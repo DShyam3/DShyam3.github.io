@@ -62,7 +62,7 @@
    */
 
   /* font-family */
-  --ff-poppins: 'Poppins', sans-serif;
+  --ff-poppins: -apple-system, BlinkMacSystemFont, "SF Pro Text", "San Francisco", "Helvetica Neue", Helvetica, sans-serif;
 
   /* font-size */
   --fs-1: 24px;
@@ -386,6 +386,17 @@ main {
 .contact-info {
   max-width: calc(100% - 46px);
   width: calc(100% - 46px);
+  padding-right: 10px;
+}
+
+.contact-info .contact-link {
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .contact-title {
@@ -1757,8 +1768,8 @@ textarea.form-input::-webkit-resizer { display: none; }
   }
 
   .main-content {
-    min-width: 75%;
-    width: 75%;
+    min-width: 70%;
+    width: 70%;
     margin: 0;
   }
 
@@ -1776,11 +1787,13 @@ textarea.form-input::-webkit-resizer { display: none; }
     margin-bottom: 0;
     padding-top: 60px;
     z-index: 1;
+    min-width: 350px;
+    width: 350px;
   }
 
   .sidebar-info { flex-direction: column; }
 
-  .avatar-box img { width: 150px; }
+  .avatar-box img { width: 170px; }
 
   .info-content .name {
     white-space: nowrap;
@@ -1824,4 +1837,12 @@ textarea.form-input::-webkit-resizer { display: none; }
 
   .timeline-text { max-width: 700px; }
 
+}
+
+/* Optional: Add specific font weights if needed */
+@supports (-webkit-font-smoothing: antialiased) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
