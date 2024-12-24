@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Confirmation - Travel Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .confirm-container {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+    }
+
+    .confirm-card {
+      background: var(--bg-secondary);
+      padding: 2rem;
+      border-radius: var(--border-radius);
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      animation: modalFadeIn 0.3s ease;
+      text-align: center;
+    }
+
+    .confirm-card h1 {
+      color: var(--text-primary);
+      font-size: 1.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .confirm-card p {
+      color: var(--text-secondary);
+      margin-bottom: 1.5rem;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      border-top-color: var(--accent-primary);
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-message {
+      color: #f87171;
+      margin-bottom: 1.5rem;
+    }
+
+    .success-message {
+      color: #10b981;
+      margin-bottom: 1.5rem;
+    }
+
+    .return-home {
+      display: inline-block;
+      padding: 0.875rem 1.5rem;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .return-home:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="confirm-container">
+    <div class="confirm-card">
+      <div id="loading-state">
+        <div class="loading-spinner"></div>
+        <h1>Confirming Your Email</h1>
+        <p>Please wait while we verify your email address...</p>
+      </div>
+      
+      <div id="error-state" style="display: none;">
+        <h1>Verification Failed</h1>
+        <p class="error-message" id="error-message"></p>
+        <p>Please try signing up again or contact support if the problem persists.</p>
+        <a href="/" class="return-home">Return to Login</a>
+      </div>
+      
+      <div id="success-state" style="display: none;">
+        <h1>Email Confirmed!</h1>
+        <p class="success-message">Your email has been successfully verified.</p>
+        <p>You can now sign in to your account.</p>
+        <a href="/" class="return-home">Sign In</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './supabaseClient.js';
+
+    async function handleEmailConfirmation() {
+      const errorElement = document.getElementById('error-message');
+      
+      try {
+        // Get the hash fragment from the URL
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        
+        // Check for error parameters
+        if (params.has('error')) {
+          const error = params.get('error');
+          const errorDescription = params.get('error_description');
+          throw new Error(errorDescription || error);
+        }
+
+        // Get the access_token and refresh_token if available
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        
+        if (!accessToken) {
+          throw new Error('No access token found in URL');
+        }
+
+        // Set the session
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (error) throw error;
+
+        // Show success state
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('success-state').style.display = 'block';
+      } catch (err) {
+        console.error('Confirmation error:', err);
+        
+        // Show error state
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('error-state').style.display = 'block';
+        errorElement.textContent = err.message;
+      }
+    }
+
+    // Handle the confirmation when the page loads
+    document.addEventListener('DOMContentLoaded', handleEmailConfirmation);
+  </script>
+</body>
+</html> 

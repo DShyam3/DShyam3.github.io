@@ -1,0 +1,218 @@
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Travel Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Add Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Add Mapbox CSS and JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+</head>
+
+<body>
+  <header>
+    <button id="auth-button">Sign In</button>
+  </header>
+
+  <!-- Login Modal -->
+  <div id="login-modal">
+    <div id="login-modal-content">
+      <!-- Success Message Overlay -->
+      <div id="success-overlay" class="auth-overlay">
+        <div class="success-content">
+          <div class="success-icon">✉️</div>
+          <h2>Check Your Email</h2>
+          <p>We've sent you a confirmation email. Please check your inbox and follow the instructions to complete your registration.</p>
+          <p class="small-text">Don't see the email? Check your spam folder or try again in a few minutes.</p>
+          <button class="auth-submit" onclick="document.getElementById('success-overlay').style.display='none'">Got it</button>
+        </div>
+      </div>
+
+      <div class="auth-container">
+        <div class="auth-header">
+          <button class="auth-tab active" data-tab="login">Sign In</button>
+          <button class="auth-tab" data-tab="signup">Sign Up</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" class="auth-form active">
+          <div class="form-group">
+            <input type="email" id="login-email" placeholder="Email" required>
+          </div>
+          <div class="form-group password-group">
+            <input type="password" id="login-password" placeholder="Password" required>
+            <button type="button" class="toggle-password">
+              <span class="eye-icon">👁️</span>
+            </button>
+          </div>
+          <div id="login-error" class="error"></div>
+          <button type="submit" class="auth-submit">Sign In</button>
+          <button type="button" class="forgot-password" data-form="reset">Forgot Password?</button>
+        </form>
+
+        <!-- Signup Form -->
+        <form id="signup-form" class="auth-form">
+          <div class="form-group">
+            <input type="email" id="signup-email" placeholder="Email" required>
+          </div>
+          <div class="form-group password-group">
+            <input type="password" id="signup-password" placeholder="Password" required>
+            <button type="button" class="toggle-password">
+              <span class="eye-icon">👁️</span>
+            </button>
+          </div>
+          <div class="password-requirements">
+            Password must contain:
+            <ul>
+              <li>At least one uppercase letter</li>
+              <li>At least one lowercase letter</li>
+              <li>At least one number</li>
+              <li>At least one special character</li>
+              <li>Minimum 6 characters</li>
+            </ul>
+          </div>
+          <div class="form-group password-group">
+            <input type="password" id="signup-confirm-password" placeholder="Confirm Password" required>
+            <button type="button" class="toggle-password">
+              <span class="eye-icon">👁️</span>
+            </button>
+          </div>
+          <div id="signup-error" class="error"></div>
+          <button type="submit" class="auth-submit">Sign Up</button>
+        </form>
+
+        <!-- Password Reset Form -->
+        <form id="reset-form" class="auth-form">
+          <h3>Reset Password</h3>
+          <p class="form-description">Enter your email address and we'll send you instructions to reset your password.</p>
+          <div class="form-group">
+            <input type="email" id="reset-email" placeholder="Enter your email" required>
+          </div>
+          <div id="reset-error" class="error"></div>
+          <div id="reset-success" class="success"></div>
+          <button type="submit" class="auth-submit">Send Reset Link</button>
+          <button type="button" class="auth-back" data-form="login">Back to Login</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    <!-- Stats Container - Hidden when signed out -->
+    <div id="stats-container" style="display: none;">
+      <!-- Map Section -->
+      <div id="map">
+        <div class="map-controls">
+          <button class="map-toggle-button" id="projection-toggle" data-current="globe" title="Switch to Flat View">
+            <span class="map-icon">🌐</span>
+          </button>
+          <button class="map-toggle-button" id="style-toggle" data-current="streets" title="Switch to Satellite View">
+            <span class="map-icon">🗺️</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Year Filter -->
+      <div class="filter-section">
+        <button class="year-filter-button" id="year-filter">
+          <span id="selected-year">All Years</span>
+        </button>
+        <div class="year-dropdown" id="year-dropdown">
+          <!-- Years will be populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="stats-section">
+        <div class="stats-card" id="countries-visited">
+          <button class="stats-button" id="countries-button">
+            <h3>Countries Visited</h3>
+            <div class="counter-container">
+              <div class="counter">0</div>
+              <div class="total-counter">/ 0</div>
+            </div>
+          </button>
+        </div>
+        
+        <div class="stats-card" id="continents-visited">
+          <button class="stats-button" id="continents-button">
+            <h3>Continents Explored</h3>
+            <div class="counter-container">
+              <div class="counter">0</div>
+              <div class="total-counter">/ 0</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Travel Summary Section -->
+      <section class="travel-summary">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="summary-value" id="total-trips">0</div>
+            <div class="summary-label">Total Trips</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value" id="total-duration">0 days</div>
+            <div class="summary-label">Total Duration</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value" id="total-flights">0</div>
+            <div class="summary-label">Total Flights</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value" id="total-miles">0 miles</div>
+            <div class="summary-label">Total Miles Traveled</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Trips Section -->
+      <div class="trips-section">
+        <h2>Your Trips</h2>
+        <div id="trips-container"></div>
+      </div>
+
+      <!-- Airport Lookup Section -->
+      <div id="airport-lookup" class="airport-lookup-section">
+        <h2>Airport Lookup</h2>
+        <div class="search-container">
+          <input type="text" id="iata" placeholder="Search airport..." list="airports-datalist">
+          <datalist id="airports-datalist"></datalist>
+        </div>
+        <div id="results"></div>
+      </div>
+
+      <!-- Countries Modal -->
+      <div id="countries-modal" class="stats-modal">
+        <div class="stats-modal-content">
+          <div class="modal-header">
+            <h2>Countries Visited</h2>
+            <button class="close-modal">&times;</button>
+          </div>
+          <div class="flags-grid"></div>
+        </div>
+      </div>
+
+      <!-- Continents Modal -->
+      <div id="continents-modal" class="stats-modal">
+        <div class="stats-modal-content">
+          <div class="modal-header">
+            <h2>Continents Explored</h2>
+            <button class="close-modal">&times;</button>
+          </div>
+          <div class="continents-list">
+            <div class="continent-item all-continents active" data-continent="all">
+              <span class="continent-name">All Continents</span>
+            </div>
+            <!-- Continents will be populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+  
