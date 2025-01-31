@@ -99,7 +99,24 @@ function setupEventListeners() {
             const section = filter.closest('section');
             const isMovieSection = section.id === 'movies-section';
             
-            // Update filter counts based on current selections
+            // Update the current filters based on the section
+            if (isMovieSection) {
+                if (filter.id === 'movies-genre-filter') {
+                    currentFilters.movies.genre = filter.value;
+                } else if (filter.id === 'movies-platform-filter') {
+                    currentFilters.movies.platform = filter.value;
+                }
+            } else {
+                if (filter.id === 'tv-genre-filter') {
+                    currentFilters.tvShows.genre = filter.value;
+                } else if (filter.id === 'tv-platform-filter') {
+                    currentFilters.tvShows.platform = filter.value;
+                } else if (filter.id === 'tv-status-filter') {
+                    currentFilters.tvShows.status = filter.value;
+                }
+            }
+            
+            // Update filter counts and render
             updateFilterCounts(isMovieSection);
             renderMediaGrids();
         });
@@ -240,11 +257,9 @@ function createMediaCard(media, type) {
     const today = new Date();
     const releaseDateTime = media.release_date ? new Date(media.release_date) : null;
     
-    // Calculate days until release
     const daysUntilRelease = releaseDateTime ? 
         Math.ceil((releaseDateTime - today) / (1000 * 60 * 60 * 24)) : null;
     
-    // Create release status text
     let releaseText = '';
     if (releaseDateTime) {
         if (daysUntilRelease > 0) {
@@ -259,14 +274,16 @@ function createMediaCard(media, type) {
     }
 
     return `
-        <div class="media-card" data-id="${media.id}" data-type="${type}">
+        <div class="media-card" data-id="${media.id}" data-type="${type}" onclick="handleCardClick(this)">
             <div class="media-card-actions">
                 <button class="edit-platform-btn" onclick="event.stopPropagation(); showEditPlatformModal(${media.id}, '${type}', '${media.platform}')">
                     <span class="edit-icon">✎</span>
                 </button>
             </div>
-            <img src="${media.poster || 'placeholder.jpg'}" alt="${media.title}" onclick="handleCardClick(this.parentElement)">
-            <div class="media-card-content" onclick="handleCardClick(this.parentElement)">
+            <div class="media-card-image-container" onclick="handleCardClick(this.parentElement)">
+                <img src="${media.poster || 'placeholder.jpg'}" alt="${media.title}" loading="lazy">
+            </div>
+            <div class="media-card-content">
                 <h3>${media.title}</h3>
                 <p class="platform-text">${media.platform}</p>
                 ${releaseDateTime ? `<p class="release-date ${isUpcoming ? 'upcoming' : 'released'}">${releaseText}</p>` : ''}
@@ -330,10 +347,14 @@ function createTVShowDetails(show) {
         return data && data.length > 0 ? data[0].day_of_week : null;
     };
 
+    // Escape the title for JavaScript string literals
+    const escapedTitle = show.title.replace(/'/g, "\\'");
+    const escapedPoster = show.poster ? show.poster.replace(/'/g, "\\'") : 'placeholder.jpg';
+
     const modalContent = `
         <div class="modal-content">
             <div class="modal-close">&times;</div>
-            <button class="delete-media-btn" data-type="tv" data-id="${show.id}" data-title="${show.title}">
+            <button class="delete-media-btn" data-type="tv" data-id="${show.id}" data-title="${escapedTitle}">
                 Delete TV Show
             </button>
             <div class="details-grid">
@@ -356,7 +377,7 @@ function createTVShowDetails(show) {
                             </button>
                         </div>
                     </div>
-                    <button id="schedule-btn-${show.id}" class="schedule-btn" onclick="handleScheduleButton(${show.id}, '${show.title}', '${show.poster}')">
+                    <button id="schedule-btn-${show.id}" class="schedule-btn" onclick="handleScheduleButton(${show.id}, '${escapedTitle}', '${escapedPoster}')">
                         <span class="schedule-btn-text">Checking schedule...</span>
                     </button>
                 </div>
@@ -712,9 +733,7 @@ function updateFilterOptions(filterId, options, items, field) {
 // Update filter functions
 function filterTVShows(shows) {
     return shows.filter(show => {
-        const genre = document.getElementById('tv-genre-filter').value;
-        const platform = document.getElementById('tv-platform-filter').value;
-        const status = document.getElementById('tv-status-filter').value;
+        const { genre, platform, status } = currentFilters.tvShows;
         
         return (!genre || show.genre.includes(genre)) &&
                (!platform || show.platform === platform) &&
@@ -725,16 +744,18 @@ function filterTVShows(shows) {
 function filterMovies(movies) {
     // First filter the movies based on criteria
     const filteredMovies = movies.filter(movie => {
-        const genreMatch = !currentFilters.movies.genre || movie.genre.includes(currentFilters.movies.genre);
-        const platformMatch = !currentFilters.movies.platform || movie.platform === currentFilters.movies.platform;
+        const { genre, platform, releaseStatus } = currentFilters.movies;
+        
+        const genreMatch = !genre || movie.genre.includes(genre);
+        const platformMatch = !platform || movie.platform === platform;
         
         // Release status filtering
         const today = new Date().toISOString().split('T')[0];
         let releaseMatch = true;
         
-        if (currentFilters.movies.releaseStatus === 'released') {
+        if (releaseStatus === 'released') {
             releaseMatch = movie.release_date && movie.release_date <= today;
-        } else if (currentFilters.movies.releaseStatus === 'coming_soon') {
+        } else if (releaseStatus === 'coming_soon') {
             releaseMatch = movie.release_date && movie.release_date > today;
         }
 
@@ -947,13 +968,18 @@ function showScheduleSelector(showId, title, poster) {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const modal = document.createElement('div');
     modal.className = 'schedule-selector-modal';
+    
+    // Escape the title and poster for HTML and JavaScript
+    const escapedTitle = title.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    const escapedPoster = poster ? poster.replace(/"/g, '&quot;').replace(/'/g, "\\'") : 'placeholder.jpg';
+    
     modal.innerHTML = `
         <div class="schedule-selector-content">
             <div class="modal-close" onclick="this.parentElement.parentElement.remove()">&times;</div>
-            <h3>Add "${title}" to Schedule</h3>
+            <h3>Add "${escapedTitle}" to Schedule</h3>
             <div class="day-selector">
                 ${days.map(day => `
-                    <div class="day-option" onclick="addToSchedule(${showId}, '${day}', '${title}', '${poster}')">
+                    <div class="day-option" onclick="addToSchedule(${showId}, '${day}', '${escapedTitle}', '${escapedPoster}')">
                         <h4>${day}</h4>
                     </div>
                 `).join('')}
@@ -965,26 +991,31 @@ function showScheduleSelector(showId, title, poster) {
 
 async function addToSchedule(showId, day, title, poster) {
     try {
+        if (!showId || !day) {
+            console.error('Invalid showId or day');
+            return;
+        }
+
         // Check if show is already scheduled for this day
-        const { data: existing } = await supabase
+        const { data: existing, error: checkError } = await supabase
             .from('weekly_schedule')
             .select('*')
             .eq('tv_show_id', showId)
-            .eq('day_of_week', day)
-            .single();
+            .eq('day_of_week', day);
 
-        if (existing) {
-            // Show is already scheduled for this day
+        if (checkError) throw checkError;
+
+        if (existing && existing.length > 0) {
             alert(`${title} is already scheduled for ${day}`);
             return;
         }
 
         // Add to schedule
-        const { error } = await supabase
+        const { error: insertError } = await supabase
             .from('weekly_schedule')
             .insert([{ tv_show_id: showId, day_of_week: day }]);
 
-        if (error) throw error;
+        if (insertError) throw insertError;
 
         // Update the schedule display
         const dayElement = document.querySelector(`[data-day="${day}"] .schedule-shows`);
@@ -994,7 +1025,8 @@ async function addToSchedule(showId, day, title, poster) {
         }
 
         // Close the schedule selector
-        document.querySelector('.schedule-selector-modal').remove();
+        const modal = document.querySelector('.schedule-selector-modal');
+        if (modal) modal.remove();
 
         // Update the button in the show details if it's open
         const btn = document.getElementById(`schedule-btn-${showId}`);
@@ -1004,6 +1036,7 @@ async function addToSchedule(showId, day, title, poster) {
         }
     } catch (error) {
         console.error('Error updating schedule:', error);
+        alert('Failed to add show to schedule. Please try again.');
     }
 }
 
@@ -1182,19 +1215,21 @@ async function handleAddMediaSelect(tmdbId, type) {
     const searchInput = document.querySelector('.search-add-input');
     // Get the active tab's search container
     const activeTab = document.querySelector('.add-tab-content.active');
-    const searchContainer = activeTab.querySelector('.search-add-container');
     
-    // Clear any existing loading/error containers
-    const existingContainer = searchContainer.querySelector('.status-container');
-    if (existingContainer) {
-        existingContainer.remove();
+    // Clear any existing status messages
+    const existingStatus = document.querySelector('.add-media-status');
+    if (existingStatus) {
+        existingStatus.remove();
     }
     
-    // Create a new loading container
-    const loadingContainer = document.createElement('div');
-    loadingContainer.className = 'status-container';
-    loadingContainer.innerHTML = `<div class="loading">Adding ${type === 'tv' ? 'TV show' : 'movie'}...</div>`;
-    searchContainer.appendChild(loadingContainer);
+    // Create a new status message container
+    const statusMessage = document.createElement('div');
+    statusMessage.className = 'add-media-status';
+    statusMessage.innerHTML = `<div class="loading">Adding ${type === 'tv' ? 'TV show' : 'movie'}...</div>`;
+    
+    // Insert the status message next to the tabs
+    const tabsContainer = document.querySelector('.add-media-tabs');
+    tabsContainer.parentNode.insertBefore(statusMessage, tabsContainer.nextSibling);
     
     try {
         // Fetch and process media
@@ -1215,7 +1250,7 @@ async function handleAddMediaSelect(tmdbId, type) {
         
         // Show success message
         const title = type === 'tv' ? details.name : details.title;
-        loadingContainer.innerHTML = `<div class="success">"${title}" has been added to your ${type === 'tv' ? 'TV shows' : 'movies'}</div>`;
+        statusMessage.innerHTML = `<div class="success">"${title}" has been added to your ${type === 'tv' ? 'TV shows' : 'movies'}</div>`;
         
         // Close modal and refresh after delay
         setTimeout(() => {
@@ -1229,11 +1264,16 @@ async function handleAddMediaSelect(tmdbId, type) {
         
     } catch (error) {
         console.error('Error adding media:', error);
-        loadingContainer.innerHTML = `<div class="error">${error.message}</div>`;
-        setTimeout(() => {
-            loadingContainer.remove();
-            searchInput.disabled = false;
-        }, 3000);
+        // Show error message in the status message
+        statusMessage.innerHTML = `<div class="error">${error.message}</div>`;
+        
+        // Don't remove the error message immediately if it's a duplicate
+        if (!error.message.includes('already in your')) {
+            setTimeout(() => {
+                statusMessage.remove();
+                searchInput.disabled = false;
+            }, 3000);
+        }
     }
 }
 
@@ -1303,6 +1343,19 @@ function getBestPlatform(providers) {
 
 async function addTVShow(details, providers) {
     try {
+        // Check if TV show already exists - using select without single() first
+        const { data: existing, error: existingError } = await supabase
+            .from('tv_shows')
+            .select('id, title')
+            .ilike('title', details.name);
+
+        if (existingError) throw existingError;
+        
+        // Check if we found any matches
+        if (existing && existing.length > 0) {
+            throw new Error(`"${details.name}" is already in your TV shows list`);
+        }
+
         // Prepare TV show data
         const tvShowData = {
             title: details.name,
