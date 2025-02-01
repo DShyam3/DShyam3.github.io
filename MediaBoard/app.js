@@ -1501,12 +1501,14 @@ async function handleDeleteMedia(type, id, title) {
 
         if (mediaError) throw mediaError;
 
-        // Show success message in modal
+        // Show success message in modal only if it doesn't exist already
         const modalContent = document.querySelector('.modal-content');
-        const successMsg = document.createElement('div');
-        successMsg.className = 'success';
-        successMsg.textContent = `"${title}" has been deleted`;
-        modalContent.prepend(successMsg);
+        if (!modalContent.querySelector('.success')) {
+            const successMsg = document.createElement('div');
+            successMsg.className = 'success';
+            successMsg.textContent = `"${title}" has been deleted`;
+            modalContent.prepend(successMsg);
+        }
 
         // Close modal and refresh after delay
         setTimeout(() => {
@@ -1693,12 +1695,6 @@ async function updatePlatform(mediaId, type, newPlatform, element) {
         const options = document.querySelectorAll('.platform-option');
         options.forEach(opt => opt.classList.remove('selected'));
         element.classList.add('selected');
-
-        // Show success message
-        const successMsg = document.createElement('div');
-        successMsg.className = 'success-message';
-        successMsg.textContent = 'Platform updated successfully';
-        element.closest('.modal-content').appendChild(successMsg);
 
         // Close modal after delay
         setTimeout(() => {
