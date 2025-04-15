@@ -7,7 +7,9 @@
     "dev": "cd Terminal_Portfolio && vite",
     "build": "cd Terminal_Portfolio && tsc && vite build",
     "lint": "cd Terminal_Portfolio && eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "cd Terminal_Portfolio && vite preview"
+    "preview": "cd Terminal_Portfolio && vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d Terminal_Portfolio/dist"
   },
   "dependencies": {
     "@radix-ui/react-toast": "^1.2.7",
@@ -36,6 +38,7 @@
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "gh-pages": "^6.3.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^6.2.6"

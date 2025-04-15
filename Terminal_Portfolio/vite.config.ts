@@ -15,5 +15,5 @@ export default defineConfig(({ mode }) => ({
     },
   },
   root: "./",
-  base: '/',
+  base: '/DShyam3.github.io/',
 }));
