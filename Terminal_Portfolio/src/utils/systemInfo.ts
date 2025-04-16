@@ -70,12 +70,19 @@ export const getSystemInfo = async () => {
 
   const getLocation = async () => {
     try {
-      const response = await fetch('http://ip-api.com/json/');
+      const response = await fetch('https://ip-api.com/json/');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
+      console.log('Location API response:', data); // Debug log
+      
       if (data.status === 'success' && data.city && data.country) {
         return `${data.city}, ${data.country}`;
+      } else {
+        console.warn('Incomplete location data:', data); // Debug log
+        throw new Error('Location data incomplete');
       }
-      throw new Error('Location data incomplete');
     } catch (error) {
       console.error('Error fetching location:', error);
       // Fallback to timezone-based approximation
