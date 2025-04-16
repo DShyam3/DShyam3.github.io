@@ -1,15 +1,16 @@
 {
   "name": "terminal-portfolio",
+  "homepage": "https://DShyam3.github.io/DShyam3.github.io",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "cd Terminal_Portfolio && vite",
-    "build": "cd Terminal_Portfolio && tsc && vite build --mode production",
+    "build": "cd Terminal_Portfolio && tsc && vite build",
     "lint": "cd Terminal_Portfolio && eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "cd Terminal_Portfolio && vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d Terminal_Portfolio/dist"
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@radix-ui/react-toast": "^1.2.7",
@@ -20,6 +21,7 @@
     "@types/react-dom": "^18.2.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "gh-pages": "^6.3.0",
     "lucide-react": "^0.330.0",
     "next-themes": "^0.4.6",
     "react": "^18.2.0",
@@ -38,10 +40,8 @@
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
-    "gh-pages": "^6.3.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
-    "terser": "^5.39.0",
     "vite": "^6.2.6"
   }
 }
