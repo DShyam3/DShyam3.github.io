@@ -70,17 +70,17 @@ export const getSystemInfo = async () => {
 
   const getLocation = async () => {
     try {
-      const response = await fetch('https://ip-api.com/json/');
+      const response = await fetch('https://ipapi.co/json/');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       console.log('Location API response:', data); // Debug log
       
-      if (data.status === 'success' && data.city && data.country) {
-        return `${data.city}, ${data.country}`;
+      if (data.city && data.country_name) {
+        return `${data.city}, ${data.country_name}`;
       } else {
-        console.warn('Incomplete location data:', data); // Debug log
+        console.warn('Incomplete location data:', data);
         throw new Error('Location data incomplete');
       }
     } catch (error) {
