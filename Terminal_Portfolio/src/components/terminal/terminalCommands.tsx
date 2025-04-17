@@ -259,10 +259,20 @@ export const projectsCommand: Command = {
       <div className="p-4 bg-mocha-surface0 rounded-md border border-mocha-surface1">
         <h3 className="text-mocha-blue font-semibold">
         <a href="../../../MediaBoard/index.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
-            MediaBoard
+            MediaBoard <span className="text-sm text-mocha-text">(Click to open website)</span>
           </a>
         </h3>
         <p className="text-mocha-text mt-1">A website made to track my media consumption fully developed using vibe coding.</p>
+        <p className="text-mocha-yellow mt-2">Tech Stack: HTML, Tailwind CSS, JavaScript, Supabase</p>
+      </div>
+
+      <div className="p-4 bg-mocha-surface0 rounded-md border border-mocha-surface1">
+        <h3 className="text-mocha-blue font-semibold">
+        <a href="../../../MediaBoard/index.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
+            Travel Tracker <span className="text-sm text-mocha-text">(Click to open website)</span>
+          </a>
+        </h3>
+        <p className="text-mocha-text mt-1">A website made to keep track of my travelling adventures using vibe coding.</p>
         <p className="text-mocha-yellow mt-2">Tech Stack: HTML, Tailwind CSS, JavaScript, Supabase</p>
       </div>
 
@@ -275,7 +285,7 @@ export const projectsCommand: Command = {
       <div className="p-4 bg-mocha-surface0 rounded-md border border-mocha-surface1">
         <h3 className="text-mocha-blue font-semibold">
           <a href="/Bachelors_Thesis.pdf" target="_blank" rel="noopener noreferrer" className="hover:underline">
-            Bachelor's Thesis
+            Bachelor's Thesis <span className="text-sm text-mocha-text">(Click to download PDF)</span>
           </a>
         </h3>
         <p className="text-mocha-text mt-1">An IoT water quality monitoring system.</p>
