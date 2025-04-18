@@ -282,6 +282,8 @@ function renderMediaGrids() {
 
     renderTVShows();
     renderMovies();
+    // Setup image loading after rendering
+    setTimeout(setupImageLoading, 0);
 }
 
 function renderTVShows() {
@@ -329,7 +331,19 @@ function createMediaCard(media, type) {
                 </button>
             </div>
             <div class="media-card-image-container" onclick="handleCardClick(this.parentElement)">
-                <img src="${media.poster || 'placeholder.jpg'}" alt="${media.title}" loading="lazy">
+                <img 
+                    src="${media.poster || 'placeholder.jpg'}" 
+                    alt="${media.title}"
+                    loading="lazy"
+                    onerror="this.src='placeholder.jpg'; this.onerror=null;"
+                    class="media-poster"
+                >
+                <div class="image-placeholder">
+                    <div class="placeholder-content">
+                        <span class="placeholder-icon">🎬</span>
+                        <span class="placeholder-text">Loading...</span>
+                    </div>
+                </div>
             </div>
             <div class="media-card-content">
                 <h3>${media.title}</h3>
@@ -1907,3 +1921,38 @@ updateButton.addEventListener('click', async () => {
         updateButton.classList.remove('updating');
     }
 });
+
+// Image loading handling
+function setupImageLoading() {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const img = entry.target;
+                img.onload = () => {
+                    img.classList.add('loaded');
+                    const placeholder = img.nextElementSibling;
+                    if (placeholder && placeholder.classList.contains('image-placeholder')) {
+                        placeholder.style.display = 'none';
+                    }
+                };
+                // Start loading the image
+                if (img.dataset.src) {
+                    img.src = img.dataset.src;
+                }
+                observer.unobserve(img);
+            }
+        });
+    }, {
+        rootMargin: '50px 0px',
+        threshold: 0.1
+    });
+
+    // Observe all media posters
+    document.querySelectorAll('.media-poster').forEach(img => {
+        if (img.src && !img.src.includes('placeholder.jpg')) {
+            img.dataset.src = img.src;
+            img.src = 'placeholder.jpg';
+            observer.observe(img);
+        }
+    });
+}
