@@ -258,7 +258,14 @@ export const projectsCommand: Command = {
 
       <div className="p-4 bg-mocha-surface0 rounded-md border border-mocha-surface1">
         <h3 className="text-mocha-blue font-semibold">
-        <a href="../../../MediaBoard/index.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
+          <a 
+            href={import.meta.env.MODE === 'development' 
+              ? 'http://localhost:5175' 
+              : '/DShyam3.github.io/MediaBoard/'} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="hover:underline"
+          >
             MediaBoard <span className="text-sm text-mocha-text">(Click to open website)</span>
           </a>
         </h3>
@@ -268,7 +275,14 @@ export const projectsCommand: Command = {
 
       <div className="p-4 bg-mocha-surface0 rounded-md border border-mocha-surface1">
         <h3 className="text-mocha-blue font-semibold">
-        <a href="../../../MediaBoard/index.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
+          <a 
+            href={import.meta.env.MODE === 'development' 
+              ? 'http://localhost:5174' 
+              : '/DShyam3.github.io/Travel_Tracker/'} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="hover:underline"
+          >
             Travel Tracker <span className="text-sm text-mocha-text">(Click to open website)</span>
           </a>
         </h3>
@@ -284,7 +298,14 @@ export const projectsCommand: Command = {
       
       <div className="p-4 bg-mocha-surface0 rounded-md border border-mocha-surface1">
         <h3 className="text-mocha-blue font-semibold">
-          <a href="/Bachelors_Thesis.pdf" target="_blank" rel="noopener noreferrer" className="hover:underline">
+          <a 
+            href={import.meta.env.MODE === 'development' 
+              ? '/Bachelors_Thesis.pdf' 
+              : '/DShyam3.github.io/Bachelors_Thesis.pdf'} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="hover:underline"
+          >
             Bachelor's Thesis <span className="text-sm text-mocha-text">(Click to download PDF)</span>
           </a>
         </h3>

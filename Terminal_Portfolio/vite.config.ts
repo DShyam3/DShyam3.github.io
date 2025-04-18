@@ -6,7 +6,7 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
   },
   plugins: [react()],
   resolve: {
@@ -15,5 +15,12 @@ export default defineConfig(({ mode }) => ({
     },
   },
   root: "./",
-  base: '/',
+  base: mode === 'development' ? '/' : '/DShyam3.github.io/',
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+      },
+    },
+  },
 }));

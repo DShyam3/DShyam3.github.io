@@ -6,11 +6,12 @@
   "type": "module",
   "scripts": {
     "dev": "cd Terminal_Portfolio && vite",
-    "build": "cd Terminal_Portfolio && tsc && vite build",
+    "build": "cd travel && npm run build && cd ../Terminal_Portfolio && tsc && vite build",
     "lint": "cd Terminal_Portfolio && eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "cd Terminal_Portfolio && vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d Terminal_Portfolio/dist"
+    "deploy": "gh-pages -d Terminal_Portfolio/dist",
+    "dev:all": "concurrently \"npm run dev\" \"cd travel && npm run dev\""
   },
   "dependencies": {
     "@radix-ui/react-toast": "^1.2.7",
@@ -37,6 +38,7 @@
     "@typescript-eslint/parser": "^6.21.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
+    "concurrently": "^8.2.2",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",

@@ -114,18 +114,54 @@ main {
 .media-card-image-container {
     position: relative;
     width: 100%;
-    padding-top: 150%;
-    background-color: var(--background-color);
+    padding-top: 150%; /* 2:3 aspect ratio */
     overflow: hidden;
+    background-color: #f0f0f0;
 }
 
-.media-card img {
+.media-poster {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: opacity 0.3s ease;
+}
+
+.media-poster:not([src*="placeholder.jpg"]) {
+    opacity: 0;
+}
+
+.media-poster.loaded {
+    opacity: 1;
+}
+
+.image-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
+}
+
+.placeholder-content {
+    text-align: center;
+}
+
+.placeholder-icon {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.placeholder-text {
+    font-size: 0.9rem;
+    color: #666;
 }
 
 .media-card-content {
