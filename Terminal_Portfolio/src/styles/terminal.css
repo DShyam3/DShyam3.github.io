@@ -1,0 +1,127 @@
+
+/* Terminal styling for Catppucin Mocha theme with Oh My Zsh style */
+/* Set text styles to match JetBrains Mono */
+body {
+  font-feature-settings: "liga" 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Terminal scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #181825; /* Mocha mantle */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #45475a; /* Mocha surface1 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #585b70; /* Mocha surface2 */
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(203, 166, 247, 0.3); /* Mocha lavender with opacity */
+  color: #cdd6f4; /* Mocha text */
+}
+
+/* Oh My Zsh style shell prompt enhancements */
+.zsh-prompt-path {
+  position: relative;
+  color: #89b4fa; /* Mocha blue */
+  font-weight: 500;
+}
+
+.zsh-prompt-git {
+  font-weight: 500;
+}
+
+.zsh-prompt-arrow {
+  color: #f5c2e7; /* Mocha pink */
+  font-weight: bold;
+}
+
+/* Terminal cursor animation */
+.terminal-cursor {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  from, to {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Terminal text animations */
+.typing-animation {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typing 2s steps(40, end);
+}
+
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* Command syntax highlighting */
+.command-keyword {
+  color: #cba6f7; /* Mocha lavender */
+}
+
+.command-string {
+  color: #a6e3a1; /* Mocha green */
+}
+
+.command-number {
+  color: #f9e2af; /* Mocha yellow */
+}
+
+.command-comment {
+  color: #7f849c; /* Mocha overlay1 */
+}
+
+/* Oh My Zsh style highlighting */
+.zsh-prompt-path {
+  color: #89b4fa; /* Mocha blue */
+}
+
+.zsh-prompt-git {
+  color: #f38ba8; /* Mocha red */
+}
+
+.zsh-prompt-arrow {
+  color: #f5c2e7; /* Mocha pink */
+}
+
+.zsh-command-success {
+  color: #a6e3a1; /* Mocha green */
+}
+
+.zsh-command-error {
+  color: #f38ba8; /* Mocha red */
+}
+
+/* Make sure text is selectable */
+.select-text {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}

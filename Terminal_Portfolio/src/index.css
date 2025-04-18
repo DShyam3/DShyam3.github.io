@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;200;300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Catppuccin Mocha Theme */
+    --background: 231 11% 15%;
+    --foreground: 227 70% 87%;
+
+    --card: 231 11% 15%;
+    --card-foreground: 227 70% 87%;
+
+    --popover: 231 11% 15%;
+    --popover-foreground: 227 70% 87%;
+
+    --primary: 267 85% 81%;
+    --primary-foreground: 231 11% 15%;
+
+    --secondary: 316 73% 83%;
+    --secondary-foreground: 231 11% 15%;
+
+    --muted: 229 23% 36%;
+    --muted-foreground: 226 44% 81%;
+
+    --accent: 267 85% 81%;
+    --accent-foreground: 231 11% 15%;
+
+    --destructive: 343 82% 75%;
+    --destructive-foreground: 231 11% 15%;
+
+    --border: 229 23% 36%;
+    --input: 229 23% 36%;
+    --ring: 267 85% 81%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 233 15% 10%;
+    --sidebar-foreground: 227 70% 87%;
+    --sidebar-primary: 267 85% 81%;
+    --sidebar-primary-foreground: 231 11% 15%;
+    --sidebar-accent: 229 23% 36%;
+    --sidebar-accent-foreground: 227 70% 87%;
+    --sidebar-border: 229 23% 36%;
+    --sidebar-ring: 267 85% 81%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
