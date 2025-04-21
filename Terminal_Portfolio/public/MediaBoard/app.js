@@ -1875,14 +1875,15 @@ updateButton.addEventListener('click', async () => {
         progressBar.style.transform = 'scaleX(0.2)'; // 20% initial progress
 
         // Get total count of items to check
-        const { data: counts, error: countError } = await supabase
-            .from('media_counts')
-            .select('tv_shows_count, movies_count')
-            .single();
+        const { count: tvCount } = await supabase
+            .from('tv_shows')
+            .select('*', { count: 'exact', head: true });
             
-        if (countError) throw countError;
-        
-        const totalItems = counts.tv_shows_count + counts.movies_count;
+        const { count: movieCount } = await supabase
+            .from('movies')
+            .select('*', { count: 'exact', head: true });
+            
+        const totalItems = (tvCount || 0) + (movieCount || 0);
         let checkedItems = 0;
 
         // Create a progress update function
@@ -1901,8 +1902,9 @@ updateButton.addEventListener('click', async () => {
         statusText.textContent = 'Finished updating';
 
         // If there were changes, refresh the display
-        if (changes) {
-            await loadContent();
+        if (changes && changes.length > 0) {
+            localStorage.setItem('recentChanges', JSON.stringify(changes));
+            renderNewsSection();
         }
 
         // Reset button after delay
