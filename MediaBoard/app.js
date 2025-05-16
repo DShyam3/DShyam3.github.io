@@ -1528,7 +1528,8 @@ async function addMovie(details, providers) {
             release_year: details.release_date ? new Date(details.release_date).getFullYear() : null,
             poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null,
             overview: details.overview,
-            release_date: details.release_date || null
+            release_date: details.release_date || null,
+            tmdb_id: details.id // Add TMDB ID to the movie data
         };
 
         const { error } = await supabase

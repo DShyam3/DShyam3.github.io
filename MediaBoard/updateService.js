@@ -274,12 +274,19 @@ class MediaUpdateService {
                     // If no tmdb_id, try to find and update it
                     if (!movie.tmdb_id) {
                         console.log(`No TMDB ID found for ${movie.title}, searching...`);
-                        const tmdbId = await this.searchAndUpdateTMDBID(movie);
+                        const tmdbId = await this.searchAndUpdateMovieTMDBID(movie);
                         if (!tmdbId) {
                             console.log(`Could not find TMDB ID for ${movie.title}, skipping...`);
                             continue;
                         }
                         movie.tmdb_id = tmdbId;
+                        changes.push({
+                            type: 'movie',
+                            id: movie.id,
+                            name: movie.title,
+                            change: 'tmdb_id',
+                            details: `Added TMDB ID: ${tmdbId}`
+                        });
                     }
 
                     console.log(`Checking updates for ${movie.title} (TMDB ID: ${movie.tmdb_id})`);
@@ -299,7 +306,7 @@ class MediaUpdateService {
                     // Check platform changes if requested
                     if (checkPlatforms) {
                         try {
-                            const currentPlatform = this.getBestPlatformForMovie(currentDetails['watch/providers']);
+                            const currentPlatform = this.getBestPlatform(currentDetails['watch/providers']);
                             if (currentPlatform && currentPlatform !== movie.platform) {
                                 console.log(`Platform change detected for ${movie.title}: ${movie.platform} -> ${currentPlatform}`);
                                 await this.supabase
@@ -501,61 +508,6 @@ class MediaUpdateService {
         }
     }
 
-    getBestPlatformForMovie(providers) {
-        try {
-            // Log the providers data for debugging
-            console.log('Movie providers data:', providers);
-
-            // If no providers data, return 'Online'
-            if (!providers) {
-                console.log('No movie providers data available');
-                return 'Online';
-            }
-
-            // Define allowed streaming platforms for UK (matching app.js PLATFORMS exactly)
-            const allowedPlatforms = {
-                'Netflix': 'Netflix',
-                'Disney Plus': 'Disney+',
-                'Amazon Prime Video': 'Prime Video',
-                'Apple TV': 'Apple TV+',
-                'Apple TV Plus': 'Apple TV+',
-                'BBC iPlayer': 'BBC iPlayer',
-                'ITVX': 'ITVX'
-            };
-
-            // Check UK providers first
-            const ukProviders = providers.results?.GB;
-            if (!ukProviders) {
-                console.log('No UK providers found for movie');
-                return 'Online';
-            }
-
-            // Combine free and flatrate providers
-            const allProviders = [
-                ...(ukProviders.free || []),
-                ...(ukProviders.flatrate || [])
-            ];
-
-            console.log('All UK movie providers:', allProviders);
-
-            // Check all providers (both free and subscription)
-            for (const provider of allProviders) {
-                const platformName = allowedPlatforms[provider.provider_name];
-                if (platformName) {
-                    console.log(`Found matching platform for movie: ${provider.provider_name} -> ${platformName}`);
-                    return platformName;
-                }
-            }
-
-            // If no allowed streaming platforms found, return Online
-            console.log('No allowed UK platforms found for movie, defaulting to Online');
-            return 'Online';
-        } catch (error) {
-            console.error('Error in getBestPlatformForMovie:', error);
-            return 'Online';
-        }
-    }
-
     async searchAndUpdateTMDBID(show) {
         try {
             console.log(`Searching TMDB for "${show.title}" (Released: ${show.release_date})...`);
@@ -615,6 +567,69 @@ class MediaUpdateService {
             return null;
         } catch (error) {
             console.error(`Error searching TMDB for ${show.title}:`, error);
+            return null;
+        }
+    }
+
+    async searchAndUpdateMovieTMDBID(movie) {
+        try {
+            console.log(`Searching TMDB for movie "${movie.title}" (Released: ${movie.release_date})...`);
+            
+            // First try exact title match with release year
+            const year = movie.release_year || (movie.release_date ? new Date(movie.release_date).getFullYear() : null);
+            let searchUrl = `${this.tmdbBaseUrl}/search/movie?api_key=${this.tmdbApiKey}&query=${encodeURIComponent(movie.title)}`;
+            if (year) {
+                searchUrl += `&year=${year}`;
+            }
+            
+            const response = await fetch(searchUrl);
+            
+            if (!response.ok) {
+                console.error(`TMDB search error for ${movie.title}:`, response.status, response.statusText);
+                return null;
+            }
+            
+            const data = await response.json();
+            
+            if (data.results && data.results.length > 0) {
+                // Try to find the best match
+                let bestMatch = data.results[0];
+                
+                // If we have a release date, try to find a better match
+                if (movie.release_date) {
+                    const releaseDate = new Date(movie.release_date);
+                    const matches = data.results.filter(result => {
+                        if (!result.release_date) return false;
+                        const resultDate = new Date(result.release_date);
+                        // Allow for some flexibility in the date (up to 1 year difference)
+                        return Math.abs(resultDate - releaseDate) < 365 * 24 * 60 * 60 * 1000;
+                    });
+                    
+                    if (matches.length > 0) {
+                        bestMatch = matches[0];
+                    }
+                }
+                
+                console.log(`Found TMDB ID ${bestMatch.id} for "${movie.title}" (Release date: ${bestMatch.release_date})`);
+                
+                // Update the movie in the database
+                const { error } = await this.supabase
+                    .from('movies')
+                    .update({ tmdb_id: bestMatch.id })
+                    .eq('id', movie.id);
+                    
+                if (error) {
+                    console.error(`Error updating TMDB ID for ${movie.title}:`, error);
+                    return null;
+                }
+                
+                return bestMatch.id;
+            }
+            
+            console.log(`No TMDB results found for "${movie.title}"`);
+            return null;
+        } catch (error) {
+            console.error(`Error searching TMDB for ${movie.title}:`, error);
             return null;
         }
     }
