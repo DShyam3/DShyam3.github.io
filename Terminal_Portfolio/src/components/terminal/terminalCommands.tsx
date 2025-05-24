@@ -528,10 +528,10 @@ export default Terminal;`}
         </pre>
       </div>
       <p className="mt-2">
-        The complete source code is available on GitHub:
-        <a href="https://github.com/" target="_blank" rel="noopener noreferrer" className="text-mocha-blue ml-2 hover:underline">
+        The complete source code is available on GitHub
+        {/* <a href="https://github.com/" target="_blank" rel="noopener noreferrer" className="text-mocha-blue ml-2 hover:underline">
           github.com/username/terminal-portfolio
-        </a>
+        </a> */}
       </p>
     </div>
   ),
