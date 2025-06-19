@@ -1,0 +1,94 @@
+name: Daily MediaBoard Update (Discord Notifications)
+
+on:
+  schedule:
+    # Run daily at 6:00 AM UTC (adjust timezone as needed)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  update-mediaboard:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run MediaBoard update
+      id: update
+      run: |
+        echo "start_time=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+        npm run update-mediaboard:daily
+        echo "end_time=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+        
+    - name: Check for changes
+      id: changes
+      run: |
+        if git diff --quiet; then
+          echo "no_changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "no_changes=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Commit and push changes (if any)
+      if: steps.changes.outputs.no_changes == 'false'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "Daily MediaBoard update - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+        git push
+        
+    - name: Send Discord notification
+      if: always()
+      run: |
+        curl -H "Content-Type: application/json" \
+             -X POST \
+             -d '{
+               "embeds": [{
+                 "title": "${{ job.status == \"success\" && \"✅ MediaBoard Update Completed\" || \"❌ MediaBoard Update Failed\" }}",
+                 "description": "Daily update ${{ job.status == \"success\" && \"completed successfully\" || \"failed\" }}",
+                 "color": ${{ job.status == \"success\" && 3066993 || 15158332 }},
+                 "fields": [
+                   {
+                     "name": "Update Time",
+                     "value": "${{ steps.update.outputs.start_time }}",
+                     "inline": true
+                   },
+                   {
+                     "name": "Completion Time",
+                     "value": "${{ steps.update.outputs.end_time }}",
+                     "inline": true
+                   },
+                   {
+                     "name": "Changes Made",
+                     "value": "${{ steps.changes.outputs.no_changes == \"false\" && \"Yes\" || \"No\" }}",
+                     "inline": true
+                   },
+                   {
+                     "name": "Repository",
+                     "value": "${{ github.repository }}",
+                     "inline": true
+                   },
+                   {
+                     "name": "Workflow",
+                     "value": "[View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})",
+                     "inline": true
+                   }
+                 ],
+                 "timestamp": "${{ github.event.head_commit.timestamp }}",
+                 "footer": {
+                   "text": "MediaBoard Update System"
+                 }
+               }]
+             }' \
+             ${{ secrets.DISCORD_WEBHOOK_URL }} 

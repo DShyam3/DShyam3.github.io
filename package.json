@@ -10,7 +10,11 @@
     "lint": "cd Terminal_Portfolio && eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "cd Terminal_Portfolio && vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d Terminal_Portfolio/dist"
+    "deploy": "gh-pages -d Terminal_Portfolio/dist",
+    "update-mediaboard": "node scripts/update-mediaboard.js",
+    "update-mediaboard:force": "node scripts/update-mediaboard.js --force",
+    "update-mediaboard:daily": "node scripts/update-mediaboard.js --daily --platforms",
+    "update-mediaboard:test": "node scripts/update-mediaboard.js --force --webhook"
   },
   "dependencies": {
     "@radix-ui/react-toast": "^1.2.7",
