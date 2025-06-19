@@ -33,6 +33,10 @@
             </div>
             <div class="section-header">
                 <div class="filters">
+                    <button id="hide-watched-toggle" class="filter-toggle" title="Hide watched recurring series">
+                        <span class="toggle-icon">👁️</span>
+                        <span class="toggle-text">Hide Watched</span>
+                    </button>
                     <select id="tv-genre-filter" class="filter">
                         <option value="">All Genres</option>
                     </select>
@@ -46,24 +50,61 @@
                         <option value="Canceled">Cancelled</option>
                         <option value="In Production">In Production</option>
                     </select>
+                    <select id="tv-sort-filter" class="filter">
+                        <option value="">Sort By</option>
+                        <option value="name_asc">Name (A-Z)</option>
+                        <option value="name_desc">Name (Z-A)</option>
+                        <option value="date_asc">Release Date (Oldest)</option>
+                        <option value="date_desc">Release Date (Newest)</option>
+                    </select>
+                    <button id="weekly-schedule-btn" class="schedule-view-btn" title="View Weekly Schedule">
+                        <span class="schedule-icon">📅</span>
+                        <span class="schedule-text">Weekly Schedule</span>
+                    </button>
                 </div>
             </div>
             
-            <!-- Weekly Schedule -->
-            <div class="weekly-schedule">
-                <h3>Weekly Schedule</h3>
+            <!-- TV Shows Grid -->
+            <div class="media-grid" id="tv-shows-grid"></div>
+        </section>
+
+        <!-- Weekly Schedule Modal -->
+        <div id="weekly-schedule-modal" class="modal">
+            <div class="modal-content schedule-modal-content">
+                <div class="modal-close">&times;</div>
+                <h2>Weekly Schedule</h2>
                 <div class="schedule-grid">
                     <div class="schedule-day" data-day="Sunday">
                         <h4>Sunday</h4>
                         <div class="schedule-shows"></div>
                     </div>
-                    <!-- Repeat for other days -->
+                    <div class="schedule-day" data-day="Monday">
+                        <h4>Monday</h4>
+                        <div class="schedule-shows"></div>
+                    </div>
+                    <div class="schedule-day" data-day="Tuesday">
+                        <h4>Tuesday</h4>
+                        <div class="schedule-shows"></div>
+                    </div>
+                    <div class="schedule-day" data-day="Wednesday">
+                        <h4>Wednesday</h4>
+                        <div class="schedule-shows"></div>
+                    </div>
+                    <div class="schedule-day" data-day="Thursday">
+                        <h4>Thursday</h4>
+                        <div class="schedule-shows"></div>
+                    </div>
+                    <div class="schedule-day" data-day="Friday">
+                        <h4>Friday</h4>
+                        <div class="schedule-shows"></div>
+                    </div>
+                    <div class="schedule-day" data-day="Saturday">
+                        <h4>Saturday</h4>
+                        <div class="schedule-shows"></div>
+                    </div>
                 </div>
             </div>
-
-            <!-- TV Shows Grid -->
-            <div class="media-grid" id="tv-shows-grid"></div>
-        </section>
+        </div>
 
         <!-- Movies Tab -->
         <section id="movies-section" class="tab-content">
