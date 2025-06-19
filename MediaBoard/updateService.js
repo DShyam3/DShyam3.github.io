@@ -2,6 +2,8 @@ class MediaUpdateService {
     constructor() {
         this.lastUpdate = localStorage.getItem('lastUpdateTime');
         this.updateInterval = 1000 * 60 * 60; // 1 hour in milliseconds
+        this.dailyUpdateTime = '06:00'; // Default daily update time (6 AM)
+        this.lastDailyUpdate = localStorage.getItem('lastDailyUpdate');
         
         // Initialize Supabase client
         this.supabase = supabase;
@@ -10,7 +12,116 @@ class MediaUpdateService {
         this.tmdbBaseUrl = 'https://api.themoviedb.org/3';
         this.tmdbApiKey = TMDB_API_KEY;
         
+        // Initialize update scheduler
+        this.initializeUpdateScheduler();
+        
         console.log('UpdateService initialized with configurations');
+    }
+
+    // Initialize the update scheduler
+    initializeUpdateScheduler() {
+        // Check if we should run daily update
+        this.checkDailyUpdate();
+        
+        // Set up interval to check for daily updates
+        setInterval(() => {
+            this.checkDailyUpdate();
+        }, 60000); // Check every minute
+        
+        // Set up interval for regular update checks
+        setInterval(() => {
+            this.checkForUpdates(false, false);
+        }, this.updateInterval);
+    }
+
+    // Check if daily update should run
+    checkDailyUpdate() {
+        const now = new Date();
+        const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+        const today = now.toDateString();
+        
+        // Check if we haven't run today's update yet
+        if (this.lastDailyUpdate !== today && currentTime === this.dailyUpdateTime) {
+            console.log('Running scheduled daily update...');
+            this.runDailyUpdate();
+        }
+    }
+
+    // Run the daily update
+    async runDailyUpdate() {
+        try {
+            const now = new Date();
+            console.log('Starting daily update at:', now.toISOString());
+            
+            // Run comprehensive update
+            await this.checkForUpdates(true, true);
+            
+            // Mark daily update as completed
+            localStorage.setItem('lastDailyUpdate', now.toDateString());
+            this.lastDailyUpdate = now.toDateString();
+            
+            console.log('Daily update completed successfully');
+            
+            // Trigger UI refresh if page is open
+            if (typeof window !== 'undefined' && window.location.pathname.includes('MediaBoard')) {
+                // Dispatch custom event to notify the app
+                window.dispatchEvent(new CustomEvent('dailyUpdateCompleted', {
+                    detail: { timestamp: now.toISOString() }
+                }));
+            }
+            
+        } catch (error) {
+            console.error('Error during daily update:', error);
+        }
+    }
+
+    // Set custom daily update time
+    setDailyUpdateTime(time) {
+        // Validate time format (HH:MM)
+        if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+            this.dailyUpdateTime = time;
+            localStorage.setItem('dailyUpdateTime', time);
+            console.log('Daily update time set to:', time);
+        } else {
+            console.error('Invalid time format. Use HH:MM format (e.g., "06:00")');
+        }
+    }
+
+    // Get current daily update time
+    getDailyUpdateTime() {
+        return localStorage.getItem('dailyUpdateTime') || this.dailyUpdateTime;
+    }
+
+    // Get next scheduled update time
+    getNextUpdateTime() {
+        const now = new Date();
+        const [hours, minutes] = this.dailyUpdateTime.split(':').map(Number);
+        const nextUpdate = new Date(now);
+        nextUpdate.setHours(hours, minutes, 0, 0);
+        
+        // If today's update time has passed, schedule for tomorrow
+        if (nextUpdate <= now) {
+            nextUpdate.setDate(nextUpdate.getDate() + 1);
+        }
+        
+        return nextUpdate;
+    }
+
+    // Get update status information
+    getUpdateStatus() {
+        const now = new Date();
+        const lastUpdate = new Date(localStorage.getItem('lastUpdateCheck') || 0);
+        const lastDailyUpdate = new Date(localStorage.getItem('lastDailyUpdate') || 0);
+        const nextUpdate = this.getNextUpdateTime();
+        
+        return {
+            lastUpdate: lastUpdate,
+            lastDailyUpdate: lastDailyUpdate,
+            nextScheduledUpdate: nextUpdate,
+            timeUntilNextUpdate: nextUpdate - now,
+            dailyUpdateTime: this.getDailyUpdateTime(),
+            isUpdateOverdue: (now - lastUpdate) > this.updateInterval
+        };
     }
 
     async checkForUpdates(forceCheck = false, checkPlatforms = false, onProgress = null) {
