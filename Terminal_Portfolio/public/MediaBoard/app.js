@@ -54,8 +54,57 @@ async function initializeApp() {
         await loadData();
         setupEventListeners();
         setupWeeklySchedule();
+        updateLastUpdatedDisplay();
     } catch (error) {
         console.error('Error initializing app:', error);
+    }
+}
+
+// Function to update the last updated display
+function updateLastUpdatedDisplay() {
+    const lastUpdatedElement = document.getElementById('last-updated-time');
+    if (!lastUpdatedElement) return;
+    
+    const lastUpdateTime = localStorage.getItem('lastUpdateCheck');
+    
+    if (lastUpdateTime) {
+        const lastUpdate = new Date(lastUpdateTime);
+        const now = new Date();
+        const timeDiff = now - lastUpdate;
+        
+        // Format the time difference
+        let timeText;
+        if (timeDiff < 60000) { // Less than 1 minute
+            timeText = 'Just now';
+        } else if (timeDiff < 3600000) { // Less than 1 hour
+            const minutes = Math.floor(timeDiff / 60000);
+            timeText = `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+        } else if (timeDiff < 86400000) { // Less than 1 day
+            const hours = Math.floor(timeDiff / 3600000);
+            timeText = `${hours} hour${hours > 1 ? 's' : ''} ago`;
+        } else if (timeDiff < 604800000) { // Less than 1 week
+            const days = Math.floor(timeDiff / 86400000);
+            timeText = `${days} day${days > 1 ? 's' : ''} ago`;
+        } else {
+            // Show the actual date for older updates in dd/mm/yyyy format
+            const day = String(lastUpdate.getDate()).padStart(2, '0');
+            const month = String(lastUpdate.getMonth() + 1).padStart(2, '0');
+            const year = lastUpdate.getFullYear();
+            const time = lastUpdate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            timeText = `${day}/${month}/${year} ${time}`;
+        }
+        
+        lastUpdatedElement.textContent = timeText;
+        
+        // Add title attribute for exact time on hover with dd/mm/yyyy format
+        const day = String(lastUpdate.getDate()).padStart(2, '0');
+        const month = String(lastUpdate.getMonth() + 1).padStart(2, '0');
+        const year = lastUpdate.getFullYear();
+        const exactTime = `${day}/${month}/${year} ${lastUpdate.toLocaleTimeString()}`;
+        lastUpdatedElement.title = `Last updated: ${exactTime}`;
+    } else {
+        lastUpdatedElement.textContent = 'Never';
+        lastUpdatedElement.title = 'No updates have been performed yet';
     }
 }
 
@@ -193,6 +242,12 @@ function setupEventListeners() {
             refreshBtn.disabled = true;
             icon.style.animation = 'spin 1s linear infinite';
             
+            // Update last updated display to show checking status
+            const lastUpdatedElement = document.getElementById('last-updated-time');
+            if (lastUpdatedElement) {
+                lastUpdatedElement.textContent = 'Checking...';
+            }
+            
             try {
                 // Get total count of items to check
                 const { data: counts } = await supabase
@@ -203,16 +258,15 @@ function setupEventListeners() {
                     .select('count', { count: 'exact', head: true });
                 
                 const totalItems = (counts?.[0]?.count || 0) + (movieCounts?.[0]?.count || 0);
-                let itemsChecked = 0;
                 
                 // Show initial progress
                 refreshBtn.querySelector('.status-text').textContent = 'Checking updates (0%)...';
                 
                 // Force check for updates including platforms
                 const changes = await updateService.checkForUpdates(true, true, (progress) => {
-                    itemsChecked = progress;
-                    const percentage = Math.round((itemsChecked / totalItems) * 100);
-                    refreshBtn.querySelector('.status-text').textContent = `Checking updates (${percentage}%)...`;
+                    // Progress is now a percentage (0-100) directly from the update service
+                    const clampedPercentage = Math.min(progress, 100);
+                    refreshBtn.querySelector('.status-text').textContent = `Checking updates (${clampedPercentage}%)...`;
                 });
                 
                 // Show progress
@@ -229,6 +283,7 @@ function setupEventListeners() {
                 
                 // Show success state briefly
                 refreshBtn.querySelector('.status-text').textContent = 'Updates complete!';
+                updateLastUpdatedDisplay();
                 setTimeout(() => {
                     refreshBtn.querySelector('.status-text').textContent = originalText;
                     refreshBtn.disabled = false;
@@ -238,6 +293,7 @@ function setupEventListeners() {
             } catch (error) {
                 console.error('Error refreshing data:', error);
                 refreshBtn.querySelector('.status-text').textContent = 'Update failed';
+                updateLastUpdatedDisplay(); // Restore the last updated display
                 setTimeout(() => {
                     refreshBtn.querySelector('.status-text').textContent = originalText;
                     refreshBtn.disabled = false;

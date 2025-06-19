@@ -41,21 +41,19 @@ class MediaUpdateService {
             }
 
             console.log('Checking for updates...');
-            let itemsChecked = 0;
+            let totalProgress = 0;
 
             // Check TV shows for new seasons and status changes
             console.log('Starting TV show updates check...');
             await this.checkTVShowUpdates(false, (progress) => {
-                if (onProgress) onProgress(itemsChecked + progress);
+                if (onProgress) onProgress(progress);
             });
-            itemsChecked += 1;
 
             // Check movies for platform changes only
             console.log('Starting movie platform updates check...');
             await this.checkMovieUpdates(true, (progress) => {
-                if (onProgress) onProgress(itemsChecked + progress);
+                if (onProgress) onProgress(progress);
             });
-            itemsChecked += 1;
 
             // Update coming soon panel
             console.log('Updating coming soon panel...');
@@ -96,6 +94,7 @@ class MediaUpdateService {
             
             if (!shows || shows.length === 0) {
                 console.log('No TV shows found in database');
+                if (onProgress) onProgress(0);
                 return changes;
             }
 
@@ -103,7 +102,8 @@ class MediaUpdateService {
             
             for (let i = 0; i < shows.length; i++) {
                 const show = shows[i];
-                if (onProgress) onProgress(i);
+                // Calculate progress as percentage of TV shows processed
+                if (onProgress) onProgress(Math.round(((i + 1) / shows.length) * 50)); // TV shows are 50% of total progress
                 
                 try {
                     // If no tmdb_id, try to find and update it
@@ -260,6 +260,7 @@ class MediaUpdateService {
             
             if (!movies || movies.length === 0) {
                 console.log('No movies found in database');
+                if (onProgress) onProgress(50); // Movies are 50-100% of progress, so if no movies, we're at 50%
                 return changes;
             }
 
@@ -267,7 +268,8 @@ class MediaUpdateService {
             
             for (let i = 0; i < movies.length; i++) {
                 const movie = movies[i];
-                if (onProgress) onProgress(i);
+                // Calculate progress as percentage, starting from 50% (since TV shows are 0-50%)
+                if (onProgress) onProgress(50 + Math.round(((i + 1) / movies.length) * 50));
                 
                 try {
                     // If no tmdb_id, try to find and update it

@@ -46,6 +46,8 @@ const PLATFORMS = {
 
 let updateService;
 
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwIiB5PSI3NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
+
 // Initialize application
 async function initializeApp() {
     try {
@@ -54,213 +56,9 @@ async function initializeApp() {
         await loadData();
         setupEventListeners();
         setupWeeklySchedule();
-        setupUpdateStatusDisplay();
-        setupUpdateSettings();
-        
-        // Listen for daily update completion
-        window.addEventListener('dailyUpdateCompleted', handleDailyUpdateCompleted);
-        
-        // Initial update status check
-        updateUpdateStatusDisplay();
-        
-        // Update status display every minute
-        setInterval(updateUpdateStatusDisplay, 60000);
-        
     } catch (error) {
         console.error('Error initializing app:', error);
     }
-}
-
-// Setup update status display
-function setupUpdateStatusDisplay() {
-    const newsSection = document.querySelector('#news-section');
-    if (newsSection) {
-        const statusContainer = document.createElement('div');
-        statusContainer.className = 'update-status-container';
-        statusContainer.innerHTML = `
-            <div class="update-status">
-                <div class="status-item">
-                    <span class="status-label">Last Update:</span>
-                    <span class="status-value" id="last-update-time">Loading...</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Next Update:</span>
-                    <span class="status-value" id="next-update-time">Loading...</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Daily Update Time:</span>
-                    <span class="status-value" id="daily-update-time">Loading...</span>
-                </div>
-            </div>
-            <button id="update-settings-btn" class="settings-btn" title="Update Settings">
-                ⚙️ Settings
-            </button>
-        `;
-        
-        // Insert after the update button
-        const updateButton = newsSection.querySelector('.update-button');
-        if (updateButton) {
-            updateButton.parentNode.insertBefore(statusContainer, updateButton.nextSibling);
-        }
-    }
-}
-
-// Update the status display
-function updateUpdateStatusDisplay() {
-    if (!updateService) return;
-    
-    const status = updateService.getUpdateStatus();
-    
-    // Update last update time
-    const lastUpdateElement = document.getElementById('last-update-time');
-    if (lastUpdateElement) {
-        if (status.lastUpdate.getTime() === 0) {
-            lastUpdateElement.textContent = 'Never';
-        } else {
-            lastUpdateElement.textContent = formatRelativeTime(status.lastUpdate);
-        }
-    }
-    
-    // Update next update time
-    const nextUpdateElement = document.getElementById('next-update-time');
-    if (nextUpdateElement) {
-        const timeUntil = status.timeUntilNextUpdate;
-        if (timeUntil <= 0) {
-            nextUpdateElement.textContent = 'Due now';
-        } else {
-            const hours = Math.floor(timeUntil / (1000 * 60 * 60));
-            const minutes = Math.floor((timeUntil % (1000 * 60 * 60)) / (1000 * 60));
-            nextUpdateElement.textContent = `${hours}h ${minutes}m`;
-        }
-    }
-    
-    // Update daily update time
-    const dailyUpdateElement = document.getElementById('daily-update-time');
-    if (dailyUpdateElement) {
-        dailyUpdateElement.textContent = status.dailyUpdateTime;
-    }
-}
-
-// Setup update settings
-function setupUpdateSettings() {
-    const settingsBtn = document.getElementById('update-settings-btn');
-    if (settingsBtn) {
-        settingsBtn.addEventListener('click', showUpdateSettingsModal);
-    }
-}
-
-// Show update settings modal
-function showUpdateSettingsModal() {
-    const modal = document.createElement('div');
-    modal.className = 'modal update-settings-modal';
-    modal.style.display = 'flex';
-    
-    const currentTime = updateService.getDailyUpdateTime();
-    
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-close">&times;</div>
-            <h3>Update Settings</h3>
-            <div class="settings-form">
-                <div class="setting-group">
-                    <label for="daily-update-time-input">Daily Update Time:</label>
-                    <input type="time" id="daily-update-time-input" value="${currentTime}">
-                    <small>Set the time for daily automatic updates (24-hour format)</small>
-                </div>
-                <div class="setting-group">
-                    <label>Update Status:</label>
-                    <div class="status-info">
-                        <div>Last Update: <span id="modal-last-update">${formatRelativeTime(new Date(localStorage.getItem('lastUpdateCheck') || 0))}</span></div>
-                        <div>Last Daily Update: <span id="modal-last-daily">${formatRelativeTime(new Date(localStorage.getItem('lastDailyUpdate') || 0))}</span></div>
-                        <div>Next Scheduled: <span id="modal-next-update">${formatRelativeTime(updateService.getNextUpdateTime())}</span></div>
-                    </div>
-                </div>
-                <div class="setting-actions">
-                    <button id="save-settings-btn" class="save-btn">Save Settings</button>
-                    <button id="test-update-btn" class="test-btn">Test Update Now</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Add event listeners
-    const closeBtn = modal.querySelector('.modal-close');
-    const saveBtn = modal.querySelector('#save-settings-btn');
-    const testBtn = modal.querySelector('#test-update-btn');
-    
-    closeBtn.addEventListener('click', () => modal.remove());
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.remove();
-    });
-    
-    saveBtn.addEventListener('click', () => {
-        const newTime = document.getElementById('daily-update-time-input').value;
-        updateService.setDailyUpdateTime(newTime);
-        updateUpdateStatusDisplay();
-        modal.remove();
-    });
-    
-    testBtn.addEventListener('click', async () => {
-        testBtn.disabled = true;
-        testBtn.textContent = 'Running...';
-        
-        try {
-            await updateService.checkForUpdates(true, true);
-            testBtn.textContent = 'Update Complete!';
-            setTimeout(() => {
-                modal.remove();
-            }, 2000);
-        } catch (error) {
-            testBtn.textContent = 'Update Failed';
-            console.error('Test update failed:', error);
-        }
-    });
-}
-
-// Handle daily update completion
-function handleDailyUpdateCompleted(event) {
-    console.log('Daily update completed:', event.detail);
-    
-    // Refresh the display
-    loadData();
-    updateUpdateStatusDisplay();
-    
-    // Show notification
-    showNotification('Daily update completed successfully!', 'success');
-}
-
-// Show notification
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
-}
-
-// Format relative time
-function formatRelativeTime(date) {
-    if (date.getTime() === 0) return 'Never';
-    
-    const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    
-    return date.toLocaleDateString();
 }
 
 // Data loading functions
@@ -398,25 +196,13 @@ function setupEventListeners() {
             icon.style.animation = 'spin 1s linear infinite';
             
             try {
-                // Get total count of items to check
-                const { data: counts } = await supabase
-                    .from('tv_shows')
-                    .select('count', { count: 'exact', head: true });
-                const { data: movieCounts } = await supabase
-                    .from('movies')
-                    .select('count', { count: 'exact', head: true });
-                
-                const totalItems = (counts?.[0]?.count || 0) + (movieCounts?.[0]?.count || 0);
-                let itemsChecked = 0;
-                
                 // Show initial progress
                 refreshBtn.querySelector('.status-text').textContent = 'Checking updates (0%)...';
                 
                 // Force check for updates including platforms
                 const changes = await updateService.checkForUpdates(true, true, (progress) => {
-                    itemsChecked = progress;
-                    const percentage = Math.round((itemsChecked / totalItems) * 100);
-                    refreshBtn.querySelector('.status-text').textContent = `Checking updates (${percentage}%)...`;
+                    // progress is already a percentage (0-100)
+                    refreshBtn.querySelector('.status-text').textContent = `Checking updates (${progress}%)...`;
                 });
                 
                 // Show progress
@@ -488,7 +274,7 @@ function renderSearchResults(results) {
         div.className = 'search-result-item';
         div.innerHTML = `
             <div class="search-result-content">
-                <img src="${result.poster || 'placeholder.jpg'}" alt="${result.title}" class="search-result-poster">
+                <img src="${result.poster || PLACEHOLDER_IMAGE}" alt="${result.title}" class="search-result-poster">
                 <div class="search-result-info">
                     ${result.title}
                     <span class="result-type">${result.media_type === 'tv' ? 'TV Show' : 'Movie'}</span>
@@ -594,10 +380,10 @@ function createMediaCard(media, type) {
             </div>
             <div class="media-card-image-container" onclick="handleCardClick(this.parentElement)">
                 <img 
-                    src="${media.poster || 'placeholder.jpg'}" 
+                    src="${media.poster || PLACEHOLDER_IMAGE}" 
                     alt="${media.title}"
                     loading="lazy"
-                    onerror="this.src='placeholder.jpg'; this.onerror=null;"
+                    onerror="this.src=PLACEHOLDER_IMAGE; this.onerror=null;"
                     class="media-poster"
                 >
                 <div class="image-placeholder">
@@ -683,7 +469,7 @@ function createTVShowDetails(show) {
             </button>
             <div class="details-grid">
                 <div class="poster-column">
-                    <img src="${show.poster || 'placeholder.jpg'}" alt="${show.title}" class="detail-poster">
+                    <img src="${show.poster || PLACEHOLDER_IMAGE}" alt="${show.title}" class="detail-poster">
                 </div>
                 <div class="info-column">
                     <h2>${show.title}</h2>
@@ -886,7 +672,7 @@ function createMovieDetails(movie) {
             </button>
             <div class="details-grid movie-details">
                 <div class="poster-column">
-                    <img src="${movie.poster || 'placeholder.jpg'}" alt="${movie.title}" class="detail-poster">
+                    <img src="${movie.poster || PLACEHOLDER_IMAGE}" alt="${movie.title}" class="detail-poster">
                 </div>
                 <div class="info-column">
                     <h2>${movie.title}</h2>
@@ -1489,7 +1275,7 @@ function createScheduledShowElement(showId, title, poster, day) {
     div.className = 'scheduled-show';
     div.setAttribute('data-show-id', showId);
     div.innerHTML = `
-        <img src="${poster || 'placeholder.jpg'}" alt="${title}">
+        <img src="${poster || PLACEHOLDER_IMAGE}" alt="${title}">
         <span>${title}</span>
         <button class="remove-schedule" onclick="removeFromSchedule(${showId}, '${day}', this.parentElement)">×</button>
     `;
@@ -1976,23 +1762,47 @@ async function handleDeleteMedia(type, id, title) {
 }
 
 async function renderNewsSection() {
-    const upcomingTVContent = document.getElementById('upcoming-tv-content');
-    const upcomingMoviesContent = document.getElementById('upcoming-movies-content');
-    const changesContent = document.getElementById('changes-content');
-    
-    // Get and sort upcoming TV shows
-    const upcomingTV = await getUpcomingTVShows();
-    upcomingTV.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
-    upcomingTVContent.innerHTML = upcomingTV.map(item => createNewsItem(item, 'upcoming')).join('');
-    
-    // Get and sort upcoming movies
-    const upcomingMovies = getUpcomingMovies();
-    upcomingMovies.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
-    upcomingMoviesContent.innerHTML = upcomingMovies.map(item => createNewsItem(item, 'upcoming')).join('');
-    
-    // Get recent changes from localStorage
-    const recentChanges = JSON.parse(localStorage.getItem('recentChanges') || '[]');
-    changesContent.innerHTML = recentChanges.map(item => createNewsItem(item, 'change')).join('');
+    try {
+        const upcomingTVContent = document.getElementById('upcoming-tv-content');
+        const upcomingMoviesContent = document.getElementById('upcoming-movies-content');
+        const changesContent = document.getElementById('changes-content');
+        
+        if (!upcomingTVContent || !upcomingMoviesContent || !changesContent) {
+            console.log('News section elements not found, skipping render');
+            return;
+        }
+
+        // Get and sort upcoming TV shows
+        const upcomingTV = await getUpcomingTVShows() || [];
+        upcomingTV.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
+        upcomingTVContent.innerHTML = upcomingTV.map(item => createNewsItem(item, 'upcoming')).join('');
+        
+        // Get and sort upcoming movies
+        const upcomingMovies = getUpcomingMovies() || [];
+        upcomingMovies.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
+        upcomingMoviesContent.innerHTML = upcomingMovies.map(item => createNewsItem(item, 'upcoming')).join('');
+        
+        // Get recent changes from localStorage
+        let recentChanges = [];
+        try {
+            const storedChanges = localStorage.getItem('recentChanges');
+            if (storedChanges) {
+                recentChanges = JSON.parse(storedChanges);
+            }
+        } catch (e) {
+            console.error('Error parsing recent changes:', e);
+            recentChanges = [];
+        }
+        
+        // Ensure recentChanges is an array and has the expected structure
+        if (!Array.isArray(recentChanges)) {
+            recentChanges = [];
+        }
+        
+        changesContent.innerHTML = recentChanges.map(item => createNewsItem(item, 'change')).join('');
+    } catch (error) {
+        console.error('Error rendering news section:', error);
+    }
 }
 
 async function getUpcomingTVShows() {
@@ -2040,48 +1850,64 @@ function formatDate(dateString) {
 }
 
 function createNewsItem(item, type) {
-    if (type === 'upcoming') {
-        const releaseDate = formatDate(item.release_date);
-        const daysUntil = Math.ceil((new Date(item.release_date) - new Date()) / (1000 * 60 * 60 * 24));
-        
-        return `
-            <div class="news-item">
-                <img src="${item.poster || 'placeholder.jpg'}" alt="${item.title}">
-                <div class="news-item-content">
-                    <div class="news-item-title">${item.title}</div>
-                    <div class="news-item-date">
-                        ${daysUntil === 0 ? 'Releases today' :
-                          daysUntil === 1 ? 'Releases tomorrow' :
-                          `Releases in ${daysUntil} days`}
+    try {
+        if (!item || !item.title) {
+            console.warn('Invalid item data for news item:', item);
+            return '';
+        }
+
+        if (type === 'upcoming') {
+            const releaseDate = formatDate(item.release_date);
+            const daysUntil = Math.ceil((new Date(item.release_date) - new Date()) / (1000 * 60 * 60 * 24));
+            
+            return `
+                <div class="news-item">
+                    <img src="${item.poster || PLACEHOLDER_IMAGE}" alt="${item.title}">
+                    <div class="news-item-content">
+                        <div class="news-item-title">${item.title}</div>
+                        <div class="news-item-date">
+                            ${daysUntil === 0 ? 'Releases today' :
+                              daysUntil === 1 ? 'Releases tomorrow' :
+                              `Releases in ${daysUntil} days`}
+                        </div>
+                        <div class="news-item-release-date">Release date: ${releaseDate}</div>
+                        ${item.type === 'tv_season' ? 
+                            `<div class="news-item-info">Season ${item.season_number}</div>` : ''}
+                        <div class="news-item-platform">on ${item.platform || 'Unknown'}</div>
                     </div>
-                    <div class="news-item-release-date">Release date: ${releaseDate}</div>
-                    ${item.type === 'tv_season' ? 
-                        `<div class="news-item-info">Season ${item.season_number}</div>` : ''}
-                    <div class="news-item-platform">on ${item.platform}</div>
                 </div>
-            </div>
-        `;
-    } else {
-        return `
-            <div class="news-item">
-                <img src="${item.poster || 'placeholder.jpg'}" alt="${item.title}">
-                <div class="news-item-content">
-                    <div class="news-item-title">${item.title}</div>
-                    ${item.changes.map(change => {
-                        switch (change.type) {
-                            case 'status':
-                                return `<div class="news-item-change">Status changed from "${change.old}" to "${change.new}"</div>`;
-                            case 'platform':
-                                return `<div class="news-item-change">Now available on ${change.new}</div>`;
-                            case 'seasons':
-                                return `<div class="news-item-change">New season${change.new.length > 1 ? 's' : ''} announced!</div>`;
-                            default:
-                                return '';
-                        }
-                    }).join('')}
+            `;
+        } else {
+            // Handle changes type
+            const changesHtml = Array.isArray(item.changes) ? 
+                item.changes.map(change => {
+                    if (!change || !change.type) return '';
+                    
+                    switch (change.type) {
+                        case 'status':
+                            return `<div class="news-item-change">Status changed from "${change.old || 'Unknown'}" to "${change.new || 'Unknown'}"</div>`;
+                        case 'platform':
+                            return `<div class="news-item-change">Now available on ${change.new || 'Unknown'}</div>`;
+                        case 'seasons':
+                            return `<div class="news-item-change">New season${(change.new && change.new.length > 1) ? 's' : ''} announced!</div>`;
+                        default:
+                            return '';
+                    }
+                }).join('') : '';
+
+            return `
+                <div class="news-item">
+                    <img src="${item.poster || PLACEHOLDER_IMAGE}" alt="${item.title}">
+                    <div class="news-item-content">
+                        <div class="news-item-title">${item.title}</div>
+                        ${changesHtml}
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
+    } catch (error) {
+        console.error('Error creating news item:', error, item);
+        return '';
     }
 }
 
