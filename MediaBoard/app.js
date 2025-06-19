@@ -5,7 +5,9 @@ let currentFilters = {
     tvShows: {
         genre: '',
         platform: '',
-        status: ''
+        status: '',
+        hideWatched: false,
+        sort: ''
     },
     movies: {
         genre: '',
@@ -116,6 +118,8 @@ function setupEventListeners() {
                     currentFilters.tvShows.platform = filter.value;
                 } else if (filter.id === 'tv-status-filter') {
                     currentFilters.tvShows.status = filter.value;
+                } else if (filter.id === 'tv-sort-filter') {
+                    currentFilters.tvShows.sort = filter.value;
                 }
             }
             
@@ -143,12 +147,48 @@ function setupEventListeners() {
         });
     }
 
+    // Add hide watched toggle listener
+    const hideWatchedToggle = document.getElementById('hide-watched-toggle');
+    if (hideWatchedToggle) {
+        hideWatchedToggle.addEventListener('click', () => {
+            currentFilters.tvShows.hideWatched = !currentFilters.tvShows.hideWatched;
+            hideWatchedToggle.classList.toggle('active', currentFilters.tvShows.hideWatched);
+            renderMediaGrids();
+        });
+    }
+
+    // Add weekly schedule button listener
+    const weeklyScheduleBtn = document.getElementById('weekly-schedule-btn');
+    const weeklyScheduleModal = document.getElementById('weekly-schedule-modal');
+    
+    if (weeklyScheduleBtn && weeklyScheduleModal) {
+        weeklyScheduleBtn.addEventListener('click', () => {
+            weeklyScheduleModal.style.display = 'flex';
+            loadWeeklySchedule(); // Refresh the schedule when opening
+        });
+        
+        // Close modal when clicking outside
+        weeklyScheduleModal.addEventListener('click', (e) => {
+            if (e.target === weeklyScheduleModal) {
+                weeklyScheduleModal.style.display = 'none';
+            }
+        });
+        
+        // Close modal with X button
+        const closeBtn = weeklyScheduleModal.querySelector('.modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                weeklyScheduleModal.style.display = 'none';
+            });
+        }
+    }
+
     // Add refresh button listener
-    const refreshBtn = document.getElementById('refresh-data');
+    const refreshBtn = document.querySelector('.update-button');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', async () => {
             const icon = refreshBtn.querySelector('.refresh-icon');
-            const originalText = refreshBtn.textContent;
+            const originalText = refreshBtn.querySelector('.status-text').textContent;
             
             // Disable button and show loading state
             refreshBtn.disabled = true;
@@ -167,24 +207,17 @@ function setupEventListeners() {
                 let itemsChecked = 0;
                 
                 // Show initial progress
-                refreshBtn.innerHTML = `
-                    <div class="progress-bar" style="width: 0%"></div>
-                    <span class="refresh-icon">↻</span> Checking updates (0%)...
-                `;
+                refreshBtn.querySelector('.status-text').textContent = 'Checking updates (0%)...';
                 
                 // Force check for updates including platforms
                 const changes = await updateService.checkForUpdates(true, true, (progress) => {
                     itemsChecked = progress;
                     const percentage = Math.round((itemsChecked / totalItems) * 100);
-                    refreshBtn.querySelector('.progress-bar').style.width = `${percentage}%`;
-                    refreshBtn.innerHTML = `
-                        <div class="progress-bar" style="width: ${percentage}%"></div>
-                        <span class="refresh-icon">↻</span> Checking updates (${percentage}%)...
-                    `;
+                    refreshBtn.querySelector('.status-text').textContent = `Checking updates (${percentage}%)...`;
                 });
                 
                 // Show progress
-                refreshBtn.innerHTML = '<span class="refresh-icon">↻</span> Updating data...';
+                refreshBtn.querySelector('.status-text').textContent = 'Updating data...';
                 
                 if (changes && changes.length > 0) {
                     localStorage.setItem('recentChanges', JSON.stringify(changes));
@@ -192,22 +225,22 @@ function setupEventListeners() {
                 }
                 
                 // Show final progress
-                refreshBtn.innerHTML = '<span class="refresh-icon">✓</span> Refreshing display...';
+                refreshBtn.querySelector('.status-text').textContent = 'Refreshing display...';
                 await loadData();
                 
                 // Show success state briefly
-                refreshBtn.innerHTML = '<span class="refresh-icon">✓</span> Updates complete!';
+                refreshBtn.querySelector('.status-text').textContent = 'Updates complete!';
                 setTimeout(() => {
-                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.querySelector('.status-text').textContent = originalText;
                     refreshBtn.disabled = false;
                     icon.style.animation = '';
                 }, 2000);
                 
             } catch (error) {
                 console.error('Error refreshing data:', error);
-                refreshBtn.innerHTML = '<span class="refresh-icon">✗</span> Update failed';
+                refreshBtn.querySelector('.status-text').textContent = 'Update failed';
                 setTimeout(() => {
-                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.querySelector('.status-text').textContent = originalText;
                     refreshBtn.disabled = false;
                     icon.style.animation = '';
                 }, 2000);
@@ -268,20 +301,29 @@ function renderSearchResults(results) {
 
 // Media grid rendering
 function renderMediaGrids() {
-    // Update counts in section titles
+    // Get filtered items
+    const filteredShows = filterTVShows(currentTVShows);
+    const filteredMovies = filterMovies(currentMovies);
+    
+    // Update counts in section titles to show filtered counts
     const tvCount = document.getElementById('tv-shows-count');
     const movieCount = document.getElementById('movies-count');
     
     if (tvCount) {
-        tvCount.textContent = `(${currentTVShows.length})`;
+        tvCount.textContent = `(${filteredShows.length})`;
     }
     
     if (movieCount) {
-        movieCount.textContent = `(${currentMovies.length})`;
+        movieCount.textContent = `(${filteredMovies.length})`;
     }
 
-    renderTVShows();
-    renderMovies();
+    // Render grids with filtered items
+    const tvGrid = document.getElementById('tv-shows-grid');
+    const movieGrid = document.getElementById('movies-grid');
+    
+    tvGrid.innerHTML = filteredShows.map(show => createMediaCard(show, 'tv')).join('');
+    movieGrid.innerHTML = filteredMovies.map(movie => createMediaCard(movie, 'movie')).join('');
+    
     // Setup image loading after rendering
     setTimeout(setupImageLoading, 0);
 }
@@ -302,13 +344,30 @@ function renderMovies() {
 
 // Card creation
 function createMediaCard(media, type) {
-    const isUpcoming = media.release_date && new Date(media.release_date) > new Date();
-    const releaseDate = formatDate(media.release_date);
-    const today = new Date();
-    const releaseDateTime = media.release_date ? new Date(media.release_date) : null;
+    let releaseDate, isUpcoming, releaseDateTime, daysUntilRelease;
     
-    const daysUntilRelease = releaseDateTime ? 
-        Math.ceil((releaseDateTime - today) / (1000 * 60 * 60 * 24)) : null;
+    if (type === 'tv') {
+        // Get all valid release dates from seasons
+        const validDates = (media.tv_show_seasons || [])
+            .filter(season => season.release_date && season.release_date !== 'N/A')
+            .map(season => new Date(season.release_date));
+            
+        // Get the latest date
+        releaseDateTime = validDates.length > 0 ? new Date(Math.max(...validDates)) : null;
+        releaseDate = releaseDateTime ? formatDate(releaseDateTime) : null;
+        isUpcoming = releaseDateTime && releaseDateTime > new Date();
+        
+        if (releaseDateTime) {
+            daysUntilRelease = Math.ceil((releaseDateTime - new Date()) / (1000 * 60 * 60 * 24));
+        }
+    } else {
+        // For movies, keep existing behavior
+        releaseDate = formatDate(media.release_date);
+        isUpcoming = media.release_date && new Date(media.release_date) > new Date();
+        releaseDateTime = media.release_date ? new Date(media.release_date) : null;
+        daysUntilRelease = releaseDateTime ? 
+            Math.ceil((releaseDateTime - new Date()) / (1000 * 60 * 60 * 24)) : null;
+    }
     
     let releaseText = '';
     if (releaseDateTime) {
@@ -680,6 +739,11 @@ function setupWeeklySchedule() {
 }
 
 async function loadWeeklySchedule() {
+    // Clear existing shows first
+    document.querySelectorAll('.schedule-shows').forEach(container => {
+        container.innerHTML = '';
+    });
+
     const { data: schedule } = await supabase
         .from('weekly_schedule')
         .select(`
@@ -824,17 +888,93 @@ function updateFilters() {
     updateFilterOptions('movies-platform-filter', moviePlatforms, currentMovies, 'platform');
 }
 
-// Update filter functions
+// Add function to sort TV shows
+function sortTVShows(shows, sortOption) {
+    if (!sortOption) return shows;
+    
+    return [...shows].sort((a, b) => {
+        switch (sortOption) {
+            case 'name_asc':
+                return a.title.localeCompare(b.title);
+            case 'name_desc':
+                return b.title.localeCompare(a.title);
+            case 'date_asc':
+            case 'date_desc': {
+                // Get latest release date from seasons
+                const getLatestDate = (show) => {
+                    const validDates = (show.tv_show_seasons || [])
+                        .filter(season => season.release_date && season.release_date !== 'N/A')
+                        .map(season => new Date(season.release_date));
+                    return validDates.length > 0 ? Math.max(...validDates) : new Date(0);
+                };
+                
+                const dateA = getLatestDate(a);
+                const dateB = getLatestDate(b);
+                
+                return sortOption === 'date_asc' 
+                    ? dateA - dateB 
+                    : dateB - dateA;
+            }
+            default:
+                return 0;
+        }
+    });
+}
+
+// Update filterTVShows function to include sorting
 function filterTVShows(shows) {
-    return shows.filter(show => {
-        const { genre, platform, status } = currentFilters.tvShows;
+    const filteredShows = shows.filter(show => {
+        const { genre, platform, status, hideWatched } = currentFilters.tvShows;
         
+        // Basic filter matches
         const genreMatch = !genre || show.genre.includes(genre);
         const platformMatch = !platform || show.platform === platform;
         const statusMatch = !status || show.status === status;
         
-        return genreMatch && platformMatch && statusMatch;
+        // Hide watched logic for recurring series
+        let hideWatchedMatch = true;
+        if (hideWatched) {
+            const seasons = show.tv_show_seasons || [];
+            if (seasons.length > 0) {
+                // Split seasons into existing and new
+                const existingSeasons = seasons.filter(season => 
+                    season.release_date && 
+                    season.release_date !== 'N/A' && 
+                    season.release_date !== null &&
+                    new Date(season.release_date) <= new Date()
+                );
+                
+                const futureSeasons = seasons.filter(season => 
+                    season.release_date && 
+                    season.release_date !== 'N/A' && 
+                    season.release_date !== null &&
+                    new Date(season.release_date) > new Date()
+                );
+                
+                const invalidSeasons = seasons.filter(season => 
+                    !season.release_date || 
+                    season.release_date === 'N/A' || 
+                    season.release_date === null
+                );
+                
+                hideWatchedMatch = 
+                    (existingSeasons.length === 0 || !existingSeasons.every(season => season.watched)) ||
+                    (futureSeasons.length > 0);
+                
+                if (existingSeasons.length > 0 && 
+                    existingSeasons.every(season => season.watched) && 
+                    futureSeasons.length === 0 && 
+                    invalidSeasons.length > 0) {
+                    hideWatchedMatch = false;
+                }
+            }
+        }
+        
+        return genreMatch && platformMatch && statusMatch && hideWatchedMatch;
     });
+    
+    // Apply sorting
+    return sortTVShows(filteredShows, currentFilters.tvShows.sort);
 }
 
 function filterMovies(movies) {
@@ -864,6 +1004,27 @@ function resetApp() {
     document.querySelectorAll('.filter').forEach(filter => {
         filter.value = '';
     });
+    
+    // Reset hide watched toggle
+    const hideWatchedToggle = document.getElementById('hide-watched-toggle');
+    if (hideWatchedToggle) {
+        hideWatchedToggle.classList.remove('active');
+    }
+    
+    // Reset all filters in currentFilters
+    currentFilters.tvShows = {
+        genre: '',
+        platform: '',
+        status: '',
+        hideWatched: false,
+        sort: ''
+    };
+    
+    currentFilters.movies = {
+        genre: '',
+        platform: '',
+        releaseStatus: ''
+    };
     
     // Reset to TV Shows tab
     const tvShowsTab = document.querySelector('[data-tab="tv-shows"]');
@@ -1472,8 +1633,8 @@ async function addTVShow(details, providers) {
             const seasonData = {
                 tv_show_id: show.id,
                 season_number: season.season_number,
-                release_year: season.air_date ? new Date(season.air_date).getFullYear() : null,
-                release_date: seasonDetails.air_date || season.air_date || null,
+                release_year: season.air_date && season.air_date !== 'N/A' ? new Date(season.air_date).getFullYear() : null,
+                release_date: (seasonDetails.air_date && seasonDetails.air_date !== 'N/A') || (season.air_date && season.air_date !== 'N/A') ? (seasonDetails.air_date || season.air_date) : null,
                 watched: false
             };
 
@@ -1847,83 +2008,6 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
-
-// Find the update button
-const updateButton = document.querySelector('.update-button');
-
-// Update button click handler
-updateButton.addEventListener('click', async () => {
-    // Store original content and setup button
-    const originalContent = updateButton.innerHTML;
-    updateButton.disabled = true;
-    updateButton.classList.add('updating');
-
-    // Set up button structure
-    updateButton.innerHTML = `
-        <div class="progress-bg" style="transform: scaleX(0)"></div>
-        <div class="content">
-            <span class="refresh-icon">↻</span>
-            <span class="status-text">Checking for updates...</span>
-        </div>
-    `;
-
-    try {
-        // Get elements
-        const progressBar = updateButton.querySelector('.progress-bg');
-        const statusText = updateButton.querySelector('.status-text');
-        
-        // Start with initial progress
-        progressBar.style.transform = 'scaleX(0.2)'; // 20% initial progress
-
-        // Get total count of items to check
-        const { count: tvCount } = await supabase
-            .from('tv_shows')
-            .select('*', { count: 'exact', head: true });
-            
-        const { count: movieCount } = await supabase
-            .from('movies')
-            .select('*', { count: 'exact', head: true });
-            
-        const totalItems = (tvCount || 0) + (movieCount || 0);
-        let checkedItems = 0;
-
-        // Create a progress update function
-        const updateProgress = (itemsChecked) => {
-            checkedItems = itemsChecked;
-            const progress = (checkedItems / totalItems) * 0.8 + 0.2; // 20-100%
-            progressBar.style.transform = `scaleX(${progress})`;
-            statusText.textContent = `Checking... ${Math.round(progress * 100)}%`;
-        };
-
-        // Check for updates with progress
-        const changes = await updateService.checkForUpdates(true, true, updateProgress);
-        
-        // Show completion state
-        progressBar.style.transform = 'scaleX(1)';
-        statusText.textContent = 'Finished updating';
-
-        // If there were changes, refresh the display
-        if (changes && changes.length > 0) {
-            localStorage.setItem('recentChanges', JSON.stringify(changes));
-            renderNewsSection();
-        }
-
-        // Reset button after delay
-        setTimeout(() => {
-            updateButton.innerHTML = originalContent;
-            updateButton.disabled = false;
-            updateButton.classList.remove('updating');
-        }, 2000);
-
-    } catch (error) {
-        console.error('Error checking for updates:', error);
-        
-        // Reset button immediately on error
-        updateButton.innerHTML = originalContent;
-        updateButton.disabled = false;
-        updateButton.classList.remove('updating');
-    }
-});
 
 // Image loading handling
 function setupImageLoading() {

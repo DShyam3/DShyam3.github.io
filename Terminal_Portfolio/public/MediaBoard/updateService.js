@@ -378,7 +378,10 @@ class MediaUpdateService {
                 
                 // Extract air date from season details
                 const airDate = seasonDetails.air_date;
-                const releaseYear = airDate ? new Date(airDate).getFullYear() : null;
+                const releaseYear = airDate && airDate !== 'N/A' ? new Date(airDate).getFullYear() : null;
+                
+                // Handle N/A release dates by setting to null
+                const processedAirDate = airDate && airDate !== 'N/A' ? airDate : null;
                 
                 // First add the season
                 const { data: insertedSeason, error: seasonError } = await this.supabase
@@ -387,7 +390,7 @@ class MediaUpdateService {
                         tv_show_id: showId,
                         season_number: season.season_number,
                         release_year: releaseYear,
-                        release_date: airDate,
+                        release_date: processedAirDate,
                         watched: false
                     }])
                     .select()
