@@ -2,6 +2,8 @@ class MediaUpdateService {
     constructor() {
         this.lastUpdate = localStorage.getItem('lastUpdateTime');
         this.updateInterval = 1000 * 60 * 60; // 1 hour in milliseconds
+        this.dailyUpdateTime = '06:00'; // Default daily update time (6 AM)
+        this.lastDailyUpdate = localStorage.getItem('lastDailyUpdate');
         
         // Initialize Supabase client
         this.supabase = supabase;
