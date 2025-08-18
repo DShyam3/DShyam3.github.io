@@ -15,9 +15,21 @@ class MediaUpdateService {
     async checkForUpdates(forceCheck = false, checkPlatforms = false, onProgress = null) {
         try {
             console.log('Starting update check...');
+            console.log('Current configuration:', {
+                supabase: !!this.supabase,
+                tmdbBaseUrl: this.tmdbBaseUrl,
+                tmdbApiKey: this.tmdbApiKey ? 'Set' : 'Not set'
+            });
             
-            if (!this.supabase) throw new Error('Supabase client not initialized');
-            if (!this.tmdbBaseUrl || !this.tmdbApiKey) throw new Error('TMDB configuration not set');
+            // Verify Supabase connection
+            if (!this.supabase) {
+                throw new Error('Supabase client not initialized');
+            }
+            
+            // Verify TMDB configuration
+            if (!this.tmdbBaseUrl || !this.tmdbApiKey) {
+                throw new Error('TMDB configuration not set');
+            }
 
             const now = new Date();
             const lastUpdate = new Date(localStorage.getItem('lastUpdateCheck') || 0);
@@ -28,50 +40,41 @@ class MediaUpdateService {
                 return [];
             }
 
-            // Get total counts first
-            const { count: tvShowCount } = await this.supabase
-                .from('tv_shows')
-                .select('*', { count: 'exact', head: true });
-                
-            const { count: movieCount } = await this.supabase
-                .from('movies')
-                .select('*', { count: 'exact', head: true });
+            console.log('Checking for updates...');
+            let totalProgress = 0;
 
-            const totalItems = (tvShowCount || 0) + (movieCount || 0);
-            
-            if (totalItems === 0) {
-                if (onProgress) onProgress(100);
-                return [];
-            }
-
-            // Calculate progress weights (TV shows get 70%, movies get 30%)
-            const tvShowWeight = 0.7;
-            const movieWeight = 0.3;
-
-            // Check TV shows (0-70%)
-            await this.checkTVShowUpdates(false, (tvProgress) => {
-                if (onProgress) {
-                    const overallProgress = Math.round(tvProgress * tvShowWeight);
-                    onProgress(overallProgress);
-                }
+            // Check TV shows for new seasons and status changes
+            console.log('Starting TV show updates check...');
+            await this.checkTVShowUpdates(false, (progress) => {
+                if (onProgress) onProgress(progress);
             });
 
-            // Check movies (70-100%)
-            await this.checkMovieUpdates(true, (movieProgress) => {
-                if (onProgress) {
-                    const overallProgress = Math.round((tvShowWeight * 100) + (movieProgress * movieWeight));
-                    onProgress(overallProgress);
-                }
+            // Check movies for platform changes only
+            console.log('Starting movie platform updates check...');
+            await this.checkMovieUpdates(true, (progress) => {
+                if (onProgress) onProgress(progress);
             });
 
             // Update coming soon panel
+            console.log('Updating coming soon panel...');
             await this.updateComingSoonPanel();
+
+            // Update last check time
             localStorage.setItem('lastUpdateCheck', now.toISOString());
-            
-            if (onProgress) onProgress(100);
+            console.log('Update check complete');
+
             return [];
         } catch (error) {
             console.error('Error checking for updates:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                supabase: !!this.supabase,
+                tmdbConfig: {
+                    baseUrl: !!this.tmdbBaseUrl,
+                    apiKey: !!this.tmdbApiKey
+                }
+            });
             throw error;
         }
     }
@@ -91,6 +94,7 @@ class MediaUpdateService {
             
             if (!shows || shows.length === 0) {
                 console.log('No TV shows found in database');
+                if (onProgress) onProgress(0);
                 return changes;
             }
 
@@ -98,11 +102,8 @@ class MediaUpdateService {
             
             for (let i = 0; i < shows.length; i++) {
                 const show = shows[i];
-                // Report progress as percentage of TV shows completed
-                if (onProgress) {
-                    const percentage = Math.round((i / shows.length) * 100);
-                    onProgress(percentage);
-                }
+                // Calculate progress as percentage of TV shows processed
+                if (onProgress) onProgress(Math.round(((i + 1) / shows.length) * 50)); // TV shows are 50% of total progress
                 
                 try {
                     // If no tmdb_id, try to find and update it
@@ -259,6 +260,7 @@ class MediaUpdateService {
             
             if (!movies || movies.length === 0) {
                 console.log('No movies found in database');
+                if (onProgress) onProgress(50); // Movies are 50-100% of progress, so if no movies, we're at 50%
                 return changes;
             }
 
@@ -266,11 +268,8 @@ class MediaUpdateService {
             
             for (let i = 0; i < movies.length; i++) {
                 const movie = movies[i];
-                // Report progress as percentage of movies completed
-                if (onProgress) {
-                    const percentage = Math.round((i / movies.length) * 100);
-                    onProgress(percentage);
-                }
+                // Calculate progress as percentage, starting from 50% (since TV shows are 0-50%)
+                if (onProgress) onProgress(50 + Math.round(((i + 1) / movies.length) * 50));
                 
                 try {
                     // If no tmdb_id, try to find and update it
@@ -286,42 +285,46 @@ class MediaUpdateService {
                             type: 'movie',
                             id: movie.id,
                             name: movie.title,
-                            change: 'tmdb_id_added',
-                            details: [`Added TMDB ID: ${tmdbId}`]
+                            change: 'tmdb_id',
+                            details: `Added TMDB ID: ${tmdbId}`
                         });
                     }
 
-                    // Only check platforms if requested
-                    if (checkPlatforms && movie.tmdb_id) {
-                        console.log(`Checking platform updates for ${movie.title}`);
-                        
-                        // Get current platform info from TMDB
-                        const response = await fetch(
-                            `${this.tmdbBaseUrl}/movie/${movie.tmdb_id}/watch/providers?api_key=${this.tmdbApiKey}`
-                        );
-                        
-                        if (!response.ok) {
-                            console.error(`TMDB API error for ${movie.title}:`, response.status, response.statusText);
-                            continue;
-                        }
-                        
-                        const providers = await response.json();
-                        const bestPlatform = this.getBestPlatform(providers.results);
-                        
-                        if (bestPlatform && bestPlatform !== movie.platform) {
-                            console.log(`Platform change detected for ${movie.title}: ${movie.platform} -> ${bestPlatform}`);
-                            await this.supabase
-                                .from('movies')
-                                .update({ platform: bestPlatform })
-                                .eq('id', movie.id);
-                            changes.push({
-                                type: 'movie',
-                                id: movie.id,
-                                name: movie.title,
-                                change: 'platform',
-                                old: movie.platform,
-                                new: bestPlatform
-                            });
+                    console.log(`Checking updates for ${movie.title} (TMDB ID: ${movie.tmdb_id})`);
+                    
+                    // Get current details from TMDB
+                    const response = await fetch(
+                        `${this.tmdbBaseUrl}/movie/${movie.tmdb_id}?api_key=${this.tmdbApiKey}&append_to_response=watch/providers`
+                    );
+                    
+                    if (!response.ok) {
+                        console.error(`TMDB API error for ${movie.title}:`, response.status, response.statusText);
+                        continue;
+                    }
+                    
+                    const currentDetails = await response.json();
+
+                    // Check platform changes if requested
+                    if (checkPlatforms) {
+                        try {
+                            const currentPlatform = this.getBestPlatform(currentDetails['watch/providers']);
+                            if (currentPlatform && currentPlatform !== movie.platform) {
+                                console.log(`Platform change detected for ${movie.title}: ${movie.platform} -> ${currentPlatform}`);
+                                await this.supabase
+                                    .from('movies')
+                                    .update({ platform: currentPlatform })
+                                    .eq('id', movie.id);
+                                changes.push({
+                                    type: 'movie',
+                                    id: movie.id,
+                                    name: movie.title,
+                                    change: 'platform',
+                                    old: movie.platform,
+                                    new: currentPlatform
+                                });
+                            }
+                        } catch (platformError) {
+                            console.error(`Error checking platform for ${movie.title}:`, platformError);
                         }
                     }
                 } catch (error) {

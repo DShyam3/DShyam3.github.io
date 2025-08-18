@@ -46,8 +46,6 @@ const PLATFORMS = {
 
 let updateService;
 
-const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwIiB5PSI3NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
-
 // Initialize application
 async function initializeApp() {
     try {
@@ -56,8 +54,57 @@ async function initializeApp() {
         await loadData();
         setupEventListeners();
         setupWeeklySchedule();
+        updateLastUpdatedDisplay();
     } catch (error) {
         console.error('Error initializing app:', error);
+    }
+}
+
+// Function to update the last updated display
+function updateLastUpdatedDisplay() {
+    const lastUpdatedElement = document.getElementById('last-updated-time');
+    if (!lastUpdatedElement) return;
+    
+    const lastUpdateTime = localStorage.getItem('lastUpdateCheck');
+    
+    if (lastUpdateTime) {
+        const lastUpdate = new Date(lastUpdateTime);
+        const now = new Date();
+        const timeDiff = now - lastUpdate;
+        
+        // Format the time difference
+        let timeText;
+        if (timeDiff < 60000) { // Less than 1 minute
+            timeText = 'Just now';
+        } else if (timeDiff < 3600000) { // Less than 1 hour
+            const minutes = Math.floor(timeDiff / 60000);
+            timeText = `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+        } else if (timeDiff < 86400000) { // Less than 1 day
+            const hours = Math.floor(timeDiff / 3600000);
+            timeText = `${hours} hour${hours > 1 ? 's' : ''} ago`;
+        } else if (timeDiff < 604800000) { // Less than 1 week
+            const days = Math.floor(timeDiff / 86400000);
+            timeText = `${days} day${days > 1 ? 's' : ''} ago`;
+        } else {
+            // Show the actual date for older updates in dd/mm/yyyy format
+            const day = String(lastUpdate.getDate()).padStart(2, '0');
+            const month = String(lastUpdate.getMonth() + 1).padStart(2, '0');
+            const year = lastUpdate.getFullYear();
+            const time = lastUpdate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            timeText = `${day}/${month}/${year} ${time}`;
+        }
+        
+        lastUpdatedElement.textContent = timeText;
+        
+        // Add title attribute for exact time on hover with dd/mm/yyyy format
+        const day = String(lastUpdate.getDate()).padStart(2, '0');
+        const month = String(lastUpdate.getMonth() + 1).padStart(2, '0');
+        const year = lastUpdate.getFullYear();
+        const exactTime = `${day}/${month}/${year} ${lastUpdate.toLocaleTimeString()}`;
+        lastUpdatedElement.title = `Last updated: ${exactTime}`;
+    } else {
+        lastUpdatedElement.textContent = 'Never';
+        lastUpdatedElement.title = 'No updates have been performed yet';
     }
 }
 
@@ -195,14 +242,31 @@ function setupEventListeners() {
             refreshBtn.disabled = true;
             icon.style.animation = 'spin 1s linear infinite';
             
+            // Update last updated display to show checking status
+            const lastUpdatedElement = document.getElementById('last-updated-time');
+            if (lastUpdatedElement) {
+                lastUpdatedElement.textContent = 'Checking...';
+            }
+            
             try {
+                // Get total count of items to check
+                const { data: counts } = await supabase
+                    .from('tv_shows')
+                    .select('count', { count: 'exact', head: true });
+                const { data: movieCounts } = await supabase
+                    .from('movies')
+                    .select('count', { count: 'exact', head: true });
+                
+                const totalItems = (counts?.[0]?.count || 0) + (movieCounts?.[0]?.count || 0);
+                
                 // Show initial progress
                 refreshBtn.querySelector('.status-text').textContent = 'Checking updates (0%)...';
                 
                 // Force check for updates including platforms
                 const changes = await updateService.checkForUpdates(true, true, (progress) => {
-                    // progress is already a percentage (0-100)
-                    refreshBtn.querySelector('.status-text').textContent = `Checking updates (${progress}%)...`;
+                    // Progress is now a percentage (0-100) directly from the update service
+                    const clampedPercentage = Math.min(progress, 100);
+                    refreshBtn.querySelector('.status-text').textContent = `Checking updates (${clampedPercentage}%)...`;
                 });
                 
                 // Show progress
@@ -219,6 +283,7 @@ function setupEventListeners() {
                 
                 // Show success state briefly
                 refreshBtn.querySelector('.status-text').textContent = 'Updates complete!';
+                updateLastUpdatedDisplay();
                 setTimeout(() => {
                     refreshBtn.querySelector('.status-text').textContent = originalText;
                     refreshBtn.disabled = false;
@@ -228,6 +293,7 @@ function setupEventListeners() {
             } catch (error) {
                 console.error('Error refreshing data:', error);
                 refreshBtn.querySelector('.status-text').textContent = 'Update failed';
+                updateLastUpdatedDisplay(); // Restore the last updated display
                 setTimeout(() => {
                     refreshBtn.querySelector('.status-text').textContent = originalText;
                     refreshBtn.disabled = false;
@@ -274,7 +340,7 @@ function renderSearchResults(results) {
         div.className = 'search-result-item';
         div.innerHTML = `
             <div class="search-result-content">
-                <img src="${result.poster || PLACEHOLDER_IMAGE}" alt="${result.title}" class="search-result-poster">
+                <img src="${result.poster || 'placeholder.jpg'}" alt="${result.title}" class="search-result-poster">
                 <div class="search-result-info">
                     ${result.title}
                     <span class="result-type">${result.media_type === 'tv' ? 'TV Show' : 'Movie'}</span>
@@ -380,10 +446,10 @@ function createMediaCard(media, type) {
             </div>
             <div class="media-card-image-container" onclick="handleCardClick(this.parentElement)">
                 <img 
-                    src="${media.poster || PLACEHOLDER_IMAGE}" 
+                    src="${media.poster || 'placeholder.jpg'}" 
                     alt="${media.title}"
                     loading="lazy"
-                    onerror="this.src=PLACEHOLDER_IMAGE; this.onerror=null;"
+                    onerror="this.src='placeholder.jpg'; this.onerror=null;"
                     class="media-poster"
                 >
                 <div class="image-placeholder">
@@ -469,7 +535,7 @@ function createTVShowDetails(show) {
             </button>
             <div class="details-grid">
                 <div class="poster-column">
-                    <img src="${show.poster || PLACEHOLDER_IMAGE}" alt="${show.title}" class="detail-poster">
+                    <img src="${show.poster || 'placeholder.jpg'}" alt="${show.title}" class="detail-poster">
                 </div>
                 <div class="info-column">
                     <h2>${show.title}</h2>
@@ -672,7 +738,7 @@ function createMovieDetails(movie) {
             </button>
             <div class="details-grid movie-details">
                 <div class="poster-column">
-                    <img src="${movie.poster || PLACEHOLDER_IMAGE}" alt="${movie.title}" class="detail-poster">
+                    <img src="${movie.poster || 'placeholder.jpg'}" alt="${movie.title}" class="detail-poster">
                 </div>
                 <div class="info-column">
                     <h2>${movie.title}</h2>
@@ -1275,7 +1341,7 @@ function createScheduledShowElement(showId, title, poster, day) {
     div.className = 'scheduled-show';
     div.setAttribute('data-show-id', showId);
     div.innerHTML = `
-        <img src="${poster || PLACEHOLDER_IMAGE}" alt="${title}">
+        <img src="${poster || 'placeholder.jpg'}" alt="${title}">
         <span>${title}</span>
         <button class="remove-schedule" onclick="removeFromSchedule(${showId}, '${day}', this.parentElement)">×</button>
     `;
@@ -1762,47 +1828,23 @@ async function handleDeleteMedia(type, id, title) {
 }
 
 async function renderNewsSection() {
-    try {
-        const upcomingTVContent = document.getElementById('upcoming-tv-content');
-        const upcomingMoviesContent = document.getElementById('upcoming-movies-content');
-        const changesContent = document.getElementById('changes-content');
-        
-        if (!upcomingTVContent || !upcomingMoviesContent || !changesContent) {
-            console.log('News section elements not found, skipping render');
-            return;
-        }
-
-        // Get and sort upcoming TV shows
-        const upcomingTV = await getUpcomingTVShows() || [];
-        upcomingTV.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
-        upcomingTVContent.innerHTML = upcomingTV.map(item => createNewsItem(item, 'upcoming')).join('');
-        
-        // Get and sort upcoming movies
-        const upcomingMovies = getUpcomingMovies() || [];
-        upcomingMovies.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
-        upcomingMoviesContent.innerHTML = upcomingMovies.map(item => createNewsItem(item, 'upcoming')).join('');
-        
-        // Get recent changes from localStorage
-        let recentChanges = [];
-        try {
-            const storedChanges = localStorage.getItem('recentChanges');
-            if (storedChanges) {
-                recentChanges = JSON.parse(storedChanges);
-            }
-        } catch (e) {
-            console.error('Error parsing recent changes:', e);
-            recentChanges = [];
-        }
-        
-        // Ensure recentChanges is an array and has the expected structure
-        if (!Array.isArray(recentChanges)) {
-            recentChanges = [];
-        }
-        
-        changesContent.innerHTML = recentChanges.map(item => createNewsItem(item, 'change')).join('');
-    } catch (error) {
-        console.error('Error rendering news section:', error);
-    }
+    const upcomingTVContent = document.getElementById('upcoming-tv-content');
+    const upcomingMoviesContent = document.getElementById('upcoming-movies-content');
+    const changesContent = document.getElementById('changes-content');
+    
+    // Get and sort upcoming TV shows
+    const upcomingTV = await getUpcomingTVShows();
+    upcomingTV.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
+    upcomingTVContent.innerHTML = upcomingTV.map(item => createNewsItem(item, 'upcoming')).join('');
+    
+    // Get and sort upcoming movies
+    const upcomingMovies = getUpcomingMovies();
+    upcomingMovies.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
+    upcomingMoviesContent.innerHTML = upcomingMovies.map(item => createNewsItem(item, 'upcoming')).join('');
+    
+    // Get recent changes from localStorage
+    const recentChanges = JSON.parse(localStorage.getItem('recentChanges') || '[]');
+    changesContent.innerHTML = recentChanges.map(item => createNewsItem(item, 'change')).join('');
 }
 
 async function getUpcomingTVShows() {
@@ -1850,64 +1892,48 @@ function formatDate(dateString) {
 }
 
 function createNewsItem(item, type) {
-    try {
-        if (!item || !item.title) {
-            console.warn('Invalid item data for news item:', item);
-            return '';
-        }
-
-        if (type === 'upcoming') {
-            const releaseDate = formatDate(item.release_date);
-            const daysUntil = Math.ceil((new Date(item.release_date) - new Date()) / (1000 * 60 * 60 * 24));
-            
-            return `
-                <div class="news-item">
-                    <img src="${item.poster || PLACEHOLDER_IMAGE}" alt="${item.title}">
-                    <div class="news-item-content">
-                        <div class="news-item-title">${item.title}</div>
-                        <div class="news-item-date">
-                            ${daysUntil === 0 ? 'Releases today' :
-                              daysUntil === 1 ? 'Releases tomorrow' :
-                              `Releases in ${daysUntil} days`}
-                        </div>
-                        <div class="news-item-release-date">Release date: ${releaseDate}</div>
-                        ${item.type === 'tv_season' ? 
-                            `<div class="news-item-info">Season ${item.season_number}</div>` : ''}
-                        <div class="news-item-platform">on ${item.platform || 'Unknown'}</div>
+    if (type === 'upcoming') {
+        const releaseDate = formatDate(item.release_date);
+        const daysUntil = Math.ceil((new Date(item.release_date) - new Date()) / (1000 * 60 * 60 * 24));
+        
+        return `
+            <div class="news-item">
+                <img src="${item.poster || 'placeholder.jpg'}" alt="${item.title}">
+                <div class="news-item-content">
+                    <div class="news-item-title">${item.title}</div>
+                    <div class="news-item-date">
+                        ${daysUntil === 0 ? 'Releases today' :
+                          daysUntil === 1 ? 'Releases tomorrow' :
+                          `Releases in ${daysUntil} days`}
                     </div>
+                    <div class="news-item-release-date">Release date: ${releaseDate}</div>
+                    ${item.type === 'tv_season' ? 
+                        `<div class="news-item-info">Season ${item.season_number}</div>` : ''}
+                    <div class="news-item-platform">on ${item.platform}</div>
                 </div>
-            `;
-        } else {
-            // Handle changes type
-            const changesHtml = Array.isArray(item.changes) ? 
-                item.changes.map(change => {
-                    if (!change || !change.type) return '';
-                    
-                    switch (change.type) {
-                        case 'status':
-                            return `<div class="news-item-change">Status changed from "${change.old || 'Unknown'}" to "${change.new || 'Unknown'}"</div>`;
-                        case 'platform':
-                            return `<div class="news-item-change">Now available on ${change.new || 'Unknown'}</div>`;
-                        case 'seasons':
-                            return `<div class="news-item-change">New season${(change.new && change.new.length > 1) ? 's' : ''} announced!</div>`;
-                        default:
-                            return '';
-                    }
-                }).join('') : '';
-
-            return `
-                <div class="news-item">
-                    <img src="${item.poster || PLACEHOLDER_IMAGE}" alt="${item.title}">
-                    <div class="news-item-content">
-                        <div class="news-item-title">${item.title}</div>
-                        ${changesHtml}
-                    </div>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="news-item">
+                <img src="${item.poster || 'placeholder.jpg'}" alt="${item.title}">
+                <div class="news-item-content">
+                    <div class="news-item-title">${item.title}</div>
+                    ${item.changes.map(change => {
+                        switch (change.type) {
+                            case 'status':
+                                return `<div class="news-item-change">Status changed from "${change.old}" to "${change.new}"</div>`;
+                            case 'platform':
+                                return `<div class="news-item-change">Now available on ${change.new}</div>`;
+                            case 'seasons':
+                                return `<div class="news-item-change">New season${change.new.length > 1 ? 's' : ''} announced!</div>`;
+                            default:
+                                return '';
+                        }
+                    }).join('')}
                 </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Error creating news item:', error, item);
-        return '';
+            </div>
+        `;
     }
 }
 
