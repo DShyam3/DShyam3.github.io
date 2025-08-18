@@ -1644,17 +1644,28 @@ function getBestPlatform(providers) {
 
 async function addTVShow(details, providers) {
     try {
-        // Check if TV show already exists - using select without single() first
+        // Check if TV show already exists with same title and TMDB ID
         const { data: existing, error: existingError } = await supabase
             .from('tv_shows')
-            .select('id, title')
+            .select('id, title, tmdb_id')
             .ilike('title', details.name);
 
         if (existingError) throw existingError;
         
-        // Check if we found any matches
         if (existing && existing.length > 0) {
-            throw new Error(`"${details.name}" is already in your TV shows list`);
+            // Check for exact duplicates (same title + TMDB ID)
+            const exactDuplicate = existing.find(show => 
+                show.tmdb_id === details.id
+            );
+            
+            if (exactDuplicate) {
+                throw new Error(`"${details.name}" is already in your TV shows list`);
+            }
+            
+            // If we have shows with same title but different TMDB ID, show a helpful message
+            const similarShows = existing.map(s => `${s.title}`).join(', ');
+            console.log(`Found similar TV shows with same title: ${similarShows}`);
+            console.log(`Adding "${details.name}" as a separate entry`);
         }
 
         // Prepare TV show data
@@ -1665,7 +1676,8 @@ async function addTVShow(details, providers) {
             status: details.status,
             poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null,
             overview: details.overview,
-            release_date: details.first_air_date || null
+            release_date: details.first_air_date || null,
+            tmdb_id: details.id // Add TMDB ID for better duplicate detection
         };
 
         // Insert TV show
@@ -1726,15 +1738,29 @@ async function addTVShow(details, providers) {
 
 async function addMovie(details, providers) {
     try {
-        // Check if movie already exists
+        // Check if movie already exists with same title, year, and TMDB ID
+        const releaseYear = details.release_date ? new Date(details.release_date).getFullYear() : null;
+        
         const { data: existing } = await supabase
             .from('movies')
-            .select('id')
-            .ilike('title', details.title)
-            .single();
+            .select('id, title, release_year, tmdb_id')
+            .ilike('title', details.title);
 
-        if (existing) {
-            throw new Error(`"${details.title}" is already in your movies list`);
+        if (existing && existing.length > 0) {
+            // Check for exact duplicates (same title + year + TMDB ID)
+            const exactDuplicate = existing.find(movie => 
+                movie.release_year === releaseYear && 
+                movie.tmdb_id === details.id
+            );
+            
+            if (exactDuplicate) {
+                throw new Error(`"${details.title}" (${releaseYear || 'Unknown Year'}) is already in your movies list`);
+            }
+            
+            // If we have movies with same title but different year/ID, show a helpful message
+            const similarMovies = existing.map(m => `${m.title} (${m.release_year || 'Unknown Year'})`).join(', ');
+            console.log(`Found similar movies with same title: ${similarMovies}`);
+            console.log(`Adding "${details.title}" (${releaseYear || 'Unknown Year'}) as a separate entry`);
         }
 
         const movieData = {
