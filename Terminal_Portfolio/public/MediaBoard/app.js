@@ -720,7 +720,7 @@ function createEpisodesSection(season) {
                     </div>
                     <div class="episode-info">
                         <span class="episode-date">
-                            ${formatDate(episode.release_date)}
+                            ${episode.release_date ? formatDate(episode.release_date) : 'TBA'}
                         </span>
                     </div>
                 </div>
@@ -1718,7 +1718,7 @@ async function addTVShow(details, providers) {
                 const episodesData = seasonDetails.episodes.map(episode => ({
                     season_id: insertedSeason.id,
                     episode_number: episode.episode_number,
-                    release_date: episode.air_date,
+                    release_date: episode.air_date && episode.air_date !== 'N/A' ? episode.air_date : null,
                     watched: false
                 }));
 

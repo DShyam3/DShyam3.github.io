@@ -139,6 +139,11 @@ class MediaUpdateService {
                 }
             });
 
+            // Fix episodes with missing release dates
+            console.log('Fixing episodes with missing release dates...');
+            if (onProgress) onProgress(35);
+            await this.fixMissingEpisodeDates();
+
             // Check movies for updates (parallel processing)
             console.log('Starting comprehensive movie updates check with parallel processing...');
             if (onProgress) onProgress(40); // Movies start at 40%
@@ -378,7 +383,7 @@ class MediaUpdateService {
                             const episodesData = missingEpisodes.map(episode => ({
                                 season_id: seasonId,
                                 episode_number: episode.episode_number,
-                                release_date: episode.air_date,
+                                release_date: episode.air_date && episode.air_date !== 'N/A' ? episode.air_date : null,
                                 watched: false
                             }));
 
@@ -805,7 +810,7 @@ class MediaUpdateService {
                         const episodesData = episodesWithDates.map(episode => ({
                             season_id: insertedSeason.id,
                             episode_number: episode.episode_number,
-                            release_date: episode.air_date,
+                            release_date: episode.air_date && episode.air_date !== 'N/A' ? episode.air_date : null,
                             watched: false
                         }));
                         
@@ -820,12 +825,12 @@ class MediaUpdateService {
                         }
                     }
                     
-                    // Add episodes without air dates as upcoming
+                    // Add episodes without air dates as upcoming (TBA)
                     if (episodesWithoutDates.length > 0) {
                         const upcomingEpisodesData = episodesWithoutDates.map(episode => ({
                             season_id: insertedSeason.id,
                             episode_number: episode.episode_number,
-                            release_date: null,
+                            release_date: null, // Will show as TBA
                             watched: false
                         }));
                         
@@ -836,7 +841,7 @@ class MediaUpdateService {
                         if (upcomingEpisodesError) {
                             console.error(`Error adding upcoming episodes for season ${season.season_number}:`, upcomingEpisodesError);
                         } else {
-                            console.log(`Added ${upcomingEpisodesData.length} upcoming episodes for season ${season.season_number}`);
+                            console.log(`Added ${upcomingEpisodesData.length} upcoming episodes for season ${season.season_number} (will show as TBA)`);
                         }
                     }
                 } else {
@@ -1217,6 +1222,338 @@ class MediaUpdateService {
         this.rateLimitDelay = rateLimitDelay;
         
         console.log(`Batch processing configured: batchSize=${batchSize}, maxConcurrent=${maxConcurrent}, rateLimitDelay=${rateLimitDelay}ms`);
+    }
+
+    // Fix episodes with missing release dates
+    async fixMissingEpisodeDates() {
+        try {
+            console.log('🔧 Starting fix for episodes with missing release dates...');
+            
+            // Get all episodes with null or missing release dates
+            // This includes episodes that show as "TBA" in the UI (null values)
+            console.log('🔍 Querying for episodes with missing release dates...');
+            
+            const { data: episodesWithMissingDates, error: fetchError } = await this.supabase
+                .from('tv_show_episodes')
+                .select(`
+                    id,
+                    episode_number,
+                    release_date,
+                    season_id,
+                    tv_show_seasons!inner(
+                        id,
+                        season_number,
+                        tv_show_id,
+                        tv_shows!inner(
+                            id,
+                            title,
+                            tmdb_id
+                        )
+                    )
+                `)
+                .is('release_date', null);
+            
+            // Also check for episodes with empty string or "N/A" values
+            const { data: episodesWithEmptyDates } = await this.supabase
+                .from('tv_show_episodes')
+                .select(`
+                    id,
+                    episode_number,
+                    release_date,
+                    season_id,
+                    tv_show_seasons!inner(
+                        id,
+                        season_number,
+                        tv_show_id,
+                        tv_shows!inner(
+                            id,
+                            title,
+                            tmdb_id
+                        )
+                    )
+                `)
+                .or('release_date.eq.N/A,release_date.eq.,release_date.eq."",release_date.eq."null"');
+            
+            // Combine both results
+            const allMissingEpisodes = [
+                ...(episodesWithMissingDates || []),
+                ...(episodesWithEmptyDates || [])
+            ];
+            
+            // Remove duplicates based on episode ID
+            const uniqueMissingEpisodes = allMissingEpisodes.filter((episode, index, self) => 
+                index === self.findIndex(e => e.id === episode.id)
+            );
+            
+            if (fetchError) {
+                console.error('Error fetching episodes with missing dates:', fetchError);
+                return;
+            }
+            
+            if (!uniqueMissingEpisodes || uniqueMissingEpisodes.length === 0) {
+                console.log('✅ No episodes with missing release dates found');
+                return;
+            }
+            
+            console.log(`🔍 Found ${uniqueMissingEpisodes.length} episodes with missing release dates`);
+            
+            // Debug: Show what we found
+            uniqueMissingEpisodes.forEach(ep => {
+                console.log(`  - ${ep.tv_show_seasons.tv_shows.title} S${ep.tv_show_seasons.season_number}E${ep.episode_number}: ${ep.release_date || 'null'}`);
+            });
+            
+            // Group episodes by TV show for efficient processing
+            const episodesByShow = new Map();
+            uniqueMissingEpisodes.forEach(episode => {
+                const showId = episode.tv_show_seasons.tv_shows.id;
+                if (!episodesByShow.has(showId)) {
+                    episodesByShow.set(showId, {
+                        show: episode.tv_show_seasons.tv_shows,
+                        episodes: []
+                    });
+                }
+                episodesByShow.get(showId).episodes.push(episode);
+            });
+            
+            let totalFixed = 0;
+            let totalErrors = 0;
+            let totalSkipped = 0;
+            
+            // Process each TV show
+            for (const [showId, showData] of episodesByShow) {
+                try {
+                    const { show, episodes } = showData;
+                    
+                    if (!show.tmdb_id) {
+                        console.log(`⚠️  No TMDB ID for ${show.title}, skipping...`);
+                        continue;
+                    }
+                    
+                    console.log(`🎬 Fixing episodes for ${show.title}...`);
+                    
+                    // Get fresh episode data from TMDB
+                    const seasonNumbers = [...new Set(episodes.map(ep => ep.tv_show_seasons.season_number))];
+                    
+                    for (const seasonNumber of seasonNumbers) {
+                        try {
+                            const seasonResponse = await fetch(
+                                `${this.tmdbBaseUrl}/tv/${show.tmdb_id}/season/${seasonNumber}?api_key=${this.tmdbApiKey}`
+                            );
+                            
+                            if (!seasonResponse.ok) {
+                                console.error(`❌ Error fetching season ${seasonNumber} for ${show.title}:`, seasonResponse.status);
+                                continue;
+                            }
+                            
+                            const seasonDetails = await seasonResponse.json();
+                            
+                            if (!seasonDetails.episodes || seasonDetails.episodes.length === 0) {
+                                console.log(`⚠️  No episodes found for ${show.title} Season ${seasonNumber}`);
+                                continue;
+                            }
+                            
+                            // Find episodes that need fixing
+                            const seasonEpisodes = episodes.filter(ep => ep.tv_show_seasons.season_number === seasonNumber);
+                            
+                            for (const episode of seasonEpisodes) {
+                                const tmdbEpisode = seasonDetails.episodes.find(
+                                    tmdbEp => tmdbEp.episode_number === episode.episode_number
+                                );
+                                
+                                if (tmdbEpisode && tmdbEpisode.air_date) {
+                                    // Update the episode with the correct release date from TMDB
+                                    const { error: updateError } = await this.supabase
+                                        .from('tv_show_episodes')
+                                        .update({ release_date: tmdbEpisode.air_date })
+                                        .eq('id', episode.id);
+                                    
+                                    if (updateError) {
+                                        console.error(`❌ Error updating episode ${episode.episode_number} for ${show.title}:`, updateError);
+                                        totalErrors++;
+                                    } else {
+                                        console.log(`✅ Fixed episode ${episode.episode_number} for ${show.title}: ${tmdbEpisode.air_date}`);
+                                        totalFixed++;
+                                    }
+                                } else {
+                                    // No air date available on TMDB - leave as TBA
+                                    console.log(`⚠️  No air date found for ${show.title} Season ${seasonNumber} Episode ${episode.episode_number} - leaving as TBA`);
+                                    totalSkipped++;
+                                }
+                            }
+                            
+                        } catch (seasonError) {
+                            console.error(`❌ Error processing season ${seasonNumber} for ${show.title}:`, seasonError);
+                            totalErrors++;
+                        }
+                    }
+                    
+                } catch (showError) {
+                    console.error(`❌ Error processing show ${showData.show.title}:`, showError);
+                    totalErrors++;
+                }
+            }
+            
+            console.log(`🎉 Episode date fix completed: ${totalFixed} episodes fixed, ${totalErrors} errors, ${totalSkipped} skipped (likely first episodes without TMDB data)`);
+            
+        } catch (error) {
+            console.error('💥 Error in fixMissingEpisodeDates:', error);
+        }
+    }
+
+
+    // Debug function to check what episodes have missing dates
+    async debugMissingEpisodes() {
+        try {
+            console.log('🔍 Debugging missing episodes...');
+            
+            // Get all episodes to see what we have
+            const { data: allEpisodes } = await this.supabase
+                .from('tv_show_episodes')
+                .select(`
+                    id,
+                    episode_number,
+                    release_date,
+                    tv_show_seasons!inner(
+                        season_number,
+                        tv_shows!inner(
+                            title,
+                            tmdb_id
+                        )
+                    )
+                `)
+                .order('tv_show_seasons.tv_shows.title, tv_show_seasons.season_number, episode_number');
+            
+            if (!allEpisodes) {
+                console.log('❌ No episodes found');
+                return;
+            }
+            
+            console.log(`📊 Total episodes in database: ${allEpisodes.length}`);
+            
+            // Categorize episodes
+            const episodesWithDates = allEpisodes.filter(ep => ep.release_date && ep.release_date !== 'N/A');
+            const episodesWithoutDates = allEpisodes.filter(ep => !ep.release_date || ep.release_date === 'N/A');
+            
+            console.log(`✅ Episodes with dates: ${episodesWithDates.length}`);
+            console.log(`❌ Episodes without dates: ${episodesWithoutDates.length}`);
+            
+            if (episodesWithoutDates.length > 0) {
+                console.log('\n📋 Episodes without dates:');
+                episodesWithoutDates.forEach(ep => {
+                    console.log(`  - ${ep.tv_show_seasons.tv_shows.title} S${ep.tv_show_seasons.season_number}E${ep.episode_number}: "${ep.release_date || 'null'}"`);
+                });
+            }
+            
+            // Check for episodes that should be fixable
+            const fixableEpisodes = episodesWithoutDates.filter(ep => ep.tv_show_seasons.tv_shows.tmdb_id);
+            console.log(`\n🔧 Episodes that can be fixed (have TMDB ID): ${fixableEpisodes.length}`);
+            
+            return {
+                total: allEpisodes.length,
+                withDates: episodesWithDates.length,
+                withoutDates: episodesWithoutDates.length,
+                fixable: fixableEpisodes.length
+            };
+            
+        } catch (error) {
+            console.error('💥 Error in debugMissingEpisodes:', error);
+        }
+    }
+
+    // Manual fix function for debugging specific episodes
+    async fixSpecificEpisode(showTitle, seasonNumber, episodeNumber) {
+        try {
+            console.log(`🔧 Manually fixing ${showTitle} S${seasonNumber}E${episodeNumber}...`);
+            
+            // Find the show
+            const { data: shows } = await this.supabase
+                .from('tv_shows')
+                .select('id, title, tmdb_id')
+                .ilike('title', `%${showTitle}%`);
+            
+            if (!shows || shows.length === 0) {
+                console.log(`❌ Show "${showTitle}" not found`);
+                return;
+            }
+            
+            const show = shows[0];
+            console.log(`📺 Found show: ${show.title} (TMDB ID: ${show.tmdb_id})`);
+            
+            // Find the season
+            const { data: seasons } = await this.supabase
+                .from('tv_show_seasons')
+                .select('id, season_number, release_date')
+                .eq('tv_show_id', show.id)
+                .eq('season_number', seasonNumber);
+            
+            if (!seasons || seasons.length === 0) {
+                console.log(`❌ Season ${seasonNumber} not found for ${show.title}`);
+                return;
+            }
+            
+            const season = seasons[0];
+            console.log(`📅 Found season: ${season.season_number} (Release date: ${season.release_date})`);
+            
+            // Find the episode
+            const { data: episodes } = await this.supabase
+                .from('tv_show_episodes')
+                .select('id, episode_number, release_date')
+                .eq('season_id', season.id)
+                .eq('episode_number', episodeNumber);
+            
+            if (!episodes || episodes.length === 0) {
+                console.log(`❌ Episode ${episodeNumber} not found for ${show.title} Season ${seasonNumber}`);
+                return;
+            }
+            
+            const episode = episodes[0];
+            console.log(`🎬 Found episode: ${episode.episode_number} (Current date: ${episode.release_date || 'null'})`);
+            
+            // Try to get the date from TMDB
+            const seasonResponse = await fetch(
+                `${this.tmdbBaseUrl}/tv/${show.tmdb_id}/season/${seasonNumber}?api_key=${this.tmdbApiKey}`
+            );
+            
+            if (!seasonResponse.ok) {
+                console.log(`❌ Could not fetch season data from TMDB: ${seasonResponse.status}`);
+                return;
+            }
+            
+            const seasonDetails = await seasonResponse.json();
+            console.log(`📊 Season air date from TMDB: ${seasonDetails.air_date}`);
+            
+            // Try to find the specific episode
+            const tmdbEpisode = seasonDetails.episodes?.find(ep => ep.episode_number === episodeNumber);
+            console.log(`🎬 TMDB episode data:`, tmdbEpisode);
+            
+            let newDate = null;
+            
+            if (tmdbEpisode && tmdbEpisode.air_date) {
+                newDate = tmdbEpisode.air_date;
+                console.log(`✅ Found episode air date from TMDB: ${newDate}`);
+            } else if (episodeNumber === 1 && seasonDetails.air_date) {
+                newDate = seasonDetails.air_date;
+                console.log(`💡 Using season air date for first episode: ${newDate}`);
+            } else {
+                console.log(`⚠️  No air date available from TMDB`);
+                return;
+            }
+            
+            // Update the episode
+            const { error: updateError } = await this.supabase
+                .from('tv_show_episodes')
+                .update({ release_date: newDate })
+                .eq('id', episode.id);
+            
+            if (updateError) {
+                console.error(`❌ Error updating episode:`, updateError);
+            } else {
+                console.log(`✅ Successfully updated episode to: ${newDate}`);
+            }
+            
+        } catch (error) {
+            console.error('💥 Error in fixSpecificEpisode:', error);
+        }
     }
 
     // Keep original methods for backward compatibility
