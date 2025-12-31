@@ -736,7 +736,7 @@ class MediaUpdateService {
 
     async searchTMDBID(title, year = null) {
         try {
-            // Construct search query - use instance property instead of global
+            // Construct search query
             let searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${this.tmdbApiKey}&query=${encodeURIComponent(title)}`;
             if (year) {
                 searchUrl += `&year=${year}`;
