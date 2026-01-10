@@ -43,6 +43,13 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_TMDB_API_KEY: ${{ secrets.VITE_TMDB_API_KEY }}
+          VITE_TMDB_BASE_URL: ${{ secrets.VITE_TMDB_BASE_URL }}
+          VITE_TMDB_IMAGE_BASE_URL: ${{ secrets.VITE_TMDB_IMAGE_BASE_URL }}
+          VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
