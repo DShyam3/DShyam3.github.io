@@ -1,0 +1,106 @@
+.dot-matrix-text {
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.dot-matrix-char {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.dot-matrix-row {
+    display: flex;
+    gap: 1px;
+}
+
+.dot-matrix-dot {
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background-color: transparent;
+}
+
+.dot-matrix-dot.active {
+    background-color: currentColor;
+}
+
+.dot-matrix-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* Larger text variant */
+.dot-matrix-text-lg .dot-matrix-dot {
+    width: 3px;
+    height: 3px;
+}
+
+.dot-matrix-text-lg .dot-matrix-char {
+    gap: 1.5px;
+}
+
+.dot-matrix-text-lg .dot-matrix-row {
+    gap: 1.5px;
+}
+
+.dot-matrix-text-lg.dot-matrix-text {
+    gap: 4px;
+}
+
+/* Small text variant */
+.dot-matrix-text-sm .dot-matrix-dot {
+    width: 1.5px;
+    height: 1.5px;
+}
+
+.dot-matrix-text-sm .dot-matrix-char {
+    gap: 0.5px;
+}
+
+.dot-matrix-text-sm .dot-matrix-row {
+    gap: 0.5px;
+}
+
+.dot-matrix-text-sm.dot-matrix-text {
+    gap: 1.5px;
+}
+
+/* Extra small text variant */
+.dot-matrix-text-xs .dot-matrix-dot {
+    width: 1.1px;
+    height: 1.1px;
+}
+
+.dot-matrix-text-xs .dot-matrix-char {
+    gap: 0.4px;
+}
+
+.dot-matrix-text-xs .dot-matrix-row {
+    gap: 0.4px;
+}
+
+.dot-matrix-text-xs.dot-matrix-text {
+    gap: 1px;
+}
+
+/* Icon sizing */
+.dot-matrix-icon .dot-matrix-dot {
+    width: 2px;
+    height: 2px;
+}
+
+.dot-matrix-icon-lg .dot-matrix-dot {
+    width: 3px;
+    height: 3px;
+}
+
+.dot-matrix-icon-lg .dot-matrix-row {
+    gap: 1.5px;
+}
+
+.dot-matrix-icon-lg {
+    gap: 1.5px;
+}

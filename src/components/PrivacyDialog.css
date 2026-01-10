@@ -1,0 +1,256 @@
+/* Privacy Dialog Styles */
+.privacy-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: hsl(var(--background) / 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.privacy-card {
+    background-color: hsl(var(--background));
+    border: 2px solid hsl(var(--border));
+    border-radius: 8px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.privacy-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    color: hsl(var(--foreground));
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.privacy-close:hover {
+    background-color: hsl(var(--muted));
+}
+
+/* Tab Navigation */
+.privacy-tabs {
+    display: flex;
+    border-bottom: 2px solid hsl(var(--border));
+    gap: 0;
+    padding: 0 2rem;
+    padding-top: 1rem;
+}
+
+.privacy-tab {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s;
+    color: hsl(var(--muted-foreground));
+}
+
+.privacy-tab:hover {
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--muted) / 0.3);
+}
+
+.privacy-tab.active {
+    color: hsl(var(--foreground));
+}
+
+.privacy-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: hsl(var(--foreground));
+}
+
+/* Tab Panel */
+.tab-panel {
+    animation: fadeInPanel 0.3s ease-out;
+}
+
+@keyframes fadeInPanel {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.privacy-content {
+    padding: 2rem;
+}
+
+.privacy-title {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid hsl(var(--border));
+}
+
+.privacy-section {
+    margin-bottom: 2rem;
+}
+
+.privacy-section:last-child {
+    margin-bottom: 0;
+}
+
+.privacy-subtitle {
+    margin-bottom: 0.75rem;
+}
+
+.privacy-text {
+    color: hsl(var(--muted-foreground));
+    line-height: 1.6;
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+}
+
+.inspiration-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.inspiration-item {
+    padding: 0.75rem;
+    background-color: hsl(var(--muted) / 0.3);
+    border-radius: 4px;
+    border: 1px solid hsl(var(--border));
+    transition: all 0.2s;
+}
+
+.inspiration-item:hover {
+    background-color: hsl(var(--muted) / 0.5);
+    border-color: hsl(var(--foreground) / 0.3);
+    transform: translateX(4px);
+}
+
+.inspiration-link {
+    text-decoration: none;
+    color: hsl(var(--foreground));
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.inspiration-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.inspiration-description {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8rem;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .privacy-card {
+        max-height: 90vh;
+        border-radius: 12px 12px 0 0;
+        margin-top: auto;
+    }
+
+    .privacy-tabs {
+        padding: 0 1rem;
+        padding-top: 0.75rem;
+    }
+
+    .privacy-tab {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .privacy-content {
+        padding: 1.5rem;
+    }
+
+    .privacy-title {
+        margin-bottom: 1.5rem;
+    }
+
+    .inspiration-link {
+        gap: 0.125rem;
+    }
+
+    .inspiration-name {
+        font-size: 0.85rem;
+    }
+
+    .inspiration-description {
+        font-size: 0.75rem;
+    }
+}
+
+/* Smooth scrolling for the card */
+.privacy-card {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+}
+
+.privacy-card::-webkit-scrollbar {
+    width: 8px;
+}
+
+.privacy-card::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.privacy-card::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted));
+    border-radius: 4px;
+}
+
+.privacy-card::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground));
+}
