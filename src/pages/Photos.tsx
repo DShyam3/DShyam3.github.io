@@ -9,10 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Trash2, MapPin } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Photo } from '@/types/photos';
+import { EditPhotoDialog } from '@/components/photos/EditPhotoDialog';
 
 const Photos = () => {
   const { isAdmin } = useAuth();
-  const { photos, addPhoto, removePhoto, loading } = usePhotos();
+  const { photos, addPhoto, removePhoto, updatePhoto, loading } = usePhotos();
   const [open, setOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [caption, setCaption] = useState('');
@@ -52,20 +54,7 @@ const Photos = () => {
           {loading ? [...Array(3)].map((_, i) => <Skeleton key={i} className="aspect-square rounded-lg" />) :
             photos.length === 0 ? <p className="col-span-full text-center py-16 text-muted-foreground">No photos yet</p> :
               photos.map((p) => (
-                <div key={p.id} className="item-card group relative">
-                  <div className="aspect-square bg-muted relative overflow-hidden">
-                    <img src={p.image_url} alt={p.caption || 'Photo'} className="w-full h-full object-cover" />
-                    {isAdmin && <Button variant="secondary" size="icon" className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 bg-background/80" onClick={() => removePhoto(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
-                  </div>
-                  <div className="p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        {p.caption && <p className="text-sm line-clamp-2">{p.caption}</p>}
-                        {p.location && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><MapPin className="h-3 w-3" />{p.location}</p>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <PhotoCard key={p.id} photo={p} onRemove={isAdmin ? removePhoto : undefined} onUpdate={isAdmin ? updatePhoto : undefined} />
               ))}
         </div>
 
@@ -74,5 +63,37 @@ const Photos = () => {
     </div>
   );
 };
+
+// Photo Card Component
+function PhotoCard({ photo: p, onRemove, onUpdate }: {
+  photo: Photo;
+  onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<Photo, 'id' | 'created_at'>>) => void;
+}) {
+  return (
+    <div className="item-card group relative">
+      <div className="aspect-square bg-muted relative overflow-hidden">
+        <img src={p.image_url} alt={p.caption || 'Photo'} className="w-full h-full object-cover" />
+        {/* Action buttons */}
+        <div className="absolute top-2 right-2 flex gap-1">
+          {onUpdate && <EditPhotoDialog photo={p} onUpdate={onUpdate} />}
+          {onRemove && (
+            <Button variant="secondary" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 bg-background/80" onClick={() => onRemove(p.id)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {p.caption && <p className="text-sm line-clamp-2">{p.caption}</p>}
+            {p.location && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><MapPin className="h-3 w-3" />{p.location}</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default Photos;

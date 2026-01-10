@@ -9,15 +9,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ExternalLink, FileText } from 'lucide-react';
+import { Plus, Trash2, FileText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArticleCategory, Article } from '@/types/articles';
 import { cn } from '@/lib/utils';
 import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDialog';
+import { EditArticleDialog } from '@/components/articles/EditArticleDialog';
 
 const Articles = () => {
   const { isAdmin } = useAuth();
-  const { articles, addArticle, removeArticle, loading, categories, activeCategory, setActiveCategory, getCategoryCount } = useArticles();
+  const { articles, addArticle, removeArticle, updateArticle, loading, categories, activeCategory, setActiveCategory, getCategoryCount } = useArticles();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -73,7 +74,7 @@ const Articles = () => {
         <div className="px-4 md:px-0 py-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {loading ? [...Array(4)].map((_, i) => <Skeleton key={i} className="h-48 rounded-lg" />) :
             articles.length === 0 ? <p className="col-span-full text-center py-16 text-muted-foreground">No articles yet</p> :
-              articles.map((a) => <ArticleCard key={a.id} article={a} onRemove={isAdmin ? removeArticle : undefined} />)}
+              articles.map((a) => <ArticleCard key={a.id} article={a} onRemove={isAdmin ? removeArticle : undefined} onUpdate={isAdmin ? updateArticle : undefined} />)}
         </div>
 
         <Footer />
@@ -83,11 +84,19 @@ const Articles = () => {
 };
 
 // Article Card Component
-function ArticleCard({ article: a, onRemove }: {
+function ArticleCard({ article: a, onRemove, onUpdate }: {
   article: Article;
   onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<Article, 'id' | 'created_at'>>) => void;
 }) {
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const handleDelete = () => {
+    if (onRemove) {
+      onRemove(a.id);
+      setDetailOpen(false);
+    }
+  };
 
   return (
     <>
@@ -96,13 +105,21 @@ function ArticleCard({ article: a, onRemove }: {
           <img src={a.image_url} alt={a.title} className="w-full h-40 object-cover rounded-t-lg" /> :
           <div className="w-full h-40 bg-muted rounded-t-lg flex items-center justify-center"><FileText className="h-10 w-10 text-muted-foreground/30" /></div>
         }
+        {/* Action buttons */}
+        <div className="absolute top-2 right-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
+          {onUpdate && <EditArticleDialog article={a} onUpdate={onUpdate} />}
+          {onRemove && (
+            <Button variant="secondary" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80" onClick={() => onRemove(a.id)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <div className="p-4 flex-1 flex flex-col">
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="min-w-0 flex-1">
               <h3 className="font-medium line-clamp-2">{a.title}</h3>
               {a.author && <p className="text-sm text-muted-foreground mt-1">by {a.author}</p>}
             </div>
-            {onRemove && <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-8 w-8 flex-shrink-0" onClick={(e) => { e.stopPropagation(); onRemove(a.id); }}><Trash2 className="h-4 w-4" /></Button>}
           </div>
           {a.notes && <p className="text-sm text-muted-foreground line-clamp-3 mb-2 flex-1">{a.notes}</p>}
         </div>
@@ -116,6 +133,7 @@ function ArticleCard({ article: a, onRemove }: {
         imageUrl={a.image_url}
         link={a.link}
         badge={a.category === 'publications' ? 'Publication' : 'Article'}
+        onDelete={onRemove ? handleDelete : undefined}
       >
         {a.notes && (
           <DetailSection label="Notes">

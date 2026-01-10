@@ -9,15 +9,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, ExternalLink, ChefHat } from 'lucide-react';
+import { Plus, Trash2, ChefHat } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RecipeCategory, Recipe } from '@/types/recipes';
 import { cn } from '@/lib/utils';
 import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDialog';
+import { EditRecipeDialog } from '@/components/recipes/EditRecipeDialog';
 
 const Recipes = () => {
   const { isAdmin } = useAuth();
-  const { recipes, addRecipe, removeRecipe, loading, categories, activeCategory, setActiveCategory, getCategoryCount } = useRecipes();
+  const { recipes, addRecipe, removeRecipe, updateRecipe, loading, categories, activeCategory, setActiveCategory, getCategoryCount } = useRecipes();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -79,7 +80,7 @@ const Recipes = () => {
         <div className="px-4 md:px-0 py-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
           {loading ? [...Array(3)].map((_, i) => <Skeleton key={i} className="aspect-square rounded-lg" />) :
             recipes.length === 0 ? <p className="col-span-full text-center py-16 text-muted-foreground">No recipes yet</p> :
-              recipes.map((r) => <RecipeCard key={r.id} recipe={r} onRemove={isAdmin ? removeRecipe : undefined} />)}
+              recipes.map((r) => <RecipeCard key={r.id} recipe={r} onRemove={isAdmin ? removeRecipe : undefined} onUpdate={isAdmin ? updateRecipe : undefined} />)}
         </div>
 
         <Footer />
@@ -89,18 +90,34 @@ const Recipes = () => {
 };
 
 // Recipe Card Component
-function RecipeCard({ recipe: r, onRemove }: {
+function RecipeCard({ recipe: r, onRemove, onUpdate }: {
   recipe: Recipe;
   onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<Recipe, 'id' | 'created_at'>>) => void;
 }) {
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const handleDelete = () => {
+    if (onRemove) {
+      onRemove(r.id);
+      setDetailOpen(false);
+    }
+  };
 
   return (
     <>
       <div className="item-card group relative cursor-pointer" onClick={() => setDetailOpen(true)}>
         <div className="aspect-square bg-muted relative overflow-hidden">
           {r.image_url ? <img src={r.image_url} alt={r.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ChefHat className="h-14 w-14 text-muted-foreground/30" /></div>}
-          {onRemove && <Button variant="secondary" size="icon" className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80" onClick={(e) => { e.stopPropagation(); onRemove(r.id); }}><Trash2 className="h-4 w-4" /></Button>}
+          {/* Action buttons */}
+          <div className="absolute top-2 right-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
+            {onUpdate && <EditRecipeDialog recipe={r} onUpdate={onUpdate} />}
+            {onRemove && (
+              <Button variant="secondary" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80" onClick={() => onRemove(r.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
           {!r.is_personal && <span className="absolute top-2 left-2 px-2 py-0.5 text-xs bg-background/80 rounded">Reference</span>}
         </div>
         <div className="p-4">
@@ -121,6 +138,7 @@ function RecipeCard({ recipe: r, onRemove }: {
         imageUrl={r.image_url}
         link={r.link}
         badge={r.is_personal ? 'Personal' : 'Reference'}
+        onDelete={onRemove ? handleDelete : undefined}
       >
         {r.description && (
           <DetailSection label="Description">

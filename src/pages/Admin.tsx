@@ -13,9 +13,10 @@ const Admin = () => {
     const [shake, setShake] = useState(false);
     const navigate = useNavigate();
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (login(password)) {
+        const success = await login(password);
+        if (success) {
             setError('');
             // Redirect back to previous page or home
             navigate(-1);
@@ -26,8 +27,8 @@ const Admin = () => {
         }
     };
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         navigate('/');
     };
 

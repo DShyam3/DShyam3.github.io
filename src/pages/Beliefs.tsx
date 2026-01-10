@@ -10,10 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2, Quote as QuoteIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EditBeliefDialog } from '@/components/beliefs/EditBeliefDialog';
 
 const Beliefs = () => {
   const { isAdmin } = useAuth();
-  const { beliefs, addBelief, removeBelief, loading } = useBeliefs();
+  const { beliefs, addBelief, removeBelief, updateBelief, loading } = useBeliefs();
   const [open, setOpen] = useState(false);
   const [belief, setBelief] = useState('');
   const [author, setAuthor] = useState('');
@@ -55,9 +56,14 @@ const Beliefs = () => {
                   <QuoteIcon className="h-6 w-6 text-muted-foreground/20 absolute top-4 left-4" />
                   <p className="text-base font-serif italic pl-8 line-clamp-4">"{b.quote}"</p>
                   {b.author && <p className="text-sm text-muted-foreground mt-2 pl-8">— {b.author}</p>}
-                  <div className="flex items-center justify-end mt-4 pl-8">
-                    {isAdmin && <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7" onClick={() => removeBelief(b.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
-                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center justify-end gap-1 mt-4 pl-8">
+                      <EditBeliefDialog belief={b} onUpdate={updateBelief} />
+                      <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7" onClick={() => removeBelief(b.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
         </div>

@@ -9,15 +9,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ExternalLink, User } from 'lucide-react';
+import { Plus, Trash2, User } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InspirationCategory, type Inspiration as InspirationType } from '@/types/inspirations';
 import { cn } from '@/lib/utils';
 import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDialog';
+import { EditInspirationDialog } from '@/components/inspirations/EditInspirationDialog';
 
 const Inspiration = () => {
   const { isAdmin } = useAuth();
-  const { inspirations, addInspiration, removeInspiration, loading, categories, activeCategory, setActiveCategory, getCategoryCount } = useInspirations();
+  const { inspirations, addInspiration, removeInspiration, updateInspiration, loading, categories, activeCategory, setActiveCategory, getCategoryCount } = useInspirations();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -98,7 +99,7 @@ const Inspiration = () => {
         <div className="px-4 md:px-0 py-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
           {loading ? [...Array(3)].map((_, i) => <Skeleton key={i} className="aspect-square rounded-lg" />) :
             inspirations.length === 0 ? <p className="col-span-full text-center py-16 text-muted-foreground">No inspirations yet</p> :
-              inspirations.map((p) => <InspirationCard key={p.id} inspiration={p} onRemove={isAdmin ? removeInspiration : undefined} />)}
+              inspirations.map((p) => <InspirationCard key={p.id} inspiration={p} onRemove={isAdmin ? removeInspiration : undefined} onUpdate={isAdmin ? updateInspiration : undefined} />)}
         </div>
 
         <Footer />
@@ -116,18 +117,34 @@ const categoryLabels: Record<string, string> = {
   photographers: 'Photographers',
 };
 
-function InspirationCard({ inspiration: p, onRemove }: {
+function InspirationCard({ inspiration: p, onRemove, onUpdate }: {
   inspiration: InspirationType;
   onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<InspirationType, 'id' | 'created_at'>>) => void;
 }) {
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const handleDelete = () => {
+    if (onRemove) {
+      onRemove(p.id);
+      setDetailOpen(false);
+    }
+  };
 
   return (
     <>
       <div className="item-card group relative cursor-pointer" onClick={() => setDetailOpen(true)}>
         <div className="aspect-square bg-muted relative overflow-hidden">
           {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><User className="h-14 w-14 text-muted-foreground/30" /></div>}
-          {onRemove && <Button variant="secondary" size="icon" className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80" onClick={(e) => { e.stopPropagation(); onRemove(p.id); }}><Trash2 className="h-4 w-4" /></Button>}
+          {/* Action buttons */}
+          <div className="absolute top-2 right-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
+            {onUpdate && <EditInspirationDialog inspiration={p} onUpdate={onUpdate} />}
+            {onRemove && (
+              <Button variant="secondary" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80" onClick={() => onRemove(p.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="p-4">
           <div className="flex items-start justify-between gap-2">
@@ -147,6 +164,7 @@ function InspirationCard({ inspiration: p, onRemove }: {
         imageUrl={p.image_url}
         link={p.link}
         badge={categoryLabels[p.category] || p.category}
+        onDelete={onRemove ? handleDelete : undefined}
       >
         {p.why_i_like && (
           <DetailSection label="Why I Like Them">

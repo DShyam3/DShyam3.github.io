@@ -6,8 +6,8 @@ import { EditCreatorDialog } from './EditCreatorDialog';
 
 interface CreatorCardProps {
   creator: Creator;
-  onRemove: (id: string) => void;
-  onUpdate: (id: string, updates: Partial<Omit<Creator, 'id' | 'created_at'>>) => void;
+  onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<Creator, 'id' | 'created_at'>>) => void;
 }
 
 export function CreatorCard({ creator, onRemove, onUpdate }: CreatorCardProps) {
@@ -37,15 +37,17 @@ export function CreatorCard({ creator, onRemove, onUpdate }: CreatorCardProps) {
           className={`absolute top-2 right-2 flex gap-1 transition-opacity duration-200 ${showActions ? 'opacity-100' : 'opacity-0'
             }`}
         >
-          <EditCreatorDialog creator={creator} onUpdate={onUpdate} />
-          <Button
-            variant="secondary"
-            size="icon"
-            className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-            onClick={() => onRemove(creator.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {onUpdate && <EditCreatorDialog creator={creator} onUpdate={onUpdate} />}
+          {onRemove && (
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+              onClick={() => onRemove(creator.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
 
         {/* Category badge */}

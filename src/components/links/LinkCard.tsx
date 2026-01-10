@@ -8,8 +8,8 @@ import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDi
 
 interface LinkCardProps {
   link: LinkItem;
-  onRemove: (id: string) => void;
-  onUpdate: (id: string, updates: Partial<Omit<LinkItem, 'id' | 'createdAt'>>) => void;
+  onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<LinkItem, 'id' | 'createdAt'>>) => void;
   index: number;
 }
 
@@ -25,6 +25,11 @@ const categoryLabels: Record<string, string> = {
 export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
 
+  const handleDelete = () => {
+    onRemove(link.id);
+    setDetailOpen(false);
+  };
+
   return (
     <>
       <article
@@ -36,15 +41,17 @@ export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {
       >
         {/* Action buttons */}
         <div className="absolute top-3 right-3 flex gap-1" onClick={(e) => e.stopPropagation()}>
-          <EditLinkDialog link={link} onUpdate={onUpdate} />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(link.id)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
-          >
-            <X className="w-4 h-4" />
-          </Button>
+          {onUpdate && <EditLinkDialog link={link} onUpdate={onUpdate} />}
+          {onRemove && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onRemove(link.id)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
 
         <div className="flex gap-4 items-start">
@@ -87,6 +94,7 @@ export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {
         subtitle={categoryLabels[link.category] || link.category}
         imageUrl={link.icon}
         link={link.url}
+        onDelete={onRemove ? handleDelete : undefined}
       >
         {link.description && (
           <DetailSection label="Description">

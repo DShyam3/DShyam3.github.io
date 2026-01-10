@@ -64,13 +64,8 @@ const Watchlist = () => {
     const [showSchedule, setShowSchedule] = useState(false);
     const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
     const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
-    const [sortOrder, setSortOrder] = useState<'default' | 'alphabetical' | 'recent'>('default');
+    const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>('alphabetical');
     const [title, setTitle] = useState('');
-    const [status, setStatus] = useState('');
-    const [description, setDescription] = useState('');
-    const [year, setYear] = useState('');
-    const [imageUrl, setImageUrl] = useState('');
-    const [link, setLink] = useState('');
     const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
 
     const { results: searchResults, search: tmdbSearch, getPosterUrl, getMovieDetails, loading: searchLoading } = useTMDB();
@@ -79,11 +74,6 @@ const Watchlist = () => {
     useEffect(() => {
         if (!open) {
             setTitle('');
-            setStatus('');
-            setDescription('');
-            setYear('');
-            setImageUrl('');
-            setLink('');
             setAddedItems(new Set());
         }
     }, [open]);
@@ -103,20 +93,7 @@ const Watchlist = () => {
         return () => clearTimeout(timer);
     }, [title, selectedCategory, tmdbSearch]);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!title.trim()) return;
-        addWatchlistItem({
-            title: title.trim(),
-            category: selectedCategory,
-            status: status.trim() || undefined,
-            description: description.trim() || undefined,
-            year: year ? parseInt(year) : undefined,
-            image_url: imageUrl.trim() || undefined,
-            link: link.trim() || undefined,
-        });
-        setOpen(false);
-    };
+
 
     const categoryItems = useMemo(() => {
         if (selectedCategory === 'Upcoming') {
@@ -176,7 +153,7 @@ const Watchlist = () => {
                 return autoStatus !== 'Completed' && autoStatus !== 'Watched';
             });
         }
-        if (sortOrder !== 'default' && selectedCategory !== 'Upcoming') {
+        if (selectedCategory !== 'Upcoming') {
             result = [...result].sort((a, b) => {
                 if (sortOrder === 'alphabetical') return a.title.localeCompare(b.title);
                 if (sortOrder === 'recent') {
@@ -226,7 +203,7 @@ const Watchlist = () => {
 
                 <div className="px-4 md:px-0 pt-6 space-y-4">
                     <div className="flex flex-wrap items-center gap-2 justify-between">
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto">
                             {CATEGORIES.map((cat) => (
                                 <Button
                                     key={cat}
@@ -237,24 +214,23 @@ const Watchlist = () => {
                                         setShowSchedule(false);
                                         setSelectedPlatform(null);
                                         setSelectedGenre(null);
-                                        setSortOrder('default');
                                     }}
-                                    className="gap-1.5"
+                                    className="gap-1 px-2 text-[11px] sm:text-xs h-8 sm:h-9"
                                 >
-                                    {getCategoryIcon(cat)}
-                                    {cat}
-                                    <span className="text-xs opacity-70">({getCategoryCount(cat)})</span>
+                                    <span className="shrink-0">{getCategoryIcon(cat)}</span>
+                                    <span className="truncate">{cat}</span>
+                                    <span className="text-[10px] opacity-70">({getCategoryCount(cat)})</span>
                                 </Button>
                             ))}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             {isAdmin && (
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={syncWatchlist}
                                     disabled={syncing}
-                                    className="gap-1.5 relative overflow-hidden"
+                                    className="gap-1.5 relative overflow-hidden h-8 sm:h-9"
                                 >
                                     {syncing && (
                                         <div
@@ -272,7 +248,7 @@ const Watchlist = () => {
                                 variant={showSchedule ? 'default' : 'outline'}
                                 size="sm"
                                 onClick={() => setShowSchedule(!showSchedule)}
-                                className="gap-1.5"
+                                className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
                             >
                                 <CalendarDays className="h-4 w-4" />
                                 Weekly Schedule
@@ -354,16 +330,13 @@ const Watchlist = () => {
 
                                     {(selectedCategory === 'Movies' || selectedCategory === 'TV Shows') && (
                                         <Button
-                                            variant={sortOrder !== 'default' ? 'default' : 'outline'}
+                                            variant="outline"
                                             size="sm"
                                             onClick={() => {
-                                                if (sortOrder === 'default') setSortOrder('alphabetical');
-                                                else if (sortOrder === 'alphabetical') setSortOrder('recent');
-                                                else setSortOrder('default');
+                                                setSortOrder(sortOrder === 'alphabetical' ? 'recent' : 'alphabetical');
                                             }}
                                             className="h-9 px-3 text-xs whitespace-nowrap gap-1.5"
                                         >
-                                            {sortOrder === 'default' && <><ArrowUpDown className="h-3.5 w-3.5" />Sort</>}
                                             {sortOrder === 'alphabetical' && <><ArrowDownAZ className="h-3.5 w-3.5" />A-Z</>}
                                             {sortOrder === 'recent' && <><Clock className="h-3.5 w-3.5" />Recent</>}
                                         </Button>
@@ -392,7 +365,7 @@ const Watchlist = () => {
                                             <DialogDescription className="sr-only">Search and add items to your watchlist.</DialogDescription>
                                         </DialogHeader>
                                     </div>
-                                    <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 p-6 pt-4">
+                                    <div className="flex-1 flex flex-col min-h-0 p-6 pt-4">
                                         <div className="space-y-2 flex-shrink-0">
                                             <Label htmlFor="title">Search {selectedCategory} *</Label>
                                             <div className="relative">
@@ -476,18 +449,7 @@ const Watchlist = () => {
                                             )}
                                         </div>
 
-                                        <div className="hidden">
-                                            <Input id="year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
-                                            <Input id="status" value={status} onChange={(e) => setStatus(e.target.value)} />
-                                            <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
-                                            <Input id="imageUrl" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
-                                            <Input id="link" value={link} onChange={(e) => setLink(e.target.value)} />
-                                        </div>
-
-                                        <div className="pt-4 flex-shrink-0">
-                                            <Button type="submit" className="w-full h-11 text-base font-medium">Add to Watchlist</Button>
-                                        </div>
-                                    </form>
+                                    </div>
                                 </DialogContent>
                             </Dialog>
                         )}
@@ -498,14 +460,14 @@ const Watchlist = () => {
                     <WeeklySchedule
                         DAYS={DAYS}
                         getScheduleForDay={getScheduleForDay}
-                        removeFromSchedule={removeFromSchedule}
+                        removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
                         watchlist={watchlist}
-                        toggleEpisodeWatched={toggleEpisodeWatched}
+                        toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
                         isEpisodeWatched={isEpisodeWatched}
                         isSeasonWatched={isSeasonWatched}
                         getAutoStatus={getAutoStatus}
-                        onRemoveWatchlist={removeWatchlistItem}
-                        addToSchedule={addToSchedule}
+                        onRemoveWatchlist={isAdmin ? removeWatchlistItem : undefined}
+                        addToSchedule={isAdmin ? addToSchedule : undefined}
                         isInSchedule={isInSchedule}
                     />
                 ) : (
@@ -521,11 +483,11 @@ const Watchlist = () => {
                                     item={item}
                                     onRemove={isAdmin ? removeWatchlistItem : undefined}
                                     getCategoryIcon={getCategoryIcon}
-                                    toggleEpisodeWatched={toggleEpisodeWatched}
+                                    toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
                                     isEpisodeWatched={isEpisodeWatched}
                                     isSeasonWatched={isSeasonWatched}
                                     getAutoStatus={getAutoStatus}
-                                    addToSchedule={addToSchedule}
+                                    addToSchedule={isAdmin ? addToSchedule : undefined}
                                     isInSchedule={isInSchedule}
                                 />
                             ))

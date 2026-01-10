@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "12.2.3 (519615d)"
   }
   public: {
     Tables: {
@@ -77,6 +77,8 @@ export type Database = {
           description: string | null
           id: string
           link: string | null
+          price: number | null
+          tags: string[] | null
           title: string
         }
         Insert: {
@@ -87,6 +89,8 @@ export type Database = {
           description?: string | null
           id?: string
           link?: string | null
+          price?: number | null
+          tags?: string[] | null
           title: string
         }
         Update: {
@@ -97,6 +101,8 @@ export type Database = {
           description?: string | null
           id?: string
           link?: string | null
+          price?: number | null
+          tags?: string[] | null
           title?: string
         }
         Relationships: []
@@ -161,17 +167,82 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_items: {
+        Row: {
+          brand: string | null
+          category: string
+          created_at: string
+          id: string
+          image: string | null
+          is_new: boolean | null
+          link: string | null
+          name: string
+          price: number | null
+        }
+        Insert: {
+          brand?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          image?: string | null
+          is_new?: boolean | null
+          link?: string | null
+          name: string
+          price?: number | null
+        }
+        Update: {
+          brand?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          image?: string | null
+          is_new?: boolean | null
+          link?: string | null
+          name?: string
+          price?: number | null
+        }
+        Relationships: []
+      }
+      links: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          url: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          url: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          url?: string
+        }
+        Relationships: []
+      }
       movies: {
         Row: {
           genre: string | null
           id: number
           overview: string | null
-          platform: string
+          platform: string | null
           poster: string | null
           release_date: string | null
           release_year: number | null
           runtime: number | null
-          status: string | null
           title: string
           tmdb_id: number | null
         }
@@ -179,12 +250,11 @@ export type Database = {
           genre?: string | null
           id?: number
           overview?: string | null
-          platform: string
+          platform?: string | null
           poster?: string | null
           release_date?: string | null
           release_year?: number | null
           runtime?: number | null
-          status?: string | null
           title: string
           tmdb_id?: number | null
         }
@@ -192,12 +262,11 @@ export type Database = {
           genre?: string | null
           id?: number
           overview?: string | null
-          platform?: string
+          platform?: string | null
           poster?: string | null
           release_date?: string | null
           release_year?: number | null
           runtime?: number | null
-          status?: string | null
           title?: string
           tmdb_id?: number | null
         }
@@ -266,6 +335,115 @@ export type Database = {
         }
         Relationships: []
       }
+      tv_show_episodes: {
+        Row: {
+          episode_number: number
+          id: number
+          release_date: string | null
+          runtime: number | null
+          season_id: number | null
+          title: string | null
+          watched: boolean | null
+        }
+        Insert: {
+          episode_number: number
+          id?: number
+          release_date?: string | null
+          runtime?: number | null
+          season_id?: number | null
+          title?: string | null
+          watched?: boolean | null
+        }
+        Update: {
+          episode_number?: number
+          id?: number
+          release_date?: string | null
+          runtime?: number | null
+          season_id?: number | null
+          title?: string | null
+          watched?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tv_show_episodes_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "tv_show_seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tv_show_seasons: {
+        Row: {
+          id: number
+          release_date: string | null
+          release_year: number | null
+          season_number: number
+          tv_show_id: number | null
+          watched: boolean | null
+        }
+        Insert: {
+          id?: number
+          release_date?: string | null
+          release_year?: number | null
+          season_number: number
+          tv_show_id?: number | null
+          watched?: boolean | null
+        }
+        Update: {
+          id?: number
+          release_date?: string | null
+          release_year?: number | null
+          season_number?: number
+          tv_show_id?: number | null
+          watched?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tv_show_seasons_tv_show_id_fkey"
+            columns: ["tv_show_id"]
+            isOneToOne: false
+            referencedRelation: "tv_shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tv_shows: {
+        Row: {
+          genre: string | null
+          id: number
+          overview: string | null
+          platform: string
+          poster: string | null
+          release_date: string | null
+          status: string | null
+          title: string
+          tmdb_id: number | null
+        }
+        Insert: {
+          genre?: string | null
+          id?: number
+          overview?: string | null
+          platform: string
+          poster?: string | null
+          release_date?: string | null
+          status?: string | null
+          title: string
+          tmdb_id?: number | null
+        }
+        Update: {
+          genre?: string | null
+          id?: number
+          overview?: string | null
+          platform?: string
+          poster?: string | null
+          release_date?: string | null
+          status?: string | null
+          title?: string
+          tmdb_id?: number | null
+        }
+        Relationships: []
+      }
       upvotes: {
         Row: {
           content_id: string
@@ -290,6 +468,35 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_schedule: {
+        Row: {
+          day_of_week: string
+          id: number
+          tv_show_id: number | null
+          movie_id: number | null
+        }
+        Insert: {
+          day_of_week: string
+          id?: number
+          tv_show_id?: number | null
+          movie_id?: number | null
+        }
+        Update: {
+          day_of_week?: string
+          id?: number
+          tv_show_id?: number | null
+          movie_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_schedule_tv_show_id_fkey"
+            columns: ["tv_show_id"]
+            isOneToOne: false
+            referencedRelation: "tv_shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -302,14 +509,12 @@ export type Database = {
       | "inventory"
       | "link"
       | "book"
-      | "creator"
-      | "quote"
-      | "inspiration"
-      | "photo"
       | "article"
+      | "creator"
+      | "photo"
       | "recipe"
       | "belief"
-      | "watchlist"
+      | "inspiration"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -441,14 +646,12 @@ export const Constants = {
         "inventory",
         "link",
         "book",
-        "creator",
-        "quote",
-        "inspiration",
-        "photo",
         "article",
+        "creator",
+        "photo",
         "recipe",
         "belief",
-        "watchlist",
+        "inspiration",
       ],
     },
   },

@@ -1,44 +1,46 @@
-# Dhyan's website - Personal Goods Tracker
+# Dhyan's Website - Personal Portfolio & Tracker
 
-A curated inventory of technology, wardrobe, and kitchen items. Track and manage your personal belongings.
+Welcome to my personal corner of the web. This site serves as a central hub to showcase my personal interests, curated collections, and ongoing trackers.
 
-## Project info
+## 🌟 About This Site
 
-This is a personal inventory and watchlist tracker built with React, Vite, and Supabase.
+This platform is more than just a tracker; it's a window into what I value and how I spend my time. It features:
 
-## Technologies
+- **Inventory**: A curated showcase of my technology, wardrobe, and kitchen essentials.
+- **Watchlist**: My personal tracking for TV shows and movies, including release schedules and progress monitoring.
+- **Insights**: Collections of books, articles, and inspirations that shape my perspective.
+- **Personal Touch**: A glimpse into my beliefs, favorite recipes, and photography.
+
+## 🛠️ Technology Stack
 
 - **Frontend**: Vite, TypeScript, React, shadcn-ui, Tailwind CSS
-- **Backend**: Supabase (Database, Auth, Edge Functions)
-- **APIs**: TMDB (for movie/TV show data)
+- **Backend & Auth**: Supabase
+- **Data Integration**: TMDB API (for media metadata)
 
-## Getting Started
+## 🚀 Getting Started
 
-Follow these steps:
+To run this project locally:
 
 ```sh
-# Step 1: Clone the repository
-git clone <YOUR_GIT_URL>
+# Clone the repository
+git clone https://github.com/DShyam3/DShyam3.github.io.git
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
+# Install dependencies
 npm i
 
-# Step 4: Start the development server
+# Start the development server
 npm run dev
 ```
 
-## Environment Variables
+## 🔐 Environment Setup
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Ensure you have a `.env` file with the following configurations:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_TMDB_API_KEY`
 - `VITE_ADMIN_PASSWORD`
 
-## License
+## ⚖️ License
 
 MIT

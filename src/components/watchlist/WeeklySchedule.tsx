@@ -4,14 +4,14 @@ import { ScheduleItem } from './ScheduleItem';
 interface WeeklyScheduleProps {
     DAYS: readonly ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
     getScheduleForDay: (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => any[];
-    removeFromSchedule: (id: string) => void;
+    removeFromSchedule?: (id: string) => void;
     watchlist: WatchlistItem[];
-    toggleEpisodeWatched: (showId: string, seasonNumber: number, episodeNumber: number) => void;
+    toggleEpisodeWatched?: (showId: string, seasonNumber: number, episodeNumber: number) => void;
     isEpisodeWatched: (showId: string, seasonNumber: number, episodeNumber: number) => boolean;
     isSeasonWatched: (showId: string, season: Season) => boolean;
     getAutoStatus: (item: WatchlistItem) => string | undefined;
-    onRemoveWatchlist: (id: string) => void;
-    addToSchedule: (item: Omit<any, 'id'>) => void;
+    onRemoveWatchlist?: (id: string) => void;
+    addToSchedule?: (item: Omit<any, 'id'>) => void;
     isInSchedule: (watchlistItemId: string) => boolean;
 }
 
@@ -35,8 +35,8 @@ export function WeeklySchedule({
                     const daySchedule = getScheduleForDay(day);
 
                     return (
-                        <div key={day} className="space-y-3">
-                            <div className="sticky top-0 bg-background/95 backdrop-blur-sm pb-2 border-b">
+                        <div key={day} className="space-y-3 min-w-0">
+                            <div className="bg-background/95 backdrop-blur-sm pb-2 border-b md:sticky md:top-0 md:z-20">
                                 <h3 className="font-medium text-sm">{day}</h3>
                                 <p className="text-xs text-muted-foreground">{daySchedule.length} items</p>
                             </div>

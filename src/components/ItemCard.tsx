@@ -6,8 +6,8 @@ import { EditItemDialog } from './EditItemDialog';
 
 interface ItemCardProps {
   item: InventoryItem;
-  onRemove: (id: string) => void;
-  onUpdate: (id: string, updates: Partial<Omit<InventoryItem, 'id' | 'createdAt'>>) => void;
+  onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<InventoryItem, 'id' | 'createdAt'>>) => void;
   index: number;
 }
 
@@ -20,9 +20,9 @@ const categoryLabels: Record<string, string> = {
 
 export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-GB', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'GBP',
       minimumFractionDigits: 0,
     }).format(price);
   };
@@ -36,21 +36,18 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
     >
       {/* Action buttons */}
       <div className="absolute top-2 right-2 z-10 flex gap-1">
-        <EditItemDialog item={item} onUpdate={onUpdate} />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onRemove(item.id)}
-          className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-7 h-7"
-        >
-          <X className="w-3.5 h-3.5" />
-        </Button>
+        {onUpdate && <EditItemDialog item={item} onUpdate={onUpdate} />}
+        {onRemove && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(item.id)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-7 h-7"
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
-
-      {/* New badge */}
-      {item.isNew && (
-        <span className="badge-new absolute top-3 left-3 z-10">New</span>
-      )}
 
       {/* Image */}
       <div className="aspect-square bg-secondary/30 overflow-hidden">

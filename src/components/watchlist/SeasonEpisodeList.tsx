@@ -8,7 +8,7 @@ import { DetailSection } from '@/components/cards/CardDetailDialog';
 interface SeasonEpisodeListProps {
     seasons: Season[];
     showId: string;
-    toggleEpisodeWatched: (showId: string, seasonNumber: number, episodeNumber: number) => void;
+    toggleEpisodeWatched?: (showId: string, seasonNumber: number, episodeNumber: number) => void;
     isEpisodeWatched: (showId: string, seasonNumber: number, episodeNumber: number) => boolean;
     isSeasonWatched: (showId: string, season: Season) => boolean;
 }
@@ -90,12 +90,14 @@ export function SeasonEpisodeList({
                             return (
                                 <div
                                     key={episode.episode_number}
-                                    onClick={() => toggleEpisodeWatched(showId, currentSeason.season_number, episode.episode_number)}
+                                    onClick={() => toggleEpisodeWatched && toggleEpisodeWatched(showId, currentSeason.season_number, episode.episode_number)}
                                     className={cn(
-                                        "p-3 rounded-lg transition-all cursor-pointer",
-                                        watched
-                                            ? "bg-secondary/60 hover:bg-secondary/70 opacity-60"
-                                            : "bg-secondary/30 hover:bg-secondary/50"
+                                        "p-3 rounded-lg transition-all border-l-4",
+                                        toggleEpisodeWatched ? "cursor-pointer" : "cursor-default",
+                                        !watched && "bg-secondary/30 border-l-transparent",
+                                        !watched && toggleEpisodeWatched && "hover:bg-secondary/50",
+                                        watched && "bg-secondary/60 opacity-60 border-l-green-500",
+                                        watched && toggleEpisodeWatched && "hover:bg-secondary/70"
                                     )}
                                 >
                                     <div className="flex items-start justify-between gap-2 mb-1">
@@ -125,6 +127,11 @@ export function SeasonEpisodeList({
                                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                         <Calendar className="h-3 w-3" />
                                         {formatDate(episode.release_date)}
+                                        {watched && (
+                                            <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-green-500 text-white">
+                                                Watched
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             );

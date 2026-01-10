@@ -11,6 +11,7 @@ export function useInventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>('recent');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -138,8 +139,15 @@ export function useInventory() {
       );
     }
 
-    return filtered;
-  }, [items, activeCategory, searchQuery]);
+    // Apply sorting
+    return [...filtered].sort((a, b) => {
+      if (sortOrder === 'alphabetical') {
+        return a.name.localeCompare(b.name);
+      } else {
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      }
+    });
+  }, [items, activeCategory, searchQuery, sortOrder]);
 
   const categories: { key: Category; label: string }[] = [
     { key: 'all', label: 'Everything' },
@@ -170,6 +178,8 @@ export function useInventory() {
     updateItem,
     categories,
     getCategoryCount,
+    sortOrder,
+    setSortOrder,
     loading,
   };
 }

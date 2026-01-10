@@ -122,7 +122,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-price">Price ($) *</Label>
+            <Label htmlFor="edit-price">Price (£) *</Label>
             <Input
               id="edit-price"
               type="number"

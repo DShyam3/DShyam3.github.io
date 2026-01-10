@@ -5,6 +5,8 @@ import { ItemGrid } from '@/components/ItemGrid';
 import { AddItemDialog } from '@/components/AddItemDialog';
 import { useInventory } from '@/hooks/useInventory';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { ArrowDownAZ, Clock } from 'lucide-react';
 
 const Index = () => {
   const { isAdmin } = useAuth();
@@ -19,6 +21,8 @@ const Index = () => {
     updateItem,
     categories,
     getCategoryCount,
+    sortOrder,
+    setSortOrder,
   } = useInventory();
 
   return (
@@ -34,9 +38,23 @@ const Index = () => {
         />
 
         <div className="flex items-center justify-between px-4 md:px-0 pt-6">
-          <p className="text-sm text-muted-foreground">
-            {items.length} {items.length === 1 ? 'item' : 'items'}
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground">
+              {items.length} {items.length === 1 ? 'item' : 'items'}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortOrder(sortOrder === 'alphabetical' ? 'recent' : 'alphabetical')}
+              className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
+            >
+              {sortOrder === 'alphabetical' ? (
+                <><ArrowDownAZ className="h-3.5 w-3.5" />A-Z</>
+              ) : (
+                <><Clock className="h-3.5 w-3.5" />Recent</>
+              )}
+            </Button>
+          </div>
           {isAdmin && <AddItemDialog onAdd={addItem} />}
         </div>
 

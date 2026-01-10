@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface ScheduleItem {
     id: string;
     watchlistItemId: string;
     day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
-    time?: string; // Optional time like "20:00"
-    title: string;
-    category: 'TV Shows' | 'Movies' | 'Updates';
+    time?: string;
+    title?: string;
+    category?: 'TV Shows' | 'Movies' | 'Upcoming';
     image_url?: string;
 }
 
@@ -15,55 +16,96 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 
 export function useSchedule() {
     const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+    const [loading, setLoading] = useState(true);
     const { toast } = useToast();
 
-    useEffect(() => {
-        // Load schedule from localStorage
+    const fetchSchedule = useCallback(async () => {
         try {
-            const stored = localStorage.getItem('weekly_schedule');
-            if (stored) {
-                setSchedule(JSON.parse(stored));
-            }
+            const { data, error } = await supabase
+                .from('weekly_schedule')
+                .select('*');
+
+            if (error) throw error;
+
+            const mapped: ScheduleItem[] = (data || []).map(item => ({
+                id: item.id.toString(),
+                watchlistItemId: (item.tv_show_id || item.movie_id || '').toString(),
+                day: item.day_of_week as any,
+                category: item.tv_show_id ? 'TV Shows' : 'Movies',
+            }));
+
+            setSchedule(mapped);
         } catch (error) {
-            console.error('Error loading schedule:', error);
+            console.error('Error fetching schedule:', error);
+        } finally {
+            setLoading(false);
         }
     }, []);
 
-    const addToSchedule = (item: Omit<ScheduleItem, 'id'>) => {
-        const newItem: ScheduleItem = {
-            ...item,
-            id: Math.random().toString(36).substr(2, 9),
-        };
-        const updated = [...schedule, newItem];
-        setSchedule(updated);
+    useEffect(() => {
+        fetchSchedule();
+    }, [fetchSchedule]);
 
-        // Save to localStorage
+    const addToSchedule = async (item: Omit<ScheduleItem, 'id'>) => {
         try {
-            localStorage.setItem('weekly_schedule', JSON.stringify(updated));
-        } catch (error) {
-            console.error('Error saving schedule:', error);
-        }
+            const isTVShow = item.category === 'TV Shows';
+            const payload: any = {
+                day_of_week: item.day,
+                tv_show_id: isTVShow ? parseInt(item.watchlistItemId) : null,
+                movie_id: !isTVShow ? parseInt(item.watchlistItemId) : null,
+            };
 
-        toast({
-            title: 'Added to schedule',
-            description: `${item.title} added to ${item.day}`,
-        });
+            const { data, error } = await supabase
+                .from('weekly_schedule')
+                .insert([payload])
+                .select();
+
+            if (error) throw error;
+
+            if (data && data[0]) {
+                const newItem: ScheduleItem = {
+                    ...item,
+                    id: data[0].id.toString(),
+                };
+                setSchedule(prev => [...prev, newItem]);
+            }
+
+            toast({
+                title: 'Added to schedule',
+                description: `${item.title} added to ${item.day}`,
+            });
+        } catch (error) {
+            console.error('Error adding to schedule:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to add item to schedule.',
+            });
+        }
     };
 
-    const removeFromSchedule = (id: string) => {
-        const updated = schedule.filter((item) => item.id !== id);
-        setSchedule(updated);
-
-        // Save to localStorage
+    const removeFromSchedule = async (id: string) => {
         try {
-            localStorage.setItem('weekly_schedule', JSON.stringify(updated));
-        } catch (error) {
-            console.error('Error saving schedule:', error);
-        }
+            const { error } = await supabase
+                .from('weekly_schedule')
+                .delete()
+                .eq('id', parseInt(id));
 
-        toast({
-            title: 'Removed from schedule',
-        });
+            if (error) throw error;
+
+            setSchedule(prev => prev.filter(item => item.id !== id));
+
+            toast({
+                title: 'Removed from schedule',
+            });
+        } catch (error) {
+            console.error('Error removing from schedule:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to remove item from schedule.',
+            });
+        }
     };
 
     const getScheduleForDay = (day: typeof DAYS[number]) => {
@@ -76,6 +118,7 @@ export function useSchedule() {
 
     return {
         schedule,
+        loading,
         addToSchedule,
         removeFromSchedule,
         getScheduleForDay,

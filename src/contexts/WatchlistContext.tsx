@@ -158,21 +158,74 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }, [fetchData]);
 
     const getAutoStatus = useCallback((item: WatchlistItem) => {
-        if (item.category === 'Movies') return 'Released';
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        if (item.category === 'Movies') {
+            if (item.release_date) {
+                const releaseDate = new Date(item.release_date);
+                releaseDate.setHours(0, 0, 0, 0);
+                if (releaseDate > now) {
+                    const diffTime = Math.abs(releaseDate.getTime() - now.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    return `releases in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+                }
+            }
+            return 'Released';
+        }
+
         if (!item.seasons || item.seasons.length === 0) return 'Returning Series';
 
-        const now = new Date();
         const futureSeasons = item.seasons.filter(s => s.release_date && new Date(s.release_date) > now);
-        if (futureSeasons.length > 0) return 'Coming Soon';
+        if (futureSeasons.length > 0) {
+            const earliestSeason = futureSeasons.reduce((earliest, current) => {
+                if (!earliest.release_date) return current;
+                if (!current.release_date) return earliest;
+                return new Date(current.release_date) < new Date(earliest.release_date) ? current : earliest;
+            });
 
-        const allEpisodes = item.seasons.flatMap(s => s.episodes);
-        const watchedCount = allEpisodes.filter(ep => ep.watched).length;
+            if (earliestSeason.release_date) {
+                const releaseDate = new Date(earliestSeason.release_date);
+                releaseDate.setHours(0, 0, 0, 0);
+                const diffTime = Math.abs(releaseDate.getTime() - now.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return `S${earliestSeason.season_number} releases in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+            }
+            return 'Coming Soon';
+        }
+
+        const allEpisodes = item.seasons.flatMap(s =>
+            s.episodes.map(ep => ({
+                ...ep,
+                season_number: s.season_number
+            }))
+        );
+        const watchedCount = allEpisodes.filter(ep =>
+            watchedEpisodes.has(`${item.id}-s${ep.season_number}-e${ep.episode_number}`)
+        ).length;
+
         if (watchedCount === 0) return 'To Watch';
         if (watchedCount === allEpisodes.length && allEpisodes.length > 0) {
             return item.series_status === 'Ended' || item.series_status === 'Cancelled' ? 'Completed' : 'Watched';
         }
-        return 'In Progress';
-    }, []);
+
+        // Check if there are any partially watched seasons
+        const hasPartiallyWatchedSeason = item.seasons.some(s => {
+            const seasonEpisodes = s.episodes;
+            const seasonWatchedCount = seasonEpisodes.filter(ep =>
+                watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`)
+            ).length;
+            return seasonWatchedCount > 0 && seasonWatchedCount < seasonEpisodes.length;
+        });
+
+        if (hasPartiallyWatchedSeason) {
+            return 'Watching';
+        }
+
+        // If no partially watched season, but some episodes ARE watched (and we aren't finished),
+        // it means we finished a season and haven't started the next.
+        return 'To Watch';
+    }, [watchedEpisodes]);
 
     const addWatchlistItem = async (item: Omit<WatchlistItem, 'id' | 'created_at'>) => {
         const exists = watchlist.find(i => (item.tmdb_id && i.tmdb_id === item.tmdb_id) || (i.title.toLowerCase() === item.title.toLowerCase() && i.category === item.category));
@@ -243,12 +296,16 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+
     const toggleEpisodeWatched = async (showId: string, seasonNumber: number, episodeNumber: number) => {
         const episodeKey = `${showId}-s${seasonNumber}-e${episodeNumber}`;
         const isCurrentlyWatched = watchedEpisodes.has(episodeKey);
+        const nextWatched = !isCurrentlyWatched;
+
         setWatchedEpisodes(prev => {
             const next = new Set(prev);
-            if (next.has(episodeKey)) next.delete(episodeKey); else next.add(episodeKey);
+            if (nextWatched) next.add(episodeKey);
+            else next.delete(episodeKey);
             localStorage.setItem('watched_episodes', JSON.stringify([...next]));
             return next;
         });
@@ -258,7 +315,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             const season = show?.seasons?.find(s => s.season_number === seasonNumber);
             const episode = season?.episodes.find(e => e.episode_number === episodeNumber);
             if (episode?.id) {
-                await (supabase.from('tv_show_episodes') as any).update({ watched: !isCurrentlyWatched }).eq('id', episode.id);
+                await (supabase.from('tv_show_episodes') as any).update({
+                    watched: nextWatched
+                }).eq('id', episode.id);
             }
         } catch (error) { console.error(error); }
     };
@@ -311,21 +370,27 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                     const data = await (await fetch(`${TMDB_BASE_URL}/${type}/${item.tmdb_id}?api_key=${TMDB_API_KEY}&append_to_response=watch/providers`)).json();
                     if (!data.id) return;
 
-                    const updates: any = {};
-                    if (!item.image_url && data.poster_path) updates.poster = `${TMDB_IMAGE_BASE_URL}${data.poster_path}`;
-                    if (!item.description && data.overview) updates.overview = data.overview;
-                    if (!item.year && (data.release_date || data.first_air_date)) updates.release_year = new Date(data.release_date || data.first_air_date).getFullYear();
-                    if (data.release_date || data.first_air_date) updates.release_date = data.release_date || data.first_air_date;
-                    if (!item.genres?.length && data.genres) updates.genre = data.genres.map((g: any) => g.name).join(', ');
-                    updates.platform = getPlatform(data['watch/providers']?.results?.GB);
+                    // Common fields for both movies and TV shows
+                    const commonUpdates: any = {};
+                    if (!item.image_url && data.poster_path) commonUpdates.poster = `${TMDB_IMAGE_BASE_URL}${data.poster_path}`;
+                    if (!item.description && data.overview) commonUpdates.overview = data.overview;
+                    if (data.release_date || data.first_air_date) commonUpdates.release_date = data.release_date || data.first_air_date;
+                    if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g: any) => g.name).join(', ');
+                    commonUpdates.platform = getPlatform(data['watch/providers']?.results?.GB);
 
                     if (item.category === 'Movies') {
-                        if (data.runtime) updates.runtime = data.runtime;
-                        await supabase.from('movies').update(updates).eq('id', parseInt(item.id));
+                        // Movies have release_year and runtime columns
+                        const movieUpdates = { ...commonUpdates };
+                        if (!item.year && (data.release_date || data.first_air_date)) {
+                            movieUpdates.release_year = new Date(data.release_date || data.first_air_date).getFullYear();
+                        }
+                        if (data.runtime) movieUpdates.runtime = data.runtime;
+                        await supabase.from('movies').update(movieUpdates).eq('id', parseInt(item.id));
                     } else {
-                        updates.status = data.status;
-                        updates.runtime = data.episode_run_time?.[0] || null;
-                        await (supabase.from('tv_shows') as any).update(updates).eq('id', parseInt(item.id));
+                        // TV shows only have status (no release_year or runtime columns)
+                        const tvUpdates = { ...commonUpdates };
+                        tvUpdates.status = data.status;
+                        await (supabase.from('tv_shows') as any).update(tvUpdates).eq('id', parseInt(item.id));
 
                         // Season 0 Cleanup Logic
                         const tmdbSeason0 = data.seasons?.find((s: any) => s.season_number === 0);
@@ -354,7 +419,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                             }
 
                             if (shouldDelete) {
-                                console.log(`Cleaning up Season 0 for "${item.title}": ${reason}`);
+
                                 await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason0.id);
                             }
                         }
@@ -369,7 +434,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                     // Check if we have this empty season locally and remove it
                                     const localEmptySeason = item.seasons?.find(ls => ls.season_number === s.season_number);
                                     if (localEmptySeason) {
-                                        console.log(`Removing announced-only Season ${s.season_number} for "${item.title}" (0 episodes)`);
+
                                         await (supabase.from('tv_show_seasons') as any).delete().eq('id', localEmptySeason.id);
                                     }
                                     return; // Don't add this season
@@ -378,20 +443,37 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                 try {
                                     const { data: dbS, error: sErr } = await (supabase.from('tv_show_seasons') as any).upsert({ tv_show_id: parseInt(item.id), season_number: s.season_number, release_date: s.air_date || null }, { onConflict: 'tv_show_id,season_number' }).select().single();
                                     if (sErr || !dbS) return;
-                                    const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
-                                    if (sDetails.episodes && sDetails.episodes.length > 0) {
-                                        const eps = sDetails.episodes.map((v: any) => {
-                                            const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
-                                            if (v.name) ep.title = v.name;
-                                            if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
-                                            if (v.air_date) ep.release_date = v.air_date;
-                                            return ep;
-                                        });
-                                        await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
-                                    } else {
-                                        // Season was added but has no episode details - remove it
-                                        console.log(`Removing Season ${s.season_number} for "${item.title}" (no episode details available)`);
-                                        await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
+
+                                    // Determine if we should update episode details
+                                    // Only fetch episode details for seasons that:
+                                    // 1. Have no release date (unknown)
+                                    // 2. Release date is in the future
+                                    // 3. Released within the last 90 days (to catch any date changes)
+                                    const now = new Date();
+                                    now.setHours(0, 0, 0, 0);
+                                    const seasonReleaseDate = s.air_date ? new Date(s.air_date) : null;
+                                    const ninetyDaysAgo = new Date(now);
+                                    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+                                    const shouldUpdateEpisodes = !seasonReleaseDate ||
+                                        seasonReleaseDate >= ninetyDaysAgo; // Future or within 90 days
+
+                                    if (shouldUpdateEpisodes) {
+                                        const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
+                                        if (sDetails.episodes && sDetails.episodes.length > 0) {
+                                            const eps = sDetails.episodes.map((v: any) => {
+                                                const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
+                                                if (v.name) ep.title = v.name;
+                                                if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
+                                                if (v.air_date) ep.release_date = v.air_date;
+                                                return ep;
+                                            });
+                                            await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
+                                        } else {
+                                            // Season was added but has no episode details - remove it
+
+                                            await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
+                                        }
                                     }
                                 } catch (e) { }
                             }));
@@ -401,7 +483,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                             for (const localSeason of localSeasons) {
                                 const existsInTmdb = data.seasons.some((ts: any) => ts.season_number === localSeason.season_number);
                                 if (!existsInTmdb) {
-                                    console.log(`Removing orphaned Season ${localSeason.season_number} for "${item.title}" (no longer in TMDB)`);
+
                                     await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason.id);
                                 }
                             }

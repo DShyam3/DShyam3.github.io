@@ -7,13 +7,18 @@ import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDi
 
 interface BookCardProps {
   book: Book;
-  onRemove: (id: string) => void;
-  onUpdate: (id: string, updates: Partial<Omit<Book, 'id' | 'created_at'>>) => void;
+  onRemove?: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Omit<Book, 'id' | 'created_at'>>) => void;
 }
 
 export function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
   const [showActions, setShowActions] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const handleDelete = () => {
+    onRemove(book.id);
+    setDetailOpen(false);
+  };
 
   return (
     <>
@@ -42,23 +47,19 @@ export function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
               }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <EditBookDialog book={book} onUpdate={onUpdate} />
-            <Button
-              variant="secondary"
-              size="icon"
-              className="h-8 w-8 bg-background/80 backdrop-blur-sm"
-              onClick={() => onRemove(book.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {onUpdate && <EditBookDialog book={book} onUpdate={onUpdate} />}
+            {onRemove && (
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+                onClick={() => onRemove(book.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
-          {/* Category badge */}
-          <div className="absolute top-2 left-2">
-            <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-background/80 backdrop-blur-sm text-foreground">
-              {book.category === 'favourite' ? '❤️' : '📖'}
-            </span>
-          </div>
         </div>
 
         <div className="p-4">
@@ -82,6 +83,7 @@ export function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
         imageUrl={book.cover_url}
         link={book.link}
         badge={book.category === 'favourite' ? 'Favourite' : 'To Read'}
+        onDelete={onRemove ? handleDelete : undefined}
       >
         {book.description && (
           <DetailSection label="Description">

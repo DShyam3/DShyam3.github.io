@@ -57,7 +57,7 @@ export function Header({
 
             <div className="flex items-center gap-3">
               <div className="flex flex-col gap-1">
-                <DotMatrixText text="DHYAN SHYAM" size="sm" />
+                <DotMatrixText text="DHYAN SHYAM" size="md" className="text-muted-foreground" />
                 <DotMatrixText text="ROBOTIC ENGINEER" size="xs" className="text-muted-foreground" />
               </div>
 
