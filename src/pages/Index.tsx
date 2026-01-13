@@ -1,66 +1,49 @@
+import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
-import { CategoryNav } from '@/components/CategoryNav';
-import { ItemGrid } from '@/components/ItemGrid';
-import { AddItemDialog } from '@/components/AddItemDialog';
-import { useInventory } from '@/hooks/useInventory';
-import { useAuth } from '@/contexts/AuthContext';
+import { DotMatrixText } from '@/components/DotMatrixText';
 import { Button } from '@/components/ui/button';
-import { ArrowDownAZ, Clock } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 const Index = () => {
-  const { isAdmin } = useAuth();
-  const {
-    items,
-    activeCategory,
-    setActiveCategory,
-    searchQuery,
-    setSearchQuery,
-    addItem,
-    removeItem,
-    updateItem,
-    categories,
-    getCategoryCount,
-    sortOrder,
-    setSortOrder,
-  } = useInventory();
+  const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="wide-container">
-        <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="wide-container flex-1 flex flex-col">
+        <Header />
 
-        <CategoryNav
-          categories={categories}
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
-          getCategoryCount={getCategoryCount}
-        />
+        <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-0 py-12 md:py-24 space-y-12">
 
-        <div className="flex items-center justify-between px-4 md:px-0 pt-6">
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              {items.length} {items.length === 1 ? 'item' : 'items'}
-            </p>
+          <div className="flex flex-col items-center space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-2">
+              <DotMatrixText text="ABOUT ME" size="lg" className="text-foreground" />
+            </div>
+
+            <div className="max-w-2xl space-y-6 text-muted-foreground text-lg md:text-xl leading-relaxed">
+              <p>
+                Welcome to my digital garden. I am Dhyan, a Robotic Engineer with a passion for building
+                things that exist in both the physical and digital worlds.
+              </p>
+              <p>
+                This space is a curated collection of my beliefs, inspirations, and the tools I use
+                to navigate the complexities of life and engineering.
+              </p>
+            </div>
+          </div>
+
+          <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSortOrder(sortOrder === 'alphabetical' ? 'recent' : 'alphabetical')}
-              className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
+              size="lg"
+              className="text-lg px-8 py-6 h-auto group bg-primary hover:bg-primary/90 transition-all duration-300"
+              onClick={() => navigate('/inventory')}
             >
-              {sortOrder === 'alphabetical' ? (
-                <><ArrowDownAZ className="h-3.5 w-3.5" />A-Z</>
-              ) : (
-                <><Clock className="h-3.5 w-3.5" />Recent</>
-              )}
+              Explore Inventory
+              <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </div>
-          {isAdmin && <AddItemDialog onAdd={addItem} />}
-        </div>
 
-        <div className="px-4 md:px-0">
-          <ItemGrid items={items} onRemove={isAdmin ? removeItem : undefined} onUpdate={isAdmin ? updateItem : undefined} />
-        </div>
+        </main>
 
         <Footer />
       </div>

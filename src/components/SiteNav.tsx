@@ -10,7 +10,8 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
   const location = useLocation();
 
   const links = [
-    { to: '/', label: 'Inventory' },
+    { to: '/', label: 'About' },
+    { to: '/inventory', label: 'Inventory' },
     { to: '/links', label: 'Links' },
     { to: '/books', label: 'Books' },
     { to: '/articles', label: 'Articles' },

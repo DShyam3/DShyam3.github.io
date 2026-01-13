@@ -6,7 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { OpeningSequence } from "@/components/OpeningSequence";
+import Link from "./pages/Inventory";
 import Index from "./pages/Index";
+import Inventory from "./pages/Inventory";
 import Links from "./pages/Links";
 import Books from "./pages/Books";
 import Beliefs from "./pages/Beliefs";
@@ -49,6 +51,7 @@ const App = () => {
                       <RecipesProvider>
                         <Routes>
                           <Route path="/" element={<Index />} />
+                          <Route path="/inventory" element={<Inventory />} />
                           <Route path="/links" element={<Links />} />
                           <Route path="/books" element={<Books />} />
                           <Route path="/beliefs" element={<Beliefs />} />

@@ -48,18 +48,31 @@ export function Header({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           {/* Left side: Profile with social links */}
           <div className="flex items-center gap-3">
-            <img
-              src="/memoji.png"
-              alt="Dhyan Shyam memoji avatar"
-              className="h-12 w-12 rounded-full bg-secondary object-cover flex-shrink-0"
-              loading="eager"
-            />
+            <div
+              className="flex items-center gap-3 cursor-pointer select-none transition-opacity hover:opacity-80"
+              onClick={() => navigate('/')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  navigate('/');
+                }
+              }}
+            >
+              <img
+                src="/memoji.png"
+                alt="Dhyan Shyam memoji avatar"
+                className="h-12 w-12 rounded-full bg-secondary object-cover flex-shrink-0"
+                loading="eager"
+              />
 
-            <div className="flex items-center gap-3">
               <div className="flex flex-col gap-1">
                 <DotMatrixText text="DHYAN SHYAM" size="md" className="text-muted-foreground" />
                 <DotMatrixText text="ROBOTIC ENGINEER" size="xs" className="text-muted-foreground" />
               </div>
+            </div>
+
+            <div className="flex items-center gap-3">
 
               <Button
                 type="button"
