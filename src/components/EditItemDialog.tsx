@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { InventoryItem, Category } from '@/types/inventory';
+import { InventoryItem, Category, WardrobeSubcategory, WARDROBE_SUBCATEGORIES } from '@/types/inventory';
 import { toast } from 'sonner';
 
 interface EditItemDialogProps {
@@ -30,6 +30,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
   const [name, setName] = useState(item.name);
   const [brand, setBrand] = useState(item.brand);
   const [category, setCategory] = useState<Exclude<Category, 'all'>>(item.category);
+  const [subcategory, setSubcategory] = useState<WardrobeSubcategory | ''>(item.subcategory || '');
   const [price, setPrice] = useState(item.price.toString());
   const [image, setImage] = useState(item.image);
   const [link, setLink] = useState(item.link || '');
@@ -39,6 +40,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
       setName(item.name);
       setBrand(item.brand);
       setCategory(item.category);
+      setSubcategory(item.subcategory || '');
       setPrice(item.price.toString());
       setImage(item.image);
       setLink(item.link || '');
@@ -53,10 +55,16 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
       return;
     }
 
+    if (category === 'wardrobe' && !subcategory) {
+      toast.error('Please select a subcategory for wardrobe items');
+      return;
+    }
+
     onUpdate(item.id, {
       name,
       brand,
       category,
+      subcategory: category === 'wardrobe' ? subcategory as WardrobeSubcategory : undefined,
       price: parseFloat(price),
       image,
       link: link || undefined,
@@ -64,6 +72,14 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
 
     toast.success('Item updated');
     setOpen(false);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategory(value as Exclude<Category, 'all'>);
+    // Reset subcategory when category changes away from wardrobe
+    if (value !== 'wardrobe') {
+      setSubcategory('');
+    }
   };
 
   return (
@@ -77,7 +93,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
           <Pencil className="w-3.5 h-3.5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl">Edit Item</DialogTitle>
         </DialogHeader>
@@ -104,7 +120,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
 
           <div className="space-y-2">
             <Label htmlFor="edit-category">Category</Label>
-            <Select value={category} onValueChange={(v) => setCategory(v as Exclude<Category, 'all'>)}>
+            <Select value={category} onValueChange={handleCategoryChange}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -120,6 +136,24 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
               </SelectContent>
             </Select>
           </div>
+
+          {category === 'wardrobe' && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-subcategory">Subcategory *</Label>
+              <Select value={subcategory} onValueChange={(v) => setSubcategory(v as WardrobeSubcategory)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select subcategory..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {WARDROBE_SUBCATEGORIES.map((sub) => (
+                    <SelectItem key={sub.key} value={sub.key}>
+                      {sub.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="edit-price">Price (£) *</Label>
@@ -146,7 +180,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-link">Product URL (optional)</Label>
+            <Label htmlFor="edit-link">Product URL</Label>
             <Input
               id="edit-link"
               type="url"

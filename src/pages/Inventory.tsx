@@ -42,24 +42,31 @@ const Inventory = () => {
             <p className="text-sm text-muted-foreground">
               {items.length} {items.length === 1 ? 'item' : 'items'}
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSortOrder(sortOrder === 'alphabetical' ? 'recent' : 'alphabetical')}
-              className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
-            >
-              {sortOrder === 'alphabetical' ? (
-                <><ArrowDownAZ className="h-3.5 w-3.5" />A-Z</>
-              ) : (
-                <><Clock className="h-3.5 w-3.5" />Recent</>
-              )}
-            </Button>
+            {activeCategory !== 'wardrobe' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSortOrder(sortOrder === 'alphabetical' ? 'recent' : 'alphabetical')}
+                className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
+              >
+                {sortOrder === 'alphabetical' ? (
+                  <><ArrowDownAZ className="h-3.5 w-3.5" />A-Z</>
+                ) : (
+                  <><Clock className="h-3.5 w-3.5" />Recent</>
+                )}
+              </Button>
+            )}
           </div>
           {isAdmin && <AddItemDialog onAdd={addItem} />}
         </div>
 
         <div className="px-4 md:px-0">
-          <ItemGrid items={items} onRemove={isAdmin ? removeItem : undefined} onUpdate={isAdmin ? updateItem : undefined} />
+          <ItemGrid
+            items={items}
+            onRemove={isAdmin ? removeItem : undefined}
+            onUpdate={isAdmin ? updateItem : undefined}
+            groupBySubcategory={activeCategory === 'wardrobe'}
+          />
         </div>
 
         <Footer />

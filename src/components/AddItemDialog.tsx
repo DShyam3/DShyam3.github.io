@@ -17,7 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { InventoryItem, Category } from '@/types/inventory';
+import { InventoryItem, Category, WardrobeSubcategory, WARDROBE_SUBCATEGORIES } from '@/types/inventory';
 import { toast } from 'sonner';
 
 interface AddItemDialogProps {
@@ -29,6 +29,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
     const [name, setName] = useState('');
     const [brand, setBrand] = useState('');
     const [category, setCategory] = useState<Exclude<Category, 'all'>>('tech-edc');
+    const [subcategory, setSubcategory] = useState<WardrobeSubcategory | ''>('');
     const [price, setPrice] = useState('');
     const [image, setImage] = useState('');
     const [link, setLink] = useState('');
@@ -41,10 +42,16 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
             return;
         }
 
+        if (category === 'wardrobe' && !subcategory) {
+            toast.error('Please select a subcategory for wardrobe items');
+            return;
+        }
+
         onAdd({
             name,
             brand,
             category,
+            subcategory: category === 'wardrobe' ? subcategory as WardrobeSubcategory : undefined,
             price: parseFloat(price),
             image,
             link: link || undefined,
@@ -59,9 +66,18 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
         setName('');
         setBrand('');
         setCategory('tech-edc');
+        setSubcategory('');
         setPrice('');
         setImage('');
         setLink('');
+    };
+
+    const handleCategoryChange = (value: string) => {
+        setCategory(value as Exclude<Category, 'all'>);
+        // Reset subcategory when category changes
+        if (value !== 'wardrobe') {
+            setSubcategory('');
+        }
     };
 
     return (
@@ -72,7 +88,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                     Add Item
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="font-serif text-xl">Add New Item</DialogTitle>
                 </DialogHeader>
@@ -99,7 +115,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
 
                     <div className="space-y-2">
                         <Label htmlFor="category">Category</Label>
-                        <Select value={category} onValueChange={(v) => setCategory(v as Exclude<Category, 'all'>)}>
+                        <Select value={category} onValueChange={handleCategoryChange}>
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
@@ -115,6 +131,24 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                             </SelectContent>
                         </Select>
                     </div>
+
+                    {category === 'wardrobe' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="subcategory">Subcategory *</Label>
+                            <Select value={subcategory} onValueChange={(v) => setSubcategory(v as WardrobeSubcategory)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select subcategory..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {WARDROBE_SUBCATEGORIES.map((sub) => (
+                                        <SelectItem key={sub.key} value={sub.key}>
+                                            {sub.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label htmlFor="price">Price (£) *</Label>
@@ -164,3 +198,4 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
         </Dialog>
     );
 }
+

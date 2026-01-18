@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { InventoryItem, Category } from '@/types/inventory';
+import { InventoryItem, Category, WardrobeSubcategory, WARDROBE_SUBCATEGORIES } from '@/types/inventory';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -31,6 +31,7 @@ export function useInventory() {
           name: item.name,
           brand: item.brand || '',
           category: item.category as Exclude<Category, 'all'>,
+          subcategory: item.subcategory as WardrobeSubcategory | undefined,
           price: Number(item.price) || 0,
           image: item.image || '',
           link: item.link || undefined,
@@ -58,6 +59,7 @@ export function useInventory() {
           name: item.name,
           brand: item.brand,
           category: item.category,
+          subcategory: item.subcategory || null,
           price: item.price,
           image: item.image,
           link: item.link || null,
@@ -73,6 +75,7 @@ export function useInventory() {
         name: data.name,
         brand: data.brand || '',
         category: data.category as Exclude<Category, 'all'>,
+        subcategory: data.subcategory as WardrobeSubcategory | undefined,
         price: Number(data.price) || 0,
         image: data.image || '',
         link: data.link || undefined,
@@ -105,10 +108,16 @@ export function useInventory() {
       if (updates.name !== undefined) dbUpdates.name = updates.name;
       if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
       if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.subcategory !== undefined) dbUpdates.subcategory = updates.subcategory;
       if (updates.price !== undefined) dbUpdates.price = updates.price;
       if (updates.image !== undefined) dbUpdates.image = updates.image;
       if (updates.link !== undefined) dbUpdates.link = updates.link;
       if (updates.isNew !== undefined) dbUpdates.is_new = updates.isNew;
+
+      // If category is changed away from wardrobe, clear subcategory
+      if (updates.category && updates.category !== 'wardrobe') {
+        dbUpdates.subcategory = null;
+      }
 
       const { error } = await db
         .from('inventory_items')
@@ -118,7 +127,17 @@ export function useInventory() {
       if (error) throw error;
 
       setItems((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+        prev.map((item) => {
+          if (item.id === id) {
+            const updated = { ...item, ...updates };
+            // Clear subcategory if category changed away from wardrobe
+            if (updates.category && updates.category !== 'wardrobe') {
+              updated.subcategory = undefined;
+            }
+            return updated;
+          }
+          return item;
+        })
       );
       toast({ title: 'Item updated!' });
     } catch (error) {
@@ -143,7 +162,19 @@ export function useInventory() {
       );
     }
 
-    // Apply sorting
+    // Special sorting for wardrobe category - sort by subcategory order
+    if (activeCategory === 'wardrobe') {
+      const subcategoryOrder = WARDROBE_SUBCATEGORIES.map(s => s.key);
+      return [...filtered].sort((a, b) => {
+        const aIndex = a.subcategory ? subcategoryOrder.indexOf(a.subcategory) : 999;
+        const bIndex = b.subcategory ? subcategoryOrder.indexOf(b.subcategory) : 999;
+        if (aIndex !== bIndex) return aIndex - bIndex;
+        // Within same subcategory, sort alphabetically
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    // Apply normal sorting for other categories
     return [...filtered].sort((a, b) => {
       if (sortOrder === 'alphabetical') {
         return a.name.localeCompare(b.name);
@@ -187,3 +218,4 @@ export function useInventory() {
     loading,
   };
 }
+

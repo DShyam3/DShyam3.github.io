@@ -1,10 +1,57 @@
 export type Category = 'all' | 'tech-edc' | 'wardrobe' | 'kitchen' | 'vehicles' | 'home-decor' | 'hygiene' | 'sports-gear' | 'wishlist';
 
+export type WardrobeSubcategory =
+  | 'accessories'
+  | 'watches'
+  | 'shoes'
+  | 'jewellery'
+  | 'cold-weather'
+  | 'hoodies'
+  | 'sweaters'
+  | 'jackets'
+  | 'shirts'
+  | 't-shirts'
+  | 'trousers'
+  | 'jeans'
+  | 'joggers'
+  | 'shorts'
+  | 'underwear'
+  | 'socks'
+  | 'vests'
+  | 'sports'
+  | 'suits'
+  | 'suit-accessories';
+
+// Order for displaying wardrobe subcategories
+export const WARDROBE_SUBCATEGORIES: { key: WardrobeSubcategory; label: string }[] = [
+  { key: 'accessories', label: 'Accessories' },
+  { key: 'watches', label: 'Watches' },
+  { key: 'shoes', label: 'Shoes' },
+  { key: 'jewellery', label: 'Jewellery' },
+  { key: 'cold-weather', label: 'Cold Weather' },
+  { key: 'hoodies', label: 'Hoodies' },
+  { key: 'sweaters', label: 'Sweaters' },
+  { key: 'jackets', label: 'Jackets' },
+  { key: 'shirts', label: 'Shirts' },
+  { key: 't-shirts', label: 'T-Shirts' },
+  { key: 'trousers', label: 'Trousers' },
+  { key: 'jeans', label: 'Jeans' },
+  { key: 'joggers', label: 'Joggers' },
+  { key: 'shorts', label: 'Shorts' },
+  { key: 'underwear', label: 'Underwear' },
+  { key: 'socks', label: 'Socks' },
+  { key: 'vests', label: 'Vests' },
+  { key: 'sports', label: 'Sports' },
+  { key: 'suits', label: 'Suits' },
+  { key: 'suit-accessories', label: 'Suit Accessories' },
+];
+
 export interface InventoryItem {
   id: string;
   name: string;
   brand: string;
   category: Exclude<Category, 'all'>;
+  subcategory?: WardrobeSubcategory;
   price: number;
   image: string;
   link?: string;
