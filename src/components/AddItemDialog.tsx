@@ -178,10 +178,10 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                         <Label htmlFor="link">Product URL</Label>
                         <Input
                             id="link"
-                            type="url"
+                            type="text"
                             value={link}
                             onChange={(e) => setLink(e.target.value)}
-                            placeholder="https://..."
+                            placeholder="https://... or N/A for custom items"
                         />
                     </div>
 

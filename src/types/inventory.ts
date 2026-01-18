@@ -15,7 +15,6 @@ export type WardrobeSubcategory =
   | 'jeans'
   | 'joggers'
   | 'shorts'
-  | 'underwear'
   | 'socks'
   | 'vests'
   | 'sports'
@@ -38,7 +37,6 @@ export const WARDROBE_SUBCATEGORIES: { key: WardrobeSubcategory; label: string }
   { key: 'jeans', label: 'Jeans' },
   { key: 'joggers', label: 'Joggers' },
   { key: 'shorts', label: 'Shorts' },
-  { key: 'underwear', label: 'Underwear' },
   { key: 'socks', label: 'Socks' },
   { key: 'vests', label: 'Vests' },
   { key: 'sports', label: 'Sports' },

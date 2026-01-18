@@ -183,10 +183,10 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
             <Label htmlFor="edit-link">Product URL</Label>
             <Input
               id="edit-link"
-              type="url"
+              type="text"
               value={link}
               onChange={(e) => setLink(e.target.value)}
-              placeholder="https://..."
+              placeholder="https://... or N/A for custom items"
             />
           </div>
 

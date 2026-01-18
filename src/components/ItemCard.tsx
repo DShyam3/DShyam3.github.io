@@ -68,7 +68,7 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
         </div>
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-serif text-base font-medium leading-tight">
-            {item.link ? (
+            {item.link && item.link.toLowerCase() !== 'n/a' ? (
               <a
                 href={item.link}
                 target="_blank"
