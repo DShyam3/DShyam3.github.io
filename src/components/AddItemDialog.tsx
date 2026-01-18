@@ -141,7 +141,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="link">Product URL (optional)</Label>
+                        <Label htmlFor="link">Product URL</Label>
                         <Input
                             id="link"
                             type="url"

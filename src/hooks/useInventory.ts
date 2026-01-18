@@ -33,6 +33,7 @@ export function useInventory() {
           category: item.category as Exclude<Category, 'all'>,
           price: Number(item.price) || 0,
           image: item.image || '',
+          link: item.link || undefined,
           isNew: item.is_new || false,
           createdAt: new Date(item.created_at),
         })) || []
@@ -59,6 +60,7 @@ export function useInventory() {
           category: item.category,
           price: item.price,
           image: item.image,
+          link: item.link || null,
           is_new: item.isNew || false,
         })
         .select()
@@ -73,6 +75,7 @@ export function useInventory() {
         category: data.category as Exclude<Category, 'all'>,
         price: Number(data.price) || 0,
         image: data.image || '',
+        link: data.link || undefined,
         isNew: data.is_new || false,
         createdAt: new Date(data.created_at),
       }, ...prev]);
@@ -104,6 +107,7 @@ export function useInventory() {
       if (updates.category !== undefined) dbUpdates.category = updates.category;
       if (updates.price !== undefined) dbUpdates.price = updates.price;
       if (updates.image !== undefined) dbUpdates.image = updates.image;
+      if (updates.link !== undefined) dbUpdates.link = updates.link;
       if (updates.isNew !== undefined) dbUpdates.is_new = updates.isNew;
 
       const { error } = await db

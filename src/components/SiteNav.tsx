@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SiteNavProps {
   align?: 'start' | 'center' | 'end';
@@ -8,8 +9,9 @@ interface SiteNavProps {
 
 export function SiteNav({ align = 'center', className }: SiteNavProps) {
   const location = useLocation();
+  const { isAdmin } = useAuth();
 
-  const links = [
+  const allLinks = [
     { to: '/', label: 'About' },
     { to: '/inventory', label: 'Inventory' },
     { to: '/links', label: 'Links' },
@@ -18,9 +20,12 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
     { to: '/inspiration', label: 'Inspiration' },
     { to: '/photos', label: 'Photos' },
     { to: '/recipes', label: 'Recipes' },
-    { to: '/beliefs', label: 'Beliefs' },
+    { to: '/beliefs', label: 'Beliefs', requiresAuth: true },
     { to: '/watchlist', label: 'Watchlist' },
   ];
+
+  // Filter out links that require auth when not logged in
+  const links = allLinks.filter(link => !link.requiresAuth || isAdmin);
 
   const justifyClass =
     align === 'start'
