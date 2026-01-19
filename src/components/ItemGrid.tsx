@@ -63,11 +63,11 @@ export function ItemGrid({ items, onRemove, onUpdate, groupBySubcategory = false
           <section key={group.key}>
             {/* Section header with divider */}
             <div className="flex items-center gap-4 mb-5">
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+              <h3 className="text-lg font-semibold text-foreground tracking-wide whitespace-nowrap">
                 {group.label}
               </h3>
               <div className="h-px bg-border flex-1" />
-              <span className="text-xs text-muted-foreground/60">
+              <span className="text-sm text-muted-foreground">
                 {group.items.length}
               </span>
             </div>

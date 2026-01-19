@@ -7,6 +7,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowDownAZ, Clock } from 'lucide-react';
+import { useMemo } from 'react';
 
 const Inventory = () => {
   const { isAdmin } = useAuth();
@@ -24,6 +25,20 @@ const Inventory = () => {
     sortOrder,
     setSortOrder,
   } = useInventory();
+
+  // Calculate total valuation of current items
+  const totalValuation = useMemo(() => {
+    return items.reduce((sum, item) => sum + (item.price || 0), 0);
+  }, [items]);
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(price);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -57,7 +72,15 @@ const Inventory = () => {
               </Button>
             )}
           </div>
-          {isAdmin && <AddItemDialog onAdd={addItem} />}
+          <div className="flex items-center gap-4">
+            {isAdmin && (
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Total Value</p>
+                <p className="text-sm font-semibold">{formatPrice(totalValuation)}</p>
+              </div>
+            )}
+            {isAdmin && <AddItemDialog onAdd={addItem} />}
+          </div>
         </div>
 
         <div className="px-4 md:px-0">
@@ -76,4 +99,5 @@ const Inventory = () => {
 };
 
 export default Inventory;
+
 
