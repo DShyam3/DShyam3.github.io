@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Tv, Film, X, Clock, Calendar } from 'lucide-react';
+import { Tv, Film, X, Clock, Calendar, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
 import { formatRuntime, getPlatformColor } from '@/lib/watchlist-utils';
@@ -13,6 +13,7 @@ interface ScheduleItemProps {
     scheduleItem: any;
     item: WatchlistItem;
     removeFromSchedule?: (id: string) => void;
+    updateScheduleDay?: (id: string, newDay: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => void;
     onRemoveWatchlist?: (id: string) => void;
     toggleEpisodeWatched?: (showId: string, seasonNumber: number, episodeNumber: number) => void;
     isEpisodeWatched: (showId: string, seasonNumber: number, episodeNumber: number) => boolean;
@@ -26,6 +27,7 @@ export function ScheduleItem({
     scheduleItem,
     item,
     removeFromSchedule,
+    updateScheduleDay,
     onRemoveWatchlist,
     toggleEpisodeWatched,
     isEpisodeWatched,
@@ -36,6 +38,7 @@ export function ScheduleItem({
 }: ScheduleItemProps) {
     const [detailOpen, setDetailOpen] = useState(false);
     const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+    const [changeDayDialogOpen, setChangeDayDialogOpen] = useState(false);
     const [selectedDay, setSelectedDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'>('Monday');
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 
@@ -50,6 +53,18 @@ export function ScheduleItem({
             });
         }
         setScheduleDialogOpen(false);
+    };
+
+    const handleChangeDay = () => {
+        if (updateScheduleDay && selectedDay !== scheduleItem.day) {
+            updateScheduleDay(scheduleItem.id, selectedDay);
+        }
+        setChangeDayDialogOpen(false);
+    };
+
+    const openChangeDayDialog = () => {
+        setSelectedDay(scheduleItem.day);
+        setChangeDayDialogOpen(true);
     };
 
     return (
@@ -90,19 +105,34 @@ export function ScheduleItem({
                     </div>
                 </div>
 
-                {removeFromSchedule && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-1/2 -translate-y-1/2 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 bg-background/90 backdrop-blur-sm z-10 transition-opacity"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            removeFromSchedule(scheduleItem.id);
-                        }}
-                    >
-                        <X className="h-2.5 w-2.5" />
-                    </Button>
-                )}
+                <div className="absolute top-1/2 -translate-y-1/2 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    {updateScheduleDay && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 bg-background/90 backdrop-blur-sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openChangeDayDialog();
+                            }}
+                        >
+                            <ArrowRightLeft className="h-2.5 w-2.5" />
+                        </Button>
+                    )}
+                    {removeFromSchedule && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 bg-background/90 backdrop-blur-sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                removeFromSchedule(scheduleItem.id);
+                            }}
+                        >
+                            <X className="h-2.5 w-2.5" />
+                        </Button>
+                    )}
+                </div>
             </div>
 
             <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
@@ -136,6 +166,43 @@ export function ScheduleItem({
                             </Button>
                             <Button onClick={handleAddToSchedule} className="flex-1">
                                 Add to {selectedDay}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={changeDayDialogOpen} onOpenChange={setChangeDayDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="font-serif">Change Schedule Day</DialogTitle>
+                        <DialogDescription className="sr-only">Choose a different day of the week for this item.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            Move <span className="font-medium">{item.title}</span> to a different day
+                        </p>
+                        <div className="space-y-2">
+                            <Label>New day</Label>
+                            <Select value={selectedDay} onValueChange={(value) => setSelectedDay(value as typeof selectedDay)}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {DAYS.map((day) => (
+                                        <SelectItem key={day} value={day} disabled={day === scheduleItem.day}>
+                                            {day} {day === scheduleItem.day && '(current)'}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setChangeDayDialogOpen(false)} className="flex-1">
+                                Cancel
+                            </Button>
+                            <Button onClick={handleChangeDay} className="flex-1" disabled={selectedDay === scheduleItem.day}>
+                                Move to {selectedDay}
                             </Button>
                         </div>
                     </div>

@@ -28,7 +28,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
     const [brand, setBrand] = useState('');
-    const [category, setCategory] = useState<Exclude<Category, 'all'>>('tech-edc');
+    const [category, setCategory] = useState<Category>('tech-edc');
     const [subcategory, setSubcategory] = useState<WardrobeSubcategory | ''>('');
     const [price, setPrice] = useState('');
     const [image, setImage] = useState('');
@@ -73,7 +73,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
     };
 
     const handleCategoryChange = (value: string) => {
-        setCategory(value as Exclude<Category, 'all'>);
+        setCategory(value as Category);
         // Reset subcategory when category changes
         if (value !== 'wardrobe') {
             setSubcategory('');
@@ -123,7 +123,6 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                                 <SelectItem value="tech-edc">Tech + EDC</SelectItem>
                                 <SelectItem value="wardrobe">Wardrobe</SelectItem>
                                 <SelectItem value="kitchen">Kitchen</SelectItem>
-                                <SelectItem value="vehicles">Vehicles</SelectItem>
                                 <SelectItem value="home-decor">Home Decor</SelectItem>
                                 <SelectItem value="hygiene">Hygiene</SelectItem>
                                 <SelectItem value="sports-gear">Sports Gear</SelectItem>

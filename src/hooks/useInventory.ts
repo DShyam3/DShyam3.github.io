@@ -9,9 +9,9 @@ const db = supabase as any;
 
 export function useInventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [activeCategory, setActiveCategory] = useState<Category>('all');
+  const [activeCategory, setActiveCategory] = useState<Category>('tech-edc');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>('recent');
+  const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>('alphabetical');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -30,7 +30,7 @@ export function useInventory() {
           id: item.id,
           name: item.name,
           brand: item.brand || '',
-          category: item.category as Exclude<Category, 'all'>,
+          category: item.category as Category,
           subcategory: item.subcategory as WardrobeSubcategory | undefined,
           price: Number(item.price) || 0,
           image: item.image || '',
@@ -74,7 +74,7 @@ export function useInventory() {
         id: data.id,
         name: data.name,
         brand: data.brand || '',
-        category: data.category as Exclude<Category, 'all'>,
+        category: data.category as Category,
         subcategory: data.subcategory as WardrobeSubcategory | undefined,
         price: Number(data.price) || 0,
         image: data.image || '',
@@ -147,11 +147,7 @@ export function useInventory() {
   }, [toast]);
 
   const filteredItems = useMemo(() => {
-    let filtered = items;
-
-    if (activeCategory !== 'all') {
-      filtered = filtered.filter((item) => item.category === activeCategory);
-    }
+    let filtered = items.filter((item) => item.category === activeCategory);
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -185,11 +181,9 @@ export function useInventory() {
   }, [items, activeCategory, searchQuery, sortOrder]);
 
   const categories: { key: Category; label: string }[] = [
-    { key: 'all', label: 'Everything' },
     { key: 'tech-edc', label: 'Tech + EDC' },
     { key: 'wardrobe', label: 'Wardrobe' },
     { key: 'kitchen', label: 'Kitchen' },
-    { key: 'vehicles', label: 'Vehicles' },
     { key: 'home-decor', label: 'Home Decor' },
     { key: 'hygiene', label: 'Hygiene' },
     { key: 'sports-gear', label: 'Sports Gear' },
@@ -197,7 +191,6 @@ export function useInventory() {
   ];
 
   const getCategoryCount = (category: Category) => {
-    if (category === 'all') return items.length;
     return items.filter((item) => item.category === category).length;
   };
 

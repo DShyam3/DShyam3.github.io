@@ -5,6 +5,7 @@ interface WeeklyScheduleProps {
     DAYS: readonly ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
     getScheduleForDay: (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => any[];
     removeFromSchedule?: (id: string) => void;
+    updateScheduleDay?: (id: string, newDay: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => void;
     watchlist: WatchlistItem[];
     toggleEpisodeWatched?: (showId: string, seasonNumber: number, episodeNumber: number) => void;
     isEpisodeWatched: (showId: string, seasonNumber: number, episodeNumber: number) => boolean;
@@ -19,6 +20,7 @@ export function WeeklySchedule({
     DAYS,
     getScheduleForDay,
     removeFromSchedule,
+    updateScheduleDay,
     watchlist,
     toggleEpisodeWatched,
     isEpisodeWatched,
@@ -57,6 +59,7 @@ export function WeeklySchedule({
                                                 scheduleItem={scheduleItem}
                                                 item={watchlistItem}
                                                 removeFromSchedule={removeFromSchedule}
+                                                updateScheduleDay={updateScheduleDay}
                                                 toggleEpisodeWatched={toggleEpisodeWatched}
                                                 isEpisodeWatched={isEpisodeWatched}
                                                 isSeasonWatched={isSeasonWatched}

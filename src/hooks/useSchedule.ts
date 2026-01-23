@@ -108,6 +108,33 @@ export function useSchedule() {
         }
     };
 
+    const updateScheduleDay = async (id: string, newDay: typeof DAYS[number]) => {
+        try {
+            const { error } = await supabase
+                .from('weekly_schedule')
+                .update({ day_of_week: newDay })
+                .eq('id', parseInt(id));
+
+            if (error) throw error;
+
+            setSchedule(prev => prev.map(item =>
+                item.id === id ? { ...item, day: newDay } : item
+            ));
+
+            toast({
+                title: 'Schedule updated',
+                description: `Moved to ${newDay}`,
+            });
+        } catch (error) {
+            console.error('Error updating schedule:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to update schedule.',
+            });
+        }
+    };
+
     const getScheduleForDay = (day: typeof DAYS[number]) => {
         return schedule.filter((item) => item.day === day);
     };
@@ -121,6 +148,7 @@ export function useSchedule() {
         loading,
         addToSchedule,
         removeFromSchedule,
+        updateScheduleDay,
         getScheduleForDay,
         isInSchedule,
         DAYS,

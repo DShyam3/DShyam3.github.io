@@ -1,4 +1,4 @@
-export type Category = 'all' | 'tech-edc' | 'wardrobe' | 'kitchen' | 'vehicles' | 'home-decor' | 'hygiene' | 'sports-gear' | 'wishlist';
+export type Category = 'tech-edc' | 'wardrobe' | 'kitchen' | 'home-decor' | 'hygiene' | 'sports-gear' | 'wishlist';
 
 export type WardrobeSubcategory =
   | 'accessories'
@@ -48,7 +48,7 @@ export interface InventoryItem {
   id: string;
   name: string;
   brand: string;
-  category: Exclude<Category, 'all'>;
+  category: Category;
   subcategory?: WardrobeSubcategory;
   price: number;
   image: string;

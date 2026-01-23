@@ -56,7 +56,7 @@ const ALL_GENRES = [
 const Watchlist = () => {
     const { isAdmin } = useAuth();
     const { watchlist, addWatchlistItem, removeWatchlistItem, loading, syncing, syncProgress, syncWatchlist, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus } = useWatchlist();
-    const { addToSchedule, removeFromSchedule, getScheduleForDay, isInSchedule, DAYS } = useSchedule();
+    const { addToSchedule, removeFromSchedule, updateScheduleDay, getScheduleForDay, isInSchedule, DAYS } = useSchedule();
     const [open, setOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<typeof CATEGORIES[number]>('TV Shows');
     const [searchQuery, setSearchQuery] = useState('');
@@ -461,6 +461,7 @@ const Watchlist = () => {
                         DAYS={DAYS}
                         getScheduleForDay={getScheduleForDay}
                         removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
+                        updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
                         watchlist={watchlist}
                         toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
                         isEpisodeWatched={isEpisodeWatched}

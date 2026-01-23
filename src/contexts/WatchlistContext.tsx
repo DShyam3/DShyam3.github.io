@@ -361,133 +361,139 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             const itemsToSync = watchlist.filter(item => item.tmdb_id);
-            const chunkSize = 30;
+            // Use smaller chunks for better progress tracking in background tabs
+            const chunkSize = 50;
             let processedCount = 0;
             for (let i = 0; i < itemsToSync.length; i += chunkSize) {
                 const chunk = itemsToSync.slice(i, i + chunkSize);
                 await Promise.all(chunk.map(async (item) => {
-                    const type = item.category === 'TV Shows' ? 'tv' : 'movie';
-                    const data = await (await fetch(`${TMDB_BASE_URL}/${type}/${item.tmdb_id}?api_key=${TMDB_API_KEY}&append_to_response=watch/providers`)).json();
-                    if (!data.id) return;
+                    try {
+                        const type = item.category === 'TV Shows' ? 'tv' : 'movie';
+                        const data = await (await fetch(`${TMDB_BASE_URL}/${type}/${item.tmdb_id}?api_key=${TMDB_API_KEY}&append_to_response=watch/providers`)).json();
+                        if (!data.id) return;
 
-                    // Common fields for both movies and TV shows
-                    const commonUpdates: any = {};
-                    if (!item.image_url && data.poster_path) commonUpdates.poster = `${TMDB_IMAGE_BASE_URL}${data.poster_path}`;
-                    if (!item.description && data.overview) commonUpdates.overview = data.overview;
-                    if (data.release_date || data.first_air_date) commonUpdates.release_date = data.release_date || data.first_air_date;
-                    if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g: any) => g.name).join(', ');
-                    commonUpdates.platform = getPlatform(data['watch/providers']?.results?.GB);
+                        // Common fields for both movies and TV shows
+                        const commonUpdates: any = {};
+                        if (!item.image_url && data.poster_path) commonUpdates.poster = `${TMDB_IMAGE_BASE_URL}${data.poster_path}`;
+                        if (!item.description && data.overview) commonUpdates.overview = data.overview;
+                        if (data.release_date || data.first_air_date) commonUpdates.release_date = data.release_date || data.first_air_date;
+                        if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g: any) => g.name).join(', ');
+                        commonUpdates.platform = getPlatform(data['watch/providers']?.results?.GB);
 
-                    if (item.category === 'Movies') {
-                        // Movies have release_year and runtime columns
-                        const movieUpdates = { ...commonUpdates };
-                        if (!item.year && (data.release_date || data.first_air_date)) {
-                            movieUpdates.release_year = new Date(data.release_date || data.first_air_date).getFullYear();
-                        }
-                        if (data.runtime) movieUpdates.runtime = data.runtime;
-                        await supabase.from('movies').update(movieUpdates).eq('id', parseInt(item.id));
-                    } else {
-                        // TV shows only have status (no release_year or runtime columns)
-                        const tvUpdates = { ...commonUpdates };
-                        tvUpdates.status = data.status;
-                        await (supabase.from('tv_shows') as any).update(tvUpdates).eq('id', parseInt(item.id));
-
-                        // Season 0 Cleanup Logic
-                        const tmdbSeason0 = data.seasons?.find((s: any) => s.season_number === 0);
-                        const localSeason0 = item.seasons?.find(s => s.season_number === 0);
-
-                        if (localSeason0) {
-                            let shouldDelete = false;
-                            let reason = '';
-
-                            // Check 1: TMDB doesn't have Season 0 or it has 0 episodes
-                            if (!tmdbSeason0 || tmdbSeason0.episode_count === 0) {
-                                shouldDelete = true;
-                                reason = 'TMDB has no Season 0 or it has 0 episodes';
+                        if (item.category === 'Movies') {
+                            // Movies have release_year and runtime columns
+                            const movieUpdates = { ...commonUpdates };
+                            if (!item.year && (data.release_date || data.first_air_date)) {
+                                movieUpdates.release_year = new Date(data.release_date || data.first_air_date).getFullYear();
                             }
+                            if (data.runtime) movieUpdates.runtime = data.runtime;
+                            await supabase.from('movies').update(movieUpdates).eq('id', parseInt(item.id));
+                        } else {
+                            // TV shows only have status (no release_year or runtime columns)
+                            const tvUpdates = { ...commonUpdates };
+                            tvUpdates.status = data.status;
+                            await (supabase.from('tv_shows') as any).update(tvUpdates).eq('id', parseInt(item.id));
 
-                            // Check 2: Season 0 release date matches any other season (duplicate)
-                            if (!shouldDelete && localSeason0.release_date) {
-                                const otherSeasons = item.seasons?.filter(s => s.season_number !== 0) || [];
-                                const isDuplicate = otherSeasons.some(s =>
-                                    s.release_date && s.release_date === localSeason0.release_date
-                                );
-                                if (isDuplicate) {
+                            // Season 0 Cleanup Logic
+                            const tmdbSeason0 = data.seasons?.find((s: any) => s.season_number === 0);
+                            const localSeason0 = item.seasons?.find(s => s.season_number === 0);
+
+                            if (localSeason0) {
+                                let shouldDelete = false;
+                                let reason = '';
+
+                                // Check 1: TMDB doesn't have Season 0 or it has 0 episodes
+                                if (!tmdbSeason0 || tmdbSeason0.episode_count === 0) {
                                     shouldDelete = true;
-                                    reason = 'Season 0 release date matches another season (duplicate)';
+                                    reason = 'TMDB has no Season 0 or it has 0 episodes';
                                 }
-                            }
 
-                            if (shouldDelete) {
-
-                                await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason0.id);
-                            }
-                        }
-
-                        // Sync regular seasons (skip Season 0 and empty announced seasons)
-                        if (data.seasons) {
-                            await Promise.all(data.seasons.map(async (s: any) => {
-                                if (s.season_number === 0) return;
-
-                                // Skip seasons that have been announced but have no episodes yet
-                                if (s.episode_count === 0) {
-                                    // Check if we have this empty season locally and remove it
-                                    const localEmptySeason = item.seasons?.find(ls => ls.season_number === s.season_number);
-                                    if (localEmptySeason) {
-
-                                        await (supabase.from('tv_show_seasons') as any).delete().eq('id', localEmptySeason.id);
+                                // Check 2: Season 0 release date matches any other season (duplicate)
+                                if (!shouldDelete && localSeason0.release_date) {
+                                    const otherSeasons = item.seasons?.filter(s => s.season_number !== 0) || [];
+                                    const isDuplicate = otherSeasons.some(s =>
+                                        s.release_date && s.release_date === localSeason0.release_date
+                                    );
+                                    if (isDuplicate) {
+                                        shouldDelete = true;
+                                        reason = 'Season 0 release date matches another season (duplicate)';
                                     }
-                                    return; // Don't add this season
                                 }
 
-                                try {
-                                    const { data: dbS, error: sErr } = await (supabase.from('tv_show_seasons') as any).upsert({ tv_show_id: parseInt(item.id), season_number: s.season_number, release_date: s.air_date || null }, { onConflict: 'tv_show_id,season_number' }).select().single();
-                                    if (sErr || !dbS) return;
+                                if (shouldDelete) {
 
-                                    // Determine if we should update episode details
-                                    // Only fetch episode details for seasons that:
-                                    // 1. Have no release date (unknown)
-                                    // 2. Release date is in the future
-                                    // 3. Released within the last 90 days (to catch any date changes)
-                                    const now = new Date();
-                                    now.setHours(0, 0, 0, 0);
-                                    const seasonReleaseDate = s.air_date ? new Date(s.air_date) : null;
-                                    const ninetyDaysAgo = new Date(now);
-                                    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+                                    await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason0.id);
+                                }
+                            }
 
-                                    const shouldUpdateEpisodes = !seasonReleaseDate ||
-                                        seasonReleaseDate >= ninetyDaysAgo; // Future or within 90 days
+                            // Sync regular seasons (skip Season 0 and empty announced seasons)
+                            if (data.seasons) {
+                                await Promise.all(data.seasons.map(async (s: any) => {
+                                    if (s.season_number === 0) return;
 
-                                    if (shouldUpdateEpisodes) {
-                                        const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
-                                        if (sDetails.episodes && sDetails.episodes.length > 0) {
-                                            const eps = sDetails.episodes.map((v: any) => {
-                                                const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
-                                                if (v.name) ep.title = v.name;
-                                                if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
-                                                if (v.air_date) ep.release_date = v.air_date;
-                                                return ep;
-                                            });
-                                            await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
-                                        } else {
-                                            // Season was added but has no episode details - remove it
+                                    // Skip seasons that have been announced but have no episodes yet
+                                    if (s.episode_count === 0) {
+                                        // Check if we have this empty season locally and remove it
+                                        const localEmptySeason = item.seasons?.find(ls => ls.season_number === s.season_number);
+                                        if (localEmptySeason) {
 
-                                            await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
+                                            await (supabase.from('tv_show_seasons') as any).delete().eq('id', localEmptySeason.id);
                                         }
+                                        return; // Don't add this season
                                     }
-                                } catch (e) { }
-                            }));
 
-                            // Clean up any local seasons that no longer exist in TMDB (except Season 0)
-                            const localSeasons = item.seasons?.filter(s => s.season_number !== 0) || [];
-                            for (const localSeason of localSeasons) {
-                                const existsInTmdb = data.seasons.some((ts: any) => ts.season_number === localSeason.season_number);
-                                if (!existsInTmdb) {
+                                    try {
+                                        const { data: dbS, error: sErr } = await (supabase.from('tv_show_seasons') as any).upsert({ tv_show_id: parseInt(item.id), season_number: s.season_number, release_date: s.air_date || null }, { onConflict: 'tv_show_id,season_number' }).select().single();
+                                        if (sErr || !dbS) return;
 
-                                    await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason.id);
+                                        // Determine if we should update episode details
+                                        // Only fetch episode details for seasons that:
+                                        // 1. Have no release date (unknown)
+                                        // 2. Release date is in the future
+                                        // 3. Released within the last 90 days (to catch any date changes)
+                                        const now = new Date();
+                                        now.setHours(0, 0, 0, 0);
+                                        const seasonReleaseDate = s.air_date ? new Date(s.air_date) : null;
+                                        const ninetyDaysAgo = new Date(now);
+                                        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+                                        const shouldUpdateEpisodes = !seasonReleaseDate ||
+                                            seasonReleaseDate >= ninetyDaysAgo; // Future or within 90 days
+
+                                        if (shouldUpdateEpisodes) {
+                                            const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
+                                            if (sDetails.episodes && sDetails.episodes.length > 0) {
+                                                const eps = sDetails.episodes.map((v: any) => {
+                                                    const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
+                                                    if (v.name) ep.title = v.name;
+                                                    if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
+                                                    if (v.air_date) ep.release_date = v.air_date;
+                                                    return ep;
+                                                });
+                                                await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
+                                            } else {
+                                                // Season was added but has no episode details - remove it
+
+                                                await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
+                                            }
+                                        }
+                                    } catch (e) { }
+                                }));
+
+                                // Clean up any local seasons that no longer exist in TMDB (except Season 0)
+                                const localSeasons = item.seasons?.filter(s => s.season_number !== 0) || [];
+                                for (const localSeason of localSeasons) {
+                                    const existsInTmdb = data.seasons.some((ts: any) => ts.season_number === localSeason.season_number);
+                                    if (!existsInTmdb) {
+
+                                        await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason.id);
+                                    }
                                 }
                             }
                         }
+                    } catch (itemError) {
+                        // Log error but continue with other items
+                        console.error(`Error syncing item ${item.title}:`, itemError);
                     }
                     processedCount++;
                     setSyncProgress(Math.round((processedCount / itemsToSync.length) * 100));
