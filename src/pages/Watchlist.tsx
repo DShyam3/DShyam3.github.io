@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Bell, CalendarDays, X, Search, RefreshCcw, ArrowUpDown, ArrowDownAZ, Tv, Film, Clock } from 'lucide-react';
+import { Plus, Bell, CalendarDays, X, Search, RefreshCcw, ArrowUpDown, ArrowDownAZ, Tv, Film, Clock, Eye } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { Filter } from 'lucide-react';
@@ -19,7 +19,7 @@ import { WatchlistCard } from '@/components/watchlist/WatchlistCard';
 import { WeeklySchedule } from '@/components/watchlist/WeeklySchedule';
 import { formatRuntime, getPlatformColor } from '@/lib/watchlist-utils';
 
-const CATEGORIES = ['TV Shows', 'Movies', 'Upcoming'] as const;
+const CATEGORIES = ['TV Shows', 'Movies', 'Currently Watching', 'Upcoming'] as const;
 
 const ALL_PLATFORMS = [
     'Netflix',
@@ -55,7 +55,7 @@ const ALL_GENRES = [
 
 const Watchlist = () => {
     const { isAdmin } = useAuth();
-    const { watchlist, addWatchlistItem, removeWatchlistItem, loading, syncing, syncProgress, syncWatchlist, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus } = useWatchlist();
+    const { watchlist, addWatchlistItem, removeWatchlistItem, loading, syncing, syncProgress, lastSyncTime, syncWatchlist, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus } = useWatchlist();
     const { addToSchedule, removeFromSchedule, updateScheduleDay, getScheduleForDay, isInSchedule, DAYS } = useSchedule();
     const [open, setOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<typeof CATEGORIES[number]>('TV Shows');
@@ -79,7 +79,7 @@ const Watchlist = () => {
     }, [open]);
 
     useEffect(() => {
-        if (selectedCategory === 'Upcoming') return;
+        if (selectedCategory === 'Upcoming' || selectedCategory === 'Currently Watching') return;
 
         const timer = setTimeout(() => {
             if (title.length >= 2) {
@@ -119,8 +119,16 @@ const Watchlist = () => {
                 return getEarliestDate(a) - getEarliestDate(b);
             });
         }
+        if (selectedCategory === 'Currently Watching') {
+            return watchlist.filter((item) => {
+                if (item.category !== 'TV Shows') return false;
+                const autoStatus = getAutoStatus(item);
+                // Only show shows that are actively being watched (started a season but not finished it)
+                return autoStatus === 'Watching';
+            });
+        }
         return watchlist.filter((item) => item.category === selectedCategory);
-    }, [watchlist, selectedCategory]);
+    }, [watchlist, selectedCategory, getAutoStatus]);
 
     const platformCounts = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -179,6 +187,7 @@ const Watchlist = () => {
         switch (cat) {
             case 'TV Shows': return <Tv className="h-4 w-4" />;
             case 'Movies': return <Film className="h-4 w-4" />;
+            case 'Currently Watching': return <Eye className="h-4 w-4" />;
             case 'Upcoming': return <Bell className="h-4 w-4" />;
             default: return null;
         }
@@ -193,8 +202,15 @@ const Watchlist = () => {
                 return false;
             }).length;
         }
+        if (cat === 'Currently Watching') {
+            return watchlist.filter((item) => {
+                if (item.category !== 'TV Shows') return false;
+                const autoStatus = getAutoStatus(item);
+                return autoStatus === 'Watching';
+            }).length;
+        }
         return watchlist.filter((item) => item.category === cat).length;
-    }, [watchlist]);
+    }, [watchlist, getAutoStatus]);
 
     return (
         <div className="min-h-screen bg-background">
@@ -203,7 +219,7 @@ const Watchlist = () => {
 
                 <div className="px-4 md:px-0 pt-6 space-y-4">
                     <div className="flex flex-wrap items-center gap-2 justify-between">
-                        <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full sm:w-auto">
                             {CATEGORIES.map((cat) => (
                                 <Button
                                     key={cat}
@@ -225,24 +241,44 @@ const Watchlist = () => {
                         </div>
                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             {isAdmin && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={syncWatchlist}
-                                    disabled={syncing}
-                                    className="gap-1.5 relative overflow-hidden h-8 sm:h-9"
-                                >
-                                    {syncing && (
-                                        <div
-                                            className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-300 ease-out"
-                                            style={{ width: `${syncProgress}%` }}
-                                        />
+                                <div className="flex flex-col gap-1">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={syncWatchlist}
+                                        disabled={syncing}
+                                        className="gap-1.5 relative overflow-hidden h-8 sm:h-9"
+                                    >
+                                        {syncing && (
+                                            <div
+                                                className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-300 ease-out"
+                                                style={{ width: `${syncProgress}%` }}
+                                            />
+                                        )}
+                                        <span className="relative z-10 flex items-center gap-1.5">
+                                            <RefreshCcw className={cn("h-4 w-4", syncing && "animate-spin")} />
+                                            {syncing ? `${syncProgress}%` : 'Sync Updates'}
+                                        </span>
+                                    </Button>
+                                    {lastSyncTime && (
+                                        <span className="text-[10px] text-muted-foreground text-center">
+                                            Last synced: {(() => {
+                                                const now = new Date();
+                                                const syncDate = new Date(lastSyncTime);
+                                                const diffMs = now.getTime() - syncDate.getTime();
+                                                const diffMins = Math.floor(diffMs / 60000);
+                                                const diffHours = Math.floor(diffMs / 3600000);
+                                                const diffDays = Math.floor(diffMs / 86400000);
+
+                                                if (diffMins < 1) return 'just now';
+                                                if (diffMins < 60) return `${diffMins}m ago`;
+                                                if (diffHours < 24) return `${diffHours}h ago`;
+                                                if (diffDays < 7) return `${diffDays}d ago`;
+                                                return syncDate.toLocaleDateString();
+                                            })()}
+                                        </span>
                                     )}
-                                    <span className="relative z-10 flex items-center gap-1.5">
-                                        <RefreshCcw className={cn("h-4 w-4", syncing && "animate-spin")} />
-                                        {syncing ? `${syncProgress}%` : 'Sync Updates'}
-                                    </span>
-                                </Button>
+                                </div>
                             )}
                             <Button
                                 variant={showSchedule ? 'default' : 'outline'}
@@ -388,7 +424,7 @@ const Watchlist = () => {
                                         </div>
 
                                         <div className="flex-1 overflow-y-auto min-h-0 mt-4 -mx-6 px-6 border-t border-b border-border/50 bg-secondary/5">
-                                            {selectedCategory !== 'Upcoming' && title.length >= 2 && (searchResults.length > 0 || searchLoading) ? (
+                                            {selectedCategory !== 'Upcoming' && selectedCategory !== 'Currently Watching' && title.length >= 2 && (searchResults.length > 0 || searchLoading) ? (
                                                 <div className="divide-y divide-border/50">
                                                     {searchLoading ? (
                                                         <div className="p-12 text-base text-muted-foreground text-center animate-pulse">Searching TMDB...</div>

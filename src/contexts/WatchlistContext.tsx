@@ -43,6 +43,7 @@ interface WatchlistContextType {
     loading: boolean;
     syncing: boolean;
     syncProgress: number;
+    lastSyncTime: string | null;
     syncWatchlist: () => Promise<void>;
     addWatchlistItem: (item: Omit<WatchlistItem, 'id' | 'created_at'>) => Promise<void>;
     removeWatchlistItem: (id: string) => Promise<void>;
@@ -61,6 +62,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const [syncing, setSyncing] = useState(false);
     const [syncProgress, setSyncProgress] = useState(0);
     const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
+    const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
     const { toast } = useToast();
 
     const fetchData = useCallback(async () => {
@@ -153,6 +155,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         const stored = localStorage.getItem('watched_episodes');
         if (stored) {
             try { setWatchedEpisodes(new Set(JSON.parse(stored))); } catch (e) { }
+        }
+        const storedSyncTime = localStorage.getItem('last_sync_time');
+        if (storedSyncTime) {
+            setLastSyncTime(storedSyncTime);
         }
         fetchData();
     }, [fetchData]);
@@ -263,13 +269,32 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                     const showDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}?api_key=${TMDB_API_KEY}`)).json();
                     if (showDetails.seasons) {
                         for (const s of showDetails.seasons) {
-                            if (s.season_number === 0) continue;
+                            // Skip Season 0 and seasons with no episodes
+                            if (s.season_number === 0 || s.episode_count === 0) continue;
+
                             const { data: season, error: sErr } = await (supabase.from('tv_show_seasons') as any).insert({ tv_show_id: show.id, season_number: s.season_number, release_date: s.air_date || null }).select().single();
                             if (sErr) continue;
+
                             const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
-                            if (sDetails.episodes) {
-                                const eps = sDetails.episodes.map((v: any) => ({ season_id: season.id, episode_number: v.episode_number, title: v.name, runtime: v.runtime || null, release_date: v.air_date || null }));
-                                await (supabase.from('tv_show_episodes') as any).insert(eps);
+                            if (sDetails.episodes && sDetails.episodes.length > 0) {
+                                // Filter out TBA episodes (episodes with no air date)
+                                const validEpisodes = sDetails.episodes.filter((v: any) => v.air_date);
+                                if (validEpisodes.length > 0) {
+                                    const eps = validEpisodes.map((v: any) => ({
+                                        season_id: season.id,
+                                        episode_number: v.episode_number,
+                                        title: v.name,
+                                        runtime: v.runtime || null,
+                                        release_date: v.air_date
+                                    }));
+                                    await (supabase.from('tv_show_episodes') as any).insert(eps);
+                                } else {
+                                    // No valid episodes, remove the season
+                                    await (supabase.from('tv_show_seasons') as any).delete().eq('id', season.id);
+                                }
+                            } else {
+                                // No episodes, remove the season
+                                await (supabase.from('tv_show_seasons') as any).delete().eq('id', season.id);
                             }
                         }
                     }
@@ -286,12 +311,44 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         const itemToRemove = watchlist.find(item => item.id === id);
         if (!itemToRemove) return;
         try {
-            const table = itemToRemove.category === 'Movies' ? 'movies' : 'tv_shows';
-            const { error } = await (supabase.from(table) as any).delete().eq('id', parseInt(id));
-            if (error) throw error;
+            if (itemToRemove.category === 'TV Shows') {
+                // For TV shows, manually cascade delete seasons and episodes
+                // First, get all seasons for this show
+                const { data: seasons } = await (supabase.from('tv_show_seasons') as any)
+                    .select('id')
+                    .eq('tv_show_id', parseInt(id));
+
+                if (seasons && seasons.length > 0) {
+                    const seasonIds = seasons.map((s: any) => s.id);
+
+                    // Delete all episodes for these seasons
+                    await (supabase.from('tv_show_episodes') as any)
+                        .delete()
+                        .in('season_id', seasonIds);
+
+                    // Delete all seasons
+                    await (supabase.from('tv_show_seasons') as any)
+                        .delete()
+                        .eq('tv_show_id', parseInt(id));
+                }
+
+                // Finally, delete the TV show itself
+                const { error } = await (supabase.from('tv_shows') as any)
+                    .delete()
+                    .eq('id', parseInt(id));
+                if (error) throw error;
+            } else {
+                // For movies, simple delete
+                const { error } = await supabase.from('movies')
+                    .delete()
+                    .eq('id', parseInt(id));
+                if (error) throw error;
+            }
+
             setWatchlist(prev => prev.filter(item => item.id !== id));
             toast({ title: 'Success', description: 'Item removed' });
         } catch (error) {
+            console.error('Error removing item:', error);
             toast({ title: 'Error', description: 'Failed to remove item', variant: 'destructive' });
         }
     };
@@ -345,14 +402,18 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 ...(providers.ads || [])
             ];
             const allowed = [
-                { tmdbName: 'netflix', displayName: 'Netflix' },
-                { tmdbName: 'disney plus', displayName: 'Disney+' },
-                { tmdbName: 'amazon prime video', displayName: 'Prime Video' },
-                { tmdbName: 'apple tv plus', displayName: 'Apple TV+' },
-                { tmdbName: 'bbc iplayer', displayName: 'BBC iPlayer' },
+                { tmdbNames: ['Netflix'], displayName: 'Netflix' },
+                { tmdbNames: ['Disney Plus', 'Disney+'], displayName: 'Disney+' },
+                { tmdbNames: ['Amazon Prime Video'], displayName: 'Prime Video' },
+                { tmdbNames: ['Apple TV Plus', 'Apple TV+', 'Apple TV'], displayName: 'Apple TV+' },
+                { tmdbNames: ['BBC iPlayer'], displayName: 'BBC iPlayer' },
             ];
             for (const a of allowed) {
-                if (available.some((p: any) => p.provider_name?.toLowerCase() === a.tmdbName)) {
+                if (available.some((p: any) =>
+                    a.tmdbNames.some(name =>
+                        p.provider_name?.toLowerCase() === name.toLowerCase()
+                    )
+                )) {
                     return a.displayName;
                 }
             }
@@ -463,17 +524,39 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                         if (shouldUpdateEpisodes) {
                                             const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
                                             if (sDetails.episodes && sDetails.episodes.length > 0) {
-                                                const eps = sDetails.episodes.map((v: any) => {
-                                                    const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
-                                                    if (v.name) ep.title = v.name;
-                                                    if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
-                                                    if (v.air_date) ep.release_date = v.air_date;
-                                                    return ep;
-                                                });
-                                                await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
+                                                // Filter out TBA episodes (episodes with no air date)
+                                                const validEpisodes = sDetails.episodes.filter((v: any) => v.air_date);
+
+                                                if (validEpisodes.length > 0) {
+                                                    const eps = validEpisodes.map((v: any) => {
+                                                        const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
+                                                        if (v.name) ep.title = v.name;
+                                                        if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
+                                                        ep.release_date = v.air_date; // Always set release_date for valid episodes
+                                                        return ep;
+                                                    });
+                                                    await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
+
+                                                    // Delete any TBA episodes that might have been added previously
+                                                    const validEpisodeNumbers = validEpisodes.map((v: any) => v.episode_number);
+                                                    const { data: existingEpisodes } = await (supabase.from('tv_show_episodes') as any)
+                                                        .select('id, episode_number')
+                                                        .eq('season_id', dbS.id);
+
+                                                    if (existingEpisodes) {
+                                                        const episodesToDelete = existingEpisodes.filter((e: any) => !validEpisodeNumbers.includes(e.episode_number));
+                                                        if (episodesToDelete.length > 0) {
+                                                            await (supabase.from('tv_show_episodes') as any)
+                                                                .delete()
+                                                                .in('id', episodesToDelete.map((e: any) => e.id));
+                                                        }
+                                                    }
+                                                } else {
+                                                    // No valid episodes (all TBA), remove the season
+                                                    await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
+                                                }
                                             } else {
                                                 // Season was added but has no episode details - remove it
-
                                                 await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
                                             }
                                         }
@@ -500,13 +583,16 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 }));
             }
             await fetchData();
+            const syncTime = new Date().toISOString();
+            setLastSyncTime(syncTime);
+            localStorage.setItem('last_sync_time', syncTime);
             toast({ title: 'Success', description: 'Watchlist synchronized' });
         } catch (error) { toast({ title: 'Error', description: 'Sync failed', variant: 'destructive' }); }
         finally { setSyncing(false); setTimeout(() => setSyncProgress(0), 1000); }
     };
 
     return (
-        <WatchlistContext.Provider value={{ watchlist, loading, syncing, syncProgress, syncWatchlist, addWatchlistItem, removeWatchlistItem, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus, fetchData }}>
+        <WatchlistContext.Provider value={{ watchlist, loading, syncing, syncProgress, lastSyncTime, syncWatchlist, addWatchlistItem, removeWatchlistItem, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus, fetchData }}>
             {children}
         </WatchlistContext.Provider>
     );

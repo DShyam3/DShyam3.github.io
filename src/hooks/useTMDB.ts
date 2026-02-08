@@ -88,17 +88,20 @@ export function useTMDB() {
             if (providers) {
                 const available = [...(providers.flatrate || []), ...(providers.free || [])];
                 const allowedPlatforms = [
-                    { tmdbName: 'Netflix', displayName: 'Netflix' },
-                    { tmdbName: 'Disney Plus', displayName: 'Disney+' },
-                    { tmdbName: 'Amazon Prime Video', displayName: 'Prime Video' },
-                    { tmdbName: 'Apple TV', displayName: 'Apple TV+' },
-                    { tmdbName: 'Apple TV Plus', displayName: 'Apple TV+' },
-                    { tmdbName: 'BBC iPlayer', displayName: 'BBC iPlayer' },
-                    { tmdbName: 'ITVX', displayName: 'ITVX' },
+                    { tmdbNames: ['Netflix'], displayName: 'Netflix' },
+                    { tmdbNames: ['Disney Plus', 'Disney+'], displayName: 'Disney+' },
+                    { tmdbNames: ['Amazon Prime Video'], displayName: 'Prime Video' },
+                    { tmdbNames: ['Apple TV Plus', 'Apple TV+', 'Apple TV'], displayName: 'Apple TV+' },
+                    { tmdbNames: ['BBC iPlayer'], displayName: 'BBC iPlayer' },
+                    { tmdbNames: ['ITVX'], displayName: 'ITVX' },
                 ];
 
                 for (const allowed of allowedPlatforms) {
-                    if (available.some((p: any) => p.provider_name === allowed.tmdbName)) {
+                    if (available.some((p: any) =>
+                        allowed.tmdbNames.some(name =>
+                            p.provider_name?.toLowerCase() === name.toLowerCase()
+                        )
+                    )) {
                         platform = allowed.displayName;
                         break;
                     }
