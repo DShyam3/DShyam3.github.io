@@ -124,14 +124,19 @@ Deno.serve(async (req) => {
                                 const sRes = await fetch(sUrl)
                                 const sData = await sRes.json()
                                 if (sData.episodes && sData.episodes.length > 0) {
-                                    const eps = sData.episodes.map((v: any) => ({
-                                        season_id: dbSeason.id,
-                                        episode_number: v.episode_number,
-                                        title: v.name,
-                                        runtime: v.runtime || data.episode_run_time?.[0] || null,
-                                        release_date: v.air_date || null
-                                    }))
-                                    await supabase.from('tv_show_episodes').upsert(eps, { onConflict: 'season_id,episode_number' })
+                                    // Filter out TBA episodes (episodes with no air date)
+                                    const validEpisodes = sData.episodes.filter((v: any) => v.air_date)
+                                    if (validEpisodes.length > 0) {
+                                        const eps = validEpisodes.map((v: any) => ({
+                                            season_id: dbSeason.id,
+                                            episode_number: v.episode_number,
+                                            title: v.name || `Episode ${v.episode_number}`,
+                                            runtime: v.runtime || data.episode_run_time?.[0] || null,
+                                            release_date: v.air_date
+                                        }))
+                                        const { error: upsertErr } = await supabase.from('tv_show_episodes').upsert(eps, { onConflict: 'season_id,episode_number' })
+                                        if (upsertErr) console.error(`Episode upsert failed for ${show.title} S${s.season_number}:`, upsertErr)
+                                    }
                                 }
                             }
                         }

@@ -508,18 +508,26 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                         if (sErr || !dbS) return;
 
                                         // Determine if we should update episode details
-                                        // Only fetch episode details for seasons that:
+                                        // Fetch episode details for seasons that:
                                         // 1. Have no release date (unknown)
-                                        // 2. Release date is in the future
-                                        // 3. Released within the last 90 days (to catch any date changes)
+                                        // 2. Release date is in the future or within the last 90 days
+                                        // 3. Show is currently airing (Returning Series / In Production) - handles long-running seasons like anime
+                                        // 4. Episode count on TMDB differs from local (new episodes added or names updated)
                                         const now = new Date();
                                         now.setHours(0, 0, 0, 0);
                                         const seasonReleaseDate = s.air_date ? new Date(s.air_date) : null;
                                         const ninetyDaysAgo = new Date(now);
                                         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
+                                        const isShowCurrentlyAiring = data.status === 'Returning Series' || data.status === 'In Production';
+                                        const localSeason = item.seasons?.find(ls => ls.season_number === s.season_number);
+                                        const localEpisodeCount = localSeason?.episodes?.length || 0;
+                                        const hasEpisodeCountChanged = localEpisodeCount !== s.episode_count;
+
                                         const shouldUpdateEpisodes = !seasonReleaseDate ||
-                                            seasonReleaseDate >= ninetyDaysAgo; // Future or within 90 days
+                                            seasonReleaseDate >= ninetyDaysAgo || // Future or within 90 days
+                                            isShowCurrentlyAiring || // Show is still airing (handles long-running seasons)
+                                            hasEpisodeCountChanged; // Episode count changed (new episodes added)
 
                                         if (shouldUpdateEpisodes) {
                                             const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
@@ -530,12 +538,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                                 if (validEpisodes.length > 0) {
                                                     const eps = validEpisodes.map((v: any) => {
                                                         const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
-                                                        if (v.name) ep.title = v.name;
+                                                        ep.title = v.name || `Episode ${v.episode_number}`;
                                                         if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
                                                         ep.release_date = v.air_date; // Always set release_date for valid episodes
                                                         return ep;
                                                     });
-                                                    await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
+                                                    const { error: upsertError } = await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
+                                                    if (upsertError) console.error(`Episode upsert failed for ${item.title} S${s.season_number}:`, upsertError);
 
                                                     // Delete any TBA episodes that might have been added previously
                                                     const validEpisodeNumbers = validEpisodes.map((v: any) => v.episode_number);
