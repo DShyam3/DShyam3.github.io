@@ -314,32 +314,35 @@ const Watchlist = () => {
 
                     {/* Sync Log Panel */}
                     {isAdmin && showSyncLog && (
-                        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm p-4 space-y-3">
+                        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm px-3 py-2 space-y-2">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold flex items-center gap-2">
-                                    <History className="h-4 w-4" />
+                                <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
+                                    <History className="h-3 w-3" />
                                     Sync History
                                 </h3>
-                                <Button variant="ghost" size="sm" onClick={() => setShowSyncLog(false)} className="h-6 w-6 p-0">
+                                <Button variant="ghost" size="sm" onClick={() => setShowSyncLog(false)} className="h-5 w-5 p-0">
                                     <X className="h-3 w-3" />
                                 </Button>
                             </div>
                             {syncLog.length === 0 ? (
-                                <p className="text-xs text-muted-foreground text-center py-4">No sync history yet</p>
+                                <p className="text-[11px] text-muted-foreground text-center py-2">No sync history yet</p>
                             ) : (
-                                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                <div
+                                    className="space-y-1 overflow-y-auto pr-0.5"
+                                    style={{ maxHeight: '96px' }}
+                                >
                                     {syncLog.map((entry) => (
-                                        <div key={entry.id} className="flex items-center justify-between gap-3 text-xs py-1.5 px-2 rounded-md bg-secondary/30">
-                                            <div className="flex items-center gap-2">
+                                        <div key={entry.id} className="flex items-center justify-between gap-2 text-[11px] py-1 px-1.5 rounded bg-secondary/30">
+                                            <div className="flex items-center gap-1.5">
                                                 {entry.status === 'success'
-                                                    ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                                                    : <XCircle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                                                    ? <CheckCircle className="h-2.5 w-2.5 text-green-500 flex-shrink-0" />
+                                                    : <XCircle className="h-2.5 w-2.5 text-red-500 flex-shrink-0" />
                                                 }
                                                 <span className={cn(
-                                                    "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                                    "px-1 py-px rounded text-[9px] font-semibold tracking-wide",
                                                     entry.sync_type === 'auto' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
                                                 )}>
-                                                    {entry.sync_type === 'auto' ? 'AUTO' : 'MANUAL'}
+                                                    {entry.sync_type === 'auto' ? 'AUTO' : 'MAN'}
                                                 </span>
                                                 <span className="text-muted-foreground">
                                                     {entry.items_synced} items · {(entry.duration_ms / 1000).toFixed(1)}s
@@ -356,9 +359,9 @@ const Watchlist = () => {
                                 </div>
                             )}
                             {autoSyncEnabled && (
-                                <div className="text-[10px] text-muted-foreground border-t border-border/50 pt-2 flex items-center gap-1.5">
-                                    <Timer className="h-3 w-3" />
-                                    Auto-sync runs daily at 6:00 AM (your local time). Next sync: {new Date(nextAutoSyncTime).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                                <div className="text-[9px] text-muted-foreground border-t border-border/50 pt-1.5 flex items-center gap-1">
+                                    <Timer className="h-2.5 w-2.5" />
+                                    Next auto-sync: {new Date(nextAutoSyncTime).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
                                 </div>
                             )}
                         </div>

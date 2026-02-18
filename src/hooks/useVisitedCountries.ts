@@ -5,7 +5,13 @@ export interface VisitedCountry {
     id: number;
     country_code: string;
     country_name: string;
+    flag_url: string | null;
     created_at: string;
+}
+
+/** Returns a flagcdn.com URL for a given ISO-2 country code */
+export function getFlagUrl(countryCode: string): string {
+    return `https://flagcdn.com/w80/${countryCode.toLowerCase()}.png`;
 }
 
 export function useVisitedCountries() {
@@ -32,8 +38,9 @@ export function useVisitedCountries() {
 
     const addCountry = async (countryCode: string, countryName: string) => {
         try {
+            const flag_url = getFlagUrl(countryCode);
             const { error } = await (supabase.from('visited_countries') as any)
-                .insert({ country_code: countryCode, country_name: countryName });
+                .insert({ country_code: countryCode, country_name: countryName, flag_url });
             if (error) throw error;
             await fetchCountries();
             return true;
