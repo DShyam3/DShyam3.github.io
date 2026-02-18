@@ -2,11 +2,33 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { DotMatrixText } from '@/components/DotMatrixText';
+import { DotMatrixGlobe } from '@/components/DotMatrixGlobe';
+import { GlobeAdminPanel } from '@/components/GlobeAdminPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useVisitedCountries } from '@/hooks/useVisitedCountries';
+import { useState, useEffect } from 'react';
 
 const Index = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  const { visitedCountries, addCountry, removeCountry } = useVisitedCountries();
+  const visitedCodes = visitedCountries.map(c => c.country_code);
+
+  // Responsive globe size
+  const [globeSize, setGlobeSize] = useState(360);
+  useEffect(() => {
+    const updateSize = () => {
+      const w = window.innerWidth;
+      if (w < 480) setGlobeSize(260);
+      else if (w < 768) setGlobeSize(320);
+      else setGlobeSize(400);
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -32,6 +54,31 @@ const Index = () => {
             </div>
           </div>
 
+          {/* Globe Section */}
+          <div className="flex flex-col items-center space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
+            <DotMatrixText text="WHERE I'VE BEEN" size="sm" className="text-muted-foreground" />
+            <DotMatrixGlobe
+              visitedCountryCodes={visitedCodes}
+              size={globeSize}
+            />
+            {visitedCodes.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {visitedCodes.length} {visitedCodes.length === 1 ? 'country' : 'countries'} visited
+              </p>
+            )}
+
+            {/* Admin panel for managing visited countries */}
+            {isAdmin && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex justify-center">
+                <GlobeAdminPanel
+                  visitedCodes={visitedCodes}
+                  onAddCountry={addCountry}
+                  onRemoveCountry={removeCountry}
+                />
+              </div>
+            )}
+          </div>
+
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
             <Button
               size="lg"
@@ -52,4 +99,3 @@ const Index = () => {
 };
 
 export default Index;
-

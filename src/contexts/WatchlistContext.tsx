@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -38,13 +38,27 @@ export interface WatchlistItem {
     series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Cancelled';
 }
 
+interface SyncLogEntry {
+    id: number;
+    synced_at: string;
+    sync_type: 'auto' | 'manual';
+    status: 'success' | 'error';
+    items_synced: number;
+    error_message?: string;
+    duration_ms: number;
+}
+
 interface WatchlistContextType {
     watchlist: WatchlistItem[];
     loading: boolean;
     syncing: boolean;
     syncProgress: number;
     lastSyncTime: string | null;
-    syncWatchlist: () => Promise<void>;
+    lastAutoSyncTime: string | null;
+    nextAutoSyncTime: string;
+    syncLog: SyncLogEntry[];
+    autoSyncEnabled: boolean;
+    syncWatchlist: (type?: 'manual' | 'auto') => Promise<void>;
     addWatchlistItem: (item: Omit<WatchlistItem, 'id' | 'created_at'>) => Promise<void>;
     removeWatchlistItem: (id: string) => Promise<void>;
     toggleEpisodeWatched: (showId: string, seasonNumber: number, episodeNumber: number) => Promise<void>;
@@ -56,6 +70,31 @@ interface WatchlistContextType {
 
 const WatchlistContext = createContext<WatchlistContextType | undefined>(undefined);
 
+// Auto-sync target hour (6 AM in user's local timezone)
+const AUTO_SYNC_HOUR = 6;
+
+/** Get the most recent 6 AM timestamp (today if past 6 AM, yesterday if before 6 AM) */
+const getMostRecent6AM = () => {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(AUTO_SYNC_HOUR, 0, 0, 0);
+    if (now < target) {
+        target.setDate(target.getDate() - 1);
+    }
+    return target;
+};
+
+/** Get the next upcoming 6 AM */
+const getNext6AM = () => {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(AUTO_SYNC_HOUR, 0, 0, 0);
+    if (now >= target) {
+        target.setDate(target.getDate() + 1);
+    }
+    return target;
+};
+
 export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -63,6 +102,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const [syncProgress, setSyncProgress] = useState(0);
     const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
     const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+    const [lastAutoSyncTime, setLastAutoSyncTime] = useState<string | null>(null);
+    const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
+    const [nextAutoSyncTime, setNextAutoSyncTime] = useState<string>(getNext6AM().toISOString());
+    const autoSyncEnabled = true;
+    const autoSyncTriggeredRef = useRef(false);
     const { toast } = useToast();
 
     const fetchData = useCallback(async () => {
@@ -151,17 +195,66 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
+    // Fetch sync log from Supabase
+    const fetchSyncLog = useCallback(async () => {
+        try {
+            const { data, error } = await (supabase.from('sync_log') as any)
+                .select('*')
+                .order('synced_at', { ascending: false })
+                .limit(20);
+            if (error) throw error;
+            if (data) {
+                setSyncLog(data);
+                // Find most recent successful sync of any type
+                const lastSuccessful = data.find((e: SyncLogEntry) => e.status === 'success');
+                if (lastSuccessful) {
+                    setLastSyncTime(lastSuccessful.synced_at);
+                }
+                // Find most recent successful auto sync
+                const lastAutoSuccess = data.find((e: SyncLogEntry) => e.sync_type === 'auto' && e.status === 'success');
+                if (lastAutoSuccess) {
+                    setLastAutoSyncTime(lastAutoSuccess.synced_at);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching sync log:', error);
+        }
+    }, []);
+
+    // Log a sync event to Supabase
+    const logSync = useCallback(async (syncType: 'auto' | 'manual', status: 'success' | 'error', itemsSynced: number, durationMs: number, errorMessage?: string) => {
+        try {
+            await (supabase.from('sync_log') as any).insert({
+                sync_type: syncType,
+                status,
+                items_synced: itemsSynced,
+                duration_ms: durationMs,
+                error_message: errorMessage || null,
+            });
+            // Clean up old logs (keep last 50)
+            const { data: oldLogs } = await (supabase.from('sync_log') as any)
+                .select('id')
+                .order('synced_at', { ascending: false })
+                .range(50, 1000);
+            if (oldLogs && oldLogs.length > 0) {
+                await (supabase.from('sync_log') as any)
+                    .delete()
+                    .in('id', oldLogs.map((l: any) => l.id));
+            }
+            await fetchSyncLog();
+        } catch (error) {
+            console.error('Error logging sync:', error);
+        }
+    }, [fetchSyncLog]);
+
     useEffect(() => {
         const stored = localStorage.getItem('watched_episodes');
         if (stored) {
             try { setWatchedEpisodes(new Set(JSON.parse(stored))); } catch (e) { }
         }
-        const storedSyncTime = localStorage.getItem('last_sync_time');
-        if (storedSyncTime) {
-            setLastSyncTime(storedSyncTime);
-        }
         fetchData();
-    }, [fetchData]);
+        fetchSyncLog();
+    }, [fetchData, fetchSyncLog]);
 
     const getAutoStatus = useCallback((item: WatchlistItem) => {
         const now = new Date();
@@ -387,9 +480,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         return season.episodes.every(ep => isEpisodeWatched(showId, season.season_number, ep.episode_number));
     };
 
-    const syncWatchlist = async () => {
+    const syncWatchlist = async (type: 'manual' | 'auto' = 'manual') => {
+        if (syncing) return; // Prevent concurrent syncs
         setSyncing(true);
         setSyncProgress(0);
+        const startTime = Date.now();
         const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
         const TMDB_BASE_URL = import.meta.env.VITE_TMDB_BASE_URL;
         const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
@@ -420,6 +515,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             return 'Online';
         };
 
+        let itemsSynced = 0;
         try {
             const itemsToSync = watchlist.filter(item => item.tmdb_id);
             // Use smaller chunks for better progress tracking in background tabs
@@ -429,8 +525,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 const chunk = itemsToSync.slice(i, i + chunkSize);
                 await Promise.all(chunk.map(async (item) => {
                     try {
-                        const type = item.category === 'TV Shows' ? 'tv' : 'movie';
-                        const data = await (await fetch(`${TMDB_BASE_URL}/${type}/${item.tmdb_id}?api_key=${TMDB_API_KEY}&append_to_response=watch/providers`)).json();
+                        const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie';
+                        const data = await (await fetch(`${TMDB_BASE_URL}/${tmdbType}/${item.tmdb_id}?api_key=${TMDB_API_KEY}&append_to_response=watch/providers`)).json();
                         if (!data.id) return;
 
                         // Common fields for both movies and TV shows
@@ -461,12 +557,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
                             if (localSeason0) {
                                 let shouldDelete = false;
-                                let reason = '';
 
                                 // Check 1: TMDB doesn't have Season 0 or it has 0 episodes
                                 if (!tmdbSeason0 || tmdbSeason0.episode_count === 0) {
                                     shouldDelete = true;
-                                    reason = 'TMDB has no Season 0 or it has 0 episodes';
                                 }
 
                                 // Check 2: Season 0 release date matches any other season (duplicate)
@@ -477,12 +571,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                     );
                                     if (isDuplicate) {
                                         shouldDelete = true;
-                                        reason = 'Season 0 release date matches another season (duplicate)';
                                     }
                                 }
 
                                 if (shouldDelete) {
-
                                     await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason0.id);
                                 }
                             }
@@ -497,7 +589,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                         // Check if we have this empty season locally and remove it
                                         const localEmptySeason = item.seasons?.find(ls => ls.season_number === s.season_number);
                                         if (localEmptySeason) {
-
                                             await (supabase.from('tv_show_seasons') as any).delete().eq('id', localEmptySeason.id);
                                         }
                                         return; // Don't add this season
@@ -507,12 +598,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                         const { data: dbS, error: sErr } = await (supabase.from('tv_show_seasons') as any).upsert({ tv_show_id: parseInt(item.id), season_number: s.season_number, release_date: s.air_date || null }, { onConflict: 'tv_show_id,season_number' }).select().single();
                                         if (sErr || !dbS) return;
 
-                                        // Determine if we should update episode details
-                                        // Fetch episode details for seasons that:
-                                        // 1. Have no release date (unknown)
-                                        // 2. Release date is in the future or within the last 90 days
-                                        // 3. Show is currently airing (Returning Series / In Production) - handles long-running seasons like anime
-                                        // 4. Episode count on TMDB differs from local (new episodes added or names updated)
                                         const now = new Date();
                                         now.setHours(0, 0, 0, 0);
                                         const seasonReleaseDate = s.air_date ? new Date(s.air_date) : null;
@@ -525,14 +610,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                         const hasEpisodeCountChanged = localEpisodeCount !== s.episode_count;
 
                                         const shouldUpdateEpisodes = !seasonReleaseDate ||
-                                            seasonReleaseDate >= ninetyDaysAgo || // Future or within 90 days
-                                            isShowCurrentlyAiring || // Show is still airing (handles long-running seasons)
-                                            hasEpisodeCountChanged; // Episode count changed (new episodes added)
+                                            seasonReleaseDate >= ninetyDaysAgo ||
+                                            isShowCurrentlyAiring ||
+                                            hasEpisodeCountChanged;
 
                                         if (shouldUpdateEpisodes) {
                                             const sDetails = await (await fetch(`${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`)).json();
                                             if (sDetails.episodes && sDetails.episodes.length > 0) {
-                                                // Filter out TBA episodes (episodes with no air date)
                                                 const validEpisodes = sDetails.episodes.filter((v: any) => v.air_date);
 
                                                 if (validEpisodes.length > 0) {
@@ -540,13 +624,12 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                                         const ep: any = { season_id: dbS.id, episode_number: v.episode_number };
                                                         ep.title = v.name || `Episode ${v.episode_number}`;
                                                         if (v.runtime) ep.runtime = v.runtime; else if (data.episode_run_time?.[0]) ep.runtime = data.episode_run_time[0];
-                                                        ep.release_date = v.air_date; // Always set release_date for valid episodes
+                                                        ep.release_date = v.air_date;
                                                         return ep;
                                                     });
                                                     const { error: upsertError } = await (supabase.from('tv_show_episodes') as any).upsert(eps, { onConflict: 'season_id,episode_number' });
                                                     if (upsertError) console.error(`Episode upsert failed for ${item.title} S${s.season_number}:`, upsertError);
 
-                                                    // Delete any TBA episodes that might have been added previously
                                                     const validEpisodeNumbers = validEpisodes.map((v: any) => v.episode_number);
                                                     const { data: existingEpisodes } = await (supabase.from('tv_show_episodes') as any)
                                                         .select('id, episode_number')
@@ -561,11 +644,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                                         }
                                                     }
                                                 } else {
-                                                    // No valid episodes (all TBA), remove the season
                                                     await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
                                                 }
                                             } else {
-                                                // Season was added but has no episode details - remove it
                                                 await (supabase.from('tv_show_seasons') as any).delete().eq('id', dbS.id);
                                             }
                                         }
@@ -577,14 +658,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                 for (const localSeason of localSeasons) {
                                     const existsInTmdb = data.seasons.some((ts: any) => ts.season_number === localSeason.season_number);
                                     if (!existsInTmdb) {
-
                                         await (supabase.from('tv_show_seasons') as any).delete().eq('id', localSeason.id);
                                     }
                                 }
                             }
                         }
+                        itemsSynced++;
                     } catch (itemError) {
-                        // Log error but continue with other items
                         console.error(`Error syncing item ${item.title}:`, itemError);
                     }
                     processedCount++;
@@ -592,16 +672,69 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 }));
             }
             await fetchData();
+            const durationMs = Date.now() - startTime;
             const syncTime = new Date().toISOString();
             setLastSyncTime(syncTime);
             localStorage.setItem('last_sync_time', syncTime);
-            toast({ title: 'Success', description: 'Watchlist synchronized' });
-        } catch (error) { toast({ title: 'Error', description: 'Sync failed', variant: 'destructive' }); }
+            await logSync(type, 'success', itemsSynced, durationMs);
+            setNextAutoSyncTime(getNext6AM().toISOString());
+            if (type === 'auto') {
+                console.log(`[Auto-Sync] Completed at ${syncTime}. ${itemsSynced} items synced in ${(durationMs / 1000).toFixed(1)}s`);
+            }
+            toast({ title: type === 'auto' ? 'Auto-Sync Complete' : 'Sync Complete', description: `${itemsSynced} items synchronized${type === 'auto' ? ' (scheduled)' : ''}` });
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            await logSync(type, 'error', itemsSynced, durationMs, errorMsg);
+            toast({ title: 'Error', description: 'Sync failed', variant: 'destructive' });
+        }
         finally { setSyncing(false); setTimeout(() => setSyncProgress(0), 1000); }
     };
 
+    // Auto-sync: Check on load and every 15 minutes if a sync is due
+    useEffect(() => {
+        if (!autoSyncEnabled || loading || watchlist.length === 0) return;
+
+        const checkAndAutoSync = async () => {
+            // Prevent multiple triggers in the same session
+            if (autoSyncTriggeredRef.current || syncing) return;
+
+            const mostRecent6AM = getMostRecent6AM();
+
+            // Check if any successful sync has happened since the most recent 6 AM
+            const { data: recentSyncs } = await (supabase.from('sync_log') as any)
+                .select('id')
+                .gte('synced_at', mostRecent6AM.toISOString())
+                .eq('status', 'success')
+                .limit(1);
+
+            if (!recentSyncs || recentSyncs.length === 0) {
+                console.log(`[Auto-Sync] No sync since ${mostRecent6AM.toISOString()}. Triggering auto-sync...`);
+                autoSyncTriggeredRef.current = true;
+                await syncWatchlist('auto');
+            } else {
+                console.log(`[Auto-Sync] Already synced since ${mostRecent6AM.toISOString()}. Skipping.`);
+            }
+        };
+
+        // Check immediately on load (with a small delay to let data settle)
+        const initialTimer = setTimeout(checkAndAutoSync, 3000);
+
+        // Also check every 15 minutes (for when the tab stays open overnight)
+        const intervalTimer = setInterval(() => {
+            autoSyncTriggeredRef.current = false; // Reset so it can trigger again for new 6 AM windows
+            checkAndAutoSync();
+        }, 15 * 60 * 1000);
+
+        return () => {
+            clearTimeout(initialTimer);
+            clearInterval(intervalTimer);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loading, watchlist.length, autoSyncEnabled]);
+
     return (
-        <WatchlistContext.Provider value={{ watchlist, loading, syncing, syncProgress, lastSyncTime, syncWatchlist, addWatchlistItem, removeWatchlistItem, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus, fetchData }}>
+        <WatchlistContext.Provider value={{ watchlist, loading, syncing, syncProgress, lastSyncTime, lastAutoSyncTime, nextAutoSyncTime, syncLog, autoSyncEnabled, syncWatchlist, addWatchlistItem, removeWatchlistItem, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus, fetchData }}>
             {children}
         </WatchlistContext.Provider>
     );

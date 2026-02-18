@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Bell, CalendarDays, X, Search, RefreshCcw, ArrowUpDown, ArrowDownAZ, Tv, Film, Clock, Eye } from 'lucide-react';
+import { Plus, Bell, CalendarDays, X, Search, RefreshCcw, ArrowUpDown, ArrowDownAZ, Tv, Film, Clock, Eye, History, CheckCircle, XCircle, Timer } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { Filter } from 'lucide-react';
@@ -55,7 +55,7 @@ const ALL_GENRES = [
 
 const Watchlist = () => {
     const { isAdmin } = useAuth();
-    const { watchlist, addWatchlistItem, removeWatchlistItem, loading, syncing, syncProgress, lastSyncTime, syncWatchlist, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus } = useWatchlist();
+    const { watchlist, addWatchlistItem, removeWatchlistItem, loading, syncing, syncProgress, lastSyncTime, lastAutoSyncTime, nextAutoSyncTime, syncLog, autoSyncEnabled, syncWatchlist, toggleEpisodeWatched, isEpisodeWatched, isSeasonWatched, getAutoStatus } = useWatchlist();
     const { addToSchedule, removeFromSchedule, updateScheduleDay, getScheduleForDay, isInSchedule, DAYS } = useSchedule();
     const [open, setOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<typeof CATEGORIES[number]>('TV Shows');
@@ -67,6 +67,7 @@ const Watchlist = () => {
     const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>('alphabetical');
     const [title, setTitle] = useState('');
     const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
+    const [showSyncLog, setShowSyncLog] = useState(false);
 
     const { results: searchResults, search: tmdbSearch, getPosterUrl, getMovieDetails, loading: searchLoading } = useTMDB();
 
@@ -242,42 +243,61 @@ const Watchlist = () => {
                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             {isAdmin && (
                                 <div className="flex flex-col gap-1">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={syncWatchlist}
-                                        disabled={syncing}
-                                        className="gap-1.5 relative overflow-hidden h-8 sm:h-9"
-                                    >
-                                        {syncing && (
-                                            <div
-                                                className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-300 ease-out"
-                                                style={{ width: `${syncProgress}%` }}
-                                            />
-                                        )}
-                                        <span className="relative z-10 flex items-center gap-1.5">
-                                            <RefreshCcw className={cn("h-4 w-4", syncing && "animate-spin")} />
-                                            {syncing ? `${syncProgress}%` : 'Sync Updates'}
-                                        </span>
-                                    </Button>
-                                    {lastSyncTime && (
-                                        <span className="text-[10px] text-muted-foreground text-center">
-                                            Last synced: {(() => {
-                                                const now = new Date();
-                                                const syncDate = new Date(lastSyncTime);
-                                                const diffMs = now.getTime() - syncDate.getTime();
-                                                const diffMins = Math.floor(diffMs / 60000);
-                                                const diffHours = Math.floor(diffMs / 3600000);
-                                                const diffDays = Math.floor(diffMs / 86400000);
+                                    <div className="flex items-center gap-1.5">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => syncWatchlist('manual')}
+                                            disabled={syncing}
+                                            className="gap-1.5 relative overflow-hidden h-8 sm:h-9"
+                                        >
+                                            {syncing && (
+                                                <div
+                                                    className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-300 ease-out"
+                                                    style={{ width: `${syncProgress}%` }}
+                                                />
+                                            )}
+                                            <span className="relative z-10 flex items-center gap-1.5">
+                                                <RefreshCcw className={cn("h-4 w-4", syncing && "animate-spin")} />
+                                                {syncing ? `${syncProgress}%` : 'Sync Updates'}
+                                            </span>
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setShowSyncLog(!showSyncLog)}
+                                            className="h-8 sm:h-9 px-2"
+                                            title="View sync history"
+                                        >
+                                            <History className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-0.5">
+                                        {lastSyncTime && (
+                                            <span className="text-[10px] text-muted-foreground">
+                                                Last synced: {(() => {
+                                                    const now = new Date();
+                                                    const syncDate = new Date(lastSyncTime);
+                                                    const diffMs = now.getTime() - syncDate.getTime();
+                                                    const diffMins = Math.floor(diffMs / 60000);
+                                                    const diffHours = Math.floor(diffMs / 3600000);
+                                                    const diffDays = Math.floor(diffMs / 86400000);
 
-                                                if (diffMins < 1) return 'just now';
-                                                if (diffMins < 60) return `${diffMins}m ago`;
-                                                if (diffHours < 24) return `${diffHours}h ago`;
-                                                if (diffDays < 7) return `${diffDays}d ago`;
-                                                return syncDate.toLocaleDateString();
-                                            })()}
-                                        </span>
-                                    )}
+                                                    if (diffMins < 1) return 'just now';
+                                                    if (diffMins < 60) return `${diffMins}m ago`;
+                                                    if (diffHours < 24) return `${diffHours}h ago`;
+                                                    if (diffDays < 7) return `${diffDays}d ago`;
+                                                    return syncDate.toLocaleDateString();
+                                                })()}
+                                            </span>
+                                        )}
+                                        {autoSyncEnabled && (
+                                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                <Timer className="h-2.5 w-2.5" />
+                                                Next auto: {new Date(nextAutoSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             <Button
@@ -291,6 +311,58 @@ const Watchlist = () => {
                             </Button>
                         </div>
                     </div>
+
+                    {/* Sync Log Panel */}
+                    {isAdmin && showSyncLog && (
+                        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold flex items-center gap-2">
+                                    <History className="h-4 w-4" />
+                                    Sync History
+                                </h3>
+                                <Button variant="ghost" size="sm" onClick={() => setShowSyncLog(false)} className="h-6 w-6 p-0">
+                                    <X className="h-3 w-3" />
+                                </Button>
+                            </div>
+                            {syncLog.length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-4">No sync history yet</p>
+                            ) : (
+                                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                    {syncLog.map((entry) => (
+                                        <div key={entry.id} className="flex items-center justify-between gap-3 text-xs py-1.5 px-2 rounded-md bg-secondary/30">
+                                            <div className="flex items-center gap-2">
+                                                {entry.status === 'success'
+                                                    ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                                    : <XCircle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                                                }
+                                                <span className={cn(
+                                                    "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                                    entry.sync_type === 'auto' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
+                                                )}>
+                                                    {entry.sync_type === 'auto' ? 'AUTO' : 'MANUAL'}
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    {entry.items_synced} items · {(entry.duration_ms / 1000).toFixed(1)}s
+                                                </span>
+                                            </div>
+                                            <span className="text-muted-foreground text-[10px] whitespace-nowrap">
+                                                {new Date(entry.synced_at).toLocaleString([], {
+                                                    month: 'short', day: 'numeric',
+                                                    hour: '2-digit', minute: '2-digit'
+                                                })}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {autoSyncEnabled && (
+                                <div className="text-[10px] text-muted-foreground border-t border-border/50 pt-2 flex items-center gap-1.5">
+                                    <Timer className="h-3 w-3" />
+                                    Auto-sync runs daily at 6:00 AM (your local time). Next sync: {new Date(nextAutoSyncTime).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {!showSchedule && (
                         <div className="space-y-4">
