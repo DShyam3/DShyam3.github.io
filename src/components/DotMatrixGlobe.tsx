@@ -40,8 +40,8 @@ async function loadTopoData(): Promise<any> {
     try {
         const res = await fetch('/data/world-topo.json');
         const topo = await res.json();
-        // Convert TopoJSON to GeoJSON feature collection
-        cachedTopoData = topojson.feature(topo, topo.objects.c);
+        // Convert TopoJSON to a single lightweight boundary mesh instead of heavy polygons
+        cachedTopoData = topojson.mesh(topo, topo.objects.c);
     } catch {
         // fallback to null if not available
     }
@@ -128,6 +128,23 @@ export function DotMatrixGlobe({
             setGeoFeatures(geo);
         });
     }, []);
+
+    const optimizedDots = useMemo(() => {
+        if (!dotData) return [];
+        const { cols, rows, dots } = dotData;
+        return dots.map(([col, row, code]) => {
+            const lon = (col / cols) * 2 * Math.PI - Math.PI;
+            const lat = Math.PI / 2 - (row / rows) * Math.PI;
+            return {
+                code,
+                cxNorm: (col + 0.5) / cols,
+                cyNorm: (row + 0.5) / rows,
+                ux: Math.cos(lat) * Math.sin(lon),
+                uy: -Math.sin(lat),
+                uz: Math.cos(lat) * Math.cos(lon),
+            };
+        });
+    }, [dotData]);
 
     // Draw the map
     const draw = useCallback((time: number) => {
@@ -263,9 +280,15 @@ export function DotMatrixGlobe({
             ctx.globalAlpha = 1;
         }
 
-        const { cols, rows, dots } = dotData;
+        const { cols, rows } = dotData;
         const dotSpacingX = W / cols;
         const dotSpacingY = H / rows;
+        const W_half = W / 2;
+        const H_half = H / 2;
+        const W_zoom = W * curZoom;
+        const H_zoom = H * curZoom;
+        const W_offset = W_half - W_half * curZoom + panX;
+        const H_offset = H_half - H_half * curZoom + panY;
 
         // Anti-clutter tuning on Mobile
         const isMobile = W < 600;
@@ -358,12 +381,11 @@ export function DotMatrixGlobe({
         const backDots: ProjectedDot[] = [];
         const frontDots: ProjectedDot[] = [];
 
-        for (const [col, row, code] of dots) {
-            const cx2d = (col + 0.5) * dotSpacingX * curZoom + (W / 2 - (W / 2) * curZoom) + panX;
-            const cy2d = (row + 0.5) * dotSpacingY * curZoom + (H / 2 - (H / 2) * curZoom) + panY;
+        for (const dot of optimizedDots) {
+            const cx2d = dot.cxNorm * W_zoom + W_offset;
+            const cy2d = dot.cyNorm * H_zoom + H_offset;
 
             // 2D Viewport culling optimization:
-            // If we are strictly in 2D mode, we don't need to mathematically process or push dots that are completely out of viewport bounds!
             if (progress === 0 && (cx2d < -20 || cx2d > W + 20 || cy2d < -20 || cy2d > H + 20)) {
                 continue;
             }
@@ -374,33 +396,25 @@ export function DotMatrixGlobe({
             let isBack = false;
 
             if (progress > 0) {
-                const lon = (col / cols) * 2 * Math.PI - Math.PI;
-                const lat = Math.PI / 2 - (row / rows) * Math.PI;
-
-                const x3d = R * Math.cos(lat) * Math.sin(lon);
-                const y3d = -R * Math.sin(lat);
-                const z3d = R * Math.cos(lat) * Math.cos(lon);
+                const x3d = R * dot.ux;
+                const y3d = R * dot.uy;
+                const z3d = R * dot.uz;
 
                 // 1. Rotation around Y axis (longitude scroll)
-                let x_rot = x3d * cosRot - z3d * sinRot;
-                let z_rot = x3d * sinRot + z3d * cosRot;
-                let y_rot = y3d;
+                const x_rot = x3d * cosRot - z3d * sinRot;
+                const z_rot = x3d * sinRot + z3d * cosRot;
 
                 // 2. Rotation around X axis (latitude tilt from manual drag)
-                // y' = y*cos(theta) - z*sin(theta)
-                // z' = y*sin(theta) + z*cos(theta)
-                const y_tilt = y_rot * cosLatOffset - z_rot * sinLatOffset;
-                const z_tilt = y_rot * sinLatOffset + z_rot * cosLatOffset;
-                y_rot = y_tilt;
-                z_rot = z_tilt;
+                const y_tilt = y3d * cosLatOffset - z_rot * sinLatOffset;
+                const z_tilt = y3d * sinLatOffset + z_rot * cosLatOffset;
 
-                const cx3d = W / 2 + x_rot;
-                const cy3d = H / 2 + y_rot;
+                const cx3d = W_half + x_rot;
+                const cy3d = H_half + y_tilt;
 
-                cx = cx2d * (1 - progress) + cx3d * progress;
-                cy = cy2d * (1 - progress) + cy3d * progress;
-                zNorm = z_rot / R;
-                isBack = z_rot < 0;
+                cx = cx2d + (cx3d - cx2d) * progress;
+                cy = cy2d + (cy3d - cy2d) * progress;
+                zNorm = z_tilt / R;
+                isBack = z_tilt < 0;
             }
 
             const activeRadius = baseRadius * (1 * (1 - progress) + Math.max(0.4, 0.6 + 0.4 * zNorm) * progress);
@@ -409,7 +423,7 @@ export function DotMatrixGlobe({
             const pDot: ProjectedDot = {
                 x: cx, y: cy,
                 r: activeRadius,
-                code,
+                code: dot.code,
                 isBack,
                 opacity: activeOpacity
             };
@@ -446,8 +460,8 @@ export function DotMatrixGlobe({
 
             ctx.globalAlpha = p.opacity;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
             ctx.fillStyle = color;
+            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
             ctx.fill();
         };
 
@@ -467,7 +481,7 @@ export function DotMatrixGlobe({
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, visitedSet, hoveredCountry, mode]);
+    }, [dotData, optimizedDots, visitedSet, hoveredCountry, mode, geoFeatures, stars]);
 
     // Force animation loop restart when dependencies change
     useEffect(() => {
@@ -593,7 +607,7 @@ export function DotMatrixGlobe({
         dragRef.current.lastY = e.clientY;
         dragRef.current.velocityX = 0;
         dragRef.current.lastInteractionTime = performance.now();
-    }, [mode, dotData]);
+    }, [dotData]);
 
     const handleMouseUp = useCallback(() => {
         dragRef.current.isDragging = false;
