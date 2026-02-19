@@ -128,8 +128,8 @@ export function Header({
               role="button"
               tabIndex={-1}
             >
-              <h1 className="inventory-title mb-1">{title}</h1>
-              <p className="inventory-subtitle">{subtitle}</p>
+              <div><DotMatrixText text={title.toUpperCase()} size="sm" className="text-foreground justify-end" /></div>
+              <div><DotMatrixText text={subtitle.toUpperCase()} size="xs" className="text-muted-foreground justify-end mt-1" /></div>
             </div>
             <ThemeToggle />
           </div>

@@ -1,5 +1,6 @@
 import { Category } from '@/types/inventory';
 import { cn } from '@/lib/utils';
+import { DotMatrixText } from './DotMatrixText';
 
 interface CategoryNavProps {
   categories: { key: Category; label: string }[];
@@ -25,7 +26,7 @@ export function CategoryNav({
               activeCategory === category.key && 'nav-link-active'
             )}
           >
-            {category.label}
+            <DotMatrixText text={category.label.toUpperCase()} size="xs" />
             <span className="ml-1.5 text-xs text-muted-foreground/60">
               ({getCategoryCount(category.key)})
             </span>

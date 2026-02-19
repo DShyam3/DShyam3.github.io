@@ -112,7 +112,7 @@ const Travel = () => {
                                             return (
                                                 <div key={continent} className="travel-continent-section">
                                                     <div className="travel-continent-header">
-                                                        <span className="travel-continent-name">{continent}</span>
+                                                        <span className="travel-continent-name"><DotMatrixText text={continent.toUpperCase()} size="xs" /></span>
                                                         <span className="travel-continent-stats">
                                                             {countries.length}/{total} · {pct}%
                                                         </span>
@@ -148,7 +148,7 @@ const Travel = () => {
                                     {territoriesSorted.length > 0 && (
                                         <div className="travel-continent-section travel-territories-section">
                                             <div className="travel-continent-header">
-                                                <span className="travel-continent-name travel-territories-label">Territories &amp; Dependencies</span>
+                                                <span className="travel-continent-name travel-territories-label"><DotMatrixText text="TERRITORIES AND DEPENDENCIES" size="xs" /></span>
                                                 <span className="travel-continent-stats">{territoriesSorted.length} visited</span>
                                             </div>
                                             <ul className="travel-country-list">

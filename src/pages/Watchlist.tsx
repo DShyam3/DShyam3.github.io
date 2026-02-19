@@ -1,6 +1,7 @@
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { DotMatrixText } from '@/components/DotMatrixText';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useWatchlist, WatchlistItem } from '@/hooks/useWatchlist';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useTMDB } from '@/hooks/useTMDB';
@@ -68,6 +69,8 @@ const Watchlist = () => {
     const [title, setTitle] = useState('');
     const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
     const [showSyncLog, setShowSyncLog] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(48);
+    const observerTarget = useRef<HTMLDivElement>(null);
 
     const { results: searchResults, search: tmdbSearch, getPosterUrl, getMovieDetails, loading: searchLoading } = useTMDB();
 
@@ -133,16 +136,24 @@ const Watchlist = () => {
 
     const platformCounts = useMemo(() => {
         const counts: Record<string, number> = {};
-        ALL_PLATFORMS.forEach(p => {
-            counts[p] = categoryItems.filter(item => item.streaming_platform === p).length;
+        ALL_PLATFORMS.forEach(p => counts[p] = 0);
+        categoryItems.forEach(item => {
+            if (item.streaming_platform && counts[item.streaming_platform] !== undefined) {
+                counts[item.streaming_platform]++;
+            }
         });
         return counts;
     }, [categoryItems]);
 
     const genreCounts = useMemo(() => {
         const counts: Record<string, number> = {};
-        ALL_GENRES.forEach(g => {
-            counts[g] = categoryItems.filter(item => item.genres?.includes(g)).length;
+        ALL_GENRES.forEach(g => counts[g] = 0);
+        categoryItems.forEach(item => {
+            item.genres?.forEach(g => {
+                if (counts[g] !== undefined) {
+                    counts[g]++;
+                }
+            });
         });
         return counts;
     }, [categoryItems]);
@@ -194,24 +205,65 @@ const Watchlist = () => {
         }
     }, []);
 
-    const getCategoryCount = useMemo(() => (cat: typeof CATEGORIES[number]) => {
-        if (cat === 'Upcoming') {
-            const now = new Date();
-            return watchlist.filter(item => {
-                if (item.release_date && new Date(item.release_date) > now) return true;
-                if (item.category === 'TV Shows' && item.seasons) return item.seasons.some(s => s.release_date && new Date(s.release_date) > now);
-                return false;
-            }).length;
-        }
-        if (cat === 'Currently Watching') {
-            return watchlist.filter((item) => {
-                if (item.category !== 'TV Shows') return false;
+    const categoryCounts = useMemo(() => {
+        const counts = {
+            'TV Shows': 0,
+            'Movies': 0,
+            'Upcoming': 0,
+            'Currently Watching': 0
+        };
+        const now = new Date();
+        watchlist.forEach(item => {
+            if (item.category === 'TV Shows' || item.category === 'Movies') {
+                counts[item.category]++;
+            }
+            if (item.release_date && new Date(item.release_date) > now) {
+                counts['Upcoming']++;
+            } else if (item.category === 'TV Shows' && item.seasons && item.seasons.some(s => s.release_date && new Date(s.release_date) > now)) {
+                counts['Upcoming']++;
+            }
+
+            if (item.category === 'TV Shows') {
                 const autoStatus = getAutoStatus(item);
-                return autoStatus === 'Watching';
-            }).length;
-        }
-        return watchlist.filter((item) => item.category === cat).length;
+                if (autoStatus === 'Watching') {
+                    counts['Currently Watching']++;
+                }
+            }
+        });
+        return counts;
     }, [watchlist, getAutoStatus]);
+
+    // Reset visible count when filters change
+    useEffect(() => {
+        setVisibleCount(48);
+    }, [selectedCategory, searchQuery, selectedPlatform, selectedGenre, sortOrder, hideCompleted]);
+
+    // Setup intersection observer for infinite scroll
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    setVisibleCount((prev) => Math.min(prev + 48, filteredWatchlist.length));
+                }
+            },
+            { rootMargin: '100px' }
+        );
+
+        const currentTarget = observerTarget.current;
+        if (currentTarget) {
+            observer.observe(currentTarget);
+        }
+
+        return () => {
+            if (currentTarget) {
+                observer.unobserve(currentTarget);
+            }
+        };
+    }, [filteredWatchlist.length]);
+
+    const visibleWatchlist = useMemo(() => {
+        return filteredWatchlist.slice(0, visibleCount);
+    }, [filteredWatchlist, visibleCount]);
 
     return (
         <div className="min-h-screen bg-background">
@@ -220,24 +272,32 @@ const Watchlist = () => {
 
                 <div className="px-4 md:px-0 pt-6 space-y-4">
                     <div className="flex flex-wrap items-center gap-2 justify-between">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full sm:w-auto">
-                            {CATEGORIES.map((cat) => (
-                                <Button
-                                    key={cat}
-                                    variant={selectedCategory === cat ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => {
-                                        setSelectedCategory(cat);
-                                        setShowSchedule(false);
-                                        setSelectedPlatform(null);
-                                        setSelectedGenre(null);
-                                    }}
-                                    className="gap-1 px-2 text-[11px] sm:text-xs h-8 sm:h-9"
-                                >
-                                    <span className="shrink-0">{getCategoryIcon(cat)}</span>
-                                    <span className="truncate">{cat}</span>
-                                    <span className="text-[10px] opacity-70">({getCategoryCount(cat)})</span>
-                                </Button>
+                        <div className="flex flex-wrap items-center gap-2 md:gap-4">
+                            {CATEGORIES.map((cat, index) => (
+                                <div key={cat} className="flex items-center gap-2 md:gap-4">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedCategory(cat);
+                                            setShowSchedule(false);
+                                            setSelectedPlatform(null);
+                                            setSelectedGenre(null);
+                                        }}
+                                        className={cn(
+                                            'nav-link relative py-1 flex items-center gap-1.5',
+                                            selectedCategory === cat && 'nav-link-active'
+                                        )}
+                                    >
+                                        <span className="shrink-0">{getCategoryIcon(cat)}</span>
+                                        <DotMatrixText text={cat.toUpperCase()} size="xs" />
+                                        <span className="text-xs text-muted-foreground/60">({categoryCounts[cat]})</span>
+                                        {selectedCategory === cat && (
+                                            <span className="absolute -bottom-1 left-0 right-0 h-px bg-foreground" />
+                                        )}
+                                    </button>
+                                    {index < CATEGORIES.length - 1 && (
+                                        <span className="text-muted-foreground/30 hidden md:inline">·</span>
+                                    )}
+                                </div>
                             ))}
                         </div>
                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -259,7 +319,7 @@ const Watchlist = () => {
                                             )}
                                             <span className="relative z-10 flex items-center gap-1.5">
                                                 <RefreshCcw className={cn("h-4 w-4", syncing && "animate-spin")} />
-                                                {syncing ? `${syncProgress}%` : 'Sync Updates'}
+                                                {syncing ? `${syncProgress}%` : <DotMatrixText text="SYNC UPDATES" size="xs" />}
                                             </span>
                                         </Button>
                                         <Button
@@ -307,7 +367,7 @@ const Watchlist = () => {
                                 className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
                             >
                                 <CalendarDays className="h-4 w-4" />
-                                Weekly Schedule
+                                <DotMatrixText text="WEEKLY SCHEDULE" size="xs" />
                             </Button>
                         </div>
                     </div>
@@ -318,7 +378,7 @@ const Watchlist = () => {
                             <div className="flex items-center justify-between">
                                 <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
                                     <History className="h-3 w-3" />
-                                    Sync History
+                                    <DotMatrixText text="SYNC HISTORY" size="xs" />
                                 </h3>
                                 <Button variant="ghost" size="sm" onClick={() => setShowSyncLog(false)} className="h-5 w-5 p-0">
                                     <X className="h-3 w-3" />
@@ -397,7 +457,7 @@ const Watchlist = () => {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Platforms</SelectItem>
-                                            {ALL_PLATFORMS.map(p => (
+                                            {ALL_PLATFORMS.filter(p => getPlatformCount(p) > 0).map(p => (
                                                 <SelectItem key={p} value={p}>
                                                     <div className="flex items-center justify-between gap-4 w-full">
                                                         <span>{p}</span>
@@ -417,7 +477,7 @@ const Watchlist = () => {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Genres</SelectItem>
-                                            {ALL_GENRES.map(g => (
+                                            {ALL_GENRES.filter(g => getGenreCount(g) > 0).map(g => (
                                                 <SelectItem key={g} value={g}>
                                                     <div className="flex items-center justify-between gap-4 w-full">
                                                         <span>{g}</span>
@@ -435,7 +495,7 @@ const Watchlist = () => {
                                             onClick={() => setHideCompleted(!hideCompleted)}
                                             className="h-9 px-3 text-xs whitespace-nowrap"
                                         >
-                                            {hideCompleted ? 'Show All' : 'Hide Completed'}
+                                            {hideCompleted ? <DotMatrixText text="SHOW ALL" size="xs" /> : <DotMatrixText text="HIDE COMPLETED" size="xs" />}
                                         </Button>
                                     )}
 
@@ -448,8 +508,8 @@ const Watchlist = () => {
                                             }}
                                             className="h-9 px-3 text-xs whitespace-nowrap gap-1.5"
                                         >
-                                            {sortOrder === 'alphabetical' && <><ArrowDownAZ className="h-3.5 w-3.5" />A-Z</>}
-                                            {sortOrder === 'recent' && <><Clock className="h-3.5 w-3.5" />Recent</>}
+                                            {sortOrder === 'alphabetical' && <><ArrowDownAZ className="h-3.5 w-3.5" /><DotMatrixText text="A-Z" size="xs" /></>}
+                                            {sortOrder === 'recent' && <><Clock className="h-3.5 w-3.5" /><DotMatrixText text="RECENT" size="xs" /></>}
                                         </Button>
                                     )}
                                 </div>
@@ -583,26 +643,31 @@ const Watchlist = () => {
                         isInSchedule={isInSchedule}
                     />
                 ) : (
-                    <div className="px-4 md:px-0 py-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
-                        {loading ? (
-                            [...Array(8)].map((_, i) => <Skeleton key={i} className="h-64 rounded-lg" />)
-                        ) : filteredWatchlist.length === 0 ? (
-                            <p className="col-span-full text-center py-16 text-muted-foreground">No items in {selectedCategory.toLowerCase()} yet</p>
-                        ) : (
-                            filteredWatchlist.map((item) => (
-                                <WatchlistCard
-                                    key={item.id}
-                                    item={item}
-                                    onRemove={isAdmin ? removeWatchlistItem : undefined}
-                                    getCategoryIcon={getCategoryIcon}
-                                    toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
-                                    isEpisodeWatched={isEpisodeWatched}
-                                    isSeasonWatched={isSeasonWatched}
-                                    getAutoStatus={getAutoStatus}
-                                    addToSchedule={isAdmin ? addToSchedule : undefined}
-                                    isInSchedule={isInSchedule}
-                                />
-                            ))
+                    <div className="px-4 md:px-0 py-6">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
+                            {loading ? (
+                                [...Array(8)].map((_, i) => <Skeleton key={i} className="h-64 rounded-lg" />)
+                            ) : filteredWatchlist.length === 0 ? (
+                                <p className="col-span-full text-center py-16 text-muted-foreground">No items in {selectedCategory.toLowerCase()} yet</p>
+                            ) : (
+                                visibleWatchlist.map((item) => (
+                                    <WatchlistCard
+                                        key={item.id}
+                                        item={item}
+                                        onRemove={isAdmin ? removeWatchlistItem : undefined}
+                                        getCategoryIcon={getCategoryIcon}
+                                        toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+                                        isEpisodeWatched={isEpisodeWatched}
+                                        isSeasonWatched={isSeasonWatched}
+                                        getAutoStatus={getAutoStatus}
+                                        addToSchedule={isAdmin ? addToSchedule : undefined}
+                                        isInSchedule={isInSchedule}
+                                    />
+                                ))
+                            )}
+                        </div>
+                        {visibleCount < filteredWatchlist.length && (
+                            <div ref={observerTarget} className="h-20 w-full" />
                         )}
                     </div>
                 )}

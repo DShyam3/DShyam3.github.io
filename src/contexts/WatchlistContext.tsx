@@ -293,29 +293,32 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             return 'Coming Soon';
         }
 
-        const allEpisodes = item.seasons.flatMap(s =>
-            s.episodes.map(ep => ({
-                ...ep,
-                season_number: s.season_number
-            }))
-        );
-        const watchedCount = allEpisodes.filter(ep =>
-            watchedEpisodes.has(`${item.id}-s${ep.season_number}-e${ep.episode_number}`)
-        ).length;
+        let watchedCount = 0;
+        let totalEpisodes = 0;
+        let hasPartiallyWatchedSeason = false;
 
-        if (watchedCount === 0) return 'To Watch';
-        if (watchedCount === allEpisodes.length && allEpisodes.length > 0) {
-            return item.series_status === 'Ended' || item.series_status === 'Cancelled' ? 'Completed' : 'Watched';
+        for (const s of item.seasons) {
+            const seasonEpisodes = s.episodes;
+            const seasonTotal = seasonEpisodes.length;
+            totalEpisodes += seasonTotal;
+
+            let seasonWatchedCount = 0;
+            for (const ep of seasonEpisodes) {
+                if (watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`)) {
+                    seasonWatchedCount++;
+                }
+            }
+
+            watchedCount += seasonWatchedCount;
+            if (seasonWatchedCount > 0 && seasonWatchedCount < seasonTotal) {
+                hasPartiallyWatchedSeason = true;
+            }
         }
 
-        // Check if there are any partially watched seasons
-        const hasPartiallyWatchedSeason = item.seasons.some(s => {
-            const seasonEpisodes = s.episodes;
-            const seasonWatchedCount = seasonEpisodes.filter(ep =>
-                watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`)
-            ).length;
-            return seasonWatchedCount > 0 && seasonWatchedCount < seasonEpisodes.length;
-        });
+        if (watchedCount === 0) return 'To Watch';
+        if (watchedCount === totalEpisodes && totalEpisodes > 0) {
+            return item.series_status === 'Ended' || item.series_status === 'Cancelled' ? 'Completed' : 'Watched';
+        }
 
         if (hasPartiallyWatchedSeason) {
             return 'Watching';

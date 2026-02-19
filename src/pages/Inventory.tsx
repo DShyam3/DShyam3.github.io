@@ -1,5 +1,6 @@
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { DotMatrixText } from '@/components/DotMatrixText';
 import { CategoryNav } from '@/components/CategoryNav';
 import { ItemGrid } from '@/components/ItemGrid';
 import { AddItemDialog } from '@/components/AddItemDialog';
@@ -65,9 +66,9 @@ const Inventory = () => {
                 className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
               >
                 {sortOrder === 'alphabetical' ? (
-                  <><ArrowDownAZ className="h-3.5 w-3.5" />A-Z</>
+                  <><ArrowDownAZ className="h-3.5 w-3.5" /><DotMatrixText text="A-Z" size="xs" /></>
                 ) : (
-                  <><Clock className="h-3.5 w-3.5" />Recent</>
+                  <><Clock className="h-3.5 w-3.5" /><DotMatrixText text="RECENT" size="xs" /></>
                 )}
               </Button>
             )}

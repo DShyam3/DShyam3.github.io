@@ -1,6 +1,7 @@
 import { InventoryItem, WARDROBE_SUBCATEGORIES } from '@/types/inventory';
 import { ItemCard } from './ItemCard';
 import { useMemo } from 'react';
+import { DotMatrixText } from './DotMatrixText';
 
 interface ItemGridProps {
   items: InventoryItem[];
@@ -64,7 +65,7 @@ export function ItemGrid({ items, onRemove, onUpdate, groupBySubcategory = false
             {/* Section header with divider */}
             <div className="flex items-center gap-4 mb-5">
               <h3 className="text-lg font-semibold text-foreground tracking-wide whitespace-nowrap">
-                {group.label}
+                <DotMatrixText text={group.label.toUpperCase()} size="xs" />
               </h3>
               <div className="h-px bg-border flex-1" />
               <span className="text-sm text-muted-foreground">

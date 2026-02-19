@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { LinkCategory } from '@/types/links';
+import { DotMatrixText } from '../DotMatrixText';
 
 interface LinkCategoryNavProps {
   categories: { key: LinkCategory; label: string }[];
@@ -25,7 +26,7 @@ export function LinkCategoryNav({
             activeCategory === cat.key && 'nav-link-active'
           )}
         >
-          <span>{cat.label}</span>
+          <DotMatrixText text={cat.label.toUpperCase()} size="xs" />
           <span className="text-xs text-muted-foreground/70">
             ({getCategoryCount(cat.key)})
           </span>

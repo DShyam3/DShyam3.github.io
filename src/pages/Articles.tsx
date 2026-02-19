@@ -1,5 +1,6 @@
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { DotMatrixText } from '@/components/DotMatrixText';
 import { useState } from 'react';
 import { useArticles } from '@/hooks/useArticles';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,13 +40,30 @@ const Articles = () => {
       <div className="wide-container">
         <Header title="Articles & Publications" subtitle="What I've been reading" />
 
-        <div className="flex flex-wrap justify-center gap-2 px-4 md:px-0 mt-4 mb-6">
-          {categories.map((cat) => (
-            <button key={cat.key} onClick={() => setActiveCategory(cat.key as ArticleCategory)} className={cn('px-3 py-1.5 text-sm rounded-full transition-colors', activeCategory === cat.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80')}>
-              {cat.label} ({getCategoryCount(cat.key as ArticleCategory)})
-            </button>
+        <nav className="flex flex-wrap items-center justify-center gap-2 md:gap-4 py-4 px-4 border-b border-border/50">
+          {categories.map((cat, index) => (
+            <div key={cat.key} className="flex items-center gap-2 md:gap-4">
+              <button
+                onClick={() => setActiveCategory(cat.key as ArticleCategory)}
+                className={cn(
+                  'nav-link relative py-1',
+                  activeCategory === cat.key && 'nav-link-active'
+                )}
+              >
+                <DotMatrixText text={cat.label.toUpperCase()} size="xs" />
+                <span className="ml-1.5 text-xs text-muted-foreground/60">
+                  ({getCategoryCount(cat.key as ArticleCategory)})
+                </span>
+                {activeCategory === cat.key && (
+                  <span className="absolute -bottom-1 left-0 right-0 h-px bg-foreground" />
+                )}
+              </button>
+              {index < categories.length - 1 && (
+                <span className="text-muted-foreground/30 hidden md:inline">·</span>
+              )}
+            </div>
           ))}
-        </div>
+        </nav>
 
         <div className="flex items-center justify-between px-4 md:px-0 pt-6">
           <p className="text-sm text-muted-foreground">{loading ? '...' : `${articles.length} articles`}</p>

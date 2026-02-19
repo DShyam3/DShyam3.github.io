@@ -1,5 +1,6 @@
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
 import { ScheduleItem } from './ScheduleItem';
+import { DotMatrixText } from '../DotMatrixText';
 
 interface WeeklyScheduleProps {
     DAYS: readonly ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
@@ -39,7 +40,7 @@ export function WeeklySchedule({
                     return (
                         <div key={day} className="space-y-3 min-w-0">
                             <div className="bg-background/95 backdrop-blur-sm pb-2 border-b md:sticky md:top-0 md:z-20">
-                                <h3 className="font-medium text-sm">{day}</h3>
+                                <DotMatrixText text={day.toUpperCase()} size="xs" />
                                 <p className="text-xs text-muted-foreground">{daySchedule.length} items</p>
                             </div>
 

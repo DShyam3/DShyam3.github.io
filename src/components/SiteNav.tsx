@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { DotMatrixText } from './DotMatrixText';
 
 interface SiteNavProps {
   align?: 'start' | 'center' | 'end';
@@ -46,7 +47,7 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
             location.pathname === link.to ? 'text-foreground' : 'text-muted-foreground'
           )}
         >
-          {link.label}
+          <DotMatrixText text={link.label.toUpperCase()} size="xs" />
         </Link>
       ))}
     </nav>
