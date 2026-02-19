@@ -116,8 +116,8 @@ def main():
     seen = set()
     for feature in geojson['features']:
         props = feature.get('properties', {})
-        iso = (props.get('ISO_A2') or props.get('iso_a2') or '').strip().upper()
-        if not iso or iso in ('-1', '--', ''):
+        iso = (props.get('ISO_A2_EH') or props.get('iso_a2_eh') or props.get('ISO_A2') or props.get('iso_a2') or '').strip().upper()
+        if not iso or iso in ('-1', '-99', '--', ''):
             iso = (props.get('ADM0_ISO') or '')[:2].upper()
         if iso and iso not in seen:
             seen.add(iso)
