@@ -216,7 +216,7 @@ const Watchlist = () => {
     return (
         <div className="min-h-screen bg-background">
             <div className="wide-container">
-                <Header title="Watchlist" subtitle="What I'm watching & tracking" />
+                <Header title="Watchlist" subtitle="What I'm watching" />
 
                 <div className="px-4 md:px-0 pt-6 space-y-4">
                     <div className="flex flex-wrap items-center gap-2 justify-between">

@@ -47,7 +47,7 @@ export function Header({
         {/* Top row: Profile on left, Theme on right */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           {/* Left side: Profile with social links */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div
               className="flex items-center gap-3 cursor-pointer select-none transition-opacity hover:opacity-80"
               onClick={() => navigate('/')}

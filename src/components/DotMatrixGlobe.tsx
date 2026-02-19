@@ -1,5 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Globe, Map as MapIcon } from 'lucide-react';
+import * as topojson from 'topojson-client';
+import { geoOrthographic, geoEquirectangular, geoPath } from 'd3-geo';
 import './DotMatrixGlobe.css';
 
 export interface CountryRegion {
@@ -19,8 +21,9 @@ interface DotMatrixGlobeProps {
     onCountryHover?: (code: string | null, name: string | null, flagUrl: string | null) => void;
 }
 
-// Cache the loaded dot data globally so it's only fetched once
+// Cache the loaded data globally so it's only fetched once
 let cachedDotData: DotData | null = null;
+let cachedTopoData: any = null;
 
 // Country name lookup - loaded from REST Countries API
 let cachedCountryNames: Record<string, string> = {};
@@ -30,6 +33,19 @@ async function loadDotData(): Promise<DotData> {
     const res = await fetch('/data/dot-world-map.json');
     cachedDotData = await res.json();
     return cachedDotData!;
+}
+
+async function loadTopoData(): Promise<any> {
+    if (cachedTopoData) return cachedTopoData;
+    try {
+        const res = await fetch('/data/world-topo.json');
+        const topo = await res.json();
+        // Convert TopoJSON to GeoJSON feature collection
+        cachedTopoData = topojson.feature(topo, topo.objects.c);
+    } catch {
+        // fallback to null if not available
+    }
+    return cachedTopoData;
 }
 
 async function loadCountryNames(): Promise<Record<string, string>> {
@@ -56,6 +72,7 @@ export function DotMatrixGlobe({
 }: DotMatrixGlobeProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [dotData, setDotData] = useState<DotData | null>(null);
+    const [geoFeatures, setGeoFeatures] = useState<any>(null);
     const [countryNames, setCountryNames] = useState<Record<string, string>>({});
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
     const visitedSet = useMemo(() => new Set(visitedCountryCodes), [visitedCountryCodes]);
@@ -69,6 +86,11 @@ export function DotMatrixGlobe({
         velocityX: 0,
         offsetLat: 0, // up/down rotation offset for manual drag
         lastInteractionTime: 0,
+        panX: 0,
+        panY: 0,
+        zoom: 1,
+        targetZoom: 1,
+        pinchDist: 0,
     });
     const animRef = useRef({
         progress: 0,
@@ -87,11 +109,23 @@ export function DotMatrixGlobe({
     }
     const projectedDotsRef = useRef<ProjectedDot[]>([]);
 
+    const stars = useMemo(() => {
+        return Array.from({ length: 400 }).map(() => ({
+            x: Math.random(),
+            y: Math.random(),
+            r: Math.random() * 1.5 + 0.3,
+            opacity: Math.random() * 0.8 + 0.2,
+        }));
+    }, []);
+
+    const shootingStarRef = useRef({ active: false, x: 0, y: 0, length: 0, speed: 0, angle: 0, progress: 0 });
+
     // Load data
     useEffect(() => {
-        Promise.all([loadDotData(), loadCountryNames()]).then(([dots, names]) => {
+        Promise.all([loadDotData(), loadCountryNames(), loadTopoData()]).then(([dots, names, geo]) => {
             setDotData(dots);
             setCountryNames(names);
+            setGeoFeatures(geo);
         });
     }, []);
 
@@ -139,30 +173,200 @@ export function DotMatrixGlobe({
         canvas.width = W * dpr;
         canvas.height = H * dpr;
         ctx.scale(dpr, dpr);
-
         ctx.clearRect(0, 0, W, H);
+
+        const isDark = document.documentElement.classList.contains('dark');
+
+        // Smooth zoom interpolation
+        dragRef.current.zoom += (dragRef.current.targetZoom - dragRef.current.zoom) * 0.1;
+        const curZoom = dragRef.current.zoom;
+
+        // Clamp 2D pan to prevent wandering infinitely offscreen
+        if (mode === '2d') {
+            const maxPanX = Math.max(0, (W * curZoom - W) / 2);
+            const maxPanY = Math.max(0, (H * curZoom - H) / 2);
+            dragRef.current.panX = Math.max(-maxPanX, Math.min(maxPanX, dragRef.current.panX));
+            dragRef.current.panY = Math.max(-maxPanY, Math.min(maxPanY, dragRef.current.panY));
+        }
+
+        const { panX, panY } = dragRef.current;
+        const { progress, rotation } = animRef.current;
+        const R = Math.min(W, H) * 0.45 * curZoom;
+
+        // Draw background stars ONLY in 3D mode (scales with progress)
+        const starVisibility = progress;
+
+        if (starVisibility > 0) {
+            ctx.save();
+            // Inverse clip to prevent stars from bleeding through the 3D globe itself
+            ctx.beginPath();
+            ctx.rect(0, 0, W, H);
+            ctx.arc(W / 2, H / 2, Math.max(0, R - 1), 0, Math.PI * 2, true);
+            ctx.clip('evenodd');
+
+            // Parallax effect using pan and rotation
+            const px = panX * 0.05 + rotation * 50;
+            const py = panY * 0.05 - dragRef.current.offsetLat * 50;
+
+            ctx.fillStyle = isDark ? '#ffffff' : '#111827';
+            for (const star of stars) {
+                const sx = (star.x * W + px) % W;
+                const sy = (star.y * H + py) % H;
+
+                const drawX = sx < 0 ? sx + W : sx;
+                const drawY = sy < 0 ? sy + H : sy;
+
+                ctx.globalAlpha = star.opacity * starVisibility;
+                ctx.beginPath();
+                ctx.arc(drawX, drawY, star.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Handle shooting stars
+            const ss = shootingStarRef.current;
+            if (!ss.active && Math.random() < 0.005) {
+                ss.active = true;
+                ss.x = Math.random() * W;
+                ss.y = Math.random() * (H / 3);
+                ss.angle = Math.PI / 4 + (Math.random() - 0.5) * 0.5;
+                ss.length = 80 + Math.random() * 120;
+                ss.speed = 15 + Math.random() * 20;
+                ss.progress = 0;
+            }
+
+            if (ss.active) {
+                ss.progress += ss.speed;
+                const ex = ss.x - Math.cos(ss.angle) * ss.progress;
+                const ey = ss.y + Math.sin(ss.angle) * ss.progress;
+
+                const tailX = ss.x - Math.cos(ss.angle) * Math.max(0, ss.progress - ss.length);
+                const tailY = ss.y + Math.sin(ss.angle) * Math.max(0, ss.progress - ss.length);
+
+                ctx.globalAlpha = Math.max(0, 1 - (ss.progress / (W * 1.5))) * starVisibility;
+                const grad = ctx.createLinearGradient(ex, ey, tailX, tailY);
+                const colorBase = isDark ? '255, 255, 255' : '17, 24, 39';
+                grad.addColorStop(0, `rgba(${colorBase}, 1)`);
+                grad.addColorStop(1, `rgba(${colorBase}, 0)`);
+
+                ctx.beginPath();
+                ctx.moveTo(ex, ey);
+                ctx.lineTo(tailX, tailY);
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                if (ss.progress > W * 1.5 || ey > H + 100) {
+                    ss.active = false;
+                }
+            }
+            ctx.restore();
+            ctx.globalAlpha = 1;
+        }
 
         const { cols, rows, dots } = dotData;
         const dotSpacingX = W / cols;
         const dotSpacingY = H / rows;
-        const baseRadius = Math.min(dotSpacingX, dotSpacingY) * 0.38;
 
-        const isDark = document.documentElement.classList.contains('dark');
-        const R = Math.min(W, H) * 0.45;
-        const { progress, rotation } = animRef.current;
+        // Anti-clutter tuning on Mobile
+        const isMobile = W < 600;
+        const radiusMultiplier = isMobile ? (progress === 0 ? 0.25 : 0.32) : 0.38;
+        const baseRadius = Math.min(dotSpacingX, dotSpacingY) * radiusMultiplier * curZoom;
 
         const cosRot = Math.cos(rotation);
         const sinRot = Math.sin(rotation);
         const cosLatOffset = Math.cos(dragRef.current.offsetLat);
         const sinLatOffset = Math.sin(dragRef.current.offsetLat);
 
+        // --- Render GeoJSON Borders (Fading Underneath) ---
+        if (geoFeatures) {
+            let activeProjection = null;
+            let drawHemisphere = false;
+
+            if (progress === 1) {
+                // 3D projection only
+                activeProjection = geoOrthographic()
+                    .scale(R)
+                    .translate([W / 2, H / 2])
+                    .rotate([-(rotation * 180 / Math.PI), dragRef.current.offsetLat * 180 / Math.PI, 0]);
+                drawHemisphere = true;
+                ctx.globalAlpha = 0.15;
+            } else if (progress === 0) {
+                // 2D projection only
+                activeProjection = geoEquirectangular()
+                    .scale((W / (2 * Math.PI)) * curZoom)
+                    .translate([W / 2 + panX, H / 2 + panY]);
+                ctx.globalAlpha = 0.15;
+            } else {
+                // Transition state: To maintain 60FPS and keep the pure "dots forming a globe" 
+                // animation from before, we rapidly fade out static borders during the transition.
+                const threshold = 0.15;
+                if (progress > 1 - threshold) {
+                    activeProjection = geoOrthographic()
+                        .scale(R)
+                        .translate([W / 2, H / 2])
+                        .rotate([-(rotation * 180 / Math.PI), dragRef.current.offsetLat * 180 / Math.PI, 0]);
+                    drawHemisphere = true;
+                    ctx.globalAlpha = 0.15 * ((progress - (1 - threshold)) / threshold);
+                } else if (progress < threshold) {
+                    activeProjection = geoEquirectangular()
+                        .scale((W / (2 * Math.PI)) * curZoom)
+                        .translate([W / 2 + panX, H / 2 + panY]);
+                    ctx.globalAlpha = 0.15 * (1 - (progress / threshold));
+                } else {
+                    ctx.globalAlpha = 0;
+                }
+            }
+
+            if (activeProjection && ctx.globalAlpha > 0) {
+                let currentAlpha = ctx.globalAlpha;
+
+                // PERFORMANCE OPTIMIZATION: 
+                // The GeoJSON topology path is massive. When heavily zoomed into the 2D map, 
+                // continuously transforming and drawing it obliterates frame rates.
+                // We smoothly fade it out completely by 2.0x zoom to preserve buttery 60 FPS morphs!
+                if (curZoom > 1.0) {
+                    currentAlpha *= Math.max(0, 1 - (curZoom - 1.0));
+                }
+
+                if (currentAlpha > 0.02) {
+                    ctx.globalAlpha = currentAlpha;
+                    // Provide a clip extent so d3-geo doesn't parse segments lightyears off-screen
+                    if (activeProjection.clipExtent) {
+                        activeProjection.clipExtent([[-W, -H], [W * 2, H * 2]]);
+                    }
+                    ctx.beginPath();
+                    geoPath(activeProjection, ctx)(geoFeatures);
+                    ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
+                    ctx.lineWidth = (isMobile ? 0.35 : 1) * dpr;
+                    ctx.stroke();
+                }
+
+                // Hemisphere outline (only in 3D)
+                if (drawHemisphere) {
+                    ctx.globalAlpha = (currentAlpha / 0.15) * 0.05;
+                    ctx.beginPath();
+                    ctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
+                    ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
+                    ctx.lineWidth = 1 * dpr;
+                    ctx.stroke();
+                }
+            }
+            ctx.globalAlpha = 1;
+        }
+
         const newProjected: ProjectedDot[] = [];
         const backDots: ProjectedDot[] = [];
         const frontDots: ProjectedDot[] = [];
 
         for (const [col, row, code] of dots) {
-            const cx2d = (col + 0.5) * dotSpacingX;
-            const cy2d = (row + 0.5) * dotSpacingY;
+            const cx2d = (col + 0.5) * dotSpacingX * curZoom + (W / 2 - (W / 2) * curZoom) + panX;
+            const cy2d = (row + 0.5) * dotSpacingY * curZoom + (H / 2 - (H / 2) * curZoom) + panY;
+
+            // 2D Viewport culling optimization:
+            // If we are strictly in 2D mode, we don't need to mathematically process or push dots that are completely out of viewport bounds!
+            if (progress === 0 && (cx2d < -20 || cx2d > W + 20 || cy2d < -20 || cy2d > H + 20)) {
+                continue;
+            }
 
             let cx = cx2d;
             let cy = cy2d;
@@ -237,7 +441,7 @@ export function DotMatrixGlobe({
                 color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
                 r *= 1.2;
             } else {
-                color = isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(50, 70, 130, 0.25)';
+                color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.12 : 0.22})` : `rgba(50, 70, 130, ${isMobile ? 0.12 : 0.25})`;
             }
 
             ctx.globalAlpha = p.opacity;
@@ -250,7 +454,16 @@ export function DotMatrixGlobe({
         for (const p of backDots) drawDot(p);
         for (const p of frontDots) drawDot(p);
 
+        // Add auto-recentering for 2D pan when fully zoomed out
+        if (mode === '2d' && curZoom <= 1.01) {
+            dragRef.current.panX *= 0.9;
+            dragRef.current.panY *= 0.9;
+        }
+
         if (progress > 0 || animRef.current.progress !== target) {
+            requestRef.current = requestAnimationFrame((t) => draw(t));
+        } else if (mode === '2d' && (Math.abs(dragRef.current.targetZoom - curZoom) > 0.01 || Math.abs(panX) > 1 || Math.abs(panY) > 1)) {
+            // keep 2D drawing alive ONLY if it's currently actively zooming/panning
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
@@ -279,8 +492,102 @@ export function DotMatrixGlobe({
     }, [draw]);
 
     // Mouse events
+    useEffect(() => {
+        const handleWheel = (e: WheelEvent) => {
+            if (!dotData) return;
+            e.preventDefault();
+            dragRef.current.lastInteractionTime = performance.now();
+            const zoomDelta = e.deltaY * -0.001;
+            const minZ = mode === '2d' ? 1.0 : 0.98;
+            dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom + zoomDelta * dragRef.current.targetZoom));
+
+            // Wake up animation loop if sleeping
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            requestRef.current = requestAnimationFrame((t) => draw(t));
+        };
+
+        const handleTouchStart = (e: TouchEvent) => {
+            if (!dotData) return;
+            e.preventDefault(); // Prevent iOS from hijacking touch
+            if (e.touches.length === 1) {
+                dragRef.current.isDragging = true;
+                dragRef.current.lastX = e.touches[0].clientX;
+                dragRef.current.lastY = e.touches[0].clientY;
+                dragRef.current.velocityX = 0;
+                dragRef.current.lastInteractionTime = performance.now();
+            } else if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                dragRef.current.pinchDist = Math.sqrt(dx * dx + dy * dy);
+            }
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (!dotData) return;
+            e.preventDefault(); // Prevent iOS from hijacking touch
+
+            if (e.touches.length === 1 && dragRef.current.isDragging) {
+                dragRef.current.lastInteractionTime = performance.now();
+                const dx = e.touches[0].clientX - dragRef.current.lastX;
+                const dy = e.touches[0].clientY - dragRef.current.lastY;
+                dragRef.current.lastX = e.touches[0].clientX;
+                dragRef.current.lastY = e.touches[0].clientY;
+
+                if (mode === '3d') {
+                    const rotDelta = -dx * 0.005;
+                    animRef.current.rotation += rotDelta;
+                    dragRef.current.velocityX = rotDelta; // Save for momentum
+                    dragRef.current.offsetLat -= dy * 0.005;
+                    dragRef.current.offsetLat = Math.max(-1.2, Math.min(1.2, dragRef.current.offsetLat));
+                } else if (mode === '2d') {
+                    dragRef.current.panX += dx;
+                    dragRef.current.panY += dy;
+                }
+            } else if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const newDist = Math.sqrt(dx * dx + dy * dy);
+                if (dragRef.current.pinchDist) {
+                    const zoomDelta = (newDist - dragRef.current.pinchDist) * 0.01;
+                    const minZ = mode === '2d' ? 1.0 : 0.98;
+                    dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom + zoomDelta));
+                }
+                dragRef.current.pinchDist = newDist;
+            }
+
+            // Immediately wake up animation loop to ensure smooth 60fps follow on finger tracking
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            requestRef.current = requestAnimationFrame((t) => draw(t));
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            // No strict preventDefault here to allow tap-to-click events if needed natively
+            dragRef.current.isDragging = false;
+            dragRef.current.pinchDist = 0;
+            dragRef.current.lastInteractionTime = performance.now();
+        };
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+            canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+        }
+        return () => {
+            if (canvas) {
+                canvas.removeEventListener('wheel', handleWheel);
+                canvas.removeEventListener('touchstart', handleTouchStart);
+                canvas.removeEventListener('touchmove', handleTouchMove);
+                canvas.removeEventListener('touchend', handleTouchEnd);
+                canvas.removeEventListener('touchcancel', handleTouchEnd);
+            }
+        };
+    }, [dotData, mode, draw]);
+
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (mode !== '3d' || !dotData) return;
+        if (!dotData) return;
         dragRef.current.isDragging = true;
         dragRef.current.lastX = e.clientX;
         dragRef.current.lastY = e.clientY;
@@ -297,21 +604,26 @@ export function DotMatrixGlobe({
         if (!canvasRef.current || !projectedDotsRef.current.length) return;
 
         // Handle dragging map
-        if (dragRef.current.isDragging && mode === '3d') {
+        if (dragRef.current.isDragging) {
             dragRef.current.lastInteractionTime = performance.now();
             const dx = e.clientX - dragRef.current.lastX;
             const dy = e.clientY - dragRef.current.lastY;
             dragRef.current.lastX = e.clientX;
             dragRef.current.lastY = e.clientY;
 
-            // Update rotation instantly (inverted dx)
-            const rotDelta = -dx * 0.005;
-            animRef.current.rotation += rotDelta;
-            dragRef.current.velocityX = rotDelta; // Save for momentum
+            if (mode === '3d') {
+                // Update rotation instantly (inverted dx)
+                const rotDelta = -dx * 0.005;
+                animRef.current.rotation += rotDelta;
+                dragRef.current.velocityX = rotDelta; // Save for momentum
 
-            // Update latitude tilt (inverted dy), limit range so we don't go upside down
-            dragRef.current.offsetLat -= dy * 0.005;
-            dragRef.current.offsetLat = Math.max(-1.2, Math.min(1.2, dragRef.current.offsetLat));
+                // Update latitude tilt (inverted dy), limit range so we don't go upside down
+                dragRef.current.offsetLat -= dy * 0.005;
+                dragRef.current.offsetLat = Math.max(-1.2, Math.min(1.2, dragRef.current.offsetLat));
+            } else if (mode === '2d') {
+                dragRef.current.panX += dx;
+                dragRef.current.panY += dy;
+            }
 
             // Re-draw immediately without waiting for hover logic frame
             // but still do hover logic!
@@ -352,7 +664,6 @@ export function DotMatrixGlobe({
     }, [onCountryHover]);
 
 
-
     return (
         <div
             className={`dot-matrix-map-container ${className}`}
@@ -368,7 +679,7 @@ export function DotMatrixGlobe({
             <canvas
                 ref={canvasRef}
                 className="dot-matrix-map-canvas"
-                style={{ width: '100%', height: '100%', cursor: dragRef.current.isDragging ? 'grabbing' : (hoveredCountry ? 'crosshair' : (mode === '3d' ? 'grab' : 'default')) }}
+                style={{ width: '100%', height: '100%', cursor: dragRef.current.isDragging ? 'grabbing' : (hoveredCountry ? 'crosshair' : 'grab'), touchAction: 'none' }}
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onMouseMove={handleMouseMove}

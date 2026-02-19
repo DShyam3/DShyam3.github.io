@@ -8,6 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { OpeningSequence } from "@/components/OpeningSequence";
 import Link from "./pages/Inventory";
 import Index from "./pages/Index";
+import Travel from "./pages/Travel";
 import Inventory from "./pages/Inventory";
 import Links from "./pages/Links";
 import Books from "./pages/Books";
@@ -51,6 +52,7 @@ const App = () => {
                       <RecipesProvider>
                         <Routes>
                           <Route path="/" element={<Index />} />
+                          <Route path="/travel" element={<Travel />} />
                           <Route path="/inventory" element={<Inventory />} />
                           <Route path="/links" element={<Links />} />
                           <Route path="/books" element={<Books />} />
