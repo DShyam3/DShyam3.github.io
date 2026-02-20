@@ -88,9 +88,10 @@ interface DotMatrixTextProps {
     text: string;
     size?: 'xs' | 'sm' | 'md' | 'lg';
     className?: string;
+    wrap?: boolean;
 }
 
-export const DotMatrixText = ({ text, size = 'md', className = '' }: DotMatrixTextProps) => {
+export const DotMatrixText = ({ text, size = 'md', className = '', wrap = true }: DotMatrixTextProps) => {
     const sizeClass =
         size === 'lg' ? 'dot-matrix-text-lg' :
             size === 'sm' ? 'dot-matrix-text-sm' :
@@ -100,9 +101,15 @@ export const DotMatrixText = ({ text, size = 'md', className = '' }: DotMatrixTe
     const words = text.split(' ');
 
     return (
-        <div className={`dot-matrix-text ${sizeClass} ${className}`} style={{ flexWrap: 'wrap', rowGap: '0.75rem' }}>
+        <div
+            className={`dot-matrix-text ${sizeClass} ${className}`}
+            style={{
+                flexWrap: wrap ? 'wrap' : 'nowrap',
+                rowGap: '0.75rem'
+            }}
+        >
             {words.map((word, wordIndex) => (
-                <div key={wordIndex} style={{ display: 'flex', gap: 'inherit' }}>
+                <div key={wordIndex} style={{ display: 'flex', gap: 'inherit', flexShrink: 0 }}>
                     {word.split('').map((char, charIndex) => (
                         <DotMatrixChar key={`${wordIndex}-${charIndex}`} char={char} />
                     ))}

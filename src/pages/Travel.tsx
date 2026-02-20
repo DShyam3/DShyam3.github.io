@@ -8,9 +8,11 @@ import { useVisitedCountries } from '@/hooks/useVisitedCountries';
 import { useState, useCallback, useMemo } from 'react';
 import { CONTINENT_ORDER } from '@/data/continents';
 import { useContinentMap } from '@/hooks/useContinentMap';
+import { useIsMobile } from '@/hooks/use-mobile';
 import './Index.css';
 
 const Travel = () => {
+    const isMobile = useIsMobile();
     const { isAdmin } = useAuth();
     const { visitedCountries, addCountry, removeCountry } = useVisitedCountries();
     const visitedCodes = visitedCountries.map(c => c.country_code);
@@ -79,15 +81,17 @@ const Travel = () => {
                             {/* LEFT — title above, country list in card below */}
                             <div className="travel-sidebar-col">
                                 {/* Title + counter + percentage — sovereign states only */}
-                                <div className="travel-sidebar-labels md:flex-nowrap">
+                                <div className="travel-sidebar-labels">
                                     <DotMatrixText
-                                        text="WHERE I'VE BEEN"
-                                        size="sm"
+                                        text="WHERE I'VE BEEN  "
+                                        size={isMobile ? "xs" : "sm"}
+                                        wrap={false}
                                         className="text-muted-foreground whitespace-nowrap"
                                     />
                                     <DotMatrixText
                                         text={`${sovereignCount}/${totalCountries}  ${Math.round((sovereignCount / totalCountries) * 100)}%`}
-                                        size="sm"
+                                        size={isMobile ? "xs" : "sm"}
+                                        wrap={false}
                                         className="text-muted-foreground whitespace-nowrap"
                                     />
                                 </div>
