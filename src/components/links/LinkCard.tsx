@@ -14,12 +14,11 @@ interface LinkCardProps {
 }
 
 const categoryLabels: Record<string, string> = {
-  productivity: 'Productivity',
-  design: 'Design',
-  development: 'Development',
-  entertainment: 'Entertainment',
-  articles: 'Articles',
   websites: 'Websites',
+  'iphone-apps': 'iPhone Apps',
+  'ipad-apps': 'iPad Apps',
+  'mac-apps': 'Mac Apps',
+  'dev-setup': 'Dev Setup',
 };
 
 export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {

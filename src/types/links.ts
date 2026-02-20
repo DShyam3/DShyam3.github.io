@@ -1,4 +1,4 @@
-export type LinkCategory = 'all' | 'articles' | 'websites' | 'productivity' | 'design' | 'development' | 'entertainment';
+export type LinkCategory = 'all' | 'websites' | 'iphone-apps' | 'ipad-apps' | 'mac-apps' | 'dev-setup';
 
 export interface LinkItem {
   id: string;

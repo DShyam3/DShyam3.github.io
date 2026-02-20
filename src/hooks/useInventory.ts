@@ -36,6 +36,7 @@ export function useInventory() {
           image: item.image || '',
           link: item.link || undefined,
           isNew: item.is_new || false,
+          isWishlist: item.is_wishlist || false,
           createdAt: new Date(item.created_at),
         })) || []
       );
@@ -64,6 +65,7 @@ export function useInventory() {
           image: item.image,
           link: item.link || null,
           is_new: item.isNew || false,
+          is_wishlist: item.isWishlist || false,
         })
         .select()
         .single();
@@ -80,6 +82,7 @@ export function useInventory() {
         image: data.image || '',
         link: data.link || undefined,
         isNew: data.is_new || false,
+        isWishlist: data.is_wishlist || false,
         createdAt: new Date(data.created_at),
       }, ...prev]);
 
@@ -113,6 +116,7 @@ export function useInventory() {
       if (updates.image !== undefined) dbUpdates.image = updates.image;
       if (updates.link !== undefined) dbUpdates.link = updates.link;
       if (updates.isNew !== undefined) dbUpdates.is_new = updates.isNew;
+      if (updates.isWishlist !== undefined) dbUpdates.is_wishlist = updates.isWishlist;
 
       // If category is changed away from wardrobe, clear subcategory
       if (updates.category && updates.category !== 'wardrobe') {
@@ -187,7 +191,6 @@ export function useInventory() {
     { key: 'home-decor', label: 'Home Decor' },
     { key: 'hygiene', label: 'Hygiene' },
     { key: 'sports-gear', label: 'Sports Gear' },
-    { key: 'wishlist', label: 'Wishlist' },
   ];
 
   const getCategoryCount = (category: Category) => {

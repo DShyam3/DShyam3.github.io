@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { InventoryItem, Category, WardrobeSubcategory, WARDROBE_SUBCATEGORIES } from '@/types/inventory';
 import { toast } from 'sonner';
 
@@ -34,6 +35,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
   const [price, setPrice] = useState(item.price.toString());
   const [image, setImage] = useState(item.image);
   const [link, setLink] = useState(item.link || '');
+  const [isWishlist, setIsWishlist] = useState(item.isWishlist || false);
 
   useEffect(() => {
     if (open) {
@@ -44,6 +46,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
       setPrice(item.price.toString());
       setImage(item.image);
       setLink(item.link || '');
+      setIsWishlist(item.isWishlist || false);
     }
   }, [open, item]);
 
@@ -68,6 +71,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
       price: parseFloat(price),
       image,
       link: link || undefined,
+      isWishlist,
     });
 
     toast.success('Item updated');
@@ -131,9 +135,13 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
                 <SelectItem value="home-decor">Home Decor</SelectItem>
                 <SelectItem value="hygiene">Hygiene</SelectItem>
                 <SelectItem value="sports-gear">Sports Gear</SelectItem>
-                <SelectItem value="wishlist">Wishlist</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch id={`edit-wishlist-${item.id}`} checked={isWishlist} onCheckedChange={setIsWishlist} />
+            <Label htmlFor={`edit-wishlist-${item.id}`} className="cursor-pointer text-sm font-medium">Add to Wishlist</Label>
           </div>
 
           {category === 'wardrobe' && (

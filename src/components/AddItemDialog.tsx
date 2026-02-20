@@ -17,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { InventoryItem, Category, WardrobeSubcategory, WARDROBE_SUBCATEGORIES } from '@/types/inventory';
 import { toast } from 'sonner';
 
@@ -33,6 +34,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
     const [price, setPrice] = useState('');
     const [image, setImage] = useState('');
     const [link, setLink] = useState('');
+    const [isWishlist, setIsWishlist] = useState(false);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -55,6 +57,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
             price: parseFloat(price),
             image,
             link: link || undefined,
+            isWishlist,
         });
 
         toast.success('Item added to collection');
@@ -70,6 +73,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
         setPrice('');
         setImage('');
         setLink('');
+        setIsWishlist(false);
     };
 
     const handleCategoryChange = (value: string) => {
@@ -126,9 +130,13 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                                 <SelectItem value="home-decor">Home Decor</SelectItem>
                                 <SelectItem value="hygiene">Hygiene</SelectItem>
                                 <SelectItem value="sports-gear">Sports Gear</SelectItem>
-                                <SelectItem value="wishlist">Wishlist</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                        <Switch id="wishlist" checked={isWishlist} onCheckedChange={setIsWishlist} />
+                        <Label htmlFor="wishlist" className="cursor-pointer text-sm font-medium">Add to Wishlist</Label>
                     </div>
 
                     {category === 'wardrobe' && (

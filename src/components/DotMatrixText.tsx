@@ -96,10 +96,20 @@ export const DotMatrixText = ({ text, size = 'md', className = '' }: DotMatrixTe
             size === 'sm' ? 'dot-matrix-text-sm' :
                 size === 'xs' ? 'dot-matrix-text-xs' :
                     '';
+
+    const words = text.split(' ');
+
     return (
-        <div className={`dot-matrix-text ${sizeClass} ${className}`}>
-            {text.split('').map((char, index) => (
-                <DotMatrixChar key={index} char={char} />
+        <div className={`dot-matrix-text ${sizeClass} ${className}`} style={{ flexWrap: 'wrap', rowGap: '0.75rem' }}>
+            {words.map((word, wordIndex) => (
+                <div key={wordIndex} style={{ display: 'flex', gap: 'inherit' }}>
+                    {word.split('').map((char, charIndex) => (
+                        <DotMatrixChar key={`${wordIndex}-${charIndex}`} char={char} />
+                    ))}
+                    {wordIndex < words.length - 1 && (
+                        <DotMatrixChar char=" " />
+                    )}
+                </div>
             ))}
         </div>
     );

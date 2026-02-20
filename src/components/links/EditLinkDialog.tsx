@@ -119,10 +119,11 @@ export function EditLinkDialog({ link, onUpdate }: EditLinkDialogProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="productivity">Productivity</SelectItem>
-                <SelectItem value="design">Design</SelectItem>
-                <SelectItem value="development">Development</SelectItem>
-                <SelectItem value="entertainment">Entertainment</SelectItem>
+                <SelectItem value="websites">Websites</SelectItem>
+                <SelectItem value="iphone-apps">iPhone Apps</SelectItem>
+                <SelectItem value="ipad-apps">iPad Apps</SelectItem>
+                <SelectItem value="mac-apps">Mac Apps</SelectItem>
+                <SelectItem value="dev-setup">Dev Setup</SelectItem>
               </SelectContent>
             </Select>
           </div>

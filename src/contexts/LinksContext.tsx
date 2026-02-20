@@ -103,12 +103,11 @@ export const LinksProvider = ({ children }: { children: ReactNode }) => {
 
     const categories: { key: LinkCategory; label: string }[] = [
         { key: 'all', label: 'All' },
-        { key: 'articles', label: 'Articles & Publications' },
-        { key: 'websites', label: 'Websites & Apps' },
-        { key: 'productivity', label: 'Productivity' },
-        { key: 'design', label: 'Design' },
-        { key: 'development', label: 'Development' },
-        { key: 'entertainment', label: 'Entertainment' },
+        { key: 'websites', label: 'Websites' },
+        { key: 'iphone-apps', label: 'iPhone Apps' },
+        { key: 'ipad-apps', label: 'iPad Apps' },
+        { key: 'mac-apps', label: 'Mac Apps' },
+        { key: 'dev-setup', label: 'Dev Setup' },
     ];
 
     const getCategoryCount = (category: LinkCategory) => {

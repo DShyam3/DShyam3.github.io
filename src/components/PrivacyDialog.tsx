@@ -36,9 +36,9 @@ export function PrivacyDialog() {
         <>
             <button
                 onClick={handleOpen}
-                className="flex items-center hover:opacity-70 transition-opacity cursor-pointer"
+                className="flex items-center hover:opacity-70 transition-opacity cursor-pointer text-muted-foreground hover:text-foreground"
             >
-                <DotMatrixText text={`© ${new Date().getFullYear()}`} />
+                <DotMatrixText text={`© ${new Date().getFullYear()}`} className="opacity-80 transition-opacity hover:opacity-100" />
             </button>
 
             {isOpen && (
@@ -53,18 +53,18 @@ export function PrivacyDialog() {
                         </button>
 
                         {/* Tab Navigation */}
-                        <div className="privacy-tabs">
+                        <div className="privacy-tabs gap-4 pt-4">
                             <button
-                                className={`privacy-tab ${activeTab === 'privacy' ? 'active' : ''}`}
+                                className={`privacy-tab flex justify-center pb-3 ${activeTab === 'privacy' ? 'active' : ''}`}
                                 onClick={() => setActiveTab('privacy')}
                             >
-                                <DotMatrixText text="Privacy" size="sm" />
+                                <DotMatrixText text="Privacy" size="xs" className={activeTab === 'privacy' ? '' : 'opacity-60'} />
                             </button>
                             <button
-                                className={`privacy-tab ${activeTab === 'inspiration' ? 'active' : ''}`}
+                                className={`privacy-tab flex justify-center pb-3 ${activeTab === 'inspiration' ? 'active' : ''}`}
                                 onClick={() => setActiveTab('inspiration')}
                             >
-                                <DotMatrixText text="Credits" size="sm" />
+                                <DotMatrixText text="Credits" size="xs" className={activeTab === 'inspiration' ? '' : 'opacity-60'} />
                             </button>
                         </div>
 
@@ -73,23 +73,27 @@ export function PrivacyDialog() {
                             {activeTab === 'privacy' && (
                                 <div className="tab-panel">
                                     <section className="privacy-section">
-                                        <h3 className="privacy-subtitle">
-                                            <DotMatrixText text="Privacy" size="sm" />
+                                        <h3 className="privacy-subtitle mb-4">
+                                            <DotMatrixText text="Privacy" size="xs" />
                                         </h3>
-                                        <p className="privacy-text">
-                                            This website is a personal portfolio and does not collect, store, or share any personal data.
-                                            No cookies are used, and no analytics are tracked. Your privacy is fully respected.
-                                        </p>
+                                        <div className="privacy-text pb-2">
+                                            <DotMatrixText
+                                                text="This website is a personal portfolio and does not collect, store, or share any personal data. No cookies are used, and no analytics are tracked. Your privacy is fully respected."
+                                                size="xs"
+                                            />
+                                        </div>
                                     </section>
 
-                                    <section className="privacy-section">
-                                        <h3 className="privacy-subtitle">
-                                            <DotMatrixText text="Copyright" size="sm" />
+                                    <section className="privacy-section mt-8">
+                                        <h3 className="privacy-subtitle mb-4">
+                                            <DotMatrixText text="Copyright" size="xs" />
                                         </h3>
-                                        <p className="privacy-text">
-                                            © {new Date().getFullYear()} Dhyan Shyam. All rights reserved.
-                                            The content and design of this website are original works.
-                                        </p>
+                                        <div className="privacy-text pb-2">
+                                            <DotMatrixText
+                                                text={`© ${new Date().getFullYear()} Dhyan Shyam. All rights reserved. The content and design of this website are original works.`}
+                                                size="xs"
+                                            />
+                                        </div>
                                     </section>
                                 </div>
                             )}
@@ -97,9 +101,12 @@ export function PrivacyDialog() {
                             {activeTab === 'inspiration' && (
                                 <div className="tab-panel">
                                     <section className="privacy-section">
-                                        <p className="privacy-text">
-                                            This website was inspired by the following sources:
-                                        </p>
+                                        <div className="privacy-text mb-6">
+                                            <DotMatrixText
+                                                text="This website was inspired by the following sources:"
+                                                size="xs"
+                                            />
+                                        </div>
                                         <ul className="inspiration-list">
                                             {inspirationLinks.map((link, index) => (
                                                 <li key={index} className="inspiration-item">
@@ -107,10 +114,10 @@ export function PrivacyDialog() {
                                                         href={link.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="inspiration-link"
+                                                        className="inspiration-link flex flex-col gap-3 py-1"
                                                     >
-                                                        <span className="inspiration-name">{link.name}</span>
-                                                        <span className="inspiration-description">— {link.description}</span>
+                                                        <DotMatrixText text={link.name} size="xs" />
+                                                        <DotMatrixText text={`- ${link.description}`} size="xs" className="opacity-80" />
                                                     </a>
                                                 </li>
                                             ))}

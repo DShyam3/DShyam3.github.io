@@ -1,4 +1,4 @@
-export type Category = 'tech-edc' | 'wardrobe' | 'kitchen' | 'home-decor' | 'hygiene' | 'sports-gear' | 'wishlist';
+export type Category = 'tech-edc' | 'wardrobe' | 'kitchen' | 'home-decor' | 'hygiene' | 'sports-gear';
 
 export type WardrobeSubcategory =
   | 'accessories'
@@ -58,5 +58,6 @@ export interface InventoryItem {
   image: string;
   link?: string;
   isNew?: boolean;
+  isWishlist?: boolean;
   createdAt: Date;
 }

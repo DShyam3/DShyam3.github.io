@@ -11,6 +11,9 @@ interface ItemGridProps {
 }
 
 export function ItemGrid({ items, onRemove, onUpdate, groupBySubcategory = false }: ItemGridProps) {
+  const ownedItems = useMemo(() => items.filter(i => !i.isWishlist), [items]);
+  const wishlistItems = useMemo(() => items.filter(i => i.isWishlist), [items]);
+
   // Group items by subcategory when needed
   const groupedItems = useMemo(() => {
     if (!groupBySubcategory) return null;
@@ -18,7 +21,7 @@ export function ItemGrid({ items, onRemove, onUpdate, groupBySubcategory = false
     const groups: { key: string; label: string; items: InventoryItem[] }[] = [];
 
     WARDROBE_SUBCATEGORIES.forEach((sub) => {
-      const categoryItems = items.filter(item => item.subcategory === sub.key);
+      const categoryItems = ownedItems.filter(item => item.subcategory === sub.key);
       if (categoryItems.length > 0) {
         groups.push({
           key: sub.key,
@@ -29,7 +32,7 @@ export function ItemGrid({ items, onRemove, onUpdate, groupBySubcategory = false
     });
 
     // Add items without subcategory at the end
-    const uncategorized = items.filter(item => !item.subcategory);
+    const uncategorized = ownedItems.filter(item => !item.subcategory);
     if (uncategorized.length > 0) {
       groups.push({
         key: 'uncategorized',
@@ -39,7 +42,7 @@ export function ItemGrid({ items, onRemove, onUpdate, groupBySubcategory = false
     }
 
     return groups;
-  }, [items, groupBySubcategory]);
+  }, [ownedItems, groupBySubcategory]);
 
   if (items.length === 0) {
     return (
@@ -54,58 +57,79 @@ export function ItemGrid({ items, onRemove, onUpdate, groupBySubcategory = false
     );
   }
 
-  // Grouped view for wardrobe
-  if (groupBySubcategory && groupedItems) {
-    let globalIndex = 0;
+  let globalIndex = 0;
 
-    return (
-      <div className="space-y-8 pt-6 pb-4">
-        {groupedItems.map((group, groupIndex) => (
-          <section key={group.key}>
-            {/* Section header with divider */}
-            <div className="flex items-center gap-4 mb-5">
-              <h3 className="text-lg font-semibold text-foreground tracking-wide whitespace-nowrap">
-                <DotMatrixText text={group.label.toUpperCase()} size="xs" />
-              </h3>
-              <div className="h-px bg-border flex-1" />
-              <span className="text-sm text-muted-foreground">
-                {group.items.length}
-              </span>
-            </div>
+  return (
+    <div className="space-y-8 pt-6 pb-4">
+      {/* Owned Items */}
+      {groupBySubcategory && groupedItems ? (
+        <div className="space-y-8">
+          {groupedItems.map((group) => (
+            <section key={group.key}>
+              <div className="flex items-center gap-4 mb-5">
+                <h3 className="text-lg font-semibold text-foreground tracking-wide whitespace-nowrap">
+                  <DotMatrixText text={group.label.toUpperCase()} size="xs" />
+                </h3>
+                <div className="h-px bg-border flex-1" />
+                <span className="text-sm text-muted-foreground">
+                  {group.items.length}
+                </span>
+              </div>
 
-            {/* Items grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-5 md:gap-6">
-              {group.items.map((item) => {
-                const index = globalIndex++;
-                return (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-5 md:gap-6">
+                {group.items.map((item) => (
                   <ItemCard
                     key={item.id}
                     item={item}
                     onRemove={onRemove}
                     onUpdate={onUpdate}
-                    index={index}
+                    index={globalIndex++}
                   />
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
-    );
-  }
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : ownedItems.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-5 md:gap-6">
+          {ownedItems.map((item) => (
+            <ItemCard
+              key={item.id}
+              item={item}
+              onRemove={onRemove}
+              onUpdate={onUpdate}
+              index={globalIndex++}
+            />
+          ))}
+        </div>
+      ) : null}
 
-  // Default flat grid view
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-5 md:gap-6 pt-8 pb-4">
-      {items.map((item, index) => (
-        <ItemCard
-          key={item.id}
-          item={item}
-          onRemove={onRemove}
-          onUpdate={onUpdate}
-          index={index}
-        />
-      ))}
+      {/* Wishlist Section */}
+      {wishlistItems.length > 0 && (
+        <section className={`pt-8 ${ownedItems.length > 0 ? 'mt-8 border-t border-border' : ''}`}>
+          <div className="flex items-center gap-4 mb-5">
+            <h3 className="text-lg font-semibold text-foreground tracking-wide whitespace-nowrap">
+              <DotMatrixText text="WISHLIST" size="xs" />
+            </h3>
+            <div className="h-px bg-border flex-1" />
+            <span className="text-sm text-muted-foreground">
+              {wishlistItems.length}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-5 md:gap-6">
+            {wishlistItems.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                onRemove={onRemove}
+                onUpdate={onUpdate}
+                index={globalIndex++}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -30,7 +30,7 @@ export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<Exclude<LinkCategory, 'all'>>('productivity');
+  const [category, setCategory] = useState<Exclude<LinkCategory, 'all'>>('websites');
   const [icon, setIcon] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -58,7 +58,7 @@ export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
     setName('');
     setUrl('');
     setDescription('');
-    setCategory('productivity');
+    setCategory('websites');
     setIcon('');
   };
 
@@ -114,10 +114,11 @@ export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="productivity">Productivity</SelectItem>
-                <SelectItem value="design">Design</SelectItem>
-                <SelectItem value="development">Development</SelectItem>
-                <SelectItem value="entertainment">Entertainment</SelectItem>
+                <SelectItem value="websites">Websites</SelectItem>
+                <SelectItem value="iphone-apps">iPhone Apps</SelectItem>
+                <SelectItem value="ipad-apps">iPad Apps</SelectItem>
+                <SelectItem value="mac-apps">Mac Apps</SelectItem>
+                <SelectItem value="dev-setup">Dev Setup</SelectItem>
               </SelectContent>
             </Select>
           </div>
