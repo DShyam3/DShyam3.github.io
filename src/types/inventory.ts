@@ -4,6 +4,7 @@ export type WardrobeSubcategory =
   | 'accessories'
   | 'sunglasses'
   | 'watches'
+  | 'perfumes-colognes'
   | 'shoes'
   | 'jewellery'
   | 'cold-weather'
@@ -27,6 +28,7 @@ export const WARDROBE_SUBCATEGORIES: { key: WardrobeSubcategory; label: string }
   { key: 'accessories', label: 'Accessories' },
   { key: 'sunglasses', label: 'Sunglasses' },
   { key: 'watches', label: 'Watches' },
+  { key: 'perfumes-colognes', label: 'Perfumes / Colognes' },
   { key: 'shoes', label: 'Shoes' },
   { key: 'jewellery', label: 'Jewellery' },
   { key: 'cold-weather', label: 'Cold Weather' },
