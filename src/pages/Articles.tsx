@@ -38,7 +38,7 @@ const Articles = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="wide-container">
-        <Header title="Articles & Publications" subtitle="What I've been reading" />
+        <Header title="Articles" subtitle="Cool things on the internet" />
 
         <nav className="flex flex-wrap items-center justify-center gap-2 md:gap-4 py-4 px-4 border-b border-border/50">
           {categories.map((cat, index) => (

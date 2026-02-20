@@ -44,7 +44,12 @@ const Inventory = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="wide-container">
-        <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <Header
+          title="Inventory"
+          subtitle="Things I own"
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
 
         <CategoryNav
           categories={categories}

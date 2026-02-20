@@ -19,7 +19,7 @@ interface HeaderProps {
 
 export function Header({
   title = "Dhyan's website",
-  subtitle = "my cherished things",
+  subtitle = "My Digital Garden",
   searchQuery,
   onSearchChange,
   searchPlaceholder = "Search..."

@@ -68,7 +68,7 @@ const Travel = () => {
     return (
         <div className="min-h-screen bg-background flex flex-col">
             <div className="wide-container flex-1 flex flex-col">
-                <Header title="Dhyan's website" subtitle="my cherished things" />
+                <Header title="Travel" subtitle="Where I've been" />
 
                 <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-0 py-12 md:py-24 space-y-16">
 
