@@ -2,6 +2,7 @@ export type Category = 'tech-edc' | 'wardrobe' | 'kitchen' | 'home-decor' | 'hyg
 
 export type WardrobeSubcategory =
   | 'accessories'
+  | 'sunglasses'
   | 'watches'
   | 'shoes'
   | 'jewellery'
@@ -24,6 +25,7 @@ export type WardrobeSubcategory =
 // Order for displaying wardrobe subcategories
 export const WARDROBE_SUBCATEGORIES: { key: WardrobeSubcategory; label: string }[] = [
   { key: 'accessories', label: 'Accessories' },
+  { key: 'sunglasses', label: 'Sunglasses' },
   { key: 'watches', label: 'Watches' },
   { key: 'shoes', label: 'Shoes' },
   { key: 'jewellery', label: 'Jewellery' },
