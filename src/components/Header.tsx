@@ -140,7 +140,7 @@ export function Header({
           <SiteNav align="start" className="mb-0 px-0" />
 
           {onSearchChange && (
-            <div className="w-full md:w-[260px] relative">
+            <div className="w-full md:w-[200px] lg:w-[260px] relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 type="text"

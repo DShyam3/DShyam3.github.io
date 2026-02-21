@@ -37,7 +37,7 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
         : 'justify-center';
 
   return (
-    <nav className={cn('flex flex-wrap gap-4 md:gap-6 px-4', justifyClass, className)}>
+    <nav className={cn('flex flex-wrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 px-4', justifyClass, className)}>
       {links.map((link) => (
         <Link
           key={link.to}
@@ -47,7 +47,7 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
             location.pathname === link.to ? 'text-foreground' : 'text-muted-foreground'
           )}
         >
-          <DotMatrixText text={link.label.toUpperCase()} size="xs" />
+          <DotMatrixText text={link.label.toUpperCase()} size="xs" className="nav-label" />
         </Link>
       ))}
     </nav>
