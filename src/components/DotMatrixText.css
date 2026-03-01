@@ -1,124 +1,107 @@
 .dot-matrix-text {
-    display: inline-flex;
-    gap: 2px;
-    align-items: center;
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
 }
 
 .dot-matrix-char {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .dot-matrix-row {
-    display: flex;
-    gap: 1px;
+  display: flex;
+  gap: 1px;
 }
 
 .dot-matrix-dot {
-    width: 2px;
-    height: 2px;
-    border-radius: 50%;
-    background-color: transparent;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background-color: transparent;
 }
 
 .dot-matrix-dot.active {
-    background-color: currentColor;
+  background-color: currentColor;
 }
 
 .dot-matrix-icon {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 /* Larger text variant */
 .dot-matrix-text-lg .dot-matrix-dot {
-    width: 3px;
-    height: 3px;
+  width: 3px;
+  height: 3px;
 }
 
 .dot-matrix-text-lg .dot-matrix-char {
-    gap: 1.5px;
+  gap: 1.5px;
 }
 
 .dot-matrix-text-lg .dot-matrix-row {
-    gap: 1.5px;
+  gap: 1.5px;
 }
 
 .dot-matrix-text-lg.dot-matrix-text {
-    gap: 4px;
+  gap: 4px;
 }
 
 /* Small text variant */
 /* Small text variant */
 .dot-matrix-text-sm .dot-matrix-dot {
-    width: 1.5px;
-    height: 1.5px;
+  width: 1.5px;
+  height: 1.5px;
 }
 
 .dot-matrix-text-sm .dot-matrix-char {
-    gap: 1.5px;
+  gap: 1.5px;
 }
 
 .dot-matrix-text-sm .dot-matrix-row {
-    gap: 1.5px;
+  gap: 1.5px;
 }
 
 .dot-matrix-text-sm.dot-matrix-text {
-    gap: 3px;
+  gap: 3px;
 }
 
 /* Extra small text variant - scaled down for hierarchy */
 .dot-matrix-text-xs .dot-matrix-dot {
-    width: 1px;
-    height: 1px;
+  width: 1px;
+  height: 1px;
 }
 
 .dot-matrix-text-xs .dot-matrix-char {
-    gap: 1px;
+  gap: 1px;
 }
 
 .dot-matrix-text-xs .dot-matrix-row {
-    gap: 1px;
+  gap: 1px;
 }
 
 .dot-matrix-text-xs.dot-matrix-text {
-    gap: 2px;
-}
-
-/* Make nav labels even more compact on tablets/small laptops to prevent wrapping */
-@media (min-width: 768px) and (max-width: 1280px) {
-    .nav-label.dot-matrix-text-xs {
-        gap: 1.5px;
-    }
-
-    .nav-label.dot-matrix-text-xs .dot-matrix-dot {
-        width: 0.85px;
-        height: 0.85px;
-    }
-
-    .nav-label.dot-matrix-text-xs .dot-matrix-char,
-    .nav-label.dot-matrix-text-xs .dot-matrix-row {
-        gap: 0.85px;
-    }
+  gap: 2px;
 }
 
 /* Icon sizing */
 .dot-matrix-icon .dot-matrix-dot {
-    width: 2px;
-    height: 2px;
+  width: 2px;
+  height: 2px;
 }
 
 .dot-matrix-icon-lg .dot-matrix-dot {
-    width: 3px;
-    height: 3px;
+  width: 3px;
+  height: 3px;
 }
 
 .dot-matrix-icon-lg .dot-matrix-row {
-    gap: 1.5px;
+  gap: 1.5px;
 }
 
 .dot-matrix-icon-lg {
-    gap: 1.5px;
+  gap: 1.5px;
 }

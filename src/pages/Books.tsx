@@ -26,24 +26,22 @@ const Books = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="wide-container">
-        <Header
-          title="Books"
-          subtitle="Reading list"
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder="Search books..."
-        />
+        <Header title="Books" subtitle="Reading list" />
 
         <BookCategoryNav
           categories={categories}
           activeCategory={activeCategory}
           onCategoryChange={setActiveCategory}
           getCategoryCount={getCategoryCount}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
 
         <div className="flex items-center justify-between px-4 md:px-0 pt-6">
           <p className="text-sm text-muted-foreground">
-            {loading ? '...' : `${books.length} ${books.length === 1 ? 'book' : 'books'}`}
+            {loading
+              ? '...'
+              : `${books.length} ${books.length === 1 ? 'book' : 'books'}`}
           </p>
           {isAdmin && <AddBookDialog onAdd={addBook} />}
         </div>
@@ -56,7 +54,11 @@ const Books = () => {
               ))}
             </div>
           ) : (
-            <BookGrid books={books} onRemove={isAdmin ? removeBook : undefined} onUpdate={isAdmin ? updateBook : undefined} />
+            <BookGrid
+              books={books}
+              onRemove={isAdmin ? removeBook : undefined}
+              onUpdate={isAdmin ? updateBook : undefined}
+            />
           )}
         </div>
 

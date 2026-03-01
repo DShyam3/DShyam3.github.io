@@ -27,7 +27,7 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
   ];
 
   // Filter out links that require auth when not logged in
-  const links = allLinks.filter(link => !link.requiresAuth || isAdmin);
+  const links = allLinks.filter((link) => !link.requiresAuth || isAdmin);
 
   const justifyClass =
     align === 'start'
@@ -37,17 +37,27 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
         : 'justify-center';
 
   return (
-    <nav className={cn('flex flex-wrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 px-4', justifyClass, className)}>
+    <nav
+      className={cn(
+        'flex flex-wrap md:flex-nowrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 px-4 overflow-x-auto scrollbar-hide py-1',
+        justifyClass,
+        className,
+      )}
+    >
       {links.map((link) => (
         <Link
           key={link.to}
           to={link.to}
           className={cn(
             'text-sm font-medium transition-colors hover:text-foreground',
-            location.pathname === link.to ? 'text-foreground' : 'text-muted-foreground'
+            location.pathname === link.to ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
-          <DotMatrixText text={link.label.toUpperCase()} size="xs" className="nav-label" />
+          <DotMatrixText
+            text={link.label.toUpperCase()}
+            size="xs"
+            className="nav-label"
+          />
         </Link>
       ))}
     </nav>

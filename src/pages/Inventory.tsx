@@ -44,18 +44,15 @@ const Inventory = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="wide-container">
-        <Header
-          title="Inventory"
-          subtitle="Things I own"
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+        <Header title="Inventory" subtitle="Things I own" />
 
         <CategoryNav
           categories={categories}
           activeCategory={activeCategory}
           onCategoryChange={setActiveCategory}
           getCategoryCount={getCategoryCount}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
 
         <div className="flex items-center justify-between px-4 md:px-0 pt-6">
@@ -67,13 +64,21 @@ const Inventory = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setSortOrder(sortOrder === 'alphabetical' ? 'recent' : 'alphabetical')}
+                onClick={() =>
+                  setSortOrder(sortOrder === 'alphabetical' ? 'recent' : 'alphabetical')
+                }
                 className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
               >
                 {sortOrder === 'alphabetical' ? (
-                  <><ArrowDownAZ className="h-3.5 w-3.5" /><DotMatrixText text="A-Z" size="xs" /></>
+                  <>
+                    <ArrowDownAZ className="h-3.5 w-3.5" />
+                    <DotMatrixText text="A-Z" size="xs" />
+                  </>
                 ) : (
-                  <><Clock className="h-3.5 w-3.5" /><DotMatrixText text="RECENT" size="xs" /></>
+                  <>
+                    <Clock className="h-3.5 w-3.5" />
+                    <DotMatrixText text="RECENT" size="xs" />
+                  </>
                 )}
               </Button>
             )}
@@ -105,5 +110,3 @@ const Inventory = () => {
 };
 
 export default Inventory;
-
-
