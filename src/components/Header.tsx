@@ -43,9 +43,9 @@ export function Header({
         {/* Top row: Profile on left, Theme on right */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           {/* Left side: Profile with social links */}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-start md:items-center justify-between w-full md:w-auto gap-2 md:gap-3">
             <div
-              className="flex items-center gap-3 cursor-pointer select-none transition-opacity hover:opacity-80"
+              className="flex items-center gap-3 flex-shrink-0 cursor-pointer select-none transition-opacity hover:opacity-80 md:w-auto"
               onClick={() => navigate('/')}
               role="button"
               tabIndex={0}
@@ -58,7 +58,7 @@ export function Header({
               <img
                 src="/memoji.png"
                 alt="Dhyan Shyam memoji avatar"
-                className="h-12 w-12 rounded-full bg-secondary object-cover flex-shrink-0"
+                className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-secondary object-cover flex-shrink-0"
                 loading="eager"
               />
 
@@ -76,19 +76,19 @@ export function Header({
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 order-2 md:order-1 flex-shrink-0"
                 onClick={() => setSocialOpen((v) => !v)}
                 aria-label="Open social links"
                 aria-expanded={socialOpen}
               >
                 <div
                   className={cn(
-                    'transition-transform duration-200',
+                    'transition-transform duration-200 flex items-center justify-center',
                     socialOpen && 'rotate-45',
                   )}
                 >
@@ -99,8 +99,10 @@ export function Header({
               {/* Social links - appear horizontally to the side */}
               <div
                 className={cn(
-                  'flex items-center gap-2 overflow-hidden transition-[max-width,opacity] duration-200',
-                  socialOpen ? 'max-w-[200px] opacity-100' : 'max-w-0 opacity-0',
+                  'flex items-center gap-1 md:gap-2 overflow-hidden transition-[max-width,opacity,margin] duration-200 order-1 md:order-2 justify-end md:justify-start',
+                  socialOpen
+                    ? 'max-w-[200px] opacity-100 mr-1 md:mr-0'
+                    : 'max-w-0 opacity-0 mr-0',
                 )}
               >
                 {socialLinks.map(({ label, href, icon }) => (
@@ -110,12 +112,12 @@ export function Header({
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={label}
-                    className="p-2 hover:bg-secondary/50 rounded transition-colors flex-shrink-0"
+                    className="p-1.5 md:p-2 hover:bg-secondary/50 rounded transition-colors flex-shrink-0"
                   >
                     <img
                       src={`/${icon === 'mail' ? 'gmail' : icon}.svg`}
                       alt={label}
-                      className="h-6 w-6 dark:invert dark:brightness-0 dark:contrast-200"
+                      className="h-5 w-5 md:h-6 md:w-6 dark:invert dark:brightness-0 dark:contrast-200"
                     />
                   </a>
                 ))}

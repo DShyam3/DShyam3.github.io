@@ -20,8 +20,7 @@ const LOGO_URLS = {
   airbus: 'https://business.esa.int/sites/business/files/AIRBUS_DS_3D_Blue_RGB.jpg',
   lodestar:
     'https://media.licdn.com/dms/image/v2/D4E0BAQFnAnRtu4BPQg/company-logo_200_200/company-logo_200_200/0/1682965495735/lodestarspace_logo?e=2147483647&v=beta&t=lWPqrJb1xFiKMpCCWMx9r9DZWzPEzvmc8r-iAAj3a58', // Update with correct path or URL
-  keysight:
-    'https://www.dorsetcouncil.gov.uk/documents/d/guest/keysight-logo-whitebackground-1280x-q95',
+  keysight: 'https://upload.wikimedia.org/wikipedia/en/5/58/Keysight_Logo.svg',
   ucl: 'https://www.ucl.ac.uk/brand-and-experience/sites/brand_and_experience/files/styles/all_size_mobile_16_9/public/2025-11/about-brand-logo-hero.png.jpg?itok=5QCfiLR0',
   plymouth:
     'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTBYMKYus6J7E5KDFFn9LtuZZBTk7Y2UOgZjg&s',
@@ -78,20 +77,22 @@ const Index = () => {
 
               {/* Experience */}
               <div className="bg-card/40 border border-border/40 backdrop-blur-sm rounded-[2rem] p-8 transition-all hover:bg-card/50">
-                <div className="flex items-center justify-between mb-4">
-                  <DotMatrixText
-                    text="EXPERIENCE"
-                    size="sm"
-                    className="text-foreground tracking-widest pl-1 font-semibold"
-                  />
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2 mb-4 w-full overflow-hidden">
+                  <div className="w-full sm:w-auto overflow-hidden">
+                    <DotMatrixText
+                      text="EXPERIENCE"
+                      size="sm"
+                      className="text-foreground tracking-widest pl-1 font-semibold truncate"
+                    />
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-2 text-xs rounded-full hover:bg-primary hover:text-primary-foreground border-primary/20 hover:border-transparent transition-all"
+                    className="h-8 gap-2 text-xs rounded-full hover:bg-primary hover:text-primary-foreground border-primary/20 hover:border-transparent transition-all shrink-0 max-w-full"
                     onClick={() => window.open('/Dhyan_Shyam_CV.pdf', '_blank')}
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    Download CV / Resume
+                    <Download className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Download CV / Resume</span>
                   </Button>
                 </div>
                 <div className="border-b border-border/50 mb-6"></div>
@@ -160,11 +161,13 @@ const Index = () => {
                   {/* Keysight */}
                   <div className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
                     <div className="flex items-start gap-4">
-                      <img
-                        src={LOGO_URLS.keysight}
-                        alt="Keysight"
-                        className="w-16 h-16 object-contain mt-1 group-hover/item:scale-105 transition-transform shrink-0"
-                      />
+                      <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white rounded-md p-1 group-hover/item:scale-105 transition-transform">
+                        <img
+                          src={LOGO_URLS.keysight}
+                          alt="Keysight"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
                       <div>
                         <DotMatrixText
                           text="5G R&D SOFTWARE ENGINEER // KEYSIGHT TECHNOLOGIES"
