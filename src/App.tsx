@@ -1,33 +1,40 @@
-import { useState } from "react";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider } from "next-themes";
-import { OpeningSequence } from "@/components/OpeningSequence";
-import Link from "./pages/Inventory";
-import Index from "./pages/Index";
-import Travel from "./pages/Travel";
-import Inventory from "./pages/Inventory";
-import Links from "./pages/Links";
-import Books from "./pages/Books";
-import Beliefs from "./pages/Beliefs";
-import Watchlist from "./pages/Watchlist";
-import Inspiration from "./pages/Inspiration";
-import Photos from "./pages/Photos";
-import Articles from "./pages/Articles";
-import Recipes from "./pages/Recipes";
-import Admin from "./pages/Admin";
-import NotFound from "./pages/NotFound";
-import { WatchlistProvider } from "./contexts/WatchlistContext";
-import { LinksProvider } from "./contexts/LinksContext";
-import { BooksProvider } from "./contexts/BooksContext";
-import { ArticlesProvider } from "./contexts/ArticlesContext";
-import { RecipesProvider } from "./contexts/RecipesContext";
-import { AuthProvider } from "./contexts/AuthContext";
+import { useState } from 'react';
+import { Toaster } from '@/components/ui/toaster';
+import { Toaster as Sonner } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ThemeProvider } from 'next-themes';
+import { OpeningSequence } from '@/components/OpeningSequence';
+import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
+import Link from './pages/Inventory';
+import Index from './pages/Index';
+import Travel from './pages/Travel';
+import Inventory from './pages/Inventory';
+import Links from './pages/Links';
+import Books from './pages/Books';
+import Beliefs from './pages/Beliefs';
+import Watchlist from './pages/Watchlist';
+import Inspiration from './pages/Inspiration';
+import Photos from './pages/Photos';
+import Articles from './pages/Articles';
+import Recipes from './pages/Recipes';
+import Admin from './pages/Admin';
+import NotFound from './pages/NotFound';
+import { WatchlistProvider } from './contexts/WatchlistContext';
+import { LinksProvider } from './contexts/LinksContext';
+import { BooksProvider } from './contexts/BooksContext';
+import { ArticlesProvider } from './contexts/ArticlesContext';
+import { RecipesProvider } from './contexts/RecipesContext';
+import { AuthProvider } from './contexts/AuthContext';
 
 const queryClient = new QueryClient();
+
+/** Invisible component that runs the time-based theme auto-switch logic */
+function TimeBasedThemeManager() {
+  useTimeBasedTheme();
+  return null;
+}
 
 const App = () => {
   const [showOpening, setShowOpening] = useState(true);
@@ -38,7 +45,8 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <TimeBasedThemeManager />
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -81,4 +89,3 @@ const App = () => {
 };
 
 export default App;
-

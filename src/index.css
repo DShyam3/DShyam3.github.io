@@ -52,36 +52,37 @@
   }
 
   .dark {
-    --background: 30 10% 8%;
-    --foreground: 40 20% 95%;
+    --background: 222 20% 6%;
+    --foreground: 210 20% 96%;
 
-    --card: 30 10% 12%;
-    --card-foreground: 40 20% 95%;
+    --card: 220 18% 10%;
+    --card-foreground: 210 20% 96%;
 
-    --popover: 30 10% 12%;
-    --popover-foreground: 40 20% 95%;
+    --popover: 220 18% 10%;
+    --popover-foreground: 210 20% 96%;
 
-    --primary: 40 20% 95%;
-    --primary-foreground: 30 10% 8%;
+    --primary: 210 20% 96%;
+    --primary-foreground: 222 20% 6%;
 
-    --secondary: 30 10% 18%;
-    --secondary-foreground: 40 15% 85%;
+    --secondary: 220 16% 16%;
+    --secondary-foreground: 210 15% 88%;
 
-    --muted: 30 10% 20%;
-    --muted-foreground: 30 8% 60%;
+    --muted: 220 14% 18%;
+    --muted-foreground: 215 12% 65%;
 
-    --accent: 25 60% 55%;
+    --accent: 35 85% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 10% 22%;
-    --input: 30 10% 22%;
-    --ring: 40 20% 95%;
+    --border: 220 14% 18%;
+    --input: 220 14% 18%;
+    --ring: 210 20% 96%;
 
-    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.2);
-    --shadow-card-hover: 0 10px 25px -5px hsl(0 0% 0% / 0.3);
+    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(220 20% 20% / 0.15);
+    --shadow-card-hover:
+      0 10px 30px -5px hsl(0 0% 0% / 0.5), 0 0 0 1px hsl(220 20% 25% / 0.2);
   }
 }
 
@@ -97,18 +98,6 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    text-transform: uppercase;
-  }
-
-  input,
-  textarea,
-  button,
-  select {
-    text-transform: uppercase;
-  }
-
-  ::placeholder {
-    text-transform: uppercase;
   }
 
   h1,
@@ -119,7 +108,6 @@
   h6 {
     font-family: var(--font-serif);
     font-weight: 500;
-    text-transform: uppercase;
   }
 }
 

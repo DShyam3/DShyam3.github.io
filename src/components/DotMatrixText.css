@@ -39,30 +39,29 @@
 }
 
 .dot-matrix-text-lg .dot-matrix-char {
-  gap: 1.5px;
+  gap: 2px;
 }
 
 .dot-matrix-text-lg .dot-matrix-row {
-  gap: 1.5px;
+  gap: 2px;
 }
 
 .dot-matrix-text-lg.dot-matrix-text {
-  gap: 4px;
+  gap: 5px;
 }
 
 /* Small text variant */
-/* Small text variant */
 .dot-matrix-text-sm .dot-matrix-dot {
-  width: 1.5px;
-  height: 1.5px;
+  width: 2px;
+  height: 2px;
 }
 
 .dot-matrix-text-sm .dot-matrix-char {
-  gap: 1.5px;
+  gap: 1px;
 }
 
 .dot-matrix-text-sm .dot-matrix-row {
-  gap: 1.5px;
+  gap: 1px;
 }
 
 .dot-matrix-text-sm.dot-matrix-text {
@@ -99,9 +98,9 @@
 }
 
 .dot-matrix-icon-lg .dot-matrix-row {
-  gap: 1.5px;
+  gap: 2px;
 }
 
 .dot-matrix-icon-lg {
-  gap: 1.5px;
+  gap: 2px;
 }
