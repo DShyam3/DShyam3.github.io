@@ -19,6 +19,7 @@ interface WatchlistDetailDialogProps {
   status?: string;
   onDelete?: () => void;
   onSchedule?: () => void;
+  onRemoveFromSchedule?: () => void;
   isScheduled?: boolean;
   toggleEpisodeWatched?: (
     showId: string,
@@ -40,6 +41,7 @@ export function WatchlistDetailDialog({
   status,
   onDelete,
   onSchedule,
+  onRemoveFromSchedule,
   isScheduled,
   toggleEpisodeWatched,
   isEpisodeWatched,
@@ -187,13 +189,17 @@ export function WatchlistDetailDialog({
             <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t pb-2">
               {onSchedule && (
                 <Button
-                  variant={isScheduled ? 'default' : 'outline'}
+                  variant={isScheduled ? 'secondary' : 'outline'}
                   size="sm"
-                  onClick={onSchedule}
+                  onClick={
+                    isScheduled && onRemoveFromSchedule
+                      ? onRemoveFromSchedule
+                      : onSchedule
+                  }
                   className="gap-1.5 flex-1 sm:flex-initial justify-center"
                 >
                   <CalendarDays className="h-4 w-4" />
-                  {isScheduled ? 'Scheduled' : 'Add to Schedule'}
+                  {isScheduled ? 'Remove from Schedule' : 'Add to Schedule'}
                 </Button>
               )}
               {onDelete && (
@@ -279,15 +285,18 @@ export function WatchlistDetailDialog({
                 <div className="flex items-center gap-3 mr-6">
                   {onSchedule && (
                     <Button
-                      variant={isScheduled ? 'default' : 'ghost'}
+                      variant={isScheduled ? 'secondary' : 'ghost'}
                       size="icon"
-                      onClick={onSchedule}
+                      onClick={
+                        isScheduled && onRemoveFromSchedule
+                          ? onRemoveFromSchedule
+                          : onSchedule
+                      }
                       className={cn(
                         'h-8 w-8 flex-shrink-0',
-                        isScheduled
-                          ? 'text-primary-foreground'
-                          : 'text-muted-foreground',
+                        isScheduled ? 'text-foreground' : 'text-muted-foreground',
                       )}
+                      title={isScheduled ? 'Remove from schedule' : 'Add to schedule'}
                     >
                       <CalendarDays className="h-4 w-4" />
                     </Button>

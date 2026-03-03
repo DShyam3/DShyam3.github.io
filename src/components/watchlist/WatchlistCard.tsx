@@ -38,6 +38,7 @@ interface WatchlistCardProps {
   isSeasonWatched: (showId: string, season: Season) => boolean;
   getAutoStatus: (item: WatchlistItem) => string | undefined;
   addToSchedule?: (item: Omit<any, 'id'>) => void;
+  removeFromSchedule?: (watchlistItemId: string) => void;
   isInSchedule: (watchlistItemId: string) => boolean;
 }
 
@@ -50,6 +51,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   isSeasonWatched,
   getAutoStatus,
   addToSchedule,
+  removeFromSchedule,
   isInSchedule,
 }: WatchlistCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
@@ -108,7 +110,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
-            {addToSchedule && (
+            {(addToSchedule || removeFromSchedule) && (
               <Button
                 variant="secondary"
                 size="icon"
@@ -118,7 +120,11 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setScheduleDialogOpen(true);
+                  if (isInSchedule(item.id)) {
+                    if (removeFromSchedule) removeFromSchedule(item.id);
+                  } else {
+                    if (addToSchedule) setScheduleDialogOpen(true);
+                  }
                 }}
               >
                 <Calendar className="h-3.5 w-3.5" />
@@ -262,6 +268,14 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                 if (!isInSchedule(item.id)) {
                   setScheduleDialogOpen(true);
                 }
+              }
+            : undefined
+        }
+        onRemoveFromSchedule={
+          removeFromSchedule
+            ? () => {
+                removeFromSchedule(item.id);
+                setDetailOpen(false);
               }
             : undefined
         }

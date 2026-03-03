@@ -107,6 +107,7 @@ const Watchlist = () => {
   const {
     addToSchedule,
     removeFromSchedule,
+    removeFromScheduleByWatchlistId,
     updateScheduleDay,
     getScheduleForDay,
     isInSchedule,
@@ -879,6 +880,9 @@ const Watchlist = () => {
                     isSeasonWatched={isSeasonWatched}
                     getAutoStatus={getAutoStatus}
                     addToSchedule={isAdmin ? addToSchedule : undefined}
+                    removeFromSchedule={
+                      isAdmin ? removeFromScheduleByWatchlistId : undefined
+                    }
                     isInSchedule={isInSchedule}
                   />
                 ))
