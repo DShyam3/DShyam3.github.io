@@ -135,6 +135,7 @@
   .item-card {
     @apply bg-card rounded-lg overflow-hidden transition-all duration-300;
     box-shadow: var(--shadow-card);
+    font-family: var(--font-serif);
   }
 
   .item-card:hover {

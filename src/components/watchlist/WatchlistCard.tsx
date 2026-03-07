@@ -155,9 +155,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
         <div className="p-3">
           {/* Title */}
-          <h3 className="font-serif text-sm font-medium leading-tight line-clamp-1">
-            {item.title}
-          </h3>
+          <h3 className="font-serif text-sm font-medium leading-tight">{item.title}</h3>
 
           {/* Year and first genre on same line */}
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -166,12 +164,12 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             {item.genres?.[0]}
           </p>
 
-          {/* Platform and Status badges - wrap on all screens natively */}
-          <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+          {/* Platform and Status badges */}
+          <div className="flex items-center gap-1 mt-2 flex-wrap">
             {item.streaming_platform && (
               <span
                 className={cn(
-                  'text-[10px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap',
+                  'text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
                   getPlatformColor(item.streaming_platform),
                 )}
               >
@@ -181,7 +179,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             {status && (
               <span
                 className={cn(
-                  'text-[10px] px-2 py-0.5 rounded-full font-medium text-center leading-[1.2]',
+                  'text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
                   status === 'Watching' &&
                     'bg-orange-500/10 text-orange-600 dark:text-orange-400',
                   status === 'To Watch' && 'bg-primary/10 text-primary',

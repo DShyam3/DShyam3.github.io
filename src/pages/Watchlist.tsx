@@ -407,7 +407,7 @@ const Watchlist = () => {
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5">
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => syncWatchlist('manual')}
                       disabled={syncing}
@@ -474,7 +474,7 @@ const Watchlist = () => {
                 </div>
               )}
               <Button
-                variant={showSchedule ? 'default' : 'outline'}
+                variant={showSchedule ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setShowSchedule(!showSchedule)}
                 className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
