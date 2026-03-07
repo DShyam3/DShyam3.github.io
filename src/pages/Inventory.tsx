@@ -29,7 +29,10 @@ const Inventory = () => {
 
   // Calculate total valuation of current items
   const totalValuation = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.price || 0), 0);
+    return items.reduce((sum, item) => {
+      if (item.isWishlist) return sum;
+      return sum + (item.price || 0);
+    }, 0);
   }, [items]);
 
   const formatPrice = (price: number) => {

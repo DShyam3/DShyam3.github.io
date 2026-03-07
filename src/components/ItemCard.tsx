@@ -7,7 +7,10 @@ import { EditItemDialog } from './EditItemDialog';
 interface ItemCardProps {
   item: InventoryItem;
   onRemove?: (id: string) => void;
-  onUpdate?: (id: string, updates: Partial<Omit<InventoryItem, 'id' | 'createdAt'>>) => void;
+  onUpdate?: (
+    id: string,
+    updates: Partial<Omit<InventoryItem, 'id' | 'createdAt'>>,
+  ) => void;
   index: number;
 }
 
@@ -29,12 +32,16 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
 
   return (
     <article
-      className={cn(
-        'item-card group relative opacity-0 animate-fade-in'
-      )}
+      className={cn('item-card group relative opacity-0 animate-fade-in')}
       style={{ animationDelay: `${index * 50}ms` }}
     >
-      <div className={cn("relative w-full h-full", item.isWishlist && "opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300")}>
+      <div
+        className={cn(
+          'relative w-full h-full',
+          item.isWishlist &&
+            'opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300',
+        )}
+      >
         {/* Action buttons */}
         <div className="absolute top-2 right-2 z-10 flex gap-1">
           {onUpdate && <EditItemDialog item={item} onUpdate={onUpdate} />}
@@ -62,10 +69,14 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
 
         {/* Content */}
         <div className="p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-            <span className="font-medium">{item.brand}</span>
-            <span>·</span>
-            <span>{categoryLabels[item.category]}</span>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-medium text-sm text-muted-foreground">
+              {item.brand}
+            </span>
+            <span className="text-xs text-muted-foreground/70">·</span>
+            <span className="text-xs text-muted-foreground/70">
+              {categoryLabels[item.category]}
+            </span>
           </div>
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-serif text-base font-medium leading-tight">
