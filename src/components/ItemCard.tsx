@@ -79,22 +79,22 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
             </span>
           </div>
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-serif text-base font-medium leading-tight">
+            <h3 className="font-serif text-base font-medium leading-tight min-w-0 flex-1">
               {item.link && item.link.toLowerCase() !== 'n/a' ? (
                 <a
                   href={item.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-primary transition-colors inline-flex items-center gap-1"
+                  className="hover:text-primary transition-colors inline break-words"
                 >
                   {item.name}
-                  <ExternalLink className="w-3 h-3 opacity-50" />
+                  <ExternalLink className="inline-block w-3 h-3 opacity-50 ml-1 mb-0.5" />
                 </a>
               ) : (
-                item.name
+                <span className="break-words">{item.name}</span>
               )}
             </h3>
-            <span className="text-sm text-muted-foreground shrink-0">
+            <span className="text-sm text-muted-foreground shrink-0 mt-0.5 whitespace-nowrap">
               {formatPrice(item.price)}
             </span>
           </div>
