@@ -58,11 +58,11 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
         </div>
 
         {/* Image */}
-        <div className="aspect-square bg-secondary/30 overflow-hidden">
+        <div className="aspect-square bg-secondary/30 overflow-hidden p-3 flex items-center justify-center">
           <img
             src={item.image}
             alt={item.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
           />
         </div>
