@@ -57,7 +57,13 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   const [detailOpen, setDetailOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<
-    'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
+    | 'Monday'
+    | 'Tuesday'
+    | 'Wednesday'
+    | 'Thursday'
+    | 'Friday'
+    | 'Saturday'
+    | 'Sunday'
   >('Monday');
 
   const DAYS = [
@@ -155,7 +161,9 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
         <div className="p-3">
           {/* Title */}
-          <h3 className="font-serif text-sm font-medium leading-tight">{item.title}</h3>
+          <h3 className="font-serif text-sm font-medium leading-tight">
+            {item.title}
+          </h3>
 
           {/* Year and first genre on same line */}
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -165,11 +173,11 @@ export const WatchlistCard = React.memo(function WatchlistCard({
           </p>
 
           {/* Platform and Status badges */}
-          <div className="flex items-center gap-1 mt-2 flex-wrap">
+          <div className="flex flex-col items-start gap-1 mt-2">
             {item.streaming_platform && (
               <span
                 className={cn(
-                  'text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
+                  'text-[10px] px-2 py-0.5 rounded font-medium whitespace-nowrap',
                   getPlatformColor(item.streaming_platform),
                 )}
               >
@@ -179,7 +187,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             {status && (
               <span
                 className={cn(
-                  'text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
+                  'text-[10px] px-2 py-0.5 rounded font-medium',
                   status === 'Watching' &&
                     'bg-orange-500/10 text-orange-600 dark:text-orange-400',
                   status === 'To Watch' && 'bg-primary/10 text-primary',
@@ -203,7 +211,9 @@ export const WatchlistCard = React.memo(function WatchlistCard({
       <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">Add to Weekly Schedule</DialogTitle>
+            <DialogTitle className="font-serif">
+              Add to Weekly Schedule
+            </DialogTitle>
             <DialogDescription className="sr-only">
               Choose a day of the week to schedule watching this title.
             </DialogDescription>
@@ -217,7 +227,9 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               <Label>Day of the week</Label>
               <Select
                 value={selectedDay}
-                onValueChange={(value) => setSelectedDay(value as typeof selectedDay)}
+                onValueChange={(value) =>
+                  setSelectedDay(value as typeof selectedDay)
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
