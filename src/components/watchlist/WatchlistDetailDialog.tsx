@@ -61,7 +61,7 @@ export function WatchlistDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          'h-fit max-h-[90vh] overflow-y-auto p-0 rounded-xl',
+          'max-h-[85vh] overflow-y-auto p-0 rounded-xl items-start',
           // Wider dialog for TV shows with seasons
           hasSeasons ? 'sm:max-w-4xl' : 'sm:max-w-2xl',
         )}
@@ -255,7 +255,10 @@ export function WatchlistDetailDialog({
 
           {/* Middle: Info */}
           <div
-            className={cn('flex-1 p-6 min-w-0 flex flex-col', hasSeasons && 'border-r')}
+            className={cn(
+              'flex-1 p-6 min-w-0 flex flex-col',
+              hasSeasons && 'border-r',
+            )}
           >
             <DialogHeader className="text-left">
               <div className="flex items-start justify-between gap-3">
@@ -294,9 +297,13 @@ export function WatchlistDetailDialog({
                       }
                       className={cn(
                         'h-8 w-8 flex-shrink-0',
-                        isScheduled ? 'text-foreground' : 'text-muted-foreground',
+                        isScheduled
+                          ? 'text-foreground'
+                          : 'text-muted-foreground',
                       )}
-                      title={isScheduled ? 'Remove from schedule' : 'Add to schedule'}
+                      title={
+                        isScheduled ? 'Remove from schedule' : 'Add to schedule'
+                      }
                     >
                       <CalendarDays className="h-4 w-4" />
                     </Button>
@@ -355,7 +362,9 @@ export function WatchlistDetailDialog({
 
             {/* Description */}
             {item.description && (
-              <p className="text-sm text-muted-foreground mt-4">{item.description}</p>
+              <p className="text-sm text-muted-foreground mt-4">
+                {item.description}
+              </p>
             )}
 
             {/* Movie runtime */}

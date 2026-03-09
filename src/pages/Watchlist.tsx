@@ -1,7 +1,13 @@
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { DotMatrixText } from '@/components/DotMatrixText';
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from 'react';
 import { useWatchlist, WatchlistItem } from '@/hooks/useWatchlist';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useTMDB } from '@/hooks/useTMDB';
@@ -50,7 +56,12 @@ import { WatchlistCard } from '@/components/watchlist/WatchlistCard';
 import { WeeklySchedule } from '@/components/watchlist/WeeklySchedule';
 import { formatRuntime, getPlatformColor } from '@/lib/watchlist-utils';
 
-const CATEGORIES = ['TV Shows', 'Movies', 'Currently Watching', 'Upcoming'] as const;
+const CATEGORIES = [
+  'TV Shows',
+  'Movies',
+  'Currently Watching',
+  'Upcoming',
+] as const;
 
 const ALL_PLATFORMS = [
   'Netflix',
@@ -121,7 +132,9 @@ const Watchlist = () => {
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>('alphabetical');
+  const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>(
+    'alphabetical',
+  );
   const [title, setTitle] = useState('');
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
   const [showSyncLog, setShowSyncLog] = useState(false);
@@ -145,7 +158,10 @@ const Watchlist = () => {
   }, [open]);
 
   useEffect(() => {
-    if (selectedCategory === 'Upcoming' || selectedCategory === 'Currently Watching')
+    if (
+      selectedCategory === 'Upcoming' ||
+      selectedCategory === 'Currently Watching'
+    )
       return;
 
     const timer = setTimeout(() => {
@@ -165,7 +181,8 @@ const Watchlist = () => {
       const now = new Date();
       return watchlist
         .filter((item) => {
-          if (item.release_date && new Date(item.release_date) > now) return true;
+          if (item.release_date && new Date(item.release_date) > now)
+            return true;
           if (item.category === 'TV Shows' && item.seasons) {
             return item.seasons.some(
               (s) => s.release_date && new Date(s.release_date) > now,
@@ -205,7 +222,10 @@ const Watchlist = () => {
     const counts: Record<string, number> = {};
     ALL_PLATFORMS.forEach((p) => (counts[p] = 0));
     categoryItems.forEach((item) => {
-      if (item.streaming_platform && counts[item.streaming_platform] !== undefined) {
+      if (
+        item.streaming_platform &&
+        counts[item.streaming_platform] !== undefined
+      ) {
         counts[item.streaming_platform]++;
       }
     });
@@ -231,7 +251,9 @@ const Watchlist = () => {
   const filteredWatchlist = useMemo(() => {
     let result = categoryItems;
     if (selectedPlatform)
-      result = result.filter((item) => item.streaming_platform === selectedPlatform);
+      result = result.filter(
+        (item) => item.streaming_platform === selectedPlatform,
+      );
     if (selectedGenre)
       result = result.filter((item) => item.genres?.includes(selectedGenre));
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -252,7 +274,9 @@ const Watchlist = () => {
           if (selectedCategory === 'TV Shows') {
             const getLatestSeasonDate = (item: WatchlistItem) => {
               if (!item.seasons || item.seasons.length === 0)
-                return item.release_date ? new Date(item.release_date).getTime() : 0;
+                return item.release_date
+                  ? new Date(item.release_date).getTime()
+                  : 0;
               const seasonDates = item.seasons
                 .filter((s) => s.release_date)
                 .map((s) => new Date(s.release_date!).getTime());
@@ -311,7 +335,9 @@ const Watchlist = () => {
       } else if (
         item.category === 'TV Shows' &&
         item.seasons &&
-        item.seasons.some((s) => s.release_date && new Date(s.release_date) > now)
+        item.seasons.some(
+          (s) => s.release_date && new Date(s.release_date) > now,
+        )
       ) {
         counts['Upcoming']++;
       }
@@ -343,7 +369,9 @@ const Watchlist = () => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + 48, filteredWatchlist.length));
+          setVisibleCount((prev) =>
+            Math.min(prev + 48, filteredWatchlist.length),
+          );
         }
       },
       { rootMargin: '100px' },
@@ -397,7 +425,9 @@ const Watchlist = () => {
                     )}
                   </button>
                   {index < CATEGORIES.length - 1 && (
-                    <span className="text-muted-foreground/30 hidden md:inline">·</span>
+                    <span className="text-muted-foreground/30 hidden md:inline">
+                      ·
+                    </span>
                   )}
                 </div>
               ))}
@@ -591,7 +621,9 @@ const Watchlist = () => {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Select
                     value={selectedPlatform || 'all'}
-                    onValueChange={(v) => setSelectedPlatform(v === 'all' ? null : v)}
+                    onValueChange={(v) =>
+                      setSelectedPlatform(v === 'all' ? null : v)
+                    }
                   >
                     <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
                       <div className="flex items-center gap-2 truncate">
@@ -601,22 +633,26 @@ const Watchlist = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Platforms</SelectItem>
-                      {ALL_PLATFORMS.filter((p) => getPlatformCount(p) > 0).map((p) => (
-                        <SelectItem key={p} value={p}>
-                          <div className="flex items-center justify-between gap-4 w-full">
-                            <span>{p}</span>
-                            <span className="text-[10px] opacity-50">
-                              ({getPlatformCount(p)})
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
+                      {ALL_PLATFORMS.filter((p) => getPlatformCount(p) > 0).map(
+                        (p) => (
+                          <SelectItem key={p} value={p}>
+                            <div className="flex items-center justify-between gap-4 w-full">
+                              <span>{p}</span>
+                              <span className="text-[10px] opacity-50">
+                                ({getPlatformCount(p)})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ),
+                      )}
                     </SelectContent>
                   </Select>
 
                   <Select
                     value={selectedGenre || 'all'}
-                    onValueChange={(v) => setSelectedGenre(v === 'all' ? null : v)}
+                    onValueChange={(v) =>
+                      setSelectedGenre(v === 'all' ? null : v)
+                    }
                   >
                     <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
                       <div className="flex items-center gap-2 truncate">
@@ -626,16 +662,18 @@ const Watchlist = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Genres</SelectItem>
-                      {ALL_GENRES.filter((g) => getGenreCount(g) > 0).map((g) => (
-                        <SelectItem key={g} value={g}>
-                          <div className="flex items-center justify-between gap-4 w-full">
-                            <span>{g}</span>
-                            <span className="text-[10px] opacity-50">
-                              ({getGenreCount(g)})
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
+                      {ALL_GENRES.filter((g) => getGenreCount(g) > 0).map(
+                        (g) => (
+                          <SelectItem key={g} value={g}>
+                            <div className="flex items-center justify-between gap-4 w-full">
+                              <span>{g}</span>
+                              <span className="text-[10px] opacity-50">
+                                ({getGenreCount(g)})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ),
+                      )}
                     </SelectContent>
                   </Select>
 
@@ -661,7 +699,9 @@ const Watchlist = () => {
                       size="sm"
                       onClick={() => {
                         setSortOrder(
-                          sortOrder === 'alphabetical' ? 'recent' : 'alphabetical',
+                          sortOrder === 'alphabetical'
+                            ? 'recent'
+                            : 'alphabetical',
                         );
                       }}
                       className="h-9 px-3 text-xs whitespace-nowrap gap-1.5"
@@ -702,7 +742,9 @@ const Watchlist = () => {
                 <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90vh] flex flex-col p-0">
                   <div className="p-6 pb-0">
                     <DialogHeader>
-                      <DialogTitle className="font-serif">Add to Watchlist</DialogTitle>
+                      <DialogTitle className="font-serif">
+                        Add to Watchlist
+                      </DialogTitle>
                       <DialogDescription className="sr-only">
                         Search and add items to your watchlist.
                       </DialogDescription>
@@ -783,7 +825,9 @@ const Watchlist = () => {
                                 <div className="h-32 w-20 flex-shrink-0 bg-secondary rounded-md overflow-hidden shadow-md">
                                   {result.poster_path ? (
                                     <img
-                                      src={getPosterUrl(result.poster_path) || ''}
+                                      src={
+                                        getPosterUrl(result.poster_path) || ''
+                                      }
                                       alt={result.title || result.name}
                                       className="h-full w-full object-cover"
                                     />
@@ -801,7 +845,8 @@ const Watchlist = () => {
                                       </span>
                                       <span className="text-sm text-muted-foreground whitespace-nowrap">
                                         (
-                                        {result.release_date || result.first_air_date
+                                        {result.release_date ||
+                                        result.first_air_date
                                           ? new Date(
                                               result.release_date ||
                                                 result.first_air_date ||
@@ -859,7 +904,7 @@ const Watchlist = () => {
           />
         ) : (
           <div className="px-4 md:px-0 py-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-4 sm:gap-5 md:gap-6">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
               {loading ? (
                 [...Array(12)].map((_, i) => (
                   <Skeleton key={i} className="h-64 rounded-lg" />
@@ -875,7 +920,9 @@ const Watchlist = () => {
                     item={item}
                     onRemove={isAdmin ? removeWatchlistItem : undefined}
                     getCategoryIcon={getCategoryIcon}
-                    toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+                    toggleEpisodeWatched={
+                      isAdmin ? toggleEpisodeWatched : undefined
+                    }
                     isEpisodeWatched={isEpisodeWatched}
                     isSeasonWatched={isSeasonWatched}
                     getAutoStatus={getAutoStatus}
