@@ -26,6 +26,7 @@ interface WatchlistDetailDialogProps {
     seasonNumber: number,
     episodeNumber: number,
   ) => void;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -44,6 +45,7 @@ export function WatchlistDetailDialog({
   onRemoveFromSchedule,
   isScheduled,
   toggleEpisodeWatched,
+  toggleSeasonWatched,
   isEpisodeWatched,
   isSeasonWatched,
 }: WatchlistDetailDialogProps) {
@@ -179,6 +181,7 @@ export function WatchlistDetailDialog({
                   showId={item.id}
                   seasons={item.seasons!}
                   toggleEpisodeWatched={toggleEpisodeWatched}
+                  toggleSeasonWatched={toggleSeasonWatched}
                   isEpisodeWatched={isEpisodeWatched}
                   isSeasonWatched={isSeasonWatched}
                 />
@@ -440,6 +443,7 @@ export function WatchlistDetailDialog({
                 showId={item.id}
                 seasons={item.seasons!}
                 toggleEpisodeWatched={toggleEpisodeWatched}
+                toggleSeasonWatched={toggleSeasonWatched}
                 isEpisodeWatched={isEpisodeWatched}
                 isSeasonWatched={isSeasonWatched}
               />

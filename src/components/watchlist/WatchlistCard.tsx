@@ -30,6 +30,7 @@ interface WatchlistCardProps {
     seasonNumber: number,
     episodeNumber: number,
   ) => void;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -47,6 +48,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   onRemove,
   getCategoryIcon,
   toggleEpisodeWatched,
+  toggleSeasonWatched,
   isEpisodeWatched,
   isSeasonWatched,
   getAutoStatus,
@@ -56,6 +58,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 }: WatchlistCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<
     | 'Monday'
     | 'Tuesday'
@@ -143,7 +146,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                 className="h-7 w-7 bg-background/80 backdrop-blur-sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onRemove(item.id);
+                  setDeleteConfirmOpen(true);
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -207,6 +210,44 @@ export const WatchlistCard = React.memo(function WatchlistCard({
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif">
+              Delete from Watchlist
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove{' '}
+              <span className="font-medium text-foreground">
+                "{item.title}"
+              </span>{' '}
+              from your watchlist? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (onRemove) onRemove(item.id);
+                setDeleteConfirmOpen(false);
+              }}
+              className="flex-1 gap-1.5"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -291,6 +332,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         }
         isScheduled={isInSchedule(item.id)}
         toggleEpisodeWatched={toggleEpisodeWatched}
+        toggleSeasonWatched={toggleSeasonWatched}
         isEpisodeWatched={isEpisodeWatched}
         isSeasonWatched={isSeasonWatched}
       />

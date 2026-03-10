@@ -111,6 +111,7 @@ const Watchlist = () => {
     autoSyncEnabled,
     syncWatchlist,
     toggleEpisodeWatched,
+    toggleSeasonWatched,
     isEpisodeWatched,
     isSeasonWatched,
     getAutoStatus,
@@ -922,6 +923,9 @@ const Watchlist = () => {
                     getCategoryIcon={getCategoryIcon}
                     toggleEpisodeWatched={
                       isAdmin ? toggleEpisodeWatched : undefined
+                    }
+                    toggleSeasonWatched={
+                      isAdmin ? toggleSeasonWatched : undefined
                     }
                     isEpisodeWatched={isEpisodeWatched}
                     isSeasonWatched={isSeasonWatched}
