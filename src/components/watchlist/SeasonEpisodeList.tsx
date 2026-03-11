@@ -115,7 +115,7 @@ export function SeasonEpisodeList({
                     toggleSeasonWatched(showId, currentSeason.season_number)
                   }
                   className={cn(
-                    'w-full gap-2 text-xs transition-all',
+                    'w-full gap-2 text-xs transition-all whitespace-normal h-auto py-2',
                     seasonFullyWatched
                       ? 'border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500/10'
                       : '',
@@ -123,19 +123,21 @@ export function SeasonEpisodeList({
                 >
                   {seasonFullyWatched ? (
                     <>
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Season Complete — Mark as Unwatched
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span>Season Complete — Mark as Unwatched</span>
                     </>
                   ) : (
                     <>
-                      <Circle className="h-3.5 w-3.5" />
-                      Mark Season {currentSeason.season_number} as Complete
-                      {watchedCount > 0 && (
-                        <span className="opacity-60">
-                          ({watchedCount}/{currentSeason.episodes.length}{' '}
-                          watched)
-                        </span>
-                      )}
+                      <Circle className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Mark Season {currentSeason.season_number} as Complete
+                        {watchedCount > 0 && (
+                          <span className="opacity-60 ml-1">
+                            ({watchedCount}/{currentSeason.episodes.length}{' '}
+                            watched)
+                          </span>
+                        )}
+                      </span>
                     </>
                   )}
                 </Button>
