@@ -263,3 +263,260 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
 }
+
+/* ─── View Mode Toggle ──────────────────────────────────────────────── */
+
+.travel-view-toggle {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.5);
+  padding: 2px;
+  gap: 2px;
+}
+
+.travel-view-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+
+.travel-view-toggle-btn:hover {
+  color: hsl(var(--foreground));
+}
+
+.travel-view-toggle-btn--active {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ─── City Drill-Down Panel ─────────────────────────────────────────── */
+
+.city-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  animation: city-panel-in 0.25s ease-out;
+}
+
+@keyframes city-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.city-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  position: sticky;
+  top: 0;
+  background: hsl(var(--card));
+  z-index: 2;
+}
+
+.city-panel-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: hsl(var(--muted) / 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.city-panel-back:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.city-panel-flag {
+  width: 24px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.city-panel-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.city-panel-country-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.city-panel-city-count {
+  font-size: 0.68rem;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-sans);
+}
+
+/* Search */
+.city-panel-search {
+  padding: 8px 12px;
+  position: relative;
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
+}
+
+.city-panel-results {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 12px;
+  right: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  z-index: 50;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.2);
+}
+
+.city-panel-result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  color: hsl(var(--foreground));
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.city-panel-result-item:hover {
+  background: hsl(var(--accent) / 0.1);
+}
+
+.city-result-visited {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.city-result-visited:hover {
+  background: transparent;
+}
+
+/* Visited city list */
+.city-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.city-panel-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.city-panel-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.city-panel-list::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+
+.city-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.city-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.city-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  transition: background-color 0.15s ease;
+}
+
+.city-list-row:hover {
+  background: hsl(var(--accent) / 0.06);
+}
+
+.city-list-name {
+  flex: 1;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.city-remove-btn {
+  opacity: 0;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  padding: 0;
+  border-radius: 3px;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.city-list-row:hover .city-remove-btn {
+  opacity: 1;
+}
+
+.city-remove-btn:hover {
+  color: hsl(var(--destructive));
+}
