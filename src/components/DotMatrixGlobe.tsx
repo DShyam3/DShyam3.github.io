@@ -16,6 +16,8 @@ interface DotData {
 
 interface DotMatrixGlobeProps {
     visitedCountryCodes: string[];
+    visitedCityDots?: Set<string>;       // set of "col,row" keys for city-level dots
+    viewMode?: 'countries' | 'cities';   // which highlighting layer to use
     size?: number;
     className?: string;
     onCountryHover?: (code: string | null, name: string | null, flagUrl: string | null) => void;
@@ -66,6 +68,8 @@ async function loadCountryNames(): Promise<Record<string, string>> {
 
 export function DotMatrixGlobe({
     visitedCountryCodes,
+    visitedCityDots,
+    viewMode = 'countries',
     size = 800,
     className = '',
     onCountryHover,
@@ -91,6 +95,9 @@ export function DotMatrixGlobe({
         zoom: 1,
         targetZoom: 1,
         pinchDist: 0,
+        // Cursor position for cursor-centered zooming (relative to canvas center)
+        zoomCursorX: 0,
+        zoomCursorY: 0,
     });
     const animRef = useRef({
         progress: 0,
@@ -104,6 +111,7 @@ export function DotMatrixGlobe({
         y: number;
         r: number;
         code: string;
+        dotKey: string;
         isBack: boolean;
         opacity: number;
     }
@@ -137,6 +145,7 @@ export function DotMatrixGlobe({
             const lat = Math.PI / 2 - (row / rows) * Math.PI;
             return {
                 code,
+                dotKey: `${col},${row}`,  // for city-level dot lookup
                 cxNorm: (col + 0.5) / cols,
                 cyNorm: (row + 0.5) / rows,
                 ux: Math.cos(lat) * Math.sin(lon),
@@ -194,9 +203,18 @@ export function DotMatrixGlobe({
 
         const isDark = document.documentElement.classList.contains('dark');
 
-        // Smooth zoom interpolation
+        // Smooth zoom interpolation with cursor-centered pan correction
+        const prevZoom = dragRef.current.zoom;
         dragRef.current.zoom += (dragRef.current.targetZoom - dragRef.current.zoom) * 0.1;
         const curZoom = dragRef.current.zoom;
+
+        // Apply cursor-centered pan correction for this frame's zoom delta (2D only)
+        // This keeps the point under the cursor fixed as zoom smoothly changes.
+        if (mode === '2d' && Math.abs(curZoom - prevZoom) > 0.0001) {
+            const factor = 1 - curZoom / prevZoom;
+            dragRef.current.panX += (dragRef.current.zoomCursorX - dragRef.current.panX) * factor;
+            dragRef.current.panY += (dragRef.current.zoomCursorY - dragRef.current.panY) * factor;
+        }
 
         // Clamp 2D pan to prevent wandering infinitely offscreen
         if (mode === '2d') {
@@ -386,7 +404,10 @@ export function DotMatrixGlobe({
             const cy2d = dot.cyNorm * H_zoom + H_offset;
 
             // 2D Viewport culling optimization:
-            if (progress === 0 && (cx2d < -20 || cx2d > W + 20 || cy2d < -20 || cy2d > H + 20)) {
+            // Calculate an inclusive safety margin based on current active radius scale
+            // to prevent large dots from popping out of existence at the screen edges when zoomed far in.
+            const safetyMargin = Math.max(20, baseRadius * 2);
+            if (progress === 0 && (cx2d < -safetyMargin || cx2d > W + safetyMargin || cy2d < -safetyMargin || cy2d > H + safetyMargin)) {
                 continue;
             }
 
@@ -424,6 +445,7 @@ export function DotMatrixGlobe({
                 x: cx, y: cy,
                 r: activeRadius,
                 code: dot.code,
+                dotKey: dot.dotKey,
                 isBack,
                 opacity: activeOpacity
             };
@@ -439,23 +461,48 @@ export function DotMatrixGlobe({
         projectedDotsRef.current = newProjected;
 
         const drawDot = (p: ProjectedDot) => {
-            const isVisited = visitedSet.has(p.code);
+            const isCountryVisited = visitedSet.has(p.code);
+            const isCityDot = visitedCityDots?.has(p.dotKey) ?? false;
             const isHovered = p.code === hoveredCountry;
+            const isCityMode = viewMode === 'cities';
 
             let color: string;
             let r = p.r;
 
-            if (isVisited && isHovered) {
-                color = 'rgba(255, 200, 50, 1)';
-                r *= 1.4;
-            } else if (isVisited) {
-                color = 'rgba(218, 165, 32, 0.95)';
-                r *= 1.2;
-            } else if (isHovered) {
-                color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
-                r *= 1.2;
+            if (isCityMode) {
+                // City view mode: highlight only dots with visited cities
+                if (isCityDot && isHovered) {
+                    color = 'rgba(255, 200, 50, 1)';
+                    r *= 1.4;
+                } else if (isCityDot) {
+                    color = 'rgba(218, 165, 32, 0.95)';
+                    r *= 1.2;
+                } else if (isCountryVisited && isHovered) {
+                    color = 'rgba(218, 165, 32, 0.45)';
+                    r *= 1.1;
+                } else if (isCountryVisited) {
+                    // Dim gold for visited country but no city here
+                    color = 'rgba(218, 165, 32, 0.22)';
+                } else if (isHovered) {
+                    color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
+                    r *= 1.2;
+                } else {
+                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.12 : 0.22})` : `rgba(50, 70, 130, ${isMobile ? 0.12 : 0.25})`;
+                }
             } else {
-                color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.12 : 0.22})` : `rgba(50, 70, 130, ${isMobile ? 0.12 : 0.25})`;
+                // Country view mode (existing behavior)
+                if (isCountryVisited && isHovered) {
+                    color = 'rgba(255, 200, 50, 1)';
+                    r *= 1.4;
+                } else if (isCountryVisited) {
+                    color = 'rgba(218, 165, 32, 0.95)';
+                    r *= 1.2;
+                } else if (isHovered) {
+                    color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
+                    r *= 1.2;
+                } else {
+                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.12 : 0.22})` : `rgba(50, 70, 130, ${isMobile ? 0.12 : 0.25})`;
+                }
             }
 
             ctx.globalAlpha = p.opacity;
@@ -481,7 +528,7 @@ export function DotMatrixGlobe({
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, optimizedDots, visitedSet, hoveredCountry, mode, geoFeatures, stars]);
+    }, [dotData, optimizedDots, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, geoFeatures, stars]);
 
     // Force animation loop restart when dependencies change
     useEffect(() => {
@@ -511,9 +558,17 @@ export function DotMatrixGlobe({
             if (!dotData) return;
             e.preventDefault();
             dragRef.current.lastInteractionTime = performance.now();
+
             const zoomDelta = e.deltaY * -0.001;
             const minZ = mode === '2d' ? 1.0 : 0.98;
             dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom + zoomDelta * dragRef.current.targetZoom));
+
+            // Store cursor position for cursor-centered zooming (applied per-frame in draw())
+            if (mode === '2d' && canvasRef.current) {
+                const rect = canvasRef.current.getBoundingClientRect();
+                dragRef.current.zoomCursorX = (e.clientX - rect.left) - rect.width / 2;
+                dragRef.current.zoomCursorY = (e.clientY - rect.top) - rect.height / 2;
+            }
 
             // Wake up animation loop if sleeping
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
@@ -565,6 +620,13 @@ export function DotMatrixGlobe({
                     const zoomDelta = (newDist - dragRef.current.pinchDist) * 0.01;
                     const minZ = mode === '2d' ? 1.0 : 0.98;
                     dragRef.current.targetZoom = Math.max(minZ, Math.min(10, dragRef.current.targetZoom + zoomDelta));
+
+                    // Store pinch midpoint for cursor-centered zooming (applied per-frame in draw())
+                    if (mode === '2d' && canvasRef.current) {
+                        const rect = canvasRef.current.getBoundingClientRect();
+                        dragRef.current.zoomCursorX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) - rect.width / 2;
+                        dragRef.current.zoomCursorY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top) - rect.height / 2;
+                    }
                 }
                 dragRef.current.pinchDist = newDist;
             }
