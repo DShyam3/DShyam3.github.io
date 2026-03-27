@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,11 +30,27 @@ export function SeasonEpisodeList({
   isEpisodeWatched,
   isSeasonWatched,
 }: SeasonEpisodeListProps) {
-  const [selectedSeason, setSelectedSeason] = useState(
-    seasons[0].season_number,
-  );
+  const initialSeason = useMemo(() => {
+    const firstUnwatched = seasons.find((s) => !isSeasonWatched(showId, s));
+    return firstUnwatched ? firstUnwatched.season_number : seasons[seasons.length - 1].season_number;
+  }, [seasons, showId, isSeasonWatched]);
+
+  const [selectedSeason, setSelectedSeason] = useState(initialSeason);
+  const unwatchedEpisodeRef = useRef<HTMLDivElement>(null);
 
   const currentSeason = seasons.find((s) => s.season_number === selectedSeason);
+
+  useEffect(() => {
+    if (unwatchedEpisodeRef.current) {
+      // Use setTimeout to ensure the element is rendered and the container is ready
+      setTimeout(() => {
+        unwatchedEpisodeRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }, 100);
+    }
+  }, [selectedSeason, unwatchedEpisodeRef.current]);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'TBA';
@@ -144,16 +160,28 @@ export function SeasonEpisodeList({
               )}
 
               <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                {currentSeason.episodes.map((episode) => {
+                {currentSeason.episodes.map((episode, index) => {
                   const watched = isEpisodeWatched(
                     showId,
                     currentSeason.season_number,
                     episode.episode_number,
                   );
 
+                  // Find the first unwatched episode to attach the ref
+                  const firstUnwatchedIndex = currentSeason.episodes.findIndex(
+                    (ep) =>
+                      !isEpisodeWatched(
+                        showId,
+                        currentSeason.season_number,
+                        ep.episode_number,
+                      )
+                  );
+                  const isCurrentTarget = index === firstUnwatchedIndex;
+
                   return (
                     <div
                       key={episode.episode_number}
+                      ref={isCurrentTarget ? unwatchedEpisodeRef : null}
                       onClick={() =>
                         toggleEpisodeWatched &&
                         toggleEpisodeWatched(
