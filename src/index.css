@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -41,7 +41,7 @@
     --badge-new-foreground: 0 0% 100%;
 
     --font-serif: 'JetBrains Mono', monospace;
-    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 
     --shadow-card:
       0 1px 3px 0 hsl(30 10% 15% / 0.04), 0 1px 2px -1px hsl(30 10% 15% / 0.04);

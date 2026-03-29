@@ -482,12 +482,12 @@ export function DotMatrixGlobe({
                     r *= 1.1;
                 } else if (isCountryVisited) {
                     // Dim gold for visited country but no city here
-                    color = 'rgba(218, 165, 32, 0.22)';
+                    color = 'rgba(218, 165, 32, 0.08)';
                 } else if (isHovered) {
                     color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
                     r *= 1.2;
                 } else {
-                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.12 : 0.22})` : `rgba(50, 70, 130, ${isMobile ? 0.12 : 0.25})`;
+                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.04 : 0.06})` : `rgba(50, 70, 130, ${isMobile ? 0.05 : 0.07})`;
                 }
             } else {
                 // Country view mode (existing behavior)
