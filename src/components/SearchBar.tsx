@@ -24,7 +24,7 @@ export function SearchBar({
         placeholder={placeholder}
         value={query}
         onChange={(e) => onChange(e.target.value)}
-        className="pl-10 pr-10 bg-secondary/30 md:bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-all h-9 text-sm"
+        className="pl-10 pr-10 bg-secondary/30 md:bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-[border-color,background-color] duration-200 h-9 text-sm"
       />
       {query && (
         <Button

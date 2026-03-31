@@ -218,7 +218,7 @@
     background: rgba(218, 165, 32, 0.15);
     color: rgb(180, 135, 25);
     border: 1px solid rgba(218, 165, 32, 0.3);
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     font-family: var(--font-sans);
 }
 

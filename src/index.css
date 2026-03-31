@@ -48,7 +48,15 @@
     --shadow-card-hover:
       0 10px 25px -5px hsl(30 10% 15% / 0.08), 0 8px 10px -6px hsl(30 10% 15% / 0.04);
 
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Shadow-as-border: layered shadows replace solid borders for depth */
+    --shadow-border:
+      0px 0px 0px 1px rgba(0, 0, 0, 0.06),
+      0px 1px 2px -1px rgba(0, 0, 0, 0.06),
+      0px 2px 4px 0px rgba(0, 0, 0, 0.04);
+    --shadow-border-hover:
+      0px 0px 0px 1px rgba(0, 0, 0, 0.08),
+      0px 1px 2px -1px rgba(0, 0, 0, 0.08),
+      0px 2px 4px 0px rgba(0, 0, 0, 0.06);
   }
 
   .dark {
@@ -83,6 +91,10 @@
     --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(220 20% 20% / 0.15);
     --shadow-card-hover:
       0 10px 30px -5px hsl(0 0% 0% / 0.5), 0 0 0 1px hsl(220 20% 25% / 0.2);
+
+    /* Shadow-as-border: single white ring for dark backgrounds */
+    --shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --shadow-border-hover: 0 0 0 1px rgba(255, 255, 255, 0.13);
   }
 }
 
@@ -93,6 +105,8 @@
 
   html {
     scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
@@ -110,6 +124,28 @@
     font-family: var(--font-serif);
     font-weight: 500;
     font-variant-numeric: lining-nums tabular-nums;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Subtle image outlines for consistent depth */
+  img {
+    outline: 1px solid rgba(0, 0, 0, 0.1);
+    outline-offset: -1px;
+  }
+
+  .dark img {
+    outline-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Opt-out for decorative/icon images that shouldn't have outlines */
+  img[class*="invert"],
+  img.no-outline,
+  svg {
+    outline: none;
   }
 }
 
@@ -133,9 +169,13 @@
   }
 
   .item-card {
-    @apply bg-card rounded-lg overflow-hidden transition-all duration-300;
+    @apply bg-card rounded-lg overflow-hidden;
     box-shadow: var(--shadow-card);
     font-family: var(--font-serif);
+    transition-property: box-shadow, transform;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
   }
 
   .item-card:hover {

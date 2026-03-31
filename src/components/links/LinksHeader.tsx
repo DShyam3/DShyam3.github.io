@@ -27,7 +27,7 @@ export function LinksHeader({ searchQuery, onSearchChange }: LinksHeaderProps) {
           placeholder="Search links..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10 bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-all"
+          className="pl-10 bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-[border-color,background-color] duration-200"
         />
       </div>
     </header>

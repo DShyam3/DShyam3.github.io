@@ -39,7 +39,7 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
         className={cn(
           'relative w-full h-full',
           item.isWishlist &&
-            'opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300',
+            'opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-[opacity,filter] duration-300',
         )}
       >
         {/* Action buttons */}
@@ -50,7 +50,7 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
               variant="ghost"
               size="icon"
               onClick={() => onRemove(item.id)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-7 h-7"
+              className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
             >
               <X className="w-3.5 h-3.5" />
             </Button>
@@ -62,7 +62,7 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
           <img
             src={item.image}
             alt={item.name}
-            className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 no-outline"
             loading="lazy"
           />
         </div>

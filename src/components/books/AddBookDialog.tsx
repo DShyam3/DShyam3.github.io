@@ -134,7 +134,7 @@ export function AddBookDialog({ onAdd }: AddBookDialogProps) {
                                 onChange={handleSearchChange}
                                 onFocus={() => searchTerm.trim().length >= 2 && setShowResults(true)}
                                 placeholder="Search by title, author, or ISBN..."
-                                className="pr-10 bg-secondary/30 border-transparent focus:border-border transition-all"
+                                className="pr-10 bg-secondary/30 border-transparent focus:border-border transition-[border-color,background-color] duration-200"
                             />
                             <div className="absolute right-3 top-1/2 -translate-y-1/2">
                                 {searchLoading ? (

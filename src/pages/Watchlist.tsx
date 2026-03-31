@@ -446,7 +446,7 @@ const Watchlist = () => {
                     >
                       {syncing && (
                         <div
-                          className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-300 ease-out"
+                          className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-[width] duration-300 ease-out"
                           style={{ width: `${syncProgress}%` }}
                         />
                       )}
@@ -793,7 +793,7 @@ const Watchlist = () => {
                             searchResults.map((result) => (
                               <div
                                 key={result.id}
-                                className="flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-all -mx-6 px-6"
+                                className="flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-[background-color] duration-200 -mx-6 px-6"
                                 onClick={async (e) => {
                                   e.preventDefault();
                                   if (addedItems.has(result.id)) return;

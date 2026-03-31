@@ -158,7 +158,7 @@ export function GlobeAdminPanel({ visitedCodes, onAddCountry, onRemoveCountry }:
                         onChange={handleInputChange}
                         onFocus={handleInputFocus}
                         onKeyDown={handleInputKeyDown}
-                        className="pl-10 pr-4 bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-all text-sm"
+                        className="pl-10 pr-4 bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-[border-color,background-color] duration-200 text-sm"
                         autoComplete="off"
                     />
                 </div>

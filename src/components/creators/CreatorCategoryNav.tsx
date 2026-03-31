@@ -21,7 +21,7 @@ export function CreatorCategoryNav({
           key={category.key}
           onClick={() => onCategoryChange(category.key)}
           className={cn(
-            'px-4 py-2 text-sm font-medium rounded-full transition-all duration-200',
+            'px-4 py-2 text-sm font-medium rounded-full transition-[color,background-color] duration-200',
             activeCategory === category.key
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted'

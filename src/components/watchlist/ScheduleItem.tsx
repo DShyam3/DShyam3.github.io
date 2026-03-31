@@ -110,7 +110,7 @@ export function ScheduleItem({
   return (
     <>
       <div
-        className="group relative bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border rounded-md overflow-hidden transition-all cursor-pointer"
+        className="group relative bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border rounded-md overflow-hidden transition-[background-color,border-color] duration-200 cursor-pointer"
         onClick={() => setDetailOpen(true)}
       >
         <div className="flex items-center p-1.5 gap-2">

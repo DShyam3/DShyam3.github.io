@@ -131,7 +131,7 @@ export function SeasonEpisodeList({
                     toggleSeasonWatched(showId, currentSeason.season_number)
                   }
                   className={cn(
-                    'w-full gap-2 text-xs transition-all whitespace-normal h-auto py-2',
+                    'w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-2',
                     seasonFullyWatched
                       ? 'border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500/10'
                       : '',
@@ -191,7 +191,7 @@ export function SeasonEpisodeList({
                         )
                       }
                       className={cn(
-                        'p-3 rounded-lg transition-all border-l-4',
+                        'p-3 rounded-lg transition-[background-color,opacity,border-color] duration-200 border-l-4',
                         toggleEpisodeWatched
                           ? 'cursor-pointer'
                           : 'cursor-default',

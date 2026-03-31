@@ -45,7 +45,7 @@ const Index = () => {
                 <img
                   src="selfie.png"
                   alt="Me"
-                  className="max-w-[240px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out"
+                  className="max-w-[240px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
                   onError={(e) => {
                     e.currentTarget.src = '/memoji.png';
                   }}
@@ -53,7 +53,7 @@ const Index = () => {
               </div>
 
               {/* About Me */}
-              <div className="bg-card/40 border border-border/40 backdrop-blur-sm rounded-[2rem] p-8 transition-all hover:bg-card/50">
+              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="mb-6">
                   <DotMatrixText
                     text="ABOUT ME"
@@ -76,7 +76,7 @@ const Index = () => {
               </div>
 
               {/* Experience */}
-              <div className="bg-card/40 border border-border/40 backdrop-blur-sm rounded-[2rem] p-8 transition-all hover:bg-card/50">
+              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2 mb-4 w-full overflow-hidden">
                   <div className="w-full sm:w-auto overflow-hidden">
                     <DotMatrixText
@@ -88,7 +88,7 @@ const Index = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-2 text-xs rounded-full hover:bg-primary hover:text-primary-foreground border-primary/20 hover:border-transparent transition-all shrink-0 max-w-full"
+                    className="h-8 gap-2 text-xs rounded-full hover:bg-primary hover:text-primary-foreground border-primary/20 hover:border-transparent transition-[color,background-color,border-color] duration-200 shrink-0 max-w-full"
                     onClick={() => window.open('/Dhyan_Shyam_CV.pdf', '_blank')}
                   >
                     <Download className="w-3.5 h-3.5 shrink-0" />
@@ -188,7 +188,7 @@ const Index = () => {
               </div>
 
               {/* Education */}
-              <div className="bg-card/40 border border-border/40 backdrop-blur-sm rounded-[2rem] p-8 transition-all hover:bg-card/50">
+              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="mb-4">
                   <DotMatrixText
                     text="EDUCATION"
@@ -253,12 +253,12 @@ const Index = () => {
             {/* RIGHT COLUMN: Image, Projects */}
             <div className="md:col-span-6 flex flex-col gap-6">
               {/* Profile Image (Desktop Only) */}
-              <div className="hidden md:flex bg-primary/5 border hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-all duration-500 shrink-0 w-fit mx-auto">
+              <div className="hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
                 <img
                   src="selfie.png"
                   alt="Me"
-                  className="max-w-[280px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out"
+                  className="max-w-[280px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
                   onError={(e) => {
                     e.currentTarget.src = '/memoji.png';
                   }}
@@ -266,7 +266,7 @@ const Index = () => {
               </div>
 
               {/* Projects Portfolio (Full Fill Bottom) */}
-              <div className="bg-card/40 border border-border/40 backdrop-blur-sm rounded-[2rem] p-8 flex flex-col items-center justify-center text-center transition-all hover:bg-card/50 group cursor-pointer flex-1">
+              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
                   <FolderGit2 className="w-8 h-8 text-primary/70" />
                 </div>
