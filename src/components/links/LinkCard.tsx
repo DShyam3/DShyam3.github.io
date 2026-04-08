@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { EditLinkDialog } from './EditLinkDialog';
 import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDialog';
+import { Pretext } from '../ui/Pretext';
 
 interface LinkCardProps {
   link: LinkItem;
@@ -70,11 +71,14 @@ export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {
 
           {/* Content */}
           <div className="flex-1 min-w-0 pr-16">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-serif text-base font-medium leading-tight group-hover:text-primary transition-colors">
-                {link.name}
+            <div className="flex items-center gap-2 mb-1 overflow-hidden w-full">
+              <h3 className="font-serif text-base font-medium leading-tight group-hover:text-primary transition-colors block w-full">
+                <Pretext 
+                  text={link.name} 
+                  truncateLines={2} 
+                  suffix={<ExternalLink className="inline-block w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-2 align-baseline" />} 
+                />
               </h3>
-              <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
             </div>
             <span className="inline-block text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded mb-2">
               {categoryLabels[link.category] || link.category}

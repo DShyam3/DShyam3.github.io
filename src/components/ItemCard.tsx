@@ -3,6 +3,7 @@ import { X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { EditItemDialog } from './EditItemDialog';
+import { Pretext } from './ui/Pretext';
 
 interface ItemCardProps {
   item: InventoryItem;
@@ -78,23 +79,26 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
               {categoryLabels[item.category]}
             </span>
           </div>
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-serif text-base font-medium leading-tight min-w-0 flex-1">
+          <div className="flex flex-col items-start gap-1 w-full overflow-hidden">
+            <h3 className="font-serif text-base font-medium leading-tight min-w-0 w-full block">
               {item.link && item.link.toLowerCase() !== 'n/a' ? (
                 <a
                   href={item.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-primary transition-colors inline break-words"
+                  className="hover:text-primary transition-colors inline-block w-full"
                 >
-                  {item.name}
-                  <ExternalLink className="inline-block w-3 h-3 opacity-50 ml-1 mb-0.5" />
+                  <Pretext 
+                    text={item.name} 
+                    truncateLines={2} 
+                    suffix={<ExternalLink className="inline-block w-3 h-3 opacity-50 ml-1 mb-0.5 -mt-0.5 align-middle" />} 
+                  />
                 </a>
               ) : (
-                <span className="break-words">{item.name}</span>
+                <Pretext text={item.name} truncateLines={2} />
               )}
             </h3>
-            <span className="text-sm text-muted-foreground shrink-0 mt-0.5 whitespace-nowrap">
+            <span className="text-sm text-muted-foreground shrink-0 whitespace-nowrap">
               {formatPrice(item.price)}
             </span>
           </div>

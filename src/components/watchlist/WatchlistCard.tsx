@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
 import { getPlatformColor } from '@/lib/watchlist-utils';
+import { Pretext } from '../ui/Pretext';
 
 interface WatchlistCardProps {
   item: WatchlistItem;
@@ -165,7 +166,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         <div className="p-3">
           {/* Title */}
           <h3 className="font-serif text-sm font-medium leading-tight">
-            {item.title}
+            <Pretext text={item.title} truncateLines={2} />
           </h3>
 
           {/* Year and first genre on same line */}

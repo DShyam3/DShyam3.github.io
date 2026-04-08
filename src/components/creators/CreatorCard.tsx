@@ -3,6 +3,7 @@ import { Creator } from '@/types/creators';
 import { Trash2, ExternalLink, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EditCreatorDialog } from './EditCreatorDialog';
+import { Pretext } from '../ui/Pretext';
 
 interface CreatorCardProps {
   creator: Creator;
@@ -66,13 +67,18 @@ export function CreatorCard({ creator, onRemove, onUpdate }: CreatorCardProps) {
                 href={creator.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-medium line-clamp-1 hover:text-accent transition-colors flex items-center gap-1"
+                className="text-sm font-medium hover:text-accent transition-colors block w-full"
               >
-                {creator.name}
-                <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                <Pretext 
+                  text={creator.name} 
+                  truncateLines={1} 
+                  suffix={<ExternalLink className="h-3 w-3 inline-block ml-1 align-middle pb-0.5" />} 
+                />
               </a>
             ) : (
-              <h3 className="text-sm font-medium line-clamp-1">{creator.name}</h3>
+              <h3 className="text-sm font-medium">
+                 <Pretext text={creator.name} truncateLines={1} />
+              </h3>
             )}
             <p className="text-xs text-muted-foreground capitalize">{creator.category}</p>
           </div>

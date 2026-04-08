@@ -4,6 +4,7 @@ import { Trash2, ExternalLink, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EditBookDialog } from './EditBookDialog';
 import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDialog';
+import { Pretext } from '../ui/Pretext';
 
 interface BookCardProps {
   book: Book;
@@ -63,9 +64,11 @@ export function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
         </div>
 
         <div className="p-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 overflow-hidden">
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-medium line-clamp-2">{book.title}</h3>
+              <h3 className="text-sm font-medium">
+                <Pretext text={book.title} truncateLines={2} />
+              </h3>
               <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{book.author}</p>
             </div>
           </div>
