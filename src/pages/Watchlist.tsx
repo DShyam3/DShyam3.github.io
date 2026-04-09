@@ -133,6 +133,7 @@ const Watchlist = () => {
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>(
     'alphabetical',
   );
@@ -246,8 +247,19 @@ const Watchlist = () => {
     return counts;
   }, [categoryItems]);
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    categoryItems.forEach((item) => {
+      if (item.category === 'TV Shows' && item.series_status) {
+        counts[item.series_status] = (counts[item.series_status] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [categoryItems]);
+
   const getPlatformCount = (platform: string) => platformCounts[platform] || 0;
   const getGenreCount = (genre: string) => genreCounts[genre] || 0;
+  const getStatusCount = (status: string) => statusCounts[status] || 0;
 
   const filteredWatchlist = useMemo(() => {
     let result = categoryItems;
@@ -257,6 +269,8 @@ const Watchlist = () => {
       );
     if (selectedGenre)
       result = result.filter((item) => item.genres?.includes(selectedGenre));
+    if (selectedStatus && selectedCategory === 'TV Shows')
+      result = result.filter((item) => item.series_status === selectedStatus);
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (normalizedQuery)
       result = result.filter((item) =>
@@ -297,6 +311,7 @@ const Watchlist = () => {
     categoryItems,
     selectedPlatform,
     selectedGenre,
+    selectedStatus,
     searchQuery,
     selectedCategory,
     hideCompleted,
@@ -361,6 +376,7 @@ const Watchlist = () => {
     searchQuery,
     selectedPlatform,
     selectedGenre,
+    selectedStatus,
     sortOrder,
     hideCompleted,
   ]);
@@ -410,6 +426,7 @@ const Watchlist = () => {
                       setShowSchedule(false);
                       setSelectedPlatform(null);
                       setSelectedGenre(null);
+                      setSelectedStatus(null);
                     }}
                     className={cn(
                       'nav-link relative py-1 flex items-center gap-1.5',
@@ -677,6 +694,37 @@ const Watchlist = () => {
                       )}
                     </SelectContent>
                   </Select>
+
+                  {selectedCategory === 'TV Shows' && Object.keys(statusCounts).length > 0 && (
+                    <Select
+                      value={selectedStatus || 'all'}
+                      onValueChange={(v) =>
+                        setSelectedStatus(v === 'all' ? null : v)
+                      }
+                    >
+                      <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs">
+                        <div className="flex items-center gap-2 truncate">
+                          <Filter className="h-3 w-3 opacity-50" />
+                          <SelectValue placeholder="Status" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        {Object.keys(statusCounts)
+                          .sort()
+                          .map((status) => (
+                            <SelectItem key={status} value={status}>
+                              <div className="flex items-center justify-between gap-4 w-full">
+                                <span>{status === 'Canceled' ? 'Cancelled' : status}</span>
+                                <span className="text-[10px] opacity-50">
+                                  ({getStatusCount(status)})
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  )}
 
                   {selectedCategory === 'TV Shows' && (
                     <Button
