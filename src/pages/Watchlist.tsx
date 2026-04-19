@@ -129,7 +129,7 @@ const Watchlist = () => {
   const [selectedCategory, setSelectedCategory] =
     useState<(typeof CATEGORIES)[number]>('TV Shows');
   const [searchQuery, setSearchQuery] = useState('');
-  const [hideCompleted, setHideCompleted] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(true);
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
@@ -404,7 +404,7 @@ const Watchlist = () => {
         observer.unobserve(currentTarget);
       }
     };
-  }, [filteredWatchlist.length]);
+  }, [filteredWatchlist.length, visibleCount]);
 
   const visibleWatchlist = useMemo(() => {
     return filteredWatchlist.slice(0, visibleCount);
