@@ -1,0 +1,108 @@
+import { InventoryItem } from '@/types/inventory';
+import { X, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { EditItemDialog } from './EditItemDialog';
+
+interface ItemCardProps {
+  item: InventoryItem;
+  onRemove?: (id: string) => void;
+  onUpdate?: (
+    id: string,
+    updates: Partial<Omit<InventoryItem, 'id' | 'createdAt'>>,
+  ) => void;
+  index: number;
+}
+
+const categoryLabels: Record<string, string> = {
+  technology: 'Technology',
+  wardrobe: 'Wardrobe',
+  kitchen: 'Kitchen',
+  wishlist: 'Wishlist',
+};
+
+export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(price);
+  };
+
+  return (
+    <article
+      className={cn('item-card group relative opacity-0 animate-fade-in')}
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      <div
+        className={cn(
+          'relative w-full h-full',
+          item.isWishlist &&
+            'opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-[opacity,filter] duration-300',
+        )}
+      >
+        {/* Action buttons */}
+        <div className="absolute top-2 right-2 z-10 flex gap-1">
+          {onUpdate && <EditItemDialog item={item} onUpdate={onUpdate} />}
+          {onRemove && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onRemove(item.id)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          )}
+        </div>
+
+        {/* Image */}
+        <div className="aspect-square bg-secondary/30 overflow-hidden p-3 flex items-center justify-center">
+          <img
+            src={item.image}
+            alt={item.name}
+            className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 no-outline"
+            loading="lazy"
+          />
+        </div>
+
+        {/* Content */}
+        <div className="p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-medium text-sm text-muted-foreground">
+              {item.brand}
+            </span>
+            <span className="text-xs text-muted-foreground/70">·</span>
+            <span className="text-xs text-muted-foreground/70">
+              {categoryLabels[item.category]}
+            </span>
+          </div>
+          <div className="flex flex-col items-start gap-1 w-full overflow-hidden">
+            <h3 className="font-serif text-base font-medium leading-tight min-w-0 w-full block">
+              {item.link && item.link.toLowerCase() !== 'n/a' ? (
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary transition-colors inline-block w-full"
+                >
+                  <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
+                    {item.name}
+                    <ExternalLink className="inline-block w-3 h-3 opacity-50 ml-1 mb-0.5 -mt-0.5 align-middle" />
+                  </span>
+                </a>
+              ) : (
+                <span className="line-clamp-2" style={{ textWrap: 'balance' }}>{item.name}</span>
+              )}
+            </h3>
+            <span className="text-sm text-muted-foreground shrink-0 whitespace-nowrap">
+              {formatPrice(item.price)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}

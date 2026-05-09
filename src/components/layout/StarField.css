@@ -1,0 +1,154 @@
+/* Star Field Styles */
+.star-field {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Static stars with varied twinkling */
+.star {
+    position: absolute;
+    border-radius: 50%;
+    background-color: hsl(var(--foreground));
+    animation: twinkle var(--twinkle-duration, 3s) ease-in-out infinite;
+    animation-delay: var(--twinkle-delay, 0s);
+    box-shadow: 0 0 2px hsl(var(--foreground) / 0.3);
+}
+
+/* Subtle glow for larger stars */
+.star[style*="width: 2"],
+.star[style*="width: 3"],
+.star[style*="width: 4"] {
+    box-shadow: 0 0 4px hsl(var(--foreground) / 0.4),
+                0 0 8px hsl(var(--foreground) / 0.2);
+}
+
+/* Natural twinkle animation */
+@keyframes twinkle {
+    0%, 100% {
+        opacity: var(--star-opacity, 0.6);
+        transform: scale(1);
+    }
+    50% {
+        opacity: calc(var(--star-opacity, 0.6) * 0.3);
+        transform: scale(0.9);
+    }
+}
+
+/* Shooting star wrapper for animation */
+.shooting-star-wrapper {
+    position: absolute;
+    transform-origin: left center;
+    animation: shootAcross var(--shoot-duration, 1s) ease-out forwards;
+}
+
+/* The bright head of the shooting star */
+.shooting-star-head {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: hsl(var(--foreground));
+    border-radius: 50%;
+    box-shadow: 
+        0 0 6px 2px hsl(var(--foreground) / 0.8),
+        0 0 12px 4px hsl(var(--foreground) / 0.4);
+    z-index: 2;
+}
+
+/* The trailing streak */
+.shooting-star-trail {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    width: var(--trail-length, 100px);
+    height: 2px;
+    transform: translateY(-50%);
+    background: linear-gradient(
+        to left,
+        hsl(var(--foreground)) 0%,
+        hsl(var(--foreground) / 0.7) 10%,
+        hsl(var(--foreground) / 0.4) 30%,
+        hsl(var(--foreground) / 0.15) 60%,
+        transparent 100%
+    );
+    border-radius: 2px;
+    filter: blur(0.5px);
+}
+
+/* Shooting animation - moves diagonally down-right */
+@keyframes shootAcross {
+    0% {
+        transform: rotate(var(--angle, 35deg)) translateX(0) translateY(0);
+        opacity: 0;
+    }
+    5% {
+        opacity: 1;
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        transform: rotate(var(--angle, 35deg)) translateX(350px) translateY(0);
+        opacity: 0;
+    }
+}
+
+/* Add shimmer effect to trail */
+.shooting-star-trail::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        hsl(var(--foreground) / 0.3) 50%,
+        transparent 100%
+    );
+    animation: shimmer 0.3s ease-out infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .shooting-star-trail {
+        width: calc(var(--trail-length, 100px) * 0.6);
+    }
+    
+    @keyframes shootAcross {
+        0% {
+            transform: rotate(var(--angle, 35deg)) translateX(0) translateY(0);
+            opacity: 0;
+        }
+        5% {
+            opacity: 1;
+        }
+        85% {
+            opacity: 1;
+        }
+        100% {
+            transform: rotate(var(--angle, 35deg)) translateX(200px) translateY(0);
+            opacity: 0;
+        }
+    }
+}
+
+/* Dark mode enhancements - brighter stars */
+:root.dark .star {
+    box-shadow: 0 0 3px hsl(var(--foreground) / 0.5);
+}
+
+:root.dark .shooting-star-head {
+    box-shadow: 
+        0 0 8px 3px hsl(var(--foreground) / 0.9),
+        0 0 16px 6px hsl(var(--foreground) / 0.5);
+}

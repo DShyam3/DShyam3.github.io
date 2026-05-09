@@ -1,0 +1,256 @@
+/* ─── Dot Matrix World Map ─────────────────────────────────────────── */
+
+.dot-matrix-map-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+.dot-matrix-map-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Loading state */
+.dot-matrix-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dot-matrix-loading-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.dot-matrix-loading-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(218, 165, 32, 0.6);
+    animation: dot-pulse 1.2s ease-in-out infinite;
+}
+
+.dot-matrix-loading-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.dot-matrix-loading-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes dot-pulse {
+
+    0%,
+    80%,
+    100% {
+        opacity: 0.2;
+        transform: scale(0.8);
+    }
+
+    40% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ─── Globe Admin Panel ─────────────────────────────────────────────── */
+
+.globe-admin-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 8px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    max-width: 360px;
+    width: 100%;
+}
+
+.globe-admin-panel h3 {
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin: 0;
+}
+
+.globe-country-search {
+    position: relative;
+}
+
+.globe-country-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: hsl(var(--popover));
+    border: 1px solid hsl(var(--border));
+    border-radius: 6px;
+    margin-top: 4px;
+    z-index: 50;
+    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.2);
+}
+
+.globe-country-results::-webkit-scrollbar {
+    width: 4px;
+}
+
+.globe-country-results::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.globe-country-results::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 2px;
+}
+
+.globe-country-result-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    color: hsl(var(--foreground));
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+}
+
+.globe-country-result-item:hover {
+    background: hsl(var(--accent) / 0.1);
+}
+
+.globe-country-result-item:disabled:not(.globe-result-already-added) {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Already-added state: dimmed, non-interactive */
+.globe-result-already-added {
+    opacity: 0.5;
+    cursor: default;
+    background: hsl(var(--muted) / 0.4) !important;
+}
+
+.globe-result-already-added:hover {
+    background: hsl(var(--muted) / 0.4) !important;
+}
+
+.globe-result-added-label {
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+}
+
+.globe-result-check-icon {
+    color: hsl(var(--muted-foreground));
+}
+
+.globe-country-result-item.opacity-50 {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
+.globe-result-flag {
+    flex-shrink: 0;
+    width: 28px;
+    height: 19px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: hsl(var(--muted));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.globe-country-result-item .country-code {
+    font-size: 0.68rem;
+    color: hsl(var(--muted-foreground));
+    font-family: monospace;
+    background: hsl(var(--muted));
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+}
+
+.globe-country-result-item.opacity-50 {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
+.globe-visited-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.globe-visited-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.globe-visited-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.globe-visited-list::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 2px;
+}
+
+.globe-visited-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: rgba(218, 165, 32, 0.15);
+    color: rgb(180, 135, 25);
+    border: 1px solid rgba(218, 165, 32, 0.3);
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    font-family: var(--font-sans);
+}
+
+.dark .globe-visited-tag {
+    background: rgba(218, 165, 32, 0.12);
+    color: rgb(228, 190, 80);
+    border-color: rgba(218, 165, 32, 0.25);
+}
+
+.globe-visited-tag button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.globe-visited-tag button:hover {
+    opacity: 1;
+}
+
+.globe-country-count {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    font-family: var(--font-sans);
+}
