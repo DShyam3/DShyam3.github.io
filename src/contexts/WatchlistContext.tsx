@@ -46,6 +46,15 @@ export interface WatchlistItem {
   series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Cancelled';
 }
 
+export interface FavouriteItem {
+  id: string;
+  title: string;
+  poster?: string;
+  media_type: 'movie' | 'tv';
+  tmdb_id?: number;
+  created_at: string;
+}
+
 interface SyncLogEntry {
   id: number;
   synced_at: string;
@@ -58,6 +67,7 @@ interface SyncLogEntry {
 
 interface WatchlistContextType {
   watchlist: WatchlistItem[];
+  favourites: FavouriteItem[];
   loading: boolean;
   syncing: boolean;
   syncProgress: number;
@@ -71,6 +81,8 @@ interface WatchlistContextType {
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
   ) => Promise<void>;
   removeWatchlistItem: (id: string) => Promise<void>;
+  addFavourite: (item: Omit<FavouriteItem, 'id' | 'created_at'>) => Promise<void>;
+  removeFavourite: (id: string) => Promise<void>;
   toggleEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -118,6 +130,7 @@ const getNext6AM = () => {
 
 export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [favourites, setFavourites] = useState<FavouriteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
@@ -137,7 +150,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [moviesResult, showsResult] = await Promise.all([
+      const [moviesResult, showsResult, favouritesResult] = await Promise.all([
         supabase.from('movies').select('*').order('title', { ascending: true }),
         (supabase.from('tv_shows') as any)
           .select(
@@ -147,10 +160,12 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 `,
           )
           .order('title', { ascending: true }),
+        (supabase.from('favourites') as any).select('*').order('title', { ascending: true }),
       ]);
 
       if (moviesResult.error) throw moviesResult.error;
       if (showsResult.error) throw showsResult.error;
+      if (favouritesResult.error) throw favouritesResult.error;
 
       const mappedMovies: WatchlistItem[] = (moviesResult.data || []).map(
         (movie) => ({
@@ -225,6 +240,18 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       );
 
       setWatchlist([...mappedMovies, ...mappedShows]);
+
+      const mappedFavourites: FavouriteItem[] = (favouritesResult.data || []).map(
+        (fav: any) => ({
+          id: fav.id.toString(),
+          title: fav.title,
+          poster: fav.poster || undefined,
+          media_type: fav.media_type,
+          tmdb_id: fav.tmdb_id || undefined,
+          created_at: fav.created_at || new Date().toISOString(),
+        }),
+      );
+      setFavourites(mappedFavourites);
 
       const newWatchedSet = new Set<string>();
       mappedShows.forEach((show) => {
@@ -590,6 +617,57 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       toast({
         title: 'Error',
         description: 'Failed to remove item',
+      });
+    }
+  };
+
+  const addFavourite = async (
+    item: Omit<FavouriteItem, 'id' | 'created_at'>,
+  ) => {
+    const exists = favourites.find(
+      (f) =>
+        (item.tmdb_id && f.tmdb_id === item.tmdb_id && f.media_type === item.media_type) ||
+        f.title.toLowerCase() === item.title.toLowerCase(),
+    );
+    if (exists) {
+      toast({
+        title: 'Already in Favourites',
+        description: `"${item.title}" is already in your favourites.`,
+      });
+      return;
+    }
+
+    try {
+      const { error } = await (supabase.from('favourites') as any).insert({
+        title: item.title,
+        poster: item.poster || null,
+        media_type: item.media_type,
+        tmdb_id: item.tmdb_id || null,
+      });
+      if (error) throw error;
+      await fetchData();
+      toast({ title: 'Success', description: 'Added to favourites' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add favourite',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const removeFavourite = async (id: string) => {
+    try {
+      const { error } = await (supabase.from('favourites') as any)
+        .delete()
+        .eq('id', parseInt(id));
+      if (error) throw error;
+      setFavourites((prev) => prev.filter((f) => f.id !== id));
+      toast({ title: 'Success', description: 'Removed from favourites' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to remove favourite',
         variant: 'destructive',
       });
     }
@@ -1123,6 +1201,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     <WatchlistContext.Provider
       value={{
         watchlist,
+        favourites,
         loading,
         syncing,
         syncProgress,
@@ -1134,6 +1213,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         syncWatchlist,
         addWatchlistItem,
         removeWatchlistItem,
+        addFavourite,
+        removeFavourite,
         toggleEpisodeWatched,
         toggleSeasonWatched,
         isEpisodeWatched,

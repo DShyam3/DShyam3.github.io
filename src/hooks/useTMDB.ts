@@ -127,10 +127,51 @@ export function useTMDB() {
         }
     }, [fetchTMDB, getPosterUrl]);
 
+    const searchMulti = useCallback(async (query: string) => {
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery) {
+            setResults([]);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const [movieData, tvData] = await Promise.all([
+                fetchTMDB('search/movie', { query: trimmedQuery }),
+                fetchTMDB('search/tv', { query: trimmedQuery }),
+            ]);
+
+            const movies = (movieData.results || []).slice(0, 5).map((item: any) => ({
+                ...item,
+                media_type: 'movie' as const,
+            }));
+            const tvShows = (tvData.results || []).slice(0, 5).map((item: any) => ({
+                ...item,
+                media_type: 'tv' as const,
+            }));
+
+            // Interleave results: movie, tv, movie, tv...
+            const combined: TMDBResult[] = [];
+            const maxLen = Math.max(movies.length, tvShows.length);
+            for (let i = 0; i < maxLen; i++) {
+                if (i < movies.length) combined.push(movies[i]);
+                if (i < tvShows.length) combined.push(tvShows[i]);
+            }
+
+            setResults(combined);
+        } catch (error) {
+            console.error('TMDB Multi-Search Error:', error);
+            setResults([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchTMDB]);
+
     return {
         results,
         loading,
         search,
+        searchMulti,
         getPosterUrl,
         getMovieDetails,
     };

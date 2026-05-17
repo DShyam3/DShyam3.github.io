@@ -8,7 +8,7 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
-import { useWatchlist, WatchlistItem } from '@/hooks/useWatchlist';
+import { useWatchlist, WatchlistItem, FavouriteItem } from '@/hooks/useWatchlist';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useTMDB } from '@/hooks/useTMDB';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,6 +48,8 @@ import {
   CheckCircle,
   XCircle,
   Timer,
+  Heart,
+  Trash2,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -61,6 +63,7 @@ const CATEGORIES = [
   'Movies',
   'Currently Watching',
   'Upcoming',
+  'Favourites',
 ] as const;
 
 const ALL_PLATFORMS = [
@@ -99,8 +102,11 @@ const Watchlist = () => {
   const { isAdmin } = useAuth();
   const {
     watchlist,
+    favourites,
     addWatchlistItem,
     removeWatchlistItem,
+    addFavourite,
+    removeFavourite,
     loading,
     syncing,
     syncProgress,
@@ -146,10 +152,15 @@ const Watchlist = () => {
   const {
     results: searchResults,
     search: tmdbSearch,
+    searchMulti: tmdbSearchMulti,
     getPosterUrl,
     getMovieDetails,
     loading: searchLoading,
   } = useTMDB();
+
+  const [favDialogOpen, setFavDialogOpen] = useState(false);
+  const [favSearchQuery, setFavSearchQuery] = useState('');
+  const [favAddedItems, setFavAddedItems] = useState<Set<string>>(new Set());
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -159,10 +170,29 @@ const Watchlist = () => {
     }
   }, [open]);
 
+  // Reset favourites dialog when it closes
+  useEffect(() => {
+    if (!favDialogOpen) {
+      setFavSearchQuery('');
+      setFavAddedItems(new Set());
+    }
+  }, [favDialogOpen]);
+
+  // TMDB search for favourites
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (favSearchQuery.length >= 2) {
+        tmdbSearchMulti(favSearchQuery);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [favSearchQuery, tmdbSearchMulti]);
+
   useEffect(() => {
     if (
       selectedCategory === 'Upcoming' ||
-      selectedCategory === 'Currently Watching'
+      selectedCategory === 'Currently Watching' ||
+      selectedCategory === 'Favourites'
     )
       return;
 
@@ -329,17 +359,20 @@ const Watchlist = () => {
         return <Eye className="h-4 w-4" />;
       case 'Upcoming':
         return <Bell className="h-4 w-4" />;
+      case 'Favourites':
+        return <Heart className="h-4 w-4" />;
       default:
         return null;
     }
   }, []);
 
   const categoryCounts = useMemo(() => {
-    const counts = {
+    const counts: Record<(typeof CATEGORIES)[number], number> = {
       'TV Shows': 0,
       Movies: 0,
       Upcoming: 0,
       'Currently Watching': 0,
+      Favourites: favourites.length,
     };
     const now = new Date();
     watchlist.forEach((item) => {
@@ -366,7 +399,7 @@ const Watchlist = () => {
       }
     });
     return counts;
-  }, [watchlist, getAutoStatus]);
+  }, [watchlist, favourites, getAutoStatus]);
 
   // Reset visible count when filters change
   useEffect(() => {
@@ -608,7 +641,7 @@ const Watchlist = () => {
             </div>
           )}
 
-          {!showSchedule && (
+          {!showSchedule && selectedCategory !== 'Favourites' && (
             <div className="space-y-4">
               <div className="flex flex-col lg:flex-row gap-3">
                 <div className="flex-1">
@@ -775,9 +808,164 @@ const Watchlist = () => {
             <p className="text-sm text-muted-foreground">
               {loading
                 ? '...'
-                : `${filteredWatchlist.length} ${selectedCategory.toLowerCase()}`}
+                : selectedCategory === 'Favourites'
+                  ? `${favourites.length} favourites`
+                  : `${filteredWatchlist.length} ${selectedCategory.toLowerCase()}`}
             </p>
-            {isAdmin && (
+            {isAdmin && selectedCategory === 'Favourites' && (
+              <Dialog open={favDialogOpen} onOpenChange={setFavDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-4 w-4" />
+                    Add Favourite
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90vh] flex flex-col p-0">
+                  <div className="p-6 pb-0">
+                    <DialogHeader>
+                      <DialogTitle className="font-serif">
+                        Add to Favourites
+                      </DialogTitle>
+                      <DialogDescription className="sr-only">
+                        Search and add movies or TV shows to your favourites.
+                      </DialogDescription>
+                    </DialogHeader>
+                  </div>
+                  <div className="flex-1 flex flex-col min-h-0 p-6 pt-4">
+                    <div className="space-y-2 flex-shrink-0">
+                      <Label htmlFor="fav-search">Search Movies & TV Shows *</Label>
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <Input
+                          id="fav-search"
+                          value={favSearchQuery}
+                          onChange={(e) => setFavSearchQuery(e.target.value)}
+                          required
+                          placeholder="Type a movie or TV show name..."
+                          autoComplete="off"
+                          className="h-14 text-base pl-12 pr-12"
+                        />
+                        {favSearchQuery && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 hover:bg-transparent"
+                            onClick={() => setFavSearchQuery('')}
+                          >
+                            <X className="w-5 h-5 text-muted-foreground" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto min-h-0 mt-4 -mx-6 px-6 border-t border-b border-border/50 bg-secondary/5">
+                      {favSearchQuery.length >= 2 &&
+                      (searchResults.length > 0 || searchLoading) ? (
+                        <div className="divide-y divide-border/50">
+                          {searchLoading ? (
+                            <div className="p-12 text-base text-muted-foreground text-center animate-pulse">
+                              Searching TMDB...
+                            </div>
+                          ) : (
+                            searchResults.map((result) => {
+                              const itemKey = `${result.media_type}-${result.id}`;
+                              return (
+                                <div
+                                  key={itemKey}
+                                  className="flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-[background-color] duration-200 -mx-6 px-6"
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    if (favAddedItems.has(itemKey)) return;
+                                    const posterUrl = result.poster_path
+                                      ? getPosterUrl(result.poster_path)
+                                      : null;
+                                    const displayTitle = result.title || result.name || '';
+                                    await addFavourite({
+                                      title: displayTitle,
+                                      poster: posterUrl || undefined,
+                                      media_type: result.media_type,
+                                      tmdb_id: result.id,
+                                    });
+                                    setFavAddedItems((prev) =>
+                                      new Set(prev).add(itemKey),
+                                    );
+                                  }}
+                                >
+                                  <div className="h-32 w-20 flex-shrink-0 bg-secondary rounded-md overflow-hidden shadow-md">
+                                    {result.poster_path ? (
+                                      <img
+                                        src={
+                                          getPosterUrl(result.poster_path) || ''
+                                        }
+                                        alt={result.title || result.name}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground p-2 text-center bg-muted">
+                                        No Poster
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col min-w-0 py-1 flex-1">
+                                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                                      <div className="flex items-baseline gap-2">
+                                        <span className="text-lg font-semibold truncate leading-tight tracking-tight">
+                                          {result.title || result.name}
+                                        </span>
+                                        <span className="text-sm text-muted-foreground whitespace-nowrap">
+                                          (
+                                          {result.release_date ||
+                                          result.first_air_date
+                                            ? new Date(
+                                                result.release_date ||
+                                                  result.first_air_date ||
+                                                  '',
+                                              ).getFullYear()
+                                            : 'N/A'}
+                                          )
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className={cn(
+                                          'text-[10px] px-2 py-0.5 rounded font-medium',
+                                          result.media_type === 'movie'
+                                            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                            : 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                                        )}>
+                                          {result.media_type === 'movie' ? 'Movie' : 'TV Show'}
+                                        </span>
+                                        {favAddedItems.has(itemKey) && (
+                                          <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
+                                            Added
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {result.overview && (
+                                      <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
+                                        {result.overview}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-12 text-center">
+                          {favSearchQuery.length < 2
+                            ? 'Start typing to see recommendations...'
+                            : 'No recommendations found'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+            {isAdmin && selectedCategory !== 'Favourites' && (
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="gap-1.5">
@@ -948,6 +1136,132 @@ const Watchlist = () => {
             addToSchedule={isAdmin ? addToSchedule : undefined}
             isInSchedule={isInSchedule}
           />
+        ) : selectedCategory === 'Favourites' ? (
+          <div className="px-4 md:px-0 py-6 space-y-8">
+            {loading ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+                {[...Array(12)].map((_, i) => (
+                  <Skeleton key={i} className="h-64 rounded-lg" />
+                ))}
+              </div>
+            ) : favourites.length === 0 ? (
+              <p className="text-center py-16 text-muted-foreground">
+                No favourites yet
+              </p>
+            ) : (
+              <>
+                {/* Movies Section */}
+                {favourites.filter((f) => f.media_type === 'movie').length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Film className="h-4 w-4 text-muted-foreground" />
+                      <DotMatrixText text="MOVIES" size="xs" />
+                      <span className="text-xs text-muted-foreground/60">
+                        ({favourites.filter((f) => f.media_type === 'movie').length})
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+                      {favourites
+                        .filter((f) => f.media_type === 'movie')
+                        .map((fav) => (
+                          <div key={fav.id} className="item-card group">
+                            <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+                              {fav.poster ? (
+                                <img
+                                  src={fav.poster}
+                                  alt={fav.title}
+                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-secondary/30">
+                                  <Heart className="h-8 w-8 text-muted-foreground/30" />
+                                </div>
+                              )}
+                              {isAdmin && (
+                                <div
+                                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Button
+                                    variant="secondary"
+                                    size="icon"
+                                    className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+                                    onClick={() => removeFavourite(fav.id)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-3">
+                              <h3 className="font-serif text-sm font-medium leading-tight">
+                                <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
+                              </h3>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* TV Shows Section */}
+                {favourites.filter((f) => f.media_type === 'tv').length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Tv className="h-4 w-4 text-muted-foreground" />
+                      <DotMatrixText text="TV SHOWS" size="xs" />
+                      <span className="text-xs text-muted-foreground/60">
+                        ({favourites.filter((f) => f.media_type === 'tv').length})
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+                      {favourites
+                        .filter((f) => f.media_type === 'tv')
+                        .map((fav) => (
+                          <div key={fav.id} className="item-card group">
+                            <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+                              {fav.poster ? (
+                                <img
+                                  src={fav.poster}
+                                  alt={fav.title}
+                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-secondary/30">
+                                  <Heart className="h-8 w-8 text-muted-foreground/30" />
+                                </div>
+                              )}
+                              {isAdmin && (
+                                <div
+                                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Button
+                                    variant="secondary"
+                                    size="icon"
+                                    className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+                                    onClick={() => removeFavourite(fav.id)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-3">
+                              <h3 className="font-serif text-sm font-medium leading-tight">
+                                <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
+                              </h3>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         ) : (
           <div className="px-4 md:px-0 py-6">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
