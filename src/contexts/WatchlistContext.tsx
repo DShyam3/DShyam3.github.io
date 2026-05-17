@@ -825,11 +825,14 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
                       // Skip seasons that have been announced but have no episodes yet
                       if (s.episode_count === 0) {
-                        // Check if we have this empty season locally and remove it
+                        // Only remove if the local season has no episodes and no watched data
                         const localEmptySeason = item.seasons?.find(
                           (ls) => ls.season_number === s.season_number,
                         );
-                        if (localEmptySeason) {
+                        if (
+                          localEmptySeason &&
+                          localEmptySeason.episodes.length === 0
+                        ) {
                           await (supabase.from('tv_show_seasons') as any)
                             .delete()
                             .eq('id', localEmptySeason.id);
@@ -893,6 +896,19 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                             );
 
                             if (validEpisodes.length > 0) {
+                              // Read existing watched states to preserve them during upsert
+                              const { data: existingEps } = await (
+                                supabase.from('tv_show_episodes') as any
+                              )
+                                .select('episode_number, watched')
+                                .eq('season_id', dbS.id);
+                              const watchedMap = new Map<number, boolean>(
+                                (existingEps || []).map((e: any) => [
+                                  e.episode_number,
+                                  e.watched ?? false,
+                                ]),
+                              );
+
                               const eps = validEpisodes.map((v: any) => {
                                 const ep: any = {
                                   season_id: dbS.id,
@@ -904,6 +920,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                 else if (data.episode_run_time?.[0])
                                   ep.runtime = data.episode_run_time[0];
                                 ep.release_date = v.air_date;
+                                // Preserve existing watched state
+                                ep.watched =
+                                  watchedMap.get(v.episode_number) ?? false;
                                 return ep;
                               });
                               const { error: upsertError } = await (
@@ -946,14 +965,38 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                 }
                               }
                             } else {
+                              // Only delete season if no local episodes have watched state
+                              const localS = item.seasons?.find(
+                                (ls) => ls.season_number === s.season_number,
+                              );
+                              const hasWatched = localS?.episodes.some(
+                                (ep) =>
+                                  watchedEpisodes.has(
+                                    `${item.id}-s${s.season_number}-e${ep.episode_number}`,
+                                  ),
+                              );
+                              if (!hasWatched) {
+                                await (supabase.from('tv_show_seasons') as any)
+                                  .delete()
+                                  .eq('id', dbS.id);
+                              }
+                            }
+                          } else {
+                            // Only delete season if no local episodes have watched state
+                            const localS = item.seasons?.find(
+                              (ls) => ls.season_number === s.season_number,
+                            );
+                            const hasWatched = localS?.episodes.some(
+                              (ep) =>
+                                watchedEpisodes.has(
+                                  `${item.id}-s${s.season_number}-e${ep.episode_number}`,
+                                ),
+                            );
+                            if (!hasWatched) {
                               await (supabase.from('tv_show_seasons') as any)
                                 .delete()
                                 .eq('id', dbS.id);
                             }
-                          } else {
-                            await (supabase.from('tv_show_seasons') as any)
-                              .delete()
-                              .eq('id', dbS.id);
                           }
                         }
                       } catch (e) {}
@@ -969,9 +1012,18 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                         ts.season_number === localSeason.season_number,
                     );
                     if (!existsInTmdb) {
-                      await (supabase.from('tv_show_seasons') as any)
-                        .delete()
-                        .eq('id', localSeason.id);
+                      // Don't delete seasons that have watched episodes
+                      const hasWatchedEps = localSeason.episodes.some(
+                        (ep) =>
+                          watchedEpisodes.has(
+                            `${item.id}-s${localSeason.season_number}-e${ep.episode_number}`,
+                          ),
+                      );
+                      if (!hasWatchedEps) {
+                        await (supabase.from('tv_show_seasons') as any)
+                          .delete()
+                          .eq('id', localSeason.id);
+                      }
                     }
                   }
                 }
