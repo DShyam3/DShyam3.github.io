@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { PrivacyDialog } from '@/components/shared/PrivacyDialog';
 import { DotMatrixClock } from '@/components/dot-matrix/DotMatrixClock';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -20,12 +19,10 @@ export function Footer() {
                     <DotMatrixClock />
                 </div>
                 <div className="flex items-center gap-4">
-                    <Link to="/auth" className="hover:opacity-70 transition-opacity">
-                        <DotMatrixText text="Admin" />
-                    </Link>
                     <DotMatrixText text="Designed by Dhyan Shyam" />
                 </div>
             </div>
         </footer>
     );
 }
+

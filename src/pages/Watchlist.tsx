@@ -306,7 +306,7 @@ const Watchlist = () => {
       result = result.filter((item) =>
         item.title.toLowerCase().includes(normalizedQuery),
       );
-    if (selectedCategory === 'TV Shows' && hideCompleted) {
+    if (selectedCategory === 'TV Shows' && hideCompleted && !normalizedQuery) {
       result = result.filter((item) => {
         const autoStatus = getAutoStatus(item);
         return autoStatus !== 'Completed' && autoStatus !== 'Watched';
