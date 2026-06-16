@@ -14,6 +14,7 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
 
   const allLinks = [
     { to: '/', label: 'About' },
+    { to: '/finance', label: 'Finance', requiresAuth: true },
     { to: '/travel', label: 'Travel' },
     { to: '/inventory', label: 'Inventory' },
     { to: '/links', label: 'Links' },

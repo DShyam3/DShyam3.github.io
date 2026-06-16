@@ -14,6 +14,7 @@ import { DotMatrixProvider } from './contexts/DotMatrixContext';
 
 // Lazy loaded pages for code splitting
 const Index = lazy(() => import('./pages/Index'));
+const Finance = lazy(() => import('./pages/Finance'));
 const Travel = lazy(() => import('./pages/Travel'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const Links = lazy(() => import('./pages/Links'));
@@ -73,6 +74,7 @@ const App = () => {
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
+                  <Route path="/finance" element={<Finance />} />
                   <Route path="/travel" element={<Travel />} />
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/links" element={<Links />} />
