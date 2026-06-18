@@ -1,4 +1,4 @@
-export type Category = 'tech-edc' | 'wardrobe' | 'kitchen' | 'home-decor' | 'hygiene' | 'sports-gear';
+export type Category = 'tech-edc' | 'homelab' | 'wardrobe' | 'kitchen' | 'home-decor' | 'hygiene' | 'sports-gear';
 
 export type WardrobeSubcategory =
   | 'accessories'
@@ -48,12 +48,25 @@ export const WARDROBE_SUBCATEGORIES: { key: WardrobeSubcategory; label: string }
   { key: 'suit-accessories', label: 'Suit Accessories' },
 ];
 
+export type HomeLabSubcategory =
+  | 'pc-specs'
+  | 'laptop-mac'
+  | 'networking'
+  | 'general-homelab';
+
+export const HOMELAB_SUBCATEGORIES: { key: HomeLabSubcategory; label: string }[] = [
+  { key: 'pc-specs', label: 'PC Specs' },
+  { key: 'laptop-mac', label: 'Laptop / Mac' },
+  { key: 'networking', label: 'Networking' },
+  { key: 'general-homelab', label: 'General HomeLab' },
+];
+
 export interface InventoryItem {
   id: string;
   name: string;
   brand: string;
   category: Category;
-  subcategory?: WardrobeSubcategory;
+  subcategory?: WardrobeSubcategory | HomeLabSubcategory;
   price: number;
   image: string;
   link?: string;

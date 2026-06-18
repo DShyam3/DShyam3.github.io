@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { InventoryItem, Category, WardrobeSubcategory, WARDROBE_SUBCATEGORIES } from '@/types/inventory';
+import { InventoryItem, Category, WardrobeSubcategory, WARDROBE_SUBCATEGORIES, HomeLabSubcategory, HOMELAB_SUBCATEGORIES } from '@/types/inventory';
 import { useSupabaseTable } from './useSupabaseTable';
 
 export function useInventory() {
@@ -50,7 +50,7 @@ export function useInventory() {
     if (updates.isNew !== undefined) dbUpdates.is_new = updates.isNew;
     if (updates.isWishlist !== undefined) dbUpdates.is_wishlist = updates.isWishlist;
 
-    if (updates.category && updates.category !== 'wardrobe') {
+    if (updates.category && updates.category !== 'wardrobe' && updates.category !== 'homelab') {
       dbUpdates.subcategory = null;
     }
 
@@ -69,11 +69,12 @@ export function useInventory() {
       );
     }
 
-    if (activeCategory === 'wardrobe') {
-      const subcategoryOrder = WARDROBE_SUBCATEGORIES.map(s => s.key);
+    if (activeCategory === 'wardrobe' || activeCategory === 'homelab') {
+      const subcategories = activeCategory === 'wardrobe' ? WARDROBE_SUBCATEGORIES : HOMELAB_SUBCATEGORIES;
+      const subcategoryOrder = subcategories.map(s => s.key);
       return [...filtered].sort((a, b) => {
-        const aIndex = a.subcategory ? subcategoryOrder.indexOf(a.subcategory) : 999;
-        const bIndex = b.subcategory ? subcategoryOrder.indexOf(b.subcategory) : 999;
+        const aIndex = a.subcategory ? subcategoryOrder.indexOf(a.subcategory as any) : 999;
+        const bIndex = b.subcategory ? subcategoryOrder.indexOf(b.subcategory as any) : 999;
         if (aIndex !== bIndex) return aIndex - bIndex;
         return a.name.localeCompare(b.name);
       });
@@ -90,6 +91,7 @@ export function useInventory() {
 
   const categories: { key: Category; label: string }[] = [
     { key: 'tech-edc', label: 'Tech + EDC' },
+    { key: 'homelab', label: 'HomeLab' },
     { key: 'wardrobe', label: 'Wardrobe' },
     { key: 'kitchen', label: 'Kitchen' },
     { key: 'home-decor', label: 'Home Decor' },

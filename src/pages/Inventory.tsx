@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { ArrowDownAZ, Clock } from "lucide-react";
 import { useMemo } from "react";
+import { WARDROBE_SUBCATEGORIES, HOMELAB_SUBCATEGORIES } from "@/types/inventory";
 
 const Inventory = () => {
   const { isAdmin } = useAuth();
@@ -106,7 +107,14 @@ const Inventory = () => {
             items={items}
             onRemove={isAdmin ? removeItem : undefined}
             onUpdate={isAdmin ? updateItem : undefined}
-            groupBySubcategory={activeCategory === "wardrobe"}
+            groupBySubcategory={activeCategory === "wardrobe" || activeCategory === "homelab"}
+            subcategoriesList={
+              activeCategory === "wardrobe"
+                ? WARDROBE_SUBCATEGORIES
+                : activeCategory === "homelab"
+                ? HOMELAB_SUBCATEGORIES
+                : undefined
+            }
           />
         </div>
 

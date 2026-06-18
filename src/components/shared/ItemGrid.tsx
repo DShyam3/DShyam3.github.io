@@ -11,6 +11,7 @@ interface ItemGridProps {
     updates: Partial<Omit<InventoryItem, 'id' | 'createdAt'>>,
   ) => void;
   groupBySubcategory?: boolean;
+  subcategoriesList?: { key: string; label: string }[];
 }
 
 export function ItemGrid({
@@ -18,17 +19,18 @@ export function ItemGrid({
   onRemove,
   onUpdate,
   groupBySubcategory = false,
+  subcategoriesList = WARDROBE_SUBCATEGORIES,
 }: ItemGridProps) {
   const ownedItems = useMemo(() => items.filter((i) => !i.isWishlist), [items]);
   const wishlistItems = useMemo(() => items.filter((i) => i.isWishlist), [items]);
 
   // Group items by subcategory when needed
   const groupedItems = useMemo(() => {
-    if (!groupBySubcategory) return null;
+    if (!groupBySubcategory || !subcategoriesList) return null;
 
     const groups: { key: string; label: string; items: InventoryItem[] }[] = [];
 
-    WARDROBE_SUBCATEGORIES.forEach((sub) => {
+    subcategoriesList.forEach((sub) => {
       const categoryItems = ownedItems.filter((item) => item.subcategory === sub.key);
       if (categoryItems.length > 0) {
         groups.push({
@@ -50,7 +52,7 @@ export function ItemGrid({
     }
 
     return groups;
-  }, [ownedItems, groupBySubcategory]);
+  }, [ownedItems, groupBySubcategory, subcategoriesList]);
 
   if (items.length === 0) {
     return (
