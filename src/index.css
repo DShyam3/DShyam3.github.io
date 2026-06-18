@@ -241,4 +241,23 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .holiday-scrollbar {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+
+  .holiday-scrollbar::-webkit-scrollbar {
+    width: 2px;
+  }
+
+  .holiday-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .holiday-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.35);
+    border-radius: 999px;
+  }
 }

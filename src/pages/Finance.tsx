@@ -572,7 +572,7 @@ const getNormalizedHolidays = (settings: FinanceSettings, holidayDefaults: any):
   return list;
 };
 
-const getBookedDaysForMonth = (holidays: UserHoliday[], year: number, monthIdx: number): { day: number; occasion: string }[] => {
+const getBookedDaysForMonth = (holidays: UserHoliday[], year: number, monthIdx: number, bankHolidays: string[]): { day: number; occasion: string }[] => {
   const booked: { day: number; occasion: string }[] = [];
   holidays.forEach(hol => {
     const start = new Date(hol.startDate);
@@ -582,10 +582,19 @@ const getBookedDaysForMonth = (holidays: UserHoliday[], year: number, monthIdx: 
     const current = new Date(start);
     while (current <= end) {
       if (current.getFullYear() === year && current.getMonth() === monthIdx) {
-        booked.push({
-          day: current.getDate(),
-          occasion: hol.occasion
-        });
+        const dayOfWeek = current.getDay();
+        const mm = String(current.getMonth() + 1).padStart(2, '0');
+        const dd = String(current.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${mm}-${dd}`;
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isBankHoliday = bankHolidays.includes(dateStr);
+        
+        if (!isWeekend && !isBankHoliday) {
+          booked.push({
+            day: current.getDate(),
+            occasion: hol.occasion
+          });
+        }
       }
       current.setDate(current.getDate() + 1);
     }
@@ -908,6 +917,7 @@ export default function Finance() {
   const [inlineStartDate, setInlineStartDate] = useState('');
   const [inlineEndDate, setInlineEndDate] = useState('');
   const [inlineCount, setInlineCount] = useState('1');
+  const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
 
   // Config settings form inputs (in settings dialog)
   const [grossInput, setGrossInput] = useState(formatNumberInput(settings.grossSalary));
@@ -1907,6 +1917,36 @@ export default function Finance() {
   // HANDLERS: HOLIDAY TRACKER (TAX & INCOME TAB)
   // ==========================================
 
+  const resetInlineHolidayForm = () => {
+    setInlineBookMonthIdx(null);
+    setEditingHolidayId(null);
+    setInlineOccasion('');
+    setInlineStartDate('');
+    setInlineEndDate('');
+    setInlineCount('1');
+  };
+
+  const handleStartEditHoliday = (holiday: UserHoliday, monthIdx: number) => {
+    setExpandedMonthIdx(monthIdx);
+    setInlineBookMonthIdx(monthIdx);
+    setEditingHolidayId(holiday.id);
+    setInlineOccasion(holiday.occasion);
+    setInlineStartDate(holiday.startDate);
+    setInlineEndDate(holiday.endDate);
+    setInlineCount(holiday.count.toString());
+  };
+
+  const handleStartNewHoliday = (monthIdx: number) => {
+    setInlineBookMonthIdx(monthIdx);
+    setEditingHolidayId(null);
+    setInlineOccasion('');
+    const year = settings.taxYear || new Date().getFullYear();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    setInlineStartDate(`${year}-${pad(monthIdx + 1)}-01`);
+    setInlineEndDate(`${year}-${pad(monthIdx + 1)}-01`);
+    setInlineCount('1');
+  };
+
   const handleSaveInlineHoliday = (monthIdx: number) => {
     const countVal = parseFloat(inlineCount);
     if (!inlineStartDate || !inlineEndDate) {
@@ -1920,15 +1960,17 @@ export default function Finance() {
     
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
     
-    const newHoliday: UserHoliday = {
-      id: 'hol_' + Date.now(),
+    const savedHoliday: UserHoliday = {
+      id: editingHolidayId || 'hol_' + Date.now(),
       startDate: inlineStartDate,
       endDate: inlineEndDate,
       occasion: inlineOccasion.trim() || 'Leave',
       count: countVal
     };
     
-    const updatedHolidaysList = [...normalizedHolidays, newHoliday];
+    const updatedHolidaysList = editingHolidayId
+      ? normalizedHolidays.map(holiday => holiday.id === editingHolidayId ? savedHoliday : holiday)
+      : [...normalizedHolidays, savedHoliday];
     
     const updatedSettings = {
       ...settings,
@@ -1938,8 +1980,11 @@ export default function Finance() {
     setSettings(updatedSettings);
     saveDataToSupabase('settings', updatedSettings);
     
-    setInlineBookMonthIdx(null);
-    toast({ title: 'Leave booked', description: `Successfully booked "${newHoliday.occasion}".` });
+    resetInlineHolidayForm();
+    toast({
+      title: editingHolidayId ? 'Leave updated' : 'Leave booked',
+      description: `${editingHolidayId ? 'Updated' : 'Successfully booked'} "${savedHoliday.occasion}".`
+    });
   };
 
   const handleDeleteHoliday = (holidayId: string) => {
@@ -1953,6 +1998,9 @@ export default function Finance() {
     
     setSettings(updatedSettings);
     saveDataToSupabase('settings', updatedSettings);
+    if (editingHolidayId === holidayId) {
+      resetInlineHolidayForm();
+    }
     toast({ title: 'Holiday deleted', description: 'Booked leave has been successfully removed.' });
   };
 
@@ -2652,26 +2700,12 @@ export default function Finance() {
               TAB 2: TAX & INCOME
               ========================================== */}
           {activeTab === 'tax-income' && (
-            <div className="space-y-6">
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
-                <div className="min-w-0">
-                  <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-primary shrink-0" /> Tax & Income
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {settings.ukRegion === 'england-and-wales' ? 'England & Wales' : settings.ukRegion === 'scotland' ? 'Scotland' : 'Northern Ireland'}
-                  </p>
-                </div>
-                <Button onClick={() => setIsSettingsOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-                  <Settings className="h-4 w-4" /> Settings
-                </Button>
-              </div>
+            <div>
               
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 
                 {/* Left Side: Payroll breakdown rate tables */}
-                <div className="lg:col-span-8 space-y-6">
+                <div className="lg:col-span-8 flex flex-col gap-4 lg:h-full">
                   
                   {/* Standard Rates Breakdown */}
                   <div className="bg-card/40 backdrop-blur-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 border border-primary/10 shadow-sm">
@@ -2816,46 +2850,24 @@ export default function Finance() {
                     </div>
                   </div>
 
-                </div>
-
-                {/* Right Side: Text-only circular Holiday Calendar & Borderless Leave Balances */}
-                <div className="lg:col-span-4 space-y-6">
-                  
-                  {/* Leave Balances Block (Borderless & outline-less) */}
-                  <div className="p-6 rounded-[2rem] bg-muted/20 space-y-4">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Leave Balances</h4>
-                    
-                    <div className="space-y-3 divide-y divide-border/20 text-xs">
-                      <div className="flex items-center justify-between text-left pb-1">
-                        <span className="font-semibold text-muted-foreground uppercase">Work Allowance</span>
-                        <div className="text-right">
-                          <span className="font-bold text-foreground font-mono">{settings.workHolidays}</span>
-                          <span className="text-[10px] text-muted-foreground ml-1">days</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-3 text-left pb-1">
-                        <span className="font-bold text-[#40a02b] dark:text-[#a6e3a1] uppercase">Work Leave Left</span>
-                        <div className="text-right">
-                          <span className="font-bold text-[#40a02b] dark:text-[#a6e3a1] font-mono text-sm">
-                            {settings.workHolidays - getHolidaysUsedCount()}
-                          </span>
-                          <span className="text-[10px] text-[#40a02b] dark:text-[#a6e3a1] ml-1">days</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-3 text-left">
-                        <span className="font-bold text-[#8839ef] dark:text-[#cba6f7] uppercase">Bank Holidays</span>
-                        <div className="text-right">
-                          <span className="font-bold text-[#8839ef] dark:text-[#cba6f7] font-mono">{settings.bankHolidays}</span>
-                          <span className="text-[10px] text-[#8839ef] dark:text-[#cba6f7] ml-1">days</span>
-                        </div>
-                      </div>
+                  <div className="flex flex-col gap-3 rounded-2xl border border-primary/10 bg-muted/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:flex-1">
+                    <div className="min-w-0">
+                      <p className="font-serif text-sm font-semibold text-foreground">Settings</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {settings.ukRegion === 'england-and-wales' ? 'England & Wales' : settings.ukRegion === 'scotland' ? 'Scotland' : 'Northern Ireland'} tax rules and income assumptions
+                      </p>
                     </div>
+                    <Button onClick={() => setIsSettingsOpen(true)} className="h-9 rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
+                      <Settings className="h-4 w-4" /> Settings
+                    </Button>
                   </div>
 
-                  {/* Holiday Tracker with Text-Only colored numbers */}
-                  <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4">
+                </div>
+
+                {/* Right Side: Combined leave balances and holiday tracker */}
+                <div className="lg:col-span-4">
+                  
+                  <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4 lg:h-full">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
                       <div className="min-w-0">
                         <h3 className="font-serif text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -2865,24 +2877,41 @@ export default function Finance() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-3 gap-2 border-b border-border/30 pb-4">
+                      <div className="rounded-xl bg-muted/20 px-2.5 py-2 text-left">
+                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Allowance</span>
+                        <span className="mt-1 block font-mono text-sm font-bold text-foreground">
+                          {settings.workHolidays}
+                          <span className="ml-1 text-[9px] font-normal text-muted-foreground">days</span>
+                        </span>
+                      </div>
+                      <div className="rounded-xl bg-[#40a02b]/10 px-2.5 py-2 text-left">
+                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#40a02b] dark:text-[#a6e3a1]">Left</span>
+                        <span className="mt-1 block font-mono text-sm font-bold text-[#40a02b] dark:text-[#a6e3a1]">
+                          {settings.workHolidays - getHolidaysUsedCount()}
+                          <span className="ml-1 text-[9px] font-normal">days</span>
+                        </span>
+                      </div>
+                      <div className="rounded-xl bg-[#8839ef]/10 px-2.5 py-2 text-left">
+                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#8839ef] dark:text-[#cba6f7]">Bank</span>
+                        <span className="mt-1 block font-mono text-sm font-bold text-[#8839ef] dark:text-[#cba6f7]">
+                          {settings.bankHolidays}
+                          <span className="ml-1 text-[9px] font-normal">days</span>
+                        </span>
+                      </div>
+                    </div>
+
                     <TooltipProvider delayDuration={150}>
-                      <div id="holiday-months-container" className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                      <div id="holiday-months-container" className="holiday-scrollbar space-y-4 max-h-[330px] overflow-y-auto pr-3 lg:max-h-[315px]">
                         {MONTH_NAMES.map((month, monthIdx) => {
                           const daysInMonth = getDaysInMonth(settings.taxYear, monthIdx);
                           const startDayOfWeek = getStartDayOfWeek(settings.taxYear, monthIdx);
                           
                           const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
-                          const bookedDaysForMonth = getBookedDaysForMonth(normalizedHolidays, settings.taxYear, monthIdx);
+                          const bookedDaysForMonth = getBookedDaysForMonth(normalizedHolidays, settings.taxYear, monthIdx, bankHolidaysList);
                           
                           // Sum up the working days (excl. weekends & bank holidays) booked in this specific month
-                          const monthWorkingDaysBooked = bookedDaysForMonth.filter(b => {
-                            const pad = (n: number) => n.toString().padStart(2, '0');
-                            const dateStr = `${settings.taxYear}-${pad(monthIdx + 1)}-${pad(b.day)}`;
-                            const isBH = bankHolidaysList.includes(dateStr);
-                            const dateObj = new Date(settings.taxYear, monthIdx, b.day);
-                            const isWE = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-                            return !isBH && !isWE;
-                          }).length;
+                          const monthWorkingDaysBooked = bookedDaysForMonth.length;
 
                           const isExpanded = expandedMonthIdx === monthIdx;
 
@@ -3025,18 +3054,32 @@ export default function Finance() {
                                                 {formatHolidayDates(hol.startDate, hol.endDate)} ({hol.count} {hol.count === 1 ? 'day' : 'days'})
                                               </span>
                                             </div>
-                                            <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteHoliday(hol.id);
-                                              }}
-                                              className="h-7 w-7 rounded-lg hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 shrink-0"
-                                              title="Delete holiday"
-                                            >
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleStartEditHoliday(hol, monthIdx);
+                                                }}
+                                                className="h-7 w-7 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-foreground"
+                                                title="Edit holiday"
+                                              >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                              </Button>
+                                              <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteHoliday(hol.id);
+                                                }}
+                                                className="h-7 w-7 rounded-lg hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500"
+                                                title="Delete holiday"
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </div>
                                           </div>
                                         ))}
                                       </div>
@@ -3053,7 +3096,9 @@ export default function Finance() {
                                       onClick={(e) => e.stopPropagation()} 
                                       className="bg-muted/40 border border-primary/10 rounded-xl p-3 space-y-3 text-left"
                                     >
-                                      <span className="text-[10px] font-semibold uppercase tracking-wider block text-primary">Book New Leave</span>
+                                      <span className="text-[10px] font-semibold uppercase tracking-wider block text-primary">
+                                        {editingHolidayId ? 'Edit Leave' : 'Book New Leave'}
+                                      </span>
                                       <div className="space-y-2">
                                         <div className="space-y-0.5">
                                           <Label className="text-[10px] text-muted-foreground">Occasion</Label>
@@ -3114,7 +3159,7 @@ export default function Finance() {
                                         <Button 
                                           variant="ghost" 
                                           size="sm" 
-                                          onClick={() => setInlineBookMonthIdx(null)}
+                                          onClick={resetInlineHolidayForm}
                                           className="h-7 px-2.5 rounded-lg text-[10px]"
                                         >
                                           Cancel
@@ -3124,7 +3169,7 @@ export default function Finance() {
                                           onClick={() => handleSaveInlineHoliday(monthIdx)}
                                           className="h-7 px-2.5 rounded-lg text-[10px] bg-primary text-primary-foreground"
                                         >
-                                          Save
+                                          {editingHolidayId ? 'Update' : 'Save'}
                                         </Button>
                                       </div>
                                     </div>
@@ -3134,13 +3179,7 @@ export default function Finance() {
                                       size="sm" 
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setInlineBookMonthIdx(monthIdx);
-                                        setInlineOccasion('');
-                                        const year = settings.taxYear || new Date().getFullYear();
-                                        const pad = (n: number) => n.toString().padStart(2, '0');
-                                        setInlineStartDate(`${year}-${pad(monthIdx + 1)}-01`);
-                                        setInlineEndDate(`${year}-${pad(monthIdx + 1)}-01`);
-                                        setInlineCount('1');
+                                        handleStartNewHoliday(monthIdx);
                                       }}
                                       className="w-full h-8 rounded-xl text-xs gap-1 border-dashed hover:bg-muted/50"
                                     >

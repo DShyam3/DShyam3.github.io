@@ -134,6 +134,42 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_data: {
+        Row: {
+          key: string
+          content: string | null
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          content?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      finance_defaults: {
+        Row: {
+          key: string
+          content: string | null
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          content?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inspirations: {
         Row: {
           category: string

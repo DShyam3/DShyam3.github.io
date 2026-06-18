@@ -38,6 +38,10 @@ The application uses Supabase Storage for media and documents:
 - **RLS**: Enable Row Level Security on all tables.
 - **Public Read**: Create a `SELECT` policy allowing public read access (`true` for all).
 - **Protected Write**: Create `INSERT`, `UPDATE`, `DELETE` policies restricting modifications to authenticated users only.
+- **Explicit API Exposure (Grants)**: Due to Supabase's table exposure security changes, new tables are not exposed to the Data/GraphQL API by default. For client queries (via `supabase-js`) to succeed:
+  - Grant appropriate permissions (e.g. `SELECT` for read-only tables) to the `anon` role.
+  - Grant full CRUD permissions (`SELECT, INSERT, UPDATE, DELETE`) to the `authenticated` and `service_role` roles.
+  - Grant `USAGE, SELECT` on sequences to all three roles to support identity/auto-increment columns.
 
 ## 5. Lean Codebase Strategy
 The following have been moved to Supabase to keep the repository lean:
