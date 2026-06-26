@@ -11,13 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { 
-  Settings, 
-  TrendingUp, 
-  DollarSign, 
-  Briefcase, 
-  Calendar, 
-  Percent, 
+import {
+  Settings,
+  TrendingUp,
+  DollarSign,
+  Briefcase,
+  Calendar,
+  Percent,
   Info,
   Edit2,
   Check,
@@ -26,6 +26,7 @@ import {
   Trash2,
   Plus,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CheckSquare,
   Square,
@@ -49,31 +50,36 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as UICalendar } from '@/components/ui/calendar';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
   DialogFooter
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  Legend, 
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   LineChart,
-  Line
+  Line,
+  BarChart,
+  Bar,
+  ReferenceLine
 } from 'recharts';
 
 // ==========================================
@@ -96,6 +102,9 @@ export interface FinanceSettings {
   ukRegion: 'england-and-wales' | 'scotland' | 'northern-ireland';
   holidaysByUser?: Record<number, { count: number; dates: string; occasion: string }> | UserHoliday[];
   payDayOfMonth?: number;
+  paydaySchedule?: 'monthly_date' | 'last_working_day' | 'last_friday' | 'biweekly' | 'weekly' | 'semimonthly';
+  paydayWeekday?: number;
+  paydayBiweeklyAnchor?: string;
 }
 
 export interface UserHoliday {
@@ -216,6 +225,13 @@ export interface RecurringTemplate {
   defaultAmount: number;
   frequency: 'monthly' | 'annually' | 'quarterly' | 'weekly';
   linkedBudgetItemId: string;
+  budgetCategoryName?: string;
+}
+
+interface CategoryPreset {
+  name: string;
+  emoji: string;
+  group: 'needs' | 'wants' | 'savings';
 }
 
 export interface CreditBureauConfig {
@@ -233,12 +249,12 @@ export interface CreditBureauConfig {
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
-  { key: 'tax-income', label: 'Tax & Income' },
   { key: 'budget', label: 'Budget' },
-  { key: 'cash-flow', label: 'Cash Flow' },
-  { key: 'goals', label: 'Goals' },
-  { key: 'accounts', label: 'Accounts' },
   { key: 'recurrings', label: 'Recurrings' },
+  { key: 'cash-flow', label: 'Cash Flow' },
+  { key: 'accounts', label: 'Accounts' },
+  { key: 'goals', label: 'Goals' },
+  { key: 'tax-income', label: 'Tax & Income' },
 ] as const;
 
 const MONTH_NAMES = [
@@ -247,13 +263,219 @@ const MONTH_NAMES = [
 ];
 
 const DEFAULT_GROUPS: Record<string, 'needs' | 'wants' | 'savings'> = {
+  home: 'needs',
   housing: 'needs',
   needs: 'needs',
-  subscriptions: 'wants',
+  food_drink: 'needs',
+  transportation: 'needs',
   insurance: 'needs',
+  utilities: 'needs',
+  rent: 'needs',
+  subscriptions: 'wants',
   video_ent: 'wants',
+  shopping: 'wants',
+  entertainment: 'wants',
+  pet: 'wants',
+  self_care: 'wants',
+  donations: 'wants',
+  travel: 'wants',
+  gifts: 'wants',
+  other: 'wants',
   wants: 'wants',
   savings: 'savings'
+};
+
+const DEFAULT_CATEGORY_PRESETS: CategoryPreset[] = [
+  { name: 'Bars & Nightlife', emoji: '🥃', group: 'wants' },
+  { name: 'Beauty', emoji: '💄', group: 'wants' },
+  { name: 'Car', emoji: '🚗', group: 'needs' },
+  { name: 'Children', emoji: '🚸', group: 'needs' },
+  { name: 'Clothing', emoji: '👕', group: 'wants' },
+  { name: 'Dance', emoji: '💃', group: 'wants' },
+  { name: 'Donations', emoji: '🤝', group: 'wants' },
+  { name: 'Education', emoji: '📘', group: 'needs' },
+  { name: 'Entertainment', emoji: '🎟️', group: 'wants' },
+  { name: 'Groceries', emoji: '🥑', group: 'needs' },
+  { name: 'Gym', emoji: '👟', group: 'wants' },
+  { name: 'Healthcare', emoji: '💊', group: 'needs' },
+  { name: 'Home', emoji: '🏠', group: 'needs' },
+  { name: 'Insurance', emoji: '☂️', group: 'needs' },
+  { name: 'Loans', emoji: '💰', group: 'needs' },
+  { name: 'Personal Care', emoji: '✂️', group: 'wants' },
+  { name: 'Pets', emoji: '🐶', group: 'wants' },
+  { name: 'Recreation', emoji: '🎫', group: 'wants' },
+  { name: 'Rent', emoji: '🔑', group: 'needs' },
+  { name: 'Restaurants', emoji: '🍔', group: 'wants' },
+  { name: 'Senior Care', emoji: '👵', group: 'needs' },
+  { name: 'Shops', emoji: '🛍️', group: 'wants' },
+  { name: 'Sports', emoji: '🚴', group: 'wants' },
+  { name: 'Subscriptions', emoji: '💳', group: 'wants' },
+  { name: 'Transportation', emoji: '🚌', group: 'needs' },
+  { name: 'Travel & Vacation', emoji: '🏖️', group: 'wants' },
+  { name: 'Utilities', emoji: '🔌', group: 'needs' },
+  { name: 'Work Expenses', emoji: '💼', group: 'needs' },
+  { name: 'Yoga & Pilates', emoji: '🧘', group: 'wants' },
+];
+
+const presetsToDefaultCategories = (presets: CategoryPreset[]): BudgetCategory[] =>
+  presets.map(preset => ({
+    id: `preset_${preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+    name: preset.name,
+    budgeted: 0,
+    group: preset.group,
+    items: [],
+    emoji: preset.emoji,
+  }));
+
+const createDefaultBudgetCategories = (): BudgetCategory[] => [
+  {
+    id: 'home',
+    name: 'Home',
+    budgeted: 0,
+    group: 'needs',
+    emoji: '🏠',
+    items: [
+      { id: 'item_rent', name: 'Rent', budgeted: 0, spent: 0 },
+      { id: 'item_phone', name: 'Phone', budgeted: 0, spent: 0 },
+      { id: 'item_electric', name: 'Electric Bill', budgeted: 0, spent: 0 },
+      { id: 'item_internet', name: 'Internet', budgeted: 0, spent: 0 },
+    ],
+  },
+  {
+    id: 'food_drink',
+    name: 'Food & Drink',
+    budgeted: 0,
+    group: 'needs',
+    emoji: '🌮',
+    items: [
+      { id: 'item_groceries', name: 'Groceries', budgeted: 0, spent: 0 },
+      { id: 'item_restaurants', name: 'Restaurants', budgeted: 0, spent: 0 },
+    ],
+  },
+  {
+    id: 'shopping',
+    name: 'Shopping',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '🛍️',
+    items: [],
+  },
+  {
+    id: 'entertainment',
+    name: 'Entertainment',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '🎬',
+    items: [],
+  },
+  {
+    id: 'transportation',
+    name: 'Transportation',
+    budgeted: 0,
+    group: 'needs',
+    emoji: '🚗',
+    items: [
+      { id: 'item_car_insurance', name: 'Car Insurance', budgeted: 0, spent: 0 },
+      { id: 'item_gas', name: 'Gas', budgeted: 0, spent: 0 },
+      { id: 'item_uber', name: 'Uber', budgeted: 0, spent: 0 },
+    ],
+  },
+  {
+    id: 'pet',
+    name: 'Pet',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '🐶',
+    items: [],
+  },
+  {
+    id: 'self_care',
+    name: 'Self Care',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '💛',
+    items: [
+      { id: 'item_personal_care', name: 'Personal Care', budgeted: 0, spent: 0 },
+      { id: 'item_gym', name: 'Gym', budgeted: 0, spent: 0 },
+    ],
+  },
+  {
+    id: 'subscriptions',
+    name: 'Subscriptions',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '💳',
+    items: [
+      { id: 'item_netflix', name: 'Netflix', budgeted: 0, spent: 0 },
+      { id: 'item_audible', name: 'Audible', budgeted: 0, spent: 0 },
+      { id: 'item_apple_tv', name: 'Apple TV+', budgeted: 0, spent: 0 },
+      { id: 'item_hulu', name: 'Hulu', budgeted: 0, spent: 0 },
+      { id: 'item_spotify', name: 'Spotify', budgeted: 0, spent: 0 },
+      { id: 'item_copilot', name: 'Copilot', budgeted: 0, spent: 0 },
+    ],
+  },
+  {
+    id: 'donations',
+    name: 'Donations',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '🤝',
+    items: [],
+  },
+  {
+    id: 'travel',
+    name: 'Travel',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '✈️',
+    items: [],
+  },
+  {
+    id: 'gifts',
+    name: 'Gifts',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '🎁',
+    items: [],
+  },
+  {
+    id: 'other',
+    name: 'Other',
+    budgeted: 0,
+    group: 'wants',
+    emoji: '🙋',
+    items: [],
+  },
+];
+
+const DEFAULT_BUDGET_CATEGORIES = createDefaultBudgetCategories();
+
+const DEFAULT_RECURRING_TEMPLATES: RecurringTemplate[] = [
+  { name: 'Rent', category: 'Rent', emoji: '🏠', tag: 'RENT', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_rent', budgetCategoryName: 'Home' },
+  { name: 'Phone Bill', category: 'Phone', emoji: '📱', tag: 'PHONE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_phone', budgetCategoryName: 'Home' },
+  { name: 'Electric Bill', category: 'Electric Bill', emoji: '💡', tag: 'ELECTRIC BILL', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_electric', budgetCategoryName: 'Home' },
+  { name: 'Internet', category: 'Internet', emoji: '📶', tag: 'INTERNET', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_internet', budgetCategoryName: 'Home' },
+  { name: 'Car Insurance', category: 'Car Insurance', emoji: '🚗', tag: 'CAR INSURANCE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_car_insurance', budgetCategoryName: 'Transportation' },
+  { name: 'Gym membership', category: 'Gym', emoji: '💪', tag: 'GYM', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_gym', budgetCategoryName: 'Self Care' },
+  { name: 'Netflix', category: 'Netflix', emoji: '🎬', tag: 'NETFLIX', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_netflix', budgetCategoryName: 'Subscriptions' },
+  { name: 'Spotify', category: 'Spotify', emoji: '🎵', tag: 'SPOTIFY', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_spotify', budgetCategoryName: 'Subscriptions' },
+  { name: 'Hulu', category: 'Hulu', emoji: '📺', tag: 'HULU', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_hulu', budgetCategoryName: 'Subscriptions' },
+  { name: 'Apple TV+', category: 'Apple TV+', emoji: '📺', tag: 'APPLE TV+', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_apple_tv', budgetCategoryName: 'Subscriptions' },
+  { name: 'Audible', category: 'Audible', emoji: '📚', tag: 'AUDIBLE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_audible', budgetCategoryName: 'Subscriptions' },
+  { name: 'Copilot', category: 'Copilot', emoji: '✨', tag: 'COPILOT', defaultAmount: 0, frequency: 'annually', linkedBudgetItemId: 'item_copilot', budgetCategoryName: 'Subscriptions' },
+  { name: 'ASPCA', category: 'Donations', emoji: '🐾', tag: 'DONATIONS', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: '', budgetCategoryName: 'Donations' },
+];
+
+const DEFAULT_CATEGORY_TEMPLATES = presetsToDefaultCategories(DEFAULT_CATEGORY_PRESETS);
+
+const resolveStoredList = <T,>(saved: string | null, fallback: T[]): T[] => {
+  if (!saved) return fallback;
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
 };
 
 // ==========================================
@@ -314,16 +536,27 @@ const formatReadableDate = (dateStr?: string) => {
 
 
 const getCategoryDefaultEmoji = (name: string): string => {
+  const preset = DEFAULT_CATEGORY_PRESETS.find(
+    p => p.name.toLowerCase() === name.toLowerCase()
+  );
+  if (preset) return preset.emoji;
+
   const lower = name.toLowerCase();
-  if (lower.includes('housing') || lower.includes('rent') || lower.includes('mortgage')) return '🏠';
+  if (lower.includes('housing') || lower.includes('rent') || lower.includes('mortgage') || lower.includes('home')) return '🏠';
   if (lower.includes('food') || lower.includes('grocery') || lower.includes('supermarket') || lower.includes('groceries')) return '🛒';
   if (lower.includes('dining') || lower.includes('restaurant') || lower.includes('eat') || lower.includes('cafe')) return '🍔';
-  if (lower.includes('transport') || lower.includes('car') || lower.includes('uber') || lower.includes('taxi') || lower.includes('fuel')) return '🚗';
-  if (lower.includes('utilities') || lower.includes('bills') || lower.includes('energy') || lower.includes('water') || lower.includes('electricity')) return '⚡';
+  if (lower.includes('transport') || lower.includes('car') || lower.includes('uber') || lower.includes('taxi') || lower.includes('fuel') || lower.includes('gas')) return '🚗';
+  if (lower.includes('utilities') || lower.includes('bills') || lower.includes('energy') || lower.includes('water') || lower.includes('electricity') || lower.includes('internet') || lower.includes('phone')) return '⚡';
   if (lower.includes('entertainment') || lower.includes('fun') || lower.includes('movie') || lower.includes('netflix') || lower.includes('game') || lower.includes('sub')) return '🎬';
   if (lower.includes('savings') || lower.includes('invest') || lower.includes('investing') || lower.includes('emergency')) return '💰';
-  if (lower.includes('shopping') || lower.includes('clothes')) return '🛍️';
-  if (lower.includes('health') || lower.includes('medical') || lower.includes('gym') || lower.includes('fitness')) return '❤️';
+  if (lower.includes('shopping') || lower.includes('clothes') || lower.includes('shop')) return '🛍️';
+  if (lower.includes('health') || lower.includes('medical') || lower.includes('gym') || lower.includes('fitness') || lower.includes('care')) return '❤️';
+  if (lower.includes('donation')) return '🤝';
+  if (lower.includes('travel') || lower.includes('vacation')) return '✈️';
+  if (lower.includes('gift')) return '🎁';
+  if (lower.includes('pet')) return '🐶';
+  if (lower.includes('insurance')) return '☂️';
+  if (lower.includes('loan')) return '💰';
   return '📂';
 };
 
@@ -404,9 +637,9 @@ const getBudgetItemSpent = (item: BudgetItem, bankAccounts: BankAccount[], recur
 const getOrdinal = (d: number) => {
   if (d > 3 && d < 21) return 'th';
   switch (d % 10) {
-    case 1:  return "st";
-    case 2:  return "nd";
-    case 3:  return "rd";
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
     default: return "th";
   }
 };
@@ -437,7 +670,7 @@ const isDueThisMonth = (bill: RecurringBill, currentMonth: number) => {
 };
 
 const getPlanName = (plan: FinanceSettings['studentLoanPlan']) => {
-  switch(plan) {
+  switch (plan) {
     case 'none': return 'None';
     case 'plan1': return 'Plan 1';
     case 'plan2': return 'Plan 2';
@@ -450,12 +683,12 @@ const getPlanName = (plan: FinanceSettings['studentLoanPlan']) => {
 const parseDays = (datesStr: string): number[] => {
   const days: number[] = [];
   if (!datesStr) return days;
-  
+
   const parts = datesStr.split(/[+,;]/);
   for (const part of parts) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    
+
     if (trimmed.includes('-')) {
       const rangeParts = trimmed.split('-');
       if (rangeParts.length === 2) {
@@ -483,7 +716,7 @@ const formatDaysList = (days: number[]): string => {
   const ranges: string[] = [];
   let start = sorted[0];
   let prev = sorted[0];
-  
+
   for (let i = 1; i <= sorted.length; i++) {
     const current = sorted[i];
     if (current === prev + 1) {
@@ -532,7 +765,7 @@ const getNormalizedHolidays = (settings: FinanceSettings, holidayDefaults: any):
   if (Array.isArray(hols)) {
     return hols;
   }
-  
+
   const list: UserHoliday[] = [];
   Object.entries(hols).forEach(([monthKey, val]: [string, any]) => {
     const monthIdx = parseInt(monthKey, 10);
@@ -554,11 +787,11 @@ const getNormalizedHolidays = (settings: FinanceSettings, holidayDefaults: any):
             endDay = single;
           }
         }
-        
+
         const year = settings.taxYear || new Date().getFullYear();
         const startStr = `${year}-${pad(monthIdx + 1)}-${pad(startDay)}`;
         const endStr = `${year}-${pad(monthIdx + 1)}-${pad(endDay)}`;
-        
+
         list.push({
           id: `legacy-${monthIdx}-${segIdx}-${Date.now()}`,
           startDate: startStr,
@@ -578,7 +811,7 @@ const getBookedDaysForMonth = (holidays: UserHoliday[], year: number, monthIdx: 
     const start = new Date(hol.startDate);
     const end = new Date(hol.endDate);
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
-    
+
     const current = new Date(start);
     while (current <= end) {
       if (current.getFullYear() === year && current.getMonth() === monthIdx) {
@@ -588,7 +821,7 @@ const getBookedDaysForMonth = (holidays: UserHoliday[], year: number, monthIdx: 
         const dateStr = `${year}-${mm}-${dd}`;
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         const isBankHoliday = bankHolidays.includes(dateStr);
-        
+
         if (!isWeekend && !isBankHoliday) {
           booked.push({
             day: current.getDate(),
@@ -607,7 +840,7 @@ const calculateWorkingDaysInRange = (startStr: string, endStr: string, bankHolid
   const start = new Date(startStr);
   const end = new Date(endStr);
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
-  
+
   let count = 0;
   const current = new Date(start);
   while (current <= end) {
@@ -616,10 +849,10 @@ const calculateWorkingDaysInRange = (startStr: string, endStr: string, bankHolid
     const mm = String(current.getMonth() + 1).padStart(2, '0');
     const dd = String(current.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
-    
+
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const isBankHoliday = bankHolidays.includes(dateStr);
-    
+
     if (!isWeekend && !isBankHoliday) {
       count++;
     }
@@ -632,10 +865,10 @@ const formatHolidayDates = (startStr: string, endStr: string): string => {
   const start = new Date(startStr);
   const end = new Date(endStr);
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
-  
+
   const optWithoutYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
   const optWithYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: '2-digit' };
-  
+
   if (startStr === endStr) {
     return start.toLocaleDateString('en-GB', optWithYear);
   }
@@ -649,17 +882,17 @@ const calculateActualPayday = (year: number, monthIndex: number, scheduledDay: n
   const maxDay = getDaysInMonth(year, monthIndex);
   const targetDay = Math.min(scheduledDay, maxDay);
   const date = new Date(year, monthIndex, targetDay);
-  
+
   let adjusted = false;
   let adjustReason: 'weekend' | 'bank_holiday' | null = null;
-  
+
   while (true) {
     const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
-    
+
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       adjusted = true;
       adjustReason = 'weekend';
@@ -672,7 +905,7 @@ const calculateActualPayday = (year: number, monthIndex: number, scheduledDay: n
       break;
     }
   }
-  
+
   return { date, adjusted, adjustReason };
 };
 
@@ -683,13 +916,13 @@ const Sparkline = ({ data }: { data: number[] }) => {
   const range = max - min || 1;
   const width = 100;
   const height = 30;
-  
+
   const points = data.map((val, idx) => {
     const x = (idx / (data.length - 1)) * width;
     const y = height - ((val - min) / range) * height;
     return `${x},${y}`;
   }).join(' ');
-  
+
   return (
     <svg className="w-24 h-8 text-primary overflow-visible" viewBox={`0 0 ${width} ${height}`}>
       <polyline
@@ -711,7 +944,7 @@ const Sparkline = ({ data }: { data: number[] }) => {
 export default function Finance() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
-  
+
   // Tab State with LocalStorage Persistence
   const [activeTab, setActiveTab] = useState<typeof TABS[number]['key']>(() => {
     const saved = localStorage.getItem('finance_active_tab');
@@ -721,7 +954,21 @@ export default function Finance() {
     }
     return 'dashboard';
   });
-  
+
+  // Cash flow period selector
+  const [cfPeriod, setCfPeriod] = useState<'ytd' | 'mtd' | 'last_12m' | 'last_3m' | 'last_4w' | 'custom'>('ytd');
+  const [cfPeriodOpen, setCfPeriodOpen] = useState(false);
+  const [cfCustomStart, setCfCustomStart] = useState<string>(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-01-01`;
+  });
+  const [cfCustomEnd, setCfCustomEnd] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [cfStartOpen, setCfStartOpen] = useState(false);
+  const [cfEndOpen, setCfEndOpen] = useState(false);
+
   // Store defaults from database
   const [databaseDefaults, setDatabaseDefaults] = useState<Record<string, any>>({});
 
@@ -773,7 +1020,7 @@ export default function Finance() {
 
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
     const saved = localStorage.getItem('finance_budget');
-    return sanitizeBudgetCategories(saved ? JSON.parse(saved) : []);
+    return sanitizeBudgetCategories(resolveStoredList(saved, DEFAULT_BUDGET_CATEGORIES));
   });
 
   const [mockTransactions, setMockTransactions] = useState<MockTransaction[]>(() => {
@@ -793,7 +1040,7 @@ export default function Finance() {
   });
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(() => {
     const saved = localStorage.getItem('finance_recurring_templates');
-    return saved ? JSON.parse(saved) : [];
+    return resolveStoredList(saved, DEFAULT_RECURRING_TEMPLATES);
   });
   const [creditBureaus, setCreditBureaus] = useState<CreditBureauConfig[]>(() => {
     const saved = localStorage.getItem('finance_credit_bureaus');
@@ -809,12 +1056,12 @@ export default function Finance() {
   });
   const [defaultBudgetCategories, setDefaultBudgetCategories] = useState<BudgetCategory[]>(() => {
     const saved = localStorage.getItem('finance_default_budget_categories');
-    return saved ? JSON.parse(saved) : [];
+    return resolveStoredList(saved, DEFAULT_CATEGORY_TEMPLATES);
   });
 
   const autoCategorizeRecurring = (name: string) => {
     const cleanName = name.trim().toLowerCase();
-    const match = recurringTemplates.find(t => 
+    const match = recurringTemplates.find(t =>
       cleanName.includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(cleanName)
     );
     return match || null;
@@ -850,6 +1097,7 @@ export default function Finance() {
   const [isAddMembershipOpen, setIsAddMembershipOpen] = useState(false);
   const [isEditMembershipOpen, setIsEditMembershipOpen] = useState(false);
   const [isAddRecurringOpen, setIsAddRecurringOpen] = useState(false);
+  const [addRecTemplate, setAddRecTemplate] = useState("scratch");
   const [isEditRecurringOpen, setIsEditRecurringOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
@@ -870,8 +1118,21 @@ export default function Finance() {
       setDraftRecurringTemplates(recurringTemplates);
       setDraftCreditBureaus(creditBureaus);
       setExpandedSection('none');
+      setGrossInput(formatNumberInput(settings.grossSalary));
+      setPersonalPensionInput(settings.personalPensionPercent.toString());
+      setEmployerPensionInput(settings.employerPensionPercent.toString());
+      setTaxCodeInput(settings.taxCode);
+      setAllowanceInput(formatNumberInput(settings.personalAllowance));
+      setWeekendsInput(settings.weekends.toString());
+      setBankHolsInput(settings.bankHolidays.toString());
+      setWorkHolsInput(settings.workHolidays.toString());
+      setHoursInput(settings.workingHoursPerDay.toString());
+      setPayDayInput((settings.payDayOfMonth || 25).toString());
+      setPaydaySchedule(settings.paydaySchedule || 'monthly_date');
+      setPaydayWeekday(settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
+      setPaydayBiweeklyAnchor(settings.paydayBiweeklyAnchor || '2026-01-02');
     }
-  }, [isSettingsOpen, taxConfig, recurringTemplates, creditBureaus]);
+  }, [isSettingsOpen, taxConfig, recurringTemplates, creditBureaus, settings]);
   const [includeWorkLeaveInActual, setIncludeWorkLeaveInActual] = useState(true);
   const [newCreditScore, setNewCreditScore] = useState<{ bureau: 'experian' | 'transunion' | 'equifax'; score: number; date: string }>({ bureau: 'experian', score: 700, date: new Date().toISOString().split('T')[0] });
 
@@ -887,18 +1148,18 @@ export default function Finance() {
   const [newMembership, setNewMembership] = useState<Omit<Membership, 'id'>>({ name: '', type: 'points', status: 'Active', annualFee: 0, useCase: '' });
 
   const [activeRecurring, setActiveRecurring] = useState<RecurringBill | null>(null);
-  const [newRecurring, setNewRecurring] = useState<Omit<RecurringBill, 'id'>>({ 
-    name: '', 
-    amount: 0, 
-    dueDate: 15, 
-    isPaid: false, 
-    frequency: 'monthly', 
-    dueMonth: new Date().getMonth() + 1, 
-    emoji: '', 
-    category: '', 
-    tag: '', 
-    linkedBudgetItemId: '', 
-    linkedAccountId: '' 
+  const [newRecurring, setNewRecurring] = useState<Omit<RecurringBill, 'id'>>({
+    name: '',
+    amount: 0,
+    dueDate: 15,
+    isPaid: false,
+    frequency: 'monthly',
+    dueMonth: new Date().getMonth() + 1,
+    emoji: '',
+    category: '',
+    tag: '',
+    linkedBudgetItemId: '',
+    linkedAccountId: ''
   });
 
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -911,13 +1172,15 @@ export default function Finance() {
   const [activeBudgetItem, setActiveBudgetItem] = useState<{ id: string, name: string, budgeted: number, spent: number, categoryId: string, linkedAccountId?: string } | null>(null);
 
   // Holiday Tracker State (Tax & Income tab)
-  const [expandedMonthIdx, setExpandedMonthIdx] = useState<number | null>(new Date().getMonth());
+  const [expandedMonthIdx, setExpandedMonthIdx] = useState<number | null>(null);
   const [inlineBookMonthIdx, setInlineBookMonthIdx] = useState<number | null>(null);
   const [inlineOccasion, setInlineOccasion] = useState('');
   const [inlineStartDate, setInlineStartDate] = useState('');
   const [inlineEndDate, setInlineEndDate] = useState('');
   const [inlineCount, setInlineCount] = useState('1');
   const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+  const [thisMonthCollapsed, setThisMonthCollapsed] = useState(false);
+  const [futureCollapsed, setFutureCollapsed] = useState(false);
 
   // Config settings form inputs (in settings dialog)
   const [grossInput, setGrossInput] = useState(formatNumberInput(settings.grossSalary));
@@ -930,6 +1193,9 @@ export default function Finance() {
   const [workHolsInput, setWorkHolsInput] = useState(settings.workHolidays.toString());
   const [hoursInput, setHoursInput] = useState(settings.workingHoursPerDay.toString());
   const [payDayInput, setPayDayInput] = useState(settings.payDayOfMonth?.toString() || '25');
+  const [paydaySchedule, setPaydaySchedule] = useState<FinanceSettings['paydaySchedule']>(() => settings.paydaySchedule || 'monthly_date');
+  const [paydayWeekday, setPaydayWeekday] = useState<number>(() => settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
+  const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(() => settings.paydayBiweeklyAnchor || '2026-01-02');
 
   // ==========================================
   // SYNC & FETCH EFFECT
@@ -987,12 +1253,15 @@ export default function Finance() {
         // Populate settings
         const loadedSettings = getValue('settings');
         if (loadedSettings) {
-          setSettings(prev => ({ 
-            ...prev, 
+          setSettings(prev => ({
+            ...prev,
             ...loadedSettings,
-            holidaysByUser: loadedSettings.holidaysByUser || prev.holidaysByUser 
+            holidaysByUser: loadedSettings.holidaysByUser || prev.holidaysByUser
           }));
           setPayDayInput((loadedSettings.payDayOfMonth || 25).toString());
+          setPaydaySchedule(loadedSettings.paydaySchedule || 'monthly_date');
+          setPaydayWeekday(loadedSettings.paydayWeekday !== undefined ? loadedSettings.paydayWeekday : 5);
+          setPaydayBiweeklyAnchor(loadedSettings.paydayBiweeklyAnchor || '2026-01-02');
         }
 
         // Populate goals
@@ -1012,8 +1281,10 @@ export default function Finance() {
 
         // Populate budget
         const loadedBudget = getValue('budget');
-        if (loadedBudget) {
+        if (loadedBudget && loadedBudget.length > 0) {
           setBudgetCategories(sanitizeBudgetCategories(loadedBudget));
+        } else {
+          setBudgetCategories(prev => prev.length > 0 ? prev : sanitizeBudgetCategories(DEFAULT_BUDGET_CATEGORIES));
         }
 
         // Populate recurrings
@@ -1036,8 +1307,10 @@ export default function Finance() {
 
         // Populate recurringTemplates
         const loadedTemplates = getValue('recurring_templates');
-        if (loadedTemplates) {
+        if (loadedTemplates && loadedTemplates.length > 0) {
           setRecurringTemplates(loadedTemplates);
+        } else {
+          setRecurringTemplates(prev => prev.length > 0 ? prev : DEFAULT_RECURRING_TEMPLATES);
         }
 
         // Populate creditBureaus
@@ -1054,11 +1327,11 @@ export default function Finance() {
 
         // Populate defaultBudgetCategories
         const loadedDefaultBudgetCategories = getValue('default_budget_categories');
-        if (loadedDefaultBudgetCategories) {
+        if (loadedDefaultBudgetCategories && loadedDefaultBudgetCategories.length > 0) {
           setDefaultBudgetCategories(loadedDefaultBudgetCategories);
+        } else {
+          setDefaultBudgetCategories(prev => prev.length > 0 ? prev : DEFAULT_CATEGORY_TEMPLATES);
         }
-        
-        toast({ title: 'Synced with cloud', description: 'Finance dashboard loaded from Supabase.' });
       } catch (err) {
         console.error('Error fetching settings from Supabase:', err);
       } finally {
@@ -1077,17 +1350,17 @@ export default function Finance() {
         const res = await fetch('https://www.gov.uk/bank-holidays.json');
         if (!res.ok) throw new Error('Failed to fetch holidays');
         const data = await res.json();
-        
+
         const region = settings.ukRegion || 'england-and-wales';
         const events = (data[region]?.events || []) as any[];
-        
+
         const yearStr = settings.taxYear.toString();
         const holsInYear = events
           .filter((e) => e.date.startsWith(yearStr))
           .map((e) => e.date);
-        
+
         setBankHolidaysList(holsInYear);
-        
+
         const holsMap: Record<string, string> = {};
         events.forEach((e) => {
           if (e.date.startsWith(yearStr)) {
@@ -1095,7 +1368,7 @@ export default function Finance() {
           }
         });
         setBankHolidaysMap(holsMap);
-        
+
         const calculatedWeekends = calculateWeekends(settings.taxYear);
         const calculatedHolidays = holsInYear.length;
 
@@ -1130,7 +1403,7 @@ export default function Finance() {
     setBankHolsInput(settings.bankHolidays.toString());
     setWorkHolsInput(settings.workHolidays.toString());
     setHoursInput(settings.workingHoursPerDay.toString());
-    
+
     localStorage.setItem('finance_settings', JSON.stringify(settings));
   }, [settings]);
 
@@ -1246,7 +1519,7 @@ export default function Finance() {
     if (incomeTaxGross > personalAllowance) {
       const taxableAmount = incomeTaxGross - personalAllowance;
       const { basicRateLimit, higherRateLimit, basicRatePercent, higherRatePercent, additionalRatePercent } = taxConfig.incomeTaxBands;
-      
+
       if (incomeTaxGross <= higherRateLimit) {
         const basicRateAmount = Math.min(taxableAmount, basicRateLimit);
         const higherRateAmount = Math.max(0, taxableAmount - basicRateAmount);
@@ -1321,44 +1594,217 @@ export default function Finance() {
   const breakdownRates = includeWorkLeaveInActual ? results.breakdown.includingLeave : results.breakdown.excludingLeave;
   const breakdownWorkingDays = includeWorkLeaveInActual ? results.workingDaysIncludingLeave : results.workingDaysExcludingLeave;
 
+  // Calculate remaining bank holidays
+  const getBankHolidaysLeft = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return bankHolidaysList.filter(dateStr => {
+      const bhDate = new Date(dateStr);
+      bhDate.setHours(0, 0, 0, 0);
+      return bhDate.getTime() >= today.getTime();
+    }).length;
+  };
+
+  const bankHolidaysLeft = getBankHolidaysLeft();
+
   // Calculate next payday details
   const getNextPaydayDetails = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    const schedule = settings.paydaySchedule || 'monthly_date';
     const scheduledPayday = settings.payDayOfMonth || 25;
-    
-    let targetYear = today.getFullYear();
-    let targetMonthIdx = today.getMonth();
-    
-    let paydayInfo = calculateActualPayday(
-      targetYear,
-      targetMonthIdx,
-      scheduledPayday,
-      bankHolidaysList
-    );
-    
-    const paydayDate = new Date(paydayInfo.date);
-    paydayDate.setHours(0, 0, 0, 0);
-    
-    if (paydayDate.getTime() < today.getTime()) {
-      targetMonthIdx += 1;
-      if (targetMonthIdx > 11) {
-        targetMonthIdx = 0;
-        targetYear += 1;
+    const weekday = settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5; // default Friday
+    const anchorStr = settings.paydayBiweeklyAnchor || '2026-01-02';
+
+    let paydayDate = new Date();
+    let adjusted = false;
+    let adjustReason: 'weekend' | 'bank_holiday' | null = null;
+
+    const adjustIfWeekendOrHoliday = (date: Date): { date: Date; adjusted: boolean; adjustReason: 'weekend' | 'bank_holiday' | null } => {
+      let isAdj = false;
+      let reason: 'weekend' | 'bank_holiday' | null = null;
+      const d = new Date(date);
+      while (true) {
+        const dayOfWeek = d.getDay();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          isAdj = true;
+          reason = 'weekend';
+          d.setDate(d.getDate() - 1);
+        } else if (bankHolidaysList.includes(dateStr)) {
+          isAdj = true;
+          reason = 'bank_holiday';
+          d.setDate(d.getDate() - 1);
+        } else {
+          break;
+        }
       }
-      paydayInfo = calculateActualPayday(
-        targetYear,
-        targetMonthIdx,
-        scheduledPayday,
-        bankHolidaysList
-      );
+      return { date: d, adjusted: isAdj, adjustReason: reason };
+    };
+
+    if (schedule === 'monthly_date') {
+      let targetYear = today.getFullYear();
+      let targetMonthIdx = today.getMonth();
+
+      let res = calculateActualPayday(targetYear, targetMonthIdx, scheduledPayday, bankHolidaysList);
+      const resDate = new Date(res.date);
+      resDate.setHours(0, 0, 0, 0);
+
+      if (resDate.getTime() < today.getTime()) {
+        targetMonthIdx += 1;
+        if (targetMonthIdx > 11) {
+          targetMonthIdx = 0;
+          targetYear += 1;
+        }
+        res = calculateActualPayday(targetYear, targetMonthIdx, scheduledPayday, bankHolidaysList);
+      }
+      paydayDate = res.date;
+      adjusted = res.adjusted;
+      adjustReason = res.adjustReason;
+
+    } else if (schedule === 'last_working_day') {
+      let targetYear = today.getFullYear();
+      let targetMonthIdx = today.getMonth();
+
+      const targetDateOfLastDay = new Date(targetYear, targetMonthIdx + 1, 0);
+      let res = adjustIfWeekendOrHoliday(targetDateOfLastDay);
+      res.date.setHours(0, 0, 0, 0);
+
+      if (res.date.getTime() < today.getTime()) {
+        targetMonthIdx += 1;
+        if (targetMonthIdx > 11) {
+          targetMonthIdx = 0;
+          targetYear += 1;
+        }
+        const nextMonthLastDay = new Date(targetYear, targetMonthIdx + 1, 0);
+        res = adjustIfWeekendOrHoliday(nextMonthLastDay);
+      }
+      paydayDate = res.date;
+      adjusted = res.adjusted;
+      adjustReason = res.adjustReason;
+
+    } else if (schedule === 'last_friday') {
+      let targetYear = today.getFullYear();
+      let targetMonthIdx = today.getMonth();
+
+      const getLastFridayOfMonth = (year: number, monthIdx: number): Date => {
+        const d = new Date(year, monthIdx + 1, 0);
+        while (d.getDay() !== 5) {
+          d.setDate(d.getDate() - 1);
+        }
+        return d;
+      };
+
+      const lastFri = getLastFridayOfMonth(targetYear, targetMonthIdx);
+      let res = adjustIfWeekendOrHoliday(lastFri);
+      res.date.setHours(0, 0, 0, 0);
+
+      if (res.date.getTime() < today.getTime()) {
+        targetMonthIdx += 1;
+        if (targetMonthIdx > 11) {
+          targetMonthIdx = 0;
+          targetYear += 1;
+        }
+        const nextMonthLastFri = getLastFridayOfMonth(targetYear, targetMonthIdx);
+        res = adjustIfWeekendOrHoliday(nextMonthLastFri);
+      }
+      paydayDate = res.date;
+      adjusted = res.adjusted;
+      adjustReason = res.adjustReason;
+
+    } else if (schedule === 'biweekly') {
+      const anchor = new Date(anchorStr);
+      anchor.setHours(0, 0, 0, 0);
+      const diffTime = today.getTime() - anchor.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      let candidate = new Date(anchor);
+      if (diffDays >= 0) {
+        const biweeks = Math.floor(diffDays / 14);
+        candidate.setDate(candidate.getDate() + (biweeks * 14));
+
+        let res = adjustIfWeekendOrHoliday(candidate);
+        res.date.setHours(0, 0, 0, 0);
+
+        if (res.date.getTime() < today.getTime()) {
+          candidate = new Date(candidate);
+          candidate.setDate(candidate.getDate() + 14);
+          res = adjustIfWeekendOrHoliday(candidate);
+        }
+        paydayDate = res.date;
+        adjusted = res.adjusted;
+        adjustReason = res.adjustReason;
+      } else {
+        const res = adjustIfWeekendOrHoliday(anchor);
+        paydayDate = res.date;
+        adjusted = res.adjusted;
+        adjustReason = res.adjustReason;
+      }
+
+    } else if (schedule === 'weekly') {
+      const daysToAdd = (weekday - today.getDay() + 7) % 7;
+      let candidate = new Date(today);
+      candidate.setDate(candidate.getDate() + daysToAdd);
+
+      let res = adjustIfWeekendOrHoliday(candidate);
+      res.date.setHours(0, 0, 0, 0);
+
+      if (res.date.getTime() < today.getTime()) {
+        candidate = new Date(candidate);
+        candidate.setDate(candidate.getDate() + 7);
+        res = adjustIfWeekendOrHoliday(candidate);
+      }
+      paydayDate = res.date;
+      adjusted = res.adjusted;
+      adjustReason = res.adjustReason;
+
+    } else if (schedule === 'semimonthly') {
+      let targetYear = today.getFullYear();
+      let targetMonthIdx = today.getMonth();
+
+      const getSemimonthlyDates = (year: number, monthIdx: number) => {
+        const d15 = new Date(year, monthIdx, 15);
+        const res15 = adjustIfWeekendOrHoliday(d15);
+        res15.date.setHours(0, 0, 0, 0);
+
+        const dLast = new Date(year, monthIdx + 1, 0);
+        const resLast = adjustIfWeekendOrHoliday(dLast);
+        resLast.date.setHours(0, 0, 0, 0);
+
+        return [res15, resLast];
+      };
+
+      let candidates = getSemimonthlyDates(targetYear, targetMonthIdx);
+      let found = candidates.find(c => c.date.getTime() >= today.getTime());
+
+      if (!found) {
+        targetMonthIdx += 1;
+        if (targetMonthIdx > 11) {
+          targetMonthIdx = 0;
+          targetYear += 1;
+        }
+        candidates = getSemimonthlyDates(targetYear, targetMonthIdx);
+        found = candidates[0];
+      }
+
+      paydayDate = found.date;
+      adjusted = found.adjusted;
+      adjustReason = found.adjustReason;
     }
-    
-    const timeDiff = paydayInfo.date.getTime() - today.getTime();
+
+    paydayDate.setHours(0, 0, 0, 0);
+    const timeDiff = paydayDate.getTime() - today.getTime();
     const daysRemaining = Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
-    
+
     return {
-      ...paydayInfo,
+      date: paydayDate,
+      adjusted,
+      adjustReason,
       daysRemaining
     };
   };
@@ -1626,13 +2072,27 @@ export default function Finance() {
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
+
+    const normalizedName = newCategoryName.trim();
+    const alreadyExists = budgetCategories.some(
+      cat => cat.name.toLowerCase() === normalizedName.toLowerCase()
+    );
+    if (alreadyExists) {
+      toast({ title: 'Category Exists', description: `"${normalizedName}" is already in your budget.`, variant: 'destructive' });
+      return;
+    }
+
+    const preset = DEFAULT_CATEGORY_PRESETS.find(
+      p => p.name.toLowerCase() === normalizedName.toLowerCase()
+    );
+
     const created: BudgetCategory = {
       id: 'cat_' + Date.now(),
-      name: newCategoryName.trim(),
+      name: normalizedName,
       budgeted: newCategoryBudget,
-      group: newCategoryGroup,
+      group: newCategoryGroup || preset?.group || 'needs',
       items: [],
-      emoji: newCategoryEmoji.trim() || getCategoryDefaultEmoji(newCategoryName)
+      emoji: newCategoryEmoji.trim() || preset?.emoji || getCategoryDefaultEmoji(normalizedName)
     };
     const updated = [...budgetCategories, created];
     setBudgetCategories(updated);
@@ -1752,15 +2212,18 @@ export default function Finance() {
 
     let updatedBudget = [...budgetCategories];
     let finalLinkedBudgetItemId = newRecurring.linkedBudgetItemId;
-    
+
     const template = autoCategorizeRecurring(newRecurring.name);
     const resolvedEmoji = newRecurring.emoji || template?.emoji || '💸';
     const resolvedCategory = newRecurring.category || template?.category || 'Subscriptions';
     const resolvedTag = newRecurring.tag || template?.tag || newRecurring.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
     if (finalLinkedBudgetItemId === 'create' || (!finalLinkedBudgetItemId && newRecurring.name)) {
-      const targetCatId = template?.budgetCategoryName?.toLowerCase() || 'subscriptions';
-      const targetCat = updatedBudget.find(c => c.id === targetCatId || c.name.toLowerCase() === targetCatId);
+      const targetCatName = template?.budgetCategoryName || template?.category || 'Subscriptions';
+      const targetCatId = targetCatName.toLowerCase();
+      const targetCat = updatedBudget.find(
+        c => c.id === targetCatId || c.name.toLowerCase() === targetCatId
+      );
       if (targetCat) {
         const existingItem = targetCat.items.find(i => i.name.toLowerCase() === newRecurring.name.toLowerCase());
         if (existingItem) {
@@ -1800,18 +2263,18 @@ export default function Finance() {
     setRecurrings(updated);
     saveDataToSupabase('recurrings', updated);
     setIsAddRecurringOpen(false);
-    setNewRecurring({ 
-      name: '', 
-      amount: 0, 
-      dueDate: 15, 
-      isPaid: false, 
-      frequency: 'monthly', 
-      dueMonth: new Date().getMonth() + 1, 
-      emoji: '', 
-      category: '', 
-      tag: '', 
-      linkedBudgetItemId: '', 
-      linkedAccountId: '' 
+    setNewRecurring({
+      name: '',
+      amount: 0,
+      dueDate: 15,
+      isPaid: false,
+      frequency: 'monthly',
+      dueMonth: new Date().getMonth() + 1,
+      emoji: '',
+      category: '',
+      tag: '',
+      linkedBudgetItemId: '',
+      linkedAccountId: ''
     });
     toast({ title: 'Recurring Added', description: `Successfully added recurring bill "${created.name}".` });
   };
@@ -1819,20 +2282,20 @@ export default function Finance() {
   const handleEditRecurring = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeRecurring) return;
-    
+
     // Balance reconciliation if amount or linked account changed
     let updatedAccounts = [...bankAccounts];
     const oldBill = recurrings.find(r => r.id === activeRecurring.id);
     if (oldBill && oldBill.isPaid) {
       // Revert old payment
       if (oldBill.linkedAccountId) {
-        updatedAccounts = updatedAccounts.map(acc => 
+        updatedAccounts = updatedAccounts.map(acc =>
           acc.id === oldBill.linkedAccountId ? { ...acc, balance: acc.balance + oldBill.amount } : acc
         );
       }
       // Apply new payment
       if (activeRecurring.linkedAccountId && activeRecurring.isPaid) {
-        updatedAccounts = updatedAccounts.map(acc => 
+        updatedAccounts = updatedAccounts.map(acc =>
           acc.id === activeRecurring.linkedAccountId ? { ...acc, balance: acc.balance - activeRecurring.amount } : acc
         );
       }
@@ -1957,9 +2420,9 @@ export default function Finance() {
       toast({ title: 'Invalid Days Count', description: 'Leave days count must be a non-negative number.', variant: 'destructive' });
       return;
     }
-    
+
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
-    
+
     const savedHoliday: UserHoliday = {
       id: editingHolidayId || 'hol_' + Date.now(),
       startDate: inlineStartDate,
@@ -1967,19 +2430,19 @@ export default function Finance() {
       occasion: inlineOccasion.trim() || 'Leave',
       count: countVal
     };
-    
+
     const updatedHolidaysList = editingHolidayId
       ? normalizedHolidays.map(holiday => holiday.id === editingHolidayId ? savedHoliday : holiday)
       : [...normalizedHolidays, savedHoliday];
-    
+
     const updatedSettings = {
       ...settings,
       holidaysByUser: updatedHolidaysList
     };
-    
+
     setSettings(updatedSettings);
     saveDataToSupabase('settings', updatedSettings);
-    
+
     resetInlineHolidayForm();
     toast({
       title: editingHolidayId ? 'Leave updated' : 'Leave booked',
@@ -1990,12 +2453,12 @@ export default function Finance() {
   const handleDeleteHoliday = (holidayId: string) => {
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
     const updatedHolidaysList = normalizedHolidays.filter(h => h.id !== holidayId);
-    
+
     const updatedSettings = {
       ...settings,
       holidaysByUser: updatedHolidaysList
     };
-    
+
     setSettings(updatedSettings);
     saveDataToSupabase('settings', updatedSettings);
     if (editingHolidayId === holidayId) {
@@ -2045,9 +2508,21 @@ export default function Finance() {
       return;
     }
 
-    const newPayDay = parseInt(payDayInput, 10);
-    if (isNaN(newPayDay) || newPayDay < 1 || newPayDay > 31) {
-      toast({ title: 'Invalid Payday', description: 'Pay day of month must be between 1 and 31.', variant: 'destructive' });
+    let newPayDay = parseInt(payDayInput, 10);
+    if (paydaySchedule === 'monthly_date') {
+      if (isNaN(newPayDay) || newPayDay < 1 || newPayDay > 31) {
+        toast({ title: 'Invalid Payday', description: 'Pay day of month must be between 1 and 31.', variant: 'destructive' });
+        return;
+      }
+    } else {
+      if (isNaN(newPayDay) || newPayDay < 1 || newPayDay > 31) {
+        newPayDay = 25; // default fallback
+      }
+    }
+
+    // Additional biweekly anchor validation
+    if (paydaySchedule === 'biweekly' && !paydayBiweeklyAnchor) {
+      toast({ title: 'Invalid Anchor Date', description: 'Please select a reference anchor date for the bi-weekly schedule.', variant: 'destructive' });
       return;
     }
 
@@ -2063,13 +2538,16 @@ export default function Finance() {
       workHolidays: newWorkHols,
       workingHoursPerDay: newHours,
       payDayOfMonth: newPayDay,
+      paydaySchedule,
+      paydayWeekday,
+      paydayBiweeklyAnchor,
     };
 
     setSettings(updatedSettings);
     setTaxConfig(draftTaxConfig);
     setRecurringTemplates(draftRecurringTemplates);
     setCreditBureaus(draftCreditBureaus);
-    
+
     setSavingDb(true);
     try {
       await Promise.all([
@@ -2112,13 +2590,19 @@ export default function Finance() {
       incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
       nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 }
     };
-    const defaultRecurringTemplates = databaseDefaults.recurring_templates || [];
+    const defaultRecurringTemplates = databaseDefaults.recurring_templates?.length
+      ? databaseDefaults.recurring_templates
+      : DEFAULT_RECURRING_TEMPLATES;
     const defaultCreditBureaus = databaseDefaults.credit_bureaus || [];
+    const defaultCategoryTemplates = databaseDefaults.default_budget_categories?.length
+      ? databaseDefaults.default_budget_categories
+      : DEFAULT_CATEGORY_TEMPLATES;
 
     setSettings(defaultSettings);
     setDraftTaxConfig(defaultTaxConfig);
     setDraftRecurringTemplates(defaultRecurringTemplates);
     setDraftCreditBureaus(defaultCreditBureaus);
+    setDefaultBudgetCategories(defaultCategoryTemplates);
 
     setGrossInput(formatNumberInput(defaultSettings.grossSalary));
     setPersonalPensionInput(defaultSettings.personalPensionPercent.toString());
@@ -2130,6 +2614,9 @@ export default function Finance() {
     setWorkHolsInput(defaultSettings.workHolidays.toString());
     setHoursInput(defaultSettings.workingHoursPerDay.toString());
     setPayDayInput((defaultSettings.payDayOfMonth || 25).toString());
+    setPaydaySchedule(defaultSettings.paydaySchedule || 'monthly_date');
+    setPaydayWeekday(defaultSettings.paydayWeekday !== undefined ? defaultSettings.paydayWeekday : 5);
+    setPaydayBiweeklyAnchor(defaultSettings.paydayBiweeklyAnchor || '2026-01-02');
     toast({ title: 'Reset successful', description: 'Returned configurations to default values.' });
   };
 
@@ -2152,7 +2639,7 @@ export default function Finance() {
   const totalBudget = budgetCategories.reduce((sum, cat) => sum + (cat.budgeted || 0), 0);
   const totalSpent = budgetCategories.reduce((sum, cat) => sum + cat.items.reduce((s, item) => s + getBudgetItemSpent(item, bankAccounts, recurrings), 0), 0);
   const currentMonth = new Date().getMonth() + 1;
-  const allBudgetItems = budgetCategories.flatMap(cat => 
+  const allBudgetItems = budgetCategories.flatMap(cat =>
     (cat.items || []).map(item => ({
       id: item.id,
       label: `${cat.name} > ${item.name}`
@@ -2172,7 +2659,7 @@ export default function Finance() {
     .reduce((sum, r) => sum + r.amount, 0);
 
   const freeToSpend = totalBudget - totalSpent - unpaidRecurrings;
-  
+
   const todayDateObj = new Date();
   const currentYear = todayDateObj.getFullYear();
   const currentMonthIdx = todayDateObj.getMonth();
@@ -2189,7 +2676,7 @@ export default function Finance() {
   const getSpendingProgressData = () => {
     const prefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}-`;
     const monthTx = mockTransactions.filter(tx => tx.date.startsWith(prefix));
-    
+
     const dailyAmounts: Record<number, number> = {};
     monthTx.forEach(tx => {
       const day = parseInt(tx.date.split('-')[2], 10);
@@ -2197,20 +2684,20 @@ export default function Finance() {
         dailyAmounts[day] = (dailyAmounts[day] || 0) + tx.amount;
       }
     });
-    
+
     const data = [];
     let cumulativeSpent = 0;
     const todayDay = todayDateObj.getDate();
-    
+
     for (let day = 1; day <= daysInMonth; day++) {
       const idealCumulative = totalBudget > 0 ? (day / daysInMonth) * totalBudget : 0;
       let actualCumulative: number | undefined = undefined;
-      
+
       if (day <= todayDay) {
         cumulativeSpent += (dailyAmounts[day] || 0);
         actualCumulative = cumulativeSpent;
       }
-      
+
       data.push({
         day,
         label: `${day}`,
@@ -2218,7 +2705,7 @@ export default function Finance() {
         "Actual Spent": actualCumulative !== undefined ? parseFloat(actualCumulative.toFixed(2)) : undefined
       });
     }
-    
+
     return data;
   };
 
@@ -2226,14 +2713,14 @@ export default function Finance() {
   const todayDayNum = todayDateObj.getDate();
   const todayProgress = spendingProgressData.find(d => d.day === todayDayNum);
   const isOverBudgetToday = todayProgress && todayProgress["Actual Spent"] !== undefined && todayProgress["Actual Spent"] > todayProgress["Ideal Limit"];
-  
+
   const progressLineColor = isOverBudgetToday ? '#f97316' : '#10b981'; // orange/amber vs emerald
   const progressGradientColor = isOverBudgetToday ? '#f97316' : '#10b981';
 
   // Transactions to review state
   const unreviewedCount = mockTransactions.filter(tx => !tx.isReviewed).length;
-  const displayedTransactions = showAllTransactions 
-    ? mockTransactions 
+  const displayedTransactions = showAllTransactions
+    ? mockTransactions
     : mockTransactions.filter(tx => !tx.isReviewed);
 
   // Spent progress color bar
@@ -2265,11 +2752,6 @@ export default function Finance() {
                     )}
                   >
                     <DotMatrixText text={tab.label.toUpperCase()} size="xs" />
-                    {tab.key === 'dashboard' && unreviewedCount > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-mono text-[9px] font-bold leading-none shrink-0 animate-pulse">
-                        {unreviewedCount}
-                      </span>
-                    )}
                   </button>
                   {index < TABS.length - 1 && (
                     <span className="text-muted-foreground/30 hidden md:inline">·</span>
@@ -2291,10 +2773,10 @@ export default function Finance() {
               ========================================== */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              
+
               {/* PRIMARY COCKPIT: Spending Progress & Core Cards */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* Column 1 & 2: Spending Progress cumulative chart */}
                 <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 lg:col-span-2 shadow-xl flex flex-col justify-between">
                   <div className="space-y-2">
@@ -2311,14 +2793,14 @@ export default function Finance() {
                           "text-xs font-bold font-mono px-2 py-0.5 rounded-full inline-block mt-0.5",
                           isOverBudgetToday ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
                         )}>
-                          {isOverBudgetToday 
-                            ? `Over pace by ${formatGBP((todayProgress?.["Actual Spent"] || 0) - (todayProgress?.["Ideal Limit"] || 0))}` 
+                          {isOverBudgetToday
+                            ? `Over pace by ${formatGBP((todayProgress?.["Actual Spent"] || 0) - (todayProgress?.["Ideal Limit"] || 0))}`
                             : `Under pace by ${formatGBP((todayProgress?.["Ideal Limit"] || 0) - (todayProgress?.["Actual Spent"] || 0))}`
                           }
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="flex gap-4 pt-3 text-xs">
                       <div>
                         <span className="text-muted-foreground text-[10px] uppercase block">Spent Today</span>
@@ -2337,49 +2819,49 @@ export default function Finance() {
                       <AreaChart data={spendingProgressData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
                           <linearGradient id="progressGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={progressGradientColor} stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor={progressGradientColor} stopOpacity={0}/>
+                            <stop offset="5%" stopColor={progressGradientColor} stopOpacity={0.2} />
+                            <stop offset="95%" stopColor={progressGradientColor} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                        <XAxis 
-                          dataKey="day" 
-                          tickLine={false} 
+                        <XAxis
+                          dataKey="day"
+                          tickLine={false}
                           axisLine={false}
-                          tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }} 
+                          tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
                         />
-                        <YAxis 
-                          tickLine={false} 
+                        <YAxis
+                          tickLine={false}
                           axisLine={false}
                           tickFormatter={(v) => `£${v}`}
-                          tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }} 
+                          tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
                         />
-                        <RechartsTooltip 
+                        <RechartsTooltip
                           contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '1rem' }}
                           itemStyle={{ color: 'hsl(var(--foreground))', fontSize: '11px' }}
                           labelStyle={{ fontWeight: 'bold', fontSize: '11px' }}
                           formatter={(value) => [formatGBP(Number(value)), undefined]}
                         />
                         {/* Ideal Curve (grey dashed line) */}
-                        <Line 
-                          type="monotone" 
-                          dataKey="Ideal Limit" 
-                          stroke="#64748b" 
-                          strokeDasharray="4 4" 
-                          dot={false} 
-                          strokeWidth={1.5} 
-                          name="Ideal Limit" 
+                        <Line
+                          type="monotone"
+                          dataKey="Ideal Limit"
+                          stroke="#64748b"
+                          strokeDasharray="4 4"
+                          dot={false}
+                          strokeWidth={1.5}
+                          name="Ideal Limit"
                         />
                         {/* Actual Curve (solid colored area) */}
-                        <Area 
-                          type="monotone" 
-                          dataKey="Actual Spent" 
-                          stroke={progressLineColor} 
-                          fill="url(#progressGrad)" 
-                          strokeWidth={2.5} 
+                        <Area
+                          type="monotone"
+                          dataKey="Actual Spent"
+                          stroke={progressLineColor}
+                          fill="url(#progressGrad)"
+                          strokeWidth={2.5}
                           connectNulls={false}
-                          dot={false} 
-                          name="Actual Spent" 
+                          dot={false}
+                          name="Actual Spent"
                         />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -2388,7 +2870,7 @@ export default function Finance() {
 
                 {/* Column 3: Copilot Key Metrics Side-Panel */}
                 <div className="space-y-6 flex flex-col justify-between">
-                  
+
                   {/* Free to Spend Card (Composition Bar) */}
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-xl p-4 sm:p-5 rounded-3xl flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-1.5">
@@ -2419,7 +2901,7 @@ export default function Finance() {
                         <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${Math.min(100 - spentPercent, billsPercent)}%` }} title={`Bills: ${billsPercent.toFixed(0)}%`} />
                         <div className="h-full bg-emerald-500 rounded-r-full transition-all duration-300" style={{ width: `${Math.max(0, 100 - spentPercent - billsPercent)}%` }} title={`Free: ${freePercent.toFixed(0)}%`} />
                       </div>
-                      
+
                       {/* Composition Legend */}
                       <div className="flex items-center justify-between text-[9px] font-mono text-muted-foreground pt-1">
                         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Spent</span>
@@ -2476,10 +2958,10 @@ export default function Finance() {
 
               {/* LOWER ROW: Interactive Reviews, Top Categories, Upcoming bills */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
+
                 {/* Left Side: Unreviewed Transaction Checklist (lg:col-span-8) */}
                 <div className="lg:col-span-8 space-y-6">
-                  
+
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
                     <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between">
                       <div>
@@ -2488,10 +2970,10 @@ export default function Finance() {
                         </CardTitle>
                         <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Review recent aggregate card activity</CardDescription>
                       </div>
-                      
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setShowAllTransactions(!showAllTransactions)}
                         className="text-[10px] rounded-xl hover:bg-muted font-sans font-semibold h-8 text-muted-foreground hover:text-foreground"
                       >
@@ -2499,13 +2981,13 @@ export default function Finance() {
                       </Button>
                     </CardHeader>
                     <CardContent className="p-0 pt-4">
-                      
+
                       {/* Unreviewed list with Exit Animation */}
                       <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                         <AnimatePresence mode="popLayout">
                           {displayedTransactions.map(tx => (
-                            <motion.div 
-                              key={tx.id} 
+                            <motion.div
+                              key={tx.id}
                               layout
                               initial={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, x: -80, scale: 0.95, transition: { duration: 0.2 } }}
@@ -2537,8 +3019,8 @@ export default function Finance() {
                                   variant={tx.isReviewed ? "ghost" : "default"}
                                   className={cn(
                                     "h-8 rounded-xl text-[10px] gap-1 px-3 shrink-0 font-semibold",
-                                    tx.isReviewed 
-                                      ? "text-muted-foreground hover:text-foreground hover:bg-muted/30" 
+                                    tx.isReviewed
+                                      ? "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                                       : "bg-emerald-500 hover:bg-emerald-600 text-white"
                                   )}
                                 >
@@ -2552,10 +3034,10 @@ export default function Finance() {
                             </motion.div>
                           ))}
                         </AnimatePresence>
-                        
+
                         {/* Empty pending state */}
                         {displayedTransactions.length === 0 && !showAllTransactions && (
-                          <motion.div 
+                          <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             className="flex flex-col items-center justify-center py-12 text-center space-y-3"
@@ -2567,9 +3049,9 @@ export default function Finance() {
                               <h4 className="text-xs font-semibold text-foreground font-serif uppercase tracking-wider">All Caught Up!</h4>
                               <p className="text-[10px] text-muted-foreground max-w-[220px] mx-auto">No pending transactions left to review. Your budget and metrics are in perfect sync.</p>
                             </div>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => setShowAllTransactions(true)}
                               className="rounded-xl text-[10px] h-8 font-sans font-medium"
                             >
@@ -2612,9 +3094,9 @@ export default function Finance() {
                               </span>
                             </div>
                             <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className={cn("h-full rounded-full transition-all duration-300", getProgressColor(cat.spent, cat.budget))} 
-                                style={{ width: `${Math.min(100, cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0)}%` }} 
+                              <div
+                                className={cn("h-full rounded-full transition-all duration-300", getProgressColor(cat.spent, cat.budget))}
+                                style={{ width: `${Math.min(100, cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0)}%` }}
                               />
                             </div>
                           </div>
@@ -2626,7 +3108,7 @@ export default function Finance() {
 
                 {/* Right Side: Recurrings List & Active savings goals (lg:col-span-4) */}
                 <div className="lg:col-span-4 space-y-6">
-                  
+
                   {/* Next two weeks recurrings card */}
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
                     <CardHeader className="p-0 pb-4 border-b border-border/30">
@@ -2701,12 +3183,12 @@ export default function Finance() {
               ========================================== */}
           {activeTab === 'tax-income' && (
             <div>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
+
                 {/* Left Side: Payroll breakdown rate tables */}
-                <div className="lg:col-span-8 flex flex-col gap-4 lg:h-full">
-                  
+                <div className="lg:col-span-8 flex flex-col gap-4">
+
                   {/* Standard Rates Breakdown */}
                   <div className="bg-card/40 backdrop-blur-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 border border-primary/10 shadow-sm">
                     <div className="flex flex-col gap-3 mb-4 border-b border-border/50 pb-3">
@@ -2750,7 +3232,7 @@ export default function Finance() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30 font-mono text-xs text-foreground">
-                          
+
                           {/* Gross Salary */}
                           <tr className="hover:bg-muted/10 transition-colors font-medium">
                             <td className="py-3 pr-4 font-bold font-sans text-foreground whitespace-nowrap">Gross Salary</td>
@@ -2768,9 +3250,9 @@ export default function Finance() {
                                 <div className="flex flex-col justify-center min-w-[120px]">
                                   <span className="font-bold text-foreground">Pension ({settings.personalPensionPercent}%)</span>
                                   <span className="text-[10px] text-muted-foreground/90 font-medium leading-normal mt-0.5">
-                                    {settings.pensionType === 'net_pay' ? 'Net Pay' : 
-                                     settings.pensionType === 'salary_sacrifice' ? 'Salary Sacrifice' : 
-                                     'Relief at Source'}
+                                    {settings.pensionType === 'net_pay' ? 'Net Pay' :
+                                      settings.pensionType === 'salary_sacrifice' ? 'Salary Sacrifice' :
+                                        'Relief at Source'}
                                   </span>
                                 </div>
                               </td>
@@ -2850,7 +3332,7 @@ export default function Finance() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 rounded-2xl border border-primary/10 bg-muted/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:flex-1">
+                  <div className="flex flex-col gap-3 rounded-2xl border border-primary/10 bg-muted/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="font-serif text-sm font-semibold text-foreground">Settings</p>
                       <p className="text-[11px] text-muted-foreground">
@@ -2865,9 +3347,9 @@ export default function Finance() {
                 </div>
 
                 {/* Right Side: Combined leave balances and holiday tracker */}
-                <div className="lg:col-span-4">
-                  
-                  <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4 lg:h-full">
+                <div className="lg:col-span-4 flex flex-col gap-6">
+
+                  <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
                       <div className="min-w-0">
                         <h3 className="font-serif text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -2895,8 +3377,8 @@ export default function Finance() {
                       <div className="rounded-xl bg-[#8839ef]/10 px-2.5 py-2 text-left">
                         <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#8839ef] dark:text-[#cba6f7]">Bank</span>
                         <span className="mt-1 block font-mono text-sm font-bold text-[#8839ef] dark:text-[#cba6f7]">
-                          {settings.bankHolidays}
-                          <span className="ml-1 text-[9px] font-normal">days</span>
+                          {bankHolidaysLeft}/{settings.bankHolidays}
+                          <span className="ml-1 text-[9px] font-normal">left</span>
                         </span>
                       </div>
                     </div>
@@ -2906,10 +3388,10 @@ export default function Finance() {
                         {MONTH_NAMES.map((month, monthIdx) => {
                           const daysInMonth = getDaysInMonth(settings.taxYear, monthIdx);
                           const startDayOfWeek = getStartDayOfWeek(settings.taxYear, monthIdx);
-                          
+
                           const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
                           const bookedDaysForMonth = getBookedDaysForMonth(normalizedHolidays, settings.taxYear, monthIdx, bankHolidaysList);
-                          
+
                           // Sum up the working days (excl. weekends & bank holidays) booked in this specific month
                           const monthWorkingDaysBooked = bookedDaysForMonth.length;
 
@@ -2920,18 +3402,18 @@ export default function Finance() {
                             const start = new Date(hol.startDate);
                             const end = new Date(hol.endDate);
                             if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
-                            
+
                             const startVal = start.getFullYear() * 12 + start.getMonth();
                             const endVal = end.getFullYear() * 12 + end.getMonth();
                             const currentVal = settings.taxYear * 12 + monthIdx;
-                            
+
                             return currentVal >= startVal && currentVal <= endVal;
                           });
 
                           return (
-                            <div 
-                              key={month} 
-                              id={`holiday-month-${monthIdx}`} 
+                            <div
+                              key={month}
+                              id={`holiday-month-${monthIdx}`}
                               onClick={() => setExpandedMonthIdx(isExpanded ? null : monthIdx)}
                               className={cn(
                                 "p-3 rounded-2xl bg-muted/10 border border-border/20 flex flex-col transition-all cursor-pointer hover:border-primary/20",
@@ -2949,34 +3431,34 @@ export default function Finance() {
                                   <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", isExpanded && "rotate-90")} />
                                 </div>
                               </div>
-                              
+
                               {/* Week headers */}
                               <div className="grid grid-cols-7 gap-1 mb-1 text-[9px] font-semibold text-muted-foreground text-center">
                                 <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
                               </div>
-                              
+
                               {/* Days Grid */}
                               <div className="grid grid-cols-7 gap-x-1 gap-y-1 text-center justify-items-center">
                                 {Array.from({ length: startDayOfWeek }).map((_, i) => (
                                   <div key={`empty-${i}`} className="w-7 h-7 sm:w-6 sm:h-6" />
                                 ))}
-                                
+
                                 {Array.from({ length: daysInMonth }).map((_, i) => {
                                   const dayNum = i + 1;
                                   const pad = (n: number) => n.toString().padStart(2, '0');
                                   const dateStr = `${settings.taxYear}-${pad(monthIdx + 1)}-${pad(dayNum)}`;
-                                  
+
                                   const isBankHoliday = bankHolidaysList.includes(dateStr);
-                                  
+
                                   const isBookedHoliday = bookedDaysForMonth.some(b => b.day === dayNum);
                                   const bookedOccasion = bookedDaysForMonth.find(b => b.day === dayNum)?.occasion || 'Leave';
-                                  
+
                                   const dateObj = new Date(settings.taxYear, monthIdx, dayNum);
                                   const dayOfWeek = dateObj.getDay();
                                   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                                  
+
                                   let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-[10px] font-mono flex items-center justify-center rounded-full font-medium ";
-                                  
+
                                   if (isBookedHoliday) {
                                     cellClass += "text-[#40a02b] dark:text-[#a6e3a1] font-bold";
                                   } else if (isBankHoliday) {
@@ -2986,7 +3468,7 @@ export default function Finance() {
                                   } else {
                                     cellClass += "text-foreground";
                                   }
-                                  
+
                                   const getTooltipDetails = () => {
                                     const list = [];
                                     if (isBankHoliday) {
@@ -3003,7 +3485,7 @@ export default function Finance() {
                                     }
                                     return list;
                                   };
-                                  
+
                                   return (
                                     <Tooltip key={dayNum}>
                                       <TooltipTrigger asChild>
@@ -3043,9 +3525,9 @@ export default function Finance() {
                                     {overlappingHolidays.length > 0 ? (
                                       <div className="space-y-1.5">
                                         {overlappingHolidays.map(hol => (
-                                          <div 
-                                            key={hol.id} 
-                                            onClick={(e) => e.stopPropagation()} 
+                                          <div
+                                            key={hol.id}
+                                            onClick={(e) => e.stopPropagation()}
                                             className="bg-muted/35 border border-border/15 rounded-xl p-2.5 flex items-center justify-between text-xs"
                                           >
                                             <div className="space-y-0.5 min-w-0 pr-2 text-left">
@@ -3055,9 +3537,9 @@ export default function Finance() {
                                               </span>
                                             </div>
                                             <div className="flex items-center gap-1 shrink-0">
-                                              <Button 
-                                                variant="ghost" 
-                                                size="icon" 
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   handleStartEditHoliday(hol, monthIdx);
@@ -3067,9 +3549,9 @@ export default function Finance() {
                                               >
                                                 <Pencil className="h-3.5 w-3.5" />
                                               </Button>
-                                              <Button 
-                                                variant="ghost" 
-                                                size="icon" 
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   handleDeleteHoliday(hol.id);
@@ -3092,8 +3574,8 @@ export default function Finance() {
 
                                   {/* Add Holiday Button or Form */}
                                   {inlineBookMonthIdx === monthIdx ? (
-                                    <div 
-                                      onClick={(e) => e.stopPropagation()} 
+                                    <div
+                                      onClick={(e) => e.stopPropagation()}
                                       className="bg-muted/40 border border-primary/10 rounded-xl p-3 space-y-3 text-left"
                                     >
                                       <span className="text-[10px] font-semibold uppercase tracking-wider block text-primary">
@@ -3102,7 +3584,7 @@ export default function Finance() {
                                       <div className="space-y-2">
                                         <div className="space-y-0.5">
                                           <Label className="text-[10px] text-muted-foreground">Occasion</Label>
-                                          <Input 
+                                          <Input
                                             placeholder="e.g. Skiing, Paris Trip"
                                             value={inlineOccasion}
                                             onChange={(e) => setInlineOccasion(e.target.value)}
@@ -3112,7 +3594,7 @@ export default function Finance() {
                                         <div className="grid grid-cols-2 gap-2">
                                           <div className="space-y-0.5">
                                             <Label className="text-[10px] text-muted-foreground">Start Date</Label>
-                                            <Input 
+                                            <Input
                                               type="date"
                                               value={inlineStartDate}
                                               onChange={(e) => {
@@ -3128,7 +3610,7 @@ export default function Finance() {
                                           </div>
                                           <div className="space-y-0.5">
                                             <Label className="text-[10px] text-muted-foreground">End Date</Label>
-                                            <Input 
+                                            <Input
                                               type="date"
                                               value={inlineEndDate}
                                               onChange={(e) => {
@@ -3145,7 +3627,7 @@ export default function Finance() {
                                         </div>
                                         <div className="space-y-0.5">
                                           <Label className="text-[10px] text-muted-foreground">Days count (working days)</Label>
-                                          <Input 
+                                          <Input
                                             type="number"
                                             step="0.5"
                                             min="0"
@@ -3156,16 +3638,16 @@ export default function Finance() {
                                         </div>
                                       </div>
                                       <div className="flex justify-end gap-1.5 pt-1">
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm" 
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
                                           onClick={resetInlineHolidayForm}
                                           className="h-7 px-2.5 rounded-lg text-[10px]"
                                         >
                                           Cancel
                                         </Button>
-                                        <Button 
-                                          size="sm" 
+                                        <Button
+                                          size="sm"
                                           onClick={() => handleSaveInlineHoliday(monthIdx)}
                                           className="h-7 px-2.5 rounded-lg text-[10px] bg-primary text-primary-foreground"
                                         >
@@ -3174,9 +3656,9 @@ export default function Finance() {
                                       </div>
                                     </div>
                                   ) : (
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleStartNewHoliday(monthIdx);
@@ -3194,6 +3676,59 @@ export default function Finance() {
                       </div>
                     </TooltipProvider>
 
+                  </div>
+
+                  {/* Card 2: Payday Details */}
+                  <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
+                      <div className="min-w-0">
+                        <h3 className="font-serif text-sm font-semibold text-foreground flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4 text-primary shrink-0" /> Payday Details
+                        </h3>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Your configured payday schedule and next expected pay date.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground font-medium">Schedule Type</span>
+                        <span className="font-semibold text-foreground capitalize">
+                          {settings.paydaySchedule === 'monthly_date' && `Monthly (${settings.payDayOfMonth || 25}th)`}
+                          {settings.paydaySchedule === 'last_working_day' && 'Last Working Day'}
+                          {settings.paydaySchedule === 'last_friday' && 'Last Friday of Month'}
+                          {settings.paydaySchedule === 'biweekly' && 'Bi-weekly (Every 2 weeks)'}
+                          {settings.paydaySchedule === 'weekly' && `Weekly (${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][settings.paydayWeekday ?? 5]}s)`}
+                          {settings.paydaySchedule === 'semimonthly' && 'Semi-monthly (15th & Last working day)'}
+                          {!settings.paydaySchedule && `Monthly (${settings.payDayOfMonth || 25}th)`}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground font-medium">Next Payday</span>
+                        <span className="font-semibold text-foreground">
+                          {nextPayday.date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground font-medium">Status</span>
+                        <span className={cn(
+                          "font-mono px-2 py-0.5 rounded-lg font-bold text-[10px]",
+                          nextPayday.daysRemaining === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-muted/60 text-muted-foreground"
+                        )}>
+                          {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
+                        </span>
+                      </div>
+
+                      {nextPayday.adjusted && (
+                        <div className="rounded-xl bg-[#df8e1d]/10 p-2.5 text-[10px] text-[#df8e1d] dark:text-[#f9e2af] flex items-start gap-1.5 leading-normal">
+                          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>
+                            Adjusted to working day before due to {nextPayday.adjustReason === 'weekend' ? 'a weekend' : 'a bank holiday'}.
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                 </div>
@@ -3255,7 +3790,7 @@ export default function Finance() {
 
             return (
               <div className="space-y-6">
-                
+
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
                   <div className="min-w-0">
                     <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
@@ -3270,7 +3805,7 @@ export default function Finance() {
 
                 {/* Header Overview: Spent vs Total Budget gauge */}
                 <div className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col md:flex-row items-center justify-around gap-6">
-                  
+
                   {/* Left: Total Spent */}
                   <div className="text-center md:text-left space-y-1">
                     <span className="text-3xl md:text-4xl font-bold font-mono text-foreground block">
@@ -3318,7 +3853,7 @@ export default function Finance() {
 
                 {/* Money Allocation & Savings Dashboard */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  
+
                   {/* Left Column: Savings breakdown */}
                   <div className="lg:col-span-5 bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4">
                     <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2">Savings Allocation</h4>
@@ -3353,7 +3888,7 @@ export default function Finance() {
 
                   {/* Right Column: Money Allocation Summary & Pie Chart */}
                   <div className="lg:col-span-7 bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
+
                     {/* Summary table */}
                     <div className="space-y-4">
                       <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2">Money Allocation</h4>
@@ -3369,7 +3904,7 @@ export default function Finance() {
                             <tr className="hover:bg-muted/10">
                               <td className="p-3 font-sans font-medium text-foreground">
                                 <div className="flex items-center gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shrink-0" /> Needs
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shrink-0" /> Needs
                                 </div>
                               </td>
                               <td className="p-3 text-right">{formatGBP(needsTotal)}</td>
@@ -3377,7 +3912,7 @@ export default function Finance() {
                             <tr className="hover:bg-muted/10">
                               <td className="p-3 font-sans font-medium text-foreground">
                                 <div className="flex items-center gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] shrink-0" /> Savings
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] shrink-0" /> Savings
                                 </div>
                               </td>
                               <td className="p-3 text-right">{formatGBP(totalSavings)}</td>
@@ -3385,7 +3920,7 @@ export default function Finance() {
                             <tr className="hover:bg-muted/10">
                               <td className="p-3 font-sans font-medium text-foreground">
                                 <div className="flex items-center gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#8892b0] shrink-0" /> Wants
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#8892b0] shrink-0" /> Wants
                                 </div>
                               </td>
                               <td className="p-3 text-right">{formatGBP(wantsTotal)}</td>
@@ -3435,7 +3970,7 @@ export default function Finance() {
                               <RechartsTooltip formatter={(v: number) => formatGBP(v)} />
                             </PieChart>
                           </ResponsiveContainer>
-                          
+
                           {/* Legend / Percentages breakdown */}
                           <div className="flex flex-wrap justify-center gap-3 text-[10px] text-muted-foreground font-mono">
                             {allocationData.map((entry, index) => {
@@ -3460,126 +3995,126 @@ export default function Finance() {
 
                 {/* Grid of Budget Categories */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {budgetCategories.map(category => {
-                  const catBudget = category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0);
-                  const catSpent = category.items.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
-                  const catColor = getProgressColor(catSpent, catBudget);
-                  
-                  return (
-                    <Card key={category.id} className="bg-card/40 border border-primary/10 rounded-3xl p-6 flex flex-col justify-between space-y-4">
-                      
-                      {/* Header block */}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
-                        <div className="space-y-1 min-w-0 flex-1 flex items-start gap-2.5">
-                          <span className="text-2xl pt-0.5 leading-none shrink-0">{category.emoji || '📂'}</span>
-                          <div className="min-w-0">
-                            <span className="text-sm font-bold font-serif text-foreground block truncate">{category.name}</span>
-                            <span className="text-[10px] text-muted-foreground font-mono block">
-                              {formatGBP(catSpent)} Spent / {formatGBP(catBudget)} Budgeted
-                            </span>
+                  {budgetCategories.map(category => {
+                    const catBudget = category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0);
+                    const catSpent = category.items.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
+                    const catColor = getProgressColor(catSpent, catBudget);
+
+                    return (
+                      <Card key={category.id} className="bg-card/40 border border-primary/10 rounded-3xl p-6 flex flex-col justify-between space-y-4">
+
+                        {/* Header block */}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+                          <div className="space-y-1 min-w-0 flex-1 flex items-start gap-2.5">
+                            <span className="text-2xl pt-0.5 leading-none shrink-0">{category.emoji || '📂'}</span>
+                            <div className="min-w-0">
+                              <span className="text-sm font-bold font-serif text-foreground block truncate">{category.name}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono block">
+                                {formatGBP(catSpent)} Spent / {formatGBP(catBudget)} Budgeted
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-1 shrink-0 self-end sm:self-start">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setActiveCategoryId(category.id);
+                                setIsAddItemOpen(true);
+                              }}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                              title="Add item"
+                            >
+                              <PlusCircle className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setActiveCategoryId(category.id);
+                                setNewCategoryName(category.name);
+                                setNewCategoryBudget(category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0));
+                                setNewCategoryEmoji(category.emoji || '');
+                                setNewCategoryGroup(category.group || 'needs');
+                                setIsEditCategoryOpen(true);
+                              }}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                              title="Edit Category"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteCategory(category.id)}
+                              className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                              title="Delete Category"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        
-                        <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => {
-                              setActiveCategoryId(category.id);
-                              setIsAddItemOpen(true);
-                            }}
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-                            title="Add item"
-                          >
-                            <PlusCircle className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => {
-                              setActiveCategoryId(category.id);
-                              setNewCategoryName(category.name);
-                              setNewCategoryBudget(category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0));
-                              setNewCategoryEmoji(category.emoji || '');
-                              setNewCategoryGroup(category.group || 'needs');
-                              setIsEditCategoryOpen(true);
-                            }}
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-                            title="Edit Category"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleDeleteCategory(category.id)}
-                            className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
-                            title="Delete Category"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
 
-                      {/* Total progress bar for category */}
-                      <div className="space-y-1.5">
-                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className={cn("h-full rounded-full transition-all duration-300", catColor)} 
-                            style={{ width: `${Math.min(100, catBudget > 0 ? (catSpent / catBudget) * 100 : 0)}%` }} 
-                          />
+                        {/* Total progress bar for category */}
+                        <div className="space-y-1.5">
+                          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all duration-300", catColor)}
+                              style={{ width: `${Math.min(100, catBudget > 0 ? (catSpent / catBudget) * 100 : 0)}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Children Items */}
-                      <div className="space-y-2 pt-2 border-t border-border/20">
-                        {category.items.map(item => {
-                          const spentVal = getBudgetItemSpent(item, bankAccounts, recurrings);
-                          const linkedAcc = item.linkedAccountId ? bankAccounts.find(a => a.id === item.linkedAccountId) : null;
-                          return (
-                            <div key={item.id} className="group flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center text-xs py-1">
-                              <div className="flex flex-col min-w-0">
-                                <span className="font-semibold text-foreground/95 truncate">{item.name}</span>
-                                {linkedAcc && (
-                                  <span className="text-[9px] text-primary/70 font-mono">
-                                    Linked: {linkedAcc.name}
+                        {/* Children Items */}
+                        <div className="space-y-2 pt-2 border-t border-border/20">
+                          {category.items.map(item => {
+                            const spentVal = getBudgetItemSpent(item, bankAccounts, recurrings);
+                            const linkedAcc = item.linkedAccountId ? bankAccounts.find(a => a.id === item.linkedAccountId) : null;
+                            return (
+                              <div key={item.id} className="group flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center text-xs py-1">
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold text-foreground/95 truncate">{item.name}</span>
+                                  {linkedAcc && (
+                                    <span className="text-[9px] text-primary/70 font-mono">
+                                      Linked: {linkedAcc.name}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                  <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                                    {formatGBP(spentVal)}
                                   </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
-                                  {formatGBP(spentVal)}
-                                </span>
-                                
-                                <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                  <button 
-                                    onClick={() => {
-                                      setActiveBudgetItem({ ...item, categoryId: category.id });
-                                      setIsEditItemOpen(true);
-                                    }}
-                                    className="text-muted-foreground hover:text-foreground p-0.5"
-                                  >
-                                    <Edit2 className="h-3 w-3" />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteItem(category.id, item.id)}
-                                    className="text-rose-500 hover:text-rose-600 p-0.5"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
+
+                                  <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => {
+                                        setActiveBudgetItem({ ...item, categoryId: category.id });
+                                        setIsEditItemOpen(true);
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground p-0.5"
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteItem(category.id, item.id)}
+                                      className="text-rose-500 hover:text-rose-600 p-0.5"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                        {category.items.length === 0 && (
-                          <p className="text-[10px] text-muted-foreground italic text-center py-2">No items. Click '+' to add.</p>
-                        )}
-                      </div>
+                            );
+                          })}
+                          {category.items.length === 0 && (
+                            <p className="text-[10px] text-muted-foreground italic text-center py-2">No items. Click '+' to add.</p>
+                          )}
+                        </div>
 
-                    </Card>
-                  );
-                })}
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -3588,79 +4123,508 @@ export default function Finance() {
           {/* ==========================================
               TAB 4: CASH FLOW
               ========================================== */}
-          {activeTab === 'cash-flow' && (
+          {activeTab === 'cash-flow' && (() => {
+            // ── Cash Flow Period Definitions ──
+            const cfMonthlyIncome = breakdownRates.postTax.monthly;
+            const cfCurrentMonthIdx = todayDateObj.getMonth();
+            const cfYear = todayDateObj.getFullYear();
+
+            // Compute period start/end dates based on selected period
+            const getPeriodRange = () => {
+              const today = new Date(todayDateObj);
+              today.setHours(0, 0, 0, 0);
+              switch (cfPeriod) {
+                case 'ytd':
+                  return { start: new Date(cfYear, 0, 1), end: today };
+                case 'mtd':
+                  return { start: new Date(cfYear, cfCurrentMonthIdx, 1), end: today };
+                case 'last_12m': {
+                  const s = new Date(today);
+                  s.setMonth(s.getMonth() - 11);
+                  s.setDate(1);
+                  return { start: s, end: today };
+                }
+                case 'last_3m': {
+                  const s = new Date(today);
+                  s.setMonth(s.getMonth() - 2);
+                  s.setDate(1);
+                  return { start: s, end: today };
+                }
+                case 'last_4w': {
+                  const s = new Date(today);
+                  s.setDate(s.getDate() - 27);
+                  return { start: s, end: today };
+                }
+                case 'custom': {
+                  const s = new Date(cfCustomStart);
+                  const e = new Date(cfCustomEnd);
+                  s.setHours(0, 0, 0, 0);
+                  e.setHours(23, 59, 59, 999);
+                  return {
+                    start: isNaN(s.getTime()) ? new Date(cfYear, 0, 1) : s,
+                    end: isNaN(e.getTime()) ? today : e
+                  };
+                }
+                default:
+                  return { start: new Date(cfYear, 0, 1), end: today };
+              }
+            };
+
+            const { start: cfPeriodStart, end: cfPeriodEnd } = getPeriodRange();
+
+            const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' });
+            const periodStartLabel = fmtDate(cfPeriodStart);
+            const periodEndLabel = fmtDate(cfPeriodEnd);
+
+            const CF_PERIOD_OPTIONS = [
+              { key: 'ytd' as const, label: 'Year to Date' },
+              { key: 'mtd' as const, label: 'Month to Date' },
+              { key: 'last_12m' as const, label: 'Last 12 Months' },
+              { key: 'last_3m' as const, label: 'Last 3 Months' },
+              { key: 'last_4w' as const, label: 'Last 4 Weeks' },
+              { key: 'custom' as const, label: 'Custom Range' },
+            ];
+
+            const activePeriodLabel = CF_PERIOD_OPTIONS.find(o => o.key === cfPeriod)?.label || 'Year to Date';
+
+            // Build monthly data buckets covering the period
+            const buildMonthlyBuckets = () => {
+              const buckets: { year: number; month: number; name: string; fullName: string; spend: number; income: number; net: number; isFuture: boolean; isCurrent: boolean; monthIdx: number }[] = [];
+              const cursor = new Date(cfPeriodStart.getFullYear(), cfPeriodStart.getMonth(), 1);
+              const endMonth = new Date(cfPeriodEnd.getFullYear(), cfPeriodEnd.getMonth(), 1);
+              const now = new Date(todayDateObj.getFullYear(), todayDateObj.getMonth(), 1);
+
+              while (cursor <= endMonth) {
+                const yr = cursor.getFullYear();
+                const mo = cursor.getMonth();
+                const isFuture = cursor > now;
+                const isCurrent = yr === now.getFullYear() && mo === now.getMonth();
+                const shortName = MONTH_NAMES[mo].slice(0, 3);
+
+                const prefix = `${yr}-${String(mo + 1).padStart(2, '0')}-`;
+                const monthSpend = isFuture ? 0 : mockTransactions
+                  .filter(tx => tx.date.startsWith(prefix))
+                  .reduce((sum, tx) => sum + tx.amount, 0);
+
+                const monthRecurringSpend = isFuture ? 0 : recurrings
+                  .filter(r => isDueThisMonth(r, mo + 1))
+                  .reduce((sum, r) => sum + r.amount, 0);
+
+                const spend = monthSpend + monthRecurringSpend;
+                const income = isFuture ? 0 : cfMonthlyIncome;
+                const net = income - spend;
+
+                // For Last 12 months spanning two years, show "Jan '25" style
+                const label = cfPeriod === 'last_12m' || cfPeriod === 'last_3m' || cfPeriod === 'custom'
+                  ? `${shortName} '${String(yr).slice(2)}`
+                  : shortName;
+
+                buckets.push({ year: yr, month: mo, name: label, fullName: MONTH_NAMES[mo], spend, income, net, isFuture, isCurrent, monthIdx: mo });
+                cursor.setMonth(cursor.getMonth() + 1);
+              }
+              return buckets;
+            };
+
+            // For dynamic range weekly buckets
+            const buildWeeklyBuckets = () => {
+              const buckets: { name: string; fullName: string; spend: number; income: number; net: number; isFuture: boolean; isCurrent: boolean; monthIdx: number }[] = [];
+              const weekStart = new Date(cfPeriodStart);
+              const weeklyIncome = cfMonthlyIncome / 4.33; // approximate weekly income
+              let w = 0;
+
+              while (weekStart <= cfPeriodEnd) {
+                const wEnd = new Date(weekStart);
+                wEnd.setDate(wEnd.getDate() + 6);
+                if (wEnd > cfPeriodEnd) wEnd.setTime(cfPeriodEnd.getTime());
+
+                const wStartStr = `${weekStart.getDate()} ${MONTH_NAMES[weekStart.getMonth()].slice(0, 3)}`;
+                const isCurrent = todayDateObj >= weekStart && todayDateObj <= wEnd;
+                const isFuture = weekStart > todayDateObj;
+
+                let spend = 0;
+                const cursor = new Date(weekStart);
+                while (cursor <= wEnd) {
+                  const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+                  spend += mockTransactions
+                    .filter(tx => tx.date === dateStr)
+                    .reduce((sum, tx) => sum + tx.amount, 0);
+                  cursor.setDate(cursor.getDate() + 1);
+                }
+
+                // Add proportional recurring spend
+                const weekRecurring = recurrings
+                  .filter(r => r.frequency === 'monthly' || r.frequency === 'weekly')
+                  .reduce((sum, r) => sum + (r.frequency === 'weekly' ? r.amount : r.amount / 4.33), 0);
+                spend += weekRecurring;
+
+                const income = isFuture ? 0 : weeklyIncome;
+                const net = income - spend;
+
+                buckets.push({ name: `Wk ${w + 1}`, fullName: wStartStr, spend, income, net, isFuture, isCurrent, monthIdx: w });
+                weekStart.setDate(weekStart.getDate() + 7);
+                w++;
+              }
+              return buckets;
+            };
+
+            const diffDays = Math.ceil((cfPeriodEnd.getTime() - cfPeriodStart.getTime()) / (1000 * 60 * 60 * 24));
+            const useWeekly = cfPeriod === 'last_4w' || (cfPeriod === 'custom' && diffDays <= 60);
+            const cfMonthlyData = useWeekly ? buildWeeklyBuckets() : buildMonthlyBuckets();
+
+            const activeData = cfMonthlyData.filter(m => !m.isFuture);
+            const elapsedMonths = activeData.length;
+            const ytdIncome = activeData.reduce((s, m) => s + m.income, 0);
+            const ytdSpend = activeData.reduce((s, m) => s + m.spend, 0);
+            const ytdNet = ytdIncome - ytdSpend;
+            const avgMonthlyNet = elapsedMonths > 0 ? ytdNet / elapsedMonths : 0;
+            const savingsRate = ytdIncome > 0 ? ((ytdIncome - ytdSpend) / ytdIncome) * 100 : 0;
+            const totalMonthlyRecurrings = recurrings
+              .filter(r => r.frequency === 'monthly')
+              .reduce((sum, r) => sum + r.amount, 0);
+            const recurringBurnRate = cfMonthlyIncome > 0 ? (totalMonthlyRecurrings / cfMonthlyIncome) * 100 : 0;
+
+            // Custom bar shape that renders rounded-top bars
+            const RoundedBar = (props: { x?: number; y?: number; width?: number; height?: number; fill?: string; opacity?: number }) => {
+              const { x = 0, y = 0, width = 0, height = 0, fill, opacity = 1 } = props;
+              if (height <= 0) return null;
+              const r = Math.min(4, width / 2, height);
+              return (
+                <path
+                  d={`M${x},${y + height} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} L${x + width},${y + height} Z`}
+                  fill={fill}
+                  opacity={opacity}
+                />
+              );
+            };
+
+            // Custom tick to render "Now" label on current bucket
+            const CashFlowXTick = (props: { x?: number; y?: number; payload?: { value: string; index: number } }) => {
+              const { x = 0, y = 0, payload } = props;
+              if (!payload) return null;
+              const dataPoint = cfMonthlyData[payload.index];
+              const isCurr = dataPoint?.isCurrent;
+              return (
+                <g transform={`translate(${x},${y})`}>
+                  <text x={0} y={0} dy={12} textAnchor="middle" fill="currentColor" opacity={dataPoint?.isFuture ? 0.25 : 0.5} fontSize={9}>
+                    {payload.value}
+                  </text>
+                  {isCurr && (
+                    <g>
+                      <rect x={-14} y={18} width={28} height={14} rx={4} fill="hsl(var(--foreground))" opacity={0.9} />
+                      <text x={0} y={28} textAnchor="middle" fill="hsl(var(--background))" fontSize={8} fontWeight={700}>Now</text>
+                    </g>
+                  )}
+                </g>
+              );
+            };
+
+            const cfTooltipStyle = {
+              backgroundColor: 'hsl(var(--popover))',
+              borderColor: 'hsl(var(--border))',
+              borderRadius: '1rem',
+              fontSize: '11px',
+              padding: '8px 12px',
+            };
+
+            return (
             <div className="space-y-6">
-              
-              <div className="border-b border-border/50 pb-4">
-                <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" /> Net Cash Flow Trend
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Visualization of your post-tax monthly income compared to budget spents</p>
+
+              {/* Period Header Row */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
+                <div className="min-w-0">
+                  <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary shrink-0" /> Cash Flow
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Overview of income, spending, and net position</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {/* Custom Date Picker Popovers */}
+                  {cfPeriod === 'custom' && (
+                    <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-right-2 duration-200">
+                      <Popover open={cfStartOpen} onOpenChange={setCfStartOpen}>
+                        <PopoverTrigger asChild>
+                          <button className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-full bg-background border border-border/50 text-foreground outline-none hover:border-primary/40 focus:border-primary/50 transition-colors flex items-center gap-1.5 hover:bg-muted/30">
+                            <Calendar className="h-3 w-3 text-primary shrink-0" />
+                            {fmtDate(cfPeriodStart)}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border rounded-2xl shadow-xl" align="end">
+                          <MonthYearPicker
+                            value={cfCustomStart}
+                            onChange={(val) => {
+                              setCfCustomStart(val);
+                              setCfStartOpen(false);
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <span className="text-[10px] text-muted-foreground font-mono">to</span>
+                      <Popover open={cfEndOpen} onOpenChange={setCfEndOpen}>
+                        <PopoverTrigger asChild>
+                          <button className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-full bg-background border border-border/50 text-foreground outline-none hover:border-primary/40 focus:border-primary/50 transition-colors flex items-center gap-1.5 hover:bg-muted/30">
+                            <Calendar className="h-3 w-3 text-primary shrink-0" />
+                            {fmtDate(cfPeriodEnd)}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border rounded-2xl shadow-xl" align="end">
+                          <MonthYearPicker
+                            value={cfCustomEnd}
+                            onChange={(val) => {
+                              setCfCustomEnd(val);
+                              setCfEndOpen(false);
+                            }}
+                            isEnd
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
+
+                  {/* Period Selector Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setCfPeriodOpen(!cfPeriodOpen)}
+                      className="text-[10px] font-semibold px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono flex items-center gap-1.5 hover:bg-primary/20 transition-colors"
+                    >
+                      {activePeriodLabel}
+                      <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", cfPeriodOpen && "rotate-180")} />
+                    </button>
+                    {cfPeriodOpen && (
+                      <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[240px] bg-popover border border-border rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                        {CF_PERIOD_OPTIONS.map(opt => {
+                          // Compute the date range for each option label
+                          const optRange = (() => {
+                            const today = new Date(todayDateObj);
+                            today.setHours(0, 0, 0, 0);
+                            switch (opt.key) {
+                              case 'ytd': return { s: new Date(cfYear, 0, 1), e: today };
+                              case 'mtd': return { s: new Date(cfYear, cfCurrentMonthIdx, 1), e: today };
+                              case 'last_12m': { const d = new Date(today); d.setMonth(d.getMonth() - 11); d.setDate(1); return { s: d, e: today }; }
+                              case 'last_3m': { const d = new Date(today); d.setMonth(d.getMonth() - 2); d.setDate(1); return { s: d, e: today }; }
+                              case 'last_4w': { const d = new Date(today); d.setDate(d.getDate() - 27); return { s: d, e: today }; }
+                              case 'custom': return { s: new Date(cfCustomStart), e: new Date(cfCustomEnd) };
+                              default: return { s: new Date(cfYear, 0, 1), e: today };
+                            }
+                          })();
+                          const rangeStr = `${fmtDate(optRange.s)} - ${fmtDate(optRange.e)}`;
+                          const isActive = cfPeriod === opt.key;
+                          return (
+                            <button
+                              key={opt.key}
+                              onClick={() => { setCfPeriod(opt.key); setCfPeriodOpen(false); }}
+                              className={cn(
+                                "w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-3 transition-colors",
+                                isActive ? "bg-primary/10 text-primary" : "hover:bg-muted/50 text-foreground"
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                <span className={cn("font-semibold", !isActive && "ml-5")}>{opt.label}</span>
+                              </span>
+                              <span className="text-[9px] text-muted-foreground font-mono shrink-0">{rangeStr}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">
+                    {periodStartLabel} – {periodEndLabel}
+                  </span>
+                </div>
               </div>
 
-              {/* Area chart mapping */}
-              <Card className="bg-card/40 border border-primary/10 rounded-3xl p-6">
-                <div className="space-y-1 mb-4">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">6-Month Trend Overview</span>
-                  <p className="text-xl font-bold font-mono text-emerald-500">
-                    Average Net Flow: {formatGBP(netCashFlow)}
-                  </p>
+              {/* ─── NET INCOME HERO CARD ─── */}
+              <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
+                    <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+                    <p className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                      {formatGBP(ytdNet)}
+                    </p>
+                  </div>
                 </div>
-                
-                {/* Recharts area chart */}
-                <div className="h-[250px] sm:h-[350px] w-full mt-4 min-w-0">
+
+                <div className="h-[220px] sm:h-[280px] w-full min-w-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart 
-                      data={[
-                        { name: 'Jan', Income: monthlyIncome, Spend: totalSpent * 0.9, Net: monthlyIncome - (totalSpent * 0.9) },
-                        { name: 'Feb', Income: monthlyIncome, Spend: totalSpent * 1.05, Net: monthlyIncome - (totalSpent * 1.05) },
-                        { name: 'Mar', Income: monthlyIncome, Spend: totalSpent * 0.95, Net: monthlyIncome - (totalSpent * 0.95) },
-                        { name: 'Apr', Income: monthlyIncome, Spend: totalSpent * 0.8, Net: monthlyIncome - (totalSpent * 0.8) },
-                        { name: 'May', Income: monthlyIncome, Spend: totalSpent * 1.15, Net: monthlyIncome - (totalSpent * 1.15) },
-                        { name: 'Jun', Income: monthlyIncome, Spend: totalSpent, Net: monthlyIncome - totalSpent }
-                      ]} 
-                      margin={{ top: 10, right: 8, left: 8, bottom: 0 }}
-                    >
-                      <defs>
-                        <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#a6e3a1" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#a6e3a1" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f38ba8" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#f38ba8" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#cba6f7" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#cba6f7" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/45" />
-                      <XAxis dataKey="name" className="fill-muted-foreground text-[10px]" />
-                      <YAxis className="fill-muted-foreground text-[10px]" tickFormatter={(v) => `£${v}`} />
-                      <RechartsTooltip 
-                        contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '1rem' }}
-                        itemStyle={{ color: 'hsl(var(--foreground))', fontSize: '12px' }}
-                        labelStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                    <BarChart data={cfMonthlyData} margin={{ top: 10, right: 4, left: -16, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={(props) => <CashFlowXTick {...props} />}
+                        interval={0}
                       />
-                      <Legend wrapperStyle={{ fontSize: '11px', marginTop: '10px', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }} />
-                      <Area type="monotone" dataKey="Income" stroke="#a6e3a1" fillOpacity={1} fill="url(#colorIncome)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="Spend" stroke="#f38ba8" fillOpacity={1} fill="url(#colorSpend)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="Net" stroke="#cba6f7" fillOpacity={1} fill="url(#colorNet)" strokeWidth={2} />
-                    </AreaChart>
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v) => `£${v >= 0 ? '' : '-'}${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}K` : Math.abs(v)}`}
+                        tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                      />
+                      <RechartsTooltip
+                        contentStyle={cfTooltipStyle}
+                        itemStyle={{ color: 'hsl(var(--foreground))' }}
+                        labelStyle={{ fontWeight: 'bold' }}
+                        formatter={(value: number) => [formatGBP(value), 'Net Income']}
+                      />
+                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
+                      <Bar
+                        dataKey="net"
+                        shape={(props: Record<string, unknown>) => {
+                          const dataPoint = cfMonthlyData[(props as { index: number }).index];
+                          const val = (props as { value?: number }).value ?? (props as { net?: number }).net ?? 0;
+                          return (
+                            <RoundedBar
+                              {...props as { x: number; y: number; width: number; height: number }}
+                              fill={val >= 0 ? '#10b981' : '#f43f5e'}
+                              opacity={dataPoint?.isFuture ? 0.15 : 1}
+                            />
+                          );
+                        }}
+                      />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </Card>
 
+              {/* ─── SPEND + INCOME SIDE-BY-SIDE ─── */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Spend Card */}
+                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+                  <div className="space-y-1 mb-4">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
+                    <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+                    <p className="text-2xl font-extrabold font-mono text-rose-500">{formatGBP(ytdSpend)}</p>
+                  </div>
+                  <div className="h-[180px] w-full min-w-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                        <XAxis
+                          dataKey="name"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={(props) => <CashFlowXTick {...props} />}
+                          interval={0}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
+                          tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                        />
+                        <RechartsTooltip
+                          contentStyle={cfTooltipStyle}
+                          itemStyle={{ color: 'hsl(var(--foreground))' }}
+                          formatter={(value: number) => [formatGBP(value), 'Spend']}
+                        />
+                        <Bar
+                          dataKey="spend"
+                          shape={(props: Record<string, unknown>) => {
+                            const dataPoint = cfMonthlyData[(props as { index: number }).index];
+                            return (
+                              <RoundedBar
+                                {...props as { x: number; y: number; width: number; height: number }}
+                                fill="#f43f5e"
+                                opacity={dataPoint?.isFuture ? 0.15 : 0.85}
+                              />
+                            );
+                          }}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                {/* Income Card */}
+                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+                  <div className="space-y-1 mb-4">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
+                    <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+                    <p className="text-2xl font-extrabold font-mono text-cyan-500">{formatGBP(ytdIncome)}</p>
+                  </div>
+                  <div className="h-[180px] w-full min-w-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                        <XAxis
+                          dataKey="name"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={(props) => <CashFlowXTick {...props} />}
+                          interval={0}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
+                          tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                        />
+                        <RechartsTooltip
+                          contentStyle={cfTooltipStyle}
+                          itemStyle={{ color: 'hsl(var(--foreground))' }}
+                          formatter={(value: number) => [formatGBP(value), 'Income']}
+                        />
+                        <Bar
+                          dataKey="income"
+                          shape={(props: Record<string, unknown>) => {
+                            const dataPoint = cfMonthlyData[(props as { index: number }).index];
+                            return (
+                              <RoundedBar
+                                {...props as { x: number; y: number; width: number; height: number }}
+                                fill="#06b6d4"
+                                opacity={dataPoint?.isFuture ? 0.15 : 0.85}
+                              />
+                            );
+                          }}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+              </div>
+
+              {/* ─── METRIC SUMMARY ROW ─── */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
+                  <span className={cn("text-xl font-extrabold font-mono block", avgMonthlyNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                    {formatGBP(avgMonthlyNet)}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
+                </Card>
+
+                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
+                  <span className={cn("text-xl font-extrabold font-mono block", savingsRate >= 20 ? "text-emerald-500" : savingsRate >= 0 ? "text-amber-500" : "text-rose-500")}>
+                    {savingsRate.toFixed(1)}%
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">of income retained YTD</span>
+                </Card>
+
+                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
+                  <span className={cn("text-xl font-extrabold font-mono block", recurringBurnRate <= 30 ? "text-emerald-500" : recurringBurnRate <= 50 ? "text-amber-500" : "text-rose-500")}>
+                    {recurringBurnRate.toFixed(1)}%
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
+                </Card>
+              </div>
+
             </div>
-          )}
+            );
+          })()}
 
           {/* ==========================================
               TAB 5: GOALS
               ========================================== */}
           {activeTab === 'goals' && (
             <div className="space-y-6">
-              
+
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
                 <div className="min-w-0">
                   <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
@@ -3675,21 +4639,21 @@ export default function Finance() {
 
               {/* Sidebar list + Details layout */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                
+
                 {/* Left side: Goal List sidebar */}
                 <div className="md:col-span-5 space-y-3">
                   {goals.map(goal => {
                     const isActiveGoal = goal.id === selectedGoalId;
                     const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
-                    
+
                     return (
-                      <div 
+                      <div
                         key={goal.id}
                         onClick={() => setSelectedGoalId(isActiveGoal ? null : goal.id)}
                         className={cn(
                           "p-4 rounded-3xl border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3",
-                          isActiveGoal 
-                            ? "bg-primary/5 border-primary shadow-sm" 
+                          isActiveGoal
+                            ? "bg-primary/5 border-primary shadow-sm"
                             : "bg-card/40 border-border/30 hover:bg-muted/30"
                         )}
                       >
@@ -3723,20 +4687,20 @@ export default function Finance() {
                   {(() => {
                     const goal = goals.find(g => g.id === selectedGoalId);
                     if (!goal) return <p className="text-xs text-muted-foreground italic text-center py-8">Select a goal from the list to view its details.</p>;
-                    
+
                     const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
                     const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
-                    
+
                     const sortedContributions = [...(goal.contributions || [])].sort((a, b) => a.date.localeCompare(b.date));
                     const startD = goal.startDate || (sortedContributions[0] ? sortedContributions[0].date : new Date().toISOString().split('T')[0]);
-                    
+
                     let currentTotal = 0;
                     const chartData = [{
                       date: startD,
                       amount: 0,
                       formattedDate: formatReadableDate(startD)
                     }];
-                    
+
                     sortedContributions.forEach(c => {
                       currentTotal += c.amount;
                       chartData.push({
@@ -3745,7 +4709,7 @@ export default function Finance() {
                         formattedDate: formatReadableDate(c.date)
                       });
                     });
-                    
+
                     const todayStr = new Date().toISOString().split('T')[0];
                     if (chartData[chartData.length - 1].date < todayStr) {
                       chartData.push({
@@ -3754,10 +4718,10 @@ export default function Finance() {
                         formattedDate: formatReadableDate(todayStr)
                       });
                     }
-                    
+
                     return (
                       <Card className="bg-card/40 border border-primary/10 rounded-3xl p-6 space-y-6">
-                        
+
                         {/* Title Block */}
                         <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start border-b border-border/30 pb-4">
                           <div className="space-y-1 min-w-0">
@@ -3772,9 +4736,9 @@ export default function Finance() {
                                 {progress >= 100 ? "Goal achieved!" : `${progress.toFixed(0)}% complete`}
                               </span>
                             </div>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleDeleteGoal(goal.id)}
                               className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl"
                             >
@@ -3789,25 +4753,25 @@ export default function Finance() {
                             <AreaChart data={chartData} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
                               <defs>
                                 <linearGradient id="goalProgressGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                 </linearGradient>
                               </defs>
                               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                              <XAxis 
-                                dataKey="formattedDate" 
-                                tickLine={false} 
+                              <XAxis
+                                dataKey="formattedDate"
+                                tickLine={false}
                                 axisLine={false}
                                 interval="preserveStartEnd"
-                                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }} 
+                                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
                               />
-                              <YAxis 
-                                tickLine={false} 
-                                axisLine={false} 
-                                tickFormatter={(v) => `£${v}`} 
-                                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }} 
+                              <YAxis
+                                tickLine={false}
+                                axisLine={false}
+                                tickFormatter={(v) => `£${v}`}
+                                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
                               />
-                              <RechartsTooltip 
+                              <RechartsTooltip
                                 formatter={(value: number) => [formatGBP(value), 'Saved']}
                                 labelFormatter={(label) => `Date: ${label}`}
                                 contentStyle={{
@@ -3818,13 +4782,13 @@ export default function Finance() {
                                   color: '#cdd6f4'
                                 }}
                               />
-                              <Area 
-                                type="monotone" 
-                                dataKey="amount" 
-                                stroke="#10b981" 
-                                strokeWidth={2} 
-                                fillOpacity={1} 
-                                fill="url(#goalProgressGrad)" 
+                              <Area
+                                type="monotone"
+                                dataKey="amount"
+                                stroke="#10b981"
+                                strokeWidth={2}
+                                fillOpacity={1}
+                                fill="url(#goalProgressGrad)"
                               />
                             </AreaChart>
                           </ResponsiveContainer>
@@ -3857,7 +4821,7 @@ export default function Finance() {
                         <form onSubmit={(e) => handleAddContribution(e, goal.id)} className="space-y-3 pt-2">
                           <span className="text-xs font-bold text-foreground">Log New Contribution</span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                            <Input 
+                            <Input
                               type="number"
                               placeholder="Amount (£)"
                               value={newContribution.amount || ''}
@@ -3865,7 +4829,7 @@ export default function Finance() {
                               className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs"
                               required
                             />
-                            <Input 
+                            <Input
                               type="text"
                               placeholder="Note / Source"
                               value={newContribution.note}
@@ -3875,7 +4839,7 @@ export default function Finance() {
                             <select
                               value={newContribution.bankAccountId || ''}
                               onChange={(e) => setNewContribution({ ...newContribution, bankAccountId: e.target.value })}
-                              className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                              className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
                             >
                               <option value="">No linked account (Manual)</option>
                               {bankAccounts.map(acc => (
@@ -3910,9 +4874,9 @@ export default function Finance() {
                                     {c.note && <span className="text-[10px] text-muted-foreground block">"{c.note}"</span>}
                                     <span className="text-[9px] text-muted-foreground/60 block font-mono">{c.date}</span>
                                   </div>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => handleDeleteContribution(goal.id, c.id)}
                                     className="h-7 w-7 text-rose-500 hover:text-rose-600 shrink-0 self-end sm:self-center"
                                   >
@@ -3942,7 +4906,7 @@ export default function Finance() {
               ========================================== */}
           {activeTab === 'accounts' && (
             <div className="space-y-8">
-              
+
               {/* SECTION A: Bank Accounts */}
               <div className="space-y-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
@@ -3974,9 +4938,9 @@ export default function Finance() {
                       {bankAccounts.map(account => (
                         <tr key={account.id} className="hover:bg-muted/10 transition-colors">
                           <td className="py-3 px-3 font-semibold text-foreground flex items-center gap-2">
-                            <span 
-                              className="w-1.5 h-6 rounded-full shrink-0" 
-                              style={{ backgroundColor: account.color || '#475569' }} 
+                            <span
+                              className="w-1.5 h-6 rounded-full shrink-0"
+                              style={{ backgroundColor: account.color || '#475569' }}
                             />
                             <span className="text-base shrink-0 leading-none">{account.emoji || '💰'}</span>
                             <span>{account.name}</span>
@@ -3990,9 +4954,9 @@ export default function Finance() {
                           <td className="py-3 px-3 text-muted-foreground truncate max-w-[150px]">{account.useCase || '—'}</td>
                           <td className="py-3 px-3 text-center">
                             <div className="flex justify-center gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => {
                                   setActiveAccount(account);
                                   setIsEditAccountOpen(true);
@@ -4001,9 +4965,9 @@ export default function Finance() {
                               >
                                 <Edit2 className="h-3.5 w-3.5" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleDeleteAccount(account.id)}
                                 className="h-8 w-8 text-rose-500 hover:text-rose-600"
                               >
@@ -4059,9 +5023,9 @@ export default function Finance() {
                           <td className="py-3 px-3 text-muted-foreground truncate max-w-[200px]">{membership.useCase || '—'}</td>
                           <td className="py-3 px-3 text-center">
                             <div className="flex justify-center gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => {
                                   setActiveMembership(membership);
                                   setIsEditMembershipOpen(true);
@@ -4070,9 +5034,9 @@ export default function Finance() {
                               >
                                 <Edit2 className="h-3.5 w-3.5" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleDeleteMembership(membership.id)}
                                 className="h-8 w-8 text-rose-500 hover:text-rose-600"
                               >
@@ -4113,27 +5077,46 @@ export default function Finance() {
                     const prev = entries.length > 1 ? entries[entries.length - 2] : null;
                     const delta = latest && prev ? latest.score - prev.score : 0;
                     const pct = latest ? Math.min((latest.score / bureau.maxScore) * 100, 100) : 0;
-                    
+
                     const gaugeRadius = 58;
                     const gaugeCircumference = 2 * Math.PI * gaugeRadius;
                     const gaugeOffset = gaugeCircumference - (pct / 100) * gaugeCircumference;
 
-                    // Score rating label
-                    const getRating = (score: number, max: number) => {
-                      const ratio = score / max;
+                    const getRating = (score: number, key: string) => {
+                      if (key === 'experian') {
+                        if (score >= 1121) return { text: 'Excellent', cls: 'text-emerald-500' };
+                        if (score >= 1001) return { text: 'Very Good', cls: 'text-teal-500' };
+                        if (score >= 861) return { text: 'Good', cls: 'text-cyan-500' };
+                        if (score >= 641) return { text: 'Fair', cls: 'text-amber-500' };
+                        return { text: 'Low', cls: 'text-rose-500' };
+                      }
+                      if (key === 'transunion') {
+                        if (score >= 628) return { text: 'Excellent', cls: 'text-emerald-500' };
+                        if (score >= 604) return { text: 'Good', cls: 'text-cyan-500' };
+                        if (score >= 566) return { text: 'Fair', cls: 'text-amber-500' };
+                        return { text: 'Needs Work', cls: 'text-rose-500' };
+                      }
+                      if (key === 'equifax') {
+                        if (score >= 725) return { text: 'Soaring High', cls: 'text-emerald-500' };
+                        if (score >= 605) return { text: 'Looking Bright', cls: 'text-teal-500' };
+                        if (score >= 520) return { text: 'On Good Ground', cls: 'text-cyan-500' };
+                        if (score >= 410) return { text: 'Moving On Up', cls: 'text-amber-500' };
+                        return { text: 'Start Climbing', cls: 'text-rose-500' };
+                      }
+                      const ratio = score / bureau.maxScore;
                       if (ratio >= 0.8) return { text: 'Excellent', cls: 'text-emerald-500' };
                       if (ratio >= 0.6) return { text: 'Good', cls: 'text-cyan-500' };
                       if (ratio >= 0.4) return { text: 'Fair', cls: 'text-amber-500' };
                       return { text: 'Poor', cls: 'text-rose-500' };
                     };
-                    const rating = latest ? getRating(latest.score, bureau.maxScore) : null;
+                    const rating = latest ? getRating(latest.score, bureau.key) : null;
 
                     return (
                       <Card key={bureau.key} className={cn("bg-gradient-to-br border border-primary/10 rounded-[2rem] overflow-hidden", bureau.gradient)}>
                         <CardContent className="pt-6 pb-2 px-6 flex flex-col items-center">
                           {/* Bureau Label */}
                           <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-4">{bureau.label}</span>
-                          
+
                           {/* Circular Gauge */}
                           <div className="relative w-36 h-36 flex items-center justify-center">
                             <svg className="w-36 h-36 transform -rotate-90">
@@ -4243,7 +5226,7 @@ export default function Finance() {
                   return 'bg-muted/30 text-muted-foreground border border-border/30';
               }
             };
-            
+
             const thisMonthBills = recurrings.filter(r => isDueThisMonth(r, currentMonth));
             const futureBills = recurrings.filter(r => !isDueThisMonth(r, currentMonth));
 
@@ -4251,39 +5234,43 @@ export default function Finance() {
             const paidAmount = thisMonthBills.filter(r => r.isPaid).reduce((sum, r) => sum + r.amount, 0);
             const leftAmount = Math.max(0, totalAmount - paidAmount);
             const progress = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
-            
+
             const radius = 36;
             const circumference = 2 * Math.PI * radius;
             const strokeDashoffset = circumference - (progress / 100) * circumference;
 
             return (
               <div className="space-y-6">
-                
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
-                  <div className="min-w-0">
-                    <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-                      <Calendar className="h-5 w-5 text-primary shrink-0" /> Recurring Bills
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Track and sync automated recurring monthly and annual payments</p>
-                  </div>
-                  <Button onClick={() => setIsAddRecurringOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-                    <Plus className="h-4 w-4" /> Add Bill
-                  </Button>
+
+                {/* Recurrings Title Header with [+] button */}
+                <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+                  <h3 className="font-serif text-lg font-semibold text-foreground">
+                    Recurrings
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setIsAddRecurringOpen(true);
+                      setAddRecTemplate("scratch");
+                    }}
+                    className="h-7 w-7 rounded-lg border border-border bg-card hover:bg-muted flex items-center justify-center text-foreground transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
 
                 <div className="space-y-8">
-                  
+
                   {/* Circular progress card */}
-                  <div className="bg-card/40 backdrop-blur-sm border border-primary/10 rounded-[2rem] p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6">
+                  <div className="bg-card/20 backdrop-blur-sm border border-primary/10 rounded-[2rem] p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6">
                     <div className="text-center sm:text-left space-y-1">
-                      <span className="text-3xl md:text-4xl font-extrabold font-mono text-rose-500 block">
+                      <span className="text-3xl md:text-4xl font-extrabold font-mono text-foreground block">
                         {formatGBP(leftAmount)}
                       </span>
                       <span className="text-[10px] text-muted-foreground block font-sans font-medium uppercase tracking-wider">
                         left to pay
                       </span>
                     </div>
-                    
+
                     <div className="relative w-24 h-24 flex items-center justify-center">
                       <svg className="w-24 h-24 transform -rotate-90">
                         <circle
@@ -4298,7 +5285,7 @@ export default function Finance() {
                           cx="48"
                           cy="48"
                           r={radius}
-                          className="stroke-primary transition-all duration-500 ease-out"
+                          className="stroke-[#1d70b8] transition-all duration-500 ease-out"
                           strokeWidth="8"
                           fill="transparent"
                           strokeDasharray={circumference}
@@ -4306,13 +5293,10 @@ export default function Finance() {
                           strokeLinecap="round"
                         />
                       </svg>
-                      <span className="absolute text-sm font-mono font-bold text-foreground">
-                        {progress.toFixed(0)}%
-                      </span>
                     </div>
 
                     <div className="text-center sm:text-right space-y-1">
-                      <span className="text-3xl md:text-4xl font-extrabold font-mono text-emerald-500 block">
+                      <span className="text-3xl md:text-4xl font-extrabold font-mono text-foreground block">
                         {formatGBP(paidAmount)}
                       </span>
                       <span className="text-[10px] text-muted-foreground block font-sans font-medium uppercase tracking-wider">
@@ -4322,107 +5306,122 @@ export default function Finance() {
                   </div>
 
                   {/* Grouped Lists */}
-                  <div className="space-y-6">
-                    
+                  <div className="space-y-8">
+
                     {/* Section: This Month */}
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">
-                        <ChevronDown className="h-4 w-4" /> This month
-                      </div>
-                      
-                      <Card className="bg-card/40 border border-primary/10 rounded-3xl p-6">
-                        <div className="space-y-4">
+                      <button
+                        onClick={() => setThisMonthCollapsed(!thisMonthCollapsed)}
+                        className="flex items-center gap-2 text-sm font-bold text-foreground tracking-wide px-1 hover:text-primary transition-colors outline-none"
+                      >
+                        <span className="text-[10px] text-muted-foreground transition-transform duration-200">
+                          {thisMonthCollapsed ? '▶' : '▼'}
+                        </span>
+                        This month
+                      </button>
+
+                      {!thisMonthCollapsed && (
+                        <div className="space-y-1 px-1">
                           {thisMonthBills
                             .sort((a, b) => a.dueDate - b.dueDate)
                             .map(bill => {
                               const dueDateText = getDueDateText(bill, currentMonth);
                               return (
-                                <div 
-                                  key={bill.id} 
+                                <div
+                                  key={bill.id}
                                   className={cn(
-                                    "group flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border/10 last:border-b-0 transition-opacity",
-                                    bill.isPaid && "opacity-70"
+                                    "group flex items-center justify-between py-2 border-b border-border/5 last:border-b-0 transition-opacity",
+                                    bill.isPaid && "opacity-60"
                                   )}
                                 >
-                                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                                    <span className="shrink-0 w-14 text-muted-foreground font-mono text-xs">
+                                  {/* Left side: Date, Emoji + Subscription Name, Frequency */}
+                                  <div className="flex items-center gap-6 min-w-0 flex-1">
+                                    <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
                                       {dueDateText}
                                     </span>
-                                    <div className="min-w-0 flex-1 space-y-1">
-                                      <div className="flex items-center gap-2 font-medium text-xs text-foreground min-w-0">
-                                        {bill.emoji && <span className="shrink-0">{bill.emoji}</span>}
-                                        <span className={cn("truncate", bill.isPaid && "line-through text-muted-foreground")}>{bill.name}</span>
-                                        <span className="text-[9px] text-muted-foreground/60 lowercase font-normal shrink-0 hidden sm:inline">
-                                          ({bill.frequency})
-                                        </span>
-                                      </div>
-                                      <span className={cn("inline-flex sm:hidden px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono", getTagColor(bill.category))}>
-                                        {bill.tag || bill.category || 'BILL'}
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
+                                      <span className={cn("font-semibold text-xs text-foreground truncate", bill.isPaid && "line-through text-muted-foreground")}>
+                                        {bill.name}
                                       </span>
-                                      <span className="hidden sm:inline-flex">
-                                        <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono", getTagColor(bill.category))}>
-                                          {bill.tag || bill.category || 'BILL'}
-                                        </span>
+                                      <span className="text-[10px] text-muted-foreground/50 lowercase font-normal shrink-0">
+                                        {bill.frequency}
                                       </span>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pl-[4.25rem] sm:pl-0">
-                                    <span className="font-mono font-bold text-xs text-foreground whitespace-nowrap">
-                                      {formatGBP(bill.amount)}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                        <button 
-                                          onClick={() => {
-                                            setActiveRecurring(bill);
-                                            setIsEditRecurringOpen(true);
-                                          }}
-                                          className="text-muted-foreground hover:text-foreground p-1"
-                                          title="Edit"
-                                        >
-                                          <Edit2 className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button 
-                                          onClick={() => handleDeleteRecurring(bill.id)}
-                                          className="text-rose-500 hover:text-rose-600 p-1"
-                                          title="Delete"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                      </div>
+                                  {/* Right side: Pill Badge, Price, Paid Status */}
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    {/* Action Edit/Delete Overlay */}
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex mr-2">
                                       <button
-                                        onClick={() => toggleRecurringPaid(bill.id)}
-                                        className={cn(
-                                          "h-6 w-6 rounded-full flex items-center justify-center border transition-all shrink-0",
-                                          bill.isPaid 
-                                            ? "bg-emerald-500 border-emerald-500 text-white" 
-                                            : "border-primary/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-transparent hover:text-emerald-500/70"
-                                        )}
+                                        onClick={() => {
+                                          setActiveRecurring(bill);
+                                          setIsEditRecurringOpen(true);
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                                        title="Edit"
                                       >
-                                        <Check className="h-3.5 w-3.5" />
+                                        <Edit2 className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteRecurring(bill.id)}
+                                        className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
                                       </button>
                                     </div>
+
+                                    {/* Pill Badge */}
+                                    <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                                      {bill.emoji && <span>{bill.emoji}</span>}
+                                      {bill.tag || bill.category || 'BILL'}
+                                    </span>
+
+                                    {/* Price */}
+                                    <span className="font-mono font-bold text-xs text-foreground w-20 text-right">
+                                      {formatGBP(bill.amount)}
+                                    </span>
+
+                                    {/* Checkmark paid status */}
+                                    <button
+                                      onClick={() => toggleRecurringPaid(bill.id)}
+                                      className={cn(
+                                        "h-5 w-5 rounded-lg flex items-center justify-center border transition-all shrink-0",
+                                        bill.isPaid
+                                          ? "bg-transparent border-transparent text-foreground font-bold"
+                                          : "border-border/40 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-transparent hover:text-emerald-500/70"
+                                      )}
+                                    >
+                                      <Check className="h-3.5 w-3.5 font-bold" />
+                                    </button>
                                   </div>
                                 </div>
                               );
                             })}
-                          
+
                           {thisMonthBills.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic text-center py-6">No bills due this month.</p>
+                            <p className="text-xs text-muted-foreground italic py-6 text-center">No bills due this month.</p>
                           )}
                         </div>
-                      </Card>
+                      )}
                     </div>
 
                     {/* Section: In the Future */}
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">
-                        <ChevronRight className="h-4 w-4" /> In the future
-                      </div>
-                      
-                      <Card className="bg-card/40 border border-primary/10 rounded-3xl p-6">
-                        <div className="space-y-4">
+                      <button
+                        onClick={() => setFutureCollapsed(!futureCollapsed)}
+                        className="flex items-center gap-2 text-sm font-bold text-foreground tracking-wide px-1 hover:text-primary transition-colors outline-none"
+                      >
+                        <span className="text-[10px] text-muted-foreground transition-transform duration-200">
+                          {futureCollapsed ? '▶' : '▼'}
+                        </span>
+                        In the future
+                      </button>
+
+                      {!futureCollapsed && (
+                        <div className="space-y-1 px-1">
                           {futureBills
                             .sort((a, b) => {
                               const mDiff = (a.dueMonth || 1) - (b.dueMonth || 1);
@@ -4432,69 +5431,72 @@ export default function Finance() {
                             .map(bill => {
                               const dueDateText = getDueDateText(bill, currentMonth);
                               return (
-                                <div 
-                                  key={bill.id} 
-                                  className="group flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border/10 last:border-b-0"
+                                <div
+                                  key={bill.id}
+                                  className="group flex items-center justify-between py-2 border-b border-border/5 last:border-b-0"
                                 >
-                                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                                    <span className="shrink-0 w-14 text-muted-foreground font-mono text-xs">
+                                  {/* Left side: Date, Emoji + Subscription Name, Frequency */}
+                                  <div className="flex items-center gap-6 min-w-0 flex-1">
+                                    <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
                                       {dueDateText}
                                     </span>
-                                    <div className="min-w-0 flex-1 space-y-1">
-                                      <div className="flex items-center gap-2 font-medium text-xs text-foreground min-w-0">
-                                        {bill.emoji && <span className="shrink-0">{bill.emoji}</span>}
-                                        <span className="truncate">{bill.name}</span>
-                                        <span className="text-[9px] text-muted-foreground/60 lowercase font-normal shrink-0 hidden sm:inline">
-                                          ({bill.frequency})
-                                        </span>
-                                      </div>
-                                      <span className={cn("inline-flex sm:hidden px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono", getTagColor(bill.category))}>
-                                        {bill.tag || bill.category || 'BILL'}
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
+                                      <span className="font-semibold text-xs text-foreground truncate">
+                                        {bill.name}
                                       </span>
-                                      <span className="hidden sm:inline-flex">
-                                        <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono", getTagColor(bill.category))}>
-                                          {bill.tag || bill.category || 'BILL'}
-                                        </span>
+                                      <span className="text-[10px] text-muted-foreground/50 lowercase font-normal shrink-0">
+                                        {bill.frequency}
                                       </span>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pl-[4.25rem] sm:pl-0">
-                                    <span className="font-mono font-bold text-xs text-foreground whitespace-nowrap">
+                                  {/* Right side: Pill Badge, Price, Empty spacer */}
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    {/* Action Edit/Delete Overlay */}
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex mr-2">
+                                      <button
+                                        onClick={() => {
+                                          setActiveRecurring(bill);
+                                          setIsEditRecurringOpen(true);
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                                        title="Edit"
+                                      >
+                                        <Edit2 className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteRecurring(bill.id)}
+                                        className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
+
+                                    {/* Pill Badge */}
+                                    <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                                      {bill.emoji && <span>{bill.emoji}</span>}
+                                      {bill.tag || bill.category || 'BILL'}
+                                    </span>
+
+                                    {/* Price */}
+                                    <span className="font-mono font-bold text-xs text-foreground w-20 text-right">
                                       {formatGBP(bill.amount)}
                                     </span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                        <button 
-                                          onClick={() => {
-                                            setActiveRecurring(bill);
-                                            setIsEditRecurringOpen(true);
-                                          }}
-                                          className="text-muted-foreground hover:text-foreground p-1"
-                                          title="Edit"
-                                        >
-                                          <Edit2 className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button 
-                                          onClick={() => handleDeleteRecurring(bill.id)}
-                                          className="text-rose-500 hover:text-rose-600 p-1"
-                                          title="Delete"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                      </div>
-                                      <div className="w-6 shrink-0" />
-                                    </div>
+
+                                    {/* Empty spacer to align with checkmark */}
+                                    <div className="w-5" />
                                   </div>
                                 </div>
                               );
                             })}
-                          
+
                           {futureBills.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic text-center py-6">No future bills scheduled.</p>
+                            <p className="text-xs text-muted-foreground italic py-6 text-center">No future bills scheduled.</p>
                           )}
                         </div>
-                      </Card>
+                      )}
                     </div>
 
                   </div>
@@ -4554,19 +5556,79 @@ export default function Finance() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="payDay" className="text-xs font-medium text-muted-foreground">Scheduled Payday (Day of Month)</Label>
-                    <Input
-                      id="payDay"
-                      type="number"
-                      inputMode="numeric"
-                      min="1"
-                      max="31"
-                      value={payDayInput}
-                      onChange={(e) => setPayDayInput(e.target.value)}
-                      className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
-                      required
-                    />
+                    <Label htmlFor="paydaySchedule" className="text-xs font-medium text-muted-foreground">Payday Schedule</Label>
+                    <Select
+                      value={paydaySchedule}
+                      onValueChange={(val) => setPaydaySchedule(val as FinanceSettings['paydaySchedule'])}
+                    >
+                      <SelectTrigger id="paydaySchedule" className="rounded-xl h-11 border-primary/20 bg-background/50">
+                        <SelectValue placeholder="Select schedule..." />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-primary/10">
+                        <SelectItem value="monthly_date">Monthly on specific date</SelectItem>
+                        <SelectItem value="last_working_day">Last working day of month</SelectItem>
+                        <SelectItem value="last_friday">Last Friday of month</SelectItem>
+                        <SelectItem value="biweekly">Every 2 weeks (Bi-weekly)</SelectItem>
+                        <SelectItem value="weekly">Every week (Weekly)</SelectItem>
+                        <SelectItem value="semimonthly">Semi-monthly (15th & Last working day)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {paydaySchedule === 'monthly_date' && (
+                    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <Label htmlFor="payDay" className="text-xs font-medium text-muted-foreground">Scheduled Payday (Day of Month)</Label>
+                      <Input
+                        id="payDay"
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        max="31"
+                        value={payDayInput}
+                        onChange={(e) => setPayDayInput(e.target.value)}
+                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {paydaySchedule === 'weekly' && (
+                    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <Label htmlFor="paydayWeekday" className="text-xs font-medium text-muted-foreground">Weekly Payday</Label>
+                      <Select
+                        value={paydayWeekday.toString()}
+                        onValueChange={(val) => setPaydayWeekday(parseInt(val, 10))}
+                      >
+                        <SelectTrigger id="paydayWeekday" className="rounded-xl h-11 border-primary/20 bg-background/50">
+                          <SelectValue placeholder="Select day..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-primary/10">
+                          <SelectItem value="1">Monday</SelectItem>
+                          <SelectItem value="2">Tuesday</SelectItem>
+                          <SelectItem value="3">Wednesday</SelectItem>
+                          <SelectItem value="4">Thursday</SelectItem>
+                          <SelectItem value="5">Friday</SelectItem>
+                          <SelectItem value="6">Saturday</SelectItem>
+                          <SelectItem value="0">Sunday</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {paydaySchedule === 'biweekly' && (
+                    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <Label htmlFor="paydayBiweeklyAnchor" className="text-xs font-medium text-muted-foreground">Bi-weekly Reference Payday (Anchor Date)</Label>
+                      <Input
+                        id="paydayBiweeklyAnchor"
+                        type="date"
+                        value={paydayBiweeklyAnchor}
+                        onChange={(e) => setPaydayBiweeklyAnchor(e.target.value)}
+                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        required
+                      />
+                      <p className="text-[10px] text-muted-foreground">Any past pay date to calculate every two weeks from.</p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
@@ -5204,7 +6266,7 @@ export default function Finance() {
           </form>
         </DialogContent>
       </Dialog>
-      
+
       {/* DIALOG: Add Savings Goal */}
       <Dialog open={isAddGoalOpen} onOpenChange={setIsAddGoalOpen}>
         <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
@@ -5215,44 +6277,44 @@ export default function Finance() {
           <form onSubmit={handleAddGoal} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label htmlFor="goal-name">Goal Name</Label>
-              <Input 
-                id="goal-name" 
-                placeholder="e.g. New Macbook Pro" 
-                value={newGoal.name} 
-                onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })} 
+              <Input
+                id="goal-name"
+                placeholder="e.g. New Macbook Pro"
+                value={newGoal.name}
+                onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="goal-target">Target Amount (£)</Label>
-              <Input 
-                id="goal-target" 
-                type="number" 
-                placeholder="e.g. 2500" 
-                value={newGoal.targetAmount || ''} 
-                onChange={(e) => setNewGoal({ ...newGoal, targetAmount: parseFloat(e.target.value) || 0 })} 
+              <Input
+                id="goal-target"
+                type="number"
+                placeholder="e.g. 2500"
+                value={newGoal.targetAmount || ''}
+                onChange={(e) => setNewGoal({ ...newGoal, targetAmount: parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="goal-start-date">Start Date</Label>
-              <Input 
-                id="goal-start-date" 
-                type="date" 
-                value={newGoal.startDate} 
-                onChange={(e) => setNewGoal({ ...newGoal, startDate: e.target.value })} 
+              <Input
+                id="goal-start-date"
+                type="date"
+                value={newGoal.startDate}
+                onChange={(e) => setNewGoal({ ...newGoal, startDate: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="goal-date">Target Date</Label>
-              <Input 
-                id="goal-date" 
-                type="date" 
-                value={newGoal.targetDate} 
-                onChange={(e) => setNewGoal({ ...newGoal, targetDate: e.target.value })} 
+              <Input
+                id="goal-date"
+                type="date"
+                value={newGoal.targetDate}
+                onChange={(e) => setNewGoal({ ...newGoal, targetDate: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
@@ -5274,19 +6336,19 @@ export default function Finance() {
           <form onSubmit={handleAddAccount} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label htmlFor="acc-name">Account Name</Label>
-              <Input 
-                id="acc-name" 
-                placeholder="e.g. Chase Saver" 
-                value={newAccount.name} 
-                onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} 
+              <Input
+                id="acc-name"
+                placeholder="e.g. Chase Saver"
+                value={newAccount.name}
+                onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-type">Account Type</Label>
-              <Select 
-                value={newAccount.type} 
+              <Select
+                value={newAccount.type}
                 onValueChange={(val) => setNewAccount({ ...newAccount, type: val as BankAccount['type'] })}
               >
                 <SelectTrigger id="acc-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
@@ -5302,71 +6364,71 @@ export default function Finance() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-issuer">Issuer / Bank</Label>
-              <Input 
-                id="acc-issuer" 
-                placeholder="e.g. Chase Bank" 
-                value={newAccount.issuer} 
-                onChange={(e) => setNewAccount({ ...newAccount, issuer: e.target.value })} 
+              <Input
+                id="acc-issuer"
+                placeholder="e.g. Chase Bank"
+                value={newAccount.issuer}
+                onChange={(e) => setNewAccount({ ...newAccount, issuer: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-balance">Balance (£)</Label>
-              <Input 
-                id="acc-balance" 
-                type="number" 
+              <Input
+                id="acc-balance"
+                type="number"
                 step="0.01"
-                placeholder="e.g. 5200 (Use negative for credit balance)" 
-                value={newAccount.balance || ''} 
-                onChange={(e) => setNewAccount({ ...newAccount, balance: parseFloat(e.target.value) || 0 })} 
+                placeholder="e.g. 5200 (Use negative for credit balance)"
+                value={newAccount.balance || ''}
+                onChange={(e) => setNewAccount({ ...newAccount, balance: parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-fee">Annual Fee (£)</Label>
-              <Input 
-                id="acc-fee" 
-                type="number" 
-                placeholder="e.g. 195" 
-                value={newAccount.annualFee || ''} 
-                onChange={(e) => setNewAccount({ ...newAccount, annualFee: parseFloat(e.target.value) || 0 })} 
+              <Input
+                id="acc-fee"
+                type="number"
+                placeholder="e.g. 195"
+                value={newAccount.annualFee || ''}
+                onChange={(e) => setNewAccount({ ...newAccount, annualFee: parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-use">Primary Use Case</Label>
-              <Input 
-                id="acc-use" 
-                placeholder="e.g. Salary deposits, tech purchases" 
-                value={newAccount.useCase} 
-                onChange={(e) => setNewAccount({ ...newAccount, useCase: e.target.value })} 
+              <Input
+                id="acc-use"
+                placeholder="e.g. Salary deposits, tech purchases"
+                value={newAccount.useCase}
+                onChange={(e) => setNewAccount({ ...newAccount, useCase: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="acc-emoji">Emoji Icon</Label>
-                <Input 
-                  id="acc-emoji" 
-                  placeholder="e.g. 🏦" 
-                  value={newAccount.emoji || ''} 
-                  onChange={(e) => setNewAccount({ ...newAccount, emoji: e.target.value })} 
+                <Input
+                  id="acc-emoji"
+                  placeholder="e.g. 🏦"
+                  value={newAccount.emoji || ''}
+                  onChange={(e) => setNewAccount({ ...newAccount, emoji: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="acc-color">Accent Color</Label>
                 <div className="flex gap-2">
-                  <Input 
-                    id="acc-color" 
-                    type="color" 
-                    value={newAccount.color || '#475569'} 
-                    onChange={(e) => setNewAccount({ ...newAccount, color: e.target.value })} 
+                  <Input
+                    id="acc-color"
+                    type="color"
+                    value={newAccount.color || '#475569'}
+                    onChange={(e) => setNewAccount({ ...newAccount, color: e.target.value })}
                     className="rounded-xl h-10 w-12 border-primary/20 bg-background/50 p-1 cursor-pointer"
                   />
-                  <Input 
+                  <Input
                     type="text"
                     value={newAccount.color || '#475569'}
                     onChange={(e) => setNewAccount({ ...newAccount, color: e.target.value })}
@@ -5394,67 +6456,67 @@ export default function Finance() {
             <form onSubmit={handleEditAccount} className="space-y-4 py-2">
               <div className="space-y-1">
                 <Label htmlFor="edit-acc-name">Account Name</Label>
-                <Input 
-                  id="edit-acc-name" 
-                  value={activeAccount.name} 
-                  onChange={(e) => setActiveAccount({ ...activeAccount, name: e.target.value })} 
+                <Input
+                  id="edit-acc-name"
+                  value={activeAccount.name}
+                  onChange={(e) => setActiveAccount({ ...activeAccount, name: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                   required
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-acc-balance">Balance (£)</Label>
-                <Input 
-                  id="edit-acc-balance" 
-                  type="number" 
+                <Input
+                  id="edit-acc-balance"
+                  type="number"
                   step="0.01"
-                  value={activeAccount.balance} 
-                  onChange={(e) => setActiveAccount({ ...activeAccount, balance: parseFloat(e.target.value) || 0 })} 
+                  value={activeAccount.balance}
+                  onChange={(e) => setActiveAccount({ ...activeAccount, balance: parseFloat(e.target.value) || 0 })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                   required
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-acc-fee">Annual Fee (£)</Label>
-                <Input 
-                  id="edit-acc-fee" 
-                  type="number" 
-                  value={activeAccount.annualFee} 
-                  onChange={(e) => setActiveAccount({ ...activeAccount, annualFee: parseFloat(e.target.value) || 0 })} 
+                <Input
+                  id="edit-acc-fee"
+                  type="number"
+                  value={activeAccount.annualFee}
+                  onChange={(e) => setActiveAccount({ ...activeAccount, annualFee: parseFloat(e.target.value) || 0 })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-acc-use">Primary Use Case</Label>
-                <Input 
-                  id="edit-acc-use" 
-                  value={activeAccount.useCase || ''} 
-                  onChange={(e) => setActiveAccount({ ...activeAccount, useCase: e.target.value })} 
+                <Input
+                  id="edit-acc-use"
+                  value={activeAccount.useCase || ''}
+                  onChange={(e) => setActiveAccount({ ...activeAccount, useCase: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="edit-acc-emoji">Emoji Icon</Label>
-                  <Input 
-                    id="edit-acc-emoji" 
-                    placeholder="e.g. 🏦" 
-                    value={activeAccount.emoji || ''} 
-                    onChange={(e) => setActiveAccount({ ...activeAccount, emoji: e.target.value })} 
+                  <Input
+                    id="edit-acc-emoji"
+                    placeholder="e.g. 🏦"
+                    value={activeAccount.emoji || ''}
+                    onChange={(e) => setActiveAccount({ ...activeAccount, emoji: e.target.value })}
                     className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
                   />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="edit-acc-color">Accent Color</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      id="edit-acc-color" 
-                      type="color" 
-                      value={activeAccount.color || '#475569'} 
-                      onChange={(e) => setActiveAccount({ ...activeAccount, color: e.target.value })} 
+                    <Input
+                      id="edit-acc-color"
+                      type="color"
+                      value={activeAccount.color || '#475569'}
+                      onChange={(e) => setActiveAccount({ ...activeAccount, color: e.target.value })}
                       className="rounded-xl h-10 w-12 border-primary/20 bg-background/50 p-1 cursor-pointer"
                     />
-                    <Input 
+                    <Input
                       type="text"
                       value={activeAccount.color || '#475569'}
                       onChange={(e) => setActiveAccount({ ...activeAccount, color: e.target.value })}
@@ -5482,19 +6544,19 @@ export default function Finance() {
           <form onSubmit={handleAddMembership} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label htmlFor="mem-name">Membership Program</Label>
-              <Input 
-                id="mem-name" 
-                placeholder="e.g. Tesco Clubcard" 
-                value={newMembership.name} 
-                onChange={(e) => setNewMembership({ ...newMembership, name: e.target.value })} 
+              <Input
+                id="mem-name"
+                placeholder="e.g. Tesco Clubcard"
+                value={newMembership.name}
+                onChange={(e) => setNewMembership({ ...newMembership, name: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="mem-type">Program Type</Label>
-              <Select 
-                value={newMembership.type} 
+              <Select
+                value={newMembership.type}
                 onValueChange={(val) => setNewMembership({ ...newMembership, type: val as Membership['type'] })}
               >
                 <SelectTrigger id="mem-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
@@ -5510,33 +6572,33 @@ export default function Finance() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="mem-status">Status / Tier / Point Count</Label>
-              <Input 
-                id="mem-status" 
-                placeholder="e.g. Silver Tier (1200 points)" 
-                value={newMembership.status} 
-                onChange={(e) => setNewMembership({ ...newMembership, status: e.target.value })} 
+              <Input
+                id="mem-status"
+                placeholder="e.g. Silver Tier (1200 points)"
+                value={newMembership.status}
+                onChange={(e) => setNewMembership({ ...newMembership, status: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="mem-fee">Annual Fee (£)</Label>
-              <Input 
-                id="mem-fee" 
-                type="number" 
-                placeholder="e.g. 0" 
-                value={newMembership.annualFee || ''} 
-                onChange={(e) => setNewMembership({ ...newMembership, annualFee: parseFloat(e.target.value) || 0 })} 
+              <Input
+                id="mem-fee"
+                type="number"
+                placeholder="e.g. 0"
+                value={newMembership.annualFee || ''}
+                onChange={(e) => setNewMembership({ ...newMembership, annualFee: parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="mem-use">Primary Use Case</Label>
-              <Input 
-                id="mem-use" 
-                placeholder="e.g. Grocery cash savings" 
-                value={newMembership.useCase} 
-                onChange={(e) => setNewMembership({ ...newMembership, useCase: e.target.value })} 
+              <Input
+                id="mem-use"
+                placeholder="e.g. Grocery cash savings"
+                value={newMembership.useCase}
+                onChange={(e) => setNewMembership({ ...newMembership, useCase: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
@@ -5559,40 +6621,40 @@ export default function Finance() {
             <form onSubmit={handleEditMembership} className="space-y-4 py-2">
               <div className="space-y-1">
                 <Label htmlFor="edit-mem-name">Program Name</Label>
-                <Input 
-                  id="edit-mem-name" 
-                  value={activeMembership.name} 
-                  onChange={(e) => setActiveMembership({ ...activeMembership, name: e.target.value })} 
+                <Input
+                  id="edit-mem-name"
+                  value={activeMembership.name}
+                  onChange={(e) => setActiveMembership({ ...activeMembership, name: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                   required
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-mem-status">Status / Tier</Label>
-                <Input 
-                  id="edit-mem-status" 
-                  value={activeMembership.status} 
-                  onChange={(e) => setActiveMembership({ ...activeMembership, status: e.target.value })} 
+                <Input
+                  id="edit-mem-status"
+                  value={activeMembership.status}
+                  onChange={(e) => setActiveMembership({ ...activeMembership, status: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                   required
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-mem-fee">Annual Fee (£)</Label>
-                <Input 
-                  id="edit-mem-fee" 
-                  type="number" 
-                  value={activeMembership.annualFee} 
-                  onChange={(e) => setActiveMembership({ ...activeMembership, annualFee: parseFloat(e.target.value) || 0 })} 
+                <Input
+                  id="edit-mem-fee"
+                  type="number"
+                  value={activeMembership.annualFee}
+                  onChange={(e) => setActiveMembership({ ...activeMembership, annualFee: parseFloat(e.target.value) || 0 })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-mem-use">Primary Use Case</Label>
-                <Input 
-                  id="edit-mem-use" 
-                  value={activeMembership.useCase || ''} 
-                  onChange={(e) => setActiveMembership({ ...activeMembership, useCase: e.target.value })} 
+                <Input
+                  id="edit-mem-use"
+                  value={activeMembership.useCase || ''}
+                  onChange={(e) => setActiveMembership({ ...activeMembership, useCase: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                 />
               </div>
@@ -5613,46 +6675,53 @@ export default function Finance() {
             <DialogDescription className="text-xs">Add an automated recurring bill payment, linked to budgets and accounts.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddRecurring} className="space-y-4 py-2">
-            
+
             {/* Quick Templates Dropdown */}
             <div className="space-y-1">
               <Label htmlFor="rec-template" className="text-xs">Select Template (Auto-fills details)</Label>
-              <select
-                id="rec-template"
-                onChange={(e) => {
-                  const idx = parseInt(e.target.value, 10);
-                  if (!isNaN(idx) && recurringTemplates[idx]) {
-                    const temp = recurringTemplates[idx];
-                    setNewRecurring({
-                      ...newRecurring,
-                      name: temp.name,
-                      amount: temp.defaultAmount,
-                      frequency: temp.frequency as any,
-                      emoji: temp.emoji,
-                      category: temp.category,
-                      tag: temp.tag,
-                      linkedBudgetItemId: temp.linkedBudgetItemId
-                    });
+              <Select
+                value={addRecTemplate}
+                onValueChange={(val) => {
+                  setAddRecTemplate(val);
+                  if (val !== "scratch") {
+                    const idx = parseInt(val, 10);
+                    if (!isNaN(idx) && recurringTemplates[idx]) {
+                      const temp = recurringTemplates[idx];
+                      setNewRecurring({
+                        ...newRecurring,
+                        name: temp.name,
+                        amount: temp.defaultAmount,
+                        frequency: temp.frequency as any,
+                        emoji: temp.emoji,
+                        category: temp.category,
+                        tag: temp.tag,
+                        linkedBudgetItemId: temp.linkedBudgetItemId || ''
+                      });
+                    }
                   }
                 }}
-                className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="">Start a new one from scratch</option>
-                {recurringTemplates.map((temp, idx) => (
-                  <option key={idx} value={idx}>
-                    {temp.emoji} {temp.name} ({temp.category})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="rec-template" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                  <SelectValue placeholder="Start a new one from scratch" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-primary/10">
+                  <SelectItem value="scratch" className="text-xs">Start a new one from scratch</SelectItem>
+                  {recurringTemplates.map((temp, idx) => (
+                    <SelectItem key={idx} value={String(idx)} className="text-xs">
+                      {temp.emoji} {temp.name} ({temp.category})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Bill Name */}
             <div className="space-y-1">
               <Label htmlFor="rec-name" className="text-xs">Bill Name</Label>
-              <Input 
-                id="rec-name" 
-                placeholder="e.g. Spotify Premium" 
-                value={newRecurring.name} 
+              <Input
+                id="rec-name"
+                placeholder="e.g. Spotify Premium"
+                value={newRecurring.name}
                 onChange={(e) => {
                   const nameVal = e.target.value;
                   const match = autoCategorizeRecurring(nameVal);
@@ -5673,7 +6742,7 @@ export default function Finance() {
                       name: nameVal
                     });
                   }
-                }} 
+                }}
                 className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
                 required
               />
@@ -5683,21 +6752,21 @@ export default function Finance() {
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1 col-span-1">
                 <Label htmlFor="rec-emoji" className="text-xs">Emoji</Label>
-                <Input 
-                  id="rec-emoji" 
-                  placeholder="e.g. 🎵" 
-                  value={newRecurring.emoji || ''} 
-                  onChange={(e) => setNewRecurring({ ...newRecurring, emoji: e.target.value })} 
+                <Input
+                  id="rec-emoji"
+                  placeholder="e.g. 🎵"
+                  value={newRecurring.emoji || ''}
+                  onChange={(e) => setNewRecurring({ ...newRecurring, emoji: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50 text-center"
                 />
               </div>
               <div className="space-y-1 col-span-2">
                 <Label htmlFor="rec-tag" className="text-xs">Tag / Badge Code</Label>
-                <Input 
-                  id="rec-tag" 
-                  placeholder="e.g. SPOTIFY" 
-                  value={newRecurring.tag || ''} 
-                  onChange={(e) => setNewRecurring({ ...newRecurring, tag: e.target.value.toUpperCase() })} 
+                <Input
+                  id="rec-tag"
+                  placeholder="e.g. SPOTIFY"
+                  value={newRecurring.tag || ''}
+                  onChange={(e) => setNewRecurring({ ...newRecurring, tag: e.target.value.toUpperCase() })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
                 />
               </div>
@@ -5707,30 +6776,33 @@ export default function Finance() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="rec-amount" className="text-xs">Amount (£)</Label>
-                <Input 
-                  id="rec-amount" 
-                  type="number" 
+                <Input
+                  id="rec-amount"
+                  type="number"
                   step="0.01"
-                  placeholder="e.g. 10.99" 
-                  value={newRecurring.amount || ''} 
-                  onChange={(e) => setNewRecurring({ ...newRecurring, amount: parseFloat(e.target.value) || 0 })} 
+                  placeholder="e.g. 10.99"
+                  value={newRecurring.amount || ''}
+                  onChange={(e) => setNewRecurring({ ...newRecurring, amount: parseFloat(e.target.value) || 0 })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
                   required
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="rec-frequency" className="text-xs">Frequency</Label>
-                <select
-                  id="rec-frequency"
+                <Select
                   value={newRecurring.frequency}
-                  onChange={(e) => setNewRecurring({ ...newRecurring, frequency: e.target.value as any })}
-                  className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  onValueChange={(val) => setNewRecurring({ ...newRecurring, frequency: val as any })}
                 >
-                  <option value="monthly">Monthly</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="annually">Annually</option>
-                </select>
+                  <SelectTrigger id="rec-frequency" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                    <SelectValue placeholder="Select frequency..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/10">
+                    <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
+                    <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
+                    <SelectItem value="quarterly" className="text-xs">Quarterly</SelectItem>
+                    <SelectItem value="annually" className="text-xs">Annually</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -5738,93 +6810,105 @@ export default function Finance() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="rec-day" className="text-xs">Due Day of Month (1-31)</Label>
-                <Input 
-                  id="rec-day" 
-                  type="number" 
+                <Input
+                  id="rec-day"
+                  type="number"
                   min="1"
                   max="31"
-                  placeholder="e.g. 15" 
-                  value={newRecurring.dueDate || ''} 
-                  onChange={(e) => setNewRecurring({ ...newRecurring, dueDate: parseInt(e.target.value, 10) || 1 })} 
+                  placeholder="e.g. 15"
+                  value={newRecurring.dueDate || ''}
+                  onChange={(e) => setNewRecurring({ ...newRecurring, dueDate: parseInt(e.target.value, 10) || 1 })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
                   required
                 />
               </div>
-              
+
               <div className="space-y-1">
                 <Label htmlFor="rec-month" className="text-xs">Due Month</Label>
-                <select
-                  id="rec-month"
-                  value={newRecurring.dueMonth || 1}
-                  onChange={(e) => setNewRecurring({ ...newRecurring, dueMonth: parseInt(e.target.value, 10) })}
+                <Select
+                  value={String(newRecurring.dueMonth || 1)}
+                  onValueChange={(val) => setNewRecurring({ ...newRecurring, dueMonth: parseInt(val, 10) })}
                   disabled={newRecurring.frequency === 'monthly' || newRecurring.frequency === 'weekly'}
-                  className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
                 >
-                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-                    <option key={idx} value={idx + 1}>{m}</option>
-                  ))}
-                </select>
+                  <SelectTrigger id="rec-month" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs disabled:opacity-50">
+                    <SelectValue placeholder="Select month..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/10">
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
+                      <SelectItem key={idx} value={String(idx + 1)} className="text-xs">{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             {/* Category selection */}
             <div className="space-y-1">
               <Label htmlFor="rec-category" className="text-xs">Dashboard Category</Label>
-              <select
-                id="rec-category"
-                value={newRecurring.category || ''}
-                onChange={(e) => setNewRecurring({ ...newRecurring, category: e.target.value })}
-                className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              <Select
+                value={newRecurring.category || 'none'}
+                onValueChange={(val) => setNewRecurring({ ...newRecurring, category: val === 'none' ? '' : val })}
               >
-                <option value="">Select category...</option>
-                <option value="Rent">Rent / Housing</option>
-                <option value="Subscriptions">Subscriptions</option>
-                <option value="Insurance">Insurance</option>
-                <option value="Entertainment">Entertainment</option>
-                <option value="Gym">Gym</option>
-                <option value="Donations">Donations</option>
-                <option value="Groceries">Groceries</option>
-                <option value="Car">Car</option>
-                <option value="Healthcare">Healthcare</option>
-                <option value="Other">Other</option>
-              </select>
+                <SelectTrigger id="rec-category" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                  <SelectValue placeholder="Select category..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-primary/10">
+                  <SelectItem value="none" className="text-xs">Select category...</SelectItem>
+                  <SelectItem value="Rent" className="text-xs">Rent / Housing</SelectItem>
+                  <SelectItem value="Subscriptions" className="text-xs">Subscriptions</SelectItem>
+                  <SelectItem value="Insurance" className="text-xs">Insurance</SelectItem>
+                  <SelectItem value="Entertainment" className="text-xs">Entertainment</SelectItem>
+                  <SelectItem value="Gym" className="text-xs">Gym</SelectItem>
+                  <SelectItem value="Donations" className="text-xs">Donations</SelectItem>
+                  <SelectItem value="Groceries" className="text-xs">Groceries</SelectItem>
+                  <SelectItem value="Car" className="text-xs">Car</SelectItem>
+                  <SelectItem value="Healthcare" className="text-xs">Healthcare</SelectItem>
+                  <SelectItem value="Other" className="text-xs">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Symlink: Linked Budget Item */}
             <div className="space-y-1">
               <Label htmlFor="rec-link-budget" className="text-xs">Link to Budget Item</Label>
-              <select
-                id="rec-link-budget"
-                value={newRecurring.linkedBudgetItemId || ''}
-                onChange={(e) => setNewRecurring({ ...newRecurring, linkedBudgetItemId: e.target.value })}
-                className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              <Select
+                value={newRecurring.linkedBudgetItemId || 'none'}
+                onValueChange={(val) => setNewRecurring({ ...newRecurring, linkedBudgetItemId: val === 'none' ? '' : val })}
               >
-                <option value="">No linked budget item (Create automatically on save)</option>
-                <option value="create">Force create new item</option>
-                {allBudgetItems.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="rec-link-budget" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                  <SelectValue placeholder="No linked budget item (Create automatically on save)" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-primary/10">
+                  <SelectItem value="none" className="text-xs">No linked budget item (Create automatically on save)</SelectItem>
+                  <SelectItem value="create" className="text-xs">Force create new item</SelectItem>
+                  {allBudgetItems.map(item => (
+                    <SelectItem key={item.id} value={item.id} className="text-xs">
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Symlink: Linked Bank Account */}
             <div className="space-y-1">
               <Label htmlFor="rec-link-account" className="text-xs">Link to Bank Account (Source for payments)</Label>
-              <select
-                id="rec-link-account"
-                value={newRecurring.linkedAccountId || ''}
-                onChange={(e) => setNewRecurring({ ...newRecurring, linkedAccountId: e.target.value })}
-                className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              <Select
+                value={newRecurring.linkedAccountId || 'none'}
+                onValueChange={(val) => setNewRecurring({ ...newRecurring, linkedAccountId: val === 'none' ? '' : val })}
               >
-                <option value="">No linked account (Manual cash payment)</option>
-                {bankAccounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.type} - {formatGBP(acc.balance)})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="rec-link-account" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                  <SelectValue placeholder="No linked account (Manual cash payment)" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-primary/10">
+                  <SelectItem value="none" className="text-xs">No linked account (Manual cash payment)</SelectItem>
+                  {bankAccounts.map(acc => (
+                    <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                      {acc.name} ({acc.type} - {formatGBP(acc.balance)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <DialogFooter className="pt-4 gap-2 sm:gap-0">
@@ -5844,14 +6928,14 @@ export default function Finance() {
           </DialogHeader>
           {activeRecurring && (
             <form onSubmit={handleEditRecurring} className="space-y-4 py-2">
-              
+
               {/* Bill Name */}
               <div className="space-y-1">
                 <Label htmlFor="edit-rec-name" className="text-xs">Bill Name</Label>
-                <Input 
-                  id="edit-rec-name" 
-                  value={activeRecurring.name} 
-                  onChange={(e) => setActiveRecurring({ ...activeRecurring, name: e.target.value })} 
+                <Input
+                  id="edit-rec-name"
+                  value={activeRecurring.name}
+                  onChange={(e) => setActiveRecurring({ ...activeRecurring, name: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
                   required
                 />
@@ -5861,21 +6945,21 @@ export default function Finance() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1 col-span-1">
                   <Label htmlFor="edit-rec-emoji" className="text-xs">Emoji</Label>
-                  <Input 
-                    id="edit-rec-emoji" 
-                    placeholder="e.g. 🎵" 
-                    value={activeRecurring.emoji || ''} 
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, emoji: e.target.value })} 
+                  <Input
+                    id="edit-rec-emoji"
+                    placeholder="e.g. 🎵"
+                    value={activeRecurring.emoji || ''}
+                    onChange={(e) => setActiveRecurring({ ...activeRecurring, emoji: e.target.value })}
                     className="rounded-xl h-10 border-primary/20 bg-background/50 text-center"
                   />
                 </div>
                 <div className="space-y-1 col-span-2">
                   <Label htmlFor="edit-rec-tag" className="text-xs">Tag / Badge Code</Label>
-                  <Input 
-                    id="edit-rec-tag" 
-                    placeholder="e.g. SPOTIFY" 
-                    value={activeRecurring.tag || ''} 
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, tag: e.target.value.toUpperCase() })} 
+                  <Input
+                    id="edit-rec-tag"
+                    placeholder="e.g. SPOTIFY"
+                    value={activeRecurring.tag || ''}
+                    onChange={(e) => setActiveRecurring({ ...activeRecurring, tag: e.target.value.toUpperCase() })}
                     className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
                   />
                 </div>
@@ -5885,29 +6969,32 @@ export default function Finance() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="edit-rec-amount" className="text-xs">Amount (£)</Label>
-                  <Input 
-                    id="edit-rec-amount" 
-                    type="number" 
+                  <Input
+                    id="edit-rec-amount"
+                    type="number"
                     step="0.01"
-                    value={activeRecurring.amount} 
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, amount: parseFloat(e.target.value) || 0 })} 
+                    value={activeRecurring.amount}
+                    onChange={(e) => setActiveRecurring({ ...activeRecurring, amount: parseFloat(e.target.value) || 0 })}
                     className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
                     required
                   />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="edit-rec-frequency" className="text-xs">Frequency</Label>
-                  <select
-                    id="edit-rec-frequency"
+                  <Select
                     value={activeRecurring.frequency}
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, frequency: e.target.value as any })}
-                    className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    onValueChange={(val) => setActiveRecurring({ ...activeRecurring, frequency: val as any })}
                   >
-                    <option value="monthly">Monthly</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="quarterly">Quarterly</option>
-                    <option value="annually">Annually</option>
-                  </select>
+                    <SelectTrigger id="edit-rec-frequency" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                      <SelectValue placeholder="Select frequency..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-primary/10">
+                      <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
+                      <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
+                      <SelectItem value="quarterly" className="text-xs">Quarterly</SelectItem>
+                      <SelectItem value="annually" className="text-xs">Annually</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -5915,91 +7002,103 @@ export default function Finance() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="edit-rec-day" className="text-xs">Due Day of Month (1-31)</Label>
-                  <Input 
-                    id="edit-rec-day" 
-                    type="number" 
+                  <Input
+                    id="edit-rec-day"
+                    type="number"
                     min="1"
                     max="31"
-                    value={activeRecurring.dueDate} 
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, dueDate: parseInt(e.target.value, 10) || 1 })} 
+                    value={activeRecurring.dueDate}
+                    onChange={(e) => setActiveRecurring({ ...activeRecurring, dueDate: parseInt(e.target.value, 10) || 1 })}
                     className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-1">
                   <Label htmlFor="edit-rec-month" className="text-xs">Due Month</Label>
-                  <select
-                    id="edit-rec-month"
-                    value={activeRecurring.dueMonth || 1}
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, dueMonth: parseInt(e.target.value, 10) })}
+                  <Select
+                    value={String(activeRecurring.dueMonth || 1)}
+                    onValueChange={(val) => setActiveRecurring({ ...activeRecurring, dueMonth: parseInt(val, 10) })}
                     disabled={activeRecurring.frequency === 'monthly' || activeRecurring.frequency === 'weekly'}
-                    className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
                   >
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-                      <option key={idx} value={idx + 1}>{m}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="edit-rec-month" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs disabled:opacity-50">
+                      <SelectValue placeholder="Select month..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-primary/10">
+                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
+                        <SelectItem key={idx} value={String(idx + 1)} className="text-xs">{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               {/* Category selection */}
               <div className="space-y-1">
                 <Label htmlFor="edit-rec-category" className="text-xs">Dashboard Category</Label>
-                <select
-                  id="edit-rec-category"
-                  value={activeRecurring.category || ''}
-                  onChange={(e) => setActiveRecurring({ ...activeRecurring, category: e.target.value })}
-                  className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                <Select
+                  value={activeRecurring.category || 'none'}
+                  onValueChange={(val) => setActiveRecurring({ ...activeRecurring, category: val === 'none' ? '' : val })}
                 >
-                  <option value="">Select category...</option>
-                  <option value="Rent">Rent / Housing</option>
-                  <option value="Subscriptions">Subscriptions</option>
-                  <option value="Insurance">Insurance</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Gym">Gym</option>
-                  <option value="Donations">Donations</option>
-                  <option value="Groceries">Groceries</option>
-                  <option value="Car">Car</option>
-                  <option value="Healthcare">Healthcare</option>
-                  <option value="Other">Other</option>
-                </select>
+                  <SelectTrigger id="edit-rec-category" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                    <SelectValue placeholder="Select category..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/10">
+                    <SelectItem value="none" className="text-xs">Select category...</SelectItem>
+                    <SelectItem value="Rent" className="text-xs">Rent / Housing</SelectItem>
+                    <SelectItem value="Subscriptions" className="text-xs">Subscriptions</SelectItem>
+                    <SelectItem value="Insurance" className="text-xs">Insurance</SelectItem>
+                    <SelectItem value="Entertainment" className="text-xs">Entertainment</SelectItem>
+                    <SelectItem value="Gym" className="text-xs">Gym</SelectItem>
+                    <SelectItem value="Donations" className="text-xs">Donations</SelectItem>
+                    <SelectItem value="Groceries" className="text-xs">Groceries</SelectItem>
+                    <SelectItem value="Car" className="text-xs">Car</SelectItem>
+                    <SelectItem value="Healthcare" className="text-xs">Healthcare</SelectItem>
+                    <SelectItem value="Other" className="text-xs">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Symlink: Linked Budget Item */}
               <div className="space-y-1">
                 <Label htmlFor="edit-rec-link-budget" className="text-xs">Link to Budget Item</Label>
-                <select
-                  id="edit-rec-link-budget"
-                  value={activeRecurring.linkedBudgetItemId || ''}
-                  onChange={(e) => setActiveRecurring({ ...activeRecurring, linkedBudgetItemId: e.target.value })}
-                  className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                <Select
+                  value={activeRecurring.linkedBudgetItemId || 'none'}
+                  onValueChange={(val) => setActiveRecurring({ ...activeRecurring, linkedBudgetItemId: val === 'none' ? '' : val })}
                 >
-                  <option value="">No linked budget item</option>
-                  {allBudgetItems.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="edit-rec-link-budget" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                    <SelectValue placeholder="No linked budget item" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/10">
+                    <SelectItem value="none" className="text-xs">No linked budget item</SelectItem>
+                    {allBudgetItems.map(item => (
+                      <SelectItem key={item.id} value={item.id} className="text-xs">
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Symlink: Linked Bank Account */}
               <div className="space-y-1">
                 <Label htmlFor="edit-rec-link-account" className="text-xs">Link to Bank Account (Source for payments)</Label>
-                <select
-                  id="edit-rec-link-account"
-                  value={activeRecurring.linkedAccountId || ''}
-                  onChange={(e) => setActiveRecurring({ ...activeRecurring, linkedAccountId: e.target.value })}
-                  className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                <Select
+                  value={activeRecurring.linkedAccountId || 'none'}
+                  onValueChange={(val) => setActiveRecurring({ ...activeRecurring, linkedAccountId: val === 'none' ? '' : val })}
                 >
-                  <option value="">No linked account (Manual cash payment)</option>
-                  {bankAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.type} - {formatGBP(acc.balance)})
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="edit-rec-link-account" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                    <SelectValue placeholder="No linked account (Manual cash payment)" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/10">
+                    <SelectItem value="none" className="text-xs">No linked account (Manual cash payment)</SelectItem>
+                    {bankAccounts.map(acc => (
+                      <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                        {acc.name} ({acc.type} - {formatGBP(acc.balance)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <DialogFooter className="pt-4 gap-2 sm:gap-0">
@@ -6021,22 +7120,21 @@ export default function Finance() {
           <form onSubmit={handleAddCreditScore} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label htmlFor="cs-bureau" className="text-xs">Credit Bureau</Label>
-              <select
-                id="cs-bureau"
+              <Select
                 value={newCreditScore.bureau}
-                onChange={(e) => {
-                  const bureau = e.target.value as typeof newCreditScore.bureau;
-                  setNewCreditScore({
-                    ...newCreditScore,
-                    bureau,
-                  });
-                }}
-                className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                onValueChange={(val) => setNewCreditScore({ ...newCreditScore, bureau: val as any })}
               >
-                {creditBureaus.map(b => (
-                  <option key={b.key} value={b.key}>{b.emoji} {b.label} (0–{b.maxScore})</option>
-                ))}
-              </select>
+                <SelectTrigger id="cs-bureau" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+                  <SelectValue placeholder="Select bureau..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-primary/10">
+                  {creditBureaus.map(b => (
+                    <SelectItem key={b.key} value={b.key} className="text-xs">
+                      {b.emoji} {b.label} (0–{b.maxScore})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label htmlFor="cs-score" className="text-xs">Score</Label>
@@ -6079,25 +7177,54 @@ export default function Finance() {
           </DialogHeader>
           <form onSubmit={handleAddCategory} className="space-y-4 py-2">
             <div className="space-y-1">
+              <Label htmlFor="cat-template" className="text-xs">Select Template (Auto-fills details)</Label>
+              <select
+                id="cat-template"
+                onChange={(e) => {
+                  const idx = parseInt(e.target.value, 10);
+                  if (!isNaN(idx) && defaultBudgetCategories[idx]) {
+                    const preset = defaultBudgetCategories[idx];
+                    setNewCategoryName(preset.name);
+                    setNewCategoryEmoji(preset.emoji || '');
+                    setNewCategoryGroup(preset.group || 'needs');
+                  } else {
+                    setNewCategoryName('');
+                    setNewCategoryEmoji('');
+                    setNewCategoryGroup('needs');
+                    setNewCategoryBudget(0);
+                  }
+                }}
+                className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                defaultValue=""
+              >
+                <option value="">Start a new one from scratch</option>
+                {defaultBudgetCategories.map((preset, idx) => (
+                  <option key={preset.id} value={idx}>
+                    {preset.emoji} {preset.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="cat-new-name">Category Name</Label>
-              <Input 
-                id="cat-new-name" 
-                placeholder="e.g. Travel & Transport" 
-                value={newCategoryName} 
-                onChange={(e) => setNewCategoryName(e.target.value)} 
+              <Input
+                id="cat-new-name"
+                placeholder="e.g. Travel & Transport"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="cat-new-budget">Budget Limit (£)</Label>
-              <Input 
-                id="cat-new-budget" 
+              <Input
+                id="cat-new-budget"
                 type="number"
                 step="0.01"
-                placeholder="e.g. 500" 
-                value={newCategoryBudget || ''} 
-                onChange={(e) => setNewCategoryBudget(parseFloat(e.target.value) || 0)} 
+                placeholder="e.g. 500"
+                value={newCategoryBudget || ''}
+                onChange={(e) => setNewCategoryBudget(parseFloat(e.target.value) || 0)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
@@ -6117,11 +7244,11 @@ export default function Finance() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="cat-new-emoji">Category Emoji</Label>
-              <Input 
-                id="cat-new-emoji" 
-                placeholder="e.g. 🍔 (Leave blank for default)" 
-                value={newCategoryEmoji} 
-                onChange={(e) => setNewCategoryEmoji(e.target.value)} 
+              <Input
+                id="cat-new-emoji"
+                placeholder="e.g. 🍔 (Leave blank for default)"
+                value={newCategoryEmoji}
+                onChange={(e) => setNewCategoryEmoji(e.target.value)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
               />
             </div>
@@ -6143,22 +7270,22 @@ export default function Finance() {
           <form onSubmit={handleEditCategory} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label htmlFor="cat-edit-name">Category Name</Label>
-              <Input 
-                id="cat-edit-name" 
-                value={newCategoryName} 
-                onChange={(e) => setNewCategoryName(e.target.value)} 
+              <Input
+                id="cat-edit-name"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="cat-edit-budget">Budget Limit (£)</Label>
-              <Input 
-                id="cat-edit-budget" 
+              <Input
+                id="cat-edit-budget"
                 type="number"
                 step="0.01"
-                value={newCategoryBudget || ''} 
-                onChange={(e) => setNewCategoryBudget(parseFloat(e.target.value) || 0)} 
+                value={newCategoryBudget || ''}
+                onChange={(e) => setNewCategoryBudget(parseFloat(e.target.value) || 0)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
@@ -6178,11 +7305,11 @@ export default function Finance() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="cat-edit-emoji">Category Emoji</Label>
-              <Input 
-                id="cat-edit-emoji" 
-                placeholder="e.g. 🍔" 
-                value={newCategoryEmoji} 
-                onChange={(e) => setNewCategoryEmoji(e.target.value)} 
+              <Input
+                id="cat-edit-emoji"
+                placeholder="e.g. 🍔"
+                value={newCategoryEmoji}
+                onChange={(e) => setNewCategoryEmoji(e.target.value)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
               />
             </div>
@@ -6204,24 +7331,24 @@ export default function Finance() {
           <form onSubmit={handleAddItem} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label htmlFor="item-new-name">Item Name</Label>
-              <Input 
-                id="item-new-name" 
-                placeholder="e.g. Weekly Fuel" 
-                value={newBudgetItem.name} 
-                onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })} 
+              <Input
+                id="item-new-name"
+                placeholder="e.g. Weekly Fuel"
+                value={newBudgetItem.name}
+                onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="item-new-spent">Currently Spent (£)</Label>
-              <Input 
-                id="item-new-spent" 
-                type="number" 
+              <Input
+                id="item-new-spent"
+                type="number"
                 step="0.01"
-                placeholder="e.g. 45" 
-                value={newBudgetItem.spent || ''} 
-                onChange={(e) => setNewBudgetItem({ ...newBudgetItem, spent: parseFloat(e.target.value) || 0 })} 
+                placeholder="e.g. 45"
+                value={newBudgetItem.spent || ''}
+                onChange={(e) => setNewBudgetItem({ ...newBudgetItem, spent: parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
@@ -6245,22 +7372,22 @@ export default function Finance() {
             <form onSubmit={handleEditItem} className="space-y-4 py-2">
               <div className="space-y-1">
                 <Label htmlFor="edit-item-name">Item Name</Label>
-                <Input 
-                  id="edit-item-name" 
-                  value={activeBudgetItem.name} 
-                  onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, name: e.target.value })} 
+                <Input
+                  id="edit-item-name"
+                  value={activeBudgetItem.name}
+                  onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, name: e.target.value })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                   required
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-item-spent">Currently Spent (£)</Label>
-                <Input 
-                  id="edit-item-spent" 
-                  type="number" 
+                <Input
+                  id="edit-item-spent"
+                  type="number"
                   step="0.01"
-                  value={activeBudgetItem.spent} 
-                  onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, spent: parseFloat(e.target.value) || 0 })} 
+                  value={activeBudgetItem.spent}
+                  onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, spent: parseFloat(e.target.value) || 0 })}
                   className="rounded-xl h-10 border-primary/20 bg-background/50"
                   required
                 />
@@ -6300,3 +7427,144 @@ function PieChartIcon(props: React.ComponentProps<'svg'>) {
     </svg>
   );
 }
+
+interface MonthYearPickerProps {
+  value: string;
+  onChange: (val: string) => void;
+  isEnd?: boolean;
+}
+
+function MonthYearPicker({ value, onChange, isEnd }: MonthYearPickerProps) {
+  const parsedDate = new Date(value);
+  const initialYear = isNaN(parsedDate.getTime()) ? new Date().getFullYear() : parsedDate.getFullYear();
+  const initialMonth = isNaN(parsedDate.getTime()) ? new Date().getMonth() : parsedDate.getMonth();
+  const initialDay = isNaN(parsedDate.getTime()) ? (isEnd ? 30 : 1) : parsedDate.getDate();
+
+  const [view, setView] = useState<'months' | 'days'>('months');
+  const [pickerYear, setPickerYear] = useState(initialYear);
+  const [pickerMonth, setPickerMonth] = useState(initialMonth);
+
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  if (view === 'days') {
+    const daysInMonth = getDaysInMonth(pickerYear, pickerMonth);
+    const startDayOfWeek = getStartDayOfWeek(pickerYear, pickerMonth);
+
+    return (
+      <div className="w-[300px] p-4 bg-popover text-foreground select-none">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setView('months')}
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-muted text-foreground flex items-center gap-1 hover:bg-muted/80 transition-colors"
+          >
+            <ChevronLeft className="h-3 w-3" /> Back
+          </button>
+          <span className="text-xs font-bold text-foreground">
+            {months[pickerMonth]} {pickerYear}
+          </span>
+          <div className="w-[45px]" />
+        </div>
+
+        {/* Week headers */}
+        <div className="grid grid-cols-7 gap-1 mb-1.5 text-[9px] font-semibold text-muted-foreground text-center">
+          <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+        </div>
+
+        {/* Days Grid */}
+        <div className="grid grid-cols-7 gap-1 text-center justify-items-center">
+          {Array.from({ length: startDayOfWeek }).map((_, i) => (
+            <div key={`empty-${i}`} className="w-7 h-7" />
+          ))}
+
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const dayNum = i + 1;
+            const isSelected = initialYear === pickerYear && initialMonth === pickerMonth && initialDay === dayNum;
+
+            return (
+              <button
+                key={dayNum}
+                onClick={() => {
+                  const yrStr = String(pickerYear);
+                  const moStr = String(pickerMonth + 1).padStart(2, '0');
+                  const dyStr = String(dayNum).padStart(2, '0');
+                  onChange(`${yrStr}-${moStr}-${dyStr}`);
+                }}
+                className={cn(
+                  "w-7 h-7 text-[10px] font-semibold transition-all flex items-center justify-center rounded-lg",
+                  isSelected
+                    ? "bg-[#1d70b8] text-white shadow-sm"
+                    : "text-foreground/80 hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                {dayNum}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-[300px] p-4 bg-popover text-foreground select-none">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        {/* Year Dropdown Selector */}
+        <select
+          value={pickerYear}
+          onChange={(e) => setPickerYear(Number(e.target.value))}
+          className="appearance-none bg-background/60 hover:bg-background/80 text-foreground border border-border/80 rounded-xl pl-3 pr-8 py-1.5 text-xs font-semibold focus:outline-none cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_10px_center] bg-no-repeat transition-colors"
+        >
+          {Array.from({ length: 21 }, (_, i) => 2015 + i).map(y => (
+            <option key={y} value={y} className="bg-popover text-foreground">{y}</option>
+          ))}
+        </select>
+
+        {/* Prev / Next Chevrons */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setPickerYear(prev => prev - 1)}
+            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setPickerYear(prev => prev + 1)}
+            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 3x4 Month Grid */}
+      <div className="grid grid-cols-3 gap-2">
+        {months.map((mName, idx) => {
+          const isSelected = initialYear === pickerYear && initialMonth === idx;
+          return (
+            <button
+              key={mName}
+              onClick={() => {
+                setPickerMonth(idx);
+                setView('days');
+              }}
+              className={cn(
+                "py-2 text-[10px] font-medium transition-all text-center rounded-xl",
+                isSelected
+                  ? "bg-[#1d70b8] text-white font-semibold shadow-sm"
+                  : "text-foreground/80 hover:bg-muted/50 hover:text-foreground"
+              )}
+            >
+              {mName}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
