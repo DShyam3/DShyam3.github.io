@@ -644,12 +644,13 @@ const getOrdinal = (d: number) => {
   }
 };
 
-const getDueDateText = (bill: RecurringBill, currentMonth: number) => {
+const getDueDateText = (bill: RecurringBill, currentMonth: number, overrideMonth?: number) => {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const dayStr = `${bill.dueDate}${getOrdinal(bill.dueDate)}`;
   if (bill.frequency === 'monthly' || bill.frequency === 'weekly') {
-    const currentMonthName = months[currentMonth - 1];
-    return `${currentMonthName} ${dayStr}`;
+    const targetMonth = overrideMonth !== undefined ? overrideMonth : currentMonth;
+    const monthName = months[(targetMonth - 1 + 12) % 12];
+    return `${monthName} ${dayStr}`;
   } else {
     const monthName = months[(bill.dueMonth || 1) - 1];
     return `${monthName} ${dayStr}`;
@@ -5228,7 +5229,36 @@ export default function Finance() {
             };
 
             const thisMonthBills = recurrings.filter(r => isDueThisMonth(r, currentMonth));
-            const futureBills = recurrings.filter(r => !isDueThisMonth(r, currentMonth));
+
+            const todayDay = new Date().getDate();
+            const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+
+            interface DisplayBill extends RecurringBill {
+              displayMonth?: number;
+            }
+
+            const futureBills: DisplayBill[] = [];
+            recurrings.forEach(r => {
+              const isDueThis = isDueThisMonth(r, currentMonth);
+              if (!isDueThis) {
+                futureBills.push({
+                  ...r,
+                  displayMonth: r.dueMonth || nextMonth
+                });
+              } else {
+                if (r.isPaid) {
+                  futureBills.push({
+                    ...r,
+                    displayMonth: nextMonth
+                  });
+                } else if (todayDay >= 25 && r.dueDate <= 7) {
+                  futureBills.push({
+                    ...r,
+                    displayMonth: nextMonth
+                  });
+                }
+              }
+            });
 
             const totalAmount = thisMonthBills.reduce((sum, r) => sum + r.amount, 0);
             const paidAmount = thisMonthBills.filter(r => r.isPaid).reduce((sum, r) => sum + r.amount, 0);
@@ -5320,9 +5350,10 @@ export default function Finance() {
                         This month
                       </button>
 
-                      {!thisMonthCollapsed && (
+                       {!thisMonthCollapsed && (
                         <div className="space-y-1 px-1">
                           {thisMonthBills
+                            .filter(bill => !bill.isPaid)
                             .sort((a, b) => a.dueDate - b.dueDate)
                             .map(bill => {
                               const dueDateText = getDueDateText(bill, currentMonth);
@@ -5401,8 +5432,10 @@ export default function Finance() {
                               );
                             })}
 
-                          {thisMonthBills.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic py-6 text-center">No bills due this month.</p>
+                          {thisMonthBills.filter(bill => !bill.isPaid).length === 0 && (
+                            <p className="text-xs text-muted-foreground italic py-6 text-center">
+                              {thisMonthBills.length > 0 ? "All bills paid for this month! 🎉" : "No bills due this month."}
+                            </p>
                           )}
                         </div>
                       )}
@@ -5424,12 +5457,12 @@ export default function Finance() {
                         <div className="space-y-1 px-1">
                           {futureBills
                             .sort((a, b) => {
-                              const mDiff = (a.dueMonth || 1) - (b.dueMonth || 1);
+                              const mDiff = (a.displayMonth || 1) - (b.displayMonth || 1);
                               if (mDiff !== 0) return mDiff;
                               return a.dueDate - b.dueDate;
                             })
                             .map(bill => {
-                              const dueDateText = getDueDateText(bill, currentMonth);
+                              const dueDateText = getDueDateText(bill, currentMonth, bill.displayMonth);
                               return (
                                 <div
                                   key={bill.id}
