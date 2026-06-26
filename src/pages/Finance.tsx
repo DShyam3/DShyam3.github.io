@@ -1101,6 +1101,7 @@ export default function Finance() {
   const [addRecTemplate, setAddRecTemplate] = useState("scratch");
   const [isEditRecurringOpen, setIsEditRecurringOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
@@ -4013,129 +4014,191 @@ export default function Finance() {
 
                 </div>
 
-                {/* Grid of Budget Categories */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {budgetCategories.map(category => {
-                    const catBudget = category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0);
-                    const catSpent = category.items.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
-                    const catColor = getProgressColor(catSpent, catBudget);
+                {/* Copilot-style Budget list */}
+                <Card className="bg-card/25 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl">
+                  {/* Table Header */}
+                  <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-sans border-b border-border/20 pb-2 px-2">
+                    <span className="flex-1">Regular Categories</span>
+                    <div className="flex items-center gap-4 text-right">
+                      <span className="w-20 text-right">Spent</span>
+                      <span className="w-40 md:w-60 hidden sm:inline-block text-center">Progress</span>
+                      <span className="w-20 text-right">Budget</span>
+                    </div>
+                  </div>
 
-                    return (
-                      <Card key={category.id} className="bg-card/40 border border-primary/10 rounded-3xl p-6 flex flex-col justify-between space-y-4">
+                  {/* List of Categories */}
+                  <div className="divide-y divide-border/10">
+                    {budgetCategories.map((category, idx) => {
+                      const catBudget = category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0);
+                      const catSpent = category.items.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
+                      const isOver = catSpent > catBudget;
+                      const isExpanded = expandedCategories[category.id] !== false; // expanded by default!
 
-                        {/* Header block */}
-                        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
-                          <div className="space-y-1 min-w-0 flex-1 flex items-start gap-2.5">
-                            <span className="text-2xl pt-0.5 leading-none shrink-0">{category.emoji || '📂'}</span>
-                            <div className="min-w-0">
-                              <span className="text-sm font-bold font-serif text-foreground block truncate">{category.name}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono block">
-                                {formatGBP(catSpent)} Spent / {formatGBP(catBudget)} Budgeted
-                              </span>
+                      const catColor = [
+                        '#3b82f6', // blue
+                        '#10b981', // emerald
+                        '#f59e0b', // amber
+                        '#ef4444', // red
+                        '#8b5cf6', // violet
+                        '#ec4899', // pink
+                        '#14b8a6', // teal
+                        '#f97316', // orange
+                      ][idx % 8];
+
+                      return (
+                        <div key={category.id} className="py-2.5">
+                          {/* Category Row */}
+                          <div className="group flex items-center justify-between py-1.5 hover:bg-muted/5 rounded-xl px-2 transition-colors">
+                            {/* Left: Collapse, badge count, name, hover actions */}
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <button
+                                onClick={() => setExpandedCategories({
+                                  ...expandedCategories,
+                                  [category.id]: !isExpanded
+                                })}
+                                className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4 animate-in fade-in zoom-in duration-200" style={{ color: catColor }} />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 animate-in fade-in zoom-in duration-200" style={{ color: catColor }} />
+                                )}
+                              </button>
+
+                              {/* Coloured badge with item count */}
+                              <div
+                                className="h-5 w-5 rounded flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-sm"
+                                style={{ backgroundColor: catColor }}
+                              >
+                                {category.items.length}
+                              </div>
+
+                              <span className="font-bold text-sm text-foreground truncate">{category.name}</span>
+
+                              {/* Hover actions */}
+                              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
+                                <button
+                                  onClick={() => {
+                                    setActiveCategoryId(category.id);
+                                    setIsAddItemOpen(true);
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground p-0.5"
+                                  title="Add item"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setActiveCategoryId(category.id);
+                                    setNewCategoryName(category.name);
+                                    setNewCategoryBudget(category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0));
+                                    setNewCategoryEmoji(category.emoji || '');
+                                    setNewCategoryGroup(category.group || 'needs');
+                                    setIsEditCategoryOpen(true);
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground p-0.5"
+                                  title="Edit Category"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCategory(category.id)}
+                                  className="text-rose-500 hover:text-rose-600 p-0.5"
+                                  title="Delete Category"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Right: Spent, Progress bar, Budget */}
+                            <div className="flex items-center gap-4 shrink-0 font-mono text-xs">
+                              <span className="font-bold text-foreground w-20 text-right">{formatGBP(catSpent)}</span>
+                              
+                              {/* Progress bar */}
+                              <div className="w-40 md:w-60 h-1.5 bg-muted rounded-full overflow-hidden hidden sm:inline-block">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full transition-all duration-300",
+                                    isOver ? "bg-[#ef4444]" : "bg-[#10b981]"
+                                  )}
+                                  style={{ width: `${Math.min(100, catBudget > 0 ? (catSpent / catBudget) * 100 : 0)}%` }}
+                                />
+                              </div>
+
+                              <span className="font-medium text-muted-foreground/80 w-20 text-right">{formatGBP(catBudget)}</span>
                             </div>
                           </div>
 
-                          <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setActiveCategoryId(category.id);
-                                setIsAddItemOpen(true);
-                              }}
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-                              title="Add item"
-                            >
-                              <PlusCircle className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setActiveCategoryId(category.id);
-                                setNewCategoryName(category.name);
-                                setNewCategoryBudget(category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0));
-                                setNewCategoryEmoji(category.emoji || '');
-                                setNewCategoryGroup(category.group || 'needs');
-                                setIsEditCategoryOpen(true);
-                              }}
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-                              title="Edit Category"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteCategory(category.id)}
-                              className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
-                              title="Delete Category"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
+                          {/* Category Sub-items */}
+                          {isExpanded && (
+                            <div className="space-y-1.5 pl-7 mt-1.5 border-l-2 border-border/10 ml-4">
+                              {category.items.map(item => {
+                                const spentVal = getBudgetItemSpent(item, bankAccounts, recurrings);
+                                const isItemOver = spentVal > item.budgeted;
+                                return (
+                                  <div key={item.id} className="group flex items-center justify-between text-xs py-1 hover:bg-muted/5 rounded-lg px-2 transition-colors">
+                                    {/* Left: Bullet/Emoji, name, hover actions */}
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      {item.emoji ? (
+                                        <span className="text-sm shrink-0">{item.emoji}</span>
+                                      ) : (
+                                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
+                                      )}
+                                      <span className="font-medium text-foreground/90 truncate">{item.name}</span>
 
-                        {/* Total progress bar for category */}
-                        <div className="space-y-1.5">
-                          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={cn("h-full rounded-full transition-all duration-300", catColor)}
-                              style={{ width: `${Math.min(100, catBudget > 0 ? (catSpent / catBudget) * 100 : 0)}%` }}
-                            />
-                          </div>
-                        </div>
+                                      {/* Item hover actions */}
+                                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
+                                        <button
+                                          onClick={() => {
+                                            setActiveBudgetItem({ ...item, categoryId: category.id });
+                                            setIsEditItemOpen(true);
+                                          }}
+                                          className="text-muted-foreground hover:text-foreground p-0.5"
+                                          title="Edit item"
+                                        >
+                                          <Edit2 className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteItem(category.id, item.id)}
+                                          className="text-rose-500 hover:text-rose-600 p-0.5"
+                                          title="Delete item"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    </div>
 
-                        {/* Children Items */}
-                        <div className="space-y-2 pt-2 border-t border-border/20">
-                          {category.items.map(item => {
-                            const spentVal = getBudgetItemSpent(item, bankAccounts, recurrings);
-                            const linkedAcc = item.linkedAccountId ? bankAccounts.find(a => a.id === item.linkedAccountId) : null;
-                            return (
-                              <div key={item.id} className="group flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center text-xs py-1">
-                                <div className="flex flex-col min-w-0">
-                                  <span className="font-semibold text-foreground/95 truncate">{item.name}</span>
-                                  {linkedAcc && (
-                                    <span className="text-[9px] text-primary/70 font-mono">
-                                      Linked: {linkedAcc.name}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                  <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap">
-                                    {formatGBP(spentVal)}
-                                  </span>
+                                    {/* Right: Spent, progress, budget */}
+                                    <div className="flex items-center gap-4 shrink-0 font-mono text-[11px]">
+                                      <span className="font-semibold text-foreground/80 w-20 text-right">{formatGBP(spentVal)}</span>
 
-                                  <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={() => {
-                                        setActiveBudgetItem({ ...item, categoryId: category.id });
-                                        setIsEditItemOpen(true);
-                                      }}
-                                      className="text-muted-foreground hover:text-foreground p-0.5"
-                                    >
-                                      <Edit2 className="h-3 w-3" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteItem(category.id, item.id)}
-                                      className="text-rose-500 hover:text-rose-600 p-0.5"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
+                                      {/* Progress bar */}
+                                      <div className="w-40 md:w-60 h-1 bg-muted rounded-full overflow-hidden hidden sm:inline-block">
+                                        <div
+                                          className={cn(
+                                            "h-full rounded-full transition-all duration-300",
+                                            isItemOver ? "bg-[#ef4444]" : "bg-[#10b981]"
+                                          )}
+                                          style={{ width: `${Math.min(100, item.budgeted > 0 ? (spentVal / item.budgeted) * 100 : 0)}%` }}
+                                        />
+                                      </div>
+
+                                      <span className="text-muted-foreground/60 w-20 text-right">{formatGBP(item.budgeted)}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {category.items.length === 0 && (
-                            <p className="text-[10px] text-muted-foreground italic text-center py-2">No items. Click '+' to add.</p>
+                                );
+                              })}
+                              {category.items.length === 0 && (
+                                <p className="text-[10px] text-muted-foreground italic pl-2.5 py-1">No items under this category. Click '+' to add.</p>
+                              )}
+                            </div>
                           )}
                         </div>
-
-                      </Card>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                </Card>
               </div>
             );
           })()}
