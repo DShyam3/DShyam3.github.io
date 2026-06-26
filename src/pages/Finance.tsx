@@ -3135,7 +3135,7 @@ export default function Finance() {
                           <div key={bill.id} className="flex items-center justify-between text-xs p-2.5 rounded-2xl bg-muted/10 border border-border/20 gap-3">
                             <div className="space-y-0.5 min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 font-semibold text-foreground min-w-0">
-                                <span className="text-lg shrink-0 leading-none">{bill.emoji || '💸'}</span>
+                                {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
                                 <span className="truncate">{bill.name}</span>
                               </div>
                               <span className="text-[9px] text-muted-foreground block font-mono uppercase tracking-wider">{getDueDateText(bill, currentMonth)}</span>
