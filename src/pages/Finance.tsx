@@ -5246,12 +5246,7 @@ export default function Finance() {
                   displayMonth: r.dueMonth || nextMonth
                 });
               } else {
-                if (r.isPaid) {
-                  futureBills.push({
-                    ...r,
-                    displayMonth: nextMonth
-                  });
-                } else if (todayDay >= 25 && r.dueDate <= 7) {
+                if (todayDay >= 25 && r.dueDate <= 7) {
                   futureBills.push({
                     ...r,
                     displayMonth: nextMonth
@@ -5353,7 +5348,6 @@ export default function Finance() {
                        {!thisMonthCollapsed && (
                         <div className="space-y-1 px-1">
                           {thisMonthBills
-                            .filter(bill => !bill.isPaid)
                             .sort((a, b) => a.dueDate - b.dueDate)
                             .map(bill => {
                               const dueDateText = getDueDateText(bill, currentMonth);
@@ -5432,10 +5426,8 @@ export default function Finance() {
                               );
                             })}
 
-                          {thisMonthBills.filter(bill => !bill.isPaid).length === 0 && (
-                            <p className="text-xs text-muted-foreground italic py-6 text-center">
-                              {thisMonthBills.length > 0 ? "All bills paid for this month! 🎉" : "No bills due this month."}
-                            </p>
+                          {thisMonthBills.length === 0 && (
+                            <p className="text-xs text-muted-foreground italic py-6 text-center">No bills due this month.</p>
                           )}
                         </div>
                       )}
