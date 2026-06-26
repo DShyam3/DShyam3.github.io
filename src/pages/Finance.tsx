@@ -3112,9 +3112,19 @@ export default function Finance() {
 
                   {/* Next two weeks recurrings card */}
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
-                    <CardHeader className="p-0 pb-4 border-b border-border/30">
-                      <CardTitle className="text-sm font-serif font-semibold text-foreground">Upcoming Recurring Bills</CardTitle>
-                      <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Bills due in the calendar cycle</CardDescription>
+                    <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between space-y-0">
+                      <div>
+                        <CardTitle className="text-sm font-serif font-semibold text-foreground">Upcoming Recurring Bills</CardTitle>
+                        <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Bills due in the calendar cycle</CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveTab('recurrings')}
+                        className="h-7 text-[10px] text-primary hover:text-primary/80 font-semibold px-2 rounded-lg"
+                      >
+                        View All
+                      </Button>
                     </CardHeader>
                     <CardContent className="p-0 pt-4 space-y-3">
                       {recurrings
@@ -3130,7 +3140,16 @@ export default function Finance() {
                               </div>
                               <span className="text-[9px] text-muted-foreground block font-mono uppercase tracking-wider">{getDueDateText(bill, currentMonth)}</span>
                             </div>
-                            <span className="font-bold font-mono shrink-0">{formatGBP(bill.amount)}</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="font-bold font-mono text-xs">{formatGBP(bill.amount)}</span>
+                              <button
+                                onClick={() => toggleRecurringPaid(bill.id)}
+                                className="h-5 w-5 rounded-lg flex items-center justify-center border border-border/40 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-transparent hover:text-emerald-500/70 transition-all shrink-0"
+                                title="Mark as Paid"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       {recurrings.filter(r => isDueThisMonth(r, currentMonth) && !r.isPaid).length === 0 && (
