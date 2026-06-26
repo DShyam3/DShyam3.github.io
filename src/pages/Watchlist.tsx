@@ -66,6 +66,13 @@ const CATEGORIES = [
   'Favourites',
 ] as const;
 
+const FAV_CATEGORIES = [
+  'Bollywood',
+  'Hollywood',
+  'Anime',
+  'Others',
+] as const;
+
 const ALL_PLATFORMS = [
   'Netflix',
   'Prime Video',
@@ -832,7 +839,7 @@ const Watchlist = () => {
                     </DialogHeader>
                   </div>
                   <div className="flex-1 flex flex-col min-h-0 p-6 pt-4">
-                    <div className="space-y-2 flex-shrink-0">
+                    <div className="space-y-2 flex-shrink-0 mb-2">
                       <Label htmlFor="fav-search">Search Movies & TV Shows *</Label>
                       <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -881,11 +888,20 @@ const Watchlist = () => {
                                       ? getPosterUrl(result.poster_path)
                                       : null;
                                     const displayTitle = result.title || result.name || '';
+                                    
+                                    // Auto tag logic based on TMDB metadata
+                                    const resolvedCategory =
+                                      result.original_language === 'hi' ? 'Bollywood' :
+                                      result.original_language === 'ja' ? 'Anime' :
+                                      result.original_language === 'en' ? 'Hollywood' :
+                                      'Others';
+
                                     await addFavourite({
                                       title: displayTitle,
                                       poster: posterUrl || undefined,
                                       media_type: result.media_type,
                                       tmdb_id: result.id,
+                                      category: resolvedCategory,
                                     });
                                     setFavAddedItems((prev) =>
                                       new Set(prev).add(itemKey),
@@ -934,6 +950,9 @@ const Watchlist = () => {
                                             : 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
                                         )}>
                                           {result.media_type === 'movie' ? 'Movie' : 'TV Show'}
+                                        </span>
+                                        <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
+                                          Auto: {result.original_language === 'hi' ? 'Bollywood' : result.original_language === 'ja' ? 'Anime' : 'Hollywood'}
                                         </span>
                                         {favAddedItems.has(itemKey) && (
                                           <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
@@ -1150,115 +1169,123 @@ const Watchlist = () => {
               </p>
             ) : (
               <>
-                {/* Movies Section */}
-                {favourites.filter((f) => f.media_type === 'movie').length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Film className="h-4 w-4 text-muted-foreground" />
-                      <DotMatrixText text="MOVIES" size="xs" />
-                      <span className="text-xs text-muted-foreground/60">
-                        ({favourites.filter((f) => f.media_type === 'movie').length})
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
-                      {favourites
-                        .filter((f) => f.media_type === 'movie')
-                        .map((fav) => (
-                          <div key={fav.id} className="item-card group">
-                            <div className="aspect-[2/3] bg-muted relative overflow-hidden">
-                              {fav.poster ? (
-                                <img
-                                  src={fav.poster}
-                                  alt={fav.title}
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                                  <Heart className="h-8 w-8 text-muted-foreground/30" />
-                                </div>
-                              )}
-                              {isAdmin && (
-                                <div
-                                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-                                    onClick={() => removeFavourite(fav.id)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-3">
-                              <h3 className="font-serif text-sm font-medium leading-tight">
-                                <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
-                              </h3>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
+                {/* Category Sections */}
+                {FAV_CATEGORIES.map((cat) => {
+                  const catFavs = favourites.filter((f) => f.category === cat);
+                  if (catFavs.length === 0) return null;
 
-                {/* TV Shows Section */}
-                {favourites.filter((f) => f.media_type === 'tv').length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Tv className="h-4 w-4 text-muted-foreground" />
-                      <DotMatrixText text="TV SHOWS" size="xs" />
-                      <span className="text-xs text-muted-foreground/60">
-                        ({favourites.filter((f) => f.media_type === 'tv').length})
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
-                      {favourites
-                        .filter((f) => f.media_type === 'tv')
-                        .map((fav) => (
-                          <div key={fav.id} className="item-card group">
-                            <div className="aspect-[2/3] bg-muted relative overflow-hidden">
-                              {fav.poster ? (
-                                <img
-                                  src={fav.poster}
-                                  alt={fav.title}
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                                  <Heart className="h-8 w-8 text-muted-foreground/30" />
-                                </div>
-                              )}
-                              {isAdmin && (
-                                <div
-                                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-                                    onClick={() => removeFavourite(fav.id)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-3">
-                              <h3 className="font-serif text-sm font-medium leading-tight">
-                                <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
-                              </h3>
-                            </div>
+                  const catMovies = catFavs.filter((f) => f.media_type === 'movie');
+                  const catTVShows = catFavs.filter((f) => f.media_type === 'tv');
+
+                  return (
+                    <div key={cat} className="space-y-4 border-b border-border/40 pb-6 last:border-b-0">
+                      <div className="flex items-center gap-2">
+                        <DotMatrixText text={cat.toUpperCase()} size="xs" />
+                        <span className="text-xs text-muted-foreground/60 text-sm font-semibold">
+                          ({catFavs.length})
+                        </span>
+                      </div>
+
+                      {catMovies.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 font-medium pl-1">
+                            <Film className="h-3.5 w-3.5" />
+                            <span>Movies ({catMovies.length})</span>
                           </div>
-                        ))}
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+                            {catMovies.map((fav) => (
+                              <div key={fav.id} className="item-card group">
+                                <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+                                  {fav.poster ? (
+                                    <img
+                                      src={fav.poster}
+                                      alt={fav.title}
+                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-secondary/30">
+                                      <Heart className="h-8 w-8 text-muted-foreground/30" />
+                                    </div>
+                                  )}
+                                  {isAdmin && (
+                                    <div
+                                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Button
+                                        variant="secondary"
+                                        size="icon"
+                                        className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+                                        onClick={() => removeFavourite(fav.id)}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="p-3">
+                                  <h3 className="font-serif text-sm font-medium leading-tight">
+                                    <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
+                                  </h3>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {catTVShows.length > 0 && (
+                        <div className="space-y-2 pt-2">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 font-medium pl-1">
+                            <Tv className="h-3.5 w-3.5" />
+                            <span>TV Shows ({catTVShows.length})</span>
+                          </div>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+                            {catTVShows.map((fav) => (
+                              <div key={fav.id} className="item-card group">
+                                <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+                                  {fav.poster ? (
+                                    <img
+                                      src={fav.poster}
+                                      alt={fav.title}
+                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-secondary/30">
+                                      <Heart className="h-8 w-8 text-muted-foreground/30" />
+                                    </div>
+                                  )}
+                                  {isAdmin && (
+                                    <div
+                                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Button
+                                        variant="secondary"
+                                        size="icon"
+                                        className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+                                        onClick={() => removeFavourite(fav.id)}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="p-3">
+                                  <h3 className="font-serif text-sm font-medium leading-tight">
+                                    <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
+                                  </h3>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })}
               </>
             )}
           </div>

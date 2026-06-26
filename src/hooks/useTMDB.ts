@@ -14,6 +14,7 @@ export interface TMDBResult {
     poster_path: string | null;
     overview: string;
     media_type: 'movie' | 'tv';
+    original_language?: string;
 }
 
 export function useTMDB() {
