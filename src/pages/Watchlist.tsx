@@ -288,7 +288,12 @@ const Watchlist = () => {
     const counts: Record<string, number> = {};
     categoryItems.forEach((item) => {
       if (item.category === 'TV Shows' && item.series_status) {
-        counts[item.series_status] = (counts[item.series_status] || 0) + 1;
+        const rawStatus = item.series_status;
+        const normalizedStatus =
+          rawStatus === 'Canceled' || rawStatus === 'Cancelled' || rawStatus === 'Ended'
+            ? 'Ended / Cancelled'
+            : rawStatus;
+        counts[normalizedStatus] = (counts[normalizedStatus] || 0) + 1;
       }
     });
     return counts;
@@ -306,8 +311,18 @@ const Watchlist = () => {
       );
     if (selectedGenre)
       result = result.filter((item) => item.genres?.includes(selectedGenre));
-    if (selectedStatus && selectedCategory === 'TV Shows')
-      result = result.filter((item) => item.series_status === selectedStatus);
+    if (selectedStatus && selectedCategory === 'TV Shows') {
+      if (selectedStatus === 'Ended / Cancelled') {
+        result = result.filter(
+          (item) =>
+            item.series_status === 'Ended' ||
+            item.series_status === 'Cancelled' ||
+            item.series_status === 'Canceled',
+        );
+      } else {
+        result = result.filter((item) => item.series_status === selectedStatus);
+      }
+    }
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (normalizedQuery)
       result = result.filter((item) =>
