@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import defaultPresets from '../data/presets.json';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -152,6 +153,7 @@ export interface BudgetItem {
   budgeted: number;
   spent: number;
   linkedAccountId?: string;
+  emoji?: string;
 }
 
 export interface BudgetCategory {
@@ -285,37 +287,7 @@ const DEFAULT_GROUPS: Record<string, 'needs' | 'wants' | 'savings'> = {
   savings: 'savings'
 };
 
-const DEFAULT_CATEGORY_PRESETS: CategoryPreset[] = [
-  { name: 'Bars & Nightlife', emoji: '🥃', group: 'wants' },
-  { name: 'Beauty', emoji: '💄', group: 'wants' },
-  { name: 'Car', emoji: '🚗', group: 'needs' },
-  { name: 'Children', emoji: '🚸', group: 'needs' },
-  { name: 'Clothing', emoji: '👕', group: 'wants' },
-  { name: 'Dance', emoji: '💃', group: 'wants' },
-  { name: 'Donations', emoji: '🤝', group: 'wants' },
-  { name: 'Education', emoji: '📘', group: 'needs' },
-  { name: 'Entertainment', emoji: '🎟️', group: 'wants' },
-  { name: 'Groceries', emoji: '🥑', group: 'needs' },
-  { name: 'Gym', emoji: '👟', group: 'wants' },
-  { name: 'Healthcare', emoji: '💊', group: 'needs' },
-  { name: 'Home', emoji: '🏠', group: 'needs' },
-  { name: 'Insurance', emoji: '☂️', group: 'needs' },
-  { name: 'Loans', emoji: '💰', group: 'needs' },
-  { name: 'Personal Care', emoji: '✂️', group: 'wants' },
-  { name: 'Pets', emoji: '🐶', group: 'wants' },
-  { name: 'Recreation', emoji: '🎫', group: 'wants' },
-  { name: 'Rent', emoji: '🔑', group: 'needs' },
-  { name: 'Restaurants', emoji: '🍔', group: 'wants' },
-  { name: 'Senior Care', emoji: '👵', group: 'needs' },
-  { name: 'Shops', emoji: '🛍️', group: 'wants' },
-  { name: 'Sports', emoji: '🚴', group: 'wants' },
-  { name: 'Subscriptions', emoji: '💳', group: 'wants' },
-  { name: 'Transportation', emoji: '🚌', group: 'needs' },
-  { name: 'Travel & Vacation', emoji: '🏖️', group: 'wants' },
-  { name: 'Utilities', emoji: '🔌', group: 'needs' },
-  { name: 'Work Expenses', emoji: '💼', group: 'needs' },
-  { name: 'Yoga & Pilates', emoji: '🧘', group: 'wants' },
-];
+const { DEFAULT_CATEGORY_PRESETS } = defaultPresets;
 
 const presetsToDefaultCategories = (presets: CategoryPreset[]): BudgetCategory[] =>
   presets.map(preset => ({
@@ -446,6 +418,37 @@ const createDefaultBudgetCategories = (): BudgetCategory[] => [
     emoji: '🙋',
     items: [],
   },
+  {
+    id: 'savings',
+    name: 'Savings',
+    budgeted: 0,
+    group: 'savings',
+    emoji: '🐷',
+    items: [
+      { id: 'item_cash_isa', name: 'Cash ISA', budgeted: 0, spent: 0 },
+      { id: 'item_stocks_shares_isa', name: 'Stocks & Shares ISA', budgeted: 0, spent: 0 },
+      { id: 'item_lifetime_isa', name: 'Lifetime ISA', budgeted: 0, spent: 0 },
+      { id: 'item_innovative_finance_isa', name: 'Innovative Finance ISA', budgeted: 0, spent: 0 },
+      { id: 'item_junior_isa', name: 'Junior ISA', budgeted: 0, spent: 0 },
+      { id: 'item_company_shares', name: 'Company Shares', budgeted: 0, spent: 0 },
+      { id: 'item_investment_account', name: 'Investment account', budgeted: 0, spent: 0 },
+      { id: 'item_cryptocurrency', name: 'Cryptocurrency', budgeted: 0, spent: 0 },
+      { id: 'item_emergency_fund', name: 'Emergency Fund', budgeted: 0, spent: 0 },
+      { id: 'item_easy_access_savings', name: 'Easy Access Savings', budgeted: 0, spent: 0 },
+      { id: 'item_notice_savings_account', name: 'Notice Savings Account', budgeted: 0, spent: 0 },
+      { id: 'item_regular_saver', name: 'Regular Saver', budgeted: 0, spent: 0 },
+      { id: 'item_help_to_buy', name: 'Help to Buy ISA', budgeted: 0, spent: 0 },
+      { id: 'item_short_term', name: 'Short term', budgeted: 0, spent: 0 },
+      { id: 'item_long_term', name: 'Long term', budgeted: 0, spent: 0 },
+      { id: 'item_workplace_pensions', name: 'Workplace Pensions', budgeted: 0, spent: 0 },
+      { id: 'item_sipp', name: 'SIPP', budgeted: 0, spent: 0 },
+      { id: 'item_premium_bonds', name: 'Premium Bonds', budgeted: 0, spent: 0 },
+      { id: 'item_fixed_bonds', name: 'Fixed Bonds', budgeted: 0, spent: 0 },
+      { id: 'item_fixed_rates', name: 'Fixed Rates', budgeted: 0, spent: 0 },
+      { id: 'item_gilts_uk_government_bonds', name: 'Gilts (UK Government Bonds)', budgeted: 0, spent: 0 },
+      { id: 'item_physical_assets', name: 'Physical Assets', budgeted: 0, spent: 0 },
+    ],
+  },
 ];
 
 const DEFAULT_BUDGET_CATEGORIES = createDefaultBudgetCategories();
@@ -466,7 +469,126 @@ const DEFAULT_RECURRING_TEMPLATES: RecurringTemplate[] = [
   { name: 'ASPCA', category: 'Donations', emoji: '🐾', tag: 'DONATIONS', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: '', budgetCategoryName: 'Donations' },
 ];
 
+const {
+  SAVINGS_PRESETS,
+  FOOD_ENTERTAINMENT_PRESETS,
+  HOUSING_PRESETS,
+  INSURANCE_PRESETS,
+  TRANSPORT_PRESETS,
+  SUBSCRIPTION_PRESETS,
+  LOANS_PRESETS,
+  GIFTS_DONATIONS_PRESETS,
+  HEALTH_WELLNESS_PRESETS,
+  PETS_PRESETS,
+  SHOPPING_PRESETS,
+  TRAVEL_HOLIDAYS_PRESETS,
+  OTHER_PRESETS,
+  FAMILY_KIDS_PRESETS,
+  EDUCATION_CAREER_PRESETS
+} = defaultPresets;
+
+const ALL_PRESETS_FALLBACK = defaultPresets;
+
+const isDiscretionaryCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  const group = cat.group;
+  return group === 'wants' || name.includes('food') || name.includes('drink') || name.includes('dining') || name.includes('entertainment');
+};
+
+const isHousingCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  const group = cat.group;
+  return group === 'needs' && (name.includes('home') || name.includes('house') || name.includes('rent') || name.includes('accommodation') || name.includes('living'));
+};
+
+const isInsuranceCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('insurance') || name.includes('protect') || name.includes('insure') || name.includes('cover');
+};
+
+const isTransportCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('transport') || name.includes('travel') || name.includes('car') || name.includes('vehicle') || name.includes('commute') || name.includes('transit');
+};
+
+const isSubscriptionsCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('subscription') || name.includes('recurring') || name.includes('member');
+};
+
+const isLoansCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('loan') || name.includes('debt') || name.includes('repayment') || name.includes('mortgage') || name.includes('borrow');
+};
+
+const isGiftsDonationsCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('gift') || name.includes('donation') || name.includes('charity') || name.includes('giving');
+};
+
+const isHealthWellnessCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('health') || name.includes('wellness') || name.includes('medical') || name.includes('gym') || name.includes('fitness') || name.includes('doctor') || name.includes('therapy');
+};
+
+const isPetsCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('pet') || name.includes('dog') || name.includes('cat') || name.includes('animal') || name.includes('vet');
+};
+
+const isShoppingCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('shopping') || name.includes('store') || name.includes('purchase') || name.includes('clothes') || name.includes('apparel');
+};
+
+const isTravelHolidaysCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('holiday') || name.includes('vacation') || name.includes('trip') || (name.includes('travel') && !name.includes('local') && !name.includes('commute'));
+};
+
+const isOtherCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('other') || name.includes('misc') || name.includes('ad-hoc') || name.includes('general') || name.includes('cash') || name.includes('uncategorised');
+};
+
+const isFamilyKidsCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('family') || name.includes('kid') || name.includes('child') || name.includes('baby') || name.includes('parent');
+};
+
+const isEducationCareerCategory = (cat?: BudgetCategory): boolean => {
+  if (!cat) return false;
+  const name = cat.name.toLowerCase();
+  return name.includes('education') || name.includes('career') || name.includes('course') || name.includes('stud') || name.includes('learn');
+};
+
+const ALL_SAVINGS_IDS = SAVINGS_PRESETS.map(p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'));
+
 const DEFAULT_CATEGORY_TEMPLATES = presetsToDefaultCategories(DEFAULT_CATEGORY_PRESETS);
+
+const mergeMissingDefaultCategories = (loaded: BudgetCategory[], defaults: BudgetCategory[]): BudgetCategory[] => {
+  const merged = [...loaded];
+  defaults.forEach(defCat => {
+    const exists = merged.some(c => c.name.toLowerCase() === defCat.name.toLowerCase() || c.id === defCat.id);
+    if (!exists) {
+      merged.push(defCat);
+    }
+  });
+  return merged;
+};
 
 const resolveStoredList = <T,>(saved: string | null, fallback: T[]): T[] => {
   if (!saved) return fallback;
@@ -946,6 +1068,49 @@ export default function Finance() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
 
+  // Dynamic Budget Presets loaded from Supabase or Fallback
+  const [presets, setPresets] = useState(() => {
+    const saved = localStorage.getItem('finance_budget_presets');
+    if (saved) {
+      try {
+        return {
+          ...ALL_PRESETS_FALLBACK,
+          ...JSON.parse(saved)
+        };
+      } catch (e) {
+        console.error('Failed to parse cached presets:', e);
+      }
+    }
+    return ALL_PRESETS_FALLBACK;
+  });
+
+  const {
+    DEFAULT_CATEGORY_PRESETS,
+    SAVINGS_PRESETS,
+    FOOD_ENTERTAINMENT_PRESETS,
+    HOUSING_PRESETS,
+    INSURANCE_PRESETS,
+    TRANSPORT_PRESETS,
+    SUBSCRIPTION_PRESETS,
+    LOANS_PRESETS,
+    GIFTS_DONATIONS_PRESETS,
+    HEALTH_WELLNESS_PRESETS,
+    PETS_PRESETS,
+    SHOPPING_PRESETS,
+    TRAVEL_HOLIDAYS_PRESETS,
+    OTHER_PRESETS,
+    FAMILY_KIDS_PRESETS,
+    EDUCATION_CAREER_PRESETS
+  } = presets;
+
+  const ALL_SAVINGS_IDS = useMemo(() => {
+    return SAVINGS_PRESETS.map(p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'));
+  }, [SAVINGS_PRESETS]);
+
+  const DEFAULT_CATEGORY_TEMPLATES = useMemo(() => {
+    return presetsToDefaultCategories(DEFAULT_CATEGORY_PRESETS);
+  }, [DEFAULT_CATEGORY_PRESETS]);
+
   // Tab State with LocalStorage Persistence
   const [activeTab, setActiveTab] = useState<typeof TABS[number]['key']>(() => {
     const saved = localStorage.getItem('finance_active_tab');
@@ -990,9 +1155,35 @@ export default function Finance() {
       workingHoursPerDay: 7.5,
       taxYear: 2026,
       ukRegion: 'england-and-wales',
-      holidaysByUser: {}
+      holidaysByUser: {},
+      activeSavingsTypes: ALL_SAVINGS_IDS
     };
   });
+
+  const isItemActive = (item: BudgetItem, cat: BudgetCategory) => {
+    if (cat.group !== 'savings') return true;
+    const key = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const isPreset = SAVINGS_PRESETS.some(p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') === key);
+    if (!isPreset) return true; // custom item
+    const activeTypes = settings.activeSavingsTypes || ALL_SAVINGS_IDS;
+    return activeTypes.includes(key);
+  };
+
+  const getCategoryBudget = (cat: BudgetCategory) => {
+    if (cat.group === 'savings') {
+      return cat.items.filter(item => isItemActive(item, cat)).reduce((s, i) => s + (i.budgeted || 0), 0);
+    }
+    return cat.budgeted !== undefined ? cat.budgeted : cat.items.reduce((s, i) => s + (i.budgeted || 0), 0);
+  };
+
+  const getCategorySpent = (cat: BudgetCategory) => {
+    const itemsToSum = cat.group === 'savings'
+      ? cat.items.filter(item => isItemActive(item, cat))
+      : cat.items;
+    return itemsToSum.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
+  };
+
+  const isCategoryActive = (cat: BudgetCategory) => true;
 
   const [goals, setGoals] = useState<Goal[]>(() => {
     const saved = localStorage.getItem('finance_goals');
@@ -1021,7 +1212,8 @@ export default function Finance() {
 
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
     const saved = localStorage.getItem('finance_budget');
-    return sanitizeBudgetCategories(resolveStoredList(saved, DEFAULT_BUDGET_CATEGORIES));
+    const list = resolveStoredList(saved, DEFAULT_BUDGET_CATEGORIES);
+    return sanitizeBudgetCategories(mergeMissingDefaultCategories(list, DEFAULT_BUDGET_CATEGORIES));
   });
 
   const [mockTransactions, setMockTransactions] = useState<MockTransaction[]>(() => {
@@ -1112,13 +1304,15 @@ export default function Finance() {
   const [draftTaxConfig, setDraftTaxConfig] = useState<TaxConfig>(taxConfig);
   const [draftRecurringTemplates, setDraftRecurringTemplates] = useState<RecurringTemplate[]>(recurringTemplates);
   const [draftCreditBureaus, setDraftCreditBureaus] = useState<CreditBureauConfig[]>(creditBureaus);
-  const [expandedSection, setExpandedSection] = useState<'none' | 'tax' | 'recurring' | 'bureaus'>('none');
+  const [draftActiveSavingsTypes, setDraftActiveSavingsTypes] = useState<string[]>([]);
+  const [expandedSection, setExpandedSection] = useState<'none' | 'tax' | 'recurring' | 'bureaus' | 'savings'>('none');
 
   useEffect(() => {
     if (isSettingsOpen) {
       setDraftTaxConfig(taxConfig);
       setDraftRecurringTemplates(recurringTemplates);
       setDraftCreditBureaus(creditBureaus);
+      setDraftActiveSavingsTypes(settings.activeSavingsTypes || ALL_SAVINGS_IDS);
       setExpandedSection('none');
       setGrossInput(formatNumberInput(settings.grossSalary));
       setPersonalPensionInput(settings.personalPensionPercent.toString());
@@ -1135,6 +1329,7 @@ export default function Finance() {
       setPaydayBiweeklyAnchor(settings.paydayBiweeklyAnchor || '2026-01-02');
     }
   }, [isSettingsOpen, taxConfig, recurringTemplates, creditBureaus, settings]);
+
   const [includeWorkLeaveInActual, setIncludeWorkLeaveInActual] = useState(true);
   const [newCreditScore, setNewCreditScore] = useState<{ bureau: 'experian' | 'transunion' | 'equifax'; score: number; date: string }>({ bureau: 'experian', score: 700, date: new Date().toISOString().split('T')[0] });
 
@@ -1170,8 +1365,204 @@ export default function Finance() {
   const [newCategoryEmoji, setNewCategoryEmoji] = useState('');
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [newBudgetItem, setNewBudgetItem] = useState({ name: '', budgeted: 0, spent: 0, linkedAccountId: '' });
-  const [activeBudgetItem, setActiveBudgetItem] = useState<{ id: string, name: string, budgeted: number, spent: number, categoryId: string, linkedAccountId?: string } | null>(null);
+  const [newBudgetItem, setNewBudgetItem] = useState({ name: '', budgeted: 0, spent: 0, linkedAccountId: '', emoji: '' });
+  const [selectedSavingsPreset, setSelectedSavingsPreset] = useState<string>('');
+  const [selectedDiscretionaryPreset, setSelectedDiscretionaryPreset] = useState<string>('');
+  const [selectedHousingPreset, setSelectedHousingPreset] = useState<string>('');
+  const [selectedInsurancePreset, setSelectedInsurancePreset] = useState<string>('');
+  const [selectedTransportPreset, setSelectedTransportPreset] = useState<string>('');
+  const [selectedSubscriptionPreset, setSelectedSubscriptionPreset] = useState<string>('');
+  const [subscriptionProvider, setSubscriptionProvider] = useState<string>('');
+  const [selectedLoanPreset, setSelectedLoanPreset] = useState<string>('');
+  const [loanProvider, setLoanProvider] = useState<string>('');
+  const [selectedGiftsPreset, setSelectedGiftsPreset] = useState<string>('');
+  const [selectedHealthPreset, setSelectedHealthPreset] = useState<string>('');
+  const [selectedPetsPreset, setSelectedPetsPreset] = useState<string>('');
+  const [selectedShoppingPreset, setSelectedShoppingPreset] = useState<string>('');
+  const [selectedTravelPreset, setSelectedTravelPreset] = useState<string>('');
+  const [selectedOtherPreset, setSelectedOtherPreset] = useState<string>('');
+  const [selectedFamilyPreset, setSelectedFamilyPreset] = useState<string>('');
+  const [selectedEducationPreset, setSelectedEducationPreset] = useState<string>('');
+  const [activeBudgetItem, setActiveBudgetItem] = useState<{ id: string, name: string, budgeted: number, spent: number, categoryId: string, linkedAccountId?: string, emoji?: string } | null>(null);
+
+  useEffect(() => {
+    if (isAddItemOpen && activeCategoryId) {
+      const cat = budgetCategories.find(c => c.id === activeCategoryId);
+      if (cat?.group === 'savings') {
+        const activePresets = SAVINGS_PRESETS.filter(p => {
+          const key = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+          const activeTypes = settings.activeSavingsTypes || ALL_SAVINGS_IDS;
+          return activeTypes.includes(key);
+        });
+        if (activePresets.length > 0) {
+          setSelectedSavingsPreset(activePresets[0].name);
+          setNewBudgetItem({
+            name: activePresets[0].name,
+            budgeted: 0,
+            spent: 0,
+            linkedAccountId: '',
+            emoji: activePresets[0].emoji
+          });
+        } else {
+          setSelectedSavingsPreset('custom');
+          setNewBudgetItem({
+            name: '',
+            budgeted: 0,
+            spent: 0,
+            linkedAccountId: '',
+            emoji: '💰'
+          });
+        }
+      } else if (cat && isDiscretionaryCategory(cat)) {
+        setSelectedDiscretionaryPreset(FOOD_ENTERTAINMENT_PRESETS[0].name);
+        setNewBudgetItem({
+          name: FOOD_ENTERTAINMENT_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: FOOD_ENTERTAINMENT_PRESETS[0].emoji
+        });
+      } else if (cat && isHousingCategory(cat)) {
+        setSelectedHousingPreset(HOUSING_PRESETS[0].name);
+        setNewBudgetItem({
+          name: HOUSING_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: HOUSING_PRESETS[0].emoji
+        });
+      } else if (cat && isInsuranceCategory(cat)) {
+        setSelectedInsurancePreset(INSURANCE_PRESETS[0].name);
+        setNewBudgetItem({
+          name: INSURANCE_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: INSURANCE_PRESETS[0].emoji
+        });
+      } else if (cat && isTransportCategory(cat)) {
+        setSelectedTransportPreset(TRANSPORT_PRESETS[0].name);
+        setNewBudgetItem({
+          name: TRANSPORT_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: TRANSPORT_PRESETS[0].emoji
+        });
+      } else if (cat && isSubscriptionsCategory(cat)) {
+        setSelectedSubscriptionPreset(SUBSCRIPTION_PRESETS[0].name);
+        setSubscriptionProvider('');
+        setNewBudgetItem({
+          name: SUBSCRIPTION_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: SUBSCRIPTION_PRESETS[0].emoji
+        });
+      } else if (cat && isLoansCategory(cat)) {
+        setSelectedLoanPreset(LOANS_PRESETS[0].name);
+        setLoanProvider('');
+        setNewBudgetItem({
+          name: LOANS_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: LOANS_PRESETS[0].emoji
+        });
+      } else if (cat && isGiftsDonationsCategory(cat)) {
+        setSelectedGiftsPreset(GIFTS_DONATIONS_PRESETS[0].name);
+        setNewBudgetItem({
+          name: GIFTS_DONATIONS_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: GIFTS_DONATIONS_PRESETS[0].emoji
+        });
+      } else if (cat && isHealthWellnessCategory(cat)) {
+        setSelectedHealthPreset(HEALTH_WELLNESS_PRESETS[0].name);
+        setNewBudgetItem({
+          name: HEALTH_WELLNESS_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: HEALTH_WELLNESS_PRESETS[0].emoji
+        });
+      } else if (cat && isPetsCategory(cat)) {
+        setSelectedPetsPreset(PETS_PRESETS[0].name);
+        setNewBudgetItem({
+          name: PETS_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: PETS_PRESETS[0].emoji
+        });
+      } else if (cat && isShoppingCategory(cat)) {
+        setSelectedShoppingPreset(SHOPPING_PRESETS[0].name);
+        setNewBudgetItem({
+          name: SHOPPING_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: SHOPPING_PRESETS[0].emoji
+        });
+      } else if (cat && isTravelHolidaysCategory(cat)) {
+        setSelectedTravelPreset(TRAVEL_HOLIDAYS_PRESETS[0].name);
+        setNewBudgetItem({
+          name: TRAVEL_HOLIDAYS_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: TRAVEL_HOLIDAYS_PRESETS[0].emoji
+        });
+      } else if (cat && isOtherCategory(cat)) {
+        setSelectedOtherPreset(OTHER_PRESETS[0].name);
+        setNewBudgetItem({
+          name: OTHER_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: OTHER_PRESETS[0].emoji
+        });
+      } else if (cat && isFamilyKidsCategory(cat)) {
+        setSelectedFamilyPreset(FAMILY_KIDS_PRESETS[0].name);
+        setNewBudgetItem({
+          name: FAMILY_KIDS_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: FAMILY_KIDS_PRESETS[0].emoji
+        });
+      } else if (cat && isEducationCareerCategory(cat)) {
+        setSelectedEducationPreset(EDUCATION_CAREER_PRESETS[0].name);
+        setNewBudgetItem({
+          name: EDUCATION_CAREER_PRESETS[0].name,
+          budgeted: 0,
+          spent: 0,
+          linkedAccountId: '',
+          emoji: EDUCATION_CAREER_PRESETS[0].emoji
+        });
+      } else {
+        setSelectedSavingsPreset('');
+        setSelectedDiscretionaryPreset('');
+        setSelectedHousingPreset('');
+        setSelectedInsurancePreset('');
+        setSelectedTransportPreset('');
+        setSelectedSubscriptionPreset('');
+        setSubscriptionProvider('');
+        setSelectedLoanPreset('');
+        setLoanProvider('');
+        setSelectedGiftsPreset('');
+        setSelectedHealthPreset('');
+        setSelectedPetsPreset('');
+        setSelectedShoppingPreset('');
+        setSelectedTravelPreset('');
+        setSelectedOtherPreset('');
+        setSelectedFamilyPreset('');
+        setSelectedEducationPreset('');
+        setNewBudgetItem({ name: '', budgeted: 0, spent: 0, linkedAccountId: '', emoji: '' });
+      }
+    }
+  }, [isAddItemOpen, activeCategoryId, budgetCategories, settings]);
 
   // Holiday Tracker State (Tax & Income tab)
   const [expandedMonthIdx, setExpandedMonthIdx] = useState<number | null>(null);
@@ -1284,7 +1675,7 @@ export default function Finance() {
         // Populate budget
         const loadedBudget = getValue('budget');
         if (loadedBudget && loadedBudget.length > 0) {
-          setBudgetCategories(sanitizeBudgetCategories(loadedBudget));
+          setBudgetCategories(sanitizeBudgetCategories(mergeMissingDefaultCategories(loadedBudget, DEFAULT_BUDGET_CATEGORIES)));
         } else {
           setBudgetCategories(prev => prev.length > 0 ? prev : sanitizeBudgetCategories(DEFAULT_BUDGET_CATEGORIES));
         }
@@ -1333,6 +1724,21 @@ export default function Finance() {
           setDefaultBudgetCategories(loadedDefaultBudgetCategories);
         } else {
           setDefaultBudgetCategories(prev => prev.length > 0 ? prev : DEFAULT_CATEGORY_TEMPLATES);
+        }
+
+        // Populate budget_presets
+        const loadedPresets = getValue('budget_presets');
+        if (loadedPresets) {
+          setPresets(prev => {
+            const merged = {
+              ...prev,
+              ...loadedPresets
+            };
+            localStorage.setItem('finance_budget_presets', JSON.stringify(merged));
+            return merged;
+          });
+        } else {
+          saveDataToSupabase('budget_presets', ALL_PRESETS_FALLBACK);
         }
       } catch (err) {
         console.error('Error fetching settings from Supabase:', err);
@@ -2142,12 +2548,24 @@ export default function Finance() {
 
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeCategoryId || !newBudgetItem.name) return;
+    const targetCat = budgetCategories.find(c => c.id === activeCategoryId);
+    let finalName = newBudgetItem.name;
+    if (targetCat && isSubscriptionsCategory(targetCat) && selectedSubscriptionPreset !== 'custom') {
+      finalName = subscriptionProvider.trim() 
+        ? `${selectedSubscriptionPreset} (${subscriptionProvider.trim()})` 
+        : selectedSubscriptionPreset;
+    } else if (targetCat && isLoansCategory(targetCat) && selectedLoanPreset !== 'custom') {
+      finalName = loanProvider.trim() 
+        ? `${selectedLoanPreset} (${loanProvider.trim()})` 
+        : selectedLoanPreset;
+    }
+    if (!finalName) return;
     const item: BudgetItem = {
       id: 'item_' + Date.now(),
-      name: newBudgetItem.name,
+      name: finalName,
       budgeted: 0,
-      spent: newBudgetItem.spent
+      spent: newBudgetItem.spent,
+      emoji: newBudgetItem.emoji
     };
     const updated = budgetCategories.map(cat => {
       if (cat.id === activeCategoryId) {
@@ -2161,7 +2579,7 @@ export default function Finance() {
     setBudgetCategories(updated);
     saveDataToSupabase('budget', updated);
     setIsAddItemOpen(false);
-    setNewBudgetItem({ name: '', budgeted: 0, spent: 0 });
+    setNewBudgetItem({ name: '', budgeted: 0, spent: 0, linkedAccountId: '', emoji: '' });
     toast({ title: 'Item Added', description: `Added "${item.name}" to budget.` });
   };
 
@@ -2176,7 +2594,8 @@ export default function Finance() {
             id: item.id,
             name: activeBudgetItem.name,
             budgeted: 0,
-            spent: activeBudgetItem.spent
+            spent: activeBudgetItem.spent,
+            emoji: activeBudgetItem.emoji || item.emoji
           } : item)
         };
       }
@@ -2543,6 +2962,7 @@ export default function Finance() {
       paydaySchedule,
       paydayWeekday,
       paydayBiweeklyAnchor,
+      activeSavingsTypes: draftActiveSavingsTypes,
     };
 
     setSettings(updatedSettings);
@@ -2584,7 +3004,8 @@ export default function Finance() {
       workingHoursPerDay: 7.5,
       taxYear: 2026,
       ukRegion: 'england-and-wales',
-      holidaysByUser: {}
+      holidaysByUser: {},
+      activeSavingsTypes: ALL_SAVINGS_IDS
     };
     const defaultTaxConfig = databaseDefaults.tax_config || {
       studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
@@ -2604,6 +3025,7 @@ export default function Finance() {
     setDraftTaxConfig(defaultTaxConfig);
     setDraftRecurringTemplates(defaultRecurringTemplates);
     setDraftCreditBureaus(defaultCreditBureaus);
+    setDraftActiveSavingsTypes(defaultSettings.activeSavingsTypes || ALL_SAVINGS_IDS);
     setDefaultBudgetCategories(defaultCategoryTemplates);
 
     setGrossInput(formatNumberInput(defaultSettings.grossSalary));
@@ -2638,11 +3060,11 @@ export default function Finance() {
   }
 
   // Helper values for calculations
-  const totalBudget = budgetCategories.reduce((sum, cat) => sum + (cat.budgeted || 0), 0);
-  const totalSpent = budgetCategories.reduce((sum, cat) => sum + cat.items.reduce((s, item) => s + getBudgetItemSpent(item, bankAccounts, recurrings), 0), 0);
+  const totalBudget = budgetCategories.reduce((sum, cat) => sum + getCategoryBudget(cat), 0);
+  const totalSpent = budgetCategories.reduce((sum, cat) => sum + getCategorySpent(cat), 0);
   const currentMonth = new Date().getMonth() + 1;
   const allBudgetItems = budgetCategories.flatMap(cat =>
-    (cat.items || []).map(item => ({
+    (cat.items || []).filter(item => isItemActive(item, cat)).map(item => ({
       id: item.id,
       label: `${cat.name} > ${item.name}`
     }))
@@ -3764,7 +4186,13 @@ export default function Finance() {
               ========================================== */}
           {activeTab === 'budget' && (() => {
             const savingsCategories = budgetCategories.filter(cat => cat.group === 'savings');
-            const savingsItems = savingsCategories.flatMap(cat => cat.items.map(item => ({ name: item.name, value: getBudgetItemSpent(item, bankAccounts, recurrings) })));
+            const savingsItems = savingsCategories.flatMap(cat =>
+              cat.items.filter(item => isItemActive(item, cat)).map(item => ({
+                name: item.name,
+                value: getBudgetItemSpent(item, bankAccounts, recurrings) || item.budgeted || 0,
+                emoji: item.emoji || '💰'
+              }))
+            );
             const totalSavings = savingsItems.reduce((sum, item) => sum + item.value, 0);
 
             const needsTotal = budgetCategories
@@ -3775,7 +4203,7 @@ export default function Finance() {
               .filter(cat => cat.group === 'wants')
               .reduce((sum, cat) => sum + cat.items.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0), 0);
 
-            const totalBudgetLimit = budgetCategories.reduce((sum, cat) => sum + (cat.budgeted || 0), 0);
+            const totalBudgetLimit = budgetCategories.reduce((sum, cat) => sum + getCategoryBudget(cat), 0);
             const totalSpent = needsTotal + wantsTotal + totalSavings;
             const showWarning = totalBudgetLimit > 0 && totalSpent > totalBudgetLimit;
 
@@ -3873,146 +4301,257 @@ export default function Finance() {
                 </div>
 
                 {/* Money Allocation & Savings Dashboard */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {(() => {
+                  const totalAlloc = needsTotal + wantsTotal + totalSavings;
+                  const needsPct = totalAlloc > 0 ? (needsTotal / totalAlloc) * 100 : 0;
+                  const savingsPct = totalAlloc > 0 ? (totalSavings / totalAlloc) * 100 : 0;
+                  const wantsPct = totalAlloc > 0 ? (wantsTotal / totalAlloc) * 100 : 0;
 
-                  {/* Left Column: Savings breakdown */}
-                  <div className="lg:col-span-5 bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4">
-                    <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2">Savings Allocation</h4>
-                    <div className="overflow-hidden rounded-2xl border border-border/20">
-                      <table className="w-full text-xs text-left">
-                        <thead>
-                          <tr className="bg-muted/30 border-b border-border/20 font-serif font-bold text-foreground">
-                            <th className="p-3">Category</th>
-                            <th className="p-3 text-right">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/10 font-mono text-[11px]">
-                          {savingsItems.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-muted/10">
-                              <td className="p-3 font-sans font-medium text-foreground">{item.name}</td>
-                              <td className="p-3 text-right">{formatGBP(item.value)}</td>
-                            </tr>
-                          ))}
-                          {savingsItems.length === 0 && (
-                            <tr>
-                              <td colSpan={2} className="p-3 text-center text-muted-foreground italic font-sans">No savings logged yet.</td>
-                            </tr>
-                          )}
-                          <tr className="bg-muted/20 font-bold border-t border-border/20 text-foreground">
-                            <td className="p-3 font-sans text-xs">Total</td>
-                            <td className="p-3 text-right text-xs">{formatGBP(totalSavings)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                  {/* Right Column: Money Allocation Summary & Pie Chart */}
-                  <div className="lg:col-span-7 bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Left Column: Savings Allocation */}
+                      <Card className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Savings Allocation</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                    {/* Summary table */}
-                    <div className="space-y-4">
-                      <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2">Money Allocation</h4>
-                      <div className="overflow-hidden rounded-2xl border border-border/20">
-                        <table className="w-full text-xs text-left">
-                          <thead>
-                            <tr className="bg-muted/30 border-b border-border/20 font-serif font-bold text-foreground">
-                              <th className="p-3">Category</th>
-                              <th className="p-3 text-right">Value</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border/10 font-mono text-[11px]">
-                            <tr className="hover:bg-muted/10">
-                              <td className="p-3 font-sans font-medium text-foreground">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shrink-0" /> Needs
-                                </div>
-                              </td>
-                              <td className="p-3 text-right">{formatGBP(needsTotal)}</td>
-                            </tr>
-                            <tr className="hover:bg-muted/10">
-                              <td className="p-3 font-sans font-medium text-foreground">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] shrink-0" /> Savings
-                                </div>
-                              </td>
-                              <td className="p-3 text-right">{formatGBP(totalSavings)}</td>
-                            </tr>
-                            <tr className="hover:bg-muted/10">
-                              <td className="p-3 font-sans font-medium text-foreground">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-[#8892b0] shrink-0" /> Wants
-                                </div>
-                              </td>
-                              <td className="p-3 text-right">{formatGBP(wantsTotal)}</td>
-                            </tr>
-                            <tr className="bg-muted/20 font-bold border-t border-border/20 text-foreground">
-                              <td className="p-3 font-sans text-xs">Total</td>
-                              <td className="p-3 text-right text-xs">{formatGBP(needsTotal + wantsTotal + totalSavings)}</td>
-                            </tr>
-                            <tr className="font-bold border-t border-border/20">
-                              <td className="p-3 font-sans text-xs text-foreground">Spend Status</td>
-                              <td className="p-3 text-right text-xs">
-                                {showWarning ? (
-                                  <span className="inline-flex items-center text-rose-500 gap-1 font-sans" title="Spent exceeds budget limit!">
-                                    ⚠️ Over Limit
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center text-emerald-500 gap-1 font-sans">
-                                    ✓ Within Budget
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                            {/* Table */}
+                            <div className="overflow-hidden rounded-2xl border border-border/20 self-start">
+                              <table className="w-full text-xs text-left">
+                                <thead>
+                                  <tr className="bg-muted/30 border-b border-border/20 font-serif font-bold text-foreground">
+                                    <th className="p-3">Category</th>
+                                    <th className="p-3 text-right">Value (%)</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/10 font-mono text-[11px]">
+                                  {savingsItems.map((item, idx) => {
+                                    const pct = totalSavings > 0 ? (item.value / totalSavings) * 100 : 0;
+                                    return (
+                                      <tr key={idx} className="hover:bg-muted/10">
+                                        <td className="p-3 font-sans font-medium text-foreground">
+                                          <span className="mr-1.5">{item.emoji || '💰'}</span>
+                                          {item.name}
+                                        </td>
+                                        <td className="p-3 text-right whitespace-nowrap">
+                                          {formatGBP(item.value)} <span className="text-[10px] text-muted-foreground">({pct.toFixed(1)}%)</span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                  {savingsItems.length === 0 && (
+                                    <tr>
+                                      <td colSpan={2} className="p-3 text-center text-muted-foreground italic font-sans">No savings logged yet.</td>
+                                    </tr>
+                                  )}
+                                  <tr className="bg-muted/20 font-bold border-t border-border/20 text-foreground">
+                                    <td className="p-3 font-sans text-xs">Total</td>
+                                    <td className="p-3 text-right text-xs">{formatGBP(totalSavings)}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
 
-                    {/* Recharts Pie Chart */}
-                    <div className="flex flex-col items-center justify-center space-y-4">
-                      {needsTotal + wantsTotal + totalSavings > 0 ? (
-                        <>
-                          <ResponsiveContainer width="100%" height={140}>
-                            <PieChart>
-                              <Pie
-                                data={allocationData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={35}
-                                outerRadius={55}
-                                paddingAngle={4}
-                                dataKey="value"
-                              >
-                                {allocationData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <RechartsTooltip formatter={(v: number) => formatGBP(v)} />
-                            </PieChart>
-                          </ResponsiveContainer>
+                            {/* Pie Chart */}
+                            <div className="flex flex-col items-center justify-center space-y-4">
+                              {totalSavings > 0 ? (
+                                <>
+                                  <ResponsiveContainer width="100%" height={140}>
+                                    <PieChart>
+                                      <Pie
+                                        data={savingsItems.map((item, idx) => ({
+                                          name: item.name,
+                                          value: item.value,
+                                          color: [
+                                            '#10b981', // emerald
+                                            '#14b8a6', // teal
+                                            '#06b6d4', // cyan
+                                            '#3b82f6', // blue
+                                            '#6366f1', // indigo
+                                            '#8b5cf6', // violet
+                                            '#ec4899', // pink
+                                            '#f59e0b', // amber
+                                            '#ef4444', // red
+                                            '#f97316', // orange
+                                          ][idx % 10]
+                                        }))}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={35}
+                                        outerRadius={55}
+                                        paddingAngle={4}
+                                        dataKey="value"
+                                      >
+                                        {savingsItems.map((item, idx) => (
+                                          <Cell
+                                            key={`cell-savings-${idx}`}
+                                            fill={[
+                                              '#10b981', // emerald
+                                              '#14b8a6', // teal
+                                              '#06b6d4', // cyan
+                                              '#3b82f6', // blue
+                                              '#6366f1', // indigo
+                                              '#8b5cf6', // violet
+                                              '#ec4899', // pink
+                                              '#f59e0b', // amber
+                                              '#ef4444', // red
+                                              '#f97316', // orange
+                                            ][idx % 10]}
+                                          />
+                                        ))}
+                                      </Pie>
+                                      <RechartsTooltip formatter={(v: number) => formatGBP(v)} />
+                                    </PieChart>
+                                  </ResponsiveContainer>
 
-                          {/* Legend / Percentages breakdown */}
-                          <div className="flex flex-wrap justify-center gap-3 text-[10px] text-muted-foreground font-mono">
-                            {allocationData.map((entry, index) => {
-                              const percent = (entry.value / (needsTotal + wantsTotal + totalSavings)) * 100;
-                              return (
-                                <div key={index} className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                  <span>{entry.name}: {percent.toFixed(0)}%</span>
-                                </div>
-                              );
-                            })}
+                                  {/* Legend */}
+                                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[9px] text-muted-foreground font-mono">
+                                    {savingsItems.map((item, idx) => {
+                                      const pct = totalSavings > 0 ? (item.value / totalSavings) * 100 : 0;
+                                      const color = [
+                                        '#10b981', // emerald
+                                        '#14b8a6', // teal
+                                        '#06b6d4', // cyan
+                                        '#3b82f6', // blue
+                                        '#6366f1', // indigo
+                                        '#8b5cf6', // violet
+                                        '#ec4899', // pink
+                                        '#f59e0b', // amber
+                                        '#ef4444', // red
+                                        '#f97316', // orange
+                                      ][idx % 10];
+                                      return (
+                                        <div key={idx} className="flex items-center gap-1">
+                                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                                          <span>{item.name}: {pct.toFixed(0)}%</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-muted-foreground italic text-center py-6">No savings to plot.</div>
+                              )}
+                            </div>
                           </div>
-                        </>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic text-center py-8">Add items and costs to visualize allocation.</p>
-                      )}
+                        </div>
+                      </Card>
+
+                      {/* Right Column: Money Allocation Summary & Pie Chart */}
+                      <Card className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Money Allocation</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                            {/* Summary table */}
+                            <div className="overflow-hidden rounded-2xl border border-border/20 self-start">
+                              <table className="w-full text-xs text-left">
+                                <thead>
+                                  <tr className="bg-muted/30 border-b border-border/20 font-serif font-bold text-foreground">
+                                    <th className="p-3">Category</th>
+                                    <th className="p-3 text-right">Value (%)</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/10 font-mono text-[11px]">
+                                  <tr className="hover:bg-muted/10">
+                                    <td className="p-3 font-sans font-medium text-foreground">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shrink-0" /> Needs
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-right whitespace-nowrap">
+                                      {formatGBP(needsTotal)} <span className="text-[10px] text-muted-foreground">({needsPct.toFixed(1)}%)</span>
+                                    </td>
+                                  </tr>
+                                  <tr className="hover:bg-muted/10">
+                                    <td className="p-3 font-sans font-medium text-foreground">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] shrink-0" /> Savings
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-right whitespace-nowrap">
+                                      {formatGBP(totalSavings)} <span className="text-[10px] text-muted-foreground">({savingsPct.toFixed(1)}%)</span>
+                                    </td>
+                                  </tr>
+                                  <tr className="hover:bg-muted/10">
+                                    <td className="p-3 font-sans font-medium text-foreground">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#8892b0] shrink-0" /> Wants
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-right whitespace-nowrap">
+                                      {formatGBP(wantsTotal)} <span className="text-[10px] text-muted-foreground">({wantsPct.toFixed(1)}%)</span>
+                                    </td>
+                                  </tr>
+                                  <tr className="bg-muted/20 font-bold border-t border-border/20 text-foreground">
+                                    <td className="p-3 font-sans text-xs">Total</td>
+                                    <td className="p-3 text-right text-xs">{formatGBP(needsTotal + wantsTotal + totalSavings)}</td>
+                                  </tr>
+                                  <tr className="font-bold border-t border-border/20">
+                                    <td className="p-3 font-sans text-xs text-foreground">Spend Status</td>
+                                    <td className="p-3 text-right text-xs">
+                                      {showWarning ? (
+                                        <span className="inline-flex items-center text-rose-500 gap-1 font-sans" title="Spent exceeds budget limit!">
+                                          ⚠️ Over Limit
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center text-emerald-500 gap-1 font-sans">
+                                          ✓ Within Budget
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Recharts Pie Chart */}
+                            <div className="flex flex-col items-center justify-center space-y-4">
+                              {needsTotal + wantsTotal + totalSavings > 0 ? (
+                                <>
+                                  <ResponsiveContainer width="100%" height={140}>
+                                    <PieChart>
+                                      <Pie
+                                        data={allocationData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={35}
+                                        outerRadius={55}
+                                        paddingAngle={4}
+                                        dataKey="value"
+                                      >
+                                        {allocationData.map((entry, index) => (
+                                          <Cell key={`cell-allocation-${index}`} fill={entry.color} />
+                                        ))}
+                                      </Pie>
+                                      <RechartsTooltip formatter={(v: number) => formatGBP(v)} />
+                                    </PieChart>
+                                  </ResponsiveContainer>
+
+                                  {/* Legend / Percentages breakdown */}
+                                  <div className="flex flex-wrap justify-center gap-3 text-[10px] text-muted-foreground font-mono">
+                                    {allocationData.map((entry, index) => {
+                                      const percent = (entry.value / (needsTotal + wantsTotal + totalSavings)) * 100;
+                                      return (
+                                        <div key={index} className="flex items-center gap-1.5">
+                                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                          <span>{entry.name}: {percent.toFixed(0)}%</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-muted-foreground italic text-center py-6">No data to plot.</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
                     </div>
-
-                  </div>
-
-                </div>
+                  );
+                })()}
 
                 {/* Copilot-style Budget list */}
                 <Card className="bg-card/25 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl">
@@ -4028,9 +4567,9 @@ export default function Finance() {
 
                   {/* List of Categories */}
                   <div className="divide-y divide-border/10">
-                    {budgetCategories.map((category, idx) => {
-                      const catBudget = category.budgeted !== undefined ? category.budgeted : category.items.reduce((s, i) => s + i.budgeted, 0);
-                      const catSpent = category.items.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
+                    {budgetCategories.filter(isCategoryActive).map((category, idx) => {
+                      const catBudget = getCategoryBudget(category);
+                      const catSpent = getCategorySpent(category);
                       const isOver = catSpent > catBudget;
                       const isExpanded = expandedCategories[category.id] !== false; // expanded by default!
 
@@ -4070,7 +4609,7 @@ export default function Finance() {
                                 className="h-5 w-5 rounded flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-sm"
                                 style={{ backgroundColor: catColor }}
                               >
-                                {category.items.length}
+                                {category.items.filter(item => isItemActive(item, category)).length}
                               </div>
 
                               <span className="font-bold text-sm text-foreground truncate">{category.name}</span>
@@ -4114,7 +4653,7 @@ export default function Finance() {
                             {/* Right: Spent, Progress bar, Budget */}
                             <div className="flex items-center gap-4 shrink-0 font-mono text-xs">
                               <span className="font-bold text-foreground w-20 text-right">{formatGBP(catSpent)}</span>
-                              
+
                               {/* Progress bar */}
                               <div className="w-40 md:w-60 h-1.5 bg-muted rounded-full overflow-hidden hidden sm:inline-block">
                                 <div
@@ -4133,7 +4672,7 @@ export default function Finance() {
                           {/* Category Sub-items */}
                           {isExpanded && (
                             <div className="space-y-1.5 pl-7 mt-1.5 border-l-2 border-border/10 ml-4">
-                              {category.items.map(item => {
+                              {category.items.filter(item => isItemActive(item, category)).map(item => {
                                 const spentVal = getBudgetItemSpent(item, bankAccounts, recurrings);
                                 const isItemOver = spentVal > item.budgeted;
                                 return (
@@ -4189,7 +4728,7 @@ export default function Finance() {
                                   </div>
                                 );
                               })}
-                              {category.items.length === 0 && (
+                              {category.items.filter(item => isItemActive(item, category)).length === 0 && (
                                 <p className="text-[10px] text-muted-foreground italic pl-2.5 py-1">No items under this category. Click '+' to add.</p>
                               )}
                             </div>
@@ -4410,181 +4949,128 @@ export default function Finance() {
             };
 
             return (
-            <div className="space-y-6">
+              <div className="space-y-6">
 
-              {/* Period Header Row */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
-                <div className="min-w-0">
-                  <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-primary shrink-0" /> Cash Flow
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Overview of income, spending, and net position</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  {/* Custom Date Picker Popovers */}
-                  {cfPeriod === 'custom' && (
-                    <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-right-2 duration-200">
-                      <Popover open={cfStartOpen} onOpenChange={setCfStartOpen}>
-                        <PopoverTrigger asChild>
-                          <button className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-full bg-background border border-border/50 text-foreground outline-none hover:border-primary/40 focus:border-primary/50 transition-colors flex items-center gap-1.5 hover:bg-muted/30">
-                            <Calendar className="h-3 w-3 text-primary shrink-0" />
-                            {fmtDate(cfPeriodStart)}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border rounded-2xl shadow-xl" align="end">
-                          <MonthYearPicker
-                            value={cfCustomStart}
-                            onChange={(val) => {
-                              setCfCustomStart(val);
-                              setCfStartOpen(false);
-                            }}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <span className="text-[10px] text-muted-foreground font-mono">to</span>
-                      <Popover open={cfEndOpen} onOpenChange={setCfEndOpen}>
-                        <PopoverTrigger asChild>
-                          <button className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-full bg-background border border-border/50 text-foreground outline-none hover:border-primary/40 focus:border-primary/50 transition-colors flex items-center gap-1.5 hover:bg-muted/30">
-                            <Calendar className="h-3 w-3 text-primary shrink-0" />
-                            {fmtDate(cfPeriodEnd)}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border rounded-2xl shadow-xl" align="end">
-                          <MonthYearPicker
-                            value={cfCustomEnd}
-                            onChange={(val) => {
-                              setCfCustomEnd(val);
-                              setCfEndOpen(false);
-                            }}
-                            isEnd
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
-
-                  {/* Period Selector Dropdown */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setCfPeriodOpen(!cfPeriodOpen)}
-                      className="text-[10px] font-semibold px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono flex items-center gap-1.5 hover:bg-primary/20 transition-colors"
-                    >
-                      {activePeriodLabel}
-                      <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", cfPeriodOpen && "rotate-180")} />
-                    </button>
-                    {cfPeriodOpen && (
-                      <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[240px] bg-popover border border-border rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
-                        {CF_PERIOD_OPTIONS.map(opt => {
-                          // Compute the date range for each option label
-                          const optRange = (() => {
-                            const today = new Date(todayDateObj);
-                            today.setHours(0, 0, 0, 0);
-                            switch (opt.key) {
-                              case 'ytd': return { s: new Date(cfYear, 0, 1), e: today };
-                              case 'mtd': return { s: new Date(cfYear, cfCurrentMonthIdx, 1), e: today };
-                              case 'last_12m': { const d = new Date(today); d.setMonth(d.getMonth() - 11); d.setDate(1); return { s: d, e: today }; }
-                              case 'last_3m': { const d = new Date(today); d.setMonth(d.getMonth() - 2); d.setDate(1); return { s: d, e: today }; }
-                              case 'last_4w': { const d = new Date(today); d.setDate(d.getDate() - 27); return { s: d, e: today }; }
-                              case 'custom': return { s: new Date(cfCustomStart), e: new Date(cfCustomEnd) };
-                              default: return { s: new Date(cfYear, 0, 1), e: today };
-                            }
-                          })();
-                          const rangeStr = `${fmtDate(optRange.s)} - ${fmtDate(optRange.e)}`;
-                          const isActive = cfPeriod === opt.key;
-                          return (
-                            <button
-                              key={opt.key}
-                              onClick={() => { setCfPeriod(opt.key); setCfPeriodOpen(false); }}
-                              className={cn(
-                                "w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-3 transition-colors",
-                                isActive ? "bg-primary/10 text-primary" : "hover:bg-muted/50 text-foreground"
-                              )}
-                            >
-                              <span className="flex items-center gap-2">
-                                {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
-                                <span className={cn("font-semibold", !isActive && "ml-5")}>{opt.label}</span>
-                              </span>
-                              <span className="text-[9px] text-muted-foreground font-mono shrink-0">{rangeStr}</span>
+                {/* Period Header Row */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
+                  <div className="min-w-0">
+                    <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-primary shrink-0" /> Cash Flow
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Overview of income, spending, and net position</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {/* Custom Date Picker Popovers */}
+                    {cfPeriod === 'custom' && (
+                      <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-right-2 duration-200">
+                        <Popover open={cfStartOpen} onOpenChange={setCfStartOpen}>
+                          <PopoverTrigger asChild>
+                            <button className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-full bg-background border border-border/50 text-foreground outline-none hover:border-primary/40 focus:border-primary/50 transition-colors flex items-center gap-1.5 hover:bg-muted/30">
+                              <Calendar className="h-3 w-3 text-primary shrink-0" />
+                              {fmtDate(cfPeriodStart)}
                             </button>
-                          );
-                        })}
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border rounded-2xl shadow-xl" align="end">
+                            <MonthYearPicker
+                              value={cfCustomStart}
+                              onChange={(val) => {
+                                setCfCustomStart(val);
+                                setCfStartOpen(false);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <span className="text-[10px] text-muted-foreground font-mono">to</span>
+                        <Popover open={cfEndOpen} onOpenChange={setCfEndOpen}>
+                          <PopoverTrigger asChild>
+                            <button className="text-[10px] font-mono font-semibold px-3 py-1.5 rounded-full bg-background border border-border/50 text-foreground outline-none hover:border-primary/40 focus:border-primary/50 transition-colors flex items-center gap-1.5 hover:bg-muted/30">
+                              <Calendar className="h-3 w-3 text-primary shrink-0" />
+                              {fmtDate(cfPeriodEnd)}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border rounded-2xl shadow-xl" align="end">
+                            <MonthYearPicker
+                              value={cfCustomEnd}
+                              onChange={(val) => {
+                                setCfCustomEnd(val);
+                                setCfEndOpen(false);
+                              }}
+                              isEnd
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     )}
+
+                    {/* Period Selector Dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setCfPeriodOpen(!cfPeriodOpen)}
+                        className="text-[10px] font-semibold px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono flex items-center gap-1.5 hover:bg-primary/20 transition-colors"
+                      >
+                        {activePeriodLabel}
+                        <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", cfPeriodOpen && "rotate-180")} />
+                      </button>
+                      {cfPeriodOpen && (
+                        <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[240px] bg-popover border border-border rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                          {CF_PERIOD_OPTIONS.map(opt => {
+                            // Compute the date range for each option label
+                            const optRange = (() => {
+                              const today = new Date(todayDateObj);
+                              today.setHours(0, 0, 0, 0);
+                              switch (opt.key) {
+                                case 'ytd': return { s: new Date(cfYear, 0, 1), e: today };
+                                case 'mtd': return { s: new Date(cfYear, cfCurrentMonthIdx, 1), e: today };
+                                case 'last_12m': { const d = new Date(today); d.setMonth(d.getMonth() - 11); d.setDate(1); return { s: d, e: today }; }
+                                case 'last_3m': { const d = new Date(today); d.setMonth(d.getMonth() - 2); d.setDate(1); return { s: d, e: today }; }
+                                case 'last_4w': { const d = new Date(today); d.setDate(d.getDate() - 27); return { s: d, e: today }; }
+                                case 'custom': return { s: new Date(cfCustomStart), e: new Date(cfCustomEnd) };
+                                default: return { s: new Date(cfYear, 0, 1), e: today };
+                              }
+                            })();
+                            const rangeStr = `${fmtDate(optRange.s)} - ${fmtDate(optRange.e)}`;
+                            const isActive = cfPeriod === opt.key;
+                            return (
+                              <button
+                                key={opt.key}
+                                onClick={() => { setCfPeriod(opt.key); setCfPeriodOpen(false); }}
+                                className={cn(
+                                  "w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-3 transition-colors",
+                                  isActive ? "bg-primary/10 text-primary" : "hover:bg-muted/50 text-foreground"
+                                )}
+                              >
+                                <span className="flex items-center gap-2">
+                                  {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                  <span className={cn("font-semibold", !isActive && "ml-5")}>{opt.label}</span>
+                                </span>
+                                <span className="text-[9px] text-muted-foreground font-mono shrink-0">{rangeStr}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">
+                      {periodStartLabel} – {periodEndLabel}
+                    </span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">
-                    {periodStartLabel} – {periodEndLabel}
-                  </span>
-                </div>
-              </div>
-
-              {/* ─── NET INCOME HERO CARD ─── */}
-              <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
-                    <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-                    <p className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                      {formatGBP(ytdNet)}
-                    </p>
-                  </div>
                 </div>
 
-                <div className="h-[220px] sm:h-[280px] w-full min-w-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={cfMonthlyData} margin={{ top: 10, right: 4, left: -16, bottom: 30 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={(props) => <CashFlowXTick {...props} />}
-                        interval={0}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(v) => `£${v >= 0 ? '' : '-'}${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}K` : Math.abs(v)}`}
-                        tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
-                      />
-                      <RechartsTooltip
-                        contentStyle={cfTooltipStyle}
-                        itemStyle={{ color: 'hsl(var(--foreground))' }}
-                        labelStyle={{ fontWeight: 'bold' }}
-                        formatter={(value: number) => [formatGBP(value), 'Net Income']}
-                      />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
-                      <Bar
-                        dataKey="net"
-                        shape={(props: Record<string, unknown>) => {
-                          const dataPoint = cfMonthlyData[(props as { index: number }).index];
-                          const val = (props as { value?: number }).value ?? (props as { net?: number }).net ?? 0;
-                          return (
-                            <RoundedBar
-                              {...props as { x: number; y: number; width: number; height: number }}
-                              fill={val >= 0 ? '#10b981' : '#f43f5e'}
-                              opacity={dataPoint?.isFuture ? 0.15 : 1}
-                            />
-                          );
-                        }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              {/* ─── SPEND + INCOME SIDE-BY-SIDE ─── */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* Spend Card */}
+                {/* ─── NET INCOME HERO CARD ─── */}
                 <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
-                  <div className="space-y-1 mb-4">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
-                    <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-                    <p className="text-2xl font-extrabold font-mono text-rose-500">{formatGBP(ytdSpend)}</p>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
+                      <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+                      <p className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                        {formatGBP(ytdNet)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="h-[180px] w-full min-w-0">
+
+                  <div className="h-[220px] sm:h-[280px] w-full min-w-0">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
+                      <BarChart data={cfMonthlyData} margin={{ top: 10, right: 4, left: -16, bottom: 30 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis
                           dataKey="name"
@@ -4596,23 +5082,26 @@ export default function Finance() {
                         <YAxis
                           tickLine={false}
                           axisLine={false}
-                          tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
+                          tickFormatter={(v) => `£${v >= 0 ? '' : '-'}${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}K` : Math.abs(v)}`}
                           tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
                         />
                         <RechartsTooltip
                           contentStyle={cfTooltipStyle}
                           itemStyle={{ color: 'hsl(var(--foreground))' }}
-                          formatter={(value: number) => [formatGBP(value), 'Spend']}
+                          labelStyle={{ fontWeight: 'bold' }}
+                          formatter={(value: number) => [formatGBP(value), 'Net Income']}
                         />
+                        <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
                         <Bar
-                          dataKey="spend"
+                          dataKey="net"
                           shape={(props: Record<string, unknown>) => {
                             const dataPoint = cfMonthlyData[(props as { index: number }).index];
+                            const val = (props as { value?: number }).value ?? (props as { net?: number }).net ?? 0;
                             return (
                               <RoundedBar
                                 {...props as { x: number; y: number; width: number; height: number }}
-                                fill="#f43f5e"
-                                opacity={dataPoint?.isFuture ? 0.15 : 0.85}
+                                fill={val >= 0 ? '#10b981' : '#f43f5e'}
+                                opacity={dataPoint?.isFuture ? 0.15 : 1}
                               />
                             );
                           }}
@@ -4622,83 +5111,133 @@ export default function Finance() {
                   </div>
                 </Card>
 
-                {/* Income Card */}
-                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
-                  <div className="space-y-1 mb-4">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
-                    <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-                    <p className="text-2xl font-extrabold font-mono text-cyan-500">{formatGBP(ytdIncome)}</p>
-                  </div>
-                  <div className="h-[180px] w-full min-w-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                        <XAxis
-                          dataKey="name"
-                          tickLine={false}
-                          axisLine={false}
-                          tick={(props) => <CashFlowXTick {...props} />}
-                          interval={0}
-                        />
-                        <YAxis
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
-                          tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
-                        />
-                        <RechartsTooltip
-                          contentStyle={cfTooltipStyle}
-                          itemStyle={{ color: 'hsl(var(--foreground))' }}
-                          formatter={(value: number) => [formatGBP(value), 'Income']}
-                        />
-                        <Bar
-                          dataKey="income"
-                          shape={(props: Record<string, unknown>) => {
-                            const dataPoint = cfMonthlyData[(props as { index: number }).index];
-                            return (
-                              <RoundedBar
-                                {...props as { x: number; y: number; width: number; height: number }}
-                                fill="#06b6d4"
-                                opacity={dataPoint?.isFuture ? 0.15 : 0.85}
-                              />
-                            );
-                          }}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
+                {/* ─── SPEND + INCOME SIDE-BY-SIDE ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* Spend Card */}
+                  <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+                    <div className="space-y-1 mb-4">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
+                      <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+                      <p className="text-2xl font-extrabold font-mono text-rose-500">{formatGBP(ytdSpend)}</p>
+                    </div>
+                    <div className="h-[180px] w-full min-w-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={(props) => <CashFlowXTick {...props} />}
+                            interval={0}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
+                            tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                          />
+                          <RechartsTooltip
+                            contentStyle={cfTooltipStyle}
+                            itemStyle={{ color: 'hsl(var(--foreground))' }}
+                            formatter={(value: number) => [formatGBP(value), 'Spend']}
+                          />
+                          <Bar
+                            dataKey="spend"
+                            shape={(props: Record<string, unknown>) => {
+                              const dataPoint = cfMonthlyData[(props as { index: number }).index];
+                              return (
+                                <RoundedBar
+                                  {...props as { x: number; y: number; width: number; height: number }}
+                                  fill="#f43f5e"
+                                  opacity={dataPoint?.isFuture ? 0.15 : 0.85}
+                                />
+                              );
+                            }}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+
+                  {/* Income Card */}
+                  <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+                    <div className="space-y-1 mb-4">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
+                      <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+                      <p className="text-2xl font-extrabold font-mono text-cyan-500">{formatGBP(ytdIncome)}</p>
+                    </div>
+                    <div className="h-[180px] w-full min-w-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={(props) => <CashFlowXTick {...props} />}
+                            interval={0}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
+                            tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                          />
+                          <RechartsTooltip
+                            contentStyle={cfTooltipStyle}
+                            itemStyle={{ color: 'hsl(var(--foreground))' }}
+                            formatter={(value: number) => [formatGBP(value), 'Income']}
+                          />
+                          <Bar
+                            dataKey="income"
+                            shape={(props: Record<string, unknown>) => {
+                              const dataPoint = cfMonthlyData[(props as { index: number }).index];
+                              return (
+                                <RoundedBar
+                                  {...props as { x: number; y: number; width: number; height: number }}
+                                  fill="#06b6d4"
+                                  opacity={dataPoint?.isFuture ? 0.15 : 0.85}
+                                />
+                              );
+                            }}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+
+                </div>
+
+                {/* ─── METRIC SUMMARY ROW ─── */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
+                    <span className={cn("text-xl font-extrabold font-mono block", avgMonthlyNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                      {formatGBP(avgMonthlyNet)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
+                  </Card>
+
+                  <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
+                    <span className={cn("text-xl font-extrabold font-mono block", savingsRate >= 20 ? "text-emerald-500" : savingsRate >= 0 ? "text-amber-500" : "text-rose-500")}>
+                      {savingsRate.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">of income retained YTD</span>
+                  </Card>
+
+                  <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
+                    <span className={cn("text-xl font-extrabold font-mono block", recurringBurnRate <= 30 ? "text-emerald-500" : recurringBurnRate <= 50 ? "text-amber-500" : "text-rose-500")}>
+                      {recurringBurnRate.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
+                  </Card>
+                </div>
 
               </div>
-
-              {/* ─── METRIC SUMMARY ROW ─── */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
-                  <span className={cn("text-xl font-extrabold font-mono block", avgMonthlyNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                    {formatGBP(avgMonthlyNet)}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
-                </Card>
-
-                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
-                  <span className={cn("text-xl font-extrabold font-mono block", savingsRate >= 20 ? "text-emerald-500" : savingsRate >= 0 ? "text-amber-500" : "text-rose-500")}>
-                    {savingsRate.toFixed(1)}%
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">of income retained YTD</span>
-                </Card>
-
-                <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
-                  <span className={cn("text-xl font-extrabold font-mono block", recurringBurnRate <= 30 ? "text-emerald-500" : recurringBurnRate <= 50 ? "text-amber-500" : "text-rose-500")}>
-                    {recurringBurnRate.toFixed(1)}%
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
-                </Card>
-              </div>
-
-            </div>
             );
           })()}
 
@@ -5427,7 +5966,7 @@ export default function Finance() {
                         This month
                       </button>
 
-                       {!thisMonthCollapsed && (
+                      {!thisMonthCollapsed && (
                         <div className="space-y-1 px-1">
                           {thisMonthBills
                             .sort((a, b) => a.dueDate - b.dueDate)
@@ -6337,6 +6876,47 @@ export default function Finance() {
                               </div>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Item 4: Active Savings Types */}
+                  <div className="rounded-xl border border-border/40 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSection(expandedSection === 'savings' ? 'none' : 'savings')}
+                      className="w-full flex items-center justify-between p-3.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left"
+                    >
+                      <span className="flex items-center gap-2"><Briefcase className="w-3.5 h-3.5 text-primary" /> Active Savings Types</span>
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedSection === 'savings' ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expandedSection === 'savings' && (
+                      <div className="p-4 bg-background/30 border-t border-border/20 space-y-3 text-xs">
+                        <p className="text-[10px] text-muted-foreground mb-2">Enable or disable specific savings vehicles inside your budget and wealth trackers.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
+                          {SAVINGS_PRESETS.map((preset) => {
+                            const key = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                            const isChecked = draftActiveSavingsTypes.includes(key);
+                            return (
+                              <label key={key} className="flex items-center gap-2 p-2.5 rounded-xl border border-border/40 bg-card/45 hover:bg-muted/10 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setDraftActiveSavingsTypes([...draftActiveSavingsTypes, key]);
+                                    } else {
+                                      setDraftActiveSavingsTypes(draftActiveSavingsTypes.filter(t => t !== key));
+                                    }
+                                  }}
+                                  className="h-4 w-4 rounded border-primary/20 text-primary focus:ring-primary/30 cursor-pointer"
+                                />
+                                <span className="text-base leading-none shrink-0">{preset.emoji}</span>
+                                <span className="font-medium text-foreground">{preset.name}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -7289,8 +7869,8 @@ export default function Finance() {
                 id="cat-template"
                 onChange={(e) => {
                   const idx = parseInt(e.target.value, 10);
-                  if (!isNaN(idx) && defaultBudgetCategories[idx]) {
-                    const preset = defaultBudgetCategories[idx];
+                  if (!isNaN(idx) && DEFAULT_CATEGORY_TEMPLATES[idx]) {
+                    const preset = DEFAULT_CATEGORY_TEMPLATES[idx];
                     setNewCategoryName(preset.name);
                     setNewCategoryEmoji(preset.emoji || '');
                     setNewCategoryGroup(preset.group || 'needs');
@@ -7305,7 +7885,7 @@ export default function Finance() {
                 defaultValue=""
               >
                 <option value="">Start a new one from scratch</option>
-                {defaultBudgetCategories.map((preset, idx) => (
+                {DEFAULT_CATEGORY_TEMPLATES.map((preset, idx) => (
                   <option key={preset.id} value={idx}>
                     {preset.emoji} {preset.name}
                   </option>
@@ -7435,36 +8015,719 @@ export default function Finance() {
             <DialogTitle className="font-serif">Add Budget Item</DialogTitle>
             <DialogDescription className="text-xs">Add a new specific item inside the selected category.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAddItem} className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label htmlFor="item-new-name">Item Name</Label>
-              <Input
-                id="item-new-name"
-                placeholder="e.g. Weekly Fuel"
-                value={newBudgetItem.name}
-                onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
-                className="rounded-xl h-10 border-primary/20 bg-background/50"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="item-new-spent">Currently Spent (£)</Label>
-              <Input
-                id="item-new-spent"
-                type="number"
-                step="0.01"
-                placeholder="e.g. 45"
-                value={newBudgetItem.spent || ''}
-                onChange={(e) => setNewBudgetItem({ ...newBudgetItem, spent: parseFloat(e.target.value) || 0 })}
-                className="rounded-xl h-10 border-primary/20 bg-background/50"
-                required
-              />
-            </div>
-            <DialogFooter className="pt-4 gap-2 sm:gap-0">
-              <Button variant="outline" type="button" onClick={() => setIsAddItemOpen(false)} className="rounded-xl">Cancel</Button>
-              <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Item</Button>
-            </DialogFooter>
-          </form>
+          {(() => {
+            const targetCategory = budgetCategories.find(c => c.id === activeCategoryId);
+            const isSavingsCategory = targetCategory?.group === 'savings';
+            const isDiscCategory = isDiscretionaryCategory(targetCategory);
+
+            const activePresets = SAVINGS_PRESETS.filter(p => {
+              const key = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+              const activeTypes = settings.activeSavingsTypes || ALL_SAVINGS_IDS;
+              return activeTypes.includes(key);
+            });
+
+            return (
+              <form onSubmit={handleAddItem} className="space-y-4 py-2">
+                <div className="space-y-1">
+                  <Label htmlFor="item-new-name">Item Name</Label>
+                  {isSavingsCategory ? (
+                    <div className="space-y-2">
+                      <select
+                        id="savings-preset-select"
+                        value={selectedSavingsPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedSavingsPreset(val);
+                          if (val !== 'custom') {
+                            const preset = SAVINGS_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '💰'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '💰'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {activePresets.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom savings type...</option>
+                      </select>
+                      {selectedSavingsPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Dream House Fund"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isDiscCategory ? (
+                    <div className="space-y-2">
+                      <select
+                        id="discretionary-preset-select"
+                        value={selectedDiscretionaryPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedDiscretionaryPreset(val);
+                          if (val !== 'custom') {
+                            const preset = FOOD_ENTERTAINMENT_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🍔'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🍔'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {FOOD_ENTERTAINMENT_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom discretionary type...</option>
+                      </select>
+                      {selectedDiscretionaryPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Weekly Coffee Run"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isHousingCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="housing-preset-select"
+                        value={selectedHousingPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedHousingPreset(val);
+                          if (val !== 'custom') {
+                            const preset = HOUSING_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🏠'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🏠'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {HOUSING_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom housing type...</option>
+                      </select>
+                      {selectedHousingPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Service Charges"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isInsuranceCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="insurance-preset-select"
+                        value={selectedInsurancePreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedInsurancePreset(val);
+                          if (val !== 'custom') {
+                            const preset = INSURANCE_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🛡️'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🛡️'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {INSURANCE_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom insurance type...</option>
+                      </select>
+                      {selectedInsurancePreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Appliance Cover"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isTransportCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="transport-preset-select"
+                        value={selectedTransportPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedTransportPreset(val);
+                          if (val !== 'custom') {
+                            const preset = TRANSPORT_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🚗'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🚗'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {TRANSPORT_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom transport type...</option>
+                      </select>
+                      {selectedTransportPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Helicopter ride"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isSubscriptionsCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="subscription-preset-select"
+                        value={selectedSubscriptionPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedSubscriptionPreset(val);
+                          if (val !== 'custom') {
+                            const preset = SUBSCRIPTION_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '📺'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '📺'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {SUBSCRIPTION_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom subscription type...</option>
+                      </select>
+                      {selectedSubscriptionPreset !== 'custom' ? (
+                        <div className="space-y-1 pt-1">
+                          <Label htmlFor="subscription-provider-input" className="text-xs text-muted-foreground">Service Name / Provider</Label>
+                          <Input
+                            id="subscription-provider-input"
+                            placeholder="e.g. Netflix, ChatGPT, iCloud"
+                            value={subscriptionProvider}
+                            onChange={(e) => setSubscriptionProvider(e.target.value)}
+                            className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs"
+                          />
+                        </div>
+                      ) : (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Bespoke Monthly Box"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isLoansCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="loan-preset-select"
+                        value={selectedLoanPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedLoanPreset(val);
+                          if (val !== 'custom') {
+                            const preset = LOANS_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '💳'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '💳'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {LOANS_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom loan type...</option>
+                      </select>
+                      {selectedLoanPreset !== 'custom' ? (
+                        <div className="space-y-1 pt-1">
+                          <Label htmlFor="loan-provider-input" className="text-xs text-muted-foreground">Lender / Provider</Label>
+                          <Input
+                            id="loan-provider-input"
+                            placeholder="e.g. Klarna, Student Loans Company, Halifax"
+                            value={loanProvider}
+                            onChange={(e) => setLoanProvider(e.target.value)}
+                            className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs"
+                          />
+                        </div>
+                      ) : (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Family Loan"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isGiftsDonationsCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="gifts-preset-select"
+                        value={selectedGiftsPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedGiftsPreset(val);
+                          if (val !== 'custom') {
+                            const preset = GIFTS_DONATIONS_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🎁'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🎁'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {GIFTS_DONATIONS_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom gift/donation type...</option>
+                      </select>
+                      {selectedGiftsPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Anniversary Gift"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isHealthWellnessCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="health-preset-select"
+                        value={selectedHealthPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedHealthPreset(val);
+                          if (val !== 'custom') {
+                            const preset = HEALTH_WELLNESS_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🏥'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🏥'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {HEALTH_WELLNESS_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom health type...</option>
+                      </select>
+                      {selectedHealthPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Chiropractor"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isPetsCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="pets-preset-select"
+                        value={selectedPetsPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedPetsPreset(val);
+                          if (val !== 'custom') {
+                            const preset = PETS_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🐱'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🐱'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {PETS_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom pet type...</option>
+                      </select>
+                      {selectedPetsPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Pet Sitting"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isShoppingCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="shopping-preset-select"
+                        value={selectedShoppingPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedShoppingPreset(val);
+                          if (val !== 'custom') {
+                            const preset = SHOPPING_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🛍️'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🛍️'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {SHOPPING_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom shopping type...</option>
+                      </select>
+                      {selectedShoppingPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Gadget Purchase"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isTravelHolidaysCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="travel-preset-select"
+                        value={selectedTravelPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedTravelPreset(val);
+                          if (val !== 'custom') {
+                            const preset = TRAVEL_HOLIDAYS_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🏖️'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🏖️'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {TRAVEL_HOLIDAYS_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom travel type...</option>
+                      </select>
+                      {selectedTravelPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Weekend Getaway"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isOtherCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="other-preset-select"
+                        value={selectedOtherPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedOtherPreset(val);
+                          if (val !== 'custom') {
+                            const preset = OTHER_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🌀'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🌀'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {OTHER_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom other type...</option>
+                      </select>
+                      {selectedOtherPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Cash withdrawal"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isFamilyKidsCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="family-preset-select"
+                        value={selectedFamilyPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedFamilyPreset(val);
+                          if (val !== 'custom') {
+                            const preset = FAMILY_KIDS_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🚸'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🚸'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {FAMILY_KIDS_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom family/kids type...</option>
+                      </select>
+                      {selectedFamilyPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. School Trip"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isEducationCareerCategory(targetCategory) ? (
+                    <div className="space-y-2">
+                      <select
+                        id="education-preset-select"
+                        value={selectedEducationPreset}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedEducationPreset(val);
+                          if (val !== 'custom') {
+                            const preset = EDUCATION_CAREER_PRESETS.find(p => p.name === val);
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: val,
+                              emoji: preset?.emoji || '🎓'
+                            });
+                          } else {
+                            setNewBudgetItem({
+                              ...newBudgetItem,
+                              name: '',
+                              emoji: '🎓'
+                            });
+                          }
+                        }}
+                        className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                      >
+                        {EDUCATION_CAREER_PRESETS.map((preset) => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.emoji} {preset.name}
+                          </option>
+                        ))}
+                        <option value="custom">✍️ Custom education type...</option>
+                      </select>
+                      {selectedEducationPreset === 'custom' && (
+                        <Input
+                          id="item-new-name-custom"
+                          placeholder="e.g. Udemy course"
+                          value={newBudgetItem.name}
+                          onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                          className="rounded-xl h-10 border-primary/20 bg-background/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <Input
+                      id="item-new-name"
+                      placeholder="e.g. Weekly Fuel"
+                      value={newBudgetItem.name}
+                      onChange={(e) => setNewBudgetItem({ ...newBudgetItem, name: e.target.value })}
+                      className="rounded-xl h-10 border-primary/20 bg-background/50"
+                      required
+                    />
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="item-new-spent">Currently Spent (£)</Label>
+                  <Input
+                    id="item-new-spent"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 45"
+                    value={newBudgetItem.spent || ''}
+                    onChange={(e) => setNewBudgetItem({ ...newBudgetItem, spent: parseFloat(e.target.value) || 0 })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                    required
+                  />
+                </div>
+                <DialogFooter className="pt-4 gap-2 sm:gap-0">
+                  <Button variant="outline" type="button" onClick={() => setIsAddItemOpen(false)} className="rounded-xl">Cancel</Button>
+                  <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Item</Button>
+                </DialogFooter>
+              </form>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

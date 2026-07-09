@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, Trash2, CalendarDays, Clock } from 'lucide-react';
+import { ExternalLink, Trash2, CalendarDays, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
@@ -58,6 +58,45 @@ export function WatchlistDetailDialog({
 
   const isTVShow = item.category === 'TV Shows';
   const hasSeasons = isTVShow && item.seasons && item.seasons.length > 0;
+
+  const upcomingReleaseDate = (() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    if (item.category === 'Movies') {
+      if (item.release_date) {
+        const releaseDate = new Date(item.release_date);
+        releaseDate.setHours(0, 0, 0, 0);
+        if (releaseDate > now) {
+          return releaseDate;
+        }
+      }
+      return null;
+    }
+
+    if (!item.seasons || item.seasons.length === 0) return null;
+
+    const futureSeasons = item.seasons.filter(
+      (s) => s.release_date && new Date(s.release_date) > now,
+    );
+    if (futureSeasons.length > 0) {
+      const earliestSeason = futureSeasons.reduce((earliest, current) => {
+        if (!earliest.release_date) return current;
+        if (!current.release_date) return earliest;
+        return new Date(current.release_date) <
+          new Date(earliest.release_date)
+          ? current
+          : earliest;
+      });
+
+      if (earliestSeason.release_date) {
+        const releaseDate = new Date(earliestSeason.release_date);
+        releaseDate.setHours(0, 0, 0, 0);
+        return releaseDate;
+      }
+    }
+    return null;
+  })();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -116,26 +155,38 @@ export function WatchlistDetailDialog({
                     {item.streaming_platform}
                   </span>
                 )}
-                {status && (
-                  <span
-                    className={cn(
-                      'text-xs px-2 py-1 rounded-full font-medium',
-                      status === 'Watching' &&
-                        'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-                      status === 'To Watch' && 'bg-primary/10 text-primary',
-                      (status === 'Completed' || status === 'Watched') &&
-                        'bg-green-500/10 text-green-600 dark:text-green-400',
-                      status === 'Coming Soon' &&
-                        'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-                      status.toLowerCase().includes('releases in') &&
-                        'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                      status === 'Released' &&
-                        'bg-gray-500/10 text-gray-600 dark:text-gray-400',
-                    )}
-                  >
-                    {status}
-                  </span>
-                )}
+                <div className="flex flex-col items-start gap-1">
+                  {status && (
+                    <span
+                      className={cn(
+                        'text-xs px-2 py-1 rounded-full font-medium',
+                        status === 'Watching' &&
+                          'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                        status === 'To Watch' && 'bg-primary/10 text-primary',
+                        (status === 'Completed' || status === 'Watched') &&
+                          'bg-green-500/10 text-green-600 dark:text-green-400',
+                        status === 'Coming Soon' &&
+                          'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                        status.toLowerCase().includes('releases in') &&
+                          'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                        status === 'Released' &&
+                          'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+                      )}
+                    >
+                      {status}
+                    </span>
+                  )}
+                  {upcomingReleaseDate && status && (status.toLowerCase().includes('releases in') || status === 'Coming Soon') && (
+                    <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {upcomingReleaseDate.toLocaleDateString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  )}
+                </div>
               </div>
             </DialogHeader>
 
@@ -341,26 +392,38 @@ export function WatchlistDetailDialog({
                   {item.streaming_platform}
                 </span>
               )}
-              {status && (
-                <span
-                  className={cn(
-                    'text-xs px-2 py-1 rounded-full font-medium',
-                    status === 'Watching' &&
-                      'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-                    status === 'To Watch' && 'bg-primary/10 text-primary',
-                    (status === 'Completed' || status === 'Watched') &&
-                      'bg-green-500/10 text-green-600 dark:text-green-400',
-                    status === 'Coming Soon' &&
-                      'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-                    status.toLowerCase().includes('releases in') &&
-                      'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                    status === 'Released' &&
-                      'bg-gray-500/10 text-gray-600 dark:text-gray-400',
-                  )}
-                >
-                  {status}
-                </span>
-              )}
+              <div className="flex flex-col items-start gap-1">
+                {status && (
+                  <span
+                    className={cn(
+                      'text-xs px-2 py-1 rounded-full font-medium',
+                      status === 'Watching' &&
+                        'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                      status === 'To Watch' && 'bg-primary/10 text-primary',
+                      (status === 'Completed' || status === 'Watched') &&
+                        'bg-green-500/10 text-green-600 dark:text-green-400',
+                      status === 'Coming Soon' &&
+                        'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                      status.toLowerCase().includes('releases in') &&
+                        'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                      status === 'Released' &&
+                        'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+                    )}
+                  >
+                    {status}
+                  </span>
+                )}
+                {upcomingReleaseDate && status && (status.toLowerCase().includes('releases in') || status === 'Coming Soon') && (
+                  <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {upcomingReleaseDate.toLocaleDateString([], {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      })}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Description */}

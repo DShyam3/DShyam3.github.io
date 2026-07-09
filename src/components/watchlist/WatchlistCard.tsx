@@ -94,6 +94,45 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
   const status = getAutoStatus(item);
 
+  const upcomingReleaseDate = React.useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    if (item.category === 'Movies') {
+      if (item.release_date) {
+        const releaseDate = new Date(item.release_date);
+        releaseDate.setHours(0, 0, 0, 0);
+        if (releaseDate > now) {
+          return releaseDate;
+        }
+      }
+      return null;
+    }
+
+    if (!item.seasons || item.seasons.length === 0) return null;
+
+    const futureSeasons = item.seasons.filter(
+      (s) => s.release_date && new Date(s.release_date) > now,
+    );
+    if (futureSeasons.length > 0) {
+      const earliestSeason = futureSeasons.reduce((earliest, current) => {
+        if (!earliest.release_date) return current;
+        if (!current.release_date) return earliest;
+        return new Date(current.release_date) <
+          new Date(earliest.release_date)
+          ? current
+          : earliest;
+      });
+
+      if (earliestSeason.release_date) {
+        const releaseDate = new Date(earliestSeason.release_date);
+        releaseDate.setHours(0, 0, 0, 0);
+        return releaseDate;
+      }
+    }
+    return null;
+  }, [item]);
+
   return (
     <>
       <div
@@ -205,6 +244,16 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                 )}
               >
                 {status}
+              </span>
+            )}
+            {upcomingReleaseDate && status && (status.toLowerCase().includes('releases in') || status === 'Coming Soon') && (
+              <span className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {upcomingReleaseDate.toLocaleDateString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
               </span>
             )}
           </div>
