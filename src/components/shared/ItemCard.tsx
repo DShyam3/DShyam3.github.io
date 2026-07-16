@@ -35,12 +35,44 @@ function parseSpecs(description: string | undefined) {
     .map((line) => {
       const cleanLine = line.replace(/^-\s*/, '');
       const colonIndex = cleanLine.indexOf(':');
-      if (colonIndex > 0) {
-        const key = cleanLine.substring(0, colonIndex).trim();
-        const value = cleanLine.substring(colonIndex + 1).trim();
-        return { key, value };
+      if (colonIndex <= 0) {
+        return { key: '', name: cleanLine, numericPrice: 0, link: undefined, price: undefined };
       }
-      return { key: '', value: cleanLine };
+      
+      const key = cleanLine.substring(0, colonIndex).trim();
+      let rest = cleanLine.substring(colonIndex + 1).trim();
+      
+      // 1. Extract price if present, e.g. (£172.00) or £172.00
+      let priceStr: string | undefined = undefined;
+      let numericPrice = 0;
+      
+      const priceRegex = /(?:\(?)\s*£\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:\)?)/;
+      const priceMatch = rest.match(priceRegex);
+      if (priceMatch) {
+        priceStr = `£${priceMatch[1]}`;
+        numericPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
+        rest = rest.replace(priceMatch[0], '').trim();
+        rest = rest.replace(/\(\s*\)/g, '').trim(); // clean empty parentheses
+      }
+      
+      // 2. Extract markdown link if present, e.g. [NCASE Formd T1 V2.5](https://...)
+      let name = rest;
+      let link: string | undefined = undefined;
+      
+      const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/;
+      const linkMatch = rest.match(linkRegex);
+      if (linkMatch) {
+        name = linkMatch[1].trim();
+        link = linkMatch[2].trim();
+      }
+      
+      return {
+        key,
+        name,
+        link,
+        price: priceStr,
+        numericPrice: isNaN(numericPrice) ? 0 : numericPrice,
+      };
     });
 }
 
@@ -155,20 +187,55 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
             <span className="text-base font-semibold">{formatPrice(item.price)}</span>
           </DetailSection>
           {item.description && (
-            <DetailSection label="Specifications">
-              <div className="mt-2 border border-border/50 rounded-lg overflow-hidden bg-secondary/5 divide-y divide-border/30">
-                {parseSpecs(item.description).map((spec, i) => (
-                  <div key={i} className="flex flex-col sm:flex-row p-3 text-sm gap-1 sm:gap-4 hover:bg-secondary/10 transition-colors">
-                    {spec.key ? (
-                      <>
-                        <span className="sm:w-1/3 text-muted-foreground font-medium text-xs sm:text-sm uppercase tracking-wider sm:normal-case sm:tracking-normal shrink-0">{spec.key}</span>
-                        <span className="sm:w-2/3 text-foreground break-words">{spec.value}</span>
-                      </>
-                    ) : (
-                      <span className="w-full text-foreground break-words">{spec.value}</span>
-                    )}
-                  </div>
-                ))}
+            <DetailSection label="Specifications & Parts">
+              <div className="mt-2 border border-border/50 rounded-lg overflow-x-auto bg-secondary/5">
+                <table className="w-full text-sm text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-border/50 bg-secondary/10 text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                      <th className="p-3">Component</th>
+                      <th className="p-3">Part / Model</th>
+                      <th className="p-3 text-right">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {parseSpecs(item.description).map((spec, i) => (
+                      <tr key={i} className="hover:bg-secondary/10 transition-colors">
+                        <td className="p-3 font-medium text-muted-foreground whitespace-nowrap">
+                          {spec.key}
+                        </td>
+                        <td className="p-3 text-foreground break-words max-w-[200px] sm:max-w-xs">
+                          {spec.link ? (
+                            <a
+                              href={spec.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline inline-flex items-center gap-1 font-medium"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {spec.name}
+                              <ExternalLink className="w-3 h-3 opacity-60 inline shrink-0" />
+                            </a>
+                          ) : (
+                            spec.name
+                          )}
+                        </td>
+                        <td className="p-3 text-right text-foreground font-mono whitespace-nowrap">
+                          {spec.numericPrice > 0 ? formatPrice(spec.numericPrice) : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-secondary/10 font-semibold text-foreground">
+                      <td className="p-3" colSpan={2}>Total Specifications Value</td>
+                      <td className="p-3 text-right font-mono whitespace-nowrap">
+                        {formatPrice(
+                          parseSpecs(item.description).reduce((sum, spec) => sum + spec.numericPrice, 0)
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </DetailSection>
           )}
