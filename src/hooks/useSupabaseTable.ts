@@ -26,8 +26,8 @@ export function useSupabaseTable<T extends Record<string, any>>(
       if (options?.orderBy) {
         q = q.order(options.orderBy.column, { ascending: options.orderBy.ascending ?? false });
       } else {
-        // Safe default: try updated_at first as it's more common in this project's newer tables
-        q = q.order('updated_at' as any, { ascending: false });
+        // Safe default: try created_at first as it's present in all tables
+        q = q.order('created_at' as any, { ascending: false });
       }
 
       const { data, error } = await q;

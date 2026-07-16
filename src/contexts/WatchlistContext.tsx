@@ -53,6 +53,7 @@ export interface FavouriteItem {
   media_type: 'movie' | 'tv';
   tmdb_id?: number;
   created_at: string;
+  category: string;
 }
 
 interface SyncLogEntry {
@@ -249,6 +250,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           media_type: fav.media_type,
           tmdb_id: fav.tmdb_id || undefined,
           created_at: fav.created_at || new Date().toISOString(),
+          category: fav.category || 'Hollywood',
         }),
       );
       setFavourites(mappedFavourites);
@@ -643,6 +645,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         poster: item.poster || null,
         media_type: item.media_type,
         tmdb_id: item.tmdb_id || null,
+        category: item.category,
       });
       if (error) throw error;
       await fetchData();
