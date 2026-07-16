@@ -49,14 +49,12 @@ export const WARDROBE_SUBCATEGORIES: { key: WardrobeSubcategory; label: string }
 ];
 
 export type HomeLabSubcategory =
-  | 'pc-specs'
-  | 'laptop-mac'
+  | 'compute'
   | 'networking'
   | 'general-homelab';
 
 export const HOMELAB_SUBCATEGORIES: { key: HomeLabSubcategory; label: string }[] = [
-  { key: 'pc-specs', label: 'PC Specs' },
-  { key: 'laptop-mac', label: 'Laptop / Mac' },
+  { key: 'compute', label: 'Compute' },
   { key: 'networking', label: 'Networking' },
   { key: 'general-homelab', label: 'General HomeLab' },
 ];
@@ -73,4 +71,6 @@ export interface InventoryItem {
   isNew?: boolean;
   isWishlist?: boolean;
   createdAt: Date;
+  description?: string;
 }
+

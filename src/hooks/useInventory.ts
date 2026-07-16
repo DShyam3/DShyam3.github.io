@@ -21,6 +21,7 @@ export function useInventory() {
       isNew: item.is_new || false,
       isWishlist: item.is_wishlist || false,
       createdAt: new Date(item.created_at),
+      description: item.description || '',
     }));
   }, [rawItems]);
 
@@ -35,6 +36,7 @@ export function useInventory() {
       link: item.link || null,
       is_new: item.isNew || false,
       is_wishlist: item.isWishlist || false,
+      description: item.description || null,
     });
   };
 
@@ -49,6 +51,7 @@ export function useInventory() {
     if (updates.link !== undefined) dbUpdates.link = updates.link;
     if (updates.isNew !== undefined) dbUpdates.is_new = updates.isNew;
     if (updates.isWishlist !== undefined) dbUpdates.is_wishlist = updates.isWishlist;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
 
     if (updates.category && updates.category !== 'wardrobe' && updates.category !== 'homelab') {
       dbUpdates.subcategory = null;

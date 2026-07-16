@@ -36,6 +36,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
     const [image, setImage] = useState('');
     const [link, setLink] = useState('');
     const [isWishlist, setIsWishlist] = useState(false);
+    const [description, setDescription] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -69,6 +70,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
             image,
             link: link || undefined,
             isWishlist,
+            description: description || undefined,
         });
 
         toast.success('Item added to collection');
@@ -85,6 +87,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
         setImage('');
         setLink('');
         setIsWishlist(false);
+        setDescription('');
         setErrors({});
     };
 
@@ -236,6 +239,18 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                             value={link}
                             onChange={(e) => setLink(e.target.value)}
                             placeholder="https://... or N/A for custom items"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="description">Description / Specs</Label>
+                        <textarea
+                            id="description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Add item specifications or description..."
+                            rows={4}
+                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         />
                     </div>
 

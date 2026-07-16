@@ -37,6 +37,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
   const [image, setImage] = useState(item.image);
   const [link, setLink] = useState(item.link || '');
   const [isWishlist, setIsWishlist] = useState(item.isWishlist || false);
+  const [description, setDescription] = useState(item.description || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
       setImage(item.image);
       setLink(item.link || '');
       setIsWishlist(item.isWishlist || false);
+      setDescription(item.description || '');
       setErrors({});
     }
   }, [open, item]);
@@ -84,6 +86,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
       image,
       link: link || undefined,
       isWishlist,
+      description: description || undefined,
     });
 
     toast.success('Item updated');
@@ -241,6 +244,18 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
               value={link}
               onChange={(e) => setLink(e.target.value)}
               placeholder="https://... or N/A for custom items"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-description">Description / Specs</Label>
+            <textarea
+              id="edit-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add item specifications or description..."
+              rows={4}
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
