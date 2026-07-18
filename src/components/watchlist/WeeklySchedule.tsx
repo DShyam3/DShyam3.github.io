@@ -15,6 +15,7 @@ interface WeeklyScheduleProps {
     onRemoveWatchlist?: (id: string) => void;
     addToSchedule?: (item: Omit<any, 'id'>) => void;
     isInSchedule: (watchlistItemId: string) => boolean;
+    onMoveToFavourites?: (item: WatchlistItem) => void;
 }
 
 export function WeeklySchedule({
@@ -30,6 +31,7 @@ export function WeeklySchedule({
     onRemoveWatchlist,
     addToSchedule,
     isInSchedule,
+    onMoveToFavourites,
 }: WeeklyScheduleProps) {
     return (
         <div className="px-4 md:px-0 py-6">
@@ -68,6 +70,7 @@ export function WeeklySchedule({
                                                 onRemoveWatchlist={onRemoveWatchlist}
                                                 addToSchedule={addToSchedule}
                                                 isInSchedule={isInSchedule}
+                                                onMoveToFavourites={onMoveToFavourites}
                                             />
                                         );
                                     })

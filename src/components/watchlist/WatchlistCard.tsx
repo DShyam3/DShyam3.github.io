@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Trash2, Calendar } from 'lucide-react';
+import { Trash2, Calendar, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
@@ -41,6 +41,7 @@ interface WatchlistCardProps {
   addToSchedule?: (item: Omit<any, 'id'>) => void;
   removeFromSchedule?: (watchlistItemId: string) => void;
   isInSchedule: (watchlistItemId: string) => boolean;
+  onMoveToFavourites?: (item: WatchlistItem) => void;
 }
 
 export const WatchlistCard = React.memo(function WatchlistCard({
@@ -55,6 +56,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   addToSchedule,
   removeFromSchedule,
   isInSchedule,
+  onMoveToFavourites,
 }: WatchlistCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -158,6 +160,20 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
+            {onMoveToFavourites && (
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:text-red-500"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveToFavourites(item);
+                }}
+                title="Move to Favourites"
+              >
+                <Heart className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {(addToSchedule || removeFromSchedule) && (
               <Button
                 variant="secondary"
@@ -384,6 +400,14 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         toggleSeasonWatched={toggleSeasonWatched}
         isEpisodeWatched={isEpisodeWatched}
         isSeasonWatched={isSeasonWatched}
+        onMoveToFavourites={
+          onMoveToFavourites
+            ? () => {
+                onMoveToFavourites(item);
+                setDetailOpen(false);
+              }
+            : undefined
+        }
       />
     </>
   );

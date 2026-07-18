@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, Trash2, CalendarDays, Calendar, Clock } from 'lucide-react';
+import { ExternalLink, Trash2, CalendarDays, Calendar, Clock, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
@@ -33,6 +33,7 @@ interface WatchlistDetailDialogProps {
     episodeNumber: number,
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
+  onMoveToFavourites?: () => void;
 }
 
 export function WatchlistDetailDialog({
@@ -48,6 +49,7 @@ export function WatchlistDetailDialog({
   toggleSeasonWatched,
   isEpisodeWatched,
   isSeasonWatched,
+  onMoveToFavourites,
 }: WatchlistDetailDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -256,6 +258,17 @@ export function WatchlistDetailDialog({
                   {isScheduled ? 'Remove from Schedule' : 'Add to Schedule'}
                 </Button>
               )}
+              {onMoveToFavourites && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onMoveToFavourites}
+                  className="gap-1.5 flex-1 sm:flex-initial justify-center hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30"
+                >
+                  <Heart className="h-4 w-4" />
+                  Move to Favourites
+                </Button>
+              )}
               {onDelete && (
                 <div className="flex-1 sm:flex-initial flex items-center gap-2">
                   {isDeleting ? (
@@ -360,6 +373,17 @@ export function WatchlistDetailDialog({
                       }
                     >
                       <CalendarDays className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {onMoveToFavourites && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={onMoveToFavourites}
+                      className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                      title="Move to Favourites"
+                    >
+                      <Heart className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
