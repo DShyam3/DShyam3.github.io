@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import defaultPresets from '../data/presets.json';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigate } from 'react-router-dom';
@@ -64,6 +64,12 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
+import { RecurringsTab } from '@/components/finance/tabs/RecurringsTab';
+import { TimeSpentTab } from '@/components/finance/tabs/TimeSpentTab';
+import { TransactionsTab } from '@/components/finance/tabs/TransactionsTab';
+import { AddRecurringDialog } from '@/components/finance/dialogs/AddRecurringDialog';
+import { EditRecurringDialog } from '@/components/finance/dialogs/EditRecurringDialog';
 import {
   AreaChart,
   Area,
@@ -199,6 +205,12 @@ export interface MockTransaction {
   amount: number;
   date: string;
   isReviewed: boolean;
+  accountId?: string;
+  bankAccountId?: string;
+  goalId?: string;
+  notes?: string;
+  tags?: string[];
+  isRecurring?: boolean;
 }
 
 export interface TaxConfig {
@@ -245,18 +257,171 @@ export interface CreditBureauConfig {
   gradient: string;
 }
 
+export interface TrueLayerStatus {
+  connected: boolean;
+  expires_at: string | null;
+}
+
+export interface BureauBand {
+  name: string;
+  min: number;
+  max: number;
+  color: string;
+  hoverColor: string;
+  description: string;
+}
+
+export const BUREAU_BANDS: Record<'experian' | 'transunion' | 'equifax', BureauBand[]> = {
+  experian: [
+    { name: 'Low', min: 0, max: 640, color: '#ef4444', hoverColor: '#dc2626', description: 'Borrowing may be difficult and interest rates could be high. But our tools can help get your score moving in the right direction. Every small increase helps, and things should improve as you get closer to a Fair score.' },
+    { name: 'Fair', min: 641, max: 860, color: '#f59e0b', hoverColor: '#d97706', description: 'You might get limited credit options, higher interest rates, and lower borrowing limits. But our tools can help improve your score. And as it grows, so will your choices.' },
+    { name: 'Good', min: 861, max: 1000, color: '#84cc16', hoverColor: '#65a30d', description: 'You should see a wide range of credit cards, loans and mortgages (but you might have to pay a bit more interest).' },
+    { name: 'Very Good', min: 1001, max: 1120, color: '#10b981', hoverColor: '#059669', description: 'You should get most credit cards, loans and mortgages (but you might not get the very best deals).' },
+    { name: 'Excellent', min: 1121, max: 1250, color: '#047857', hoverColor: '#065f46', description: 'You should get the best credit cards, loans and mortgages (but there are no guarantees).' }
+  ],
+  transunion: [
+    { name: 'Needs Work', min: 0, max: 565, color: '#ef4444', hoverColor: '#dc2626', description: 'Your credit history needs work. You may struggle to get credit, and if you do, interest rates will likely be high.' },
+    { name: 'Fair', min: 566, max: 603, color: '#f59e0b', hoverColor: '#d97706', description: 'You have a fair credit history. You may find it harder to get credit or might have to pay higher interest rates.' },
+    { name: 'Good', min: 604, max: 627, color: '#10b981', hoverColor: '#059669', description: 'You have a good credit history and should be approved for most credit offers, though you may not get the lowest rates.' },
+    { name: 'Excellent', min: 628, max: 710, color: '#047857', hoverColor: '#065f46', description: 'You have a great credit history and are highly likely to be approved for credit and get the best interest rates.' }
+  ],
+  equifax: [
+    { name: 'Start Climbing', min: 0, max: 409, color: '#ef4444', hoverColor: '#dc2626', description: 'Your score is low. You might find it difficult to get credit, or have to pay very high interest rates.' },
+    { name: 'Moving On Up', min: 410, max: 519, color: '#f59e0b', hoverColor: '#d97706', description: 'You\'re starting to build your score. Credit options may be limited and rates could be higher.' },
+    { name: 'On Good Ground', min: 520, max: 604, color: '#84cc16', hoverColor: '#65a30d', description: 'Your score is okay. You might get accepted for credit, but interest rates might be higher.' },
+    { name: 'Looking Bright', min: 605, max: 724, color: '#10b981', hoverColor: '#059669', description: 'You\'re in a good position. You should be accepted for most credit, with decent interest rates.' },
+    { name: 'Soaring High', min: 725, max: 1000, color: '#047857', hoverColor: '#065f46', description: 'Lenders will see you as a very low risk. You\'re likely to get the best deals on loans, credit cards, and mortgages.' }
+  ]
+};
+
+export function polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number) {
+  const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians),
+  };
+}
+
+export function describeArc(x: number, y: number, radius: number, startAngle: number, endAngle: number) {
+  const start = polarToCartesian(x, y, radius, startAngle);
+  const end = polarToCartesian(x, y, radius, endAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+  return [
+    'M', start.x, start.y,
+    'A', radius, radius, 0, largeArcFlag, 1, end.x, end.y
+  ].join(' ');
+}
+
+export interface UniversalStanding {
+  label: string;
+  rating: number;
+  color: string;
+  cls: string;
+  desc: string;
+}
+
+export function getUniversalStanding(creditScores: {
+  experian: { score: number }[];
+  transunion: { score: number }[];
+  equifax: { score: number }[];
+}): UniversalStanding | null {
+  const ratings: number[] = [];
+
+  // Experian
+  const expEntries = creditScores.experian || [];
+  if (expEntries.length > 0) {
+    const score = expEntries[expEntries.length - 1].score;
+    if (score >= 1121) ratings.push(5);
+    else if (score >= 1001) ratings.push(4.2);
+    else if (score >= 861) ratings.push(3.5);
+    else if (score >= 641) ratings.push(2.5);
+    else ratings.push(1);
+  }
+
+  // Transunion
+  const tuEntries = creditScores.transunion || [];
+  if (tuEntries.length > 0) {
+    const score = tuEntries[tuEntries.length - 1].score;
+    if (score >= 628) ratings.push(5);
+    else if (score >= 604) ratings.push(3.8);
+    else if (score >= 566) ratings.push(2.5);
+    else ratings.push(1);
+  }
+
+  // Equifax
+  const eqEntries = creditScores.equifax || [];
+  if (eqEntries.length > 0) {
+    const score = eqEntries[eqEntries.length - 1].score;
+    if (score >= 725) ratings.push(5);
+    else if (score >= 605) ratings.push(4.2);
+    else if (score >= 520) ratings.push(3.2);
+    else if (score >= 410) ratings.push(2.2);
+    else ratings.push(1);
+  }
+
+  if (ratings.length === 0) return null;
+
+  const average = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+
+  if (average >= 4.5) {
+    return {
+      label: 'Excellent',
+      rating: average,
+      color: '#047857',
+      cls: 'text-emerald-600 dark:text-emerald-400',
+      desc: 'Lenders will view you as an extremely reliable borrower. You qualify for the best financial deals.',
+    };
+  }
+  if (average >= 3.5) {
+    return {
+      label: 'Very Good',
+      rating: average,
+      color: '#10b981',
+      cls: 'text-emerald-500 dark:text-emerald-400',
+      desc: 'Your credit standing is strong. You are likely to qualify for premium rates and high limits.',
+    };
+  }
+  if (average >= 2.8) {
+    return {
+      label: 'Good',
+      rating: average,
+      color: '#84cc16',
+      cls: 'text-lime-500 dark:text-lime-400',
+      desc: 'You have a healthy credit history. You will see a wide choice of loans and credit cards.',
+    };
+  }
+  if (average >= 1.8) {
+    return {
+      label: 'Fair',
+      rating: average,
+      color: '#f59e0b',
+      cls: 'text-amber-500',
+      desc: 'Your credit score is acceptable, but you may face higher interest rates or lower borrowing limits.',
+    };
+  }
+  return {
+    label: 'Needs Work',
+    rating: average,
+    color: '#ef4444',
+    cls: 'text-rose-500',
+    desc: 'Borrowing options are limited. Focus on rebuilding your payment history to improve your rating.',
+  };
+}
+
 // ==========================================
 // CONSTANTS & DEFAULTS
 // ==========================================
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
+  { key: 'transactions', label: 'Transactions' },
   { key: 'budget', label: 'Budget' },
   { key: 'recurrings', label: 'Recurrings' },
   { key: 'cash-flow', label: 'Cash Flow' },
   { key: 'accounts', label: 'Accounts' },
   { key: 'goals', label: 'Goals' },
   { key: 'tax-income', label: 'Tax & Income' },
+  { key: 'time-spent', label: 'Time Spent' },
 ] as const;
 
 const MONTH_NAMES = [
@@ -1068,6 +1233,12 @@ export default function Finance() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
 
+  // TrueLayer state
+  const [trueLayerStatus, setTrueLayerStatus] = useState<TrueLayerStatus | null>(null);
+  const [isSyncingTrueLayer, setIsSyncingTrueLayer] = useState(false);
+  const [isConnectingTrueLayer, setIsConnectingTrueLayer] = useState(false);
+
+
   // Dynamic Budget Presets loaded from Supabase or Fallback
   const [presets, setPresets] = useState(() => {
     const saved = localStorage.getItem('finance_budget_presets');
@@ -1157,6 +1328,20 @@ export default function Finance() {
       ukRegion: 'england-and-wales',
       holidaysByUser: {},
       activeSavingsTypes: ALL_SAVINGS_IDS
+    };
+  });
+
+  const [timeSpentInputs, setTimeSpentInputs] = useState(() => {
+    const saved = localStorage.getItem('finance_time_spent_inputs');
+    return saved ? JSON.parse(saved) : {
+      sleepHoursPerDay: 8.0,
+      commuteDaysPerWeek: 5,
+      commuteHoursPerDay: 2,
+      gettingReadyHoursPerDay: 1.0,
+      gymDaysPerWeek: 0,
+      gymHoursPerSession: 0,
+      learningHoursPerWeek: 0,
+      friendsHoursPerWeek: 0,
     };
   });
 
@@ -1298,6 +1483,12 @@ export default function Finance() {
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [isAddCreditScoreOpen, setIsAddCreditScoreOpen] = useState(false);
+  const [hoveredBands, setHoveredBands] = useState<Record<'experian' | 'transunion' | 'equifax', BureauBand | null>>({
+    experian: null,
+    transunion: null,
+    equifax: null
+  });
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState<string>('all');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Form Draft States for Configuration Editor
@@ -1331,23 +1522,33 @@ export default function Finance() {
   }, [isSettingsOpen, taxConfig, recurringTemplates, creditBureaus, settings]);
 
   const [includeWorkLeaveInActual, setIncludeWorkLeaveInActual] = useState(true);
-  const [newCreditScore, setNewCreditScore] = useState<{ bureau: 'experian' | 'transunion' | 'equifax'; score: number; date: string }>({ bureau: 'experian', score: 700, date: new Date().toISOString().split('T')[0] });
+  const [newCreditScore, setNewCreditScore] = useState<{ bureau: 'experian' | 'transunion' | 'equifax'; score: number | ''; date: string }>({ bureau: 'experian', score: '', date: new Date().toISOString().split('T')[0] });
 
   // Form Fields State
-  const [newGoal, setNewGoal] = useState({ name: '', targetAmount: 0, targetDate: '', startDate: '' });
-  const [newContribution, setNewContribution] = useState({ amount: 0, note: '', date: new Date().toISOString().split('T')[0], bankAccountId: '' });
+  const [newGoal, setNewGoal] = useState<{
+    name: string;
+    targetAmount: number | '';
+    targetDate: string;
+    startDate: string;
+  }>({ name: '', targetAmount: '', targetDate: '', startDate: '' });
+  const [newContribution, setNewContribution] = useState<{
+    amount: number | '';
+    note: string;
+    date: string;
+    bankAccountId: string;
+  }>({ amount: '', note: '', date: new Date().toISOString().split('T')[0], bankAccountId: '' });
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
 
   const [activeAccount, setActiveAccount] = useState<BankAccount | null>(null);
-  const [newAccount, setNewAccount] = useState<Omit<BankAccount, 'id'>>({ name: '', type: 'checking', issuer: '', balance: 0, annualFee: 0, useCase: '', emoji: '', color: '#475569' });
+  const [newAccount, setNewAccount] = useState<Omit<BankAccount, 'id'> & { balance: number | ''; annualFee: number | ''; }>({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: '#475569' });
 
   const [activeMembership, setActiveMembership] = useState<Membership | null>(null);
-  const [newMembership, setNewMembership] = useState<Omit<Membership, 'id'>>({ name: '', type: 'points', status: 'Active', annualFee: 0, useCase: '' });
+  const [newMembership, setNewMembership] = useState<Omit<Membership, 'id'> & { annualFee: number | ''; }>({ name: '', type: 'points', status: 'Active', annualFee: '', useCase: '' });
 
   const [activeRecurring, setActiveRecurring] = useState<RecurringBill | null>(null);
-  const [newRecurring, setNewRecurring] = useState<Omit<RecurringBill, 'id'>>({
+  const [newRecurring, setNewRecurring] = useState<Omit<RecurringBill, 'id'> & { amount: number | ''; }>({
     name: '',
-    amount: 0,
+    amount: '',
     dueDate: 15,
     isPaid: false,
     frequency: 'monthly',
@@ -1360,12 +1561,18 @@ export default function Finance() {
   });
 
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryBudget, setNewCategoryBudget] = useState<number>(0);
+  const [newCategoryBudget, setNewCategoryBudget] = useState<number | ''>('');
   const [newCategoryGroup, setNewCategoryGroup] = useState<'needs' | 'wants' | 'savings'>('needs');
   const [newCategoryEmoji, setNewCategoryEmoji] = useState('');
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [newBudgetItem, setNewBudgetItem] = useState({ name: '', budgeted: 0, spent: 0, linkedAccountId: '', emoji: '' });
+  const [newBudgetItem, setNewBudgetItem] = useState<{
+    name: string;
+    budgeted: number;
+    spent: number | '';
+    linkedAccountId: string;
+    emoji: string;
+  }>({ name: '', budgeted: 0, spent: '', linkedAccountId: '', emoji: '' });
   const [selectedSavingsPreset, setSelectedSavingsPreset] = useState<string>('');
   const [selectedDiscretionaryPreset, setSelectedDiscretionaryPreset] = useState<string>('');
   const [selectedHousingPreset, setSelectedHousingPreset] = useState<string>('');
@@ -1595,61 +1802,98 @@ export default function Finance() {
   // ==========================================
 
   // Fetch all finance keys on mount
-  useEffect(() => {
+  const fetchSupabaseData = async () => {
     if (!isAdmin) return;
-
-    const fetchSupabaseData = async () => {
       setLoadingDb(true);
       try {
-        // 1. Fetch defaults first
-        const { data: defaultsData, error: defaultsError } = await supabase
-          .from('finance_defaults')
-          .select('key, content');
+        const [
+          settingsRes,
+          userHolidaysRes,
+          goalsRes,
+          contributionsRes,
+          bankAccountsRes,
+          membershipsRes,
+          creditScoresRes,
+          budgetCategoriesRes,
+          budgetItemsRes,
+          recurringBillsRes,
+          transactionsRes,
+          taxConfigsRes,
+          recurringTemplatesRes,
+          creditBureausRes,
+          holidayDefaultsRes,
+          budgetPresetsRes
+        ] = await Promise.all([
+          supabase.from('finance_settings').select('*'),
+          supabase.from('finance_user_holidays').select('*'),
+          supabase.from('finance_goals').select('*'),
+          supabase.from('finance_goal_contributions').select('*'),
+          supabase.from('finance_bank_accounts').select('*'),
+          supabase.from('finance_memberships').select('*'),
+          supabase.from('finance_credit_scores').select('*'),
+          supabase.from('finance_budget_categories').select('*'),
+          supabase.from('finance_budget_items').select('*'),
+          supabase.from('finance_recurring_bills').select('*'),
+          supabase.from('finance_transactions').select('*'),
+          supabase.from('finance_tax_configs').select('*'),
+          supabase.from('finance_recurring_templates').select('*'),
+          supabase.from('finance_credit_bureaus').select('*'),
+          supabase.from('finance_holiday_defaults').select('*'),
+          supabase.from('finance_budget_presets').select('*')
+        ]);
 
-        if (defaultsError) throw defaultsError;
-
-        const defaultsMap: Record<string, any> = {};
-        if (defaultsData) {
-          defaultsData.forEach(d => {
-            try {
-              defaultsMap[d.key] = JSON.parse(d.content);
-            } catch (e) {
-              console.error('Failed to parse default key:', d.key, e);
-            }
-          });
-          setDatabaseDefaults(defaultsMap);
+        const errors = [
+          settingsRes.error, userHolidaysRes.error, goalsRes.error, contributionsRes.error,
+          bankAccountsRes.error, membershipsRes.error, creditScoresRes.error,
+          budgetCategoriesRes.error, budgetItemsRes.error, recurringBillsRes.error,
+          transactionsRes.error, taxConfigsRes.error, recurringTemplatesRes.error,
+          creditBureausRes.error, holidayDefaultsRes.error, budgetPresetsRes.error
+        ].filter(Boolean);
+        if (errors.length > 0) {
+          throw errors[0];
         }
 
-        // 2. Fetch user data
-        const { data: userData, error: userError } = await supabase
-          .from('finance_data')
-          .select('key, content');
+        const userSettings = settingsRes.data?.find(d => !d.is_default);
+        const defaultSettings = settingsRes.data?.find(d => d.is_default);
+        const activeSettings = userSettings || defaultSettings;
 
-        if (userError) throw userError;
+        const userHolidaysList = userHolidaysRes.data?.filter(d => !d.is_default) || [];
+        const defaultHolidaysList = userHolidaysRes.data?.filter(d => d.is_default) || [];
+        const holidays = userHolidaysList.length > 0 ? userHolidaysList : defaultHolidaysList;
 
-        const userMap: Record<string, any> = {};
-        if (userData) {
-          userData.forEach(d => {
-            try {
-              userMap[d.key] = JSON.parse(d.content);
-            } catch (e) {
-              console.error('Failed to parse user key:', d.key, e);
-            }
-          });
-        }
+        const mappedHolidays: UserHoliday[] = holidays.map(h => ({
+          id: h.id,
+          startDate: h.start_date,
+          endDate: h.end_date,
+          occasion: h.occasion || '',
+          count: Number(h.count) || 0
+        }));
 
-        // Helper to get value: user custom value or fallback to database default
-        const getValue = (key: string) => {
-          return userMap[key] !== undefined ? userMap[key] : defaultsMap[key];
-        };
-
-        // Populate settings
-        const loadedSettings = getValue('settings');
-        if (loadedSettings) {
+        if (activeSettings) {
+          const loadedSettings: FinanceSettings = {
+            grossSalary: Number(activeSettings.gross_salary) || 0,
+            pensionType: (activeSettings.pension_type || 'net_pay') as any,
+            personalPensionPercent: Number(activeSettings.personal_pension_percent) || 0,
+            employerPensionPercent: Number(activeSettings.employer_pension_percent) || 0,
+            studentLoanPlan: (activeSettings.student_loan_plan || 'none') as any,
+            taxCode: activeSettings.tax_code || '1257L',
+            personalAllowance: Number(activeSettings.personal_allowance) || 12570,
+            weekends: Number(activeSettings.weekends) || 104,
+            bankHolidays: Number(activeSettings.bank_holidays) || 8,
+            workHolidays: Number(activeSettings.work_holidays) || 25,
+            workingHoursPerDay: Number(activeSettings.working_hours_per_day) || 7.5,
+            taxYear: Number(activeSettings.tax_year) || 2026,
+            ukRegion: (activeSettings.uk_region || 'england-and-wales') as any,
+            payDayOfMonth: activeSettings.pay_day_of_month || 25,
+            paydaySchedule: (activeSettings.payday_schedule || 'monthly_date') as any,
+            paydayWeekday: activeSettings.payday_weekday !== null ? activeSettings.payday_weekday : 5,
+            paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || '2026-01-02',
+            activeSavingsTypes: (activeSettings.active_savings_types || []) as any[],
+            holidaysByUser: mappedHolidays
+          };
           setSettings(prev => ({
             ...prev,
-            ...loadedSettings,
-            holidaysByUser: loadedSettings.holidaysByUser || prev.holidaysByUser
+            ...loadedSettings
           }));
           setPayDayInput((loadedSettings.payDayOfMonth || 25).toString());
           setPaydaySchedule(loadedSettings.paydaySchedule || 'monthly_date');
@@ -1657,82 +1901,261 @@ export default function Finance() {
           setPaydayBiweeklyAnchor(loadedSettings.paydayBiweeklyAnchor || '2026-01-02');
         }
 
-        // Populate goals
-        const loadedGoals = getValue('goals');
-        if (loadedGoals) {
-          setGoals(loadedGoals);
-          if (loadedGoals.length > 0) setSelectedGoalId(loadedGoals[0].id);
-        }
+        const userGoals = goalsRes.data?.filter(d => !d.is_default) || [];
+        const defaultGoals = goalsRes.data?.filter(d => d.is_default) || [];
+        const activeGoals = userGoals.length > 0 ? userGoals : defaultGoals;
+        const activeContributions = contributionsRes.data || [];
 
-        // Populate accounts
-        const loadedAccounts = getValue('accounts');
-        if (loadedAccounts) {
-          setBankAccounts(loadedAccounts.bankAccounts || []);
-          setMemberships(loadedAccounts.memberships || []);
-          if (loadedAccounts.creditScores) setCreditScores(loadedAccounts.creditScores);
-        }
+        const mappedGoals: Goal[] = activeGoals.map(g => {
+          const goalContribs = activeContributions
+            .filter(c => c.goal_id === g.id && c.is_default === g.is_default)
+            .map(c => ({
+              id: c.id,
+              amount: Number(c.amount) || 0,
+              date: c.date,
+              note: c.note || undefined,
+              bankAccountId: c.bank_account_id || undefined
+            }));
+          return {
+            id: g.id,
+            name: g.name,
+            targetAmount: Number(g.target_amount) || 0,
+            currentAmount: Number(g.current_amount) || 0,
+            targetDate: g.target_date || '',
+            startDate: g.start_date || undefined,
+            contributions: goalContribs
+          };
+        });
+        setGoals(mappedGoals);
+        if (mappedGoals.length > 0) setSelectedGoalId(mappedGoals[0].id);
 
-        // Populate budget
-        const loadedBudget = getValue('budget');
-        if (loadedBudget && loadedBudget.length > 0) {
-          setBudgetCategories(sanitizeBudgetCategories(mergeMissingDefaultCategories(loadedBudget, DEFAULT_BUDGET_CATEGORIES)));
+        const userAccounts = bankAccountsRes.data?.filter(d => !d.is_default) || [];
+        const defaultAccounts = bankAccountsRes.data?.filter(d => d.is_default) || [];
+        const activeAccounts = userAccounts.length > 0 ? userAccounts : defaultAccounts;
+
+        const mappedBankAccounts: BankAccount[] = activeAccounts.map(a => ({
+          id: a.id,
+          name: a.name,
+          type: a.type as any,
+          issuer: a.issuer || '',
+          balance: Number(a.balance) || 0,
+          annualFee: Number(a.annual_fee) || 0,
+          useCase: a.use_case || undefined,
+          emoji: a.emoji || undefined,
+          color: a.color || undefined
+        }));
+        setBankAccounts(mappedBankAccounts);
+
+        const userMemberships = membershipsRes.data?.filter(d => !d.is_default) || [];
+        const defaultMemberships = membershipsRes.data?.filter(d => d.is_default) || [];
+        const activeMemberships = userMemberships.length > 0 ? userMemberships : defaultMemberships;
+
+        const mappedMemberships: Membership[] = activeMemberships.map(m => ({
+          id: m.id,
+          name: m.name,
+          type: m.type as any,
+          status: m.status || '',
+          annualFee: Number(m.annual_fee) || 0,
+          useCase: m.use_case || undefined
+        }));
+        setMemberships(mappedMemberships);
+
+        const userCreditScores = creditScoresRes.data?.filter(d => !d.is_default) || [];
+        const defaultCreditScores = creditScoresRes.data?.filter(d => d.is_default) || [];
+        const activeCreditScores = userCreditScores.length > 0 ? userCreditScores : defaultCreditScores;
+
+        const scoresObj: CreditScores = {
+          experian: activeCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score })),
+          transunion: activeCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score })),
+          equifax: activeCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score }))
+        };
+        setCreditScores(scoresObj);
+
+        const userBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && !d.is_template) || [];
+        const defaultBudgetCats = budgetCategoriesRes.data?.filter(d => d.is_default && !d.is_template) || [];
+        const activeBudgetCats = userBudgetCats.length > 0 ? userBudgetCats : defaultBudgetCats;
+        const budgetItems = budgetItemsRes.data || [];
+
+        const mappedBudgetCategories: BudgetCategory[] = activeBudgetCats.map(cat => {
+          const catItems = budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default === cat.is_default && item.is_template === cat.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }));
+          return {
+            id: cat.id,
+            name: cat.name,
+            budgeted: Number(cat.budgeted) || 0,
+            group: (cat.group_type || undefined) as any,
+            items: catItems,
+            emoji: cat.emoji || undefined
+          };
+        });
+
+        if (mappedBudgetCategories.length > 0) {
+          setBudgetCategories(sanitizeBudgetCategories(mergeMissingDefaultCategories(mappedBudgetCategories, DEFAULT_BUDGET_CATEGORIES)));
         } else {
           setBudgetCategories(prev => prev.length > 0 ? prev : sanitizeBudgetCategories(DEFAULT_BUDGET_CATEGORIES));
         }
 
-        // Populate recurrings
-        const loadedRecurrings = getValue('recurrings');
-        if (loadedRecurrings) {
-          setRecurrings(loadedRecurrings);
+        const userRecurrings = recurringBillsRes.data?.filter(d => !d.is_default) || [];
+        const defaultRecurrings = recurringBillsRes.data?.filter(d => d.is_default) || [];
+        const activeRecurrings = userRecurrings.length > 0 ? userRecurrings : defaultRecurrings;
+
+        const mappedRecurrings: RecurringBill[] = activeRecurrings.map(r => ({
+          id: r.id,
+          name: r.name,
+          amount: Number(r.amount) || 0,
+          dueDate: r.due_date,
+          isPaid: r.is_paid,
+          frequency: r.frequency as any,
+          dueMonth: r.due_month || undefined,
+          emoji: r.emoji || undefined,
+          category: r.category || undefined,
+          tag: r.tag || undefined,
+          linkedBudgetItemId: r.linked_budget_item_id || undefined,
+          linkedAccountId: r.linked_account_id || undefined
+        }));
+        setRecurrings(mappedRecurrings);
+
+        const userTransactions = transactionsRes.data?.filter(d => !d.is_default) || [];
+        const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
+        const activeTransactions = userTransactions.length > 0 ? userTransactions : defaultTransactions;
+
+        const mappedTransactions: MockTransaction[] = activeTransactions.map(t => ({
+          id: t.id,
+          name: t.name,
+          category: t.category || '',
+          amount: Number(t.amount) || 0,
+          date: t.date,
+          isReviewed: t.is_reviewed,
+          accountId: t.account_id || undefined,
+          bankAccountId: t.bank_account_id || undefined,
+          goalId: t.goal_id || undefined,
+          notes: t.notes || undefined,
+          tags: t.tags || undefined,
+          isRecurring: t.is_recurring || undefined
+        }));
+        setMockTransactions(mappedTransactions);
+
+        const userTaxConfig = taxConfigsRes.data?.find(d => !d.is_default);
+        const defaultTaxConfig = taxConfigsRes.data?.find(d => d.is_default);
+        const activeTaxConfig = userTaxConfig || defaultTaxConfig;
+
+        if (activeTaxConfig) {
+          const mappedTaxConfig: TaxConfig = {
+            studentLoanThresholds: activeTaxConfig.student_loan_thresholds as any,
+            studentLoanRates: activeTaxConfig.student_loan_rates as any,
+            incomeTaxBands: activeTaxConfig.income_tax_bands as any,
+            nationalInsuranceBands: activeTaxConfig.national_insurance_bands as any
+          };
+          setTaxConfig(mappedTaxConfig);
         }
 
-        // Populate transactions
-        const loadedTransactions = getValue('transactions');
-        if (loadedTransactions) {
-          setMockTransactions(loadedTransactions);
-        }
+        const userTemplates = recurringTemplatesRes.data?.filter(d => !d.is_default) || [];
+        const defaultTemplates = recurringTemplatesRes.data?.filter(d => d.is_default) || [];
+        const activeTemplates = userTemplates.length > 0 ? userTemplates : defaultTemplates;
 
-        // Populate taxConfig
-        const loadedTaxConfig = getValue('tax_config');
-        if (loadedTaxConfig) {
-          setTaxConfig(loadedTaxConfig);
-        }
-
-        // Populate recurringTemplates
-        const loadedTemplates = getValue('recurring_templates');
-        if (loadedTemplates && loadedTemplates.length > 0) {
-          setRecurringTemplates(loadedTemplates);
+        const mappedTemplates: RecurringTemplate[] = activeTemplates.map(t => ({
+          name: t.name,
+          category: t.category,
+          emoji: t.emoji || '',
+          tag: t.tag || '',
+          defaultAmount: Number(t.default_amount) || 0,
+          frequency: t.frequency as any,
+          linkedBudgetItemId: t.linked_budget_item_id || '',
+          budgetCategoryName: t.budget_category_name || undefined
+        }));
+        if (mappedTemplates.length > 0) {
+          setRecurringTemplates(mappedTemplates);
         } else {
           setRecurringTemplates(prev => prev.length > 0 ? prev : DEFAULT_RECURRING_TEMPLATES);
         }
 
-        // Populate creditBureaus
-        const loadedBureaus = getValue('credit_bureaus');
-        if (loadedBureaus) {
-          setCreditBureaus(loadedBureaus);
-        }
+        const userBureaus = creditBureausRes.data?.filter(d => !d.is_default) || [];
+        const defaultBureaus = creditBureausRes.data?.filter(d => d.is_default) || [];
+        const activeBureaus = userBureaus.length > 0 ? userBureaus : defaultBureaus;
 
-        // Populate holidayDefaults
-        const loadedHolidayDefaults = getValue('holiday_defaults');
-        if (loadedHolidayDefaults) {
-          setHolidayDefaults(loadedHolidayDefaults);
-        }
+        const mappedBureaus: CreditBureauConfig[] = activeBureaus.map(b => ({
+          key: b.key as any,
+          label: b.label,
+          emoji: b.emoji || '',
+          color: b.color || '',
+          maxScore: b.max_score,
+          gradient: b.gradient || ''
+        }));
+        setCreditBureaus(mappedBureaus);
 
-        // Populate defaultBudgetCategories
-        const loadedDefaultBudgetCategories = getValue('default_budget_categories');
-        if (loadedDefaultBudgetCategories && loadedDefaultBudgetCategories.length > 0) {
-          setDefaultBudgetCategories(loadedDefaultBudgetCategories);
+        const userHolidayDefaults = holidayDefaultsRes.data?.filter(d => !d.is_default) || [];
+        const defaultHolidayDefaults = holidayDefaultsRes.data?.filter(d => d.is_default) || [];
+        const activeHolidayDefaults = userHolidayDefaults.length > 0 ? userHolidayDefaults : defaultHolidayDefaults;
+
+        const mappedHolidayDefaults: Record<number, { count: number; dates: string; occasion: string }> = {};
+        activeHolidayDefaults.forEach(hd => {
+          mappedHolidayDefaults[hd.month_index] = {
+            count: Number(hd.count) || 0,
+            dates: hd.dates || '',
+            occasion: hd.occasion || ''
+          };
+        });
+        setHolidayDefaults(mappedHolidayDefaults);
+
+        const userDefaultBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && d.is_template) || [];
+        const defaultDefaultBudgetCats = budgetCategoriesRes.data?.filter(d => d.is_default && d.is_template) || [];
+        const activeDefaultBudgetCats = userDefaultBudgetCats.length > 0 ? userDefaultBudgetCats : defaultDefaultBudgetCats;
+
+        const mappedDefaultBudgetCategories: BudgetCategory[] = activeDefaultBudgetCats.map(cat => {
+          const catItems = budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default === cat.is_default && item.is_template === cat.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }));
+          return {
+            id: cat.id,
+            name: cat.name,
+            budgeted: Number(cat.budgeted) || 0,
+            group: (cat.group_type || undefined) as any,
+            items: catItems,
+            emoji: cat.emoji || undefined
+          };
+        });
+        if (mappedDefaultBudgetCategories.length > 0) {
+          setDefaultBudgetCategories(mappedDefaultBudgetCategories);
         } else {
           setDefaultBudgetCategories(prev => prev.length > 0 ? prev : DEFAULT_CATEGORY_TEMPLATES);
         }
 
-        // Populate budget_presets
-        const loadedPresets = getValue('budget_presets');
-        if (loadedPresets) {
+        const userPresets = budgetPresetsRes.data?.filter(d => !d.is_default) || [];
+        const defaultPresets = budgetPresetsRes.data?.filter(d => d.is_default) || [];
+        const activePresets = userPresets.length > 0 ? userPresets : defaultPresets;
+
+        const presetsObj: Record<string, CategoryPreset[]> = {};
+        activePresets.forEach(p => {
+          if (!presetsObj[p.preset_type]) {
+            presetsObj[p.preset_type] = [];
+          }
+          presetsObj[p.preset_type].push({
+            name: p.name,
+            emoji: p.emoji || '',
+            group: (p.group_type || 'wants') as any
+          });
+        });
+
+        if (activePresets.length > 0) {
           setPresets(prev => {
             const merged = {
               ...prev,
-              ...loadedPresets
+              ...presetsObj
             };
             localStorage.setItem('finance_budget_presets', JSON.stringify(merged));
             return merged;
@@ -1740,14 +2163,335 @@ export default function Finance() {
         } else {
           saveDataToSupabase('budget_presets', ALL_PRESETS_FALLBACK);
         }
+
+        // Reconstruct databaseDefaults map
+        const defaultsMap: Record<string, any> = {};
+        if (defaultSettings) {
+          defaultsMap['settings'] = {
+            grossSalary: Number(defaultSettings.gross_salary) || 0,
+            pensionType: defaultSettings.pension_type || 'net_pay',
+            personalPensionPercent: Number(defaultSettings.personal_pension_percent) || 0,
+            employer_pension_percent: Number(defaultSettings.employer_pension_percent) || 0,
+            studentLoanPlan: defaultSettings.student_loan_plan || 'none',
+            taxCode: defaultSettings.tax_code || '1257L',
+            personalAllowance: Number(defaultSettings.personal_allowance) || 12570,
+            weekends: Number(defaultSettings.weekends) || 104,
+            bankHolidays: Number(defaultSettings.bank_holidays) || 8,
+            workHolidays: Number(defaultSettings.work_holidays) || 25,
+            workingHoursPerDay: Number(defaultSettings.working_hours_per_day) || 7.5,
+            taxYear: Number(defaultSettings.tax_year) || 2026,
+            ukRegion: defaultSettings.uk_region || 'england-and-wales',
+            payDayOfMonth: defaultSettings.pay_day_of_month || 25,
+            paydaySchedule: defaultSettings.payday_schedule || 'monthly_date',
+            paydayWeekday: defaultSettings.payday_weekday !== null ? defaultSettings.payday_weekday : 5,
+            paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || '2026-01-02',
+            activeSavingsTypes: defaultSettings.active_savings_types || [],
+            holidaysByUser: defaultHolidaysList.map(h => ({
+              id: h.id,
+              startDate: h.start_date,
+              endDate: h.end_date,
+              occasion: h.occasion || '',
+              count: Number(h.count) || 0
+            }))
+          };
+        }
+        defaultsMap['goals'] = defaultGoals.map(g => ({
+          id: g.id,
+          name: g.name,
+          targetAmount: Number(g.target_amount) || 0,
+          currentAmount: Number(g.current_amount) || 0,
+          targetDate: g.target_date || '',
+          startDate: g.start_date || undefined,
+          contributions: activeContributions
+            .filter(c => c.goal_id === g.id && c.is_default)
+            .map(c => ({
+              id: c.id,
+              amount: Number(c.amount) || 0,
+              date: c.date,
+              note: c.note || undefined,
+              bankAccountId: c.bank_account_id || undefined
+            }))
+        }));
+        defaultsMap['accounts'] = {
+          bankAccounts: defaultAccounts.map(a => ({
+            id: a.id,
+            name: a.name,
+            type: a.type as any,
+            issuer: a.issuer || '',
+            balance: Number(a.balance) || 0,
+            annualFee: Number(a.annual_fee) || 0,
+            useCase: a.use_case || undefined,
+            emoji: a.emoji || undefined,
+            color: a.color || undefined
+          })),
+          memberships: defaultMemberships.map(m => ({
+            id: m.id,
+            name: m.name,
+            type: m.type as any,
+            status: m.status || '',
+            annualFee: Number(m.annual_fee) || 0,
+            useCase: m.use_case || undefined
+          })),
+          creditScores: {
+            experian: defaultCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score })),
+            transunion: defaultCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score })),
+            equifax: defaultCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score }))
+          }
+        };
+        defaultsMap['budget'] = defaultBudgetCats.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          budgeted: Number(cat.budgeted) || 0,
+          group: cat.group_type as any,
+          emoji: cat.emoji || undefined,
+          items: budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default && !item.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }))
+        }));
+        defaultsMap['recurrings'] = defaultRecurrings.map(r => ({
+          id: r.id,
+          name: r.name,
+          amount: Number(r.amount) || 0,
+          dueDate: r.due_date,
+          isPaid: r.is_paid,
+          frequency: r.frequency as any,
+          dueMonth: r.due_month || undefined,
+          emoji: r.emoji || undefined,
+          category: r.category || undefined,
+          tag: r.tag || undefined,
+          linkedBudgetItemId: r.linked_budget_item_id || undefined,
+          linkedAccountId: r.linked_account_id || undefined
+        }));
+        defaultsMap['transactions'] = defaultTransactions.map(t => ({
+          id: t.id,
+          name: t.name,
+          category: t.category || '',
+          amount: Number(t.amount) || 0,
+          date: t.date,
+          isReviewed: t.is_reviewed,
+          bankAccountId: t.bank_account_id || undefined,
+          goalId: t.goal_id || undefined,
+          notes: t.notes || undefined,
+          tags: t.tags || undefined,
+          isRecurring: t.is_recurring || undefined
+        }));
+        if (defaultTaxConfig) {
+          defaultsMap['tax_config'] = {
+            studentLoanThresholds: defaultTaxConfig.student_loan_thresholds,
+            studentLoanRates: defaultTaxConfig.student_loan_rates,
+            incomeTaxBands: defaultTaxConfig.income_tax_bands,
+            nationalInsuranceBands: defaultTaxConfig.national_insurance_bands
+          };
+        }
+        defaultsMap['recurring_templates'] = defaultTemplates.map(t => ({
+          name: t.name,
+          category: t.category,
+          emoji: t.emoji || '',
+          tag: t.tag || '',
+          defaultAmount: Number(t.default_amount) || 0,
+          frequency: t.frequency as any,
+          linkedBudgetItemId: t.linked_budget_item_id || '',
+          budgetCategoryName: t.budget_category_name || undefined
+        }));
+        defaultsMap['credit_bureaus'] = defaultBureaus.map(b => ({
+          key: b.key,
+          label: b.label,
+          emoji: b.emoji || '',
+          color: b.color || '',
+          maxScore: b.max_score,
+          gradient: b.gradient || ''
+        }));
+        defaultsMap['holiday_defaults'] = mappedHolidayDefaults;
+        defaultsMap['default_budget_categories'] = defaultDefaultBudgetCats.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          budgeted: Number(cat.budgeted) || 0,
+          group: cat.group_type as any,
+          emoji: cat.emoji || undefined,
+          items: budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default && item.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }))
+        }));
+        defaultsMap['budget_presets'] = presetsObj;
+        setDatabaseDefaults(defaultsMap);
+
       } catch (err) {
         console.error('Error fetching settings from Supabase:', err);
       } finally {
         setLoadingDb(false);
       }
-    };
+  };
 
-    fetchSupabaseData();
+  useEffect(() => {
+    if (isAdmin) {
+      fetchSupabaseData();
+    }
+  }, [isAdmin]);
+
+  // ==========================================
+  // HANDLERS: TRUELAYER BANK SYNC
+  // ==========================================
+
+  const callTrueLayerEdgeFunction = async (action: string, payload: any = {}) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error("User session not found. Please log in again.");
+    }
+    
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/truelayer-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+      },
+      body: JSON.stringify({
+        action,
+        ...payload
+      })
+    });
+    
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `Server returned status ${response.status}`);
+    }
+    return data;
+  };
+
+  const checkTrueLayerConnection = async () => {
+    try {
+      const data = await callTrueLayerEdgeFunction('check_connection');
+      setTrueLayerStatus(data);
+    } catch (err: any) {
+      console.error('Error checking TrueLayer connection:', err);
+    }
+  };
+
+  const connectTrueLayer = async () => {
+    setIsConnectingTrueLayer(true);
+    try {
+      const state = Math.random().toString(36).substring(2, 15);
+      const redirectUri = `${window.location.origin}/finance`;
+      
+      const data = await callTrueLayerEdgeFunction('get_auth_url', {
+        redirect_uri: redirectUri,
+        state: state
+      });
+      
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('Failed to get auth URL');
+      }
+    } catch (err: any) {
+      console.error('Error connecting to TrueLayer:', err);
+      toast({
+        title: "Connection Failed",
+        description: err.message || "Failed to initiate TrueLayer connection",
+        variant: "destructive"
+      });
+    } finally {
+      setIsConnectingTrueLayer(false);
+    }
+  };
+
+  const disconnectTrueLayer = async () => {
+    try {
+      await callTrueLayerEdgeFunction('disconnect');
+      toast({
+        title: "Disconnected",
+        description: "Bank connection removed successfully.",
+      });
+      checkTrueLayerConnection();
+    } catch (err: any) {
+      console.error('Error disconnecting TrueLayer:', err);
+      toast({
+        title: "Disconnection Failed",
+        description: err.message || "Failed to disconnect",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const syncTrueLayer = async () => {
+    setIsSyncingTrueLayer(true);
+    try {
+      const data = await callTrueLayerEdgeFunction('sync_transactions');
+      
+      toast({
+        title: "Sync Completed",
+        description: `Successfully synced ${data.synced_accounts} accounts and ${data.synced_transactions} transactions.`,
+      });
+      await fetchSupabaseData();
+    } catch (err: any) {
+      console.error('Error syncing TrueLayer:', err);
+      toast({
+        title: "Sync Failed",
+        description: err.message || "Failed to synchronize transactions",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncingTrueLayer(false);
+    }
+  };
+
+  const callbackProcessed = useRef(false);
+
+  const handleTrueLayerCallback = async (code: string) => {
+    if (callbackProcessed.current) return;
+    callbackProcessed.current = true;
+    setIsConnectingTrueLayer(true);
+    try {
+      const redirectUri = `${window.location.origin}/finance`;
+      await callTrueLayerEdgeFunction('exchange_code', {
+        code: code,
+        redirect_uri: redirectUri
+      });
+
+      toast({
+        title: "Bank Linked Successfully",
+        description: "Your bank has been connected. Initializing transaction sync...",
+      });
+      
+      window.history.replaceState({}, document.title, window.location.pathname);
+      await checkTrueLayerConnection();
+      await syncTrueLayer();
+    } catch (err: any) {
+      console.error('Error in TrueLayer callback:', err);
+      toast({
+        title: "Verification Failed",
+        description: err.message || "Could not verify bank authentication code",
+        variant: "destructive"
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } finally {
+      setIsConnectingTrueLayer(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    if (code) {
+      handleTrueLayerCallback(code);
+    } else {
+      checkTrueLayerConnection();
+    }
   }, [isAdmin]);
 
   // Fetch UK Bank Holidays dynamically
@@ -1838,6 +2582,10 @@ export default function Finance() {
     localStorage.setItem('finance_transactions', JSON.stringify(mockTransactions));
   }, [mockTransactions]);
 
+  useEffect(() => {
+    localStorage.setItem('finance_time_spent_inputs', JSON.stringify(timeSpentInputs));
+  }, [timeSpentInputs]);
+
   // Save active tab selection
   useEffect(() => {
     localStorage.setItem('finance_active_tab', activeTab);
@@ -1871,14 +2619,307 @@ export default function Finance() {
   const saveDataToSupabase = async (key: string, contentData: any) => {
     if (!isAdmin) return;
     try {
-      const stringified = JSON.stringify(contentData);
-      const { error } = await supabase
-        .from('finance_data')
-        .upsert(
-          { key, content: stringified, updated_at: new Date().toISOString() },
-          { onConflict: 'key' }
+      if (key === 'settings') {
+        const settingsObj = contentData as FinanceSettings;
+        const { data: existingSettings } = await supabase
+          .from('finance_settings')
+          .select('id')
+          .eq('is_default', false)
+          .maybeSingle();
+
+        const settingsRow = {
+          is_default: false,
+          gross_salary: settingsObj.grossSalary,
+          pension_type: settingsObj.pensionType,
+          personal_pension_percent: settingsObj.personalPensionPercent,
+          employer_pension_percent: settingsObj.employerPensionPercent,
+          student_loan_plan: settingsObj.studentLoanPlan,
+          tax_code: settingsObj.taxCode,
+          personal_allowance: settingsObj.personalAllowance,
+          weekends: settingsObj.weekends,
+          bank_holidays: settingsObj.bankHolidays,
+          work_holidays: settingsObj.workHolidays,
+          working_hours_per_day: settingsObj.workingHoursPerDay,
+          tax_year: settingsObj.taxYear,
+          uk_region: settingsObj.ukRegion,
+          pay_day_of_month: settingsObj.payDayOfMonth || null,
+          payday_schedule: settingsObj.paydaySchedule || null,
+          payday_weekday: settingsObj.paydayWeekday !== undefined ? settingsObj.paydayWeekday : null,
+          payday_biweekly_anchor: settingsObj.paydayBiweeklyAnchor || null,
+          active_savings_types: settingsObj.activeSavingsTypes || [],
+          updated_at: new Date().toISOString()
+        };
+
+        if (existingSettings?.id) {
+          await supabase.from('finance_settings').update(settingsRow).eq('id', existingSettings.id);
+        } else {
+          await supabase.from('finance_settings').insert(settingsRow);
+        }
+
+        await supabase.from('finance_user_holidays').delete().eq('is_default', false);
+        const holidaysList = Array.isArray(settingsObj.holidaysByUser)
+          ? settingsObj.holidaysByUser
+          : Object.values(settingsObj.holidaysByUser || {});
+        if (holidaysList.length > 0) {
+          await supabase.from('finance_user_holidays').insert(holidaysList.map(h => ({
+            id: h.id,
+            is_default: false,
+            start_date: h.startDate,
+            end_date: h.endDate,
+            occasion: h.occasion || null,
+            count: h.count
+          })));
+        }
+      } else if (key === 'goals') {
+        const goalsList = contentData as Goal[];
+        await supabase.from('finance_goal_contributions').delete().eq('is_default', false);
+        await supabase.from('finance_goals').delete().eq('is_default', false);
+        if (goalsList.length > 0) {
+          await supabase.from('finance_goals').insert(goalsList.map(g => ({
+            id: g.id,
+            is_default: false,
+            name: g.name,
+            target_amount: g.targetAmount,
+            current_amount: g.currentAmount,
+            target_date: g.targetDate || null,
+            start_date: g.startDate || null
+          })));
+          const contribs = goalsList.flatMap(g => (g.contributions || []).map(c => ({
+            id: c.id,
+            is_default: false,
+            goal_id: g.id,
+            amount: c.amount,
+            date: c.date,
+            note: c.note || null,
+            bank_account_id: c.bankAccountId || null
+          })));
+          if (contribs.length > 0) {
+            await supabase.from('finance_goal_contributions').insert(contribs);
+          }
+        }
+      } else if (key === 'accounts') {
+        const accsObj = contentData as { bankAccounts: BankAccount[]; memberships: Membership[]; creditScores: CreditScores };
+        await supabase.from('finance_bank_accounts').delete().eq('is_default', false);
+        if (accsObj.bankAccounts?.length > 0) {
+          await supabase.from('finance_bank_accounts').insert(accsObj.bankAccounts.map(a => ({
+            id: a.id,
+            is_default: false,
+            name: a.name,
+            type: a.type,
+            issuer: a.issuer || null,
+            balance: a.balance,
+            annual_fee: a.annualFee,
+            use_case: a.useCase || null,
+            emoji: a.emoji || null,
+            color: a.color || null
+          })));
+        }
+        await supabase.from('finance_memberships').delete().eq('is_default', false);
+        if (accsObj.memberships?.length > 0) {
+          await supabase.from('finance_memberships').insert(accsObj.memberships.map(m => ({
+            id: m.id,
+            is_default: false,
+            name: m.name,
+            type: m.type,
+            status: m.status || null,
+            annual_fee: m.annualFee,
+            use_case: m.useCase || null
+          })));
+        }
+        await supabase.from('finance_credit_scores').delete().eq('is_default', false);
+        const scores = [
+          ...(accsObj.creditScores?.experian || []).map(s => ({ ...s, bureau: 'experian' })),
+          ...(accsObj.creditScores?.transunion || []).map(s => ({ ...s, bureau: 'transunion' })),
+          ...(accsObj.creditScores?.equifax || []).map(s => ({ ...s, bureau: 'equifax' }))
+        ];
+        if (scores.length > 0) {
+          await supabase.from('finance_credit_scores').insert(scores.map(s => ({
+            id: s.id,
+            is_default: false,
+            bureau: s.bureau,
+            date: s.date,
+            score: s.score
+          })));
+        }
+      } else if (key === 'budget') {
+        const budgetCats = contentData as BudgetCategory[];
+        await supabase.from('finance_budget_items').delete().eq('is_default', false).eq('is_template', false);
+        await supabase.from('finance_budget_categories').delete().eq('is_default', false).eq('is_template', false);
+        if (budgetCats.length > 0) {
+          await supabase.from('finance_budget_categories').insert(budgetCats.map(c => ({
+            id: c.id,
+            is_default: false,
+            is_template: false,
+            name: c.name,
+            budgeted: c.budgeted,
+            group_type: c.group || null,
+            emoji: c.emoji || null
+          })));
+          const items = budgetCats.flatMap(c => (c.items || []).map(i => ({
+            id: i.id,
+            is_default: false,
+            is_template: false,
+            category_id: c.id,
+            name: i.name,
+            budgeted: i.budgeted,
+            spent: i.spent,
+            linked_account_id: i.linkedAccountId || null,
+            emoji: i.emoji || null
+          })));
+          if (items.length > 0) {
+            await supabase.from('finance_budget_items').insert(items);
+          }
+        }
+      } else if (key === 'recurrings') {
+        const recurringsList = contentData as RecurringBill[];
+        await supabase.from('finance_recurring_bills').delete().eq('is_default', false);
+        if (recurringsList.length > 0) {
+          await supabase.from('finance_recurring_bills').insert(recurringsList.map(r => ({
+            id: r.id,
+            is_default: false,
+            name: r.name,
+            amount: r.amount,
+            due_date: r.dueDate,
+            is_paid: r.isPaid,
+            frequency: r.frequency,
+            due_month: r.dueMonth || null,
+            emoji: r.emoji || null,
+            category: r.category || null,
+            tag: r.tag || null,
+            linked_budget_item_id: r.linkedBudgetItemId || null,
+            linked_account_id: r.linkedAccountId || null
+          })));
+        }
+      } else if (key === 'transactions') {
+        const txList = contentData as MockTransaction[];
+        await supabase.from('finance_transactions').delete().eq('is_default', false);
+        if (txList.length > 0) {
+          await supabase.from('finance_transactions').insert(txList.map(t => ({
+            id: t.id,
+            is_default: false,
+            name: t.name,
+            category: t.category || null,
+            amount: t.amount,
+            date: t.date,
+            is_reviewed: t.isReviewed,
+            account_id: t.accountId || null,
+            bank_account_id: t.bankAccountId || null,
+            goal_id: t.goalId || null,
+            notes: t.notes || null,
+            tags: t.tags || null,
+            is_recurring: t.isRecurring || false
+          })));
+        }
+      } else if (key === 'tax_config') {
+        const tcObj = contentData as TaxConfig;
+        const { data: existingTc } = await supabase
+          .from('finance_tax_configs')
+          .select('id')
+          .eq('is_default', false)
+          .maybeSingle();
+
+        const tcRow = {
+          is_default: false,
+          student_loan_thresholds: tcObj.studentLoanThresholds as any,
+          student_loan_rates: tcObj.studentLoanRates as any,
+          income_tax_bands: tcObj.incomeTaxBands as any,
+          national_insurance_bands: tcObj.nationalInsuranceBands as any,
+          updated_at: new Date().toISOString()
+        };
+
+        if (existingTc?.id) {
+          await supabase.from('finance_tax_configs').update(tcRow).eq('id', existingTc.id);
+        } else {
+          await supabase.from('finance_tax_configs').insert(tcRow);
+        }
+      } else if (key === 'recurring_templates') {
+        const templatesList = contentData as RecurringTemplate[];
+        await supabase.from('finance_recurring_templates').delete().eq('is_default', false);
+        if (templatesList.length > 0) {
+          await supabase.from('finance_recurring_templates').insert(templatesList.map(t => ({
+            is_default: false,
+            name: t.name,
+            category: t.category,
+            emoji: t.emoji || null,
+            tag: t.tag || null,
+            default_amount: t.defaultAmount,
+            frequency: t.frequency,
+            linked_budget_item_id: t.linkedBudgetItemId || null,
+            budget_category_name: t.budgetCategoryName || null
+          })));
+        }
+      } else if (key === 'credit_bureaus') {
+        const bureausList = contentData as CreditBureauConfig[];
+        await supabase.from('finance_credit_bureaus').delete().eq('is_default', false);
+        if (bureausList.length > 0) {
+          await supabase.from('finance_credit_bureaus').insert(bureausList.map(b => ({
+            is_default: false,
+            key: b.key,
+            label: b.label,
+            emoji: b.emoji || null,
+            color: b.color || null,
+            max_score: b.maxScore,
+            gradient: b.gradient || null
+          })));
+        }
+      } else if (key === 'holiday_defaults') {
+        const hdObj = contentData as Record<number, { count: number; dates: string; occasion: string }>;
+        await supabase.from('finance_holiday_defaults').delete().eq('is_default', false);
+        const hdRows = Object.entries(hdObj).map(([month, details]) => ({
+          is_default: false,
+          month_index: parseInt(month, 10),
+          count: details.count,
+          dates: details.dates || null,
+          occasion: details.occasion || null
+        }));
+        if (hdRows.length > 0) {
+          await supabase.from('finance_holiday_defaults').insert(hdRows);
+        }
+      } else if (key === 'default_budget_categories') {
+        const defaultBudgetCats = contentData as BudgetCategory[];
+        await supabase.from('finance_budget_items').delete().eq('is_default', false).eq('is_template', true);
+        await supabase.from('finance_budget_categories').delete().eq('is_default', false).eq('is_template', true);
+        if (defaultBudgetCats.length > 0) {
+          await supabase.from('finance_budget_categories').insert(defaultBudgetCats.map(c => ({
+            id: c.id,
+            is_default: false,
+            is_template: true,
+            name: c.name,
+            budgeted: c.budgeted,
+            group_type: c.group || null,
+            emoji: c.emoji || null
+          })));
+          const items = defaultBudgetCats.flatMap(c => (c.items || []).map(i => ({
+            id: i.id,
+            is_default: false,
+            is_template: true,
+            category_id: c.id,
+            name: i.name,
+            budgeted: i.budgeted,
+            spent: i.spent,
+            linked_account_id: i.linkedAccountId || null,
+            emoji: i.emoji || null
+          })));
+          if (items.length > 0) {
+            await supabase.from('finance_budget_items').insert(items);
+          }
+        }
+      } else if (key === 'budget_presets') {
+        const presetsObj = contentData as Record<string, CategoryPreset[]>;
+        await supabase.from('finance_budget_presets').delete().eq('is_default', false);
+        const presetRows = Object.entries(presetsObj).flatMap(([type, list]) =>
+          (list || []).map(p => ({
+            is_default: false,
+            preset_type: type,
+            name: p.name,
+            emoji: p.emoji || null,
+            group_type: p.group || null
+          }))
         );
-      if (error) throw error;
+        if (presetRows.length > 0) {
+          await supabase.from('finance_budget_presets').insert(presetRows);
+        }
+      }
     } catch (err) {
       console.error(`Error saving ${key} to Supabase:`, err);
     }
@@ -2234,7 +3275,7 @@ export default function Finance() {
 
   const handleAddGoal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGoal.name || newGoal.targetAmount <= 0) {
+    if (!newGoal.name || newGoal.targetAmount === '' || newGoal.targetAmount <= 0) {
       toast({ title: 'Invalid Goal', description: 'Please enter a valid name and target amount.', variant: 'destructive' });
       return;
     }
@@ -2242,7 +3283,7 @@ export default function Finance() {
     const created: Goal = {
       id: 'g_' + Date.now(),
       name: newGoal.name,
-      targetAmount: newGoal.targetAmount,
+      targetAmount: newGoal.targetAmount === '' ? 0 : newGoal.targetAmount,
       currentAmount: 0,
       targetDate: newGoal.targetDate || todayStr,
       startDate: newGoal.startDate || todayStr,
@@ -2252,7 +3293,7 @@ export default function Finance() {
     setGoals(updated);
     saveDataToSupabase('goals', updated);
     setIsAddGoalOpen(false);
-    setNewGoal({ name: '', targetAmount: 0, targetDate: '', startDate: '' });
+    setNewGoal({ name: '', targetAmount: '', targetDate: '', startDate: '' });
     setSelectedGoalId(created.id);
     toast({ title: 'Goal Added', description: `Successfully created goal "${created.name}".` });
   };
@@ -2269,7 +3310,7 @@ export default function Finance() {
 
   const handleAddContribution = (e: React.FormEvent, goalId: string) => {
     e.preventDefault();
-    if (newContribution.amount <= 0) {
+    if (newContribution.amount === '' || newContribution.amount <= 0) {
       toast({ title: 'Invalid Amount', description: 'Contribution must be greater than £0.00.', variant: 'destructive' });
       return;
     }
@@ -2277,7 +3318,7 @@ export default function Finance() {
     let updatedAccounts = [...bankAccounts];
     if (newContribution.bankAccountId) {
       const accId = newContribution.bankAccountId;
-      const amt = newContribution.amount;
+      const amt = newContribution.amount === '' ? 0 : newContribution.amount;
       const selectedAcc = bankAccounts.find(a => a.id === accId);
       if (selectedAcc) {
         const isSavingsOrInvestment = selectedAcc.type === 'savings' || selectedAcc.type === 'investment';
@@ -2299,7 +3340,7 @@ export default function Finance() {
       if (g.id === goalId) {
         const contrib = {
           id: 'c_' + Date.now(),
-          amount: newContribution.amount,
+          amount: newContribution.amount === '' ? 0 : newContribution.amount,
           date: newContribution.date || new Date().toISOString().split('T')[0],
           note: newContribution.note,
           bankAccountId: newContribution.bankAccountId || undefined
@@ -2314,8 +3355,8 @@ export default function Finance() {
     });
     setGoals(updated);
     saveDataToSupabase('goals', updated);
-    setNewContribution({ amount: 0, note: '', date: new Date().toISOString().split('T')[0], bankAccountId: '' });
-    toast({ title: 'Contribution Logged', description: `Added ${formatGBP(newContribution.amount)} and updated linked account.` });
+    setNewContribution({ amount: '', note: '', date: new Date().toISOString().split('T')[0], bankAccountId: '' });
+    toast({ title: 'Contribution Logged', description: `Added ${formatGBP(newContribution.amount === '' ? 0 : newContribution.amount)} and updated linked account.` });
   };
 
   const handleDeleteContribution = (goalId: string, contribId: string) => {
@@ -2370,6 +3411,8 @@ export default function Finance() {
     }
     const created: BankAccount = {
       ...newAccount,
+      balance: newAccount.balance === '' ? 0 : newAccount.balance,
+      annualFee: newAccount.annualFee === '' ? 0 : newAccount.annualFee,
       emoji: newAccount.emoji || getAccountDefaultEmoji(newAccount.type, newAccount.name),
       color: newAccount.color || getAccountDefaultColor(newAccount.name),
       id: 'a_' + Date.now()
@@ -2378,7 +3421,7 @@ export default function Finance() {
     setBankAccounts(updated);
     saveDataToSupabase('accounts', { bankAccounts: updated, memberships, creditScores });
     setIsAddAccountOpen(false);
-    setNewAccount({ name: '', type: 'checking', issuer: '', balance: 0, annualFee: 0, useCase: '', emoji: '', color: '#475569' });
+    setNewAccount({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: '#475569' });
     toast({ title: 'Account Added', description: `Added ${created.name}.` });
   };
 
@@ -2408,13 +3451,14 @@ export default function Finance() {
     }
     const created: Membership = {
       ...newMembership,
+      annualFee: newMembership.annualFee === '' ? 0 : newMembership.annualFee,
       id: 'm_' + Date.now()
     };
     const updated = [...memberships, created];
     setMemberships(updated);
     saveDataToSupabase('accounts', { bankAccounts, memberships: updated, creditScores });
     setIsAddMembershipOpen(false);
-    setNewMembership({ name: '', type: 'points', status: 'Active', annualFee: 0, useCase: '' });
+    setNewMembership({ name: '', type: 'points', status: 'Active', annualFee: '', useCase: '' });
     toast({ title: 'Membership Added', description: `Added "${created.name}".` });
   };
 
@@ -2443,14 +3487,14 @@ export default function Finance() {
   const handleAddCreditScore = (e: React.FormEvent) => {
     e.preventDefault();
     const maxScore = creditBureaus.find(b => b.key === newCreditScore.bureau)?.maxScore ?? 1000;
-    if (newCreditScore.score < 0 || newCreditScore.score > maxScore) {
+    if (newCreditScore.score === '' || newCreditScore.score < 0 || newCreditScore.score > maxScore) {
       toast({ title: 'Invalid Score', description: `Score must be between 0 and ${maxScore}.`, variant: 'destructive' });
       return;
     }
     const entry: CreditScoreEntry = {
       id: 'cs_' + Date.now(),
       date: newCreditScore.date,
-      score: newCreditScore.score
+      score: newCreditScore.score === '' ? 0 : newCreditScore.score
     };
     const updated = {
       ...creditScores,
@@ -2459,8 +3503,8 @@ export default function Finance() {
     setCreditScores(updated);
     saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores: updated });
     setIsAddCreditScoreOpen(false);
-    setNewCreditScore({ bureau: 'experian', score: 700, date: new Date().toISOString().split('T')[0] });
-    toast({ title: 'Credit Score Added', description: `Logged ${newCreditScore.bureau.charAt(0).toUpperCase() + newCreditScore.bureau.slice(1)} score of ${newCreditScore.score}.` });
+    setNewCreditScore({ bureau: 'experian', score: '', date: new Date().toISOString().split('T')[0] });
+    toast({ title: 'Credit Score Added', description: `Logged ${newCreditScore.bureau.charAt(0).toUpperCase() + newCreditScore.bureau.slice(1)} score of ${newCreditScore.score === '' ? 0 : newCreditScore.score}.` });
   };
 
   const handleDeleteCreditScore = (bureau: 'experian' | 'transunion' | 'equifax', entryId: string) => {
@@ -2497,7 +3541,7 @@ export default function Finance() {
     const created: BudgetCategory = {
       id: 'cat_' + Date.now(),
       name: normalizedName,
-      budgeted: newCategoryBudget,
+      budgeted: newCategoryBudget === '' ? 0 : newCategoryBudget,
       group: newCategoryGroup || preset?.group || 'needs',
       items: [],
       emoji: newCategoryEmoji.trim() || preset?.emoji || getCategoryDefaultEmoji(normalizedName)
@@ -2507,7 +3551,7 @@ export default function Finance() {
     saveDataToSupabase('budget', updated);
     setIsAddCategoryOpen(false);
     setNewCategoryName('');
-    setNewCategoryBudget(0);
+    setNewCategoryBudget('');
     setNewCategoryGroup('needs');
     setNewCategoryEmoji('');
     toast({ title: 'Category Created', description: `Created category "${created.name}".` });
@@ -2521,7 +3565,7 @@ export default function Finance() {
         return {
           ...cat,
           name: newCategoryName.trim(),
-          budgeted: newCategoryBudget,
+          budgeted: newCategoryBudget === '' ? 0 : newCategoryBudget,
           group: newCategoryGroup,
           emoji: newCategoryEmoji.trim() || cat.emoji || getCategoryDefaultEmoji(newCategoryName)
         };
@@ -2533,7 +3577,7 @@ export default function Finance() {
     setIsEditCategoryOpen(false);
     setActiveCategoryId(null);
     setNewCategoryName('');
-    setNewCategoryBudget(0);
+    setNewCategoryBudget('');
     setNewCategoryGroup('needs');
     setNewCategoryEmoji('');
     toast({ title: 'Category Updated', description: 'Updated category name and budget limit.' });
@@ -2564,7 +3608,7 @@ export default function Finance() {
       id: 'item_' + Date.now(),
       name: finalName,
       budgeted: 0,
-      spent: newBudgetItem.spent,
+      spent: newBudgetItem.spent === '' ? 0 : newBudgetItem.spent,
       emoji: newBudgetItem.emoji
     };
     const updated = budgetCategories.map(cat => {
@@ -2579,7 +3623,7 @@ export default function Finance() {
     setBudgetCategories(updated);
     saveDataToSupabase('budget', updated);
     setIsAddItemOpen(false);
-    setNewBudgetItem({ name: '', budgeted: 0, spent: 0, linkedAccountId: '', emoji: '' });
+    setNewBudgetItem({ name: '', budgeted: 0, spent: '', linkedAccountId: '', emoji: '' });
     toast({ title: 'Item Added', description: `Added "${item.name}" to budget.` });
   };
 
@@ -2629,7 +3673,7 @@ export default function Finance() {
 
   const handleAddRecurring = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRecurring.name || newRecurring.amount <= 0) return;
+    if (!newRecurring.name || newRecurring.amount === '' || newRecurring.amount <= 0) return;
 
     let updatedBudget = [...budgetCategories];
     let finalLinkedBudgetItemId = newRecurring.linkedBudgetItemId;
@@ -2672,6 +3716,7 @@ export default function Finance() {
 
     const created: RecurringBill = {
       ...newRecurring,
+      amount: newRecurring.amount === '' ? 0 : newRecurring.amount,
       id: 'rec_' + Date.now(),
       emoji: resolvedEmoji,
       category: resolvedCategory,
@@ -2686,7 +3731,7 @@ export default function Finance() {
     setIsAddRecurringOpen(false);
     setNewRecurring({
       name: '',
-      amount: 0,
+      amount: '',
       dueDate: 15,
       isPaid: false,
       frequency: 'monthly',
@@ -2989,7 +4034,7 @@ export default function Finance() {
     }
   };
 
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
     const defaultSettings = databaseDefaults.settings || {
       grossSalary: 0,
       pensionType: 'net_pay',
@@ -3041,7 +4086,25 @@ export default function Finance() {
     setPaydaySchedule(defaultSettings.paydaySchedule || 'monthly_date');
     setPaydayWeekday(defaultSettings.paydayWeekday !== undefined ? defaultSettings.paydayWeekday : 5);
     setPaydayBiweeklyAnchor(defaultSettings.paydayBiweeklyAnchor || '2026-01-02');
-    toast({ title: 'Reset successful', description: 'Returned configurations to default values.' });
+
+    if (isAdmin) {
+      try {
+        const deleteTables = [
+          'finance_settings', 'finance_user_holidays', 'finance_goals', 'finance_goal_contributions',
+          'finance_bank_accounts', 'finance_memberships', 'finance_credit_scores',
+          'finance_budget_categories', 'finance_budget_items', 'finance_recurring_bills',
+          'finance_transactions', 'finance_tax_configs', 'finance_recurring_templates',
+          'finance_credit_bureaus', 'finance_holiday_defaults', 'finance_budget_presets'
+        ];
+        await Promise.all(deleteTables.map(t => supabase.from(t as any).delete().eq('is_default', false)));
+        toast({ title: 'Reset successful', description: 'Database and local configurations reverted to defaults.' });
+      } catch (err) {
+        console.error('Failed to reset custom database records:', err);
+        toast({ title: 'Local Reset successful', description: 'Returned configurations to default values. Failed to clear database.', variant: 'destructive' });
+      }
+    } else {
+      toast({ title: 'Reset successful', description: 'Returned configurations to default values.' });
+    }
   };
 
   const handleTaxCodeChange = (code: string) => {
@@ -3143,9 +4206,14 @@ export default function Finance() {
 
   // Transactions to review state
   const unreviewedCount = mockTransactions.filter(tx => !tx.isReviewed).length;
-  const displayedTransactions = showAllTransactions
+  const displayedTransactions = (showAllTransactions
     ? mockTransactions
-    : mockTransactions.filter(tx => !tx.isReviewed);
+    : mockTransactions.filter(tx => !tx.isReviewed)
+  ).filter(tx => selectedAccountFilter === 'all' || tx.accountId === selectedAccountFilter);
+
+  const accountTransactionsCount = selectedAccountFilter === 'all'
+    ? mockTransactions.length
+    : mockTransactions.filter(tx => tx.accountId === selectedAccountFilter).length;
 
   // Spent progress color bar
   const getProgressColor = (spent: number, budgeted: number) => {
@@ -3395,14 +4463,46 @@ export default function Finance() {
                         <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Review recent aggregate card activity</CardDescription>
                       </div>
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowAllTransactions(!showAllTransactions)}
-                        className="text-[10px] rounded-xl hover:bg-muted font-sans font-semibold h-8 text-muted-foreground hover:text-foreground"
-                      >
-                        {showAllTransactions ? "Show Pending Only" : `View All (${mockTransactions.length})`}
-                      </Button>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {bankAccounts.length > 0 && (
+                          <Select
+                            value={selectedAccountFilter}
+                            onValueChange={setSelectedAccountFilter}
+                          >
+                            <SelectTrigger className="w-[140px] text-[10px] font-sans font-semibold h-8 rounded-xl border-primary/20 bg-background/50">
+                              <SelectValue placeholder="All Accounts" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-primary/10">
+                              <SelectItem value="all" className="text-[10px]">All Accounts</SelectItem>
+                              {bankAccounts.map(acc => (
+                                <SelectItem key={acc.id} value={acc.id} className="text-[10px]">
+                                  {acc.emoji} {acc.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {trueLayerStatus?.connected && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={syncTrueLayer}
+                            disabled={isSyncingTrueLayer}
+                            className="text-[10px] rounded-xl hover:bg-muted font-sans font-semibold h-8 text-primary border-primary/20 gap-1"
+                          >
+                            <RefreshCw className={cn("h-3 w-3", isSyncingTrueLayer && "animate-spin")} />
+                            {isSyncingTrueLayer ? "Syncing..." : "Sync Bank"}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAllTransactions(!showAllTransactions)}
+                          className="text-[10px] rounded-xl hover:bg-muted font-sans font-semibold h-8 text-muted-foreground hover:text-foreground"
+                        >
+                          {showAllTransactions ? "Show Pending Only" : `View All (${accountTransactionsCount})`}
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent className="p-0 pt-4">
 
@@ -3425,9 +4525,28 @@ export default function Finance() {
                                   {getCategoryDefaultEmoji(tx.category)}
                                 </span>
                                 <div className="space-y-0.5 min-w-0">
-                                  <span className={cn("text-xs font-semibold block truncate text-foreground", tx.isReviewed && "line-through text-muted-foreground")}>
-                                    {tx.name}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={cn("text-xs font-semibold block truncate text-foreground", tx.isReviewed && "line-through text-muted-foreground")}>
+                                      {tx.name}
+                                    </span>
+                                    {(() => {
+                                      const linkedAccount = bankAccounts.find(acc => acc.id === tx.accountId);
+                                      if (!linkedAccount) return null;
+                                      return (
+                                        <span 
+                                          className="text-[9px] font-sans font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 select-none"
+                                          style={{ 
+                                            backgroundColor: `${linkedAccount.color || '#4f46e5'}15`, 
+                                            color: linkedAccount.color || '#4f46e5',
+                                            borderColor: `${linkedAccount.color || '#4f46e5'}35`
+                                          }}
+                                        >
+                                          <span>{linkedAccount.emoji || '💰'}</span>
+                                          <span>{linkedAccount.name}</span>
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                   <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground font-mono">
                                     <span>{tx.date}</span>
                                     <span>•</span>
@@ -3641,12 +4760,12 @@ export default function Finance() {
                             <DollarSign className="w-5 h-5 text-primary shrink-0" /> Breakdown Rates
                           </h3>
                           <p className="text-[11px] text-muted-foreground font-sans">
-                            Rules applied ({settings.ukRegion === 'england-and-wales' ? 'England' : settings.ukRegion})
+                            Rules applied ({settings.ukRegion === 'england-and-wales' ? 'England' : settings.ukRegion}, weekends excluded)
                           </p>
                           <p className="text-xs text-muted-foreground pt-1">
                             {includeWorkLeaveInActual
-                              ? `${breakdownWorkingDays} paid days per year — weekends and bank holidays excluded, ${settings.workHolidays} days paid leave included.`
-                              : `${breakdownWorkingDays} working days per year — weekends, bank holidays, and ${settings.workHolidays} days paid leave excluded.`}
+                              ? `${breakdownWorkingDays} paid days per year — bank holidays and ${settings.workHolidays} days paid leave included.`
+                              : `${breakdownWorkingDays} working days per year — bank holidays and ${settings.workHolidays} days paid leave excluded.`}
                           </p>
                         </div>
                         <div className="flex items-center gap-2.5 shrink-0 rounded-xl border border-border/40 bg-muted/20 px-3 py-2 self-start">
@@ -4273,11 +5392,11 @@ export default function Finance() {
                           data={donutData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={28}
+                          innerRadius={0}
                           outerRadius={38}
-                          paddingAngle={categoryData.length > 1 ? 3 : 0}
+                          paddingAngle={0}
                           dataKey="value"
-                          cornerRadius={3}
+                          stroke="none"
                         >
                           {donutData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
@@ -4378,10 +5497,11 @@ export default function Finance() {
                                         }))}
                                         cx="50%"
                                         cy="50%"
-                                        innerRadius={35}
+                                        innerRadius={0}
                                         outerRadius={55}
-                                        paddingAngle={4}
+                                        paddingAngle={0}
                                         dataKey="value"
+                                        stroke="none"
                                       >
                                         {savingsItems.map((item, idx) => (
                                           <Cell
@@ -4516,10 +5636,11 @@ export default function Finance() {
                                         data={allocationData}
                                         cx="50%"
                                         cy="50%"
-                                        innerRadius={35}
+                                        innerRadius={0}
                                         outerRadius={55}
-                                        paddingAngle={4}
+                                        paddingAngle={0}
                                         dataKey="value"
+                                        stroke="none"
                                       >
                                         {allocationData.map((entry, index) => (
                                           <Cell key={`cell-allocation-${index}`} fill={entry.color} />
@@ -5446,8 +6567,8 @@ export default function Finance() {
                             <Input
                               type="number"
                               placeholder="Amount (£)"
-                              value={newContribution.amount || ''}
-                              onChange={(e) => setNewContribution({ ...newContribution, amount: parseFloat(e.target.value) || 0 })}
+                              value={newContribution.amount}
+                              onChange={(e) => setNewContribution({ ...newContribution, amount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                               className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs"
                               required
                             />
@@ -5609,6 +6730,95 @@ export default function Finance() {
                 </div>
               </div>
 
+              {/* TrueLayer Integration Card */}
+              <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="space-y-1">
+                    <h4 className="font-serif text-base font-semibold text-foreground flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-primary shrink-0" /> TrueLayer Open Banking
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically sync card transactions and account balances in sandbox mode.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {trueLayerStatus?.connected ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border/40">
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                        Not Connected
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-border/30 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="text-xs space-y-1.5 max-w-xl">
+                    {trueLayerStatus?.connected ? (
+                      <>
+                        <p className="text-muted-foreground">
+                          Your bank is securely linked. Live synchronization is active and will pull account details and transaction history.
+                        </p>
+                        {trueLayerStatus.expires_at && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+                            <Clock className="h-3 w-3" />
+                            <span>Consent expires on: {new Date(trueLayerStatus.expires_at).toLocaleString()}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground leading-relaxed">
+                        Securely connect your UK/EU mock accounts to automatically fetch balances and recent card statements. No financial data is ever shared or exposed publicly.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    {trueLayerStatus?.connected ? (
+                      <>
+                        <Button
+                          onClick={syncTrueLayer}
+                          disabled={isSyncingTrueLayer}
+                          className="rounded-xl bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-9 px-4"
+                        >
+                          <RefreshCw className={cn("h-3.5 w-3.5", isSyncingTrueLayer && "animate-spin")} />
+                          {isSyncingTrueLayer ? "Syncing..." : "Sync Now"}
+                        </Button>
+                        <Button
+                          onClick={disconnectTrueLayer}
+                          variant="destructive"
+                          className="rounded-xl gap-1.5 font-semibold text-xs h-9 px-4 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-white"
+                        >
+                          Disconnect
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        onClick={connectTrueLayer}
+                        disabled={isConnectingTrueLayer}
+                        className="rounded-xl bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-9 px-4"
+                      >
+                        {isConnectingTrueLayer ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            Connect Bank Account
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* SECTION B: Memberships & Rewards */}
               <div className="space-y-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
@@ -5693,128 +6903,272 @@ export default function Finance() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Rest of the bureau cards */}
                   {creditBureaus.map(bureau => {
                     const entries = creditScores[bureau.key];
                     const latest = entries.length > 0 ? entries[entries.length - 1] : null;
                     const prev = entries.length > 1 ? entries[entries.length - 2] : null;
                     const delta = latest && prev ? latest.score - prev.score : 0;
-                    const pct = latest ? Math.min((latest.score / bureau.maxScore) * 100, 100) : 0;
 
-                    const gaugeRadius = 58;
-                    const gaugeCircumference = 2 * Math.PI * gaugeRadius;
-                    const gaugeOffset = gaugeCircumference - (pct / 100) * gaugeCircumference;
+                    const getRatingFromBands = (score: number, bureauKey: 'experian' | 'transunion' | 'equifax') => {
+                      const bands = BUREAU_BANDS[bureauKey];
+                      const found = bands.find(b => score >= b.min && score <= b.max);
+                      if (found) {
+                        let cls = 'text-muted-foreground';
+                        if (found.color === '#047857') cls = 'text-emerald-600 dark:text-emerald-400';
+                        else if (found.color === '#10b981') cls = 'text-emerald-500 dark:text-emerald-400';
+                        else if (found.color === '#84cc16') cls = 'text-lime-500 dark:text-lime-400';
+                        else if (found.color === '#f59e0b') cls = 'text-amber-500';
+                        else if (found.color === '#ef4444') cls = 'text-rose-500';
 
-                    const getRating = (score: number, key: string) => {
-                      if (key === 'experian') {
-                        if (score >= 1121) return { text: 'Excellent', cls: 'text-emerald-500' };
-                        if (score >= 1001) return { text: 'Very Good', cls: 'text-teal-500' };
-                        if (score >= 861) return { text: 'Good', cls: 'text-cyan-500' };
-                        if (score >= 641) return { text: 'Fair', cls: 'text-amber-500' };
-                        return { text: 'Low', cls: 'text-rose-500' };
+                        return { text: found.name, cls, color: found.color, band: found };
                       }
-                      if (key === 'transunion') {
-                        if (score >= 628) return { text: 'Excellent', cls: 'text-emerald-500' };
-                        if (score >= 604) return { text: 'Good', cls: 'text-cyan-500' };
-                        if (score >= 566) return { text: 'Fair', cls: 'text-amber-500' };
-                        return { text: 'Needs Work', cls: 'text-rose-500' };
-                      }
-                      if (key === 'equifax') {
-                        if (score >= 725) return { text: 'Soaring High', cls: 'text-emerald-500' };
-                        if (score >= 605) return { text: 'Looking Bright', cls: 'text-teal-500' };
-                        if (score >= 520) return { text: 'On Good Ground', cls: 'text-cyan-500' };
-                        if (score >= 410) return { text: 'Moving On Up', cls: 'text-amber-500' };
-                        return { text: 'Start Climbing', cls: 'text-rose-500' };
-                      }
-                      const ratio = score / bureau.maxScore;
-                      if (ratio >= 0.8) return { text: 'Excellent', cls: 'text-emerald-500' };
-                      if (ratio >= 0.6) return { text: 'Good', cls: 'text-cyan-500' };
-                      if (ratio >= 0.4) return { text: 'Fair', cls: 'text-amber-500' };
-                      return { text: 'Poor', cls: 'text-rose-500' };
+                      return { text: 'Unknown', cls: 'text-muted-foreground', color: '#6b7280', band: null };
                     };
-                    const rating = latest ? getRating(latest.score, bureau.key) : null;
+
+                    const rating = latest ? getRatingFromBands(latest.score, bureau.key) : null;
+                    const bands = BUREAU_BANDS[bureau.key];
+                    const gapAngle = 4;
+                    const totalSweep = 270;
+                    const N = bands.length;
+                    const totalGapAngle = (N - 1) * gapAngle;
+                    const remainingAngle = totalSweep - totalGapAngle;
+
+                    let currentStartAngle = 135;
+                    const computedSegments = bands.map((band, idx) => {
+                      const span = band.max - (idx === 0 ? 0 : bands[idx - 1].max);
+                      const weight = span / bureau.maxScore;
+                      const segmentAngle = weight * remainingAngle;
+                      const startAngle = currentStartAngle;
+                      const endAngle = currentStartAngle + segmentAngle;
+                      currentStartAngle = endAngle + gapAngle;
+                      return { band, startAngle, endAngle };
+                    });
+
+                    const scoreAngle = latest ? 135 + (latest.score / bureau.maxScore) * 270 : 135;
+                    const dotPos = polarToCartesian(72, 72, 54, scoreAngle);
 
                     return (
-                      <Card key={bureau.key} className={cn("bg-gradient-to-br border border-primary/10 rounded-[2rem] overflow-hidden", bureau.gradient)}>
-                        <CardContent className="pt-6 pb-2 px-6 flex flex-col items-center">
+                      <Card key={bureau.key} className={cn("bg-gradient-to-br border border-primary/10 rounded-[2rem] overflow-hidden flex flex-col justify-between shadow-sm", bureau.gradient)}>
+                        <CardContent className="pt-6 pb-0 px-6 flex flex-col items-center">
                           {/* Bureau Label */}
                           <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-4">{bureau.label}</span>
 
-                          {/* Circular Gauge */}
+                          {/* Circular/Arch Gauge */}
                           <div className="relative w-36 h-36 flex items-center justify-center">
-                            <svg className="w-36 h-36 transform -rotate-90">
-                              {/* Background track */}
+                            <svg className="w-36 h-36 overflow-visible" viewBox="0 0 144 144">
+                              <defs>
+                                <filter id={`shadow-${bureau.key}`} x="-20%" y="-20%" width="140%" height="140%">
+                                  <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" floodOpacity="0.25"/>
+                                </filter>
+                              </defs>
+
+                              {/* Outer background thin ring */}
                               <circle
                                 cx="72"
                                 cy="72"
-                                r={gaugeRadius}
+                                r="64"
+                                stroke="currentColor"
+                                className="text-primary/10"
+                                strokeWidth="1"
+                                fill="transparent"
+                              />
+
+                              {/* Base background track */}
+                              <path
+                                d={describeArc(72, 72, 54, 135, 405)}
+                                fill="transparent"
                                 stroke="currentColor"
                                 className="text-primary/10"
                                 strokeWidth="10"
-                                fill="transparent"
-                              />
-                              {/* Score arc */}
-                              <circle
-                                cx="72"
-                                cy="72"
-                                r={gaugeRadius}
-                                stroke={bureau.color}
-                                strokeWidth="10"
-                                fill="transparent"
-                                strokeDasharray={gaugeCircumference}
-                                strokeDashoffset={latest ? gaugeOffset : gaugeCircumference}
                                 strokeLinecap="round"
-                                className="transition-all duration-700 ease-out"
                               />
+
+                              {/* Segmented Bands */}
+                              {computedSegments.map(({ band, startAngle, endAngle }) => {
+                                const isHovered = hoveredBands[bureau.key]?.name === band.name;
+                                const hasHover = hoveredBands[bureau.key] !== null;
+
+                                let opacity = 1;
+                                let strokeWidth = 10;
+
+                                if (hasHover) {
+                                  opacity = isHovered ? 1 : 0.25;
+                                  strokeWidth = isHovered ? 12 : 10;
+                                } else if (latest) {
+                                  const isFutureBand = latest.score < band.min;
+                                  opacity = isFutureBand ? 0.25 : 1;
+                                }
+
+                                return (
+                                  <path
+                                    key={band.name}
+                                    d={describeArc(72, 72, 54, startAngle, endAngle)}
+                                    fill="transparent"
+                                    stroke={band.color}
+                                    strokeWidth={strokeWidth}
+                                    strokeLinecap="round"
+                                    style={{
+                                      opacity,
+                                      transition: 'all 0.3s ease',
+                                      cursor: 'pointer'
+                                    }}
+                                    onMouseEnter={() => setHoveredBands(prev => ({ ...prev, [bureau.key]: band }))}
+                                    onMouseLeave={() => setHoveredBands(prev => ({ ...prev, [bureau.key]: null }))}
+                                  />
+                                );
+                              })}
+
+                              {/* Score Indicator Dot */}
+                              {latest && (
+                                <circle
+                                  cx={dotPos.x}
+                                  cy={dotPos.y}
+                                  r="6"
+                                  fill="#ffffff"
+                                  stroke={rating?.color || bureau.color}
+                                  strokeWidth="2.5"
+                                  filter={`url(#shadow-${bureau.key})`}
+                                  style={{
+                                    transition: 'all 0.7s ease-out'
+                                  }}
+                                />
+                              )}
+
+                              {/* Center Text content inside SVG */}
+                              {hoveredBands[bureau.key] ? (
+                                <g>
+                                  <text
+                                    x="72"
+                                    y="64"
+                                    textAnchor="middle"
+                                    className="font-extrabold text-[12px] uppercase tracking-wider"
+                                    fill={hoveredBands[bureau.key]?.color}
+                                  >
+                                    {hoveredBands[bureau.key]?.name}
+                                  </text>
+                                  <text
+                                    x="72"
+                                    y="82"
+                                    textAnchor="middle"
+                                    className="font-mono font-bold text-[11px]"
+                                    fill="currentColor"
+                                  >
+                                    {hoveredBands[bureau.key]?.min} - {hoveredBands[bureau.key]?.max}
+                                  </text>
+                                </g>
+                              ) : (
+                                <g>
+                                  <text
+                                    x="72"
+                                    y="68"
+                                    textAnchor="middle"
+                                    className="font-mono font-extrabold text-3xl"
+                                    fill={bureau.color}
+                                  >
+                                    {latest ? latest.score : '—'}
+                                  </text>
+                                  <text
+                                    x="72"
+                                    y="84"
+                                    textAnchor="middle"
+                                    className="text-[9px] font-medium"
+                                    fill="currentColor"
+                                    opacity="0.6"
+                                  >
+                                    of {bureau.maxScore}
+                                  </text>
+                                  {rating && (
+                                    <text
+                                      x="72"
+                                      y="98"
+                                      textAnchor="middle"
+                                      className="font-extrabold text-[10px] uppercase tracking-wider"
+                                      fill={rating.color}
+                                    >
+                                      {rating.text}
+                                    </text>
+                                  )}
+                                </g>
+                              )}
                             </svg>
-                            {/* Center text */}
-                            <div className="absolute flex flex-col items-center justify-center">
-                              <span className="font-mono text-3xl font-extrabold" style={{ color: bureau.color }}>
-                                {latest ? latest.score : '—'}
-                              </span>
-                              <span className="text-[9px] text-muted-foreground font-medium">of {bureau.maxScore}</span>
-                            </div>
                           </div>
 
-                          {/* Rating + Delta */}
-                          <div className="flex items-center gap-3 mt-3 mb-1">
-                            {rating && (
-                              <span className={cn("text-xs font-bold", rating.cls)}>{rating.text}</span>
-                            )}
+                          {/* Delta + Date */}
+                          <div className="flex items-center gap-3 mt-3 mb-4">
                             {delta !== 0 && (
                               <span className={cn("text-xs font-bold font-mono flex items-center gap-0.5", delta > 0 ? "text-emerald-500" : "text-rose-500")}>
                                 {delta > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                                 {delta > 0 ? '+' : ''}{delta}
                               </span>
                             )}
+                            {latest && (
+                              <span className="text-[10px] text-muted-foreground">Last checked: {latest.date}</span>
+                            )}
                           </div>
-                          {latest && (
-                            <span className="text-[10px] text-muted-foreground">Last checked: {latest.date}</span>
-                          )}
                         </CardContent>
 
-                        {/* Score history list */}
-                        {entries.length > 0 && (
-                          <div className="px-6 pb-5 pt-2">
-                            <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">History</div>
-                            <div className="space-y-1 max-h-[120px] overflow-y-auto">
-                              {[...entries].reverse().map(entry => (
-                                <div key={entry.id} className="group flex items-center justify-between py-1 border-b border-border/10 last:border-b-0">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-xs text-muted-foreground font-mono w-20">{entry.date}</span>
-                                    <span className="text-xs font-mono font-bold" style={{ color: bureau.color }}>{entry.score}</span>
-                                  </div>
-                                  <button
-                                    onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
-                                    className="text-rose-500 hover:text-rose-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </button>
+                        {/* Interactive History / Hover Overlay Area */}
+                        <div className="px-6 pb-5 pt-2 border-t border-border/10 min-h-[145px] relative overflow-hidden">
+                          <AnimatePresence mode="wait">
+                            {hoveredBands[bureau.key] ? (
+                              <motion.div
+                                key="overlay"
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 15 }}
+                                transition={{ duration: 0.2 }}
+                                className="absolute inset-x-6 bottom-5 top-2 flex flex-col justify-center bg-background/95 dark:bg-card/95 backdrop-blur-sm z-10"
+                              >
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span className="text-[11px] font-extrabold uppercase tracking-widest" style={{ color: hoveredBands[bureau.key]?.color }}>
+                                    {hoveredBands[bureau.key]?.name}
+                                  </span>
+                                  <span className="text-[9px] font-bold font-mono text-muted-foreground bg-primary/5 px-2 py-0.5 rounded-md border border-border/40">
+                                    {hoveredBands[bureau.key]?.min} - {hoveredBands[bureau.key]?.max}
+                                  </span>
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                                  {hoveredBands[bureau.key]?.description}
+                                </p>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="history"
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.2 }}
+                                className="h-full flex flex-col"
+                              >
+                                <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">History</div>
+                                {entries.length > 0 ? (
+                                  <div className="space-y-1 max-h-[100px] overflow-y-auto pr-1">
+                                    {[...entries].reverse().map(entry => (
+                                      <div key={entry.id} className="group flex items-center justify-between py-1 border-b border-border/10 last:border-b-0">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-xs text-muted-foreground font-mono w-20">{entry.date}</span>
+                                          <span className="text-xs font-mono font-bold" style={{ color: bureau.color }}>{entry.score}</span>
+                                        </div>
+                                        <button
+                                          onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
+                                          className="text-rose-500 hover:text-rose-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-muted-foreground/60 italic flex-1 flex items-center justify-center">
+                                    No credit history recorded.
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       </Card>
                     );
                   })}
@@ -5827,331 +7181,52 @@ export default function Finance() {
           {/* ==========================================
               TAB 7: RECURRINGS
               ========================================== */}
-          {activeTab === 'recurrings' && (() => {
-            const getTagColor = (category: string | undefined) => {
-              switch (category?.toLowerCase()) {
-                case 'rent':
-                  return 'bg-blue-500/10 text-blue-500 border border-blue-500/20';
-                case 'subscriptions':
-                case 'video entertainment':
-                  return 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20';
-                case 'gym':
-                  return 'bg-amber-500/10 text-amber-500 border border-amber-500/20';
-                case 'donations':
-                  return 'bg-orange-500/10 text-orange-500 border border-orange-500/20';
-                case 'insurance':
-                  return 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20';
-                case 'groceries':
-                case 'needs':
-                  return 'bg-teal-500/10 text-teal-500 border border-teal-500/20';
-                default:
-                  return 'bg-muted/30 text-muted-foreground border border-border/30';
-              }
-            };
+          {activeTab === 'recurrings' && (
+            <RecurringsTab
+              recurrings={recurrings}
+              currentMonth={currentMonth}
+              formatGBP={formatGBP}
+              onOpenAddModal={() => {
+                setIsAddRecurringOpen(true);
+                setAddRecTemplate("scratch");
+              }}
+              onTogglePaid={toggleRecurringPaid}
+              onEditRecurring={(bill) => {
+                setActiveRecurring(bill);
+                setIsEditRecurringOpen(true);
+              }}
+              onDeleteRecurring={handleDeleteRecurring}
+            />
+          )}
 
-            const thisMonthBills = recurrings.filter(r => isDueThisMonth(r, currentMonth));
+          {/* ==========================================
+              TAB: TRANSACTIONS (COPILOT STYLE)
+              ========================================== */}
+          {activeTab === 'transactions' && (
+            <TransactionsTab
+              transactions={mockTransactions}
+              onUpdateTransactions={(updated) => {
+                setMockTransactions(updated);
+                saveDataToSupabase('transactions', updated);
+              }}
+              bankAccounts={bankAccounts}
+              goals={goals}
+              budgetCategories={budgetCategories}
+              formatGBP={formatGBP}
+            />
+          )}
 
-            const todayDay = new Date().getDate();
-            const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
-
-            interface DisplayBill extends RecurringBill {
-              displayMonth?: number;
-            }
-
-            const futureBills: DisplayBill[] = [];
-            recurrings.forEach(r => {
-              const isDueThis = isDueThisMonth(r, currentMonth);
-              if (!isDueThis) {
-                futureBills.push({
-                  ...r,
-                  displayMonth: r.dueMonth || nextMonth
-                });
-              } else {
-                if (todayDay >= 25 && r.dueDate <= 7) {
-                  futureBills.push({
-                    ...r,
-                    displayMonth: nextMonth
-                  });
-                }
-              }
-            });
-
-            const totalAmount = thisMonthBills.reduce((sum, r) => sum + r.amount, 0);
-            const paidAmount = thisMonthBills.filter(r => r.isPaid).reduce((sum, r) => sum + r.amount, 0);
-            const leftAmount = Math.max(0, totalAmount - paidAmount);
-            const progress = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
-
-            const radius = 36;
-            const circumference = 2 * Math.PI * radius;
-            const strokeDashoffset = circumference - (progress / 100) * circumference;
-
-            return (
-              <div className="space-y-6">
-
-                {/* Recurrings Title Header with [+] button */}
-                <div className="flex items-center gap-3 border-b border-border/50 pb-4">
-                  <h3 className="font-serif text-lg font-semibold text-foreground">
-                    Recurrings
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setIsAddRecurringOpen(true);
-                      setAddRecTemplate("scratch");
-                    }}
-                    className="h-7 w-7 rounded-lg border border-border bg-card hover:bg-muted flex items-center justify-center text-foreground transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-8">
-
-                  {/* Circular progress card */}
-                  <div className="bg-card/20 backdrop-blur-sm border border-primary/10 rounded-[2rem] p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6">
-                    <div className="text-center sm:text-left space-y-1">
-                      <span className="text-3xl md:text-4xl font-extrabold font-mono text-foreground block">
-                        {formatGBP(leftAmount)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground block font-sans font-medium uppercase tracking-wider">
-                        left to pay
-                      </span>
-                    </div>
-
-                    <div className="relative w-24 h-24 flex items-center justify-center">
-                      <svg className="w-24 h-24 transform -rotate-90">
-                        <circle
-                          cx="48"
-                          cy="48"
-                          r={radius}
-                          className="stroke-primary/10"
-                          strokeWidth="8"
-                          fill="transparent"
-                        />
-                        <circle
-                          cx="48"
-                          cy="48"
-                          r={radius}
-                          className="stroke-[#1d70b8] transition-all duration-500 ease-out"
-                          strokeWidth="8"
-                          fill="transparent"
-                          strokeDasharray={circumference}
-                          strokeDashoffset={strokeDashoffset}
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </div>
-
-                    <div className="text-center sm:text-right space-y-1">
-                      <span className="text-3xl md:text-4xl font-extrabold font-mono text-foreground block">
-                        {formatGBP(paidAmount)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground block font-sans font-medium uppercase tracking-wider">
-                        paid so far
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Grouped Lists */}
-                  <div className="space-y-8">
-
-                    {/* Section: This Month */}
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => setThisMonthCollapsed(!thisMonthCollapsed)}
-                        className="flex items-center gap-2 text-sm font-bold text-foreground tracking-wide px-1 hover:text-primary transition-colors outline-none"
-                      >
-                        <span className="text-[10px] text-muted-foreground transition-transform duration-200">
-                          {thisMonthCollapsed ? '▶' : '▼'}
-                        </span>
-                        This month
-                      </button>
-
-                      {!thisMonthCollapsed && (
-                        <div className="space-y-1 px-1">
-                          {thisMonthBills
-                            .sort((a, b) => a.dueDate - b.dueDate)
-                            .map(bill => {
-                              const dueDateText = getDueDateText(bill, currentMonth);
-                              return (
-                                <div
-                                  key={bill.id}
-                                  className={cn(
-                                    "group flex items-center justify-between py-2 border-b border-border/5 last:border-b-0 transition-opacity",
-                                    bill.isPaid && "opacity-60"
-                                  )}
-                                >
-                                  {/* Left side: Date, Emoji + Subscription Name, Frequency */}
-                                  <div className="flex items-center gap-6 min-w-0 flex-1">
-                                    <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
-                                      {dueDateText}
-                                    </span>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
-                                      <span className={cn("font-semibold text-xs text-foreground truncate", bill.isPaid && "line-through text-muted-foreground")}>
-                                        {bill.name}
-                                      </span>
-                                      <span className="text-[10px] text-muted-foreground/50 lowercase font-normal shrink-0">
-                                        {bill.frequency}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* Right side: Pill Badge, Price, Paid Status */}
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    {/* Action Edit/Delete Overlay */}
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex mr-2">
-                                      <button
-                                        onClick={() => {
-                                          setActiveRecurring(bill);
-                                          setIsEditRecurringOpen(true);
-                                        }}
-                                        className="text-muted-foreground hover:text-foreground p-1 transition-colors"
-                                        title="Edit"
-                                      >
-                                        <Edit2 className="h-3 w-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteRecurring(bill.id)}
-                                        className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
-                                        title="Delete"
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </button>
-                                    </div>
-
-                                    {/* Pill Badge */}
-                                    <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
-                                      {bill.emoji && <span>{bill.emoji}</span>}
-                                      {bill.tag || bill.category || 'BILL'}
-                                    </span>
-
-                                    {/* Price */}
-                                    <span className="font-mono font-bold text-xs text-foreground w-20 text-right">
-                                      {formatGBP(bill.amount)}
-                                    </span>
-
-                                    {/* Checkmark paid status */}
-                                    <button
-                                      onClick={() => toggleRecurringPaid(bill.id)}
-                                      className={cn(
-                                        "h-5 w-5 rounded-lg flex items-center justify-center border transition-all shrink-0",
-                                        bill.isPaid
-                                          ? "bg-transparent border-transparent text-foreground font-bold"
-                                          : "border-border/40 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-transparent hover:text-emerald-500/70"
-                                      )}
-                                    >
-                                      <Check className="h-3.5 w-3.5 font-bold" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-
-                          {thisMonthBills.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic py-6 text-center">No bills due this month.</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Section: In the Future */}
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => setFutureCollapsed(!futureCollapsed)}
-                        className="flex items-center gap-2 text-sm font-bold text-foreground tracking-wide px-1 hover:text-primary transition-colors outline-none"
-                      >
-                        <span className="text-[10px] text-muted-foreground transition-transform duration-200">
-                          {futureCollapsed ? '▶' : '▼'}
-                        </span>
-                        In the future
-                      </button>
-
-                      {!futureCollapsed && (
-                        <div className="space-y-1 px-1">
-                          {futureBills
-                            .sort((a, b) => {
-                              const mDiff = (a.displayMonth || 1) - (b.displayMonth || 1);
-                              if (mDiff !== 0) return mDiff;
-                              return a.dueDate - b.dueDate;
-                            })
-                            .map(bill => {
-                              const dueDateText = getDueDateText(bill, currentMonth, bill.displayMonth);
-                              return (
-                                <div
-                                  key={bill.id}
-                                  className="group flex items-center justify-between py-2 border-b border-border/5 last:border-b-0"
-                                >
-                                  {/* Left side: Date, Emoji + Subscription Name, Frequency */}
-                                  <div className="flex items-center gap-6 min-w-0 flex-1">
-                                    <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
-                                      {dueDateText}
-                                    </span>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
-                                      <span className="font-semibold text-xs text-foreground truncate">
-                                        {bill.name}
-                                      </span>
-                                      <span className="text-[10px] text-muted-foreground/50 lowercase font-normal shrink-0">
-                                        {bill.frequency}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* Right side: Pill Badge, Price, Empty spacer */}
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    {/* Action Edit/Delete Overlay */}
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex mr-2">
-                                      <button
-                                        onClick={() => {
-                                          setActiveRecurring(bill);
-                                          setIsEditRecurringOpen(true);
-                                        }}
-                                        className="text-muted-foreground hover:text-foreground p-1 transition-colors"
-                                        title="Edit"
-                                      >
-                                        <Edit2 className="h-3 w-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteRecurring(bill.id)}
-                                        className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
-                                        title="Delete"
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </button>
-                                    </div>
-
-                                    {/* Pill Badge */}
-                                    <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
-                                      {bill.emoji && <span>{bill.emoji}</span>}
-                                      {bill.tag || bill.category || 'BILL'}
-                                    </span>
-
-                                    {/* Price */}
-                                    <span className="font-mono font-bold text-xs text-foreground w-20 text-right">
-                                      {formatGBP(bill.amount)}
-                                    </span>
-
-                                    {/* Empty spacer to align with checkmark */}
-                                    <div className="w-5" />
-                                  </div>
-                                </div>
-                              );
-                            })}
-
-                          {futureBills.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic py-6 text-center">No future bills scheduled.</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-            );
-          })()}
+          {/* ==========================================
+              TAB 8: TIME SPENT
+              ========================================== */}
+          {activeTab === 'time-spent' && (
+            <TimeSpentTab
+              settings={settings}
+              timeSpentInputs={timeSpentInputs}
+              setTimeSpentInputs={setTimeSpentInputs}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+            />
+          )}
 
         </main>
 
@@ -6979,8 +8054,8 @@ export default function Finance() {
                 id="goal-target"
                 type="number"
                 placeholder="e.g. 2500"
-                value={newGoal.targetAmount || ''}
-                onChange={(e) => setNewGoal({ ...newGoal, targetAmount: parseFloat(e.target.value) || 0 })}
+                value={newGoal.targetAmount}
+                onChange={(e) => setNewGoal({ ...newGoal, targetAmount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
@@ -7067,8 +8142,8 @@ export default function Finance() {
                 type="number"
                 step="0.01"
                 placeholder="e.g. 5200 (Use negative for credit balance)"
-                value={newAccount.balance || ''}
-                onChange={(e) => setNewAccount({ ...newAccount, balance: parseFloat(e.target.value) || 0 })}
+                value={newAccount.balance}
+                onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
@@ -7079,8 +8154,8 @@ export default function Finance() {
                 id="acc-fee"
                 type="number"
                 placeholder="e.g. 195"
-                value={newAccount.annualFee || ''}
-                onChange={(e) => setNewAccount({ ...newAccount, annualFee: parseFloat(e.target.value) || 0 })}
+                value={newAccount.annualFee}
+                onChange={(e) => setNewAccount({ ...newAccount, annualFee: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
@@ -7274,8 +8349,8 @@ export default function Finance() {
                 id="mem-fee"
                 type="number"
                 placeholder="e.g. 0"
-                value={newMembership.annualFee || ''}
-                onChange={(e) => setNewMembership({ ...newMembership, annualFee: parseFloat(e.target.value) || 0 })}
+                value={newMembership.annualFee}
+                onChange={(e) => setNewMembership({ ...newMembership, annualFee: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
               />
             </div>
@@ -7355,447 +8430,33 @@ export default function Finance() {
       </Dialog>
 
       {/* DIALOG: Add Recurring Bill */}
-      <Dialog open={isAddRecurringOpen} onOpenChange={setIsAddRecurringOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Add Recurring Bill</DialogTitle>
-            <DialogDescription className="text-xs">Add an automated recurring bill payment, linked to budgets and accounts.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAddRecurring} className="space-y-4 py-2">
-
-            {/* Quick Templates Dropdown */}
-            <div className="space-y-1">
-              <Label htmlFor="rec-template" className="text-xs">Select Template (Auto-fills details)</Label>
-              <Select
-                value={addRecTemplate}
-                onValueChange={(val) => {
-                  setAddRecTemplate(val);
-                  if (val !== "scratch") {
-                    const idx = parseInt(val, 10);
-                    if (!isNaN(idx) && recurringTemplates[idx]) {
-                      const temp = recurringTemplates[idx];
-                      setNewRecurring({
-                        ...newRecurring,
-                        name: temp.name,
-                        amount: temp.defaultAmount,
-                        frequency: temp.frequency as any,
-                        emoji: temp.emoji,
-                        category: temp.category,
-                        tag: temp.tag,
-                        linkedBudgetItemId: temp.linkedBudgetItemId || ''
-                      });
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger id="rec-template" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                  <SelectValue placeholder="Start a new one from scratch" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
-                  <SelectItem value="scratch" className="text-xs">Start a new one from scratch</SelectItem>
-                  {recurringTemplates.map((temp, idx) => (
-                    <SelectItem key={idx} value={String(idx)} className="text-xs">
-                      {temp.emoji} {temp.name} ({temp.category})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Bill Name */}
-            <div className="space-y-1">
-              <Label htmlFor="rec-name" className="text-xs">Bill Name</Label>
-              <Input
-                id="rec-name"
-                placeholder="e.g. Spotify Premium"
-                value={newRecurring.name}
-                onChange={(e) => {
-                  const nameVal = e.target.value;
-                  const match = autoCategorizeRecurring(nameVal);
-                  if (match) {
-                    setNewRecurring({
-                      ...newRecurring,
-                      name: nameVal,
-                      emoji: match.emoji,
-                      category: match.category,
-                      tag: match.tag,
-                      frequency: match.frequency as any,
-                      amount: newRecurring.amount === 0 ? match.defaultAmount : newRecurring.amount,
-                      linkedBudgetItemId: match.linkedBudgetItemId
-                    });
-                  } else {
-                    setNewRecurring({
-                      ...newRecurring,
-                      name: nameVal
-                    });
-                  }
-                }}
-                className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
-                required
-              />
-            </div>
-
-            {/* Grid for Emoji and Tag */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1 col-span-1">
-                <Label htmlFor="rec-emoji" className="text-xs">Emoji</Label>
-                <Input
-                  id="rec-emoji"
-                  placeholder="e.g. 🎵"
-                  value={newRecurring.emoji || ''}
-                  onChange={(e) => setNewRecurring({ ...newRecurring, emoji: e.target.value })}
-                  className="rounded-xl h-10 border-primary/20 bg-background/50 text-center"
-                />
-              </div>
-              <div className="space-y-1 col-span-2">
-                <Label htmlFor="rec-tag" className="text-xs">Tag / Badge Code</Label>
-                <Input
-                  id="rec-tag"
-                  placeholder="e.g. SPOTIFY"
-                  value={newRecurring.tag || ''}
-                  onChange={(e) => setNewRecurring({ ...newRecurring, tag: e.target.value.toUpperCase() })}
-                  className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Grid for Amount, Frequency, Category */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="rec-amount" className="text-xs">Amount (£)</Label>
-                <Input
-                  id="rec-amount"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g. 10.99"
-                  value={newRecurring.amount || ''}
-                  onChange={(e) => setNewRecurring({ ...newRecurring, amount: parseFloat(e.target.value) || 0 })}
-                  className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="rec-frequency" className="text-xs">Frequency</Label>
-                <Select
-                  value={newRecurring.frequency}
-                  onValueChange={(val) => setNewRecurring({ ...newRecurring, frequency: val as any })}
-                >
-                  <SelectTrigger id="rec-frequency" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                    <SelectValue placeholder="Select frequency..." />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-primary/10">
-                    <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
-                    <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
-                    <SelectItem value="quarterly" className="text-xs">Quarterly</SelectItem>
-                    <SelectItem value="annually" className="text-xs">Annually</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Grid for Month & Day */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="rec-day" className="text-xs">Due Day of Month (1-31)</Label>
-                <Input
-                  id="rec-day"
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="e.g. 15"
-                  value={newRecurring.dueDate || ''}
-                  onChange={(e) => setNewRecurring({ ...newRecurring, dueDate: parseInt(e.target.value, 10) || 1 })}
-                  className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="rec-month" className="text-xs">Due Month</Label>
-                <Select
-                  value={String(newRecurring.dueMonth || 1)}
-                  onValueChange={(val) => setNewRecurring({ ...newRecurring, dueMonth: parseInt(val, 10) })}
-                  disabled={newRecurring.frequency === 'monthly' || newRecurring.frequency === 'weekly'}
-                >
-                  <SelectTrigger id="rec-month" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs disabled:opacity-50">
-                    <SelectValue placeholder="Select month..." />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-primary/10">
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-                      <SelectItem key={idx} value={String(idx + 1)} className="text-xs">{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Category selection */}
-            <div className="space-y-1">
-              <Label htmlFor="rec-category" className="text-xs">Dashboard Category</Label>
-              <Select
-                value={newRecurring.category || 'none'}
-                onValueChange={(val) => setNewRecurring({ ...newRecurring, category: val === 'none' ? '' : val })}
-              >
-                <SelectTrigger id="rec-category" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                  <SelectValue placeholder="Select category..." />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
-                  <SelectItem value="none" className="text-xs">Select category...</SelectItem>
-                  <SelectItem value="Rent" className="text-xs">Rent / Housing</SelectItem>
-                  <SelectItem value="Subscriptions" className="text-xs">Subscriptions</SelectItem>
-                  <SelectItem value="Insurance" className="text-xs">Insurance</SelectItem>
-                  <SelectItem value="Entertainment" className="text-xs">Entertainment</SelectItem>
-                  <SelectItem value="Gym" className="text-xs">Gym</SelectItem>
-                  <SelectItem value="Donations" className="text-xs">Donations</SelectItem>
-                  <SelectItem value="Groceries" className="text-xs">Groceries</SelectItem>
-                  <SelectItem value="Car" className="text-xs">Car</SelectItem>
-                  <SelectItem value="Healthcare" className="text-xs">Healthcare</SelectItem>
-                  <SelectItem value="Other" className="text-xs">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Symlink: Linked Budget Item */}
-            <div className="space-y-1">
-              <Label htmlFor="rec-link-budget" className="text-xs">Link to Budget Item</Label>
-              <Select
-                value={newRecurring.linkedBudgetItemId || 'none'}
-                onValueChange={(val) => setNewRecurring({ ...newRecurring, linkedBudgetItemId: val === 'none' ? '' : val })}
-              >
-                <SelectTrigger id="rec-link-budget" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                  <SelectValue placeholder="No linked budget item (Create automatically on save)" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
-                  <SelectItem value="none" className="text-xs">No linked budget item (Create automatically on save)</SelectItem>
-                  <SelectItem value="create" className="text-xs">Force create new item</SelectItem>
-                  {allBudgetItems.map(item => (
-                    <SelectItem key={item.id} value={item.id} className="text-xs">
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Symlink: Linked Bank Account */}
-            <div className="space-y-1">
-              <Label htmlFor="rec-link-account" className="text-xs">Link to Bank Account (Source for payments)</Label>
-              <Select
-                value={newRecurring.linkedAccountId || 'none'}
-                onValueChange={(val) => setNewRecurring({ ...newRecurring, linkedAccountId: val === 'none' ? '' : val })}
-              >
-                <SelectTrigger id="rec-link-account" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                  <SelectValue placeholder="No linked account (Manual cash payment)" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
-                  <SelectItem value="none" className="text-xs">No linked account (Manual cash payment)</SelectItem>
-                  {bankAccounts.map(acc => (
-                    <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                      {acc.name} ({acc.type} - {formatGBP(acc.balance)})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <DialogFooter className="pt-4 gap-2 sm:gap-0">
-              <Button variant="outline" type="button" onClick={() => setIsAddRecurringOpen(false)} className="rounded-xl">Cancel</Button>
-              <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Bill</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AddRecurringDialog
+        isOpen={isAddRecurringOpen}
+        onOpenChange={setIsAddRecurringOpen}
+        newRecurring={newRecurring}
+        setNewRecurring={setNewRecurring}
+        addRecTemplate={addRecTemplate}
+        setAddRecTemplate={setAddRecTemplate}
+        recurringTemplates={recurringTemplates}
+        budgetCategories={budgetCategories}
+        allBudgetItems={allBudgetItems}
+        bankAccounts={bankAccounts}
+        formatGBP={formatGBP}
+        onSave={handleAddRecurring}
+      />
 
       {/* DIALOG: Edit Recurring Bill */}
-      <Dialog open={isEditRecurringOpen} onOpenChange={setIsEditRecurringOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Edit Recurring Bill</DialogTitle>
-            <DialogDescription className="text-xs">Update your recurring bill parameters.</DialogDescription>
-          </DialogHeader>
-          {activeRecurring && (
-            <form onSubmit={handleEditRecurring} className="space-y-4 py-2">
-
-              {/* Bill Name */}
-              <div className="space-y-1">
-                <Label htmlFor="edit-rec-name" className="text-xs">Bill Name</Label>
-                <Input
-                  id="edit-rec-name"
-                  value={activeRecurring.name}
-                  onChange={(e) => setActiveRecurring({ ...activeRecurring, name: e.target.value })}
-                  className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
-                  required
-                />
-              </div>
-
-              {/* Grid for Emoji and Tag */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1 col-span-1">
-                  <Label htmlFor="edit-rec-emoji" className="text-xs">Emoji</Label>
-                  <Input
-                    id="edit-rec-emoji"
-                    placeholder="e.g. 🎵"
-                    value={activeRecurring.emoji || ''}
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, emoji: e.target.value })}
-                    className="rounded-xl h-10 border-primary/20 bg-background/50 text-center"
-                  />
-                </div>
-                <div className="space-y-1 col-span-2">
-                  <Label htmlFor="edit-rec-tag" className="text-xs">Tag / Badge Code</Label>
-                  <Input
-                    id="edit-rec-tag"
-                    placeholder="e.g. SPOTIFY"
-                    value={activeRecurring.tag || ''}
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, tag: e.target.value.toUpperCase() })}
-                    className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Grid for Amount, Frequency, Category */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="edit-rec-amount" className="text-xs">Amount (£)</Label>
-                  <Input
-                    id="edit-rec-amount"
-                    type="number"
-                    step="0.01"
-                    value={activeRecurring.amount}
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, amount: parseFloat(e.target.value) || 0 })}
-                    className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="edit-rec-frequency" className="text-xs">Frequency</Label>
-                  <Select
-                    value={activeRecurring.frequency}
-                    onValueChange={(val) => setActiveRecurring({ ...activeRecurring, frequency: val as any })}
-                  >
-                    <SelectTrigger id="edit-rec-frequency" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                      <SelectValue placeholder="Select frequency..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl border-primary/10">
-                      <SelectItem value="monthly" className="text-xs">Monthly</SelectItem>
-                      <SelectItem value="weekly" className="text-xs">Weekly</SelectItem>
-                      <SelectItem value="quarterly" className="text-xs">Quarterly</SelectItem>
-                      <SelectItem value="annually" className="text-xs">Annually</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Grid for Month & Day */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="edit-rec-day" className="text-xs">Due Day of Month (1-31)</Label>
-                  <Input
-                    id="edit-rec-day"
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={activeRecurring.dueDate}
-                    onChange={(e) => setActiveRecurring({ ...activeRecurring, dueDate: parseInt(e.target.value, 10) || 1 })}
-                    className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="edit-rec-month" className="text-xs">Due Month</Label>
-                  <Select
-                    value={String(activeRecurring.dueMonth || 1)}
-                    onValueChange={(val) => setActiveRecurring({ ...activeRecurring, dueMonth: parseInt(val, 10) })}
-                    disabled={activeRecurring.frequency === 'monthly' || activeRecurring.frequency === 'weekly'}
-                  >
-                    <SelectTrigger id="edit-rec-month" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs disabled:opacity-50">
-                      <SelectValue placeholder="Select month..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl border-primary/10">
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-                        <SelectItem key={idx} value={String(idx + 1)} className="text-xs">{m}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Category selection */}
-              <div className="space-y-1">
-                <Label htmlFor="edit-rec-category" className="text-xs">Dashboard Category</Label>
-                <Select
-                  value={activeRecurring.category || 'none'}
-                  onValueChange={(val) => setActiveRecurring({ ...activeRecurring, category: val === 'none' ? '' : val })}
-                >
-                  <SelectTrigger id="edit-rec-category" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                    <SelectValue placeholder="Select category..." />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-primary/10">
-                    <SelectItem value="none" className="text-xs">Select category...</SelectItem>
-                    <SelectItem value="Rent" className="text-xs">Rent / Housing</SelectItem>
-                    <SelectItem value="Subscriptions" className="text-xs">Subscriptions</SelectItem>
-                    <SelectItem value="Insurance" className="text-xs">Insurance</SelectItem>
-                    <SelectItem value="Entertainment" className="text-xs">Entertainment</SelectItem>
-                    <SelectItem value="Gym" className="text-xs">Gym</SelectItem>
-                    <SelectItem value="Donations" className="text-xs">Donations</SelectItem>
-                    <SelectItem value="Groceries" className="text-xs">Groceries</SelectItem>
-                    <SelectItem value="Car" className="text-xs">Car</SelectItem>
-                    <SelectItem value="Healthcare" className="text-xs">Healthcare</SelectItem>
-                    <SelectItem value="Other" className="text-xs">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Symlink: Linked Budget Item */}
-              <div className="space-y-1">
-                <Label htmlFor="edit-rec-link-budget" className="text-xs">Link to Budget Item</Label>
-                <Select
-                  value={activeRecurring.linkedBudgetItemId || 'none'}
-                  onValueChange={(val) => setActiveRecurring({ ...activeRecurring, linkedBudgetItemId: val === 'none' ? '' : val })}
-                >
-                  <SelectTrigger id="edit-rec-link-budget" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                    <SelectValue placeholder="No linked budget item" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-primary/10">
-                    <SelectItem value="none" className="text-xs">No linked budget item</SelectItem>
-                    {allBudgetItems.map(item => (
-                      <SelectItem key={item.id} value={item.id} className="text-xs">
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Symlink: Linked Bank Account */}
-              <div className="space-y-1">
-                <Label htmlFor="edit-rec-link-account" className="text-xs">Link to Bank Account (Source for payments)</Label>
-                <Select
-                  value={activeRecurring.linkedAccountId || 'none'}
-                  onValueChange={(val) => setActiveRecurring({ ...activeRecurring, linkedAccountId: val === 'none' ? '' : val })}
-                >
-                  <SelectTrigger id="edit-rec-link-account" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
-                    <SelectValue placeholder="No linked account (Manual cash payment)" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-primary/10">
-                    <SelectItem value="none" className="text-xs">No linked account (Manual cash payment)</SelectItem>
-                    {bankAccounts.map(acc => (
-                      <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                        {acc.name} ({acc.type} - {formatGBP(acc.balance)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <DialogFooter className="pt-4 gap-2 sm:gap-0">
-                <Button variant="outline" type="button" onClick={() => setIsEditRecurringOpen(false)} className="rounded-xl">Cancel</Button>
-                <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+      <EditRecurringDialog
+        isOpen={isEditRecurringOpen}
+        onOpenChange={setIsEditRecurringOpen}
+        activeRecurring={activeRecurring}
+        setActiveRecurring={setActiveRecurring}
+        budgetCategories={budgetCategories}
+        allBudgetItems={allBudgetItems}
+        bankAccounts={bankAccounts}
+        formatGBP={formatGBP}
+        onSave={handleEditRecurring}
+      />
 
       {/* DIALOG: Add Credit Score */}
       <Dialog open={isAddCreditScoreOpen} onOpenChange={setIsAddCreditScoreOpen}>
@@ -7830,8 +8491,8 @@ export default function Finance() {
                 type="number"
                 min="0"
                 placeholder="e.g. 720"
-                value={newCreditScore.score || ''}
-                onChange={(e) => setNewCreditScore({ ...newCreditScore, score: parseInt(e.target.value, 10) || 0 })}
+                value={newCreditScore.score}
+                onChange={(e) => setNewCreditScore({ ...newCreditScore, score: e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0 })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
                 required
               />
@@ -7878,7 +8539,7 @@ export default function Finance() {
                     setNewCategoryName('');
                     setNewCategoryEmoji('');
                     setNewCategoryGroup('needs');
-                    setNewCategoryBudget(0);
+                    setNewCategoryBudget('');
                   }
                 }}
                 className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
@@ -7910,8 +8571,8 @@ export default function Finance() {
                 type="number"
                 step="0.01"
                 placeholder="e.g. 500"
-                value={newCategoryBudget || ''}
-                onChange={(e) => setNewCategoryBudget(parseFloat(e.target.value) || 0)}
+                value={newCategoryBudget}
+                onChange={(e) => setNewCategoryBudget(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
@@ -7971,8 +8632,8 @@ export default function Finance() {
                 id="cat-edit-budget"
                 type="number"
                 step="0.01"
-                value={newCategoryBudget || ''}
-                onChange={(e) => setNewCategoryBudget(parseFloat(e.target.value) || 0)}
+                value={newCategoryBudget}
+                onChange={(e) => setNewCategoryBudget(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
                 className="rounded-xl h-10 border-primary/20 bg-background/50"
                 required
               />
@@ -8715,8 +9376,8 @@ export default function Finance() {
                     type="number"
                     step="0.01"
                     placeholder="e.g. 45"
-                    value={newBudgetItem.spent || ''}
-                    onChange={(e) => setNewBudgetItem({ ...newBudgetItem, spent: parseFloat(e.target.value) || 0 })}
+                    value={newBudgetItem.spent}
+                    onChange={(e) => setNewBudgetItem({ ...newBudgetItem, spent: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                     className="rounded-xl h-10 border-primary/20 bg-background/50"
                     required
                   />
