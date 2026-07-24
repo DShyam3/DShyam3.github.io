@@ -169,6 +169,28 @@ const Watchlist = () => {
   const [favSearchQuery, setFavSearchQuery] = useState('');
   const [favAddedItems, setFavAddedItems] = useState<Set<string>>(new Set());
 
+  const [moveItem, setMoveItem] = useState<WatchlistItem | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [selectedFavCategory, setSelectedFavCategory] = useState<'Bollywood' | 'Hollywood' | 'Anime' | 'Others'>('Hollywood');
+
+  const handleOpenMoveDialog = useCallback((item: WatchlistItem) => {
+    setMoveItem(item);
+    
+    // Guess category based on title or genres
+    const titleLower = item.title.toLowerCase();
+    const genresLower = item.genres?.map(g => g.toLowerCase()) || [];
+    
+    if (genresLower.includes('anime') || genresLower.includes('animation')) {
+      setSelectedFavCategory('Anime');
+    } else if (titleLower.includes('hindi') || titleLower.includes('bollywood') || item.genres?.includes('Bollywood')) {
+      setSelectedFavCategory('Bollywood');
+    } else {
+      setSelectedFavCategory('Hollywood');
+    }
+    
+    setMoveDialogOpen(true);
+  }, []);
+
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
@@ -1169,6 +1191,7 @@ const Watchlist = () => {
             onRemoveWatchlist={isAdmin ? removeWatchlistItem : undefined}
             addToSchedule={isAdmin ? addToSchedule : undefined}
             isInSchedule={isInSchedule}
+            onMoveToFavourites={isAdmin ? handleOpenMoveDialog : undefined}
           />
         ) : selectedCategory === 'Favourites' ? (
           <div className="px-4 md:px-0 py-6 space-y-8">
@@ -1336,6 +1359,7 @@ const Watchlist = () => {
                       isAdmin ? removeFromScheduleByWatchlistId : undefined
                     }
                     isInSchedule={isInSchedule}
+                    onMoveToFavourites={isAdmin ? handleOpenMoveDialog : undefined}
                   />
                 ))
               )}
@@ -1345,6 +1369,86 @@ const Watchlist = () => {
             )}
           </div>
         )}
+
+        {/* Move to Favourites Dialog */}
+        <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-serif">
+                Move to Favourites
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                Add this item to favourites and optionally remove it from your watchlist.
+              </DialogDescription>
+            </DialogHeader>
+            {moveItem && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Add <span className="font-medium text-foreground">"{moveItem.title}"</span> to your favourites.
+                </p>
+
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select
+                    value={selectedFavCategory}
+                    onValueChange={(value) =>
+                      setSelectedFavCategory(value as any)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FAV_CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setMoveDialogOpen(false)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      const mediaType = moveItem.category === 'Movies' ? 'movie' : 'tv';
+                      const posterUrl = moveItem.image_url || undefined;
+
+                      try {
+                        await addFavourite({
+                          title: moveItem.title,
+                          poster: posterUrl,
+                          media_type: mediaType,
+                          tmdb_id: moveItem.tmdb_id,
+                          category: selectedFavCategory,
+                        });
+
+                        await removeWatchlistItem(moveItem.id);
+                        if (isInSchedule(moveItem.id)) {
+                          removeFromScheduleByWatchlistId(moveItem.id);
+                        }
+                        setMoveDialogOpen(false);
+                      } catch (error) {
+                        console.error('Error moving item to favourites:', error);
+                      }
+                    }}
+                    className="flex-1 gap-1.5"
+                  >
+                    <Heart className="h-4 w-4 fill-current" />
+                    Move
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <Footer />
       </div>

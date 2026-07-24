@@ -51,6 +51,7 @@ interface ScheduleItemProps {
   getAutoStatus: (item: WatchlistItem) => string | undefined;
   addToSchedule?: (item: Omit<any, 'id'>) => void;
   isInSchedule: (watchlistItemId: string) => boolean;
+  onMoveToFavourites?: (item: WatchlistItem) => void;
 }
 
 export function ScheduleItem({
@@ -65,6 +66,7 @@ export function ScheduleItem({
   getAutoStatus,
   addToSchedule,
   isInSchedule,
+  onMoveToFavourites,
 }: ScheduleItemProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -316,6 +318,14 @@ export function ScheduleItem({
         toggleEpisodeWatched={toggleEpisodeWatched}
         isEpisodeWatched={isEpisodeWatched}
         isSeasonWatched={isSeasonWatched}
+        onMoveToFavourites={
+          onMoveToFavourites
+            ? () => {
+                onMoveToFavourites(item);
+                setDetailOpen(false);
+              }
+            : undefined
+        }
       />
     </>
   );
