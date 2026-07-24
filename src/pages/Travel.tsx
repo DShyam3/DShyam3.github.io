@@ -48,7 +48,7 @@ const Travel = () => {
         if (isAdmin && allCountries.length === 0) {
             const fetchAll = async () => {
                 try {
-                    const res = await fetch('https://restcountries.com/v3.1/all?fields=cca2,name');
+                    const res = await fetch('/countries.json');
                     if (!res.ok) return;
                     const data = await res.json();
                     setAllCountries(data.map((c: any) => ({

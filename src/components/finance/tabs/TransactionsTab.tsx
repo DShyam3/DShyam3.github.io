@@ -83,6 +83,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newTxName, setNewTxName] = useState('');
   const [newTxAmount, setNewTxAmount] = useState('');
+  const [newTxType, setNewTxType] = useState<'expense' | 'income'>('expense');
   const [newTxCategory, setNewTxCategory] = useState('');
   const [newTxAccount, setNewTxAccount] = useState('');
   const [newTxGoal, setNewTxGoal] = useState('');
@@ -173,7 +174,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
     // Account Filter
     if (accountFilter !== 'all') {
-      result = result.filter(t => t.bankAccountId === accountFilter);
+      result = result.filter(t => (t.bankAccountId === accountFilter || t.accountId === accountFilter));
     }
 
     // Sort order
@@ -702,7 +703,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     {list.map(tx => {
                       const isSelected = selectedTxId === tx.id;
                       const isChecked = selectedTxIds.has(tx.id);
-                      const accInfo = getAccountInfo(tx.bankAccountId);
+                      const accInfo = getAccountInfo(tx.bankAccountId || tx.accountId);
                       const goalInfo = getGoalInfo(tx.goalId);
                       const isIncome = tx.amount < 0;
 
@@ -737,7 +738,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                               "h-8 w-8 rounded-xl shrink-0 flex items-center justify-center font-bold text-xs uppercase shadow-sm border",
                               isIncome
                                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : "bg-primary/5 text-foreground border-primary/10"
+                                : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/20"
                             )}>
                               {tx.category ? tx.category.charAt(0) : 'T'}
                             </div>
@@ -748,15 +749,9 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                                   {tx.name}
                                 </span>
                                 {accInfo && (
-                                  <span className="text-[10px] text-muted-foreground truncate hidden sm:inline">
-                                    {accInfo.issuer || accInfo.name} {accInfo.type === 'credit' ? '3860' : ''}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-0.5 sm:hidden">
-                                {accInfo && (
-                                  <span className="text-[9px] text-muted-foreground">
-                                    {accInfo.name}
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/40 border border-border/40 px-2 py-0.5 rounded-md shrink-0 font-medium">
+                                    <span>{accInfo.emoji || (accInfo.type === 'credit' ? '💳' : '🏦')}</span>
+                                    <span className="truncate max-w-[110px]">{accInfo.name}</span>
                                   </span>
                                 )}
                               </div>
@@ -786,9 +781,9 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                             <div className={cn(
                               "text-xs font-mono font-semibold text-right min-w-[70px]",
-                              isIncome ? "text-emerald-400" : "text-foreground"
+                              isIncome ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
                             )}>
-                              {isIncome ? '+' : ''}{formatGBP(Math.abs(tx.amount))}
+                              {isIncome ? '+' : '-'}{formatGBP(Math.abs(tx.amount))}
                             </div>
                           </div>
                         </div>
@@ -820,65 +815,37 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     variant={selectedTx.isReviewed ? "default" : "outline"}
                     onClick={() => handleToggleReviewSingle(selectedTx.id)}
                     className={cn(
-                      "h-7 rounded-lg text-[10px] px-2.5 font-bold flex items-center gap-1 transition-all",
+                      "h-7 rounded-lg text-[10px] flex items-center gap-1 border font-medium",
                       selectedTx.isReviewed
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                        : "border-primary/20 hover:bg-primary/5 text-foreground"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                        : "border-primary/15 text-muted-foreground hover:bg-primary/5"
                     )}
                   >
                     <Check className="h-3 w-3" />
-                    <span>{selectedTx.isReviewed ? 'Reviewed' : 'Review'}</span>
+                    <span>{selectedTx.isReviewed ? 'Reviewed' : 'Mark Reviewed'}</span>
                   </Button>
 
-                  {/* Split Button */}
-                  <Button variant="outline" size="sm" className="h-7 rounded-lg text-[10px] px-2.5 border-primary/10 hover:bg-primary/5 gap-1">
-                    <Split className="h-3 w-3 text-muted-foreground" />
-                    <span>Split</span>
+                  {/* Delete Button */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDeleteSingle(selectedTx.id)}
+                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-
-                  {/* Options Menu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-card border-primary/15 rounded-xl z-50">
-                      <DropdownMenuItem
-                        className="text-rose-400 focus:text-rose-400 text-xs cursor-pointer flex items-center gap-1.5"
-                        onClick={() => handleDeleteSingle(selectedTx.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete Transaction
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </div>
 
-              {/* Transaction Main Header (Merchant & Amount) */}
-              <div className="space-y-1">
-                <span className="text-[10px] text-muted-foreground uppercase font-sans font-bold flex items-center gap-1.5">
-                  <CalendarIcon className="h-3 w-3" />
-                  {new Date(selectedTx.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
-                  <span className="text-muted-foreground/30">·</span>
-                  <span className={cn(
-                    "font-semibold text-[9px] px-1.5 py-0.5 rounded",
-                    selectedTx.isReviewed
-                      ? "bg-emerald-500/10 text-emerald-400"
-                      : "bg-blue-500/10 text-blue-400"
-                  )}>
-                    {selectedTx.isReviewed ? 'REVIEWED' : 'TO REVIEW'}
-                  </span>
-                </span>
-
+              {/* Title & Amount inline editor */}
+              <div className="space-y-2">
                 <Input
                   value={selectedTx.name}
                   onChange={e => updateSelectedField('name', e.target.value)}
                   className="text-lg font-bold bg-transparent border-transparent hover:border-primary/15 focus:border-primary/30 p-0 h-auto focus-visible:ring-0 text-foreground cursor-text"
                 />
 
-                <div className="flex items-center gap-1.5 pt-1">
+                <div className="flex flex-wrap items-center gap-2 pt-1">
                   <span className="text-sm text-muted-foreground font-mono">£</span>
                   <Input
                     type="number"
@@ -890,12 +857,21 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     }}
                     className="text-2xl font-mono font-semibold bg-transparent border-transparent hover:border-primary/15 focus:border-primary/30 p-0 h-auto w-32 focus-visible:ring-0 text-foreground cursor-text"
                   />
-                  <Badge variant="outline" className={cn(
-                    "text-[9px] tracking-wide ml-2 uppercase",
-                    selectedTx.amount < 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-muted text-muted-foreground"
-                  )}>
-                    {selectedTx.amount < 0 ? 'INCOME' : 'EXPENSE'}
-                  </Badge>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => updateSelectedField('amount', -selectedTx.amount)}
+                    className={cn(
+                      "h-7 rounded-lg text-[10px] font-semibold flex items-center gap-1.5 border transition-colors",
+                      selectedTx.amount < 0
+                        ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
+                        : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
+                    )}
+                  >
+                    {selectedTx.amount < 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    <span>{selectedTx.amount < 0 ? '+ Income / Gain' : '- Spending / Expense'}</span>
+                  </Button>
                 </div>
               </div>
 
@@ -930,8 +906,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   <Label className="text-xs text-muted-foreground">Account</Label>
                   <div className="col-span-2">
                     <Select
-                      value={selectedTx.bankAccountId || 'none'}
-                      onValueChange={(val) => updateSelectedField('bankAccountId', val === 'none' ? undefined : val)}
+                      value={selectedTx.bankAccountId || selectedTx.accountId || 'none'}
+                      onValueChange={(val) => {
+                        const targetId = val === 'none' ? undefined : val;
+                        onUpdateTransactions(transactions.map(tx => {
+                          if (tx.id === selectedTx.id) {
+                            return { ...tx, bankAccountId: targetId, accountId: targetId };
+                          }
+                          return tx;
+                        }));
+                      }}
                     >
                       <SelectTrigger className="h-9 bg-background/50 border-primary/15 rounded-xl text-xs">
                         <SelectValue placeholder="No account linked" />
@@ -940,7 +924,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         <SelectItem value="none" className="text-xs">No account linked</SelectItem>
                         {bankAccounts.map(acc => (
                           <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                            <span className="mr-1">{acc.emoji || '💳'}</span>
+                            <span className="mr-1">{acc.emoji || (acc.type === 'credit' ? '💳' : '🏦')}</span>
                             {acc.name}
                           </SelectItem>
                         ))}
@@ -1049,8 +1033,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                             )}
                           </span>
                         </div>
-                        <span className="text-[10px] font-mono font-semibold text-foreground">
-                          {formatGBP(match.amount)}
+                        <span className={cn(
+                          "text-[10px] font-mono font-semibold",
+                          match.amount < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                        )}>
+                          {match.amount < 0 ? '+' : '-'}{formatGBP(Math.abs(match.amount))}
                         </span>
                       </div>
                     ))
@@ -1086,6 +1073,40 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground font-medium">Transaction Type</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={newTxType === 'expense' ? 'default' : 'outline'}
+                  onClick={() => setNewTxType('expense')}
+                  className={cn(
+                    "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
+                    newTxType === 'expense'
+                      ? "bg-rose-500 hover:bg-rose-600 text-white"
+                      : "border-primary/15 text-muted-foreground hover:bg-primary/5"
+                  )}
+                >
+                  <TrendingDown className="h-3.5 w-3.5" />
+                  <span>Spending (- Out)</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={newTxType === 'income' ? 'default' : 'outline'}
+                  onClick={() => setNewTxType('income')}
+                  className={cn(
+                    "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
+                    newTxType === 'income'
+                      ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                      : "border-primary/15 text-muted-foreground hover:bg-primary/5"
+                  )}
+                >
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  <span>Income (+ In)</span>
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Merchant / Description</Label>
               <Input
                 placeholder="e.g. Juice Press, Shell, Whole Foods"
@@ -1105,7 +1126,6 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   onChange={e => setNewTxAmount(e.target.value)}
                   className="bg-background/50 border-primary/15 rounded-xl text-xs h-9 font-mono"
                 />
-                <span className="text-[9px] text-muted-foreground italic">Use negative for income/refunds</span>
               </div>
 
               <div className="space-y-1.5 flex flex-col justify-start">

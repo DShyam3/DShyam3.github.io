@@ -43,7 +43,7 @@ async function loadDotData(): Promise<DotData> {
 async function loadCountryNames(): Promise<Record<string, string>> {
     if (Object.keys(cachedCountryNames).length > 0) return cachedCountryNames;
     try {
-        const res = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2');
+        const res = await fetch('/countries.json');
         const data = await res.json();
         const names: Record<string, string> = {};
         for (const c of data) {
@@ -77,6 +77,8 @@ export function DotMatrixGlobe({
     // Drag to rotate state
     const dragRef = useRef({
         isDragging: false,
+        startX: 0,
+        startY: 0,
         lastX: 0,
         lastY: 0,
         velocityX: 0,
@@ -743,6 +745,8 @@ export function DotMatrixGlobe({
                 dragRef.current.isDragging = true;
                 dragRef.current.lastX = e.touches[0].clientX;
                 dragRef.current.lastY = e.touches[0].clientY;
+                dragRef.current.startX = e.touches[0].clientX;
+                dragRef.current.startY = e.touches[0].clientY;
                 dragRef.current.velocityX = 0;
                 dragRef.current.lastInteractionTime = performance.now();
                 // Clear targets on user interaction
@@ -833,6 +837,8 @@ export function DotMatrixGlobe({
         dragRef.current.isDragging = true;
         dragRef.current.lastX = e.clientX;
         dragRef.current.lastY = e.clientY;
+        dragRef.current.startX = e.clientX;
+        dragRef.current.startY = e.clientY;
         dragRef.current.velocityX = 0;
         dragRef.current.lastInteractionTime = performance.now();
         // Clear targets on user interaction
@@ -915,10 +921,16 @@ export function DotMatrixGlobe({
     }, [onCountryHover]);
 
     const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-        // If we dragged recently or significantly, don't treat as click
-        if (dragRef.current.isDragging && performance.now() - dragRef.current.lastInteractionTime > 200) {
+        // Calculate the total distance moved between pointer start and release
+        const dx = e.clientX - dragRef.current.startX;
+        const dy = e.clientY - dragRef.current.startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // If the pointer moved more than 5px, treat it as a drag/scroll, not a click
+        if (distance > 5) {
             return;
         }
+
         if (hoveredCountry) {
             onCountryClick?.(hoveredCountry, countryNames[hoveredCountry] ?? hoveredCountry);
         }

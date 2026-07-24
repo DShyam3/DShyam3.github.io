@@ -488,6 +488,8 @@ export type Database = {
           target_amount: number
           target_date: string | null
           updated_at: string
+          status: string
+          emoji: string | null
         }
         Insert: {
           created_at?: string
@@ -499,6 +501,8 @@ export type Database = {
           target_amount?: number
           target_date?: string | null
           updated_at?: string
+          status?: string
+          emoji?: string | null
         }
         Update: {
           created_at?: string
@@ -510,6 +514,8 @@ export type Database = {
           target_amount?: number
           target_date?: string | null
           updated_at?: string
+          status?: string
+          emoji?: string | null
         }
         Relationships: []
       }

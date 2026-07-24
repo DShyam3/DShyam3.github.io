@@ -18,7 +18,7 @@ import { useSiteContent } from '@/hooks/useSiteContent';
 import { useExperience, useEducation, Experience, Education } from '@/hooks/useResume';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ExperienceDialog, EducationDialog } from '@/components/admin/ResumeDialogs';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, BarChart3 } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -93,14 +93,28 @@ const Index = () => {
                 />
               </div>
 
-              {/* About Me */}
               <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="mb-6">
-                  <DotMatrixText
-                    text="ABOUT ME"
-                    size="lg"
-                    className="text-foreground tracking-widest pl-1"
-                  />
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2 mb-6 w-full overflow-hidden">
+                  <div className="w-full sm:w-auto overflow-hidden">
+                    <DotMatrixText
+                      text="ABOUT ME"
+                      size="lg"
+                      className="text-foreground tracking-widest pl-1"
+                    />
+                  </div>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-[10px] font-bold border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200 h-8 rounded-full flex items-center gap-1.5 px-3 uppercase font-sans flex-shrink-0"
+                      asChild
+                    >
+                      <a href="https://cloud.umami.is/analytics/eu/websites" target="_blank" rel="noopener noreferrer">
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        <span>Umami Analytics</span>
+                      </a>
+                    </Button>
+                  )}
                 </div>
                 <div className="space-y-6">
                   <DotMatrixText

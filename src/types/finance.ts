@@ -18,7 +18,18 @@ export interface FinanceSettings {
   paydayWeekday?: number;
   paydayBiweeklyAnchor?: string;
   activeSavingsTypes?: string[];
+  packageBenefits?: PackageBenefit[];
 }
+
+export interface PackageBenefit {
+  id: string;
+  name: string;
+  amount: number;
+  type: 'monetary' | 'percentage';
+  emoji?: string;
+  notes?: string;
+}
+
 
 export interface UserHoliday {
   id: string;
@@ -36,6 +47,8 @@ export interface Goal {
   targetDate: string; // YYYY-MM-DD
   contributions: { id: string; amount: number; date: string; note?: string; bankAccountId?: string }[];
   startDate?: string; // YYYY-MM-DD
+  status?: 'active' | 'archived';
+  emoji?: string;
 }
 
 export interface BankAccount {
@@ -178,4 +191,15 @@ export interface TrueLayerStatus {
   connected: boolean;
   expires_at: string | null;
 }
+
+export interface InvestmentHolding {
+  id: string;
+  name: string;
+  ticker?: string;
+  shares: number;
+  avgPrice: number;
+  currentPrice: number;
+  category: 'Stock' | 'ETF' | 'Crypto' | 'Mutual Fund' | 'Real Estate' | 'Cash' | 'Other';
+}
+
 

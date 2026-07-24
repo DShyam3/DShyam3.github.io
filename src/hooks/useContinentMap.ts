@@ -28,9 +28,7 @@ export function useContinentMap(): ContinentMap {
 
         const load = async () => {
             try {
-                const res = await fetch(
-                    'https://restcountries.com/v3.1/all?fields=cca2,region,independent,status'
-                );
+                const res = await fetch('/countries.json');
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data: { cca2: string; region: string; independent: boolean; status: string }[] =
                     await res.json();

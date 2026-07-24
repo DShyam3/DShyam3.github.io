@@ -1,0 +1,2252 @@
+[
+  {
+    "name": {
+      "common": "Aruba"
+    },
+    "cca2": "AW",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Afghanistan"
+    },
+    "cca2": "AF",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Angola"
+    },
+    "cca2": "AO",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Anguilla"
+    },
+    "cca2": "AI",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Åland Islands"
+    },
+    "cca2": "AX",
+    "region": "Europe",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Albania"
+    },
+    "cca2": "AL",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Andorra"
+    },
+    "cca2": "AD",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "United Arab Emirates"
+    },
+    "cca2": "AE",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Argentina"
+    },
+    "cca2": "AR",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Armenia"
+    },
+    "cca2": "AM",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "American Samoa"
+    },
+    "cca2": "AS",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Antarctica"
+    },
+    "cca2": "AQ",
+    "region": "Antarctic",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "French Southern and Antarctic Lands"
+    },
+    "cca2": "TF",
+    "region": "Antarctic",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Antigua and Barbuda"
+    },
+    "cca2": "AG",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Australia"
+    },
+    "cca2": "AU",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Austria"
+    },
+    "cca2": "AT",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Azerbaijan"
+    },
+    "cca2": "AZ",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Burundi"
+    },
+    "cca2": "BI",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Belgium"
+    },
+    "cca2": "BE",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Benin"
+    },
+    "cca2": "BJ",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Burkina Faso"
+    },
+    "cca2": "BF",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bangladesh"
+    },
+    "cca2": "BD",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bulgaria"
+    },
+    "cca2": "BG",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bahrain"
+    },
+    "cca2": "BH",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bahamas"
+    },
+    "cca2": "BS",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bosnia and Herzegovina"
+    },
+    "cca2": "BA",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saint Barthélemy"
+    },
+    "cca2": "BL",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saint Helena, Ascension and Tristan da Cunha"
+    },
+    "cca2": "SH",
+    "region": "Africa",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Belarus"
+    },
+    "cca2": "BY",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Belize"
+    },
+    "cca2": "BZ",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bermuda"
+    },
+    "cca2": "BM",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bolivia"
+    },
+    "cca2": "BO",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Caribbean Netherlands"
+    },
+    "cca2": "BQ",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Brazil"
+    },
+    "cca2": "BR",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Barbados"
+    },
+    "cca2": "BB",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Brunei"
+    },
+    "cca2": "BN",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bhutan"
+    },
+    "cca2": "BT",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Bouvet Island"
+    },
+    "cca2": "BV",
+    "region": "Antarctic",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Botswana"
+    },
+    "cca2": "BW",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Central African Republic"
+    },
+    "cca2": "CF",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Canada"
+    },
+    "cca2": "CA",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cocos (Keeling) Islands"
+    },
+    "cca2": "CC",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Switzerland"
+    },
+    "cca2": "CH",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Chile"
+    },
+    "cca2": "CL",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "China"
+    },
+    "cca2": "CN",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Ivory Coast"
+    },
+    "cca2": "CI",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cameroon"
+    },
+    "cca2": "CM",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "DR Congo"
+    },
+    "cca2": "CD",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Congo"
+    },
+    "cca2": "CG",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cook Islands"
+    },
+    "cca2": "CK",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Colombia"
+    },
+    "cca2": "CO",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Comoros"
+    },
+    "cca2": "KM",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cape Verde"
+    },
+    "cca2": "CV",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Costa Rica"
+    },
+    "cca2": "CR",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cuba"
+    },
+    "cca2": "CU",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Curaçao"
+    },
+    "cca2": "CW",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Christmas Island"
+    },
+    "cca2": "CX",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cayman Islands"
+    },
+    "cca2": "KY",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cyprus"
+    },
+    "cca2": "CY",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Czechia"
+    },
+    "cca2": "CZ",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Germany"
+    },
+    "cca2": "DE",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Djibouti"
+    },
+    "cca2": "DJ",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Dominica"
+    },
+    "cca2": "DM",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Denmark"
+    },
+    "cca2": "DK",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Dominican Republic"
+    },
+    "cca2": "DO",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Algeria"
+    },
+    "cca2": "DZ",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Ecuador"
+    },
+    "cca2": "EC",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Egypt"
+    },
+    "cca2": "EG",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Eritrea"
+    },
+    "cca2": "ER",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Western Sahara"
+    },
+    "cca2": "EH",
+    "region": "Africa",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Spain"
+    },
+    "cca2": "ES",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Estonia"
+    },
+    "cca2": "EE",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Ethiopia"
+    },
+    "cca2": "ET",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Finland"
+    },
+    "cca2": "FI",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Fiji"
+    },
+    "cca2": "FJ",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Falkland Islands"
+    },
+    "cca2": "FK",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "France"
+    },
+    "cca2": "FR",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Faroe Islands"
+    },
+    "cca2": "FO",
+    "region": "Europe",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Micronesia"
+    },
+    "cca2": "FM",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Gabon"
+    },
+    "cca2": "GA",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "United Kingdom"
+    },
+    "cca2": "GB",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Georgia"
+    },
+    "cca2": "GE",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Guernsey"
+    },
+    "cca2": "GG",
+    "region": "Europe",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Ghana"
+    },
+    "cca2": "GH",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Gibraltar"
+    },
+    "cca2": "GI",
+    "region": "Europe",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Guinea"
+    },
+    "cca2": "GN",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Guadeloupe"
+    },
+    "cca2": "GP",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Gambia"
+    },
+    "cca2": "GM",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Guinea-Bissau"
+    },
+    "cca2": "GW",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Equatorial Guinea"
+    },
+    "cca2": "GQ",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Greece"
+    },
+    "cca2": "GR",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Grenada"
+    },
+    "cca2": "GD",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Greenland"
+    },
+    "cca2": "GL",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Guatemala"
+    },
+    "cca2": "GT",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "French Guiana"
+    },
+    "cca2": "GF",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Guam"
+    },
+    "cca2": "GU",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Guyana"
+    },
+    "cca2": "GY",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Hong Kong"
+    },
+    "cca2": "HK",
+    "region": "Asia",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Heard Island and McDonald Islands"
+    },
+    "cca2": "HM",
+    "region": "Antarctic",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Honduras"
+    },
+    "cca2": "HN",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Croatia"
+    },
+    "cca2": "HR",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Haiti"
+    },
+    "cca2": "HT",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Hungary"
+    },
+    "cca2": "HU",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Indonesia"
+    },
+    "cca2": "ID",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Isle of Man"
+    },
+    "cca2": "IM",
+    "region": "Europe",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "India"
+    },
+    "cca2": "IN",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "British Indian Ocean Territory"
+    },
+    "cca2": "IO",
+    "region": "Africa",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Ireland"
+    },
+    "cca2": "IE",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Iran"
+    },
+    "cca2": "IR",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Iraq"
+    },
+    "cca2": "IQ",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Iceland"
+    },
+    "cca2": "IS",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Israel"
+    },
+    "cca2": "IL",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Italy"
+    },
+    "cca2": "IT",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Jamaica"
+    },
+    "cca2": "JM",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Jersey"
+    },
+    "cca2": "JE",
+    "region": "Europe",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Jordan"
+    },
+    "cca2": "JO",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Japan"
+    },
+    "cca2": "JP",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Kazakhstan"
+    },
+    "cca2": "KZ",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Kenya"
+    },
+    "cca2": "KE",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Kyrgyzstan"
+    },
+    "cca2": "KG",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Cambodia"
+    },
+    "cca2": "KH",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Kiribati"
+    },
+    "cca2": "KI",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saint Kitts and Nevis"
+    },
+    "cca2": "KN",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "South Korea"
+    },
+    "cca2": "KR",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Kosovo"
+    },
+    "cca2": "XK",
+    "region": "Europe",
+    "independent": null,
+    "status": "user-assigned"
+  },
+  {
+    "name": {
+      "common": "Kuwait"
+    },
+    "cca2": "KW",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Laos"
+    },
+    "cca2": "LA",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Lebanon"
+    },
+    "cca2": "LB",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Liberia"
+    },
+    "cca2": "LR",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Libya"
+    },
+    "cca2": "LY",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saint Lucia"
+    },
+    "cca2": "LC",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Liechtenstein"
+    },
+    "cca2": "LI",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Sri Lanka"
+    },
+    "cca2": "LK",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Lesotho"
+    },
+    "cca2": "LS",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Lithuania"
+    },
+    "cca2": "LT",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Luxembourg"
+    },
+    "cca2": "LU",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Latvia"
+    },
+    "cca2": "LV",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Macau"
+    },
+    "cca2": "MO",
+    "region": "Asia",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saint Martin"
+    },
+    "cca2": "MF",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Morocco"
+    },
+    "cca2": "MA",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Monaco"
+    },
+    "cca2": "MC",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Moldova"
+    },
+    "cca2": "MD",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Madagascar"
+    },
+    "cca2": "MG",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Maldives"
+    },
+    "cca2": "MV",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Mexico"
+    },
+    "cca2": "MX",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Marshall Islands"
+    },
+    "cca2": "MH",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "North Macedonia"
+    },
+    "cca2": "MK",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Mali"
+    },
+    "cca2": "ML",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Malta"
+    },
+    "cca2": "MT",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Myanmar"
+    },
+    "cca2": "MM",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Montenegro"
+    },
+    "cca2": "ME",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Mongolia"
+    },
+    "cca2": "MN",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Northern Mariana Islands"
+    },
+    "cca2": "MP",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Mozambique"
+    },
+    "cca2": "MZ",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Mauritania"
+    },
+    "cca2": "MR",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Montserrat"
+    },
+    "cca2": "MS",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Martinique"
+    },
+    "cca2": "MQ",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Mauritius"
+    },
+    "cca2": "MU",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Malawi"
+    },
+    "cca2": "MW",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Malaysia"
+    },
+    "cca2": "MY",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Mayotte"
+    },
+    "cca2": "YT",
+    "region": "Africa",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Namibia"
+    },
+    "cca2": "NA",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "New Caledonia"
+    },
+    "cca2": "NC",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Niger"
+    },
+    "cca2": "NE",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Norfolk Island"
+    },
+    "cca2": "NF",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Nigeria"
+    },
+    "cca2": "NG",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Nicaragua"
+    },
+    "cca2": "NI",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Niue"
+    },
+    "cca2": "NU",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Netherlands"
+    },
+    "cca2": "NL",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Norway"
+    },
+    "cca2": "NO",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Nepal"
+    },
+    "cca2": "NP",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Nauru"
+    },
+    "cca2": "NR",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "New Zealand"
+    },
+    "cca2": "NZ",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Oman"
+    },
+    "cca2": "OM",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Pakistan"
+    },
+    "cca2": "PK",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Panama"
+    },
+    "cca2": "PA",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Pitcairn Islands"
+    },
+    "cca2": "PN",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Peru"
+    },
+    "cca2": "PE",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Philippines"
+    },
+    "cca2": "PH",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Palau"
+    },
+    "cca2": "PW",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Papua New Guinea"
+    },
+    "cca2": "PG",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Poland"
+    },
+    "cca2": "PL",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Puerto Rico"
+    },
+    "cca2": "PR",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "North Korea"
+    },
+    "cca2": "KP",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Portugal"
+    },
+    "cca2": "PT",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Paraguay"
+    },
+    "cca2": "PY",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Palestine"
+    },
+    "cca2": "PS",
+    "region": "Asia",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "French Polynesia"
+    },
+    "cca2": "PF",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Qatar"
+    },
+    "cca2": "QA",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Réunion"
+    },
+    "cca2": "RE",
+    "region": "Africa",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Romania"
+    },
+    "cca2": "RO",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Russia"
+    },
+    "cca2": "RU",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Rwanda"
+    },
+    "cca2": "RW",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saudi Arabia"
+    },
+    "cca2": "SA",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Sudan"
+    },
+    "cca2": "SD",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Senegal"
+    },
+    "cca2": "SN",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Singapore"
+    },
+    "cca2": "SG",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "South Georgia"
+    },
+    "cca2": "GS",
+    "region": "Antarctic",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Svalbard and Jan Mayen"
+    },
+    "cca2": "SJ",
+    "region": "Europe",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Solomon Islands"
+    },
+    "cca2": "SB",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Sierra Leone"
+    },
+    "cca2": "SL",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "El Salvador"
+    },
+    "cca2": "SV",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "San Marino"
+    },
+    "cca2": "SM",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Somalia"
+    },
+    "cca2": "SO",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saint Pierre and Miquelon"
+    },
+    "cca2": "PM",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Serbia"
+    },
+    "cca2": "RS",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "South Sudan"
+    },
+    "cca2": "SS",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "São Tomé and Príncipe"
+    },
+    "cca2": "ST",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Suriname"
+    },
+    "cca2": "SR",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Slovakia"
+    },
+    "cca2": "SK",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Slovenia"
+    },
+    "cca2": "SI",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Sweden"
+    },
+    "cca2": "SE",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Eswatini"
+    },
+    "cca2": "SZ",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Sint Maarten"
+    },
+    "cca2": "SX",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Seychelles"
+    },
+    "cca2": "SC",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Syria"
+    },
+    "cca2": "SY",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Turks and Caicos Islands"
+    },
+    "cca2": "TC",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Chad"
+    },
+    "cca2": "TD",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Togo"
+    },
+    "cca2": "TG",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Thailand"
+    },
+    "cca2": "TH",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Tajikistan"
+    },
+    "cca2": "TJ",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Tokelau"
+    },
+    "cca2": "TK",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Turkmenistan"
+    },
+    "cca2": "TM",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Timor-Leste"
+    },
+    "cca2": "TL",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Tonga"
+    },
+    "cca2": "TO",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Trinidad and Tobago"
+    },
+    "cca2": "TT",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Tunisia"
+    },
+    "cca2": "TN",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Türkiye"
+    },
+    "cca2": "TR",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Tuvalu"
+    },
+    "cca2": "TV",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Taiwan"
+    },
+    "cca2": "TW",
+    "region": "Asia",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Tanzania"
+    },
+    "cca2": "TZ",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Uganda"
+    },
+    "cca2": "UG",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Ukraine"
+    },
+    "cca2": "UA",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "United States Minor Outlying Islands"
+    },
+    "cca2": "UM",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Uruguay"
+    },
+    "cca2": "UY",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "United States"
+    },
+    "cca2": "US",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Uzbekistan"
+    },
+    "cca2": "UZ",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Vatican City"
+    },
+    "cca2": "VA",
+    "region": "Europe",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Saint Vincent and the Grenadines"
+    },
+    "cca2": "VC",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Venezuela"
+    },
+    "cca2": "VE",
+    "region": "Americas",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "British Virgin Islands"
+    },
+    "cca2": "VG",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "United States Virgin Islands"
+    },
+    "cca2": "VI",
+    "region": "Americas",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Vietnam"
+    },
+    "cca2": "VN",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Vanuatu"
+    },
+    "cca2": "VU",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Wallis and Futuna"
+    },
+    "cca2": "WF",
+    "region": "Oceania",
+    "independent": false,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Samoa"
+    },
+    "cca2": "WS",
+    "region": "Oceania",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Yemen"
+    },
+    "cca2": "YE",
+    "region": "Asia",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "South Africa"
+    },
+    "cca2": "ZA",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Zambia"
+    },
+    "cca2": "ZM",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  },
+  {
+    "name": {
+      "common": "Zimbabwe"
+    },
+    "cca2": "ZW",
+    "region": "Africa",
+    "independent": true,
+    "status": "officially-assigned"
+  }
+]
