@@ -1,12 +1,24 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = new Set([
+  'https://dshyam3.github.io',
+  'http://localhost:8080',
+  'http://localhost:5173',
+])
+
+function buildCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') || ''
+  return {
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.has(origin) ? origin : 'https://dshyam3.github.io',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  }
 }
 
 serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -313,14 +325,21 @@ serve(async (req) => {
       const daysToFetch = isInitialSync ? 90 : 30 // Pull 90 days on initial sync, 30 days on subsequent syncs to keep it fast
       const fromDate = new Date(Date.now() - daysToFetch * 24 * 60 * 60 * 1000).toISOString()
 
-      // A. Process Bank Accounts
-      for (const account of accountsList) {
+      // A. Process Bank Accounts (balance + transactions fetched in
+      // parallel per account, and accounts processed in parallel with each
+      // other -- previously this was 2 sequential round-trips per account).
+      await Promise.all(accountsList.map(async (account: any) => {
         const accId = `tl_acc_${account.account_id}`
-        
-        // Fetch balance
-        const balanceRes = await fetch(`${apiBaseUrl}/data/v1/accounts/${account.account_id}/balance`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
+
+        const [balanceRes, txRes] = await Promise.all([
+          fetch(`${apiBaseUrl}/data/v1/accounts/${account.account_id}/balance`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+          fetch(`${apiBaseUrl}/data/v1/accounts/${account.account_id}/transactions?from=${fromDate}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+        ])
+
         const balanceData = balanceRes.ok ? await balanceRes.json() : {}
         const balanceVal = balanceData.results?.[0]?.current ?? 0
 
@@ -340,12 +359,8 @@ serve(async (req) => {
 
         syncedAccounts.push(accountRow)
 
-        // Fetch transactions
-        const txRes = await fetch(`${apiBaseUrl}/data/v1/accounts/${account.account_id}/transactions?from=${fromDate}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
         if (txRes.ok) {
-          const txData = await txRes.ok ? await txRes.json() : {}
+          const txData = await txRes.json()
           const txs = txData.results || []
           for (const tx of txs) {
             allNewTransactions.push({
@@ -360,16 +375,21 @@ serve(async (req) => {
             })
           }
         }
-      }
+      }))
 
-      // B. Process Card Accounts
-      for (const card of cardsList) {
+      // B. Process Card Accounts (same parallelization as accounts above)
+      await Promise.all(cardsList.map(async (card: any) => {
         const accId = `tl_card_${card.account_id}`
 
-        // Fetch balance
-        const balanceRes = await fetch(`${apiBaseUrl}/data/v1/cards/${card.account_id}/balance`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
+        const [balanceRes, txRes] = await Promise.all([
+          fetch(`${apiBaseUrl}/data/v1/cards/${card.account_id}/balance`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+          fetch(`${apiBaseUrl}/data/v1/cards/${card.account_id}/transactions?from=${fromDate}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+        ])
+
         const balanceData = balanceRes.ok ? await balanceRes.json() : {}
         const balanceVal = balanceData.results?.[0]?.current ?? 0
 
@@ -389,10 +409,6 @@ serve(async (req) => {
 
         syncedAccounts.push(accountRow)
 
-        // Fetch card transactions
-        const txRes = await fetch(`${apiBaseUrl}/data/v1/cards/${card.account_id}/transactions?from=${fromDate}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
         if (txRes.ok) {
           const txData = await txRes.json()
           const txs = txData.results || []
@@ -409,7 +425,7 @@ serve(async (req) => {
             })
           }
         }
-      }
+      }))
 
       // 4. Update Bank Accounts Table (Delete and replace only our synced accounts to prevent clashing)
       // Since saving in the frontend deletes is_default=false, we will upsert these.
@@ -484,15 +500,14 @@ serve(async (req) => {
       if (existingAccounts) {
         // Find existing transactions that are NOT TrueLayer transactions
         const nonTlTx = existingTx?.filter(t => !t.id.startsWith('tl_tx_')) || []
-        for (const t of nonTlTx) {
-          // fetch full row
-          const { data: fullTx } = await supabaseAdmin
+        if (nonTlTx.length > 0) {
+          // Single batched lookup instead of one round-trip per transaction
+          const { data: fullTxRows } = await supabaseAdmin
             .from('finance_transactions')
             .select('*')
-            .eq('id', t.id)
-            .maybeSingle()
-          if (fullTx) {
-            finalTxList.push(fullTx)
+            .in('id', nonTlTx.map(t => t.id))
+          if (fullTxRows) {
+            finalTxList.push(...fullTxRows)
           }
         }
       }

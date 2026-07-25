@@ -45,3 +45,7 @@ coverage/
 .turbo/
 .vercel/
 .netlify/
+
+# Python bytecode cache (scripts/*.py font-build tooling)
+__pycache__/
+*.pyc

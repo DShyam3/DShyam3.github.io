@@ -23,12 +23,16 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": "off",
-      "react-hooks/exhaustive-deps": "off",
+      // Downgraded to warnings (not re-disabled) so existing debt surfaces
+      // without breaking `npm run lint`, which previously exited 0 with
+      // these fully off and hid real bugs (stale closures, `any`-typed
+      // Supabase calls, silently swallowed errors).
+      "react-hooks/exhaustive-deps": "warn",
       "@typescript-eslint/no-unused-vars": "off",
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-empty-object-type": "off",
       "@typescript-eslint/no-require-imports": "off",
-      "no-empty": "off",
+      "no-empty": "warn",
     },
   },
 );
