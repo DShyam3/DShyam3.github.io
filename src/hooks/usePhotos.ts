@@ -1,107 +1,37 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Photo } from '@/types/photos';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { deletePhotoFromStorage } from '@/lib/storage';
+import { useSupabaseTable } from './useSupabaseTable';
 
 export function usePhotos() {
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const { data: rawPhotos, loading, addItem, removeItem, updateItem } = useSupabaseTable<any>('photos');
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
 
-  const fetchPhotos = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('photos')
-        .select('*')
-        .order('created_at', { ascending: false });
+  const photos = useMemo(
+    () => rawPhotos.map((p) => ({ ...p, created_at: new Date(p.created_at) })) as Photo[],
+    [rawPhotos],
+  );
 
-      if (error) throw error;
+  const addPhoto = (photo: Omit<Photo, 'id' | 'created_at'>) =>
+    addItem({
+      image_url: photo.image_url,
+      caption: photo.caption,
+      location: photo.location,
+    });
 
-      setPhotos(
-        data?.map((p) => ({
-          ...p,
-          created_at: new Date(p.created_at),
-        })) || []
-      );
-    } catch (error) {
-      console.error('Error fetching photos:', error);
-      toast({ title: 'Error fetching photos', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchPhotos();
-  }, [fetchPhotos]);
-
-  const addPhoto = useCallback(async (photo: Omit<Photo, 'id' | 'created_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('photos')
-        .insert({
-          image_url: photo.image_url,
-          caption: photo.caption,
-          location: photo.location,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setPhotos((prev) => [{
-        ...data,
-        created_at: new Date(data.created_at),
-      }, ...prev]);
-      
-      toast({ title: 'Photo added!' });
-    } catch (error) {
-      console.error('Error adding photo:', error);
-      toast({ title: 'Error adding photo', variant: 'destructive' });
-    }
-  }, [toast]);
-
-  const removePhoto = useCallback(async (id: string) => {
-    try {
-      // Find the photo to get its URL for storage cleanup
+  const removePhoto = useCallback(
+    async (id: string) => {
       const photoToRemove = photos.find((p) => p.id === id);
-
-      const { error } = await supabase.from('photos').delete().eq('id', id);
-      if (error) throw error;
-
-      // Clean up from storage if it was stored there
+      await removeItem(id);
       if (photoToRemove?.image_url) {
         await deletePhotoFromStorage(photoToRemove.image_url);
       }
+    },
+    [photos, removeItem],
+  );
 
-      setPhotos((prev) => prev.filter((photo) => photo.id !== id));
-      toast({ title: 'Photo removed' });
-    } catch (error) {
-      console.error('Error removing photo:', error);
-      toast({ title: 'Error removing photo', variant: 'destructive' });
-    }
-  }, [toast, photos]);
-
-  const updatePhoto = useCallback(async (id: string, updates: Partial<Omit<Photo, 'id' | 'created_at'>>) => {
-    try {
-      const { error } = await supabase
-        .from('photos')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setPhotos((prev) =>
-        prev.map((photo) => (photo.id === id ? { ...photo, ...updates } : photo))
-      );
-      toast({ title: 'Photo updated!' });
-    } catch (error) {
-      console.error('Error updating photo:', error);
-      toast({ title: 'Error updating photo', variant: 'destructive' });
-    }
-  }, [toast]);
+  const updatePhoto = (id: string, updates: Partial<Omit<Photo, 'id' | 'created_at'>>) =>
+    updateItem({ id, updates });
 
   const filteredPhotos = useMemo(() => {
     if (!searchQuery) return photos;

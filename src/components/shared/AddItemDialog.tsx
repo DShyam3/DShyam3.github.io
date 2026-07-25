@@ -38,6 +38,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
     const [isWishlist, setIsWishlist] = useState(false);
     const [description, setDescription] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -89,6 +90,7 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
         setIsWishlist(false);
         setDescription('');
         setErrors({});
+        setImageLoadFailed(false);
     };
 
     const handlePriceBlur = () => {
@@ -101,10 +103,11 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
 
     const handleCategoryChange = (value: string) => {
         setCategory(value as Category);
-        // Reset subcategory when category changes away from wardrobe/homelab
-        if (value !== 'wardrobe' && value !== 'homelab') {
-            setSubcategory('');
-        }
+        // Always reset subcategory on category change -- wardrobe and
+        // homelab have separate, incompatible subcategory key sets, so a
+        // stale wardrobe subcategory must not survive a switch to homelab
+        // (or vice versa).
+        setSubcategory('');
         if (errors.subcategory) {
             setErrors((prev) => ({ ...prev, subcategory: '' }));
         }
@@ -226,9 +229,28 @@ export function AddItemDialog({ onAdd }: AddItemDialogProps) {
                             id="image"
                             type="url"
                             value={image}
-                            onChange={(e) => setImage(e.target.value)}
+                            onChange={(e) => {
+                                setImage(e.target.value);
+                                setImageLoadFailed(false);
+                            }}
                             placeholder="https://..."
                         />
+                        {image && (
+                            <div className="flex items-center gap-3 rounded-md border border-input p-2">
+                                {imageLoadFailed ? (
+                                    <p className="text-xs text-destructive">
+                                        Couldn't load an image from that URL
+                                    </p>
+                                ) : (
+                                    <img
+                                        src={image}
+                                        alt="Preview"
+                                        className="h-16 w-16 rounded object-contain bg-secondary/30"
+                                        onError={() => setImageLoadFailed(true)}
+                                    />
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-2">

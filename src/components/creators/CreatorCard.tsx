@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Creator } from '@/types/creators';
 import { Trash2, ExternalLink, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ interface CreatorCardProps {
   onUpdate?: (id: string, updates: Partial<Omit<Creator, 'id' | 'created_at'>>) => void;
 }
 
-export function CreatorCard({ creator, onRemove, onUpdate }: CreatorCardProps) {
+export const CreatorCard = memo(function CreatorCard({ creator, onRemove, onUpdate }: CreatorCardProps) {
   const [showActions, setShowActions] = useState(false);
 
   return (
@@ -25,6 +25,7 @@ export function CreatorCard({ creator, onRemove, onUpdate }: CreatorCardProps) {
             src={creator.image_url}
             alt={creator.name}
             className="w-full h-full object-cover"
+            loading="lazy"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -84,4 +85,4 @@ export function CreatorCard({ creator, onRemove, onUpdate }: CreatorCardProps) {
       </div>
     </div>
   );
-}
+});

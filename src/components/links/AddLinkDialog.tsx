@@ -25,6 +25,20 @@ interface AddLinkDialogProps {
   onAdd: (link: Omit<LinkItem, 'id' | 'createdAt'>) => void;
 }
 
+// Best-effort URL parse: tries the value as-is, then with an https://
+// prefix (users often type "figma.com" without a scheme).
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    try {
+      return new URL(`https://${value}`);
+    } catch {
+      return null;
+    }
+  }
+}
+
 export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -32,12 +46,37 @@ export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Exclude<LinkCategory, 'all'>>('websites');
   const [icon, setIcon] = useState('');
+  const [iconLoadFailed, setIconLoadFailed] = useState(false);
+  const [urlError, setUrlError] = useState('');
+  const [iconAutoFilled, setIconAutoFilled] = useState(false);
+
+  const handleUrlBlur = () => {
+    if (!url.trim()) return;
+    const parsed = parseUrl(url.trim());
+    if (!parsed) {
+      setUrlError('Enter a valid URL');
+      return;
+    }
+    setUrlError('');
+    // Auto-fill the favicon if the user hasn't set (or hand-edited) one yet.
+    if (!icon || iconAutoFilled) {
+      setIcon(`https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=64`);
+      setIconAutoFilled(true);
+      setIconLoadFailed(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!name || !url) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    const parsed = parseUrl(url.trim());
+    if (!parsed) {
+      setUrlError('Enter a valid URL');
       return;
     }
 
@@ -60,6 +99,9 @@ export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
     setDescription('');
     setCategory('websites');
     setIcon('');
+    setIconLoadFailed(false);
+    setUrlError('');
+    setIconAutoFilled(false);
   };
 
   return (
@@ -86,14 +128,20 @@ export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="link-url">URL *</Label>
+            <Label htmlFor="link-url" className={urlError ? 'text-destructive' : undefined}>URL *</Label>
             <Input
               id="link-url"
               type="url"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                if (urlError) setUrlError('');
+              }}
+              onBlur={handleUrlBlur}
               placeholder="https://figma.com"
+              className={urlError ? 'border-destructive focus-visible:ring-destructive' : undefined}
             />
+            {urlError && <p className="text-xs text-destructive">{urlError}</p>}
           </div>
 
           <div className="space-y-2">
@@ -125,13 +173,33 @@ export function AddLinkDialog({ onAdd }: AddLinkDialogProps) {
 
           <div className="space-y-2">
             <Label htmlFor="link-icon">Icon URL (optional)</Label>
-            <Input
-              id="link-icon"
-              type="url"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              placeholder="https://..."
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="link-icon"
+                type="url"
+                value={icon}
+                onChange={(e) => {
+                  setIcon(e.target.value);
+                  setIconAutoFilled(false);
+                  setIconLoadFailed(false);
+                }}
+                placeholder="Auto-filled from URL, or paste your own"
+              />
+              {icon && !iconLoadFailed && (
+                <img
+                  src={icon}
+                  alt="Icon preview"
+                  className="h-8 w-8 shrink-0 rounded object-contain bg-secondary/30"
+                  onError={() => setIconLoadFailed(true)}
+                />
+              )}
+            </div>
+            {iconLoadFailed && (
+              <p className="text-xs text-destructive">Couldn't load an icon from that URL</p>
+            )}
+            {iconAutoFilled && !iconLoadFailed && (
+              <p className="text-xs text-muted-foreground">Auto-filled from the site's favicon</p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4">

@@ -86,6 +86,9 @@ const Index = () => {
                 <img
                   src={`${ASSETS_URL}/selfie.webp`}
                   alt="Me"
+                  width={1952}
+                  height={2252}
+                  fetchPriority="high"
                   className="max-w-[240px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
                   onError={(e) => {
                     e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
@@ -334,6 +337,9 @@ const Index = () => {
                 <img
                   src={`${ASSETS_URL}/selfie.webp`}
                   alt="Me"
+                  width={1952}
+                  height={2252}
+                  fetchPriority="high"
                   className="max-w-[280px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
                   onError={(e) => {
                     e.currentTarget.src = `${ASSETS_URL}/memoji.png`;

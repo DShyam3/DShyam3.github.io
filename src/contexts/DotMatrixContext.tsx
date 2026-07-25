@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ASSETS_URL } from '@/lib/constants';
+import { createContext, useContext, ReactNode } from 'react';
+import dotMatrixData from '@/data/dot-matrix.json';
 
 interface DotMatrixData {
   charPatterns: Record<string, number[][]>;
@@ -11,27 +11,19 @@ interface DotMatrixContextType {
   loading: boolean;
 }
 
+// Bundled at build time instead of fetched from Supabase storage at runtime --
+// this data is static and small, and fetching it on every page load blocked
+// all text (nav, header, titles) behind a network round trip before anything
+// could render.
 const DotMatrixContext = createContext<DotMatrixContextType | undefined>(undefined);
 
+// Fully static, so this can live at module scope -- one stable object
+// reference for the lifetime of the app, no re-render ever changes it.
+const contextValue: DotMatrixContextType = { data: dotMatrixData as DotMatrixData, loading: false };
+
 export function DotMatrixProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<DotMatrixData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`${ASSETS_URL}/dot-matrix.json`)
-      .then((res) => res.json())
-      .then((json) => {
-        setData(json);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Failed to load dot matrix data:', err);
-        setLoading(false);
-      });
-  }, []);
-
   return (
-    <DotMatrixContext.Provider value={{ data, loading }}>
+    <DotMatrixContext.Provider value={contextValue}>
       {children}
     </DotMatrixContext.Provider>
   );

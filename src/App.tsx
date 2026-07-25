@@ -28,7 +28,16 @@ const Recipes = lazy(() => import('./pages/Recipes'));
 const Auth = lazy(() => import('./pages/Auth'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Content here changes rarely (admin-edited), so there's no need to
+      // refetch every table on every window focus/remount by default.
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Loading fallback component
 const PageLoader = () => (
@@ -38,14 +47,22 @@ const PageLoader = () => (
 );
 
 // Flattened providers component
+// WatchlistProvider is deliberately NOT here: it runs a data fetch + a
+// 15-minute auto-sync loop on mount, and every one of its consumers lives
+// under the /watchlist route -- mounting it app-wide meant that logic ran
+// on every page view instead of just the Watchlist page.
 const AppProviders = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>
-    <WatchlistProvider>
-      <DotMatrixProvider>
-        {children}
-      </DotMatrixProvider>
-    </WatchlistProvider>
+    <DotMatrixProvider>
+      {children}
+    </DotMatrixProvider>
   </AuthProvider>
+);
+
+const WatchlistPage = () => (
+  <WatchlistProvider>
+    <Watchlist />
+  </WatchlistProvider>
 );
 
 /** Invisible component that runs the time-based theme auto-switch logic */
@@ -54,10 +71,18 @@ function TimeBasedThemeManager() {
   return null;
 }
 
+const OPENING_SEEN_KEY = 'opening-sequence-seen';
+
 const App = () => {
-  const [showOpening, setShowOpening] = useState(true);
+  // Only play the splash once per browser session -- it locks scroll and
+  // requires a click/keypress, which is fine as a first-visit flourish but
+  // was replaying (and blocking interaction) on every single page load.
+  const [showOpening, setShowOpening] = useState(
+    () => sessionStorage.getItem(OPENING_SEEN_KEY) !== 'true',
+  );
 
   const handleOpeningComplete = () => {
+    sessionStorage.setItem(OPENING_SEEN_KEY, 'true');
     setShowOpening(false);
   };
 
@@ -80,7 +105,7 @@ const App = () => {
                   <Route path="/links" element={<Links />} />
                   <Route path="/books" element={<Books />} />
                   <Route path="/beliefs" element={<Beliefs />} />
-                  <Route path="/watchlist" element={<Watchlist />} />
+                  <Route path="/watchlist" element={<WatchlistPage />} />
                   <Route path="/inspiration" element={<Inspiration />} />
                   <Route path="/photos" element={<Photos />} />
                   <Route path="/articles" element={<Articles />} />

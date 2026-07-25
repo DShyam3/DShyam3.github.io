@@ -99,7 +99,7 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
     <>
       <article
         className={cn('item-card group relative opacity-0 animate-fade-in cursor-pointer')}
-        style={{ animationDelay: `${index * 50}ms` }}
+        style={{ animationDelay: `${Math.min(index, 20) * 50}ms` }}
         onClick={() => setDetailOpen(true)}
       >
         <div

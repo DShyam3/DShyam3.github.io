@@ -2,10 +2,11 @@ import { ReactNode, useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, Trash2, CalendarDays, Calendar, Clock, Heart } from 'lucide-react';
+import { ExternalLink, Trash2, CalendarDays, Calendar, Clock, Heart, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
@@ -34,6 +35,8 @@ interface WatchlistDetailDialogProps {
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
   onMoveToFavourites?: () => void;
+  onResync?: () => void;
+  syncing?: boolean;
 }
 
 export function WatchlistDetailDialog({
@@ -50,6 +53,8 @@ export function WatchlistDetailDialog({
   isEpisodeWatched,
   isSeasonWatched,
   onMoveToFavourites,
+  onResync,
+  syncing,
 }: WatchlistDetailDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -109,6 +114,9 @@ export function WatchlistDetailDialog({
           hasSeasons ? 'sm:max-w-4xl' : 'sm:max-w-2xl',
         )}
       >
+        <DialogDescription className="sr-only">
+          Details for {item.title}, including seasons, schedule, and watch status.
+        </DialogDescription>
         {/* Mobile Layout - stacked */}
         <div className="sm:hidden">
           {item.image_url && (
@@ -269,6 +277,19 @@ export function WatchlistDetailDialog({
                   Move to Favourites
                 </Button>
               )}
+              {onResync && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onResync}
+                  disabled={syncing}
+                  title="Resync this title's data from TMDB"
+                  className="gap-1.5 flex-1 sm:flex-initial justify-center"
+                >
+                  <RefreshCcw className={cn('h-4 w-4', syncing && 'animate-spin')} />
+                  Resync
+                </Button>
+              )}
               {onDelete && (
                 <div className="flex-1 sm:flex-initial flex items-center gap-2">
                   {isDeleting ? (
@@ -384,6 +405,18 @@ export function WatchlistDetailDialog({
                       title="Move to Favourites"
                     >
                       <Heart className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {onResync && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={onResync}
+                      disabled={syncing}
+                      className="h-8 w-8 flex-shrink-0 text-muted-foreground"
+                      title="Resync this title's data from TMDB"
+                    >
+                      <RefreshCcw className={cn('h-4 w-4', syncing && 'animate-spin')} />
                     </Button>
                   )}
                 </div>

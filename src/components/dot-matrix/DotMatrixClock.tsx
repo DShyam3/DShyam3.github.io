@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDotMatrix } from '@/contexts/DotMatrixContext';
 
 import './DotMatrixClock.css';
@@ -47,6 +47,11 @@ export const DotMatrixClock = () => {
   const [time, setTime] = useState('');
   const [prevTime, setPrevTime] = useState('');
   const [flippingIndices, setFlippingIndices] = useState<Set<number>>(new Set());
+  // Tracks the latest displayed time for comparisons inside the interval
+  // callback without making the effect depend on `time` state -- depending
+  // on it meant setTime() (fired every second) re-ran the effect and tore
+  // down/recreated the interval every second, drifting the tick cadence.
+  const timeRef = useRef('');
 
   useEffect(() => {
     if (loading || !data) return;
@@ -56,28 +61,31 @@ export const DotMatrixClock = () => {
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const seconds = String(now.getSeconds()).padStart(2, '0');
       const newTime = `${hours}:${minutes}:${seconds}`;
+      const previousTime = timeRef.current;
 
-      if (time !== newTime) {
+      if (previousTime !== newTime) {
         // Find which digits changed
         const changed = new Set<number>();
         for (let i = 0; i < newTime.length; i++) {
-          if (time[i] !== newTime[i]) {
+          if (previousTime[i] !== newTime[i]) {
             changed.add(i);
           }
         }
 
         if (changed.size > 0) {
-          setPrevTime(time);
+          setPrevTime(previousTime);
           setFlippingIndices(changed);
 
           // Update the time after a brief delay to allow the flip to start
           setTimeout(() => {
+            timeRef.current = newTime;
             setTime(newTime);
           }, 50);
 
           // Clear flipping state after animation completes
           setTimeout(() => setFlippingIndices(new Set()), 600);
         } else {
+          timeRef.current = newTime;
           setTime(newTime);
         }
       }
@@ -87,7 +95,7 @@ export const DotMatrixClock = () => {
     const interval = setInterval(updateTime, 1000);
 
     return () => clearInterval(interval);
-  }, [time, loading, data]);
+  }, [loading, data]);
 
   if (loading || !data) return null;
   const { charPatterns } = data;

@@ -86,6 +86,21 @@ import { InvestmentsTab } from '@/components/finance/tabs/InvestmentsTab';
 import { AddRecurringDialog } from '@/components/finance/dialogs/AddRecurringDialog';
 import { EditRecurringDialog } from '@/components/finance/dialogs/EditRecurringDialog';
 import {
+  DEFAULT_GROUPS,
+  calculateWeekends,
+  formatGBP,
+  stripNumberFormatting,
+  formatNumberInput,
+  parseFormattedFloat,
+  parseFormattedInt,
+  formatReadableDate,
+  getCategoryDefaultEmoji,
+  getAccountDefaultEmoji,
+  getAccountDefaultColor,
+  sanitizeBankAccounts,
+  sanitizeBudgetCategories,
+} from '@/components/finance/utils/calculations';
+import {
   AreaChart,
   Area,
   XAxis,
@@ -127,6 +142,7 @@ export interface FinanceSettings {
   paydaySchedule?: 'monthly_date' | 'last_working_day' | 'last_friday' | 'biweekly' | 'weekly' | 'semimonthly';
   paydayWeekday?: number;
   paydayBiweeklyAnchor?: string;
+  activeSavingsTypes?: string[];
   packageBenefits?: PackageBenefit[];
 }
 
@@ -458,29 +474,6 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const DEFAULT_GROUPS: Record<string, 'needs' | 'wants' | 'savings'> = {
-  home: 'needs',
-  housing: 'needs',
-  needs: 'needs',
-  food_drink: 'needs',
-  transportation: 'needs',
-  insurance: 'needs',
-  utilities: 'needs',
-  rent: 'needs',
-  subscriptions: 'wants',
-  video_ent: 'wants',
-  shopping: 'wants',
-  entertainment: 'wants',
-  pet: 'wants',
-  self_care: 'wants',
-  donations: 'wants',
-  travel: 'wants',
-  gifts: 'wants',
-  other: 'wants',
-  wants: 'wants',
-  savings: 'savings'
-};
-
 const { DEFAULT_CATEGORY_PRESETS } = defaultPresets;
 
 const presetsToDefaultCategories = (presets: CategoryPreset[]): BudgetCategory[] =>
@@ -784,6 +777,19 @@ const mergeMissingDefaultCategories = (loaded: BudgetCategory[], defaults: Budge
   return merged;
 };
 
+// Guards against a corrupted/malformed localStorage value crashing this
+// page's mount -- these run inside useState initializers, so an uncaught
+// parse error here previously took down the entire Finance page.
+const safeParseJSON = <T,>(saved: string | null, fallback: T): T => {
+  if (!saved) return fallback;
+  try {
+    return JSON.parse(saved) as T;
+  } catch (e) {
+    console.error('Failed to parse stored finance data, using fallback:', e);
+    return fallback;
+  }
+};
+
 const resolveStoredList = <T,>(saved: string | null, fallback: T[]): T[] => {
   if (!saved) return fallback;
   try {
@@ -797,147 +803,13 @@ const resolveStoredList = <T,>(saved: string | null, fallback: T[]): T[] => {
 // ==========================================
 // UTILITY FUNCTIONS
 // ==========================================
-
-const calculateWeekends = (year: number): number => {
-  let count = 0;
-  const date = new Date(year, 0, 1);
-  while (date.getFullYear() === year) {
-    const day = date.getDay();
-    if (day === 0 || day === 6) count++;
-    date.setDate(date.getDate() + 1);
-  }
-  return count;
-};
-
-const formatGBP = (num: number) => {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(num);
-};
-
-const stripNumberFormatting = (value: string) => value.replace(/,/g, '');
-
-const formatNumberInput = (value: string | number) => {
-  const rawValue = String(value).replace(/,/g, '');
-  if (rawValue === '') return '';
-
-  const isNegative = rawValue.startsWith('-');
-  const unsignedValue = rawValue.replace(/-/g, '');
-  const [wholePart, ...decimalParts] = unsignedValue.split('.');
-  const formattedWholePart = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  const decimalPart = decimalParts.join('');
-
-  return `${isNegative ? '-' : ''}${formattedWholePart}${unsignedValue.includes('.') ? `.${decimalPart}` : ''}`;
-};
-
-const parseFormattedFloat = (value: string) => parseFloat(stripNumberFormatting(value));
-
-const parseFormattedInt = (value: string) => parseInt(stripNumberFormatting(value), 10);
-
-const formatReadableDate = (dateStr?: string) => {
-  if (!dateStr) return 'N/A';
-  const parts = dateStr.split('-');
-  if (parts.length < 2) return dateStr;
-  const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
-  const day = parts[2] ? parseInt(parts[2], 10) : 1;
-  const date = new Date(year, month, day);
-  if (isNaN(date.getTime())) return dateStr;
-  return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-};
-
-
-
-const getCategoryDefaultEmoji = (name: string): string => {
-  const preset = DEFAULT_CATEGORY_PRESETS.find(
-    p => p.name.toLowerCase() === name.toLowerCase()
-  );
-  if (preset) return preset.emoji;
-
-  const lower = name.toLowerCase();
-  if (lower.includes('housing') || lower.includes('rent') || lower.includes('mortgage') || lower.includes('home')) return '🏠';
-  if (lower.includes('food') || lower.includes('grocery') || lower.includes('supermarket') || lower.includes('groceries')) return '🛒';
-  if (lower.includes('dining') || lower.includes('restaurant') || lower.includes('eat') || lower.includes('cafe')) return '🍔';
-  if (lower.includes('transport') || lower.includes('car') || lower.includes('uber') || lower.includes('taxi') || lower.includes('fuel') || lower.includes('gas')) return '🚗';
-  if (lower.includes('utilities') || lower.includes('bills') || lower.includes('energy') || lower.includes('water') || lower.includes('electricity') || lower.includes('internet') || lower.includes('phone')) return '⚡';
-  if (lower.includes('entertainment') || lower.includes('fun') || lower.includes('movie') || lower.includes('netflix') || lower.includes('game') || lower.includes('sub')) return '🎬';
-  if (lower.includes('savings') || lower.includes('invest') || lower.includes('investing') || lower.includes('emergency')) return '💰';
-  if (lower.includes('shopping') || lower.includes('clothes') || lower.includes('shop')) return '🛍️';
-  if (lower.includes('health') || lower.includes('medical') || lower.includes('gym') || lower.includes('fitness') || lower.includes('care')) return '❤️';
-  if (lower.includes('donation')) return '🤝';
-  if (lower.includes('travel') || lower.includes('vacation')) return '✈️';
-  if (lower.includes('gift')) return '🎁';
-  if (lower.includes('pet')) return '🐶';
-  if (lower.includes('insurance')) return '☂️';
-  if (lower.includes('loan')) return '💰';
-  return '📂';
-};
-
-const getAccountDefaultEmoji = (type: string, name: string): string => {
-  const lower = name.toLowerCase();
-  if (lower.includes('chase')) return '🏦';
-  if (lower.includes('monzo')) return '🍊';
-  if (lower.includes('revolut')) return '💳';
-  if (lower.includes('amex') || lower.includes('american express')) return '✈️';
-  if (lower.includes('vanguard')) return '📈';
-  if (lower.includes('checking') || lower.includes('current')) return '💵';
-  if (lower.includes('savings')) return '🐷';
-  if (type === 'credit') return '💳';
-  if (type === 'investment') return '📈';
-  return '💰';
-};
-
-const getAccountDefaultColor = (name: string): string => {
-  const lower = name.toLowerCase();
-  if (lower.includes('chase')) return '#115e59'; // teal
-  if (lower.includes('monzo')) return '#ff4f00'; // monzo hot coral
-  if (lower.includes('revolut')) return '#3b82f6'; // blue
-  if (lower.includes('amex') || lower.includes('american express')) return '#1e3a8a'; // deep blue
-  if (lower.includes('vanguard')) return '#991b1b'; // dark red
-  return '#475569'; // slate
-};
-
-const sanitizeBankAccounts = (accounts: any[]): BankAccount[] => {
-  if (!Array.isArray(accounts)) return [];
-  return accounts.map(acc => ({
-    ...acc,
-    emoji: acc.emoji || getAccountDefaultEmoji(acc.type || '', acc.name || ''),
-    color: acc.color || getAccountDefaultColor(acc.name || '')
-  }));
-};
-
-const sanitizeBudgetCategories = (categories: any[]): BudgetCategory[] => {
-  if (!Array.isArray(categories)) return [];
-  return categories.map(cat => {
-    let group = cat.group;
-    if (!group) {
-      const id = cat.id?.toLowerCase() || '';
-      const name = cat.name?.toLowerCase() || '';
-      if (id in DEFAULT_GROUPS) {
-        group = DEFAULT_GROUPS[id];
-      } else if (name in DEFAULT_GROUPS) {
-        group = DEFAULT_GROUPS[name];
-      } else if (id === 'housing' || id === 'needs' || id === 'insurance' || name === 'housing' || name === 'needs' || name === 'insurance') {
-        group = 'needs';
-      } else if (id === 'savings' || name === 'savings') {
-        group = 'savings';
-      } else {
-        group = 'wants';
-      }
-    }
-    return {
-      ...cat,
-      group,
-      budgeted: cat.budgeted !== undefined ? cat.budgeted : 0,
-      items: cat.items || [],
-      emoji: cat.emoji || getCategoryDefaultEmoji(cat.name || '')
-    };
-  });
-};
-
+//
+// Note: getBudgetItemSpent below is intentionally NOT imported from
+// components/finance/utils/calculations.ts -- that module has a
+// same-named function that has diverged (different balance-sign handling
+// and recurring-bill matching). This is the version actually driving the
+// live budget calculations on this page; do not replace it without
+// reconciling the two implementations first.
 const getBudgetItemSpent = (item: BudgetItem, bankAccounts: BankAccount[], recurrings: RecurringBill[]) => {
   if (item.linkedAccountId) {
     const acc = bankAccounts.find(a => a.id === item.linkedAccountId);
@@ -1345,7 +1217,7 @@ export default function Finance() {
   // Data States
   const [settings, setSettings] = useState<FinanceSettings>(() => {
     const saved = localStorage.getItem('finance_settings');
-    return saved ? JSON.parse(saved) : {
+    return safeParseJSON<FinanceSettings>(saved, {
       grossSalary: 0,
       pensionType: 'net_pay',
       personalPensionPercent: 0,
@@ -1361,12 +1233,12 @@ export default function Finance() {
       ukRegion: 'england-and-wales',
       holidaysByUser: {},
       activeSavingsTypes: ALL_SAVINGS_IDS
-    };
+    });
   });
 
   const [timeSpentInputs, setTimeSpentInputs] = useState(() => {
     const saved = localStorage.getItem('finance_time_spent_inputs');
-    return saved ? JSON.parse(saved) : {
+    return safeParseJSON(saved, {
       sleepHoursPerDay: 8.0,
       commuteDaysPerWeek: 5,
       commuteHoursPerDay: 2,
@@ -1375,7 +1247,7 @@ export default function Finance() {
       gymHoursPerSession: 0,
       learningHoursPerWeek: 0,
       friendsHoursPerWeek: 0,
-    };
+    });
   });
 
   const isItemActive = (item: BudgetItem, cat: BudgetCategory) => {
@@ -1405,12 +1277,12 @@ export default function Finance() {
 
   const [goals, setGoals] = useState<Goal[]>(() => {
     const saved = localStorage.getItem('finance_goals');
-    return saved ? JSON.parse(saved) : [];
+    return safeParseJSON<Goal[]>(saved, []);
   });
 
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(() => {
     const saved = localStorage.getItem('finance_bank_accounts');
-    return sanitizeBankAccounts(saved ? JSON.parse(saved) : []);
+    return sanitizeBankAccounts(safeParseJSON<any[]>(saved, []));
   });
 
   const [investmentHoldings, setInvestmentHoldings] = useState<InvestmentHolding[]>(() => {
@@ -1432,17 +1304,17 @@ export default function Finance() {
 
   const [memberships, setMemberships] = useState<Membership[]>(() => {
     const saved = localStorage.getItem('finance_memberships');
-    return saved ? JSON.parse(saved) : [];
+    return safeParseJSON<Membership[]>(saved, []);
   });
 
   const [recurrings, setRecurrings] = useState<RecurringBill[]>(() => {
     const saved = localStorage.getItem('finance_recurrings');
-    return saved ? JSON.parse(saved) : [];
+    return safeParseJSON<RecurringBill[]>(saved, []);
   });
 
   const [creditScores, setCreditScores] = useState<CreditScores>(() => {
     const saved = localStorage.getItem('finance_credit_scores');
-    return saved ? JSON.parse(saved) : { experian: [], transunion: [], equifax: [] };
+    return safeParseJSON<CreditScores>(saved, { experian: [], transunion: [], equifax: [] });
   });
 
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
@@ -1453,18 +1325,18 @@ export default function Finance() {
 
   const [mockTransactions, setMockTransactions] = useState<MockTransaction[]>(() => {
     const saved = localStorage.getItem('finance_transactions');
-    return saved ? JSON.parse(saved) : [];
+    return safeParseJSON<MockTransaction[]>(saved, []);
   });
 
   // Dynamic configurations fetched from Supabase
   const [taxConfig, setTaxConfig] = useState<TaxConfig>(() => {
     const saved = localStorage.getItem('finance_tax_config');
-    return saved ? JSON.parse(saved) : {
+    return safeParseJSON<TaxConfig>(saved, {
       studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
       nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 }
-    };
+    });
   });
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(() => {
     const saved = localStorage.getItem('finance_recurring_templates');
@@ -1472,15 +1344,15 @@ export default function Finance() {
   });
   const [creditBureaus, setCreditBureaus] = useState<CreditBureauConfig[]>(() => {
     const saved = localStorage.getItem('finance_credit_bureaus');
-    return saved ? JSON.parse(saved) : [
+    return safeParseJSON<CreditBureauConfig[]>(saved, [
       { key: 'experian', label: 'Experian', emoji: '🟣', color: '#8b5cf6', maxScore: 1250, gradient: 'from-violet-500/10 to-violet-500/5' },
       { key: 'transunion', label: 'Credit Karma', emoji: '🔵', color: '#06b6d4', maxScore: 710, gradient: 'from-cyan-500/10 to-cyan-500/5' },
       { key: 'equifax', label: 'ClearScore', emoji: '🟡', color: '#f59e0b', maxScore: 1000, gradient: 'from-amber-500/10 to-amber-500/5' }
-    ];
+    ]);
   });
   const [holidayDefaults, setHolidayDefaults] = useState<Record<number, { count: number; dates: string; occasion: string }>>(() => {
     const saved = localStorage.getItem('finance_holiday_defaults');
-    return saved ? JSON.parse(saved) : {};
+    return safeParseJSON(saved, {} as Record<number, { count: number; dates: string; occasion: string }>);
   });
   const [defaultBudgetCategories, setDefaultBudgetCategories] = useState<BudgetCategory[]>(() => {
     const saved = localStorage.getItem('finance_default_budget_categories');

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Book } from '@/types/books';
 import { Trash2, ExternalLink, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ interface BookCardProps {
   onUpdate?: (id: string, updates: Partial<Omit<Book, 'id' | 'created_at'>>) => void;
 }
 
-export function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
+export const BookCard = memo(function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
   const [showActions, setShowActions] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -34,6 +34,7 @@ export function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
               src={book.cover_url}
               alt={book.title}
               className="w-full h-full object-cover"
+              loading="lazy"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -95,4 +96,4 @@ export function BookCard({ book, onRemove, onUpdate }: BookCardProps) {
       </CardDetailDialog>
     </>
   );
-}
+});

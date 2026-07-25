@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Doto:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
@@ -40,6 +41,7 @@
     --badge-new: 25 80% 50%;
     --badge-new-foreground: 0 0% 100%;
 
+    --font-matrix: 'Doto', monospace;
     --font-serif: 'JetBrains Mono', monospace;
     --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 

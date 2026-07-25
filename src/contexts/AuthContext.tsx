@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
 
@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => subscription.unsubscribe();
     }, []);
 
-    const login = async (password: string): Promise<boolean> => {
+    const login = useCallback(async (password: string): Promise<boolean> => {
         try {
             const { error } = await supabase.auth.signInWithPassword({
                 email: ADMIN_EMAIL,
@@ -58,16 +58,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.error('Login error:', error);
             return false;
         }
-    };
+    }, []);
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         await supabase.auth.signOut();
         setIsAdmin(false);
         setSession(null);
-    };
+    }, []);
+
+    const value = useMemo(
+        () => ({ isAdmin, login, logout, session }),
+        [isAdmin, login, logout, session],
+    );
 
     return (
-        <AuthContext.Provider value={{ isAdmin, login, logout, session }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

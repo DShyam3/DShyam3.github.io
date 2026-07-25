@@ -42,6 +42,8 @@ interface WatchlistCardProps {
   removeFromSchedule?: (watchlistItemId: string) => void;
   isInSchedule: (watchlistItemId: string) => boolean;
   onMoveToFavourites?: (item: WatchlistItem) => void;
+  onResync?: (id: string) => void;
+  syncing?: boolean;
 }
 
 export const WatchlistCard = React.memo(function WatchlistCard({
@@ -57,6 +59,8 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   removeFromSchedule,
   isInSchedule,
   onMoveToFavourites,
+  onResync,
+  syncing,
 }: WatchlistCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -408,6 +412,8 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               }
             : undefined
         }
+        onResync={onResync ? () => onResync(item.id) : undefined}
+        syncing={syncing}
       />
     </>
   );

@@ -50,6 +50,7 @@ import {
   Timer,
   Heart,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -123,6 +124,8 @@ const Watchlist = () => {
     syncLog,
     autoSyncEnabled,
     syncWatchlist,
+    syncSingleItem,
+    cancelSync,
     toggleEpisodeWatched,
     toggleSeasonWatched,
     isEpisodeWatched,
@@ -138,6 +141,19 @@ const Watchlist = () => {
     isInSchedule,
     DAYS,
   } = useSchedule();
+
+  // removeWatchlistItem alone leaves a dangling weekly_schedule row behind
+  // (watchlist and schedule are separate hooks/tables) -- always clear the
+  // schedule entry too so deleting a show doesn't leave a stale "scheduled"
+  // count on some day of the week.
+  const removeWatchlistItemAndSchedule = useCallback(
+    async (id: string) => {
+      await removeWatchlistItem(id);
+      await removeFromScheduleByWatchlistId(id);
+    },
+    [removeWatchlistItem, removeFromScheduleByWatchlistId],
+  );
+
   const [open, setOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] =
     useState<(typeof CATEGORIES)[number]>('TV Shows');
@@ -152,6 +168,11 @@ const Watchlist = () => {
   );
   const [title, setTitle] = useState('');
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
+  // Covers the whole click-to-completion span, including the getMovieDetails
+  // fetch that happens before addWatchlistItem is even called -- without
+  // this, a second click during that window (or the multi-second TV season
+  // fetch) could kick off a duplicate add.
+  const [pendingResultIds, setPendingResultIds] = useState<Set<number>>(new Set());
   const [showSyncLog, setShowSyncLog] = useState(false);
   const [visibleCount, setVisibleCount] = useState(48);
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -552,6 +573,17 @@ const Watchlist = () => {
                         )}
                       </span>
                     </Button>
+                    {syncing && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={cancelSync}
+                        className="h-8 sm:h-9 px-2 text-muted-foreground hover:text-destructive"
+                        title="Stop sync"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1079,36 +1111,51 @@ const Watchlist = () => {
                               Searching TMDB...
                             </div>
                           ) : (
-                            searchResults.map((result) => (
+                            searchResults.map((result) => {
+                              const isPending = pendingResultIds.has(result.id);
+                              const isAdded = addedItems.has(result.id);
+                              return (
                               <div
                                 key={result.id}
-                                className="flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-[background-color] duration-200 -mx-6 px-6"
+                                className={cn(
+                                  "flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-[background-color] duration-200 -mx-6 px-6",
+                                  (isPending || isAdded) && "pointer-events-none opacity-60",
+                                )}
                                 onClick={async (e) => {
                                   e.preventDefault();
-                                  if (addedItems.has(result.id)) return;
-                                  const details = await getMovieDetails(
-                                    result.id,
-                                    result.media_type,
-                                  );
-                                  if (details) {
-                                    const formattedTitle = details.release_year
-                                      ? `${details.title} (${details.release_year})`
-                                      : details.title;
-                                    await addWatchlistItem({
-                                      title: formattedTitle,
-                                      category: selectedCategory,
-                                      description: details.overview,
-                                      year: details.release_year || undefined,
-                                      image_url: details.poster || undefined,
-                                      runtime: details.runtime || undefined,
-                                      genres: details.genres,
-                                      tmdb_id: details.tmdb_id,
-                                      release_date: details.release_date,
-                                      streaming_platform: details.platform,
-                                    });
-                                    setAddedItems((prev) =>
-                                      new Set(prev).add(result.id),
+                                  if (isAdded || isPending) return;
+                                  setPendingResultIds((prev) => new Set(prev).add(result.id));
+                                  try {
+                                    const details = await getMovieDetails(
+                                      result.id,
+                                      result.media_type,
                                     );
+                                    if (details) {
+                                      const formattedTitle = details.release_year
+                                        ? `${details.title} (${details.release_year})`
+                                        : details.title;
+                                      await addWatchlistItem({
+                                        title: formattedTitle,
+                                        category: selectedCategory,
+                                        description: details.overview,
+                                        year: details.release_year || undefined,
+                                        image_url: details.poster || undefined,
+                                        runtime: details.runtime || undefined,
+                                        genres: details.genres,
+                                        tmdb_id: details.tmdb_id,
+                                        release_date: details.release_date,
+                                        streaming_platform: details.platform,
+                                      });
+                                      setAddedItems((prev) =>
+                                        new Set(prev).add(result.id),
+                                      );
+                                    }
+                                  } finally {
+                                    setPendingResultIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(result.id);
+                                      return next;
+                                    });
                                   }
                                 }}
                               >
@@ -1146,11 +1193,16 @@ const Watchlist = () => {
                                         )
                                       </span>
                                     </div>
-                                    {addedItems.has(result.id) && (
+                                    {isPending ? (
+                                      <span className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        Adding...
+                                      </span>
+                                    ) : isAdded ? (
                                       <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
                                         Item Added
                                       </span>
-                                    )}
+                                    ) : null}
                                   </div>
                                   {result.overview && (
                                     <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
@@ -1159,7 +1211,8 @@ const Watchlist = () => {
                                   )}
                                 </div>
                               </div>
-                            ))
+                              );
+                            })
                           )}
                         </div>
                       ) : (
@@ -1188,7 +1241,7 @@ const Watchlist = () => {
             isEpisodeWatched={isEpisodeWatched}
             isSeasonWatched={isSeasonWatched}
             getAutoStatus={getAutoStatus}
-            onRemoveWatchlist={isAdmin ? removeWatchlistItem : undefined}
+            onRemoveWatchlist={isAdmin ? removeWatchlistItemAndSchedule : undefined}
             addToSchedule={isAdmin ? addToSchedule : undefined}
             isInSchedule={isInSchedule}
             onMoveToFavourites={isAdmin ? handleOpenMoveDialog : undefined}
@@ -1343,7 +1396,7 @@ const Watchlist = () => {
                   <WatchlistCard
                     key={item.id}
                     item={item}
-                    onRemove={isAdmin ? removeWatchlistItem : undefined}
+                    onRemove={isAdmin ? removeWatchlistItemAndSchedule : undefined}
                     getCategoryIcon={getCategoryIcon}
                     toggleEpisodeWatched={
                       isAdmin ? toggleEpisodeWatched : undefined
@@ -1360,6 +1413,8 @@ const Watchlist = () => {
                     }
                     isInSchedule={isInSchedule}
                     onMoveToFavourites={isAdmin ? handleOpenMoveDialog : undefined}
+                    onResync={isAdmin ? syncSingleItem : undefined}
+                    syncing={syncing}
                   />
                 ))
               )}

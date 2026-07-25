@@ -68,7 +68,7 @@ export function Header({
                 <DotMatrixText
                   text="DHYAN SHYAM"
                   size="md"
-                  className="text-muted-foreground"
+                  className="text-foreground"
                 />
                 <DotMatrixText
                   text="ROBOTIC ENGINEER"

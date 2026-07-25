@@ -35,7 +35,7 @@ export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {
         className={cn(
           'group relative bg-card rounded-lg p-5 opacity-0 animate-fade-in transition-[box-shadow] duration-300 cursor-pointer hover:shadow-md [box-shadow:var(--shadow-border)]'
         )}
-        style={{ animationDelay: `${index * 50}ms` }}
+        style={{ animationDelay: `${Math.min(index, 20) * 50}ms` }}
         onClick={() => setDetailOpen(true)}
       >
         {/* Action buttons */}

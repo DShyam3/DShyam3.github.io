@@ -1,8 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
-const TMDB_BASE_URL = import.meta.env.VITE_TMDB_BASE_URL;
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 
 export interface TMDBResult {
@@ -22,17 +20,15 @@ export function useTMDB() {
     const [loading, setLoading] = useState(false);
 
     const fetchTMDB = useCallback(async (endpoint: string, params: Record<string, string>) => {
-        // If we have a local API key, use it directly (faster for development)
-        if (TMDB_API_KEY && TMDB_API_KEY !== 'your-tmdb-api-key') {
-            const queryParams = new URLSearchParams({ ...params, api_key: TMDB_API_KEY });
-            const response = await fetch(`${TMDB_BASE_URL}/${endpoint}?${queryParams.toString()}`);
-            return await response.json();
-        }
-
-        // Secure Mode: Use Supabase Edge Function Proxy to hide the key
-        const { data, error } = await supabase.functions.invoke('tmdb-proxy', {
+        // Always route through the tmdb-proxy edge function so the TMDB API
+        // key never has to live in (or be inlined into) the client bundle.
+        // The installed @supabase/supabase-js version has no `queryParams`
+        // option on invoke() -- it's silently dropped rather than erroring,
+        // so build the query string into the function name argument instead
+        // (invoke() just concatenates it onto the URL before parsing).
+        const query = new URLSearchParams({ endpoint, ...params }).toString();
+        const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, {
             method: 'GET',
-            queryParams: { endpoint, ...params }
         });
 
         if (error) throw error;

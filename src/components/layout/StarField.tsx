@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, memo } from 'react';
 import './StarField.css';
 
 interface Star {
@@ -21,16 +21,24 @@ interface ShootingStar {
     delay: number;
 }
 
-export const StarField = () => {
+// Each star is its own infinitely-animating element, which typically gets
+// promoted to its own GPU compositing layer. Scaling count with raw viewport
+// area (uncapped) means a large desktop window ends up with 600+ of these
+// layers at once -- a classic mobile/Safari jank source regardless of how
+// cheap each individual animation is. Capping keeps the density believable
+// on small screens while bounding the layer count everywhere else.
+const MAX_STARS = 180;
+
+const StarFieldImpl = () => {
     const [stars, setStars] = useState<Star[]>([]);
     const [shootingStars, setShootingStars] = useState<ShootingStar[]>([]);
     const shootingStarId = useRef(0);
+    const resizeTimeout = useRef<ReturnType<typeof setTimeout>>();
 
     // Generate static stars on mount with more variation
     useEffect(() => {
         const generateStars = () => {
-            // Increased star density (was 6000, now 3000 for more stars)
-            const starCount = Math.floor(window.innerWidth * window.innerHeight / 3000);
+            const starCount = Math.min(MAX_STARS, Math.floor(window.innerWidth * window.innerHeight / 3000));
             const newStars: Star[] = [];
 
             for (let i = 0; i < starCount; i++) {
@@ -59,9 +67,20 @@ export const StarField = () => {
             setStars(newStars);
         };
 
+        // Debounced: mobile browsers fire `resize` repeatedly as the address
+        // bar shows/hides, which would otherwise re-roll every star's
+        // position and re-render the full list several times a second.
+        const handleResize = () => {
+            clearTimeout(resizeTimeout.current);
+            resizeTimeout.current = setTimeout(generateStars, 300);
+        };
+
         generateStars();
-        window.addEventListener('resize', generateStars);
-        return () => window.removeEventListener('resize', generateStars);
+        window.addEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            clearTimeout(resizeTimeout.current);
+        };
     }, []);
 
     // Create multiple shooting stars periodically with natural variation
@@ -178,3 +197,9 @@ export const StarField = () => {
         </div>
     );
 };
+
+// Takes no props, so this only ever needs to render once: without memo,
+// every OpeningSequence re-render (e.g. each of the ~19 setText calls during
+// the typewriter effect) re-runs this component's render and diffs its full
+// star list, right during the animation where stutter is most visible.
+export const StarField = memo(StarFieldImpl);

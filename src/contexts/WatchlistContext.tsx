@@ -4,11 +4,40 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   ReactNode,
 } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+
+// Returns a referentially-stable function that always calls the latest
+// version of `fn`. Used so the context value below doesn't hand out a new
+// function reference on every render (which defeats React.memo on
+// downstream components like WatchlistCard) without having to hand-audit
+// dependency arrays for every handler in this file.
+function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useCallback((...args: Parameters<T>) => ref.current(...args), []) as T;
+}
+
+// Routes TMDB requests through the tmdb-proxy edge function so the TMDB API
+// key never has to live in (or be inlined into) the client bundle.
+async function fetchTMDBProxy(endpoint: string, params: Record<string, string> = {}) {
+  // The installed @supabase/supabase-js version has no `queryParams` option
+  // on invoke() -- it's silently dropped, not an error, so this failed
+  // with no indication why. invoke() just concatenates its first argument
+  // onto the function URL and parses the result as a URL, so building the
+  // query string in ourselves works correctly.
+  const query = new URLSearchParams({ endpoint, ...params }).toString();
+  const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, {
+    method: 'GET',
+  });
+  if (error) throw error;
+  return data;
+}
 
 export interface Episode {
   id?: number;
@@ -43,7 +72,9 @@ export interface WatchlistItem {
   tmdb_id?: number;
   release_date?: string;
   seasons?: Season[];
-  series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Cancelled';
+  // TMDB returns the US spelling ('Canceled'); 'Cancelled' is kept for any
+  // pre-existing stored rows using the British spelling.
+  series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
 }
 
 export interface FavouriteItem {
@@ -77,10 +108,13 @@ interface WatchlistContextType {
   nextAutoSyncTime: string;
   syncLog: SyncLogEntry[];
   autoSyncEnabled: boolean;
-  syncWatchlist: (type?: 'manual' | 'auto') => Promise<void>;
+  syncWatchlist: (type?: 'manual' | 'auto', itemsOverride?: WatchlistItem[]) => Promise<void>;
+  syncSingleItem: (id: string) => Promise<void>;
+  cancelSync: () => void;
   addWatchlistItem: (
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
   ) => Promise<void>;
+  isAddPending: (item: { tmdb_id?: number; title: string; category: string }) => boolean;
   removeWatchlistItem: (id: string) => Promise<void>;
   addFavourite: (item: Omit<FavouriteItem, 'id' | 'created_at'>) => Promise<void>;
   removeFavourite: (id: string) => Promise<void>;
@@ -144,7 +178,20 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const [nextAutoSyncTime, setNextAutoSyncTime] = useState<string>(
     getNext6AM().toISOString(),
   );
-  const autoSyncEnabled = true;
+  // Tracks TV shows/movies currently mid-add so a rapid double-click (or a
+  // slow network + impatient user) can't insert the same item twice while
+  // the multi-second TMDB season fetch is still in flight.
+  const [pendingAddKeys, setPendingAddKeys] = useState<Set<string>>(new Set());
+  // Lets a full sync be stopped mid-flight. Checked between chunks rather
+  // than aborting in-flight requests, so "stop" takes effect after the
+  // current batch finishes rather than instantly.
+  const syncCancelRef = useRef(false);
+  const { isAdmin } = useAuth();
+  // Public visitors can browse the watchlist (fetchData below), but the
+  // auto-sync writes to sync_log/tv_shows/etc. and is admin-only -- RLS now
+  // enforces that at the DB level, so gate it client-side too rather than
+  // let it fail with permission errors for every non-admin visitor.
+  const autoSyncEnabled = isAdmin;
   const autoSyncTriggeredRef = useRef(false);
   const { toast } = useToast();
 
@@ -346,7 +393,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     if (stored) {
       try {
         setWatchedEpisodes(new Set(JSON.parse(stored)));
-      } catch (e) {}
+      } catch (e) {
+        console.error('Failed to parse stored watched_episodes, ignoring:', e);
+      }
     }
     fetchData();
     fetchSyncLog();
@@ -424,6 +473,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       if (watchedCount === 0) return 'To Watch';
       if (watchedCount === totalEpisodes && totalEpisodes > 0) {
         return item.series_status === 'Ended' ||
+          item.series_status === 'Canceled' ||
           item.series_status === 'Cancelled'
           ? 'Completed'
           : 'Watched';
@@ -439,6 +489,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     },
     [watchedEpisodes],
   );
+
+  const addItemKey = (item: { tmdb_id?: number; title: string; category: string }) =>
+    `${item.category}:${item.tmdb_id ?? item.title.toLowerCase()}`;
 
   const addWatchlistItem = async (
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
@@ -457,35 +510,14 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (item.category === 'Movies') {
-      try {
-        const { error } = await supabase.from('movies').insert({
-          title: item.title,
-          platform: item.streaming_platform || 'Online',
-          genre: item.genres?.join(', ') || null,
-          poster: item.image_url || null,
-          overview: item.description || null,
-          tmdb_id: item.tmdb_id || null,
-          release_date: item.release_date || null,
-          runtime: item.runtime || null,
-          release_year: item.year || null,
-        });
-        if (error) throw error;
-        await fetchData();
-        toast({ title: 'Success', description: 'Movie added to watchlist' });
-      } catch (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to add movie',
-          variant: 'destructive',
-        });
-      }
-    } else if (item.category === 'TV Shows') {
-      try {
-        const { data: show, error: showError } = await (
-          supabase.from('tv_shows') as any
-        )
-          .insert({
+    const key = addItemKey(item);
+    if (pendingAddKeys.has(key)) return; // already in flight -- ignore double-click
+    setPendingAddKeys((prev) => new Set(prev).add(key));
+
+    try {
+      if (item.category === 'Movies') {
+        try {
+          const { error } = await supabase.from('movies').insert({
             title: item.title,
             platform: item.streaming_platform || 'Online',
             genre: item.genres?.join(', ') || null,
@@ -493,83 +525,125 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             overview: item.description || null,
             tmdb_id: item.tmdb_id || null,
             release_date: item.release_date || null,
-            status: item.series_status || 'Returning Series',
-          })
-          .select()
-          .single();
-
-        if (showError) throw showError;
-
-        if (item.tmdb_id) {
-          const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
-          const TMDB_BASE_URL = import.meta.env.VITE_TMDB_BASE_URL;
-          const showDetails = await (
-            await fetch(
-              `${TMDB_BASE_URL}/tv/${item.tmdb_id}?api_key=${TMDB_API_KEY}`,
-            )
-          ).json();
-          if (showDetails.seasons) {
-            for (const s of showDetails.seasons) {
-              // Skip Season 0 and seasons with no episodes
-              if (s.season_number === 0 || s.episode_count === 0) continue;
-
-              const { data: season, error: sErr } = await (
-                supabase.from('tv_show_seasons') as any
-              )
-                .insert({
-                  tv_show_id: show.id,
-                  season_number: s.season_number,
-                  release_date: s.air_date || null,
-                })
-                .select()
-                .single();
-              if (sErr) continue;
-
-              const sDetails = await (
-                await fetch(
-                  `${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`,
-                )
-              ).json();
-              if (sDetails.episodes && sDetails.episodes.length > 0) {
-                // Filter out TBA episodes (episodes with no air date)
-                const validEpisodes = sDetails.episodes.filter(
-                  (v: any) => v.air_date,
-                );
-                if (validEpisodes.length > 0) {
-                  const eps = validEpisodes.map((v: any) => ({
-                    season_id: season.id,
-                    episode_number: v.episode_number,
-                    title: v.name,
-                    runtime: v.runtime || null,
-                    release_date: v.air_date,
-                  }));
-                  await (supabase.from('tv_show_episodes') as any).insert(eps);
-                } else {
-                  // No valid episodes, remove the season
-                  await (supabase.from('tv_show_seasons') as any)
-                    .delete()
-                    .eq('id', season.id);
-                }
-              } else {
-                // No episodes, remove the season
-                await (supabase.from('tv_show_seasons') as any)
-                  .delete()
-                  .eq('id', season.id);
-              }
-            }
-          }
+            runtime: item.runtime || null,
+            release_year: item.year || null,
+          });
+          if (error) throw error;
+          await fetchData();
+          toast({ title: 'Success', description: 'Movie added to watchlist' });
+        } catch (error) {
+          toast({
+            title: 'Error',
+            description: 'Failed to add movie',
+            variant: 'destructive',
+          });
         }
-        await fetchData();
-        toast({ title: 'Success', description: 'TV Show added' });
-      } catch (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to add TV Show',
-          variant: 'destructive',
-        });
+      } else if (item.category === 'TV Shows') {
+        try {
+          const { data: show, error: showError } = await (
+            supabase.from('tv_shows') as any
+          )
+            .insert({
+              title: item.title,
+              platform: item.streaming_platform || 'Online',
+              genre: item.genres?.join(', ') || null,
+              poster: item.image_url || null,
+              overview: item.description || null,
+              tmdb_id: item.tmdb_id || null,
+              release_date: item.release_date || null,
+              status: item.series_status || 'Returning Series',
+            })
+            .select()
+            .single();
+
+          if (showError) throw showError;
+
+          let failedSeasonCount = 0;
+
+          if (item.tmdb_id) {
+            const showDetails = await fetchTMDBProxy(`tv/${item.tmdb_id}`);
+            const validSeasons = (showDetails.seasons || []).filter(
+              // Skip Season 0 and seasons with no episodes
+              (s: any) => s.season_number !== 0 && s.episode_count !== 0,
+            );
+
+            // Seasons are independent of each other, so fetch/write them all
+            // in parallel instead of one at a time.
+            const results = await Promise.all(
+              validSeasons.map(async (s: any) => {
+                try {
+                  const [{ data: season, error: sErr }, sDetails] = await Promise.all([
+                    (supabase.from('tv_show_seasons') as any)
+                      .insert({
+                        tv_show_id: show.id,
+                        season_number: s.season_number,
+                        release_date: s.air_date || null,
+                      })
+                      .select()
+                      .single(),
+                    fetchTMDBProxy(`tv/${item.tmdb_id}/season/${s.season_number}`),
+                  ]);
+                  if (sErr) return false;
+
+                  // Filter out TBA episodes (episodes with no air date)
+                  const validEpisodes = (sDetails.episodes || []).filter(
+                    (v: any) => v.air_date,
+                  );
+                  if (validEpisodes.length > 0) {
+                    const eps = validEpisodes.map((v: any) => ({
+                      season_id: season.id,
+                      episode_number: v.episode_number,
+                      title: v.name,
+                      runtime: v.runtime || null,
+                      release_date: v.air_date,
+                    }));
+                    await (supabase.from('tv_show_episodes') as any).insert(eps);
+                  } else {
+                    // No valid episodes, remove the season
+                    await (supabase.from('tv_show_seasons') as any)
+                      .delete()
+                      .eq('id', season.id);
+                  }
+                  return true;
+                } catch (seasonError) {
+                  console.error(
+                    `Failed to sync season ${s.season_number} while adding "${item.title}":`,
+                    seasonError,
+                  );
+                  return false;
+                }
+              }),
+            );
+            failedSeasonCount = results.filter((ok) => !ok).length;
+          }
+
+          await fetchData();
+          toast({
+            title: 'Success',
+            description:
+              failedSeasonCount > 0
+                ? `TV Show added (${failedSeasonCount} season${failedSeasonCount > 1 ? 's' : ''} failed to load -- use Sync Updates to retry)`
+                : 'TV Show added',
+          });
+        } catch (error) {
+          toast({
+            title: 'Error',
+            description: 'Failed to add TV Show',
+            variant: 'destructive',
+          });
+        }
       }
+    } finally {
+      setPendingAddKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     }
   };
+
+  const isAddPending = (item: { tmdb_id?: number; title: string; category: string }) =>
+    pendingAddKeys.has(addItemKey(item));
 
   const removeWatchlistItem = async (id: string) => {
     const itemToRemove = watchlist.find((item) => item.id === id);
@@ -619,6 +693,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       toast({
         title: 'Error',
         description: 'Failed to remove item',
+        variant: 'destructive',
       });
     }
   };
@@ -764,13 +839,19 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const syncWatchlist = async (type: 'manual' | 'auto' = 'manual') => {
+  // `itemsOverride` lets a single item be resynced through the exact same
+  // logic (progress tracking, change summary, failure handling) as a full
+  // sync, instead of duplicating ~250 lines of season/episode reconciliation
+  // for a "resync this one show" action.
+  const syncWatchlist = async (
+    type: 'manual' | 'auto' = 'manual',
+    itemsOverride?: WatchlistItem[],
+  ) => {
     if (syncing) return; // Prevent concurrent syncs
+    syncCancelRef.current = false;
     setSyncing(true);
     setSyncProgress(0);
     const startTime = Date.now();
-    const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
-    const TMDB_BASE_URL = import.meta.env.VITE_TMDB_BASE_URL;
     const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 
     const getPlatform = (providers: any) => {
@@ -805,22 +886,32 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     };
 
     let itemsSynced = 0;
+    // Individual item/season failures used to just be console.error'd and
+    // silently skipped -- the completion toast looked identical whether
+    // everything worked or half the shows failed. Track them so the user
+    // actually finds out. changesSummary is a lightweight "what happened"
+    // trail (status changes, new episodes) instead of just a bare count.
+    const failedTitles: string[] = [];
+    const changesSummary: string[] = [];
     try {
-      const itemsToSync = watchlist.filter((item) => item.tmdb_id);
+      const itemsToSync = itemsOverride ?? watchlist.filter((item) => item.tmdb_id);
       // Use smaller chunks for better progress tracking in background tabs
       const chunkSize = 50;
       let processedCount = 0;
+      let wasCancelled = false;
       for (let i = 0; i < itemsToSync.length; i += chunkSize) {
+        if (syncCancelRef.current) {
+          wasCancelled = true;
+          break;
+        }
         const chunk = itemsToSync.slice(i, i + chunkSize);
         await Promise.all(
           chunk.map(async (item) => {
             try {
               const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie';
-              const data = await (
-                await fetch(
-                  `${TMDB_BASE_URL}/${tmdbType}/${item.tmdb_id}?api_key=${TMDB_API_KEY}&append_to_response=watch/providers`,
-                )
-              ).json();
+              const data = await fetchTMDBProxy(`${tmdbType}/${item.tmdb_id}`, {
+                append_to_response: 'watch/providers',
+              });
               if (!data.id) return;
 
               // Common fields for both movies and TV shows
@@ -857,6 +948,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 // TV shows only have status (no release_year or runtime columns)
                 const tvUpdates = { ...commonUpdates };
                 tvUpdates.status = data.status;
+                if (data.status && item.series_status && data.status !== item.series_status) {
+                  changesSummary.push(`${item.title}: status → ${data.status}`);
+                }
                 await (supabase.from('tv_shows') as any)
                   .update(tvUpdates)
                   .eq('id', parseInt(item.id));
@@ -963,11 +1057,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                           hasEpisodeCountChanged;
 
                         if (shouldUpdateEpisodes) {
-                          const sDetails = await (
-                            await fetch(
-                              `${TMDB_BASE_URL}/tv/${item.tmdb_id}/season/${s.season_number}?api_key=${TMDB_API_KEY}`,
-                            )
-                          ).json();
+                          const sDetails = await fetchTMDBProxy(
+                            `tv/${item.tmdb_id}/season/${s.season_number}`,
+                          );
                           if (
                             sDetails.episodes &&
                             sDetails.episodes.length > 0
@@ -977,6 +1069,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                             );
 
                             if (validEpisodes.length > 0) {
+                              if (validEpisodes.length > localEpisodeCount) {
+                                changesSummary.push(
+                                  `${item.title}: +${validEpisodes.length - localEpisodeCount} new episode(s) (S${s.season_number})`,
+                                );
+                              }
                               // Read existing watched states to preserve them during upsert
                               const { data: existingEps } = await (
                                 supabase.from('tv_show_episodes') as any
@@ -1080,7 +1177,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                             }
                           }
                         }
-                      } catch (e) {}
+                      } catch (e) {
+                        console.error('Failed to sync season during syncWatchlist:', e);
+                      }
                     }),
                   );
 
@@ -1112,6 +1211,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               itemsSynced++;
             } catch (itemError) {
               console.error(`Error syncing item ${item.title}:`, itemError);
+              failedTitles.push(item.title);
             }
             processedCount++;
             setSyncProgress(
@@ -1125,16 +1225,55 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       const syncTime = new Date().toISOString();
       setLastSyncTime(syncTime);
       localStorage.setItem('last_sync_time', syncTime);
-      await logSync(type, 'success', itemsSynced, durationMs);
+      await logSync(
+        type,
+        'success',
+        itemsSynced,
+        durationMs,
+        wasCancelled
+          ? `Stopped by user after ${itemsSynced} item(s)${failedTitles.length > 0 ? `; ${failedTitles.length} failed` : ''}`
+          : failedTitles.length > 0
+            ? `${failedTitles.length} item(s) failed: ${failedTitles.join(', ')}`
+            : undefined,
+      );
       setNextAutoSyncTime(getNext6AM().toISOString());
       if (type === 'auto') {
         console.log(
           `[Auto-Sync] Completed at ${syncTime}. ${itemsSynced} items synced in ${(durationMs / 1000).toFixed(1)}s`,
         );
       }
+
+      const isSingleItemResync = !!itemsOverride && itemsOverride.length === 1;
+      const descriptionParts = [
+        wasCancelled
+          ? `Stopped after ${itemsSynced} item(s) synchronized`
+          : isSingleItemResync && itemsSynced > 0
+            ? `"${itemsOverride[0].title}" resynced`
+            : `${itemsSynced} items synchronized${type === 'auto' ? ' (scheduled)' : ''}`,
+      ];
+      if (changesSummary.length > 0) {
+        const preview = changesSummary.slice(0, 3).join('; ');
+        descriptionParts.push(
+          changesSummary.length > 3
+            ? `${preview}; +${changesSummary.length - 3} more`
+            : preview,
+        );
+      }
+      if (failedTitles.length > 0) {
+        const preview = failedTitles.slice(0, 3).join(', ');
+        descriptionParts.push(
+          `${failedTitles.length} failed: ${preview}${failedTitles.length > 3 ? ', ...' : ''}`,
+        );
+      }
+
       toast({
-        title: type === 'auto' ? 'Auto-Sync Complete' : 'Sync Complete',
-        description: `${itemsSynced} items synchronized${type === 'auto' ? ' (scheduled)' : ''}`,
+        title: wasCancelled
+          ? 'Sync Stopped'
+          : type === 'auto'
+            ? 'Auto-Sync Complete'
+            : 'Sync Complete',
+        description: descriptionParts.join(' — '),
+        variant: failedTitles.length > 0 ? 'destructive' : undefined,
       });
     } catch (error) {
       const durationMs = Date.now() - startTime;
@@ -1149,6 +1288,20 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       setSyncing(false);
       setTimeout(() => setSyncProgress(0), 1000);
     }
+  };
+
+  // Resync a single show/movie instead of the whole watchlist -- reuses
+  // syncWatchlist's itemsOverride so it gets the same progress/change/failure
+  // handling without duplicating the sync logic.
+  const syncSingleItem = async (id: string) => {
+    const item = watchlist.find((i) => i.id === id);
+    if (!item || !item.tmdb_id) return;
+    await syncWatchlist('manual', [item]);
+  };
+
+  // Stops a full sync between chunks (see syncCancelRef declaration above).
+  const cancelSync = () => {
+    syncCancelRef.current = true;
   };
 
   // Auto-sync: Check on load and every 15 minutes if a sync is due
@@ -1200,32 +1353,76 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, watchlist.length, autoSyncEnabled]);
 
+  const stableSyncWatchlist = useStableCallback(syncWatchlist);
+  const stableSyncSingleItem = useStableCallback(syncSingleItem);
+  const stableCancelSync = useStableCallback(cancelSync);
+  const stableAddWatchlistItem = useStableCallback(addWatchlistItem);
+  const stableIsAddPending = useStableCallback(isAddPending);
+  const stableRemoveWatchlistItem = useStableCallback(removeWatchlistItem);
+  const stableAddFavourite = useStableCallback(addFavourite);
+  const stableRemoveFavourite = useStableCallback(removeFavourite);
+  const stableToggleEpisodeWatched = useStableCallback(toggleEpisodeWatched);
+  const stableToggleSeasonWatched = useStableCallback(toggleSeasonWatched);
+  const stableIsEpisodeWatched = useStableCallback(isEpisodeWatched);
+  const stableIsSeasonWatched = useStableCallback(isSeasonWatched);
+
+  const value = useMemo(
+    () => ({
+      watchlist,
+      favourites,
+      loading,
+      syncing,
+      syncProgress,
+      lastSyncTime,
+      lastAutoSyncTime,
+      nextAutoSyncTime,
+      syncLog,
+      autoSyncEnabled,
+      syncWatchlist: stableSyncWatchlist,
+      syncSingleItem: stableSyncSingleItem,
+      cancelSync: stableCancelSync,
+      addWatchlistItem: stableAddWatchlistItem,
+      isAddPending: stableIsAddPending,
+      removeWatchlistItem: stableRemoveWatchlistItem,
+      addFavourite: stableAddFavourite,
+      removeFavourite: stableRemoveFavourite,
+      toggleEpisodeWatched: stableToggleEpisodeWatched,
+      toggleSeasonWatched: stableToggleSeasonWatched,
+      isEpisodeWatched: stableIsEpisodeWatched,
+      isSeasonWatched: stableIsSeasonWatched,
+      getAutoStatus,
+      fetchData,
+    }),
+    [
+      watchlist,
+      favourites,
+      loading,
+      syncing,
+      syncProgress,
+      lastSyncTime,
+      lastAutoSyncTime,
+      nextAutoSyncTime,
+      syncLog,
+      autoSyncEnabled,
+      stableSyncWatchlist,
+      stableSyncSingleItem,
+      stableCancelSync,
+      stableAddWatchlistItem,
+      stableIsAddPending,
+      stableRemoveWatchlistItem,
+      stableAddFavourite,
+      stableRemoveFavourite,
+      stableToggleEpisodeWatched,
+      stableToggleSeasonWatched,
+      stableIsEpisodeWatched,
+      stableIsSeasonWatched,
+      getAutoStatus,
+      fetchData,
+    ],
+  );
+
   return (
-    <WatchlistContext.Provider
-      value={{
-        watchlist,
-        favourites,
-        loading,
-        syncing,
-        syncProgress,
-        lastSyncTime,
-        lastAutoSyncTime,
-        nextAutoSyncTime,
-        syncLog,
-        autoSyncEnabled,
-        syncWatchlist,
-        addWatchlistItem,
-        removeWatchlistItem,
-        addFavourite,
-        removeFavourite,
-        toggleEpisodeWatched,
-        toggleSeasonWatched,
-        isEpisodeWatched,
-        isSeasonWatched,
-        getAutoStatus,
-        fetchData,
-      }}
-    >
+    <WatchlistContext.Provider value={value}>
       {children}
     </WatchlistContext.Provider>
   );
