@@ -4,6 +4,7 @@ import { Trash2, ExternalLink, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EditBookDialog } from './EditBookDialog';
 import { CardDetailDialog, DetailSection } from '@/components/cards/CardDetailDialog';
+import { cn } from '@/lib/utils';
 
 interface BookCardProps {
   book: Book;
@@ -44,8 +45,10 @@ export const BookCard = memo(function BookCard({ book, onRemove, onUpdate }: Boo
 
           {/* Actions overlay */}
           <div
-            className={`absolute top-2 right-2 flex gap-1 transition-opacity duration-200 ${showActions ? 'opacity-100' : 'opacity-0'
-              }`}
+            className={cn(
+              'absolute top-2 right-2 flex gap-1 transition-opacity duration-200 opacity-100 lg:opacity-0',
+              showActions && 'lg:opacity-100',
+            )}
             onClick={(e) => e.stopPropagation()}
           >
             {onUpdate && <EditBookDialog book={book} onUpdate={onUpdate} />}

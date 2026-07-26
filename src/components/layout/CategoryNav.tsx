@@ -24,16 +24,16 @@ export function CategoryNav({
     <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
       <nav className="flex flex-nowrap items-center justify-start md:justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
         {categories.map((category, index) => (
-          <div key={category.key} className="flex items-center gap-2 md:gap-4">
+          <div key={category.key} className="flex items-center gap-2 md:gap-4 shrink-0">
             <button
               onClick={() => onCategoryChange(category.key)}
               className={cn(
-                'nav-link relative py-1',
+                'nav-link relative py-1 shrink-0',
                 activeCategory === category.key && 'nav-link-active',
               )}
             >
-              <DotMatrixText text={category.label.toUpperCase()} size="xs" />
-              <span className="ml-1.5 text-xs text-muted-foreground/60">
+              <DotMatrixText text={category.label.toUpperCase()} size="xs" wrap={false} />
+              <span className="ml-1.5 text-xs text-muted-foreground/60 whitespace-nowrap">
                 ({getCategoryCount(category.key)})
               </span>
             </button>

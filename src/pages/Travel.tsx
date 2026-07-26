@@ -113,14 +113,14 @@ const Travel = () => {
     }, [hovered?.dotKey, visitedCities, viewMode]);
 
     const tooltipText = useMemo(() => {
-        if (!hovered) return 'HOVER TO EXPLORE';
+        if (!hovered) return isMobile ? 'TAP TO EXPLORE' : 'HOVER TO EXPLORE';
         if (viewMode === 'cities' && hoveredCities.length > 0) {
             return hoveredCities.map(c => c.city_name).join(', ').toUpperCase();
         }
         return visitedCodes.includes(hovered.code)
             ? `${hovered.name.toUpperCase()} - VISITED`
             : hovered.name.toUpperCase();
-    }, [hovered, viewMode, hoveredCities, visitedCodes]);
+    }, [hovered, viewMode, hoveredCities, visitedCodes, isMobile]);
 
     // Group SOVEREIGN visited countries by continent
     const byContinent = useMemo(() => {

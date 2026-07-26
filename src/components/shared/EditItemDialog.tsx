@@ -118,7 +118,7 @@ export function EditItemDialog({ item, onUpdate }: EditItemDialogProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-primary hover:text-primary-foreground w-7 h-7"
+          className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-primary hover:text-primary-foreground w-7 h-7"
         >
           <Pencil className="w-3.5 h-3.5" />
         </Button>

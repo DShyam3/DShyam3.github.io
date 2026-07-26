@@ -46,7 +46,7 @@ export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {
               variant="ghost"
               size="icon"
               onClick={() => onRemove(link.id)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
+              className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -74,7 +74,7 @@ export function LinkCard({ link, onRemove, onUpdate, index }: LinkCardProps) {
               <h3 className="font-serif text-base font-medium leading-tight group-hover:text-primary transition-colors block w-full">
                 <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
                   {link.name}
-                  <ExternalLink className="inline-block w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-2 align-baseline" />
+                  <ExternalLink className="inline-block w-3 h-3 text-muted-foreground opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity ml-2 align-baseline" />
                 </span>
               </h3>
             </div>

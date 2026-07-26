@@ -56,7 +56,7 @@ export function EditBeliefDialog({ belief, onUpdate, trigger }: EditBeliefDialog
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                        className="h-7 w-7 opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                     >
                         <Pencil className="h-3.5 w-3.5" />
                     </Button>

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
-import { formatRuntime, getPlatformColor } from '@/lib/watchlist-utils';
+import { formatRuntime, getPlatformColor, getStatusColor, isUpcomingStatus } from '@/lib/watchlist-utils';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -165,38 +165,35 @@ export function WatchlistDetailDialog({
                     {item.streaming_platform}
                   </span>
                 )}
-                <div className="flex flex-col items-start gap-1">
-                  {status && (
+                {status && (
+                  isUpcomingStatus(status) && upcomingReleaseDate ? (
+                    <div
+                      className={cn(
+                        'flex flex-col gap-0.5 px-2 py-1 rounded-lg',
+                        getStatusColor(status),
+                      )}
+                    >
+                      <span className="text-xs font-medium">{status}</span>
+                      <span className="text-[11px] opacity-70 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {upcomingReleaseDate.toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  ) : (
                     <span
                       className={cn(
                         'text-xs px-2 py-1 rounded-full font-medium',
-                        status === 'Watching' &&
-                          'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-                        status === 'To Watch' && 'bg-primary/10 text-primary',
-                        (status === 'Completed' || status === 'Watched') &&
-                          'bg-green-500/10 text-green-600 dark:text-green-400',
-                        status === 'Coming Soon' &&
-                          'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-                        status.toLowerCase().includes('releases in') &&
-                          'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                        status === 'Released' &&
-                          'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+                        getStatusColor(status),
                       )}
                     >
                       {status}
                     </span>
-                  )}
-                  {upcomingReleaseDate && status && (status.toLowerCase().includes('releases in') || status === 'Coming Soon') && (
-                    <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {upcomingReleaseDate.toLocaleDateString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </span>
-                  )}
-                </div>
+                  )
+                )}
               </div>
             </DialogHeader>
 
@@ -449,38 +446,35 @@ export function WatchlistDetailDialog({
                   {item.streaming_platform}
                 </span>
               )}
-              <div className="flex flex-col items-start gap-1">
-                {status && (
+              {status && (
+                isUpcomingStatus(status) && upcomingReleaseDate ? (
+                  <div
+                    className={cn(
+                      'flex flex-col gap-0.5 px-2 py-1 rounded-lg',
+                      getStatusColor(status),
+                    )}
+                  >
+                    <span className="text-xs font-medium">{status}</span>
+                    <span className="text-[11px] opacity-70 flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {upcomingReleaseDate.toLocaleDateString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </div>
+                ) : (
                   <span
                     className={cn(
                       'text-xs px-2 py-1 rounded-full font-medium',
-                      status === 'Watching' &&
-                        'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-                      status === 'To Watch' && 'bg-primary/10 text-primary',
-                      (status === 'Completed' || status === 'Watched') &&
-                        'bg-green-500/10 text-green-600 dark:text-green-400',
-                      status === 'Coming Soon' &&
-                        'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-                      status.toLowerCase().includes('releases in') &&
-                        'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                      status === 'Released' &&
-                        'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+                      getStatusColor(status),
                     )}
                   >
                     {status}
                   </span>
-                )}
-                {upcomingReleaseDate && status && (status.toLowerCase().includes('releases in') || status === 'Coming Soon') && (
-                  <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    {upcomingReleaseDate.toLocaleDateString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                      })}
-                  </span>
-                )}
-              </div>
+                )
+              )}
             </div>
 
             {/* Description */}

@@ -81,16 +81,16 @@ const Articles = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
           <nav className="flex flex-nowrap items-center justify-start md:justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
             {categories.map((cat, index) => (
-              <div key={cat.key} className="flex items-center gap-2 md:gap-4">
+              <div key={cat.key} className="flex items-center gap-2 md:gap-4 shrink-0">
                 <button
                   onClick={() => setActiveCategory(cat.key as ArticleCategory)}
                   className={cn(
-                    'nav-link relative py-1',
+                    'nav-link relative py-1 shrink-0',
                     activeCategory === cat.key && 'nav-link-active',
                   )}
                 >
-                  <DotMatrixText text={cat.label.toUpperCase()} size="xs" />
-                  <span className="ml-1.5 text-xs text-muted-foreground/60">
+                  <DotMatrixText text={cat.label.toUpperCase()} size="xs" wrap={false} />
+                  <span className="ml-1.5 text-xs text-muted-foreground/60 whitespace-nowrap">
                     ({getCategoryCount(cat.key as ArticleCategory)})
                   </span>
                 </button>
@@ -263,7 +263,7 @@ function ArticleCard({
             <Button
               variant="secondary"
               size="icon"
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80"
+              className="h-8 w-8 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 bg-background/80"
               onClick={() => onRemove(a.id)}
             >
               <Trash2 className="h-4 w-4" />

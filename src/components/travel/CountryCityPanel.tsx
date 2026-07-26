@@ -114,7 +114,7 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
                 {isAdmin && (
                   <button
                     onClick={() => onRemoveCity(city.id)}
-                    className="city-remove-btn opacity-0 group-hover:opacity-100 p-1 hover:text-destructive transition-all"
+                    className="city-remove-btn opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 hover:text-destructive transition-all"
                   >
                     <X className="w-3 h-3" />
                   </button>

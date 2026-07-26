@@ -62,7 +62,7 @@ const Beliefs = () => {
                   {b.author && <p className="text-sm text-muted-foreground mt-2 pl-8">— {b.author}</p>}
                   <div className="flex items-center justify-end gap-1 mt-4 pl-8">
                     <EditBeliefDialog belief={b} onUpdate={updateBelief} />
-                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7" onClick={() => removeBelief(b.id)}>
+                    <Button variant="ghost" size="icon" className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 h-7 w-7" onClick={() => removeBelief(b.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>

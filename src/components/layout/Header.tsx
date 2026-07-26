@@ -128,22 +128,22 @@ export function Header({
           </div>
 
           <div className="flex items-center gap-4">
-            <div 
-              className="text-right cursor-pointer select-none active:opacity-70 transition-opacity"
+            <div
+              className="text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity"
               onClick={handleTitleClick}
             >
               <div>
                 <DotMatrixText
                   text={title.toUpperCase()}
                   size="sm"
-                  className="text-foreground justify-end"
+                  className="text-foreground justify-start md:justify-end"
                 />
               </div>
               <div>
                 <DotMatrixText
                   text={subtitle.toUpperCase()}
                   size="xs"
-                  className="text-muted-foreground justify-end mt-1"
+                  className="text-muted-foreground justify-start md:justify-end mt-1"
                 />
               </div>
             </div>

@@ -95,7 +95,7 @@ export function EditPhotoDialog({ photo, onUpdate, trigger }: EditPhotoDialogPro
                     <Button
                         variant="secondary"
                         size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80 backdrop-blur-sm"
+                        className="h-8 w-8 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 bg-background/80 backdrop-blur-sm"
                     >
                         <Pencil className="h-4 w-4" />
                     </Button>

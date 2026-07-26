@@ -19,7 +19,7 @@ import { Trash2, Calendar, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/hooks/useWatchlist';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
-import { getPlatformColor } from '@/lib/watchlist-utils';
+import { getPlatformColor, getStatusColor, isUpcomingStatus } from '@/lib/watchlist-utils';
 
 interface WatchlistCardProps {
   item: WatchlistItem;
@@ -161,7 +161,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
           {/* Action buttons - top right on hover */}
           <div
-            className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
             {onMoveToFavourites && (
@@ -247,34 +247,33 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               </span>
             )}
             {status && (
-              <span
-                className={cn(
-                  'text-[10px] px-2 py-0.5 rounded font-medium',
-                  status === 'Watching' &&
-                    'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-                  status === 'To Watch' && 'bg-primary/10 text-primary',
-                  (status === 'Completed' || status === 'Watched') &&
-                    'bg-green-500/10 text-green-600 dark:text-green-400',
-                  status === 'Coming Soon' &&
-                    'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-                  status.toLowerCase().includes('releases in') &&
-                    'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                  status === 'Released' &&
-                    'bg-gray-500/10 text-gray-600 dark:text-gray-400',
-                )}
-              >
-                {status}
-              </span>
-            )}
-            {upcomingReleaseDate && status && (status.toLowerCase().includes('releases in') || status === 'Coming Soon') && (
-              <span className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                {upcomingReleaseDate.toLocaleDateString([], {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </span>
+              isUpcomingStatus(status) && upcomingReleaseDate ? (
+                <div
+                  className={cn(
+                    'flex flex-col gap-0.5 px-2 py-1 rounded',
+                    getStatusColor(status),
+                  )}
+                >
+                  <span className="text-[10px] font-medium">{status}</span>
+                  <span className="text-[10px] opacity-70 flex items-center gap-1">
+                    <Calendar className="h-2.5 w-2.5" />
+                    {upcomingReleaseDate.toLocaleDateString([], {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+              ) : (
+                <span
+                  className={cn(
+                    'text-[10px] px-2 py-0.5 rounded font-medium',
+                    getStatusColor(status),
+                  )}
+                >
+                  {status}
+                </span>
+              )
             )}
           </div>
         </div>

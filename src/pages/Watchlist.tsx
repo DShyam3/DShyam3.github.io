@@ -514,7 +514,7 @@ const Watchlist = () => {
         <Header title="Watchlist" subtitle="What I'm watching" />
 
         <div className="px-4 md:px-0 pt-6 space-y-4">
-          <div className="flex flex-wrap items-center gap-2 justify-between">
+          <div className="flex flex-wrap items-start gap-2 justify-between">
             <div className="flex flex-wrap items-center gap-2 md:gap-4">
               {CATEGORIES.map((cat, index) => (
                 <div key={cat} className="flex items-center gap-2 md:gap-4">
@@ -545,7 +545,7 @@ const Watchlist = () => {
                 </div>
               ))}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-2 w-full sm:w-auto">
               {isAdmin && (
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5">
@@ -569,7 +569,7 @@ const Watchlist = () => {
                         {syncing ? (
                           `${syncProgress}%`
                         ) : (
-                          <DotMatrixText text="SYNC UPDATES" size="xs" />
+                          <DotMatrixText text="SYNC UPDATES" size="xs" wrap={false} />
                         )}
                       </span>
                     </Button>
@@ -634,7 +634,7 @@ const Watchlist = () => {
                 className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
               >
                 <CalendarDays className="h-4 w-4" />
-                <DotMatrixText text="WEEKLY SCHEDULE" size="xs" />
+                <DotMatrixText text="WEEKLY SCHEDULE" size="xs" wrap={false} />
               </Button>
             </div>
           </div>
@@ -680,11 +680,17 @@ const Watchlist = () => {
                           className={cn(
                             'px-1 py-px rounded text-[9px] font-semibold tracking-wide',
                             entry.sync_type === 'auto'
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : 'bg-orange-500/20 text-orange-400',
+                              ? 'bg-purple-500/20 text-purple-400'
+                              : entry.sync_type === 'daily'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'bg-orange-500/20 text-orange-400',
                           )}
                         >
-                          {entry.sync_type === 'auto' ? 'AUTO' : 'MAN'}
+                          {entry.sync_type === 'auto'
+                            ? 'AUTO'
+                            : entry.sync_type === 'daily'
+                              ? 'DAILY'
+                              : 'MAN'}
                         </span>
                         <span className="text-muted-foreground">
                           {entry.items_synced} items ·{' '}
@@ -840,9 +846,9 @@ const Watchlist = () => {
                       className="h-9 px-3 text-xs whitespace-nowrap"
                     >
                       {hideCompleted ? (
-                        <DotMatrixText text="SHOW ALL" size="xs" />
+                        <DotMatrixText text="SHOW ALL" size="xs" wrap={false} />
                       ) : (
-                        <DotMatrixText text="HIDE COMPLETED" size="xs" />
+                        <DotMatrixText text="HIDE COMPLETED" size="xs" wrap={false} />
                       )}
                     </Button>
                   )}
@@ -1301,7 +1307,7 @@ const Watchlist = () => {
                                   )}
                                   {isAdmin && (
                                     <div
-                                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="absolute top-2 right-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <Button
@@ -1350,7 +1356,7 @@ const Watchlist = () => {
                                   )}
                                   {isAdmin && (
                                     <div
-                                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="absolute top-2 right-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <Button

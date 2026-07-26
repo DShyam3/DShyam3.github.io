@@ -146,7 +146,7 @@ function InspirationCard({ inspiration: p, onRemove, onUpdate }: {
           <div className="absolute top-2 right-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
             {onUpdate && <EditInspirationDialog inspiration={p} onUpdate={onUpdate} />}
             {onRemove && (
-              <Button variant="secondary" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 bg-background/80" onClick={() => onRemove(p.id)}>
+              <Button variant="secondary" size="icon" className="h-8 w-8 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 bg-background/80" onClick={() => onRemove(p.id)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}

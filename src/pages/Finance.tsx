@@ -6472,7 +6472,7 @@ export default function Finance() {
                         return (
                           <div key={category.id} className="py-2.5">
                             {/* Category Row */}
-                            <div className="group flex items-center justify-between py-1.5 hover:bg-muted/5 rounded-xl px-2 transition-colors">
+                            <div className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0 py-1.5 hover:bg-muted/5 rounded-xl px-2 transition-colors">
                               {/* Left: Collapse, badge count, name, hover actions */}
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <button
@@ -6500,7 +6500,7 @@ export default function Finance() {
                                 <span className="font-bold text-sm text-foreground truncate">{category.name}</span>
 
                                 {/* Hover actions */}
-                                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
+                                <div className="flex gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
                                   <button
                                     onClick={() => {
                                       setActiveCategoryId(category.id);
@@ -6536,7 +6536,7 @@ export default function Finance() {
                               </div>
 
                               {/* Right: Spent, Budget, Left, Progress bar */}
-                              <div className="flex items-center gap-3 shrink-0 font-mono text-xs">
+                              <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 font-mono text-xs pl-7 sm:pl-0">
                                 <span className="font-bold text-foreground w-20 text-right">{formatGBP(catSpent)}</span>
                                 <span className="font-medium text-muted-foreground/80 w-20 text-right">{formatGBP(catBudget)}</span>
                                 <span className={cn(
@@ -6567,7 +6567,7 @@ export default function Finance() {
                                   const itemLeft = item.budgeted - spentVal;
                                   const isItemOver = spentVal > item.budgeted;
                                   return (
-                                    <div key={item.id} className="group flex items-center justify-between text-xs py-1 hover:bg-muted/5 rounded-lg px-2 transition-colors">
+                                    <div key={item.id} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 text-xs py-1 hover:bg-muted/5 rounded-lg px-2 transition-colors">
                                       {/* Left: Bullet/Emoji, name, hover actions */}
                                       <div className="flex items-center gap-2 flex-1 min-w-0">
                                         {item.emoji ? (
@@ -6578,7 +6578,7 @@ export default function Finance() {
                                         <span className="font-medium text-foreground/90 truncate">{item.name}</span>
 
                                         {/* Item hover actions */}
-                                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
+                                        <div className="flex gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
                                           <button
                                             onClick={() => {
                                               setActiveBudgetItem({ ...item, categoryId: category.id });
@@ -6600,7 +6600,7 @@ export default function Finance() {
                                       </div>
 
                                       {/* Right: Spent, Budget, Left, progress */}
-                                      <div className="flex items-center gap-3 shrink-0 font-mono text-[11px]">
+                                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 font-mono text-[11px] pl-5 sm:pl-0">
                                         <span className="font-semibold text-foreground/80 w-20 text-right">{formatGBP(spentVal)}</span>
                                         <span className="text-muted-foreground/60 w-20 text-right">{formatGBP(item.budgeted)}</span>
                                         <span className={cn(
@@ -8359,7 +8359,7 @@ export default function Finance() {
                                         </div>
                                         <button
                                           onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
-                                          className="text-rose-500 hover:text-rose-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          className="text-rose-500 hover:text-rose-600 p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                                           title="Delete"
                                         >
                                           <Trash2 className="h-3 w-3" />

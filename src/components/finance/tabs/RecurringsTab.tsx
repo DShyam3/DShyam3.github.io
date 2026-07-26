@@ -200,7 +200,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                 return (
                   <div
                     key={bill.id}
-                    className="group flex items-center justify-between py-2 border-b border-border/5 last:border-b-0"
+                    className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0 py-2 border-b border-border/5 last:border-b-0"
                   >
                     <div className="flex items-center gap-6 min-w-0 flex-1">
                       <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
@@ -217,8 +217,8 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex mr-2">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 justify-between sm:justify-end sm:ml-auto">
+                      <div className="flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity mr-2">
                         <button
                           onClick={() => onEditRecurring(bill)}
                           className="text-muted-foreground hover:text-foreground p-1 transition-colors"
@@ -279,7 +279,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                 return (
                   <div
                     key={bill.id}
-                    className="group flex items-center justify-between py-2 border-b border-border/5 last:border-b-0"
+                    className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0 py-2 border-b border-border/5 last:border-b-0"
                   >
                     <div className="flex items-center gap-6 min-w-0 flex-1">
                       <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
@@ -296,8 +296,8 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex mr-2">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 justify-between sm:justify-end sm:ml-auto">
+                      <div className="flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity mr-2">
                         <button
                           onClick={() => onEditRecurring(bill)}
                           className="text-muted-foreground hover:text-foreground p-1 transition-colors"

@@ -117,7 +117,7 @@ export function ItemCard({ item, onRemove, onUpdate, index }: ItemCardProps) {
                 variant="ghost"
                 size="icon"
                 onClick={handleDelete}
-                className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
+                className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
               >
                 <X className="w-3.5 h-3.5" />
               </Button>

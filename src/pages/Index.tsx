@@ -135,12 +135,13 @@ const Index = () => {
 
               {/* Experience */}
               <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2 mb-4 w-full overflow-hidden">
-                  <div className="w-full sm:w-auto overflow-hidden">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
+                  <div className="w-full lg:w-auto lg:shrink-0">
                     <DotMatrixText
                       text="EXPERIENCE"
                       size="sm"
-                      className="text-foreground tracking-widest pl-1 font-semibold truncate"
+                      wrap={false}
+                      className="text-foreground tracking-widest pl-1 font-semibold"
                     />
                   </div>
                   <div className="flex flex-wrap gap-2 justify-end">
@@ -169,7 +170,7 @@ const Index = () => {
                           disabled={uploadingCv}
                         >
                           {uploadingCv ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 shrink-0" />}
-                          <span className="truncate hidden sm:inline">Upload CV</span>
+                          <span className="truncate hidden lg:inline">Upload CV</span>
                         </Button>
                       </>
                     )}

@@ -153,7 +153,7 @@ export function ScheduleItem({
           </div>
         </div>
 
-        <div className="absolute top-1/2 -translate-y-1/2 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute top-1/2 -translate-y-1/2 right-1 flex gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity z-10">
           {updateScheduleDay && (
             <Button
               variant="ghost"
