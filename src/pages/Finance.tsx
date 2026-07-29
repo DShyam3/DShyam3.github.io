@@ -183,7 +183,7 @@ import type {
   UniversalStanding,
   PackageBenefit,
 } from '@/types/finance';
-import { Sparkline } from '@/components/finance/ui/primitives';
+import { Sparkline, DeltaPill, FinMeter, FinSegmentedControl } from '@/components/finance/ui/primitives';
 
 // ==========================================
 // CONSTANTS & DEFAULTS
@@ -3696,30 +3696,16 @@ export default function Finance() {
                       </div>
                       
                       <div className="flex items-center gap-3 self-start sm:self-center">
-                        <div className="flex bg-muted/30 border border-border/50 rounded-full p-0.5 gap-0.5">
-                          {[
+                        <FinSegmentedControl
+                          options={[
                             { key: 'this_month', label: 'This Month' },
                             { key: 'last_3m', label: 'Last 3M' },
                             { key: 'ytd', label: 'YTD' },
                             { key: 'all_time', label: 'All Time' },
-                          ].map((opt) => {
-                            const isActive = dashboardSpendRange === opt.key;
-                            return (
-                              <button
-                                key={opt.key}
-                                onClick={() => setDashboardSpendRange(opt.key as any)}
-                                className={cn(
-                                  "px-2.5 py-1 text-[10px] font-semibold font-sans rounded-full transition-all whitespace-nowrap",
-                                  isActive
-                                    ? "bg-primary text-primary-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                                )}
-                              >
-                                {opt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
+                          ]}
+                          value={dashboardSpendRange}
+                          onChange={(key) => setDashboardSpendRange(key)}
+                        />
 
                         <div className="text-right hidden sm:block">
                           <span className={cn(
@@ -3834,12 +3820,12 @@ export default function Finance() {
                           </span>
                           {/* Trend comparison */}
                           <div className="flex items-center gap-1 text-[8px] text-muted-foreground font-sans truncate">
-                            <span className={cn(
-                              "flex items-center px-1 py-0.5 rounded-full font-bold font-mono text-[8px]",
-                              comparison.isPositive ? "bg-fin-positive/10 text-fin-positive" : "bg-fin-negative/10 text-fin-negative"
-                            )}>
-                              {comparison.isPositive ? '↗' : '↘'} {comparison.pct.toFixed(0)}%
-                            </span>
+                            <DeltaPill
+                              value={comparison.isPositive ? comparison.pct : -comparison.pct}
+                              formatter={(v) => `${comparison.isPositive ? '↗' : '↘'} ${Math.abs(v).toFixed(0)}%`}
+                              showSign={false}
+                              className="text-[8px] px-1 py-0.5"
+                            />
                             <span>vs last month</span>
                           </div>
                         </div>
@@ -3875,10 +3861,12 @@ export default function Finance() {
                         <div className="flex justify-between text-[8px] text-muted-foreground uppercase tracking-wider font-mono">
                           <span>Actual Cash Flow</span>
                         </div>
-                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-                          <div className="h-full bg-fin-positive transition-all duration-300" style={{ width: `${incomeFlowPercent}%` }} />
-                          <div className="h-full bg-fin-accent transition-all duration-300" style={{ width: `${spendFlowPercent}%` }} />
-                        </div>
+                        <FinMeter
+                          segments={[
+                            { key: 'in', percent: incomeFlowPercent, tone: 'positive' },
+                            { key: 'out', percent: spendFlowPercent, tone: 'accent' },
+                          ]}
+                        />
                         <div className="flex items-center justify-between text-[8px] text-muted-foreground font-mono">
                           <span>In: <span className="text-fin-positive font-bold">{formatGBP(monthlyIncome)}</span></span>
                           <span>Out: <span className="text-foreground font-bold">{formatGBP(totalSpent)}</span></span>
@@ -3895,11 +3883,14 @@ export default function Finance() {
                           const billsWidth = totalBudget > 0 ? Math.min(100 - spentWidth, billsPercent) : 0;
                           const freeWidth = totalBudget > 0 && freeToSpend > 0 ? Math.max(0, 100 - spentWidth - billsWidth) : 0;
                           return (
-                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden flex">
-                              <div className="h-full bg-fin-accent transition-all duration-300" style={{ width: `${spentWidth}%` }} title={`Spent: ${spentPercent.toFixed(0)}%`} />
-                              <div className="h-full bg-fin-warn transition-all duration-300" style={{ width: `${billsWidth}%` }} title={`Bills: ${billsPercent.toFixed(0)}%`} />
-                              <div className="h-full bg-fin-positive transition-all duration-300" style={{ width: `${freeWidth}%` }} title={`Free: ${freePercent.toFixed(0)}%`} />
-                            </div>
+                            <FinMeter
+                              trackClassName="h-2"
+                              segments={[
+                                { key: 'spent', percent: spentWidth, tone: 'accent' },
+                                { key: 'bills', percent: billsWidth, tone: 'warn' },
+                                { key: 'free', percent: freeWidth, tone: 'positive' },
+                              ]}
+                            />
                           );
                         })()}
                         <div className="flex flex-wrap items-center justify-between text-[8px] font-mono text-muted-foreground gap-y-1">
@@ -5755,24 +5746,24 @@ export default function Finance() {
             const getCategoryDetails = (categoryName: string) => {
               const catLower = categoryName.toLowerCase();
               if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) return { emoji: '🏠', color: '#4f8fdb' };
-              if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) return { emoji: '🛍️', color: '#a855f7' };
+              if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) return { emoji: '🛍️', color: '#6c63d1' };
               if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('dining')) return { emoji: '🍔', color: '#b8925a' };
               if (catLower.includes('groceries')) return { emoji: '🥑', color: '#2f9e6e' };
-              if (catLower.includes('insurance')) return { emoji: '🚘', color: '#eab308' };
+              if (catLower.includes('insurance')) return { emoji: '🚘', color: '#d99a3d' };
               if (catLower.includes('gas') || catLower.includes('fuel')) return { emoji: '⛽', color: '#d1495b' };
               if (catLower.includes('personal') || catLower.includes('health') || catLower.includes('care')) return { emoji: '💆', color: '#c77dc9' };
               if (catLower.includes('phone') || catLower.includes('mobile')) return { emoji: '📱', color: '#3fb5ab' };
               if (catLower.includes('uber') || catLower.includes('taxi') || catLower.includes('ride')) return { emoji: '🚗', color: '#6c63d1' };
-              if (catLower.includes('transport') || catLower.includes('travel')) return { emoji: '🚗', color: '#eab308' };
+              if (catLower.includes('transport') || catLower.includes('travel')) return { emoji: '🚗', color: '#d99a3d' };
               if (catLower.includes('entertainment') || catLower.includes('movie') || catLower.includes('cinema')) return { emoji: '🎬', color: '#d1495b' };
               if (catLower.includes('electric') || catLower.includes('power') || catLower.includes('utilities')) return { emoji: '⚡', color: '#4f8fdb' };
-              if (catLower.includes('internet') || catLower.includes('wifi')) return { emoji: '🌐', color: '#0284c7' };
+              if (catLower.includes('internet') || catLower.includes('wifi')) return { emoji: '🌐', color: '#3fb5ab' };
               if (catLower.includes('gym') || catLower.includes('fitness') || catLower.includes('sports')) return { emoji: '🏋️', color: '#2f9e6e' };
-              if (catLower.includes('pet') || catLower.includes('vet')) return { emoji: '🐶', color: '#d97706' };
+              if (catLower.includes('pet') || catLower.includes('vet')) return { emoji: '🐶', color: '#d99a3d' };
               if (catLower.includes('gift') || catLower.includes('presents')) return { emoji: '🎁', color: '#d1495b' };
               if (catLower.includes('donations') || catLower.includes('charity')) return { emoji: '🤝', color: '#78716c' };
               if (catLower.includes('spotify') || catLower.includes('music')) return { emoji: '🎵', color: '#2f9e6e' };
-              if (catLower.includes('netflix') || catLower.includes('hulu') || catLower.includes('tv')) return { emoji: '📺', color: '#e11d48' };
+              if (catLower.includes('netflix') || catLower.includes('hulu') || catLower.includes('tv')) return { emoji: '📺', color: '#d1495b' };
               if (catLower.includes('audible') || catLower.includes('books')) return { emoji: '🎧', color: '#d99a3d' };
               return { emoji: '📦', color: '#71717a' };
             };
@@ -6226,7 +6217,7 @@ export default function Finance() {
                       <div className="space-y-1">
                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
                         <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-                        <p className="text-2xl font-extrabold font-mono text-cyan-500">{formatGBP(ytdIncome)}</p>
+                        <p className="text-2xl font-extrabold font-mono text-fin-accent">{formatGBP(ytdIncome)}</p>
                       </div>
                       <button
                         onClick={() => setCfDrawerOpen('income')}
