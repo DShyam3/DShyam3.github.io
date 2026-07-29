@@ -215,7 +215,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({
       </div>
 
       {/* Header Overview: Spent vs Total Budget gauge */}
-      <div className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col md:flex-row items-center justify-around gap-6">
+      <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 flex flex-col md:flex-row items-center justify-around gap-6">
         <div className="text-center md:text-left space-y-1">
           <span className="text-3xl md:text-4xl font-bold font-mono text-foreground block">{formatGBP(totalSpent)}</span>
           <span className="text-xs text-muted-foreground block font-sans font-medium">spent in {currentMonthName}</span>
@@ -243,7 +243,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({
       {/* Money Allocation & Savings Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column: Savings Allocation */}
-        <Card className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col justify-between">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 flex flex-col justify-between">
           <div>
             <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Savings Allocation</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -328,7 +328,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({
         </Card>
 
         {/* Right Column: Money Allocation Summary & Pie Chart */}
-        <Card className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col justify-between">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 flex flex-col justify-between">
           <div>
             <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Money Allocation</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -462,7 +462,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({
       </div>
 
       {/* Key Metrics & Historical Monthly Trend */}
-      <Card className="bg-card/25 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl space-y-6">
+      <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-border/10 pb-6">
           <div className="flex-1 space-y-3 min-w-0">
             <div className="flex items-center justify-between">
@@ -557,7 +557,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({
       </Card>
 
       {/* Budget list */}
-      <Card className="bg-card/25 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl">
+      <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
         <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-sans border-b border-border/20 pb-2 px-2">
           <span className="flex-1">Regular Categories</span>
           <div className="flex items-center gap-3 text-right">

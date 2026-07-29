@@ -215,7 +215,7 @@ const GoalDetailsPanel: React.FC<GoalDetailsPanelProps> = ({
   }
 
   return (
-    <Card className="bg-card/40 border border-primary/10 rounded-3xl p-6 space-y-6">
+    <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 space-y-6">
       {/* Title Block */}
       <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start border-b border-border/30 pb-4">
         <div className="space-y-1 min-w-0">

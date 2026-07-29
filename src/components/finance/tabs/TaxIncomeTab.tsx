@@ -138,8 +138,8 @@ export const TaxIncomeTab: React.FC<TaxIncomeTabProps> = ({
         {/* Left Side: Payroll breakdown rate tables */}
         <div className="lg:col-span-8 flex flex-col gap-4">
           {/* Total Compensation Summary Card */}
-          <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent backdrop-blur-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 border border-primary/20 shadow-sm relative overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-primary/10 pb-4">
+          <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 sm:p-6 relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
               <div>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary mb-1.5">
                   <Gift className="w-3 h-3" /> Total Compensation Package
@@ -161,19 +161,19 @@ export const TaxIncomeTab: React.FC<TaxIncomeTabProps> = ({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
-              <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
+              <div className="bg-muted/20 rounded-xl p-3 border border-border/30">
                 <span className="block text-[10px] font-medium text-muted-foreground uppercase">Base Gross Salary</span>
                 <span className="mt-1 block font-mono text-sm font-bold text-foreground">{formatGBP(settings.grossSalary)}</span>
               </div>
-              <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
+              <div className="bg-muted/20 rounded-xl p-3 border border-border/30">
                 <span className="block text-[10px] font-medium text-muted-foreground uppercase">Employer Pension ({settings.employerPensionPercent}%)</span>
                 <span className="mt-1 block font-mono text-sm font-bold text-fin-positive">+{formatGBP(results.employerPensionRate)}</span>
               </div>
-              <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
+              <div className="bg-muted/20 rounded-xl p-3 border border-border/30">
                 <span className="block text-[10px] font-medium text-muted-foreground uppercase">Benefits & Perks</span>
                 <span className="mt-1 block font-mono text-sm font-bold text-fin-positive">+{formatGBP(results.totalBenefitsValue)}</span>
               </div>
-              <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
+              <div className="bg-muted/20 rounded-xl p-3 border border-border/30">
                 <span className="block text-[10px] font-medium text-muted-foreground uppercase">Net Take-Home</span>
                 <span className="mt-1 block font-mono text-sm font-bold text-primary">{formatGBP(results.netTakeHome)}</span>
               </div>
@@ -181,7 +181,7 @@ export const TaxIncomeTab: React.FC<TaxIncomeTabProps> = ({
           </div>
 
           {/* Standard Rates Breakdown */}
-          <div className="bg-card/40 backdrop-blur-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 border border-primary/10 shadow-sm">
+          <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 sm:p-6">
             <div className="flex flex-col gap-3 mb-4 border-b border-border/50 pb-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-0.5 text-left min-w-0">
@@ -375,7 +375,7 @@ export const TaxIncomeTab: React.FC<TaxIncomeTabProps> = ({
 
         {/* Right Side: Combined leave balances and holiday tracker */}
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4">
+          <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
               <div className="min-w-0">
                 <h3 className="font-serif text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -656,7 +656,7 @@ export const TaxIncomeTab: React.FC<TaxIncomeTabProps> = ({
           </div>
 
           {/* Card 2: Payday Details */}
-          <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm space-y-4">
+          <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
               <div className="min-w-0">
                 <h3 className="font-serif text-sm font-semibold text-foreground flex items-center gap-1.5">

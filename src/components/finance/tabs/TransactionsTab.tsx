@@ -416,7 +416,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       {/* LEFT SECTION: TRANSACTIONS LIST */}
       <div className="lg:col-span-2 flex flex-col space-y-4">
         {/* TOOLBAR: Search, Filter, Sort, Batch Actions */}
-        <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-2xl p-4 space-y-3 shadow-lg">
+        <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 space-y-3">
           <div className="flex flex-col sm:flex-row items-center gap-3">
             {/* Search */}
             <div className="relative w-full sm:flex-1">
@@ -617,7 +617,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         </div>
 
         {/* LIST RENDER: Grouped by date */}
-        <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-4 shadow-xl min-h-[400px] flex flex-col justify-start">
+        <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 min-h-[400px] flex flex-col justify-start">
           {groupedTransactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 my-auto">
               <div className="p-4 bg-primary/5 rounded-full border border-primary/10">
@@ -769,7 +769,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       {/* RIGHT SECTION: TRANSACTION DETAILS PANEL */}
       <div className="flex flex-col space-y-4">
-        <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-5 shadow-xl min-h-[500px]">
+        <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-5 min-h-[500px]">
           {selectedTx ? (
             <div className="space-y-6">
               {/* Detail Panel Header */}

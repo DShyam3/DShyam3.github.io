@@ -84,7 +84,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
           </Button>
         </div>
 
-        <div className="overflow-x-auto bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm -mx-0">
+        <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm overflow-x-auto p-4 sm:p-6 -mx-0">
           <table className="min-w-[720px] w-full text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
@@ -145,7 +145,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
       </div>
 
       {/* TrueLayer Integration Card */}
-      <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl space-y-6">
+      <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
             <h4 className="font-serif text-base font-semibold text-foreground flex items-center gap-2">
@@ -247,7 +247,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
           </Button>
         </div>
 
-        <div className="overflow-x-auto bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
+        <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm overflow-x-auto p-4 sm:p-6">
           <table className="min-w-[640px] w-full text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">

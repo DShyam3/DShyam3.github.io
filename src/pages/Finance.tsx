@@ -3967,7 +3967,7 @@ export default function Finance() {
 
       {/* DIALOG: Manage Package Benefits & Perks */}
       <Dialog open={isBenefitsDialogOpen} onOpenChange={setIsBenefitsDialogOpen}>
-        <DialogContent className="sm:max-w-[560px] rounded-2xl sm:rounded-[2rem] p-6 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[560px] rounded-3xl p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-serif text-xl flex items-center gap-2">
               <Gift className="w-5 h-5 text-primary" /> Manage Package Benefits & Perks
@@ -4013,7 +4013,7 @@ export default function Finance() {
                     type="button"
                     variant="outline"
                     onClick={() => handleAddPresetBenefit(preset)}
-                    className="h-8 rounded-xl text-xs gap-1.5 border-primary/10 bg-muted/20 hover:bg-primary/10"
+                    className="h-8 rounded-xl text-xs gap-1.5 border-border/50 bg-muted/20 hover:bg-primary/10"
                   >
                     <span>{preset.emoji}</span>
                     <span>{preset.name}</span>
@@ -4143,7 +4143,7 @@ export default function Finance() {
 
       {/* DIALOG: Tax & Income Settings */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="!flex !flex-col rounded-3xl border-primary/10 w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden">
+        <DialogContent className="!flex !flex-col rounded-3xl border-border/50 w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden">
           <DialogHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
             <DialogTitle className="font-serif text-xl">Tax & Income Settings</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
@@ -4189,7 +4189,7 @@ export default function Finance() {
                       <SelectTrigger id="paydaySchedule" className="rounded-xl h-11 border-primary/20 bg-background/50">
                         <SelectValue placeholder="Select schedule..." />
                       </SelectTrigger>
-                      <SelectContent className="rounded-xl border-primary/10">
+                      <SelectContent className="rounded-xl border-border/50">
                         <SelectItem value="monthly_date">Monthly on specific date</SelectItem>
                         <SelectItem value="last_working_day">Last working day of month</SelectItem>
                         <SelectItem value="last_friday">Last Friday of month</SelectItem>
@@ -4227,7 +4227,7 @@ export default function Finance() {
                         <SelectTrigger id="paydayWeekday" className="rounded-xl h-11 border-primary/20 bg-background/50">
                           <SelectValue placeholder="Select day..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-xl border-border/50">
                           <SelectItem value="1">Monday</SelectItem>
                           <SelectItem value="2">Tuesday</SelectItem>
                           <SelectItem value="3">Wednesday</SelectItem>
@@ -4265,7 +4265,7 @@ export default function Finance() {
                         <SelectTrigger id="pensionType" className="rounded-xl h-11 border-primary/20 bg-background/50">
                           <SelectValue placeholder="Select arrangement..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-xl border-border/50">
                           <SelectItem value="net_pay">Net Pay (Pre-Tax)</SelectItem>
                           <SelectItem value="salary_sacrifice">Salary Sacrifice</SelectItem>
                           <SelectItem value="relief_at_source">Relief at Source</SelectItem>
@@ -4281,7 +4281,7 @@ export default function Finance() {
                         <SelectTrigger id="studentLoan" className="rounded-xl h-11 border-primary/20 bg-background/50">
                           <SelectValue placeholder="Select plan..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-xl border-border/50">
                           <SelectItem value="none">No student loan</SelectItem>
                           <SelectItem value="plan1">Plan 1</SelectItem>
                           <SelectItem value="plan2">Plan 2</SelectItem>
@@ -4326,7 +4326,7 @@ export default function Finance() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-primary/10 bg-primary/5 p-3.5 flex items-center justify-between gap-3">
+                  <div className="rounded-xl border border-border/50 bg-primary/5 p-3.5 flex items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                         <Gift className="w-4 h-4 text-primary" /> Benefits & Package Perks
@@ -4399,7 +4399,7 @@ export default function Finance() {
                         <SelectTrigger className="rounded-xl h-11 border-primary/20 bg-background/50">
                           <SelectValue placeholder="Select region..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-xl border-border/50">
                           <SelectItem value="england-and-wales">England & Wales</SelectItem>
                           <SelectItem value="scotland">Scotland</SelectItem>
                           <SelectItem value="northern-ireland">Northern Ireland</SelectItem>
@@ -4415,7 +4415,7 @@ export default function Finance() {
                         <SelectTrigger className="rounded-xl h-11 border-primary/20 bg-background/50">
                           <SelectValue placeholder="Select year..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-xl border-border/50">
                           <SelectItem value="2025">2025</SelectItem>
                           <SelectItem value="2026">2026</SelectItem>
                           <SelectItem value="2027">2027</SelectItem>
@@ -4954,7 +4954,7 @@ export default function Finance() {
 
       {/* DIALOG: Add Savings Goal */}
       <Dialog open={isAddGoalOpen} onOpenChange={setIsAddGoalOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Add Savings Goal</DialogTitle>
             <DialogDescription className="text-xs">Create a new milestone target and timeline.</DialogDescription>
@@ -5025,7 +5025,7 @@ export default function Finance() {
 
       {/* DIALOG: Edit Savings Goal */}
       <Dialog open={isEditGoalOpen} onOpenChange={setIsEditGoalOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Edit Savings Goal</DialogTitle>
             <DialogDescription className="text-xs">Modify the details of your savings milestone.</DialogDescription>
@@ -5096,7 +5096,7 @@ export default function Finance() {
                   <SelectTrigger id="edit-goal-status" className="bg-background/50 border-primary/20 rounded-xl h-10">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-primary/10">
+                  <SelectContent className="rounded-xl border-border/50">
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>
@@ -5113,7 +5113,7 @@ export default function Finance() {
 
       {/* DIALOG: Add Account */}
       <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Add Bank Account</DialogTitle>
             <DialogDescription className="text-xs">Add a new personal bank account or credit card.</DialogDescription>
@@ -5139,7 +5139,7 @@ export default function Finance() {
                 <SelectTrigger id="acc-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
+                <SelectContent className="rounded-xl border-border/50">
                   <SelectItem value="checking">Checking</SelectItem>
                   <SelectItem value="savings">Savings</SelectItem>
                   <SelectItem value="credit">Credit Card</SelectItem>
@@ -5232,7 +5232,7 @@ export default function Finance() {
 
       {/* DIALOG: Edit Account */}
       <Dialog open={isEditAccountOpen} onOpenChange={setIsEditAccountOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Edit Account</DialogTitle>
             <DialogDescription className="text-xs">Update account metrics.</DialogDescription>
@@ -5321,7 +5321,7 @@ export default function Finance() {
 
       {/* DIALOG: Add Membership */}
       <Dialog open={isAddMembershipOpen} onOpenChange={setIsAddMembershipOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Add Reward Membership</DialogTitle>
             <DialogDescription className="text-xs">Add a new point, loyalty or reward system.</DialogDescription>
@@ -5347,7 +5347,7 @@ export default function Finance() {
                 <SelectTrigger id="mem-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
+                <SelectContent className="rounded-xl border-border/50">
                   <SelectItem value="points">Points Program</SelectItem>
                   <SelectItem value="cashback">Cashback Reward</SelectItem>
                   <SelectItem value="miles">Airline Miles</SelectItem>
@@ -5397,7 +5397,7 @@ export default function Finance() {
 
       {/* DIALOG: Edit Membership */}
       <Dialog open={isEditMembershipOpen} onOpenChange={setIsEditMembershipOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Edit Reward Program</DialogTitle>
             <DialogDescription className="text-xs">Update loyalty account details.</DialogDescription>
@@ -5483,7 +5483,7 @@ export default function Finance() {
 
       {/* DIALOG: Add Credit Score */}
       <Dialog open={isAddCreditScoreOpen} onOpenChange={setIsAddCreditScoreOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Log Credit Score</DialogTitle>
             <DialogDescription className="text-xs">Manually log your latest credit score from any bureau.</DialogDescription>
@@ -5498,7 +5498,7 @@ export default function Finance() {
                 <SelectTrigger id="cs-bureau" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
                   <SelectValue placeholder="Select bureau..." />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
+                <SelectContent className="rounded-xl border-border/50">
                   {creditBureaus.map(b => (
                     <SelectItem key={b.key} value={b.key} className="text-xs">
                       {b.emoji} {b.label} (0–{b.maxScore})
@@ -5541,7 +5541,7 @@ export default function Finance() {
 
       {/* DIALOG: Add Budget Category */}
       <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Add Budget Category</DialogTitle>
             <DialogDescription className="text-xs">Create a new container category with a monthly budget limit.</DialogDescription>
@@ -5633,7 +5633,7 @@ export default function Finance() {
 
       {/* DIALOG: Edit Budget Category */}
       <Dialog open={isEditCategoryOpen} onOpenChange={setIsEditCategoryOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Edit Budget Category</DialogTitle>
             <DialogDescription className="text-xs">Modify the name or limit for this budget category.</DialogDescription>
@@ -5694,7 +5694,7 @@ export default function Finance() {
 
       {/* DIALOG: Add Budget Item */}
       <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Add Budget Item</DialogTitle>
             <DialogDescription className="text-xs">Add a new specific item inside the selected category.</DialogDescription>
@@ -6417,7 +6417,7 @@ export default function Finance() {
 
       {/* DIALOG: Edit Budget Item */}
       <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}>
-        <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+        <DialogContent className="rounded-3xl border-border/50 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-serif">Edit Budget Item</DialogTitle>
             <DialogDescription className="text-xs">Modify values for this specific budget item.</DialogDescription>

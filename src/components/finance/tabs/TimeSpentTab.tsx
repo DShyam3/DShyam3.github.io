@@ -144,7 +144,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Sliders */}
         <div className="lg:col-span-5 flex flex-col gap-4">
-          <Card className="bg-card/40 backdrop-blur-sm border-primary/10 shadow-sm rounded-2xl sm:rounded-[2rem]">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="font-serif text-base font-semibold">Lifestyle Parameters</CardTitle>
               <CardDescription className="text-xs">
@@ -305,7 +305,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           </Card>
 
           {/* Linked settings card */}
-          <Card className="bg-card/20 backdrop-blur-sm border-dashed border-primary/10 rounded-2xl p-4 text-xs font-sans space-y-2">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm border-dashed p-4 text-xs font-sans space-y-2">
             <div className="font-semibold text-foreground flex items-center gap-1.5">
               <span>💼</span> Inherited Work Profile
             </div>
@@ -331,7 +331,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
         {/* Right Column: Visualization & Table */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           {/* Visual Charts Card */}
-          <Card className="bg-card/40 backdrop-blur-sm border-primary/10 shadow-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 space-y-6">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 sm:p-6 space-y-6">
             <div className="flex flex-col md:flex-row items-center justify-around gap-6">
               {/* Donut Chart */}
               <div className="w-48 h-48 flex items-center justify-center relative shrink-0">
@@ -445,7 +445,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           </Card>
 
           {/* Detailed Statistics Table */}
-          <Card className="bg-card/40 backdrop-blur-sm border-primary/10 shadow-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 sm:p-6">
             <h4 className="font-serif text-sm font-semibold text-foreground mb-4 flex items-center gap-1.5">
               📊 Complete Time Metrics Breakdown
             </h4>

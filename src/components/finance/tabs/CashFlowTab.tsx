@@ -452,7 +452,7 @@ export const CashFlowTab: React.FC<CashFlowTabProps> = ({
       </div>
 
       {/* NET INCOME HERO CARD */}
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+      <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
@@ -510,7 +510,7 @@ export const CashFlowTab: React.FC<CashFlowTabProps> = ({
 
       {/* SPEND + INCOME SIDE-BY-SIDE */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
@@ -543,7 +543,7 @@ export const CashFlowTab: React.FC<CashFlowTabProps> = ({
           </div>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="space-y-1">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
@@ -596,7 +596,7 @@ export const CashFlowTab: React.FC<CashFlowTabProps> = ({
 
       {/* METRIC SUMMARY ROW */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 sm:p-5 space-y-1.5">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
           <span className={cn('text-xl font-extrabold font-mono block', avgMonthlyNet >= 0 ? 'text-fin-positive' : 'text-fin-negative')}>
             {formatGBP(avgMonthlyNet)}
@@ -604,7 +604,7 @@ export const CashFlowTab: React.FC<CashFlowTabProps> = ({
           <span className="text-[10px] text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 sm:p-5 space-y-1.5">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
           <span className={cn('text-xl font-extrabold font-mono block', savingsRate >= 20 ? 'text-fin-positive' : savingsRate >= 0 ? 'text-fin-warn' : 'text-fin-negative')}>
             {savingsRate.toFixed(1)}%
@@ -612,7 +612,7 @@ export const CashFlowTab: React.FC<CashFlowTabProps> = ({
           <span className="text-[10px] text-muted-foreground">of income retained YTD</span>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 sm:p-5 space-y-1.5">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
           <span className={cn('text-xl font-extrabold font-mono block', recurringBurnRate <= 30 ? 'text-fin-positive' : recurringBurnRate <= 50 ? 'text-fin-warn' : 'text-fin-negative')}>
             {recurringBurnRate.toFixed(1)}%

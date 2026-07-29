@@ -229,8 +229,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
     <div className="space-y-6">
       {/* 1. KEY PERFORMANCE METRICS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 relative overflow-hidden group">
           <div className="space-y-1.5 relative z-10">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               <Coins className="h-3 w-3 text-primary" /> Total Portfolio
@@ -246,11 +245,10 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 relative overflow-hidden group">
           <div className="space-y-1.5 relative z-10">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              <DollarSign className="h-3 w-3 text-cyan-500" /> Net Invested
+              <DollarSign className="h-3 w-3 text-fin-accent" /> Net Invested
             </span>
             <div className="text-2xl sm:text-3xl font-serif font-semibold text-foreground tracking-tight">
               {formatGBP(portfolioStats.totalCost)}
@@ -261,8 +259,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 relative overflow-hidden group">
           <div className="space-y-1.5 relative z-10">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               {portfolioStats.profitLoss >= 0 ? (
@@ -284,8 +281,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 relative overflow-hidden group">
           <div className="space-y-1.5 relative z-10">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               <ArrowUpRight className="h-3 w-3 text-fin-warn" /> Rate of Return
@@ -306,7 +302,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       {/* 2. HOLDINGS LIST & PORTFOLIO ALLOCATION PIE CHART */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Holdings table */}
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl lg:col-span-2 flex flex-col justify-between">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 lg:col-span-2 flex flex-col justify-between">
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-0.5">
@@ -430,7 +426,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
         </Card>
 
         {/* Right Column: Asset Allocation Pie */}
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 flex flex-col justify-between">
           <div className="space-y-6 flex-1 flex flex-col justify-between">
             <div className="space-y-0.5">
               <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
@@ -513,7 +509,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       </div>
 
       {/* 3. FUTURE VALUE PROJECTION CALCULATOR */}
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+      <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
         <div className="space-y-6">
           <div className="space-y-0.5">
             <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">

@@ -163,7 +163,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       {/* PRIMARY COCKPIT: Spending Progress & Core Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Column 1 & 2: Spending Progress cumulative chart */}
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 lg:col-span-2 shadow-xl flex flex-col justify-between">
+        <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 lg:col-span-2 flex flex-col justify-between">
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-0.5">
@@ -262,7 +262,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         {/* Column 3: Key Metrics Side-Panel */}
         <div className="space-y-6 flex flex-col justify-between">
           {/* Combined Net & Spendable Card */}
-          <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-xl p-5 rounded-3xl flex-1 flex flex-col justify-between space-y-4 text-left">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-5 flex-1 flex flex-col justify-between space-y-4 text-left">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Net & Budget</span>
@@ -349,7 +349,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
           {/* Net Worth + Payday: paired so the right column reads as one visual rhythm */}
           <div className="grid grid-cols-2 gap-4">
-            <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 rounded-3xl space-y-1.5 text-left">
+            <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 space-y-1.5 text-left">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Net Worth</span>
               <span className="text-lg font-bold font-mono text-fin-positive block truncate">{formatGBP(netWorth)}</span>
               <div className="flex flex-col gap-0.5 text-[8px] text-muted-foreground border-t border-border/20 pt-1.5 font-mono">
@@ -358,7 +358,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
             </Card>
 
-            <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 rounded-3xl space-y-1.5 text-left">
+            <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 space-y-1.5 text-left">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Next Payday</span>
               <span className="text-lg font-extrabold text-foreground block truncate">
                 {nextPayday.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
@@ -378,7 +378,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Unreviewed Transaction Checklist */}
         <div className="lg:col-span-8 space-y-6">
-          <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
             <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
@@ -527,7 +527,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </Card>
 
           {/* Top Spending Categories gauge */}
-          <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
             <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-serif font-semibold text-foreground">Top Spending Categories (For the month)</CardTitle>
@@ -569,7 +569,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
         {/* Right Side: Recurrings List & Active savings goals */}
         <div className="lg:col-span-4 space-y-6">
-          <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
             <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="text-sm font-serif font-semibold text-foreground">Upcoming Bills</CardTitle>
@@ -614,7 +614,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </CardContent>
           </Card>
 
-          <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+          <Card className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6">
             <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="text-sm font-serif font-semibold text-foreground">Goals</CardTitle>

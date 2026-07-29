@@ -111,7 +111,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
 
       <div className="space-y-8">
         {/* Progress Card */}
-        <div className="bg-card/20 backdrop-blur-sm border border-primary/10 rounded-[2rem] p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6">
+        <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6">
           <div className="text-center sm:text-left space-y-1">
             <span className="text-3xl md:text-4xl font-extrabold font-mono text-foreground block">
               {formatGBP(leftAmount)}
@@ -166,7 +166,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
               </span>
             </div>
 
-            <div className="bg-card/40 backdrop-blur-sm rounded-2xl border border-primary/10 p-4 space-y-1">
+            <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 space-y-1">
               {thisMonthBills.map(bill => {
                 const dueDateText = getDueDateText(bill, currentMonth);
                 return (
@@ -245,7 +245,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
               Future / Scheduled ({futureBills.length})
             </h4>
 
-            <div className="bg-card/40 backdrop-blur-sm rounded-2xl border border-primary/10 p-4 space-y-1">
+            <div className="bg-card/40 backdrop-blur-md border border-border/50 rounded-3xl shadow-sm p-4 space-y-1">
               {futureBills.map(bill => {
                 const dueDateText = getDueDateText(bill, currentMonth, bill.displayMonth);
                 return (
