@@ -202,4 +202,21 @@ export interface InvestmentHolding {
   category: 'Stock' | 'ETF' | 'Crypto' | 'Mutual Fund' | 'Real Estate' | 'Cash' | 'Other';
 }
 
+export interface BureauBand {
+  name: string;
+  min: number;
+  max: number;
+  color: string;
+  hoverColor: string;
+  description: string;
+}
+
+export interface UniversalStanding {
+  label: string;
+  rating: number;
+  color: string;
+  cls: string;
+  desc: string;
+}
+
 
