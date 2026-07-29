@@ -99,6 +99,8 @@ import {
   getAccountDefaultColor,
   sanitizeBankAccounts,
   sanitizeBudgetCategories,
+  FIN_HEX,
+  FIN_CHART_PALETTE,
 } from '@/components/finance/utils/calculations';
 import {
   AreaChart,
@@ -317,24 +319,24 @@ export interface BureauBand {
 
 export const BUREAU_BANDS: Record<'experian' | 'transunion' | 'equifax', BureauBand[]> = {
   experian: [
-    { name: 'Low', min: 0, max: 640, color: '#ef4444', hoverColor: '#dc2626', description: 'Borrowing may be difficult and interest rates could be high. But our tools can help get your score moving in the right direction. Every small increase helps, and things should improve as you get closer to a Fair score.' },
-    { name: 'Fair', min: 641, max: 860, color: '#f59e0b', hoverColor: '#d97706', description: 'You might get limited credit options, higher interest rates, and lower borrowing limits. But our tools can help improve your score. And as it grows, so will your choices.' },
-    { name: 'Good', min: 861, max: 1000, color: '#84cc16', hoverColor: '#65a30d', description: 'You should see a wide range of credit cards, loans and mortgages (but you might have to pay a bit more interest).' },
-    { name: 'Very Good', min: 1001, max: 1120, color: '#10b981', hoverColor: '#059669', description: 'You should get most credit cards, loans and mortgages (but you might not get the very best deals).' },
-    { name: 'Excellent', min: 1121, max: 1250, color: '#047857', hoverColor: '#065f46', description: 'You should get the best credit cards, loans and mortgages (but there are no guarantees).' }
+    { name: 'Low', min: 0, max: 640, color: '#d1495b', hoverColor: '#dc2626', description: 'Borrowing may be difficult and interest rates could be high. But our tools can help get your score moving in the right direction. Every small increase helps, and things should improve as you get closer to a Fair score.' },
+    { name: 'Fair', min: 641, max: 860, color: '#d99a3d', hoverColor: '#d97706', description: 'You might get limited credit options, higher interest rates, and lower borrowing limits. But our tools can help improve your score. And as it grows, so will your choices.' },
+    { name: 'Good', min: 861, max: 1000, color: '#2f9e6e', hoverColor: '#65a30d', description: 'You should see a wide range of credit cards, loans and mortgages (but you might have to pay a bit more interest).' },
+    { name: 'Very Good', min: 1001, max: 1120, color: '#2f9e6e', hoverColor: '#059669', description: 'You should get most credit cards, loans and mortgages (but you might not get the very best deals).' },
+    { name: 'Excellent', min: 1121, max: 1250, color: '#2f9e6e', hoverColor: '#065f46', description: 'You should get the best credit cards, loans and mortgages (but there are no guarantees).' }
   ],
   transunion: [
-    { name: 'Needs Work', min: 0, max: 565, color: '#ef4444', hoverColor: '#dc2626', description: 'Your credit history needs work. You may struggle to get credit, and if you do, interest rates will likely be high.' },
-    { name: 'Fair', min: 566, max: 603, color: '#f59e0b', hoverColor: '#d97706', description: 'You have a fair credit history. You may find it harder to get credit or might have to pay higher interest rates.' },
-    { name: 'Good', min: 604, max: 627, color: '#10b981', hoverColor: '#059669', description: 'You have a good credit history and should be approved for most credit offers, though you may not get the lowest rates.' },
-    { name: 'Excellent', min: 628, max: 710, color: '#047857', hoverColor: '#065f46', description: 'You have a great credit history and are highly likely to be approved for credit and get the best interest rates.' }
+    { name: 'Needs Work', min: 0, max: 565, color: '#d1495b', hoverColor: '#dc2626', description: 'Your credit history needs work. You may struggle to get credit, and if you do, interest rates will likely be high.' },
+    { name: 'Fair', min: 566, max: 603, color: '#d99a3d', hoverColor: '#d97706', description: 'You have a fair credit history. You may find it harder to get credit or might have to pay higher interest rates.' },
+    { name: 'Good', min: 604, max: 627, color: '#2f9e6e', hoverColor: '#059669', description: 'You have a good credit history and should be approved for most credit offers, though you may not get the lowest rates.' },
+    { name: 'Excellent', min: 628, max: 710, color: '#2f9e6e', hoverColor: '#065f46', description: 'You have a great credit history and are highly likely to be approved for credit and get the best interest rates.' }
   ],
   equifax: [
-    { name: 'Start Climbing', min: 0, max: 409, color: '#ef4444', hoverColor: '#dc2626', description: 'Your score is low. You might find it difficult to get credit, or have to pay very high interest rates.' },
-    { name: 'Moving On Up', min: 410, max: 519, color: '#f59e0b', hoverColor: '#d97706', description: 'You\'re starting to build your score. Credit options may be limited and rates could be higher.' },
-    { name: 'On Good Ground', min: 520, max: 604, color: '#84cc16', hoverColor: '#65a30d', description: 'Your score is okay. You might get accepted for credit, but interest rates might be higher.' },
-    { name: 'Looking Bright', min: 605, max: 724, color: '#10b981', hoverColor: '#059669', description: 'You\'re in a good position. You should be accepted for most credit, with decent interest rates.' },
-    { name: 'Soaring High', min: 725, max: 1000, color: '#047857', hoverColor: '#065f46', description: 'Lenders will see you as a very low risk. You\'re likely to get the best deals on loans, credit cards, and mortgages.' }
+    { name: 'Start Climbing', min: 0, max: 409, color: '#d1495b', hoverColor: '#dc2626', description: 'Your score is low. You might find it difficult to get credit, or have to pay very high interest rates.' },
+    { name: 'Moving On Up', min: 410, max: 519, color: '#d99a3d', hoverColor: '#d97706', description: 'You\'re starting to build your score. Credit options may be limited and rates could be higher.' },
+    { name: 'On Good Ground', min: 520, max: 604, color: '#2f9e6e', hoverColor: '#65a30d', description: 'Your score is okay. You might get accepted for credit, but interest rates might be higher.' },
+    { name: 'Looking Bright', min: 605, max: 724, color: '#2f9e6e', hoverColor: '#059669', description: 'You\'re in a good position. You should be accepted for most credit, with decent interest rates.' },
+    { name: 'Soaring High', min: 725, max: 1000, color: '#2f9e6e', hoverColor: '#065f46', description: 'Lenders will see you as a very low risk. You\'re likely to get the best deals on loans, credit cards, and mortgages.' }
   ]
 };
 
@@ -411,8 +413,8 @@ export function getUniversalStanding(creditScores: {
     return {
       label: 'Excellent',
       rating: average,
-      color: '#047857',
-      cls: 'text-emerald-600 dark:text-emerald-400',
+      color: '#2f9e6e',
+      cls: 'text-fin-positive',
       desc: 'Lenders will view you as an extremely reliable borrower. You qualify for the best financial deals.',
     };
   }
@@ -420,8 +422,8 @@ export function getUniversalStanding(creditScores: {
     return {
       label: 'Very Good',
       rating: average,
-      color: '#10b981',
-      cls: 'text-emerald-500 dark:text-emerald-400',
+      color: '#2f9e6e',
+      cls: 'text-fin-positive',
       desc: 'Your credit standing is strong. You are likely to qualify for premium rates and high limits.',
     };
   }
@@ -429,8 +431,8 @@ export function getUniversalStanding(creditScores: {
     return {
       label: 'Good',
       rating: average,
-      color: '#84cc16',
-      cls: 'text-lime-500 dark:text-lime-400',
+      color: '#2f9e6e',
+      cls: 'text-fin-positive',
       desc: 'You have a healthy credit history. You will see a wide choice of loans and credit cards.',
     };
   }
@@ -438,16 +440,16 @@ export function getUniversalStanding(creditScores: {
     return {
       label: 'Fair',
       rating: average,
-      color: '#f59e0b',
-      cls: 'text-amber-500',
+      color: '#d99a3d',
+      cls: 'text-fin-warn',
       desc: 'Your credit score is acceptable, but you may face higher interest rates or lower borrowing limits.',
     };
   }
   return {
     label: 'Needs Work',
     rating: average,
-    color: '#ef4444',
-    cls: 'text-rose-500',
+    color: '#d1495b',
+    cls: 'text-fin-negative',
     desc: 'Borrowing options are limited. Focus on rebuilding your payment history to improve your rating.',
   };
 }
@@ -1345,9 +1347,9 @@ export default function Finance() {
   const [creditBureaus, setCreditBureaus] = useState<CreditBureauConfig[]>(() => {
     const saved = localStorage.getItem('finance_credit_bureaus');
     return safeParseJSON<CreditBureauConfig[]>(saved, [
-      { key: 'experian', label: 'Experian', emoji: '🟣', color: '#8b5cf6', maxScore: 1250, gradient: 'from-violet-500/10 to-violet-500/5' },
-      { key: 'transunion', label: 'Credit Karma', emoji: '🔵', color: '#06b6d4', maxScore: 710, gradient: 'from-cyan-500/10 to-cyan-500/5' },
-      { key: 'equifax', label: 'ClearScore', emoji: '🟡', color: '#f59e0b', maxScore: 1000, gradient: 'from-amber-500/10 to-amber-500/5' }
+      { key: 'experian', label: 'Experian', emoji: '🟣', color: '#6c63d1', maxScore: 1250, gradient: 'from-violet-500/10 to-violet-500/5' },
+      { key: 'transunion', label: 'Credit Karma', emoji: '🔵', color: '#3fb5ab', maxScore: 710, gradient: 'from-cyan-500/10 to-cyan-500/5' },
+      { key: 'equifax', label: 'ClearScore', emoji: '🟡', color: '#d99a3d', maxScore: 1000, gradient: 'from-fin-warn/10 to-fin-warn/5' }
     ]);
   });
   const [holidayDefaults, setHolidayDefaults] = useState<Record<number, { count: number; dates: string; occasion: string }>>(() => {
@@ -4508,8 +4510,8 @@ export default function Finance() {
     xAxisKey: dashboardSpendXAxisKey,
   } = getDashboardSpendData();
 
-  const progressLineColor = isDashboardSpendOverBudget ? '#f97316' : '#10b981'; // orange/amber vs emerald
-  const progressGradientColor = isDashboardSpendOverBudget ? '#f97316' : '#10b981';
+  const progressLineColor = isDashboardSpendOverBudget ? FIN_HEX.warn : FIN_HEX.positive;
+  const progressGradientColor = isDashboardSpendOverBudget ? FIN_HEX.warn : FIN_HEX.positive;
 
   // Transactions to review state
   const unreviewedCount = mockTransactions.filter(tx => !tx.isReviewed).length;
@@ -4524,11 +4526,11 @@ export default function Finance() {
 
   // Spent progress color bar
   const getProgressColor = (spent: number, budgeted: number) => {
-    if (budgeted <= 0) return spent > 0 ? 'bg-rose-500' : 'bg-[#40a02b] dark:bg-[#a6e3a1]';
+    if (budgeted <= 0) return spent > 0 ? 'bg-fin-negative' : 'bg-fin-positive';
     const percent = spent / budgeted;
-    if (percent <= 0.75) return 'bg-[#40a02b] dark:bg-[#a6e3a1]';
-    if (percent <= 1.0) return 'bg-orange-500';
-    return 'bg-rose-500';
+    if (percent <= 0.75) return 'bg-fin-positive';
+    if (percent <= 1.0) return 'bg-fin-warn';
+    return 'bg-fin-negative';
   };
 
   return (
@@ -4620,7 +4622,7 @@ export default function Finance() {
                         <div className="text-right hidden sm:block">
                           <span className={cn(
                             "text-[10px] font-bold font-mono px-2 py-0.5 rounded-full inline-block",
-                            isDashboardSpendOverBudget ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
+                            isDashboardSpendOverBudget ? "bg-fin-negative/10 text-fin-negative" : "bg-fin-positive/10 text-fin-positive"
                           )}>
                             {dashboardSpendStatusText}
                           </span>
@@ -4632,7 +4634,7 @@ export default function Finance() {
                     <div className="block sm:hidden pt-1">
                       <span className={cn(
                         "text-[10px] font-bold font-mono px-2 py-0.5 rounded-full inline-block",
-                        isDashboardSpendOverBudget ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
+                        isDashboardSpendOverBudget ? "bg-fin-negative/10 text-fin-negative" : "bg-fin-positive/10 text-fin-positive"
                       )}>
                         {dashboardSpendStatusText}
                       </span>
@@ -4725,14 +4727,14 @@ export default function Finance() {
                         {/* Left column: Actual Net Cash Flow */}
                         <div className="space-y-1">
                           <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider block">Net this month</span>
-                          <span className={cn("text-xl sm:text-2xl font-extrabold font-mono block tracking-tight whitespace-nowrap", netCashFlow >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                          <span className={cn("text-xl sm:text-2xl font-extrabold font-mono block tracking-tight whitespace-nowrap", netCashFlow >= 0 ? "text-fin-positive" : "text-fin-negative")}>
                             {netCashFlow >= 0 ? '+' : ''}{formatGBP(netCashFlow)}
                           </span>
                           {/* Trend comparison */}
                           <div className="flex items-center gap-1 text-[8px] text-muted-foreground font-sans truncate">
                             <span className={cn(
                               "flex items-center px-1 py-0.5 rounded-full font-bold font-mono text-[8px]",
-                              comparison.isPositive ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                              comparison.isPositive ? "bg-fin-positive/10 text-fin-positive" : "bg-fin-negative/10 text-fin-negative"
                             )}>
                               {comparison.isPositive ? '↗' : '↘'} {comparison.pct.toFixed(0)}%
                             </span>
@@ -4745,9 +4747,9 @@ export default function Finance() {
                           <div>
                             <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                               <span>Free to Spend</span>
-                              <PiggyBank className="h-3 w-3 text-emerald-500" />
+                              <PiggyBank className="h-3 w-3 text-fin-positive" />
                             </span>
-                            <span className={cn("text-xl sm:text-2xl font-extrabold font-mono block tracking-tight whitespace-nowrap", freeToSpend >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                            <span className={cn("text-xl sm:text-2xl font-extrabold font-mono block tracking-tight whitespace-nowrap", freeToSpend >= 0 ? "text-fin-positive" : "text-fin-negative")}>
                               {formatGBP(freeToSpend)}
                             </span>
                           </div>
@@ -4756,7 +4758,7 @@ export default function Finance() {
                               <span className="font-bold text-foreground font-mono">{formatGBP(dailyFreeToSpend)}</span>/day left
                             </p>
                           ) : (
-                            <p className="text-[9px] text-rose-500/80 font-sans font-medium mt-0.5">
+                            <p className="text-[9px] text-fin-negative/80 font-sans font-medium mt-0.5">
                               Over budget
                             </p>
                           )}
@@ -4772,11 +4774,11 @@ export default function Finance() {
                           <span>Actual Cash Flow</span>
                         </div>
                         <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-                          <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${incomeFlowPercent}%` }} />
-                          <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${spendFlowPercent}%` }} />
+                          <div className="h-full bg-fin-positive transition-all duration-300" style={{ width: `${incomeFlowPercent}%` }} />
+                          <div className="h-full bg-fin-accent transition-all duration-300" style={{ width: `${spendFlowPercent}%` }} />
                         </div>
                         <div className="flex items-center justify-between text-[8px] text-muted-foreground font-mono">
-                          <span>In: <span className="text-emerald-500 font-bold">{formatGBP(monthlyIncome)}</span></span>
+                          <span>In: <span className="text-fin-positive font-bold">{formatGBP(monthlyIncome)}</span></span>
                           <span>Out: <span className="text-foreground font-bold">{formatGBP(totalSpent)}</span></span>
                         </div>
                       </div>
@@ -4792,16 +4794,16 @@ export default function Finance() {
                           const freeWidth = totalBudget > 0 && freeToSpend > 0 ? Math.max(0, 100 - spentWidth - billsWidth) : 0;
                           return (
                             <div className="h-2 w-full bg-muted rounded-full overflow-hidden flex">
-                              <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${spentWidth}%` }} title={`Spent: ${spentPercent.toFixed(0)}%`} />
-                              <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${billsWidth}%` }} title={`Bills: ${billsPercent.toFixed(0)}%`} />
-                              <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${freeWidth}%` }} title={`Free: ${freePercent.toFixed(0)}%`} />
+                              <div className="h-full bg-fin-accent transition-all duration-300" style={{ width: `${spentWidth}%` }} title={`Spent: ${spentPercent.toFixed(0)}%`} />
+                              <div className="h-full bg-fin-warn transition-all duration-300" style={{ width: `${billsWidth}%` }} title={`Bills: ${billsPercent.toFixed(0)}%`} />
+                              <div className="h-full bg-fin-positive transition-all duration-300" style={{ width: `${freeWidth}%` }} title={`Free: ${freePercent.toFixed(0)}%`} />
                             </div>
                           );
                         })()}
                         <div className="flex flex-wrap items-center justify-between text-[8px] font-mono text-muted-foreground gap-y-1">
-                          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Spent ({spentPercent.toFixed(0)}%)</span>
-                          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Bills ({formatGBP(unpaidRecurrings)})</span>
-                          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Free ({freePercent.toFixed(0)}%)</span>
+                          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-fin-accent" /> Spent ({spentPercent.toFixed(0)}%)</span>
+                          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-fin-warn" /> Bills ({formatGBP(unpaidRecurrings)})</span>
+                          <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-fin-positive" /> Free ({freePercent.toFixed(0)}%)</span>
                         </div>
                       </div>
                     </div>
@@ -4810,10 +4812,10 @@ export default function Finance() {
                   {/* Net Assets, Debt & Net Cash Flow block */}
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-3 sm:p-4 rounded-3xl space-y-1.5 text-left">
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase">Net Worth</span>
-                    <span className="text-base font-bold font-mono text-emerald-500 block truncate">{formatGBP(netWorth)}</span>
+                    <span className="text-base font-bold font-mono text-fin-positive block truncate">{formatGBP(netWorth)}</span>
                     <div className="flex justify-between text-[8px] text-muted-foreground border-t border-border/20 pt-1.5 font-mono">
-                      <span className="text-emerald-500/80">Assets: {formatGBP(totalAssets)}</span>
-                      <span className="text-rose-500/80">Debt: {formatGBP(totalDebt)}</span>
+                      <span className="text-fin-positive/80">Assets: {formatGBP(totalAssets)}</span>
+                      <span className="text-fin-negative/80">Debt: {formatGBP(totalDebt)}</span>
                     </div>
                   </Card>
 
@@ -4833,13 +4835,13 @@ export default function Finance() {
                         <span className="font-extrabold text-2xl text-foreground block">
                           {nextPayday.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </span>
-                        <span className="text-[10px] text-emerald-500 font-mono font-semibold block">
+                        <span className="text-[10px] text-fin-positive font-mono font-semibold block">
                           +{formatGBP(breakdownRates.postTax.monthly)} expected
                         </span>
                       </div>
                       <span className={cn(
                         "font-mono px-2.5 py-0.5 rounded-full font-bold text-[10px] select-none",
-                        nextPayday.daysRemaining === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-muted/60 text-muted-foreground"
+                        nextPayday.daysRemaining === 0 ? "bg-fin-positive/10 text-fin-positive" : "bg-muted/60 text-muted-foreground"
                       )}>
                         {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
                       </span>
@@ -4965,7 +4967,7 @@ export default function Finance() {
                               <div className="flex items-center gap-3 self-end sm:self-center">
                                 <span className={cn(
                                   "text-xs font-bold font-mono",
-                                  tx.amount < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                                  tx.amount < 0 ? "text-fin-positive" : "text-fin-negative"
                                 )}>
                                   {tx.amount < 0 ? '+' : '-'}{formatGBP(Math.abs(tx.amount))}
                                 </span>
@@ -4977,7 +4979,7 @@ export default function Finance() {
                                     "h-8 rounded-xl text-[10px] gap-1 px-3 shrink-0 font-semibold",
                                     tx.isReviewed
                                       ? "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                                      : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                                      : "bg-fin-positive hover:bg-fin-positive text-white"
                                   )}
                                 >
                                   {tx.isReviewed ? (
@@ -4998,7 +5000,7 @@ export default function Finance() {
                             animate={{ opacity: 1, scale: 1 }}
                             className="flex flex-col items-center justify-center py-12 text-center space-y-3"
                           >
-                            <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 text-lg">
+                            <div className="h-10 w-10 rounded-full bg-fin-positive/10 flex items-center justify-center text-fin-positive text-lg">
                               ✨
                             </div>
                             <div className="space-y-1">
@@ -5097,7 +5099,7 @@ export default function Finance() {
                               <span className="font-bold font-mono text-xs">{formatGBP(bill.amount)}</span>
                               <button
                                 onClick={() => toggleRecurringPaid(bill.id)}
-                                className="h-5 w-5 rounded-lg flex items-center justify-center border border-border/40 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-transparent hover:text-emerald-500/70 transition-all shrink-0"
+                                className="h-5 w-5 rounded-lg flex items-center justify-center border border-border/40 hover:border-fin-positive/50 hover:bg-fin-positive/10 text-transparent hover:text-fin-positive/70 transition-all shrink-0"
                                 title="Mark as Paid"
                               >
                                 <Check className="h-3.5 w-3.5" />
@@ -5131,7 +5133,7 @@ export default function Finance() {
                           <div key={goal.id} className="space-y-1 text-xs">
                             <div className="flex justify-between gap-2 font-semibold min-w-0">
                               <span className="truncate text-foreground font-semibold">{goal.name}</span>
-                              <span className="font-mono text-emerald-500 font-bold">
+                              <span className="font-mono text-fin-positive font-bold">
                                 {progress.toFixed(0)}%
                               </span>
                             </div>
@@ -5140,7 +5142,7 @@ export default function Finance() {
                               <span>Target: {formatGBP(goal.targetAmount)}</span>
                             </div>
                             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
+                              <div className="h-full bg-fin-positive rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
                             </div>
                           </div>
                         );
@@ -5200,11 +5202,11 @@ export default function Finance() {
                       </div>
                       <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
                         <span className="block text-[10px] font-medium text-muted-foreground uppercase">Employer Pension ({settings.employerPensionPercent}%)</span>
-                        <span className="mt-1 block font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">+{formatGBP(results.employerPensionRate)}</span>
+                        <span className="mt-1 block font-mono text-sm font-bold text-fin-positive">+{formatGBP(results.employerPensionRate)}</span>
                       </div>
                       <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
                         <span className="block text-[10px] font-medium text-muted-foreground uppercase">Benefits & Perks</span>
-                        <span className="mt-1 block font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">+{formatGBP(results.totalBenefitsValue)}</span>
+                        <span className="mt-1 block font-mono text-sm font-bold text-fin-positive">+{formatGBP(results.totalBenefitsValue)}</span>
                       </div>
                       <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
                         <span className="block text-[10px] font-medium text-muted-foreground uppercase">Net Take-Home</span>
@@ -5281,11 +5283,11 @@ export default function Finance() {
 
                           {/* Employer Pension Addition */}
                           {results.employerPensionRate > 0 && (
-                            <tr className="hover:bg-emerald-500/10 transition-colors bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                            <tr className="hover:bg-fin-positive/10 transition-colors bg-fin-positive/5 dark:bg-fin-positive/10 text-fin-positive">
                               <td className="py-3 pr-4 font-sans text-left">
                                 <div className="flex flex-col justify-center min-w-[120px]">
                                   <span className="font-bold flex items-center gap-1.5">
-                                    <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Employer Pension ({settings.employerPensionPercent}%)
+                                    <Sparkles className="w-3.5 h-3.5 shrink-0 text-fin-positive" /> Employer Pension ({settings.employerPensionPercent}%)
                                   </span>
                                   <span className="text-[10px] opacity-80 font-medium leading-normal mt-0.5">
                                     Employer contribution to pension
@@ -5302,11 +5304,11 @@ export default function Finance() {
 
                           {/* Employer Benefits & Perks Addition */}
                           {results.totalBenefitsValue > 0 && (
-                            <tr className="hover:bg-emerald-500/10 transition-colors bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                            <tr className="hover:bg-fin-positive/10 transition-colors bg-fin-positive/5 dark:bg-fin-positive/10 text-fin-positive">
                               <td className="py-3 pr-4 font-sans text-left">
                                 <div className="flex flex-col justify-center min-w-[120px]">
                                   <span className="font-bold flex items-center gap-1.5">
-                                    <Gift className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Benefits & Perks ({settings.packageBenefits?.length || 0})
+                                    <Gift className="w-3.5 h-3.5 shrink-0 text-fin-positive" /> Benefits & Perks ({settings.packageBenefits?.length || 0})
                                   </span>
                                   <span className="text-[10px] opacity-80 font-medium leading-normal mt-0.5">
                                     {(settings.packageBenefits || []).map(b => `${b.emoji || '🎁'} ${b.name}`).join(', ')}
@@ -5334,11 +5336,11 @@ export default function Finance() {
                                   </span>
                                 </div>
                               </td>
-                              <td className="py-3 px-2 text-right text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.annual)}</td>
-                              <td className="py-3 px-2 text-right text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.monthly)}</td>
-                              <td className="py-3 px-2 text-right text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.weekly)}</td>
-                              <td className="py-3 px-2 text-right text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.daily)}</td>
-                              <td className="py-3 pl-2 text-right text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.hourly)}</td>
+                              <td className="py-3 px-2 text-right text-fin-negative font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.annual)}</td>
+                              <td className="py-3 px-2 text-right text-fin-negative font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.monthly)}</td>
+                              <td className="py-3 px-2 text-right text-fin-negative font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.weekly)}</td>
+                              <td className="py-3 px-2 text-right text-fin-negative font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.daily)}</td>
+                              <td className="py-3 pl-2 text-right text-fin-negative font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.hourly)}</td>
                             </tr>
                           )}
 
@@ -5346,11 +5348,11 @@ export default function Finance() {
                           {results.incomeTax > 0 && (
                             <tr className="hover:bg-muted/10 transition-colors text-foreground">
                               <td className="py-3 font-sans font-bold text-foreground">Income Tax</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.annual)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.monthly)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.weekly)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.daily)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.hourly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.tax.annual)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.tax.monthly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.tax.weekly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.tax.daily)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.tax.hourly)}</td>
                             </tr>
                           )}
 
@@ -5365,11 +5367,11 @@ export default function Finance() {
                                   </span>
                                 </div>
                               </td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.annual)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.monthly)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.weekly)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.daily)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.hourly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.ni.annual)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.ni.monthly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.ni.weekly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.ni.daily)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.ni.hourly)}</td>
                             </tr>
                           )}
 
@@ -5377,16 +5379,16 @@ export default function Finance() {
                           {results.studentLoan > 0 && (
                             <tr className="hover:bg-muted/10 transition-colors text-foreground">
                               <td className="py-3 font-sans font-bold text-foreground">Student Loan ({getPlanName(settings.studentLoanPlan)})</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.daily)}</td>
-                              <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.hourly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.studentLoan.daily)}</td>
+                              <td className="py-3 text-right text-fin-negative font-semibold">-{formatGBP(breakdownRates.studentLoan.hourly)}</td>
                             </tr>
                           )}
 
                           {/* Total Deductions */}
-                          <tr className="hover:bg-rose-500/10 transition-colors text-rose-700 dark:text-rose-300 bg-rose-500/5 dark:bg-rose-500/10 font-sans">
+                          <tr className="hover:bg-fin-negative/10 transition-colors text-fin-negative bg-fin-negative/5 dark:bg-fin-negative/10 font-sans">
                             <td className="py-3 font-bold">Total Deductions</td>
                             <td className="py-3 text-right font-mono font-bold">-{formatGBP(breakdownRates.deductions.annual)}</td>
                             <td className="py-3 text-right font-mono font-bold">-{formatGBP(breakdownRates.deductions.monthly)}</td>
@@ -5396,7 +5398,7 @@ export default function Finance() {
                           </tr>
 
                           {/* Take Home Pay */}
-                          <tr className="hover:bg-emerald-500/10 transition-colors text-emerald-700 dark:text-emerald-300 bg-emerald-500/5 dark:bg-emerald-500/10 font-sans">
+                          <tr className="hover:bg-fin-positive/10 transition-colors text-fin-positive bg-fin-positive/5 dark:bg-fin-positive/10 font-sans">
                             <td className="py-3 font-bold text-sm">Take-Home Pay</td>
                             <td className="py-3 text-right font-mono font-bold text-sm">{formatGBP(breakdownRates.postTax.annual)}</td>
                             <td className="py-3 text-right font-mono font-bold text-sm">{formatGBP(breakdownRates.postTax.monthly)}</td>
@@ -5450,16 +5452,16 @@ export default function Finance() {
                           <span className="ml-1 text-[9px] font-normal text-muted-foreground">days</span>
                         </span>
                       </div>
-                      <div className="rounded-xl bg-[#40a02b]/10 px-2.5 py-2 text-left">
-                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#40a02b] dark:text-[#a6e3a1]">Left</span>
-                        <span className="mt-1 block font-mono text-sm font-bold text-[#40a02b] dark:text-[#a6e3a1]">
+                      <div className="rounded-xl bg-fin-positive/10 px-2.5 py-2 text-left">
+                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-fin-positive">Left</span>
+                        <span className="mt-1 block font-mono text-sm font-bold text-fin-positive">
                           {settings.workHolidays - getHolidaysUsedCount()}
                           <span className="ml-1 text-[9px] font-normal">days</span>
                         </span>
                       </div>
-                      <div className="rounded-xl bg-[#8839ef]/10 px-2.5 py-2 text-left">
-                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#8839ef] dark:text-[#cba6f7]">Bank</span>
-                        <span className="mt-1 block font-mono text-sm font-bold text-[#8839ef] dark:text-[#cba6f7]">
+                      <div className="rounded-xl bg-fin-accent/10 px-2.5 py-2 text-left">
+                        <span className="block text-[9px] font-semibold uppercase tracking-wider text-fin-accent">Bank</span>
+                        <span className="mt-1 block font-mono text-sm font-bold text-fin-accent">
                           {bankHolidaysLeft}/{settings.bankHolidays}
                           <span className="ml-1 text-[9px] font-normal">left</span>
                         </span>
@@ -5507,7 +5509,7 @@ export default function Finance() {
                                 <span className="text-xs font-semibold text-foreground">{month}</span>
                                 <div className="flex items-center gap-1.5 text-[10px]">
                                   {monthWorkingDaysBooked > 0 && (
-                                    <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold px-1.5 py-0.5 rounded font-sans">
+                                    <span className="bg-fin-positive/10 text-fin-positive font-semibold px-1.5 py-0.5 rounded font-sans">
                                       🏝️ {monthWorkingDaysBooked} {monthWorkingDaysBooked === 1 ? 'day' : 'days'}
                                     </span>
                                   )}
@@ -5543,9 +5545,9 @@ export default function Finance() {
                                   let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-[10px] font-mono flex items-center justify-center rounded-full font-medium ";
 
                                   if (isBookedHoliday) {
-                                    cellClass += "text-[#40a02b] dark:text-[#a6e3a1] font-bold";
+                                    cellClass += "text-fin-positive font-bold";
                                   } else if (isBankHoliday) {
-                                    cellClass += "text-[#8839ef] dark:text-[#cba6f7] font-bold";
+                                    cellClass += "text-fin-accent font-bold";
                                   } else if (isWeekend) {
                                     cellClass += "text-muted-foreground/30";
                                   } else {
@@ -5582,9 +5584,9 @@ export default function Finance() {
                                           {getTooltipDetails().map((detail, idx) => {
                                             let colorClass = "text-foreground/80";
                                             if (detail.startsWith('Bank Holiday')) {
-                                              colorClass = "text-[#8839ef] dark:text-[#cba6f7] font-semibold";
+                                              colorClass = "text-fin-accent font-semibold";
                                             } else if (detail.startsWith('Booked Leave')) {
-                                              colorClass = "text-[#40a02b] dark:text-[#a6e3a1] font-semibold";
+                                              colorClass = "text-fin-positive font-semibold";
                                             } else if (detail === 'Weekend') {
                                               colorClass = "text-muted-foreground/50";
                                             }
@@ -5639,7 +5641,7 @@ export default function Finance() {
                                                   e.stopPropagation();
                                                   handleDeleteHoliday(hol.id);
                                                 }}
-                                                className="h-7 w-7 rounded-lg hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500"
+                                                className="h-7 w-7 rounded-lg hover:bg-fin-negative/10 text-muted-foreground hover:text-fin-negative"
                                                 title="Delete holiday"
                                               >
                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -5797,14 +5799,14 @@ export default function Finance() {
                         <span className="text-muted-foreground font-medium">Status</span>
                         <span className={cn(
                           "font-mono px-2 py-0.5 rounded-lg font-bold text-[10px]",
-                          nextPayday.daysRemaining === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-muted/60 text-muted-foreground"
+                          nextPayday.daysRemaining === 0 ? "bg-fin-positive/10 text-fin-positive" : "bg-muted/60 text-muted-foreground"
                         )}>
                           {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
                         </span>
                       </div>
 
                       {nextPayday.adjusted && (
-                        <div className="rounded-xl bg-[#df8e1d]/10 p-2.5 text-[10px] text-[#df8e1d] dark:text-[#f9e2af] flex items-start gap-1.5 leading-normal">
+                        <div className="rounded-xl bg-fin-warn/10 p-2.5 text-[10px] text-fin-warn flex items-start gap-1.5 leading-normal">
                           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           <span>
                             Adjusted to working day before due to {nextPayday.adjustReason === 'weekend' ? 'a weekend' : 'a bank holiday'}.
@@ -5869,8 +5871,8 @@ export default function Finance() {
             const showWarning = totalBudgetLimit > 0 && totalSpent > totalBudgetLimit;
 
             const allocationData = [
-              { name: 'Needs', value: needsTotal, color: '#3b82f6' },
-              { name: 'Savings', value: totalSavings, color: '#10b981' },
+              { name: 'Needs', value: needsTotal, color: FIN_CHART_PALETTE[4] },
+              { name: 'Savings', value: totalSavings, color: FIN_HEX.positive },
               { name: 'Wants', value: wantsTotal, color: '#8892b0' }
             ].filter(d => d.value > 0);
 
@@ -5956,16 +5958,7 @@ export default function Finance() {
                 return {
                   name: cat.name,
                   value: spent,
-                  color: [
-                    '#3b82f6', // blue
-                    '#10b981', // emerald
-                    '#f59e0b', // amber
-                    '#ef4444', // red
-                    '#8b5cf6', // violet
-                    '#ec4899', // pink
-                    '#14b8a6', // teal
-                    '#f97316', // orange
-                  ][idx % 8]
+                  color: FIN_CHART_PALETTE[idx % FIN_CHART_PALETTE.length],
                 };
               })
               .filter(d => d.value > 0);
@@ -6098,18 +6091,7 @@ export default function Finance() {
                                         data={savingsItems.map((item, idx) => ({
                                           name: item.name,
                                           value: item.value,
-                                          color: [
-                                            '#10b981', // emerald
-                                            '#14b8a6', // teal
-                                            '#06b6d4', // cyan
-                                            '#3b82f6', // blue
-                                            '#6366f1', // indigo
-                                            '#8b5cf6', // violet
-                                            '#ec4899', // pink
-                                            '#f59e0b', // amber
-                                            '#ef4444', // red
-                                            '#f97316', // orange
-                                          ][idx % 10]
+                                          color: FIN_CHART_PALETTE[idx % FIN_CHART_PALETTE.length],
                                         }))}
                                         cx="50%"
                                         cy="50%"
@@ -6122,18 +6104,7 @@ export default function Finance() {
                                         {savingsItems.map((item, idx) => (
                                           <Cell
                                             key={`cell-savings-${idx}`}
-                                            fill={[
-                                              '#10b981', // emerald
-                                              '#14b8a6', // teal
-                                              '#06b6d4', // cyan
-                                              '#3b82f6', // blue
-                                              '#6366f1', // indigo
-                                              '#8b5cf6', // violet
-                                              '#ec4899', // pink
-                                              '#f59e0b', // amber
-                                              '#ef4444', // red
-                                              '#f97316', // orange
-                                            ][idx % 10]}
+                                            fill={FIN_CHART_PALETTE[idx % FIN_CHART_PALETTE.length]}
                                           />
                                         ))}
                                       </Pie>
@@ -6145,18 +6116,7 @@ export default function Finance() {
                                   <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[9px] text-muted-foreground font-mono">
                                     {savingsItems.map((item, idx) => {
                                       const pct = totalSavings > 0 ? (item.value / totalSavings) * 100 : 0;
-                                      const color = [
-                                        '#10b981', // emerald
-                                        '#14b8a6', // teal
-                                        '#06b6d4', // cyan
-                                        '#3b82f6', // blue
-                                        '#6366f1', // indigo
-                                        '#8b5cf6', // violet
-                                        '#ec4899', // pink
-                                        '#f59e0b', // amber
-                                        '#ef4444', // red
-                                        '#f97316', // orange
-                                      ][idx % 10];
+                                      const color = FIN_CHART_PALETTE[idx % FIN_CHART_PALETTE.length];
                                       return (
                                         <div key={idx} className="flex items-center gap-1">
                                           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
@@ -6193,7 +6153,7 @@ export default function Finance() {
                                   <tr className="hover:bg-muted/10">
                                     <td className="p-3 font-sans font-medium text-foreground">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shrink-0" /> Needs
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#4f8fdb] shrink-0" /> Needs
                                       </div>
                                     </td>
                                     <td className="p-3 text-right whitespace-nowrap">
@@ -6203,7 +6163,7 @@ export default function Finance() {
                                   <tr className="hover:bg-muted/10">
                                     <td className="p-3 font-sans font-medium text-foreground">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] shrink-0" /> Savings
+                                        <span className="w-2.5 h-2.5 rounded-full bg-fin-positive shrink-0" /> Savings
                                       </div>
                                     </td>
                                     <td className="p-3 text-right whitespace-nowrap">
@@ -6228,11 +6188,11 @@ export default function Finance() {
                                     <td className="p-3 font-sans text-xs text-foreground">Spend Status</td>
                                     <td className="p-3 text-right text-xs">
                                       {showWarning ? (
-                                        <span className="inline-flex items-center text-rose-500 gap-1 font-sans" title="Spent exceeds budget limit!">
+                                        <span className="inline-flex items-center text-fin-negative gap-1 font-sans" title="Spent exceeds budget limit!">
                                           ⚠️ Over Limit
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center text-emerald-500 gap-1 font-sans">
+                                        <span className="inline-flex items-center text-fin-positive gap-1 font-sans">
                                           ✓ Within Budget
                                         </span>
                                       )}
@@ -6308,10 +6268,7 @@ export default function Finance() {
                   </button>
                   {budgetCategories.filter(isCategoryActive).map((cat, idx) => {
                     const isSelected = selectedBudgetCategoryFilter === cat.id;
-                    const catColor = [
-                      '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
-                      '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'
-                    ][idx % 8];
+                    const catColor = FIN_CHART_PALETTE[idx % FIN_CHART_PALETTE.length];
                     return (
                       <button
                         key={cat.id}
@@ -6381,7 +6338,7 @@ export default function Finance() {
                               {multiMonthChartData.map((entry, index) => (
                                 <Cell
                                   key={`cell-hist-${index}`}
-                                  fill={entry.spent > entry.budget ? '#ef4444' : '#10b981'}
+                                  fill={entry.spent > entry.budget ? FIN_HEX.negative : FIN_HEX.positive}
                                 />
                               ))}
                             </Bar>
@@ -6424,7 +6381,7 @@ export default function Finance() {
                           <div key={m.year} className="grid grid-cols-3 items-center hover:bg-muted/10 p-1 rounded-lg transition-colors">
                             <span className="font-sans font-bold text-foreground">{m.year}</span>
                             <span className="text-right font-medium text-foreground">{formatGBP(m.spentPerYear)}</span>
-                            <span className="text-right font-bold text-emerald-400">{formatGBP(m.avgMonthlySpend)}</span>
+                            <span className="text-right font-bold text-fin-positive">{formatGBP(m.avgMonthlySpend)}</span>
                           </div>
                         ))}
                       </div>
@@ -6458,16 +6415,7 @@ export default function Finance() {
                         const isOver = catSpent > catBudget;
                         const isExpanded = expandedCategories[category.id] !== false; // expanded by default!
 
-                        const catColor = [
-                          '#3b82f6', // blue
-                          '#10b981', // emerald
-                          '#f59e0b', // amber
-                          '#ef4444', // red
-                          '#8b5cf6', // violet
-                          '#ec4899', // pink
-                          '#14b8a6', // teal
-                          '#f97316', // orange
-                        ][idx % 8];
+                        const catColor = FIN_CHART_PALETTE[idx % FIN_CHART_PALETTE.length];
 
                         return (
                           <div key={category.id} className="py-2.5">
@@ -6527,7 +6475,7 @@ export default function Finance() {
                                   </button>
                                   <button
                                     onClick={() => handleDeleteCategory(category.id)}
-                                    className="text-rose-500 hover:text-rose-600 p-0.5"
+                                    className="text-fin-negative hover:text-fin-negative p-0.5"
                                     title="Delete Category"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -6541,7 +6489,7 @@ export default function Finance() {
                                 <span className="font-medium text-muted-foreground/80 w-20 text-right">{formatGBP(catBudget)}</span>
                                 <span className={cn(
                                   "font-bold w-20 text-right",
-                                  catLeft >= 0 ? "text-emerald-400" : "text-rose-400"
+                                  catLeft >= 0 ? "text-fin-positive" : "text-fin-negative"
                                 )}>
                                   {catLeft >= 0 ? formatGBP(catLeft) : `-${formatGBP(Math.abs(catLeft))}`}
                                 </span>
@@ -6551,7 +6499,7 @@ export default function Finance() {
                                   <div
                                     className={cn(
                                       "h-full rounded-full transition-all duration-300",
-                                      isOver ? "bg-[#ef4444]" : "bg-[#10b981]"
+                                      isOver ? "bg-fin-negative" : "bg-fin-positive"
                                     )}
                                     style={{ width: `${Math.min(100, catBudget > 0 ? (catSpent / catBudget) * 100 : 0)}%` }}
                                   />
@@ -6591,7 +6539,7 @@ export default function Finance() {
                                           </button>
                                           <button
                                             onClick={() => handleDeleteItem(category.id, item.id)}
-                                            className="text-rose-500 hover:text-rose-600 p-0.5"
+                                            className="text-fin-negative hover:text-fin-negative p-0.5"
                                             title="Delete item"
                                           >
                                             <X className="h-3 w-3" />
@@ -6605,7 +6553,7 @@ export default function Finance() {
                                         <span className="text-muted-foreground/60 w-20 text-right">{formatGBP(item.budgeted)}</span>
                                         <span className={cn(
                                           "w-20 text-right font-medium",
-                                          itemLeft >= 0 ? "text-emerald-400/90" : "text-rose-400/90"
+                                          itemLeft >= 0 ? "text-fin-positive/90" : "text-fin-negative/90"
                                         )}>
                                           {itemLeft >= 0 ? formatGBP(itemLeft) : `-${formatGBP(Math.abs(itemLeft))}`}
                                         </span>
@@ -6615,7 +6563,7 @@ export default function Finance() {
                                           <div
                                             className={cn(
                                               "h-full rounded-full transition-all duration-300",
-                                              isItemOver ? "bg-[#ef4444]" : "bg-[#10b981]"
+                                              isItemOver ? "bg-fin-negative" : "bg-fin-positive"
                                             )}
                                             style={{ width: `${Math.min(100, item.budgeted > 0 ? (spentVal / item.budgeted) * 100 : 0)}%` }}
                                           />
@@ -6704,26 +6652,26 @@ export default function Finance() {
             // Category Details & Color Resolver
             const getCategoryDetails = (categoryName: string) => {
               const catLower = categoryName.toLowerCase();
-              if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) return { emoji: '🏠', color: '#3b82f6' };
+              if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) return { emoji: '🏠', color: '#4f8fdb' };
               if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) return { emoji: '🛍️', color: '#a855f7' };
-              if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('dining')) return { emoji: '🍔', color: '#f97316' };
-              if (catLower.includes('groceries')) return { emoji: '🥑', color: '#10b981' };
+              if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('dining')) return { emoji: '🍔', color: '#b8925a' };
+              if (catLower.includes('groceries')) return { emoji: '🥑', color: '#2f9e6e' };
               if (catLower.includes('insurance')) return { emoji: '🚘', color: '#eab308' };
-              if (catLower.includes('gas') || catLower.includes('fuel')) return { emoji: '⛽', color: '#ef4444' };
-              if (catLower.includes('personal') || catLower.includes('health') || catLower.includes('care')) return { emoji: '💆', color: '#ec4899' };
-              if (catLower.includes('phone') || catLower.includes('mobile')) return { emoji: '📱', color: '#06b6d4' };
-              if (catLower.includes('uber') || catLower.includes('taxi') || catLower.includes('ride')) return { emoji: '🚗', color: '#8b5cf6' };
+              if (catLower.includes('gas') || catLower.includes('fuel')) return { emoji: '⛽', color: '#d1495b' };
+              if (catLower.includes('personal') || catLower.includes('health') || catLower.includes('care')) return { emoji: '💆', color: '#c77dc9' };
+              if (catLower.includes('phone') || catLower.includes('mobile')) return { emoji: '📱', color: '#3fb5ab' };
+              if (catLower.includes('uber') || catLower.includes('taxi') || catLower.includes('ride')) return { emoji: '🚗', color: '#6c63d1' };
               if (catLower.includes('transport') || catLower.includes('travel')) return { emoji: '🚗', color: '#eab308' };
-              if (catLower.includes('entertainment') || catLower.includes('movie') || catLower.includes('cinema')) return { emoji: '🎬', color: '#f43f5e' };
-              if (catLower.includes('electric') || catLower.includes('power') || catLower.includes('utilities')) return { emoji: '⚡', color: '#3b82f6' };
+              if (catLower.includes('entertainment') || catLower.includes('movie') || catLower.includes('cinema')) return { emoji: '🎬', color: '#d1495b' };
+              if (catLower.includes('electric') || catLower.includes('power') || catLower.includes('utilities')) return { emoji: '⚡', color: '#4f8fdb' };
               if (catLower.includes('internet') || catLower.includes('wifi')) return { emoji: '🌐', color: '#0284c7' };
-              if (catLower.includes('gym') || catLower.includes('fitness') || catLower.includes('sports')) return { emoji: '🏋️', color: '#84cc16' };
+              if (catLower.includes('gym') || catLower.includes('fitness') || catLower.includes('sports')) return { emoji: '🏋️', color: '#2f9e6e' };
               if (catLower.includes('pet') || catLower.includes('vet')) return { emoji: '🐶', color: '#d97706' };
-              if (catLower.includes('gift') || catLower.includes('presents')) return { emoji: '🎁', color: '#f43f5e' };
+              if (catLower.includes('gift') || catLower.includes('presents')) return { emoji: '🎁', color: '#d1495b' };
               if (catLower.includes('donations') || catLower.includes('charity')) return { emoji: '🤝', color: '#78716c' };
-              if (catLower.includes('spotify') || catLower.includes('music')) return { emoji: '🎵', color: '#10b981' };
+              if (catLower.includes('spotify') || catLower.includes('music')) return { emoji: '🎵', color: '#2f9e6e' };
               if (catLower.includes('netflix') || catLower.includes('hulu') || catLower.includes('tv')) return { emoji: '📺', color: '#e11d48' };
-              if (catLower.includes('audible') || catLower.includes('books')) return { emoji: '🎧', color: '#f59e0b' };
+              if (catLower.includes('audible') || catLower.includes('books')) return { emoji: '🎧', color: '#d99a3d' };
               return { emoji: '📦', color: '#71717a' };
             };
 
@@ -6908,7 +6856,7 @@ export default function Finance() {
                     y={y}
                     width={width}
                     height={height}
-                    fill="#f43f5e"
+                    fill="#d1495b"
                     opacity={bucket.isFuture ? 0.15 : 0.85}
                   />
                 );
@@ -7070,7 +7018,7 @@ export default function Finance() {
                     <div className="space-y-1">
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
                       <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-                      <p className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                      <p className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-fin-positive" : "text-fin-negative")}>
                         {formatGBP(ytdNet)}
                       </p>
                     </div>
@@ -7116,7 +7064,7 @@ export default function Finance() {
                             return (
                               <RoundedBar
                                 {...props as { x: number; y: number; width: number; height: number }}
-                                fill={val >= 0 ? '#10b981' : '#f43f5e'}
+                                fill={val >= 0 ? FIN_HEX.positive : FIN_HEX.negative}
                                 opacity={dataPoint?.isFuture ? 0.15 : 1}
                               />
                             );
@@ -7136,7 +7084,7 @@ export default function Finance() {
                       <div className="space-y-1">
                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
                         <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-                        <p className="text-2xl font-extrabold font-mono text-rose-500">{formatGBP(ytdSpend)}</p>
+                        <p className="text-2xl font-extrabold font-mono text-fin-negative">{formatGBP(ytdSpend)}</p>
                       </div>
                       <button
                         onClick={() => setCfDrawerOpen('spend')}
@@ -7216,7 +7164,7 @@ export default function Finance() {
                               return (
                                 <RoundedBar
                                   {...props as { x: number; y: number; width: number; height: number }}
-                                  fill="#06b6d4"
+                                  fill="#3fb5ab"
                                   opacity={dataPoint?.isFuture ? 0.15 : 0.85}
                                 />
                               );
@@ -7233,7 +7181,7 @@ export default function Finance() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
-                    <span className={cn("text-xl font-extrabold font-mono block", avgMonthlyNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                    <span className={cn("text-xl font-extrabold font-mono block", avgMonthlyNet >= 0 ? "text-fin-positive" : "text-fin-negative")}>
                       {formatGBP(avgMonthlyNet)}
                     </span>
                     <span className="text-[10px] text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
@@ -7241,7 +7189,7 @@ export default function Finance() {
 
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
-                    <span className={cn("text-xl font-extrabold font-mono block", savingsRate >= 20 ? "text-emerald-500" : savingsRate >= 0 ? "text-amber-500" : "text-rose-500")}>
+                    <span className={cn("text-xl font-extrabold font-mono block", savingsRate >= 20 ? "text-fin-positive" : savingsRate >= 0 ? "text-fin-warn" : "text-fin-negative")}>
                       {savingsRate.toFixed(1)}%
                     </span>
                     <span className="text-[10px] text-muted-foreground">of income retained YTD</span>
@@ -7249,7 +7197,7 @@ export default function Finance() {
 
                   <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
-                    <span className={cn("text-xl font-extrabold font-mono block", recurringBurnRate <= 30 ? "text-emerald-500" : recurringBurnRate <= 50 ? "text-amber-500" : "text-rose-500")}>
+                    <span className={cn("text-xl font-extrabold font-mono block", recurringBurnRate <= 30 ? "text-fin-positive" : recurringBurnRate <= 50 ? "text-fin-warn" : "text-fin-negative")}>
                       {recurringBurnRate.toFixed(1)}%
                     </span>
                     <span className="text-[10px] text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
@@ -7269,7 +7217,7 @@ export default function Finance() {
                             Monthly income minus spend
                           </SheetDescription>
                           <div className="pt-2">
-                            <span className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                            <span className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-fin-positive" : "text-fin-negative")}>
                               {formatGBP(ytdNet)}
                             </span>
                           </div>
@@ -7291,15 +7239,15 @@ export default function Finance() {
                             <div className="flex justify-between items-center">
                               <span className="text-muted-foreground">2026</span>
                               <div className="flex gap-12">
-                                <span className="text-emerald-400 font-bold">{formatGBP(net2026)}</span>
-                                <span className="text-emerald-400 font-bold">{formatGBP(avgMonthlyNet)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(net2026)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(avgMonthlyNet)}</span>
                               </div>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-muted-foreground">2025</span>
                               <div className="flex gap-12">
-                                <span className="text-emerald-400 font-bold">{formatGBP(net2025 || 8754.61)}</span>
-                                <span className="text-emerald-400 font-bold">{formatGBP(729.55)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(net2025 || 8754.61)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(729.55)}</span>
                               </div>
                             </div>
                           </div>
@@ -7311,13 +7259,13 @@ export default function Finance() {
                             <div key={m.fullName + m.year} className="space-y-1.5 border-b border-border/20 pb-3">
                               <div className="flex items-center justify-between text-xs font-bold">
                                 <span>{m.fullName} {m.year}</span>
-                                <span className={cn("font-mono", m.net >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                                <span className={cn("font-mono", m.net >= 0 ? "text-fin-positive" : "text-fin-negative")}>
                                   {formatGBP(m.net)}
                                 </span>
                               </div>
                               <div className="flex justify-between text-[11px] text-muted-foreground pl-2 font-mono">
                                 <span>{m.name} Total income</span>
-                                <span className="text-emerald-400">+{formatGBP(m.income)}</span>
+                                <span className="text-fin-positive">+{formatGBP(m.income)}</span>
                               </div>
                               <div className="flex justify-between text-[11px] text-muted-foreground pl-2 font-mono">
                                 <span>{m.name} Total expenses</span>
@@ -7338,7 +7286,7 @@ export default function Finance() {
                             Monthly spend not including recurrings left to pay
                           </SheetDescription>
                           <div className="pt-2">
-                            <span className="text-3xl font-extrabold font-mono text-rose-500">
+                            <span className="text-3xl font-extrabold font-mono text-fin-negative">
                               {formatGBP(ytdSpend)}
                             </span>
                           </div>
@@ -7402,7 +7350,7 @@ export default function Finance() {
                             Income this month
                           </SheetDescription>
                           <div className="pt-2">
-                            <span className="text-3xl font-extrabold font-mono text-emerald-500">
+                            <span className="text-3xl font-extrabold font-mono text-fin-positive">
                               {formatGBP(ytdIncome)}
                             </span>
                           </div>
@@ -7424,15 +7372,15 @@ export default function Finance() {
                             <div className="flex justify-between items-center">
                               <span className="text-muted-foreground">2026</span>
                               <div className="flex gap-12">
-                                <span className="text-emerald-400 font-bold">{formatGBP(income2026)}</span>
-                                <span className="text-emerald-400 font-bold">{formatGBP(avgMonthlyIncome)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(income2026)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(avgMonthlyIncome)}</span>
                               </div>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-muted-foreground">2025</span>
                               <div className="flex gap-12">
-                                <span className="text-emerald-400 font-bold">{formatGBP(income2025 || 33210.00)}</span>
-                                <span className="text-emerald-400 font-bold">{formatGBP(2767.50)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(income2025 || 33210.00)}</span>
+                                <span className="text-fin-positive font-bold">{formatGBP(2767.50)}</span>
                               </div>
                             </div>
                           </div>
@@ -7444,7 +7392,7 @@ export default function Finance() {
                             <div key={m.fullName + m.year} className="space-y-2">
                               <div className="flex items-center justify-between text-xs font-bold border-b border-border/20 pb-1">
                                 <span>{m.fullName} {m.year}</span>
-                                <span className="font-mono text-emerald-500">{formatGBP(m.income)}</span>
+                                <span className="font-mono text-fin-positive">{formatGBP(m.income)}</span>
                               </div>
                               <div className="space-y-1.5 pl-1">
                                 {m.incomeItems.map(item => (
@@ -7454,7 +7402,7 @@ export default function Finance() {
                                       <span className="font-semibold text-foreground truncate">{item.name}</span>
                                       <span className="text-[10px] text-muted-foreground truncate hidden sm:inline">{item.accountName}</span>
                                     </div>
-                                    <span className="font-mono font-bold text-emerald-400 shrink-0">+{formatGBP(item.amount)}</span>
+                                    <span className="font-mono font-bold text-fin-positive shrink-0">+{formatGBP(item.amount)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -7522,10 +7470,10 @@ export default function Finance() {
                               <span> of </span>
                               <span className="font-mono">{formatGBP(goal.targetAmount)}</span>
                             </span>
-                            <span className="font-bold text-emerald-500 font-mono text-[11px]">{progress.toFixed(0)}%</span>
+                            <span className="font-bold text-fin-positive font-mono text-[11px]">{progress.toFixed(0)}%</span>
                           </div>
                           <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
+                            <div className="h-full bg-fin-positive rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
                           </div>
                         </div>
                       </div>
@@ -7653,8 +7601,8 @@ export default function Finance() {
                           <div className="flex items-start justify-between md:justify-end gap-4 shrink-0">
                             <div className="text-right">
                               <span className="text-[10px] text-muted-foreground block uppercase tracking-wider">Saved</span>
-                              <span className="text-xl font-bold text-emerald-500 font-mono block">{formatGBP(goal.currentAmount)}</span>
-                              <span className="text-[10px] text-emerald-500/80 font-medium block mt-0.5">
+                              <span className="text-xl font-bold text-fin-positive font-mono block">{formatGBP(goal.currentAmount)}</span>
+                              <span className="text-[10px] text-fin-positive/80 font-medium block mt-0.5">
                                 {progress >= 100 ? "Goal achieved!" : `${progress.toFixed(0)}% complete`}
                               </span>
                             </div>
@@ -7678,7 +7626,7 @@ export default function Finance() {
                                 className={cn(
                                   "h-8 w-8 rounded-xl",
                                   goal.status === 'archived'
-                                    ? "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10"
+                                    ? "text-fin-positive hover:text-fin-positive hover:bg-fin-positive/10"
                                     : "text-muted-foreground hover:text-foreground hover:bg-muted/10"
                                 )}
                                 title={goal.status === 'archived' ? "Restore / Unarchive Goal" : "Archive Goal"}
@@ -7689,7 +7637,7 @@ export default function Finance() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteGoal(goal.id)}
-                                className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl"
+                                className="h-8 w-8 text-fin-negative hover:text-fin-negative hover:bg-fin-negative/10 rounded-xl"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -7703,8 +7651,8 @@ export default function Finance() {
                             <AreaChart data={chartData} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
                               <defs>
                                 <linearGradient id="goalProgressGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                  <stop offset="5%" stopColor="#2f9e6e" stopOpacity={0.2} />
+                                  <stop offset="95%" stopColor="#2f9e6e" stopOpacity={0} />
                                 </linearGradient>
                               </defs>
                               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -7735,7 +7683,7 @@ export default function Finance() {
                               <Area
                                 type="monotone"
                                 dataKey="amount"
-                                stroke="#10b981"
+                                stroke="#2f9e6e"
                                 strokeWidth={2}
                                 fillOpacity={1}
                                 fill="url(#goalProgressGrad)"
@@ -7828,7 +7776,7 @@ export default function Finance() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleDeleteContribution(goal.id, c.id)}
-                                    className="h-7 w-7 text-rose-500 hover:text-rose-600 shrink-0 self-end sm:self-center"
+                                    className="h-7 w-7 text-fin-negative hover:text-fin-negative shrink-0 self-end sm:self-center"
                                   >
                                     <X className="h-3.5 w-3.5" />
                                   </Button>
@@ -7897,7 +7845,7 @@ export default function Finance() {
                           </td>
                           <td className="py-3 px-3 capitalize">{account.type}</td>
                           <td className="py-3 px-3">{account.issuer}</td>
-                          <td className={cn("py-3 px-3 text-right font-mono font-bold", account.balance >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                          <td className={cn("py-3 px-3 text-right font-mono font-bold", account.balance >= 0 ? "text-fin-positive" : "text-fin-negative")}>
                             {formatGBP(account.balance)}
                           </td>
                           <td className="py-3 px-3 text-right font-mono">{formatGBP(account.annualFee)}</td>
@@ -7919,7 +7867,7 @@ export default function Finance() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteAccount(account.id)}
-                                className="h-8 w-8 text-rose-500 hover:text-rose-600"
+                                className="h-8 w-8 text-fin-negative hover:text-fin-negative"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -7950,8 +7898,8 @@ export default function Finance() {
                   </div>
                   <div className="flex items-center gap-2 self-start sm:self-auto">
                     {trueLayerStatus?.connected ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-fin-positive/10 text-fin-positive border border-fin-positive/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-fin-positive animate-pulse" />
                         Connected
                       </span>
                     ) : (
@@ -8077,7 +8025,7 @@ export default function Finance() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteMembership(membership.id)}
-                                className="h-8 w-8 text-rose-500 hover:text-rose-600"
+                                className="h-8 w-8 text-fin-negative hover:text-fin-negative"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -8122,11 +8070,11 @@ export default function Finance() {
                       const found = bands.find(b => score >= b.min && score <= b.max);
                       if (found) {
                         let cls = 'text-muted-foreground';
-                        if (found.color === '#047857') cls = 'text-emerald-600 dark:text-emerald-400';
-                        else if (found.color === '#10b981') cls = 'text-emerald-500 dark:text-emerald-400';
-                        else if (found.color === '#84cc16') cls = 'text-lime-500 dark:text-lime-400';
-                        else if (found.color === '#f59e0b') cls = 'text-amber-500';
-                        else if (found.color === '#ef4444') cls = 'text-rose-500';
+                        if (found.color === '#2f9e6e') cls = 'text-fin-positive';
+                        else if (found.color === '#2f9e6e') cls = 'text-fin-positive';
+                        else if (found.color === '#2f9e6e') cls = 'text-fin-positive';
+                        else if (found.color === '#d99a3d') cls = 'text-fin-warn';
+                        else if (found.color === '#d1495b') cls = 'text-fin-negative';
 
                         return { text: found.name, cls, color: found.color, band: found };
                       }
@@ -8304,7 +8252,7 @@ export default function Finance() {
                           {/* Delta + Date */}
                           <div className="flex items-center gap-3 mt-3 mb-4">
                             {delta !== 0 && (
-                              <span className={cn("text-xs font-bold font-mono flex items-center gap-0.5", delta > 0 ? "text-emerald-500" : "text-rose-500")}>
+                              <span className={cn("text-xs font-bold font-mono flex items-center gap-0.5", delta > 0 ? "text-fin-positive" : "text-fin-negative")}>
                                 {delta > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                                 {delta > 0 ? '+' : ''}{delta}
                               </span>
@@ -8359,7 +8307,7 @@ export default function Finance() {
                                         </div>
                                         <button
                                           onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
-                                          className="text-rose-500 hover:text-rose-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          className="text-fin-negative hover:text-fin-negative p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                           title="Delete"
                                         >
                                           <Trash2 className="h-3 w-3" />
@@ -8598,14 +8546,14 @@ export default function Finance() {
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         <div className="text-right">
-                          <span className="block font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">+{formatGBP(annualVal)}</span>
+                          <span className="block font-mono text-xs font-bold text-fin-positive">+{formatGBP(annualVal)}</span>
                           <span className="block font-mono text-[9px] text-muted-foreground">+{formatGBP(annualVal / 12)}/mo</span>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteBenefit(benefit.id)}
-                          className="h-8 w-8 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                          className="h-8 w-8 rounded-lg text-fin-negative hover:text-fin-negative hover:bg-fin-negative/10"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -9202,7 +9150,7 @@ export default function Finance() {
                               <button
                                 type="button"
                                 onClick={() => setDraftRecurringTemplates(draftRecurringTemplates.filter((_, i) => i !== idx))}
-                                className="absolute top-2 right-2 text-rose-500 hover:text-rose-700 opacity-60 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-2 right-2 text-fin-negative hover:text-fin-negative opacity-60 group-hover:opacity-100 transition-opacity"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -11042,7 +10990,7 @@ function MonthYearPicker({ value, onChange, isEnd }: MonthYearPickerProps) {
               className={cn(
                 "py-2 text-[10px] font-medium transition-all text-center rounded-xl",
                 isSelected
-                  ? "bg-[#1d70b8] text-white font-semibold shadow-sm"
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                   : "text-foreground/80 hover:bg-muted/50 hover:text-foreground"
               )}
             >

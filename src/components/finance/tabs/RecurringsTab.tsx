@@ -3,6 +3,7 @@ import { RecurringBill } from '@/types/finance';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
+import { FIN_CHART_PALETTE } from '@/components/finance/utils/calculations';
 
 interface RecurringsTabProps {
   recurrings: RecurringBill[];
@@ -41,27 +42,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   onEditRecurring,
   onDeleteRecurring,
 }) => {
-  const getTagColor = (category: string | undefined) => {
-    switch (category?.toLowerCase()) {
-      case 'rent':
-      case 'housing':
-        return 'bg-blue-500/10 text-blue-500 border border-blue-500/20';
-      case 'subscriptions':
-      case 'video entertainment':
-        return 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20';
-      case 'gym':
-        return 'bg-amber-500/10 text-amber-500 border border-amber-500/20';
-      case 'donations':
-        return 'bg-orange-500/10 text-orange-500 border border-orange-500/20';
-      case 'insurance':
-        return 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20';
-      case 'groceries':
-      case 'needs':
-        return 'bg-teal-500/10 text-teal-500 border border-teal-500/20';
-      default:
-        return 'bg-muted/30 text-muted-foreground border border-border/30';
-    }
-  };
+  const tagClass = 'bg-muted/40 text-muted-foreground border border-border/50';
 
   const thisMonthBills = recurrings.filter(r => isDueThisMonth(r, currentMonth));
   const todayDay = new Date().getDate();
@@ -105,16 +86,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   }, [] as { name: string; value: number }[])
   .map((item, idx) => ({
     ...item,
-    color: [
-      '#3b82f6',
-      '#10b981',
-      '#f59e0b',
-      '#ef4444',
-      '#8b5cf6',
-      '#ec4899',
-      '#14b8a6',
-      '#f97316',
-    ][idx % 8]
+    color: FIN_CHART_PALETTE[idx % FIN_CHART_PALETTE.length],
   }));
 
   const recurringPieData = recurringCategoryData.length > 0
@@ -228,14 +200,14 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                         <button
                           onClick={() => onDeleteRecurring(bill.id)}
-                          className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
+                          className="text-fin-negative hover:text-fin-negative p-1 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
 
-                      <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                      <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", tagClass)}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>
@@ -249,7 +221,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         className={cn(
                           "w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0",
                           bill.isPaid
-                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            ? "bg-fin-positive border-fin-positive text-white"
                             : "border-border/40 hover:border-primary/50 bg-background/50"
                         )}
                         title={bill.isPaid ? "Mark as unpaid" : "Mark as paid"}
@@ -307,14 +279,14 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                         <button
                           onClick={() => onDeleteRecurring(bill.id)}
-                          className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
+                          className="text-fin-negative hover:text-fin-negative p-1 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
 
-                      <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                      <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", tagClass)}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>

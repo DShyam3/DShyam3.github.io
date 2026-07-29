@@ -65,12 +65,12 @@ const HOLDING_CATEGORIES = [
 type HoldingCategory = typeof HOLDING_CATEGORIES[number];
 
 const CATEGORY_COLORS: Record<HoldingCategory, string> = {
-  Stock: '#3b82f6',       // Blue
-  ETF: '#10b981',         // Emerald
-  Crypto: '#8b5cf6',      // Purple
-  'Mutual Fund': '#06b6d4', // Cyan
-  'Real Estate': '#f59e0b', // Amber
-  Cash: '#ec4899',        // Pink
+  Stock: '#4f8fdb',       // Blue
+  ETF: '#2f9e6e',         // Emerald
+  Crypto: '#6c63d1',      // Purple
+  'Mutual Fund': '#3fb5ab', // Cyan
+  'Real Estate': '#d99a3d', // Amber
+  Cash: '#c77dc9',        // Pink
   Other: '#6b7280'        // Gray
 };
 
@@ -266,15 +266,15 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           <div className="space-y-1.5 relative z-10">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               {portfolioStats.profitLoss >= 0 ? (
-                <TrendingUp className="h-3 w-3 text-emerald-500" />
+                <TrendingUp className="h-3 w-3 text-fin-positive" />
               ) : (
-                <TrendingDown className="h-3 w-3 text-rose-500" />
+                <TrendingDown className="h-3 w-3 text-fin-negative" />
               )}
               Total Gain / Loss
             </span>
             <div className={cn(
               "text-2xl sm:text-3xl font-serif font-semibold tracking-tight",
-              portfolioStats.profitLoss >= 0 ? "text-emerald-500" : "text-rose-500"
+              portfolioStats.profitLoss >= 0 ? "text-fin-positive" : "text-fin-negative"
             )}>
               {portfolioStats.profitLoss >= 0 ? '+' : ''}{formatGBP(portfolioStats.profitLoss)}
             </div>
@@ -288,11 +288,11 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
           <div className="space-y-1.5 relative z-10">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              <ArrowUpRight className="h-3 w-3 text-amber-500" /> Rate of Return
+              <ArrowUpRight className="h-3 w-3 text-fin-warn" /> Rate of Return
             </span>
             <div className={cn(
               "text-2xl sm:text-3xl font-serif font-semibold tracking-tight",
-              portfolioStats.totalReturnPercent >= 0 ? "text-emerald-500" : "text-rose-500"
+              portfolioStats.totalReturnPercent >= 0 ? "text-fin-positive" : "text-fin-negative"
             )}>
               {portfolioStats.totalReturnPercent >= 0 ? '+' : ''}{portfolioStats.totalReturnPercent.toFixed(2)}%
             </div>
@@ -392,7 +392,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                           </td>
                           <td className={cn(
                             "py-3.5 text-right font-mono",
-                            gainLoss >= 0 ? "text-emerald-500 font-semibold" : "text-rose-500"
+                            gainLoss >= 0 ? "text-fin-positive font-semibold" : "text-fin-negative"
                           )}>
                             <span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span>
                             <span className="text-[10px] block">
@@ -413,7 +413,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                                 onClick={() => onDeleteHolding(h.id)}
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-rose-500 rounded-full"
+                                className="h-7 w-7 text-muted-foreground hover:text-fin-negative rounded-full"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -562,7 +562,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="text-muted-foreground">Annual Return Rate</span>
-                  <span className="text-foreground font-semibold text-emerald-500 font-bold">
+                  <span className="text-foreground font-semibold text-fin-positive font-bold">
                     {calcRate}%
                   </span>
                 </div>
@@ -606,7 +606,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
                   With a compound return of <span className="font-semibold text-foreground">{calcRate}%</span>, your portfolio value is projected to reach{' '}
-                  <span className="font-semibold text-emerald-500 font-bold">
+                  <span className="font-semibold text-fin-positive font-bold">
                     {formatGBP(projectionData[projectionData.length - 1]['Future Value'])}
                   </span>
                   . That corresponds to{' '}
@@ -627,12 +627,12 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                 >
                   <defs>
                     <linearGradient id="colorFV" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#2f9e6e" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#2f9e6e" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorTC" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#4f8fdb" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#4f8fdb" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -672,7 +672,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     type="monotone"
                     name="Future Value"
                     dataKey="Future Value"
-                    stroke="#10b981"
+                    stroke="#2f9e6e"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorFV)"
@@ -681,7 +681,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     type="monotone"
                     name="Total Contributions"
                     dataKey="Total Contributions"
-                    stroke="#3b82f6"
+                    stroke="#4f8fdb"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorTC)"

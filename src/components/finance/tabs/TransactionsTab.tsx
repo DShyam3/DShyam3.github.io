@@ -118,33 +118,6 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     return options;
   }, [budgetCategories]);
 
-  // Color mapper for categories matching dashboard presets
-  const getCategoryColor = (category: string) => {
-    const catLower = category.toLowerCase();
-    if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('drink')) {
-      return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
-    }
-    if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) {
-      return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
-    }
-    if (catLower.includes('gas') || catLower.includes('transport') || catLower.includes('car') || catLower.includes('travel')) {
-      return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30';
-    }
-    if (catLower.includes('internet') || catLower.includes('utilities') || catLower.includes('bills')) {
-      return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-    }
-    if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) {
-      return 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30';
-    }
-    if (catLower.includes('savings') || catLower.includes('investment') || catLower.includes('interest')) {
-      return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
-    }
-    if (catLower.includes('groceries')) {
-      return 'bg-teal-500/15 text-teal-400 border-teal-500/30';
-    }
-    return 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30';
-  };
-
   // Filtered & Sorted Transactions
   const filteredTransactions = useMemo(() => {
     let result = [...transactions];
@@ -591,7 +564,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   onClick={() => handleBulkReview(true)}
                   className="h-7 rounded-lg text-[10px] border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
                 >
-                  <Check className="h-3 w-3 text-emerald-400" />
+                  <Check className="h-3 w-3 text-fin-positive" />
                   Mark Reviewed
                 </Button>
                 <Button
@@ -600,7 +573,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   onClick={() => handleBulkReview(false)}
                   className="h-7 rounded-lg text-[10px] border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
                 >
-                  <RefreshCw className="h-3 w-3 text-amber-400" />
+                  <RefreshCw className="h-3 w-3 text-fin-warn" />
                   Mark Pending
                 </Button>
 
@@ -633,7 +606,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   size="sm"
                   variant="outline"
                   onClick={handleBulkDelete}
-                  className="h-7 rounded-lg text-[10px] border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 flex items-center gap-1"
+                  className="h-7 rounded-lg text-[10px] border-fin-negative/20 bg-fin-negative/5 hover:bg-fin-negative/10 text-fin-negative flex items-center gap-1"
                 >
                   <Trash2 className="h-3 w-3" />
                   Delete
@@ -730,15 +703,15 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                             <div className="w-1.5 flex justify-center shrink-0">
                               {!tx.isReviewed && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#3b82f6] animate-pulse" />
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#4f8fdb] animate-pulse" />
                               )}
                             </div>
 
                             <div className={cn(
                               "h-8 w-8 rounded-xl shrink-0 flex items-center justify-center font-bold text-xs uppercase shadow-sm border",
                               isIncome
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/20"
+                                ? "bg-fin-positive/10 text-fin-positive border-fin-positive/20"
+                                : "bg-fin-negative/10 text-fin-negative border-fin-negative/20"
                             )}>
                               {tx.category ? tx.category.charAt(0) : 'T'}
                             </div>
@@ -770,10 +743,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                             {tx.category && (
                               <Badge
                                 variant="outline"
-                                className={cn(
-                                  "text-[9px] font-medium tracking-wide uppercase px-2 py-0.5 border rounded-full font-mono",
-                                  getCategoryColor(tx.category)
-                                )}
+                                className="text-[9px] font-medium tracking-wide uppercase px-2 py-0.5 border border-border/60 rounded-full font-mono bg-muted/40 text-muted-foreground"
                               >
                                 {tx.category}
                               </Badge>
@@ -781,7 +751,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                             <div className={cn(
                               "text-xs font-mono font-semibold text-right min-w-[70px]",
-                              isIncome ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                              isIncome ? "text-fin-positive" : "text-fin-negative"
                             )}>
                               {isIncome ? '+' : '-'}{formatGBP(Math.abs(tx.amount))}
                             </div>
@@ -817,7 +787,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     className={cn(
                       "h-7 rounded-lg text-[10px] flex items-center gap-1 border font-medium",
                       selectedTx.isReviewed
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                        ? "bg-fin-positive/10 text-fin-positive border-fin-positive/20 hover:bg-fin-positive/20"
                         : "border-primary/15 text-muted-foreground hover:bg-primary/5"
                     )}
                   >
@@ -830,7 +800,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     size="sm"
                     variant="ghost"
                     onClick={() => handleDeleteSingle(selectedTx.id)}
-                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10"
+                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-fin-negative hover:bg-fin-negative/10"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -865,8 +835,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     className={cn(
                       "h-7 rounded-lg text-[10px] font-semibold flex items-center gap-1.5 border transition-colors",
                       selectedTx.amount < 0
-                        ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
-                        : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
+                        ? "bg-fin-positive/10 text-fin-positive border-fin-positive/30 hover:bg-fin-positive/20"
+                        : "bg-fin-negative/10 text-fin-negative border-fin-negative/30 hover:bg-fin-negative/20"
                     )}
                   >
                     {selectedTx.amount < 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -980,7 +950,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         <span>{tag}</span>
                         <button
                           onClick={() => handleRemoveTag(tag)}
-                          className="hover:text-rose-500 font-bold ml-0.5"
+                          className="hover:text-fin-negative font-bold ml-0.5"
                         >
                           ×
                         </button>
@@ -1035,7 +1005,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         </div>
                         <span className={cn(
                           "text-[10px] font-mono font-semibold",
-                          match.amount < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                          match.amount < 0 ? "text-fin-positive" : "text-fin-negative"
                         )}>
                           {match.amount < 0 ? '+' : '-'}{formatGBP(Math.abs(match.amount))}
                         </span>
@@ -1082,7 +1052,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   className={cn(
                     "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
                     newTxType === 'expense'
-                      ? "bg-rose-500 hover:bg-rose-600 text-white"
+                      ? "bg-fin-negative hover:bg-fin-negative text-white"
                       : "border-primary/15 text-muted-foreground hover:bg-primary/5"
                   )}
                 >
@@ -1096,7 +1066,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   className={cn(
                     "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
                     newTxType === 'income'
-                      ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                      ? "bg-fin-positive hover:bg-fin-positive text-white"
                       : "border-primary/15 text-muted-foreground hover:bg-primary/5"
                   )}
                 >

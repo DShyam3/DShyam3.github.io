@@ -41,6 +41,14 @@
     --badge-new: 25 80% 50%;
     --badge-new-foreground: 0 0% 100%;
 
+    /* Finance module: deliberately small, restrained palette
+       (gain/loss + one tech accent + one warning tone) instead of
+       the default Tailwind rainbow (emerald/rose/indigo/amber/teal/...) */
+    --fin-positive: 152 45% 42%;
+    --fin-negative: 356 55% 52%;
+    --fin-accent: 244 55% 58%;
+    --fin-warn: 38 70% 50%;
+
     --font-matrix: 'Doto', monospace;
     --font-serif: 'JetBrains Mono', monospace;
     --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -89,6 +97,11 @@
     --border: 220 14% 18%;
     --input: 220 14% 18%;
     --ring: 210 20% 96%;
+
+    --fin-positive: 152 40% 52%;
+    --fin-negative: 356 62% 62%;
+    --fin-accent: 244 65% 68%;
+    --fin-warn: 38 75% 58%;
 
     --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(220 20% 20% / 0.15);
     --shadow-card-hover:
@@ -189,6 +202,26 @@
     @apply text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded;
     background-color: hsl(var(--badge-new));
     color: hsl(var(--badge-new-foreground));
+  }
+
+  /* Finance module primitives */
+  .fin-label {
+    @apply text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 font-sans;
+  }
+
+  .fin-card {
+    @apply rounded-3xl border bg-card/60 backdrop-blur-md;
+    border-color: hsl(var(--border) / 0.6);
+    box-shadow: var(--shadow-border);
+  }
+
+  .fin-gradient-bar {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--fin-accent)) 0%,
+      hsl(280 55% 62%) 55%,
+      hsl(var(--fin-positive)) 100%
+    );
   }
 }
 

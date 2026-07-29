@@ -60,6 +60,12 @@ export default {
           new: 'hsl(var(--badge-new))',
           'new-foreground': 'hsl(var(--badge-new-foreground))',
         },
+        fin: {
+          positive: 'hsl(var(--fin-positive))',
+          negative: 'hsl(var(--fin-negative))',
+          accent: 'hsl(var(--fin-accent))',
+          warn: 'hsl(var(--fin-warn))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',

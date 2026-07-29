@@ -3,6 +3,34 @@ import defaultPresets from '@/data/presets.json';
 
 const { DEFAULT_CATEGORY_PRESETS } = defaultPresets;
 
+/**
+ * Hex equivalents of the CSS `--fin-*` tokens (src/index.css), for chart libs
+ * (Recharts/SVG) that need literal color strings rather than Tailwind classes.
+ */
+export const FIN_HEX = {
+  positive: '#2f9e6e',
+  negative: '#d1495b',
+  accent: '#6c63d1',
+  warn: '#d99a3d',
+} as const;
+
+/**
+ * Small, deliberately curated categorical palette shared by every chart in the
+ * finance module (budget/recurring/investment/time breakdowns), so category
+ * colors read as one coordinated system instead of each chart picking its own
+ * ad-hoc set of saturated defaults.
+ */
+export const FIN_CHART_PALETTE = [
+  '#6c63d1', // indigo-violet
+  '#2f9e6e', // green
+  '#d99a3d', // amber
+  '#d1495b', // coral-red
+  '#4f8fdb', // blue
+  '#c77dc9', // orchid
+  '#3fb5ab', // teal
+  '#b8925a', // tan
+] as const;
+
 export const DEFAULT_GROUPS: Record<string, 'needs' | 'wants' | 'savings'> = {
   home: 'needs',
   housing: 'needs',

@@ -84,25 +84,25 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
   const pct_relaxing = (hours_relaxing_year / TOTAL_HOURS_YEAR) * 100;
 
   const timeData = [
-    { name: 'Sleep', value: hours_sleep_year, pct: pct_sleep, color: '#6366f1', emoji: '😴' },
-    { name: 'Work', value: hours_work_actual_year, pct: pct_hours_work, color: '#10b981', emoji: '💼' },
-    { name: 'Relaxing / Free', value: hours_relaxing_year, pct: pct_relaxing, color: '#f59e0b', emoji: '🌴' },
-    { name: 'Socializing', value: hours_friends_year, pct: pct_friends, color: '#ec4899', emoji: '🥳' },
-    { name: 'Getting Ready', value: hours_ready_year, pct: pct_ready, color: '#a855f7', emoji: '🧼' },
-    { name: 'Wellness / Gym', value: hours_gym_year, pct: pct_gym, color: '#14b8a6', emoji: '🏋️' },
+    { name: 'Sleep', value: hours_sleep_year, pct: pct_sleep, color: '#6c63d1', emoji: '😴' },
+    { name: 'Work', value: hours_work_actual_year, pct: pct_hours_work, color: '#2f9e6e', emoji: '💼' },
+    { name: 'Relaxing / Free', value: hours_relaxing_year, pct: pct_relaxing, color: '#d99a3d', emoji: '🌴' },
+    { name: 'Socializing', value: hours_friends_year, pct: pct_friends, color: '#c77dc9', emoji: '🥳' },
+    { name: 'Getting Ready', value: hours_ready_year, pct: pct_ready, color: '#6c63d1', emoji: '🧼' },
+    { name: 'Wellness / Gym', value: hours_gym_year, pct: pct_gym, color: '#3fb5ab', emoji: '🏋️' },
     { name: 'Commute', value: hours_commute_year, pct: pct_commute, color: '#6b7280', emoji: '🚗' },
-    { name: 'Learning', value: hours_learning_year, pct: pct_learning, color: '#3b82f6', emoji: '📚' },
+    { name: 'Learning', value: hours_learning_year, pct: pct_learning, color: '#4f8fdb', emoji: '📚' },
   ].filter(d => d.value > 0);
 
   const dailyBreakdown = [
-    { name: 'Sleep', hours: sleepHoursPerDay, color: '#6366f1', emoji: '😴' },
-    { name: 'Work', hours: hours_work_actual_year / 365, color: '#10b981', emoji: '💼' },
+    { name: 'Sleep', hours: sleepHoursPerDay, color: '#6c63d1', emoji: '😴' },
+    { name: 'Work', hours: hours_work_actual_year / 365, color: '#2f9e6e', emoji: '💼' },
     { name: 'Commute', hours: hours_commute_year / 365, color: '#6b7280', emoji: '🚗' },
-    { name: 'Getting Ready', hours: gettingReadyHoursPerDay, color: '#a855f7', emoji: '🧼' },
-    { name: 'Wellness / Gym', hours: hours_gym_year / 365, color: '#14b8a6', emoji: '🏋️' },
-    { name: 'Learning', hours: hours_learning_year / 365, color: '#3b82f6', emoji: '📚' },
-    { name: 'Socializing', hours: hours_friends_year / 365, color: '#ec4899', emoji: '🥳' },
-    { name: 'Relaxing', hours: hours_relaxing_year / 365, color: '#f59e0b', emoji: '🌴' },
+    { name: 'Getting Ready', hours: gettingReadyHoursPerDay, color: '#6c63d1', emoji: '🧼' },
+    { name: 'Wellness / Gym', hours: hours_gym_year / 365, color: '#3fb5ab', emoji: '🏋️' },
+    { name: 'Learning', hours: hours_learning_year / 365, color: '#4f8fdb', emoji: '📚' },
+    { name: 'Socializing', hours: hours_friends_year / 365, color: '#c77dc9', emoji: '🥳' },
+    { name: 'Relaxing', hours: hours_relaxing_year / 365, color: '#d99a3d', emoji: '🌴' },
   ].filter(d => d.hours > 0);
 
   const totalDailyHours = dailyBreakdown.reduce((sum, d) => sum + d.hours, 0);
@@ -129,7 +129,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
       </div>
 
       {trackedExceedsTotal && (
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl p-4 text-xs font-sans flex items-start gap-2.5">
+        <div className="bg-fin-negative/10 border border-fin-negative/20 text-fin-negative rounded-2xl p-4 text-xs font-sans flex items-start gap-2.5">
           <span className="text-base leading-none">⚠️</span>
           <div>
             <p className="font-semibold mb-0.5">Over-allocated Schedule</p>
@@ -366,17 +366,17 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
                     <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Free Time</span>
-                    <span className="font-mono text-lg font-bold text-[#f59e0b] block">{hours_relaxing_year.toFixed(0)} hrs</span>
+                    <span className="font-mono text-lg font-bold text-fin-warn block">{hours_relaxing_year.toFixed(0)} hrs</span>
                     <span className="text-[10px] text-muted-foreground/80 font-semibold">{pct_relaxing.toFixed(1)}% of year</span>
                   </div>
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
                     <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Sleep</span>
-                    <span className="font-mono text-lg font-bold text-[#6366f1] block">{hours_sleep_year.toFixed(0)} hrs</span>
+                    <span className="font-mono text-lg font-bold text-fin-accent block">{hours_sleep_year.toFixed(0)} hrs</span>
                     <span className="text-[10px] text-muted-foreground/80 font-semibold">{pct_sleep.toFixed(1)}% of year</span>
                   </div>
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
                     <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Work</span>
-                    <span className="font-mono text-lg font-bold text-[#10b981] block">{hours_work_actual_year.toFixed(0)} hrs</span>
+                    <span className="font-mono text-lg font-bold text-fin-positive block">{hours_work_actual_year.toFixed(0)} hrs</span>
                     <span className="text-[10px] text-muted-foreground/80 font-semibold">{pct_hours_work.toFixed(1)}% of year</span>
                   </div>
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
@@ -464,7 +464,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                   {/* Sleep Row */}
                   <tr className="hover:bg-muted/5 transition-colors">
                     <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#6366f1' }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#6c63d1' }} />
                       <span>😴 Sleep</span>
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono">{sleepHoursPerDay.toFixed(1)} hrs</td>
@@ -475,7 +475,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                   {/* Work Row */}
                   <tr className="hover:bg-muted/5 transition-colors">
                     <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#10b981' }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#2f9e6e' }} />
                       <span>💼 Actual Work</span>
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono">{(hours_work_actual_year / 365).toFixed(1)} hrs</td>
@@ -499,7 +499,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                   {/* Getting Ready Row */}
                   <tr className="hover:bg-muted/5 transition-colors">
                     <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#a855f7' }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#6c63d1' }} />
                       <span>🧼 Getting Ready</span>
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono">{gettingReadyHoursPerDay.toFixed(1)} hrs</td>
@@ -511,7 +511,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                   {hours_gym_year > 0 && (
                     <tr className="hover:bg-muted/5 transition-colors">
                       <td className="py-2.5 px-3 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#14b8a6' }} />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#3fb5ab' }} />
                         <span>🏋️ Wellness / Gym</span>
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono">{(hours_gym_year / 365).toFixed(1)} hrs</td>
@@ -524,7 +524,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                   {hours_learning_year > 0 && (
                     <tr className="hover:bg-muted/5 transition-colors">
                       <td className="py-2.5 px-3 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#3b82f6' }} />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#4f8fdb' }} />
                         <span>📚 Learning</span>
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono">{(hours_learning_year / 365).toFixed(1)} hrs</td>
@@ -537,7 +537,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                   {hours_friends_year > 0 && (
                     <tr className="hover:bg-muted/5 transition-colors">
                       <td className="py-2.5 px-3 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#ec4899' }} />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#c77dc9' }} />
                         <span>🥳 Socializing</span>
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono">{(hours_friends_year / 365).toFixed(1)} hrs</td>
@@ -549,7 +549,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                   {/* Relaxing Row */}
                   <tr className="hover:bg-muted/5 transition-colors">
                     <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#f59e0b' }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#d99a3d' }} />
                       <span>🌴 Relaxing / Free Time</span>
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono">{(hours_relaxing_year / 365).toFixed(1)} hrs</td>
