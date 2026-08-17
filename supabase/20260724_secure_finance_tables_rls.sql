@@ -16,6 +16,7 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
+    CONTINUE WHEN to_regclass('public.' || quote_ident(t)) IS NULL;
     EXECUTE format('DROP POLICY IF EXISTS "Public Read Access" ON public.%I', t);
     EXECUTE format('DROP POLICY IF EXISTS "Admin Write Access" ON public.%I', t);
     EXECUTE format('DROP POLICY IF EXISTS "Admin Only" ON public.%I', t);

@@ -15,10 +15,14 @@ DECLARE
   tables text[] := ARRAY[
     'movies', 'tv_shows', 'tv_show_seasons', 'tv_show_episodes', 'weekly_schedule',
     'inventory_items', 'links', 'books', 'articles', 'creators', 'photos',
-    'recipes', 'beliefs', 'inspirations', 'upvotes', 'visited_countries', 'site_content'
+    'recipes', 'beliefs', 'inspirations', 'visited_countries', 'site_content'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
+    -- Skip tables that don't exist rather than aborting the whole block: this
+    -- list has drifted from the schema before (`upvotes` was listed here for
+    -- months but never created, which made the entire migration roll back).
+    CONTINUE WHEN to_regclass('public.' || quote_ident(t)) IS NULL;
     EXECUTE format('DROP POLICY IF EXISTS "Admin Write Access" ON public.%I', t);
     EXECUTE format('DROP POLICY IF EXISTS "Admin Write Site Content" ON public.%I', t);
     EXECUTE format(
