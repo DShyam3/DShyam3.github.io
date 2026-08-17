@@ -104,14 +104,9 @@ The `supabase/*.sql` files are **not** in `supabase/migrations/` and don't follo
 
 ## 🔡 Dot-matrix text system
 
-The pixel/LED-style headings and labels ("DHYAN SHYAM", nav links, etc.) render via a real webfont, not hand-drawn dots — `scripts/generate-dot-font.py` defines the letterforms, `scripts/build-webfont.py` compiles them into `public/fonts/dot-matrix-mono.{ttf,woff2}` (requires a local Python venv with `fonttools`/`brotli`, not a project dependency). Re-run after editing letterforms:
+The pixel/LED-style headings and labels ("DHYAN SHYAM", nav links, etc.) render as real text set in [Doto](https://fonts.google.com/specimen/Doto), a Google Font imported in `src/index.css` (`--font-matrix`) — `DotMatrixText` is just a `<span>` with that font applied, no per-character data or generation step involved. Doto is a variable font where the "dots" are literally circles that grow and fuse together as weight increases, so low weights (400-600, see `DotMatrixText.css`) read as distinct dots and heavy weights read as solid strokes — reach for weight, not font-size, if the dot-matrix look isn't obvious enough.
 
-```sh
-python3 scripts/generate-dot-font.py
-python3 scripts/build-webfont.py
-```
-
-Icons that can't be represented as font glyphs (theme toggle sun/moon, the `+` social-links trigger) still use the original dot-grid approach (`DotMatrixIcon` → `DotMatrixGlyph`, backed by `src/data/dot-matrix.json`'s `iconPatterns`). Larger standalone glyphs use a separate 25x25 tier (`scripts/generate-hero-glyphs.py` → `src/data/hero-glyphs.json` → `DotMatrixHeroGlyph`).
+Icons that can't be represented as a font glyph (theme toggle sun/moon, the `+` social-links trigger, the flip-style `DotMatrixClock`) still use the original hand-authored dot-grid approach (`DotMatrixIcon`/`DotMatrixClock` → `DotMatrixGlyph`, backed by `src/data/dot-matrix.json`) — `iconPatterns` for icons, and `charPatterns` (trimmed to just `0-9`/`:`, all `DotMatrixClock` ever renders) for the clock digits. Larger standalone glyphs use a separate 25x25 tier (`scripts/generate-hero-glyphs.py` → `src/data/hero-glyphs.json` → `DotMatrixHeroGlyph`), built from geometric primitives rather than the font.
 
 ## 🧠 Codebase knowledge graph (graphify)
 
