@@ -87,10 +87,14 @@ export interface FavouriteItem {
   category: string;
 }
 
+// 'manual' = admin clicked "Sync Updates"; 'daily' = the client-side check
+// (an admin had the Watchlist page open) found the 6 AM sync was due;
+// 'auto' = the server-side pg_cron edge function fired on schedule with no
+// browser involved at all. See watchlist-cron-sync/index.ts.
 interface SyncLogEntry {
   id: number;
   synced_at: string;
-  sync_type: 'auto' | 'manual';
+  sync_type: 'auto' | 'manual' | 'daily';
   status: 'success' | 'error';
   items_synced: number;
   error_message?: string;
@@ -108,7 +112,7 @@ interface WatchlistContextType {
   nextAutoSyncTime: string;
   syncLog: SyncLogEntry[];
   autoSyncEnabled: boolean;
-  syncWatchlist: (type?: 'manual' | 'auto', itemsOverride?: WatchlistItem[]) => Promise<void>;
+  syncWatchlist: (type?: 'manual' | 'daily', itemsOverride?: WatchlistItem[]) => Promise<void>;
   syncSingleItem: (id: string) => Promise<void>;
   cancelSync: () => void;
   addWatchlistItem: (
@@ -355,7 +359,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   // Log a sync event to Supabase
   const logSync = useCallback(
     async (
-      syncType: 'auto' | 'manual',
+      syncType: 'manual' | 'daily',
       status: 'success' | 'error',
       itemsSynced: number,
       durationMs: number,
@@ -844,7 +848,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   // sync, instead of duplicating ~250 lines of season/episode reconciliation
   // for a "resync this one show" action.
   const syncWatchlist = async (
-    type: 'manual' | 'auto' = 'manual',
+    type: 'manual' | 'daily' = 'manual',
     itemsOverride?: WatchlistItem[],
   ) => {
     if (syncing) return; // Prevent concurrent syncs
@@ -1237,9 +1241,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             : undefined,
       );
       setNextAutoSyncTime(getNext6AM().toISOString());
-      if (type === 'auto') {
+      if (type === 'daily') {
         console.log(
-          `[Auto-Sync] Completed at ${syncTime}. ${itemsSynced} items synced in ${(durationMs / 1000).toFixed(1)}s`,
+          `[Daily Sync] Completed at ${syncTime}. ${itemsSynced} items synced in ${(durationMs / 1000).toFixed(1)}s`,
         );
       }
 
@@ -1249,7 +1253,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           ? `Stopped after ${itemsSynced} item(s) synchronized`
           : isSingleItemResync && itemsSynced > 0
             ? `"${itemsOverride[0].title}" resynced`
-            : `${itemsSynced} items synchronized${type === 'auto' ? ' (scheduled)' : ''}`,
+            : `${itemsSynced} items synchronized${type === 'daily' ? ' (scheduled)' : ''}`,
       ];
       if (changesSummary.length > 0) {
         const preview = changesSummary.slice(0, 3).join('; ');
@@ -1269,8 +1273,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       toast({
         title: wasCancelled
           ? 'Sync Stopped'
-          : type === 'auto'
-            ? 'Auto-Sync Complete'
+          : type === 'daily'
+            ? 'Daily Sync Complete'
             : 'Sync Complete',
         description: descriptionParts.join(' — '),
         variant: failedTitles.length > 0 ? 'destructive' : undefined,
@@ -1304,7 +1308,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     syncCancelRef.current = true;
   };
 
-  // Auto-sync: Check on load and every 15 minutes if a sync is due
+  // Daily sync: Check on load and every 15 minutes if a sync is due (this is
+  // the client-side fallback for while an admin has the tab open -- the
+  // server-side pg_cron edge function covers the case where nobody does;
+  // see watchlist-cron-sync/index.ts, logged as sync_type 'auto').
   useEffect(() => {
     if (!autoSyncEnabled || loading || watchlist.length === 0) return;
 
@@ -1323,13 +1330,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
       if (!recentSyncs || recentSyncs.length === 0) {
         console.log(
-          `[Auto-Sync] No sync since ${mostRecent6AM.toISOString()}. Triggering auto-sync...`,
+          `[Daily Sync] No sync since ${mostRecent6AM.toISOString()}. Triggering daily sync...`,
         );
         autoSyncTriggeredRef.current = true;
-        await syncWatchlist('auto');
+        await syncWatchlist('daily');
       } else {
         console.log(
-          `[Auto-Sync] Already synced since ${mostRecent6AM.toISOString()}. Skipping.`,
+          `[Daily Sync] Already synced since ${mostRecent6AM.toISOString()}. Skipping.`,
         );
       }
     };
