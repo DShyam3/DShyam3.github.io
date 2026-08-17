@@ -53,7 +53,8 @@ import {
   Gift,
   Package,
   Sparkles,
-  Shield
+  Shield,
+  Landmark
 } from 'lucide-react';
 import type { PackageBenefit } from '@/types/finance';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -186,6 +187,40 @@ export interface InvestmentHolding {
   avgPrice: number;
   currentPrice: number;
   category: 'Stock' | 'ETF' | 'Crypto' | 'Mutual Fund' | 'Real Estate' | 'Cash' | 'Other';
+}
+
+// A single tranche of borrowing — e.g. one academic year's student loan,
+// or a mortgage drawdown. Debts without tranches just have one implicit draw.
+export interface DebtDraw {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  label?: string; // e.g. "Year 1 tuition"
+}
+
+export type StudentLoanPlanKey = 'plan1' | 'plan2' | 'plan4' | 'plan5' | 'postgrad';
+
+export interface Debt {
+  id: string;
+  name: string;
+  type: 'mortgage' | 'student' | 'auto' | 'personal' | 'credit' | 'other';
+  lender: string;
+  originalAmount: number; // Amount borrowed; derived from draws when present
+  balance: number; // Outstanding amount owed, stored positive
+  interestRate: number; // Annual percentage rate
+  minPayment: number; // Contractual monthly payment (amortising debts)
+  startDate?: string; // When the debt was taken on (YYYY-MM-DD)
+  payoffDate?: string; // Expected final payment (YYYY-MM-DD)
+  // 'amortising' = fixed monthly payment (mortgage, car, personal loan).
+  // 'income_contingent' = UK student loan: % of income above a threshold,
+  // written off after a set number of years.
+  repaymentType: 'amortising' | 'income_contingent';
+  studentLoanPlan?: StudentLoanPlanKey;
+  writeOffYears?: number; // income_contingent only
+  draws: DebtDraw[];
+  notes?: string;
+  emoji?: string;
+  color?: string;
 }
 
 export interface Membership {
@@ -468,6 +503,199 @@ const TABS = [
   { key: 'tax-income', label: 'Tax & Income' },
   { key: 'time-spent', label: 'Time Spent' },
 ] as const;
+
+const DEBT_TYPE_LABELS: Record<Debt['type'], string> = {
+  mortgage: 'Mortgage',
+  student: 'Student Loan',
+  auto: 'Auto Loan',
+  personal: 'Personal Loan',
+  credit: 'Credit Card Debt',
+  other: 'Other'
+};
+
+const STUDENT_LOAN_PLAN_LABELS: Record<StudentLoanPlanKey, string> = {
+  plan1: 'Plan 1',
+  plan2: 'Plan 2',
+  plan4: 'Plan 4 (Scotland)',
+  plan5: 'Plan 5',
+  postgrad: 'Postgraduate Loan'
+};
+
+// Years until an unpaid balance is written off, by plan.
+const STUDENT_LOAN_WRITE_OFF_YEARS: Record<StudentLoanPlanKey, number> = {
+  plan1: 25,
+  plan2: 30,
+  plan4: 30,
+  plan5: 40,
+  postgrad: 30
+};
+
+/**
+ * Projects a debt's balance forward month by month.
+ *
+ * - amortising: interest accrues monthly, then the fixed payment is applied.
+ * - income_contingent: interest accrues monthly, repayments are a percentage
+ *   of gross income above the plan threshold, and any remaining balance is
+ *   written off once the plan's term elapses.
+ *
+ * Returns one point per year so the chart stays readable over 40-year terms.
+ */
+const projectDebtBalance = (
+  debt: Debt,
+  opts: { grossSalary: number; repaymentRate: number; threshold: number }
+): { year: number; balance: number; paid: number; interest: number; writtenOff: number }[] => {
+  const MAX_MONTHS = 12 * 45;
+  const monthlyRate = debt.interestRate / 100 / 12;
+
+  const startYear = debt.startDate
+    ? new Date(debt.startDate).getFullYear()
+    : new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+
+  const isIncomeContingent = debt.repaymentType === 'income_contingent';
+  const writeOffYears = debt.writeOffYears
+    ?? (debt.studentLoanPlan ? STUDENT_LOAN_WRITE_OFF_YEARS[debt.studentLoanPlan] : undefined);
+  const writeOffMonth = writeOffYears !== undefined
+    ? Math.max(Math.round((startYear + writeOffYears - currentYear) * 12), 0)
+    : undefined;
+
+  const annualRepayment = isIncomeContingent
+    ? Math.max(opts.grossSalary - opts.threshold, 0) * (opts.repaymentRate / 100)
+    : 0;
+  const monthlyPayment = isIncomeContingent ? annualRepayment / 12 : debt.minPayment;
+
+  const points: { year: number; balance: number; paid: number; interest: number; writtenOff: number }[] = [];
+  let balance = debt.balance;
+  let paid = 0;
+  let interest = 0;
+  let writtenOff = 0;
+
+  points.push({ year: currentYear, balance, paid, interest, writtenOff });
+
+  for (let month = 1; month <= MAX_MONTHS && balance > 0; month++) {
+    if (writeOffMonth !== undefined && month > writeOffMonth) {
+      writtenOff = balance;
+      balance = 0;
+      points.push({ year: currentYear + Math.ceil(month / 12), balance, paid, interest, writtenOff });
+      break;
+    }
+
+    const monthInterest = balance * monthlyRate;
+    balance += monthInterest;
+    interest += monthInterest;
+
+    const payment = Math.min(monthlyPayment, balance);
+    balance -= payment;
+    paid += payment;
+
+    // A payment that never covers the interest means the balance grows forever;
+    // stop projecting rather than looping to the cap with a runaway line.
+    if (monthlyPayment <= monthInterest && writeOffMonth === undefined && month >= 120) {
+      points.push({ year: currentYear + month / 12, balance, paid, interest, writtenOff });
+      break;
+    }
+
+    if (month % 12 === 0 || balance <= 0) {
+      points.push({ year: currentYear + month / 12, balance: Math.max(balance, 0), paid, interest, writtenOff });
+    }
+  }
+
+  return points;
+};
+
+/**
+ * Editor for a debt's borrowing tranches — e.g. one row per academic year of
+ * student loan. Shared by the add and edit debt dialogs.
+ */
+const DebtDrawsEditor = ({
+  draws,
+  newDraw,
+  setNewDraw,
+  onAdd,
+  onRemove,
+  idPrefix
+}: {
+  draws: DebtDraw[];
+  newDraw: { date: string; amount: number | ''; label: string };
+  setNewDraw: (draw: { date: string; amount: number | ''; label: string }) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  idPrefix: string;
+}) => {
+  const total = draws.reduce((sum, d) => sum + d.amount, 0);
+  return (
+    <div className="space-y-2 border-t border-border/30 pt-4">
+      <div className="flex items-center justify-between">
+        <Label>Borrowing History</Label>
+        {draws.length > 0 && (
+          <span className="text-[10px] font-mono text-muted-foreground">Total {formatGBP(total)}</span>
+        )}
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Add each amount as you borrowed it — one per academic year for a student loan. Leave empty for a single lump sum.
+      </p>
+
+      {draws.length > 0 && (
+        <div className="space-y-1.5">
+          {[...draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
+            <div key={draw.id} className="flex items-center justify-between gap-2 rounded-xl border border-primary/10 bg-background/40 px-3 py-1.5">
+              <div className="min-w-0">
+                <span className="text-xs font-mono font-semibold text-foreground">{formatGBP(draw.amount)}</span>
+                <span className="block text-[10px] text-muted-foreground truncate">
+                  {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                  {draw.label ? ` · ${draw.label}` : ''}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                type="button"
+                onClick={() => onRemove(draw.id)}
+                className="h-7 w-7 text-rose-500 hover:text-rose-600 shrink-0"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          id={`${idPrefix}-draw-date`}
+          type="date"
+          aria-label="Borrowing date"
+          value={newDraw.date}
+          onChange={(e) => setNewDraw({ ...newDraw, date: e.target.value })}
+          className="rounded-xl h-9 border-primary/20 bg-background/50 text-xs"
+        />
+        <Input
+          id={`${idPrefix}-draw-amount`}
+          type="number"
+          step="0.01"
+          aria-label="Borrowing amount"
+          placeholder="Amount (£)"
+          value={newDraw.amount}
+          onChange={(e) => setNewDraw({ ...newDraw, amount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+          className="rounded-xl h-9 border-primary/20 bg-background/50 text-xs"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Input
+          id={`${idPrefix}-draw-label`}
+          aria-label="Borrowing label"
+          placeholder="Label, e.g. Year 1 tuition"
+          value={newDraw.label}
+          onChange={(e) => setNewDraw({ ...newDraw, label: e.target.value })}
+          className="rounded-xl h-9 border-primary/20 bg-background/50 text-xs"
+        />
+        <Button type="button" onClick={onAdd} variant="outline" className="rounded-xl h-9 px-3 shrink-0 gap-1 text-xs">
+          <Plus className="h-3.5 w-3.5" /> Add
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -1307,6 +1535,16 @@ export default function Finance() {
     return safeParseJSON<Membership[]>(saved, []);
   });
 
+  const [debts, setDebts] = useState<Debt[]>(() => {
+    const saved = localStorage.getItem('finance_debts');
+    // Normalize so cached rows written before draws/repaymentType existed still render
+    return safeParseJSON<Debt[]>(saved, []).map(d => ({
+      ...d,
+      draws: Array.isArray(d.draws) ? d.draws : [],
+      repaymentType: d.repaymentType || 'amortising'
+    }));
+  });
+
   const [recurrings, setRecurrings] = useState<RecurringBill[]>(() => {
     const saved = localStorage.getItem('finance_recurrings');
     return safeParseJSON<RecurringBill[]>(saved, []);
@@ -1396,6 +1634,8 @@ export default function Finance() {
   const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
   const [isAddMembershipOpen, setIsAddMembershipOpen] = useState(false);
   const [isEditMembershipOpen, setIsEditMembershipOpen] = useState(false);
+  const [isAddDebtOpen, setIsAddDebtOpen] = useState(false);
+  const [isEditDebtOpen, setIsEditDebtOpen] = useState(false);
   const [isAddRecurringOpen, setIsAddRecurringOpen] = useState(false);
   const [addRecTemplate, setAddRecTemplate] = useState("scratch");
   const [isEditRecurringOpen, setIsEditRecurringOpen] = useState(false);
@@ -1533,6 +1773,28 @@ export default function Finance() {
 
   const [activeMembership, setActiveMembership] = useState<Membership | null>(null);
   const [newMembership, setNewMembership] = useState<Omit<Membership, 'id'> & { annualFee: number | ''; }>({ name: '', type: 'points', status: 'Active', annualFee: '', useCase: '' });
+
+  const [activeDebt, setActiveDebt] = useState<Debt | null>(null);
+  const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
+  const [newDebt, setNewDebt] = useState<Omit<Debt, 'id'> & { originalAmount: number | ''; balance: number | ''; interestRate: number | ''; minPayment: number | ''; }>({
+    name: '',
+    type: 'mortgage',
+    lender: '',
+    originalAmount: '',
+    balance: '',
+    interestRate: '',
+    minPayment: '',
+    startDate: '',
+    payoffDate: '',
+    repaymentType: 'amortising',
+    studentLoanPlan: undefined,
+    writeOffYears: undefined,
+    draws: [],
+    notes: '',
+    emoji: '',
+    color: '#f43f5e'
+  });
+  const [newDraw, setNewDraw] = useState<{ date: string; amount: number | ''; label: string }>({ date: '', amount: '', label: '' });
 
   const [activeRecurring, setActiveRecurring] = useState<RecurringBill | null>(null);
   const [newRecurring, setNewRecurring] = useState<Omit<RecurringBill, 'id'> & { amount: number | ''; }>({
@@ -1802,6 +2064,7 @@ export default function Finance() {
           contributionsRes,
           bankAccountsRes,
           membershipsRes,
+          debtsRes,
           creditScoresRes,
           budgetCategoriesRes,
           budgetItemsRes,
@@ -1819,6 +2082,7 @@ export default function Finance() {
           supabase.from('finance_goal_contributions').select('*'),
           supabase.from('finance_bank_accounts').select('*'),
           supabase.from('finance_memberships').select('*'),
+          supabase.from('finance_debts').select('*'),
           supabase.from('finance_credit_scores').select('*'),
           supabase.from('finance_budget_categories').select('*'),
           supabase.from('finance_budget_items').select('*'),
@@ -1831,15 +2095,42 @@ export default function Finance() {
           supabase.from('finance_budget_presets').select('*')
         ]);
 
-        const errors = [
-          settingsRes.error, userHolidaysRes.error, goalsRes.error, contributionsRes.error,
-          bankAccountsRes.error, membershipsRes.error, creditScoresRes.error,
-          budgetCategoriesRes.error, budgetItemsRes.error, recurringBillsRes.error,
-          transactionsRes.error, taxConfigsRes.error, recurringTemplatesRes.error,
-          creditBureausRes.error, holidayDefaultsRes.error, budgetPresetsRes.error
-        ].filter(Boolean);
-        if (errors.length > 0) {
-          throw errors[0];
+        // A single failing table used to `throw` here, aborting the whole load
+        // and silently dropping the page back to localStorage — which is how a
+        // table whose migration hadn't been applied yet could take out every
+        // other tab. Instead, record what failed, skip only those state
+        // updates (leaving the cached values in place rather than wiping them
+        // to empty), and tell the user.
+        const failedTables = ([
+          ['settings', settingsRes],
+          ['user_holidays', userHolidaysRes],
+          ['goals', goalsRes],
+          ['goal_contributions', contributionsRes],
+          ['bank_accounts', bankAccountsRes],
+          ['memberships', membershipsRes],
+          ['debts', debtsRes],
+          ['credit_scores', creditScoresRes],
+          ['budget_categories', budgetCategoriesRes],
+          ['budget_items', budgetItemsRes],
+          ['recurring_bills', recurringBillsRes],
+          ['transactions', transactionsRes],
+          ['tax_configs', taxConfigsRes],
+          ['recurring_templates', recurringTemplatesRes],
+          ['credit_bureaus', creditBureausRes],
+          ['holiday_defaults', holidayDefaultsRes],
+          ['budget_presets', budgetPresetsRes]
+        ] as const).filter(([, res]) => res.error);
+
+        if (failedTables.length > 0) {
+          console.error(
+            'Failed to load finance tables from Supabase:',
+            failedTables.map(([name, res]) => `${name}: ${res.error?.message}`)
+          );
+          toast({
+            title: 'Some finance data failed to load',
+            description: `Showing cached values for: ${failedTables.map(([name]) => name).join(', ')}. Check that all migrations have been applied.`,
+            variant: 'destructive'
+          });
         }
 
         const userSettings = settingsRes.data?.find(d => !d.is_default);
@@ -1917,8 +2208,10 @@ export default function Finance() {
             contributions: goalContribs
           };
         });
-        setGoals(mappedGoals);
-        if (mappedGoals.length > 0) setSelectedGoalId(mappedGoals[0].id);
+        if (!goalsRes.error && !contributionsRes.error) {
+          setGoals(mappedGoals);
+          if (mappedGoals.length > 0) setSelectedGoalId(mappedGoals[0].id);
+        }
 
         const userAccounts = bankAccountsRes.data?.filter(d => !d.is_default) || [];
         const defaultAccounts = bankAccountsRes.data?.filter(d => d.is_default) || [];
@@ -1935,7 +2228,7 @@ export default function Finance() {
           emoji: a.emoji || undefined,
           color: a.color || undefined
         }));
-        setBankAccounts(mappedBankAccounts);
+        if (!bankAccountsRes.error) setBankAccounts(mappedBankAccounts);
 
         const userMemberships = membershipsRes.data?.filter(d => !d.is_default) || [];
         const defaultMemberships = membershipsRes.data?.filter(d => d.is_default) || [];
@@ -1949,7 +2242,32 @@ export default function Finance() {
           annualFee: Number(m.annual_fee) || 0,
           useCase: m.use_case || undefined
         }));
-        setMemberships(mappedMemberships);
+        if (!membershipsRes.error) setMemberships(mappedMemberships);
+
+        const userDebts = debtsRes.data?.filter(d => !d.is_default) || [];
+        const defaultDebts = debtsRes.data?.filter(d => d.is_default) || [];
+        const activeDebts = userDebts.length > 0 ? userDebts : defaultDebts;
+
+        const mappedDebts: Debt[] = activeDebts.map(d => ({
+          id: d.id,
+          name: d.name,
+          type: d.type as any,
+          lender: d.lender || '',
+          originalAmount: Number(d.original_amount) || 0,
+          balance: Number(d.balance) || 0,
+          interestRate: Number(d.interest_rate) || 0,
+          minPayment: Number(d.min_payment) || 0,
+          startDate: d.start_date || undefined,
+          payoffDate: d.payoff_date || undefined,
+          repaymentType: (d.repayment_type as Debt['repaymentType']) || 'amortising',
+          studentLoanPlan: (d.student_loan_plan as StudentLoanPlanKey) || undefined,
+          writeOffYears: d.write_off_years ?? undefined,
+          draws: Array.isArray(d.draws) ? (d.draws as unknown as DebtDraw[]) : [],
+          notes: d.notes || undefined,
+          emoji: d.emoji || undefined,
+          color: d.color || undefined
+        }));
+        if (!debtsRes.error) setDebts(mappedDebts);
 
         const userCreditScores = creditScoresRes.data?.filter(d => !d.is_default) || [];
         const defaultCreditScores = creditScoresRes.data?.filter(d => d.is_default) || [];
@@ -1960,7 +2278,7 @@ export default function Finance() {
           transunion: activeCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score })),
           equifax: activeCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score }))
         };
-        setCreditScores(scoresObj);
+        if (!creditScoresRes.error) setCreditScores(scoresObj);
 
         const userBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && !d.is_template) || [];
         const defaultBudgetCats = budgetCategoriesRes.data?.filter(d => d.is_default && !d.is_template) || [];
@@ -2012,7 +2330,7 @@ export default function Finance() {
           linkedBudgetItemId: r.linked_budget_item_id || undefined,
           linkedAccountId: r.linked_account_id || undefined
         }));
-        setRecurrings(mappedRecurrings);
+        if (!recurringBillsRes.error) setRecurrings(mappedRecurrings);
 
         const userTransactions = transactionsRes.data?.filter(d => !d.is_default) || [];
         const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
@@ -2032,7 +2350,7 @@ export default function Finance() {
           tags: t.tags || undefined,
           isRecurring: t.is_recurring || undefined
         }));
-        setMockTransactions(mappedTransactions);
+        if (!transactionsRes.error) setMockTransactions(mappedTransactions);
 
         const userTaxConfig = taxConfigsRes.data?.find(d => !d.is_default);
         const defaultTaxConfig = taxConfigsRes.data?.find(d => d.is_default);
@@ -2080,7 +2398,7 @@ export default function Finance() {
           maxScore: b.max_score,
           gradient: b.gradient || ''
         }));
-        setCreditBureaus(mappedBureaus);
+        if (!creditBureausRes.error) setCreditBureaus(mappedBureaus);
 
         const userHolidayDefaults = holidayDefaultsRes.data?.filter(d => !d.is_default) || [];
         const defaultHolidayDefaults = holidayDefaultsRes.data?.filter(d => d.is_default) || [];
@@ -2094,7 +2412,7 @@ export default function Finance() {
             occasion: hd.occasion || ''
           };
         });
-        setHolidayDefaults(mappedHolidayDefaults);
+        if (!holidayDefaultsRes.error) setHolidayDefaults(mappedHolidayDefaults);
 
         const userDefaultBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && d.is_template) || [];
         const defaultDefaultBudgetCats = budgetCategoriesRes.data?.filter(d => d.is_default && d.is_template) || [];
@@ -2566,6 +2884,10 @@ export default function Finance() {
   useEffect(() => {
     localStorage.setItem('finance_memberships', JSON.stringify(memberships));
   }, [memberships]);
+
+  useEffect(() => {
+    localStorage.setItem('finance_debts', JSON.stringify(debts));
+  }, [debts]);
   useEffect(() => {
     localStorage.setItem('finance_recurrings', JSON.stringify(recurrings));
   }, [recurrings]);
@@ -2697,7 +3019,10 @@ export default function Finance() {
           }
         }
       } else if (key === 'accounts') {
-        const accsObj = contentData as { bankAccounts: BankAccount[]; memberships: Membership[]; creditScores: CreditScores };
+        // `debts` is optional so the existing account/membership/score callers
+        // don't all have to thread it through; fall back to current state.
+        const accsObj = contentData as { bankAccounts: BankAccount[]; memberships: Membership[]; creditScores: CreditScores; debts?: Debt[] };
+        const debtsToSave = accsObj.debts ?? debts;
         await supabase.from('finance_bank_accounts').delete().eq('is_default', false);
         if (accsObj.bankAccounts?.length > 0) {
           await supabase.from('finance_bank_accounts').insert(accsObj.bankAccounts.map(a => ({
@@ -2723,6 +3048,29 @@ export default function Finance() {
             status: m.status || null,
             annual_fee: m.annualFee,
             use_case: m.useCase || null
+          })));
+        }
+        await supabase.from('finance_debts').delete().eq('is_default', false);
+        if (debtsToSave.length > 0) {
+          await supabase.from('finance_debts').insert(debtsToSave.map(d => ({
+            id: d.id,
+            is_default: false,
+            name: d.name,
+            type: d.type,
+            lender: d.lender || null,
+            original_amount: d.originalAmount,
+            balance: d.balance,
+            interest_rate: d.interestRate,
+            min_payment: d.minPayment,
+            start_date: d.startDate || null,
+            payoff_date: d.payoffDate || null,
+            repayment_type: d.repaymentType || 'amortising',
+            student_loan_plan: d.studentLoanPlan || null,
+            write_off_years: d.writeOffYears ?? null,
+            draws: (d.draws || []) as any,
+            notes: d.notes || null,
+            emoji: d.emoji || null,
+            color: d.color || null
           })));
         }
         await supabase.from('finance_credit_scores').delete().eq('is_default', false);
@@ -3575,6 +3923,122 @@ export default function Finance() {
   };
 
   // ==========================================
+  // HANDLERS: DEBT
+  // ==========================================
+
+  const emptyDebtForm = {
+    name: '',
+    type: 'mortgage' as Debt['type'],
+    lender: '',
+    originalAmount: '' as number | '',
+    balance: '' as number | '',
+    interestRate: '' as number | '',
+    minPayment: '' as number | '',
+    startDate: '',
+    payoffDate: '',
+    repaymentType: 'amortising' as Debt['repaymentType'],
+    studentLoanPlan: undefined,
+    writeOffYears: undefined,
+    draws: [] as DebtDraw[],
+    notes: '',
+    emoji: '',
+    color: '#f43f5e'
+  };
+
+  const sumDraws = (draws: DebtDraw[]) => draws.reduce((sum, d) => sum + d.amount, 0);
+
+  const handleAddDraw = () => {
+    if (!newDraw.date || newDraw.amount === '') {
+      toast({ title: 'Error', description: 'Enter a date and amount for the borrowing.', variant: 'destructive' });
+      return;
+    }
+    const draw: DebtDraw = {
+      id: 'dw_' + Date.now(),
+      date: newDraw.date,
+      amount: Math.abs(newDraw.amount),
+      label: newDraw.label || undefined
+    };
+    // Route to whichever debt form is currently open
+    if (isEditDebtOpen && activeDebt) {
+      setActiveDebt({ ...activeDebt, draws: [...activeDebt.draws, draw] });
+    } else {
+      setNewDebt({ ...newDebt, draws: [...newDebt.draws, draw] });
+    }
+    setNewDraw({ date: '', amount: '', label: '' });
+  };
+
+  const handleRemoveDraw = (drawId: string) => {
+    if (isEditDebtOpen && activeDebt) {
+      setActiveDebt({ ...activeDebt, draws: activeDebt.draws.filter(d => d.id !== drawId) });
+    } else {
+      setNewDebt({ ...newDebt, draws: newDebt.draws.filter(d => d.id !== drawId) });
+    }
+  };
+
+  const handleAddDebt = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDebt.name) {
+      toast({ title: 'Error', description: 'Please enter a debt name.', variant: 'destructive' });
+      return;
+    }
+    const balance = newDebt.balance === '' ? 0 : Math.abs(newDebt.balance);
+    const drawTotal = sumDraws(newDebt.draws);
+    const created: Debt = {
+      ...newDebt,
+      // Tranches are the source of truth when present; otherwise fall back to
+      // the typed original, then to the current balance (0% paid off).
+      originalAmount: drawTotal > 0
+        ? drawTotal
+        : (newDebt.originalAmount === '' ? balance : Math.abs(newDebt.originalAmount)),
+      balance,
+      interestRate: newDebt.interestRate === '' ? 0 : newDebt.interestRate,
+      minPayment: newDebt.minPayment === '' ? 0 : newDebt.minPayment,
+      startDate: newDebt.startDate || newDebt.draws[0]?.date || undefined,
+      payoffDate: newDebt.payoffDate || undefined,
+      writeOffYears: newDebt.repaymentType === 'income_contingent'
+        ? (newDebt.writeOffYears ?? (newDebt.studentLoanPlan ? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan] : undefined))
+        : undefined,
+      notes: newDebt.notes || undefined,
+      id: 'd_' + Date.now()
+    };
+    const updated = [...debts, created];
+    setDebts(updated);
+    saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores, debts: updated });
+    setIsAddDebtOpen(false);
+    setNewDebt(emptyDebtForm);
+    setNewDraw({ date: '', amount: '', label: '' });
+    setSelectedDebtId(created.id);
+    toast({ title: 'Debt Added', description: `Added "${created.name}".` });
+  };
+
+  const handleEditDebt = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeDebt) return;
+    const drawTotal = sumDraws(activeDebt.draws);
+    const normalized: Debt = {
+      ...activeDebt,
+      balance: Math.abs(activeDebt.balance),
+      originalAmount: drawTotal > 0 ? drawTotal : Math.abs(activeDebt.originalAmount),
+      startDate: activeDebt.startDate || activeDebt.draws[0]?.date || undefined
+    };
+    const updated = debts.map(d => d.id === normalized.id ? normalized : d);
+    setDebts(updated);
+    saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores, debts: updated });
+    setIsEditDebtOpen(false);
+    setActiveDebt(null);
+    setNewDraw({ date: '', amount: '', label: '' });
+    toast({ title: 'Debt Updated', description: 'Debt details saved.' });
+  };
+
+  const handleDeleteDebt = (id: string) => {
+    const updated = debts.filter(d => d.id !== id);
+    setDebts(updated);
+    saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores, debts: updated });
+    if (selectedDebtId === id) setSelectedDebtId(null);
+    toast({ title: 'Debt Deleted', description: 'Debt removed.' });
+  };
+
+  // ==========================================
   // HANDLERS: CREDIT SCORES
   // ==========================================
 
@@ -4185,7 +4649,7 @@ export default function Finance() {
       try {
         const deleteTables = [
           'finance_settings', 'finance_user_holidays', 'finance_goals', 'finance_goal_contributions',
-          'finance_bank_accounts', 'finance_memberships', 'finance_credit_scores',
+          'finance_bank_accounts', 'finance_memberships', 'finance_debts', 'finance_credit_scores',
           'finance_budget_categories', 'finance_budget_items', 'finance_recurring_bills',
           'finance_transactions', 'finance_tax_configs', 'finance_recurring_templates',
           'finance_credit_bureaus', 'finance_holiday_defaults', 'finance_budget_presets'
@@ -4228,8 +4692,27 @@ export default function Finance() {
   );
 
   const totalAssets = bankAccounts.filter(a => a.balance > 0).reduce((sum, a) => sum + a.balance, 0);
-  const totalDebt = Math.abs(bankAccounts.filter(a => a.balance < 0).reduce((sum, a) => sum + a.balance, 0));
+  const totalLoanBalance = debts.reduce((sum, d) => sum + d.balance, 0);
+  const totalDebt = Math.abs(bankAccounts.filter(a => a.balance < 0).reduce((sum, a) => sum + a.balance, 0)) + totalLoanBalance;
   const netWorth = totalAssets - totalDebt;
+
+  const totalLoanOriginal = debts.reduce((sum, d) => sum + Math.max(d.originalAmount, d.balance), 0);
+  const totalLoanPaid = Math.max(totalLoanOriginal - totalLoanBalance, 0);
+  const loanPayoffPercent = totalLoanOriginal > 0 ? (totalLoanPaid / totalLoanOriginal) * 100 : 0;
+  const totalMinPayments = debts.reduce((sum, d) => sum + d.minPayment, 0);
+  const selectedDebt = debts.find(d => d.id === selectedDebtId) || debts[0] || null;
+  const selectedDebtProjection = selectedDebt
+    ? projectDebtBalance(selectedDebt, {
+        grossSalary: settings.grossSalary,
+        repaymentRate: selectedDebt.studentLoanPlan ? (taxConfig.studentLoanRates[selectedDebt.studentLoanPlan] || 0) : 0,
+        threshold: selectedDebt.studentLoanPlan ? (taxConfig.studentLoanThresholds[selectedDebt.studentLoanPlan] || 0) : 0
+      })
+    : [];
+  const selectedDebtFinal = selectedDebtProjection[selectedDebtProjection.length - 1];
+  // Balance-weighted average rate — a plain mean would over-weight tiny debts
+  const weightedInterestRate = totalLoanBalance > 0
+    ? debts.reduce((sum, d) => sum + d.interestRate * d.balance, 0) / totalLoanBalance
+    : 0;
 
   const monthlyIncome = results.netTakeHome / 12;
   const netCashFlow = monthlyIncome - totalSpent;
@@ -5247,7 +5730,7 @@ export default function Finance() {
                       <table className="min-w-[640px] w-full text-sm text-left border-collapse">
                         <thead>
                           <tr className="border-b border-border/40 text-foreground text-xs uppercase tracking-wider font-bold">
-                            <th className="py-3 pr-4 whitespace-nowrap">Category</th>
+                            <th className="py-3 pr-4 whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Category</th>
                             <th className="py-3 px-2 text-right whitespace-nowrap">Annual</th>
                             <th className="py-3 px-2 text-right whitespace-nowrap">Monthly</th>
                             <th className="py-3 px-2 text-right whitespace-nowrap">Weekly</th>
@@ -5259,7 +5742,7 @@ export default function Finance() {
 
                           {/* Total Package Header Row */}
                           <tr className="hover:bg-primary/10 transition-colors bg-primary/5 dark:bg-primary/15 font-sans font-bold border-b border-primary/20 text-primary">
-                            <td className="py-3 pr-4 font-bold text-sm whitespace-nowrap flex items-center gap-1.5">
+                            <td className="py-3 pr-4 font-bold text-sm whitespace-nowrap flex items-center gap-1.5 sticky left-0 z-10 bg-background border-r border-border/40">
                               <Gift className="w-4 h-4 text-primary shrink-0" /> Total Compensation Package
                             </td>
                             <td className="py-3 px-2 text-right font-mono font-bold text-sm whitespace-nowrap">{formatGBP(breakdownRates.totalPackage.annual)}</td>
@@ -5271,7 +5754,7 @@ export default function Finance() {
 
                           {/* Gross Salary */}
                           <tr className="hover:bg-muted/10 transition-colors font-medium">
-                            <td className="py-3 pr-4 font-bold font-sans text-foreground whitespace-nowrap">Gross Base Salary</td>
+                            <td className="py-3 pr-4 font-bold font-sans text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Gross Base Salary</td>
                             <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">{formatGBP(breakdownRates.preTax.annual)}</td>
                             <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">{formatGBP(breakdownRates.preTax.monthly)}</td>
                             <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">{formatGBP(breakdownRates.preTax.weekly)}</td>
@@ -5282,7 +5765,7 @@ export default function Finance() {
                           {/* Employer Pension Addition */}
                           {results.employerPensionRate > 0 && (
                             <tr className="hover:bg-emerald-500/10 transition-colors bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                              <td className="py-3 pr-4 font-sans text-left">
+                              <td className="py-3 pr-4 font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
                                 <div className="flex flex-col justify-center min-w-[120px]">
                                   <span className="font-bold flex items-center gap-1.5">
                                     <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Employer Pension ({settings.employerPensionPercent}%)
@@ -5303,7 +5786,7 @@ export default function Finance() {
                           {/* Employer Benefits & Perks Addition */}
                           {results.totalBenefitsValue > 0 && (
                             <tr className="hover:bg-emerald-500/10 transition-colors bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                              <td className="py-3 pr-4 font-sans text-left">
+                              <td className="py-3 pr-4 font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
                                 <div className="flex flex-col justify-center min-w-[120px]">
                                   <span className="font-bold flex items-center gap-1.5">
                                     <Gift className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Benefits & Perks ({settings.packageBenefits?.length || 0})
@@ -5324,7 +5807,7 @@ export default function Finance() {
                           {/* Pension Contributions */}
                           {results.personalPensionRate > 0 && (
                             <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                              <td className="py-3 pr-4 font-sans text-left">
+                              <td className="py-3 pr-4 font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
                                 <div className="flex flex-col justify-center min-w-[120px]">
                                   <span className="font-bold text-foreground">Personal Pension ({settings.personalPensionPercent}%)</span>
                                   <span className="text-[10px] text-muted-foreground/90 font-medium leading-normal mt-0.5">
@@ -5345,7 +5828,7 @@ export default function Finance() {
                           {/* Income Tax */}
                           {results.incomeTax > 0 && (
                             <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                              <td className="py-3 font-sans font-bold text-foreground">Income Tax</td>
+                              <td className="py-3 font-sans font-bold text-foreground sticky left-0 z-10 bg-background border-r border-border/40">Income Tax</td>
                               <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.annual)}</td>
                               <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.monthly)}</td>
                               <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.weekly)}</td>
@@ -5357,7 +5840,7 @@ export default function Finance() {
                           {/* National Insurance */}
                           {results.nationalInsurance > 0 && (
                             <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                              <td className="py-3 pr-4 font-sans text-left">
+                              <td className="py-3 pr-4 font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
                                 <div className="flex flex-col justify-center min-w-[120px]">
                                   <span className="font-bold text-foreground">National Insurance</span>
                                   <span className="text-[10px] text-muted-foreground/90 font-medium leading-normal mt-0.5">
@@ -5376,7 +5859,7 @@ export default function Finance() {
                           {/* Student Loan */}
                           {results.studentLoan > 0 && (
                             <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                              <td className="py-3 font-sans font-bold text-foreground">Student Loan ({getPlanName(settings.studentLoanPlan)})</td>
+                              <td className="py-3 font-sans font-bold text-foreground sticky left-0 z-10 bg-background border-r border-border/40">Student Loan ({getPlanName(settings.studentLoanPlan)})</td>
                               <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
                               <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
                               <td className="py-3 text-right text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
@@ -5387,7 +5870,7 @@ export default function Finance() {
 
                           {/* Total Deductions */}
                           <tr className="hover:bg-rose-500/10 transition-colors text-rose-700 dark:text-rose-300 bg-rose-500/5 dark:bg-rose-500/10 font-sans">
-                            <td className="py-3 font-bold">Total Deductions</td>
+                            <td className="py-3 font-bold sticky left-0 z-10 bg-background border-r border-border/40">Total Deductions</td>
                             <td className="py-3 text-right font-mono font-bold">-{formatGBP(breakdownRates.deductions.annual)}</td>
                             <td className="py-3 text-right font-mono font-bold">-{formatGBP(breakdownRates.deductions.monthly)}</td>
                             <td className="py-3 text-right font-mono font-bold">-{formatGBP(breakdownRates.deductions.weekly)}</td>
@@ -5397,7 +5880,7 @@ export default function Finance() {
 
                           {/* Take Home Pay */}
                           <tr className="hover:bg-emerald-500/10 transition-colors text-emerald-700 dark:text-emerald-300 bg-emerald-500/5 dark:bg-emerald-500/10 font-sans">
-                            <td className="py-3 font-bold text-sm">Take-Home Pay</td>
+                            <td className="py-3 font-bold text-sm sticky left-0 z-10 bg-background border-r border-border/40">Take-Home Pay</td>
                             <td className="py-3 text-right font-mono font-bold text-sm">{formatGBP(breakdownRates.postTax.annual)}</td>
                             <td className="py-3 text-right font-mono font-bold text-sm">{formatGBP(breakdownRates.postTax.monthly)}</td>
                             <td className="py-3 text-right font-mono font-bold text-sm">{formatGBP(breakdownRates.postTax.weekly)}</td>
@@ -8026,7 +8509,258 @@ export default function Finance() {
                 </div>
               </div>
 
-              {/* SECTION B: Memberships & Rewards */}
+              {/* SECTION B: Debt */}
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
+                  <div className="min-w-0">
+                    <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Landmark className="h-5 w-5 text-primary shrink-0" /> Debt
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Track mortgages, student loans and other borrowing against payoff progress</p>
+                  </div>
+                  <Button onClick={() => setIsAddDebtOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
+                    <Plus className="h-4 w-4" /> Add Debt
+                  </Button>
+                </div>
+
+                {debts.length > 0 && (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Total Owed', value: formatGBP(totalLoanBalance), tone: 'text-rose-500' },
+                      { label: 'Paid Off', value: `${loanPayoffPercent.toFixed(1)}%`, tone: 'text-emerald-500' },
+                      { label: 'Monthly Payments', value: formatGBP(totalMinPayments), tone: 'text-foreground' },
+                      { label: 'Avg Rate', value: `${weightedInterestRate.toFixed(2)}%`, tone: 'text-foreground' }
+                    ].map(stat => (
+                      <div key={stat.label} className="bg-card/40 border border-primary/10 rounded-2xl p-3 sm:p-4">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">{stat.label}</span>
+                        <span className={cn("text-base sm:text-lg font-bold font-mono block truncate mt-1", stat.tone)}>{stat.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="overflow-x-auto bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
+                  <table className="min-w-[820px] w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
+                        <th className="py-3 px-3 whitespace-nowrap">Name</th>
+                        <th className="py-3 px-3 whitespace-nowrap">Type</th>
+                        <th className="py-3 px-3 whitespace-nowrap">Lender</th>
+                        <th className="py-3 px-3 text-right whitespace-nowrap">Balance</th>
+                        <th className="py-3 px-3 text-right whitespace-nowrap">Rate</th>
+                        <th className="py-3 px-3 text-right whitespace-nowrap">Monthly</th>
+                        <th className="py-3 px-3 whitespace-nowrap min-w-[140px]">Payoff Progress</th>
+                        <th className="py-3 px-3 text-center whitespace-nowrap">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/20">
+                      {debts.map(debt => {
+                        const original = Math.max(debt.originalAmount, debt.balance);
+                        const paidPercent = original > 0 ? ((original - debt.balance) / original) * 100 : 0;
+                        const isSelected = selectedDebt?.id === debt.id;
+                        return (
+                          <tr
+                            key={debt.id}
+                            onClick={() => setSelectedDebtId(debt.id)}
+                            className={cn("cursor-pointer transition-colors", isSelected ? "bg-primary/5" : "hover:bg-muted/10")}
+                          >
+                            <td className="py-3 px-3 font-semibold text-foreground">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="w-1.5 h-6 rounded-full shrink-0"
+                                  style={{ backgroundColor: debt.color || '#f43f5e' }}
+                                />
+                                <span className="text-base shrink-0 leading-none">{debt.emoji || '🏦'}</span>
+                                <span>{debt.name}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span>{DEBT_TYPE_LABELS[debt.type] || debt.type}</span>
+                              {debt.studentLoanPlan && (
+                                <span className="block text-[10px] text-muted-foreground">{STUDENT_LOAN_PLAN_LABELS[debt.studentLoanPlan]}</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3">{debt.lender || '—'}</td>
+                            <td className="py-3 px-3 text-right font-mono font-bold text-rose-500">{formatGBP(debt.balance)}</td>
+                            <td className="py-3 px-3 text-right font-mono">{debt.interestRate.toFixed(2)}%</td>
+                            <td className="py-3 px-3 text-right font-mono">{formatGBP(debt.minPayment)}</td>
+                            <td className="py-3 px-3">
+                              <div className="space-y-1 min-w-[120px]">
+                                <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-emerald-500 transition-all"
+                                    style={{ width: `${Math.min(Math.max(paidPercent, 0), 100)}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                                  <span>{paidPercent.toFixed(0)}% paid</span>
+                                  {debt.payoffDate && <span>{new Date(debt.payoffDate).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</span>}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <div className="flex justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveDebt({ ...debt, draws: debt.draws || [] });
+                                    setIsEditDebtOpen(true);
+                                  }}
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteDebt(debt.id); }}
+                                  className="h-8 w-8 text-rose-500 hover:text-rose-600"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {debts.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="text-center py-6 italic text-muted-foreground">No debts tracked.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Payoff projection for the selected debt */}
+                {selectedDebt && (
+                  <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-xl space-y-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <h4 className="font-serif text-base font-semibold text-foreground flex items-center gap-2">
+                          <TrendingDown className="h-4 w-4 text-primary shrink-0" /> {selectedDebt.name} — Payoff Projection
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {selectedDebt.repaymentType === 'income_contingent'
+                            ? `${selectedDebt.studentLoanPlan ? STUDENT_LOAN_PLAN_LABELS[selectedDebt.studentLoanPlan] : 'Income-contingent'}: ${selectedDebt.studentLoanPlan ? (taxConfig.studentLoanRates[selectedDebt.studentLoanPlan] || 0) : 0}% of income above ${formatGBP(selectedDebt.studentLoanPlan ? (taxConfig.studentLoanThresholds[selectedDebt.studentLoanPlan] || 0) : 0)}, written off after ${selectedDebt.writeOffYears ?? '—'} years`
+                            : `Fixed repayment of ${formatGBP(selectedDebt.minPayment)}/month at ${selectedDebt.interestRate.toFixed(2)}%`}
+                        </p>
+                      </div>
+                      {debts.length > 1 && (
+                        <Select value={selectedDebt.id} onValueChange={setSelectedDebtId}>
+                          <SelectTrigger className="bg-background/50 border-primary/20 rounded-xl h-9 text-xs w-full sm:w-56 shrink-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl border-primary/10">
+                            {debts.map(d => (
+                              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+
+                    {selectedDebtFinal && (
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Cleared By</span>
+                          <span className="text-sm font-bold font-mono text-foreground">
+                            {selectedDebtFinal.balance <= 0 ? Math.round(selectedDebtFinal.year) : 'Not on track'}
+                          </span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Total Repaid</span>
+                          <span className="text-sm font-bold font-mono text-foreground">{formatGBP(selectedDebtFinal.paid)}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Interest Paid</span>
+                          <span className="text-sm font-bold font-mono text-amber-500">{formatGBP(selectedDebtFinal.interest)}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Written Off</span>
+                          <span className="text-sm font-bold font-mono text-emerald-500">{formatGBP(selectedDebtFinal.writtenOff)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="h-[260px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={selectedDebtProjection} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="debtBalanceFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
+                              <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="debtPaidFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" vertical={false} />
+                          <XAxis
+                            dataKey="year"
+                            tickFormatter={(v) => String(Math.round(v))}
+                            tick={{ fontSize: 10 }}
+                            className="text-muted-foreground"
+                          />
+                          <YAxis
+                            tickFormatter={(v) => `£${Math.round(v / 1000)}k`}
+                            tick={{ fontSize: 10 }}
+                            width={48}
+                            className="text-muted-foreground"
+                          />
+                          <RechartsTooltip
+                            formatter={(value: number, name: string) => [formatGBP(value), name]}
+                            labelFormatter={(label) => `Year ${Math.round(Number(label))}`}
+                            contentStyle={{ borderRadius: '0.75rem', fontSize: '11px' }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '11px' }} />
+                          <Area
+                            type="monotone"
+                            dataKey="balance"
+                            name="Outstanding"
+                            stroke="#f43f5e"
+                            strokeWidth={2}
+                            fill="url(#debtBalanceFill)"
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="paid"
+                            name="Repaid"
+                            stroke="#10b981"
+                            strokeWidth={2}
+                            fill="url(#debtPaidFill)"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Borrowing tranches */}
+                    {(selectedDebt.draws?.length ?? 0) > 0 && (
+                      <div className="border-t border-border/30 pt-4 space-y-2">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
+                          Borrowing History — {formatGBP(sumDraws(selectedDebt.draws))} across {selectedDebt.draws.length} {selectedDebt.draws.length === 1 ? 'draw' : 'draws'}
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {[...selectedDebt.draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
+                            <div key={draw.id} className="rounded-xl border border-primary/10 bg-background/40 px-3 py-2 text-xs">
+                              <span className="font-mono font-bold text-foreground block">{formatGBP(draw.amount)}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                                {draw.label ? ` · ${draw.label}` : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION C: Memberships & Rewards */}
               <div className="space-y-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
                   <div className="min-w-0">
@@ -9938,6 +10672,447 @@ export default function Finance() {
               </div>
               <DialogFooter className="pt-4 gap-2 sm:gap-0">
                 <Button variant="outline" type="button" onClick={() => setIsEditMembershipOpen(false)} className="rounded-xl">Cancel</Button>
+                <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: Add Debt */}
+      <Dialog open={isAddDebtOpen} onOpenChange={setIsAddDebtOpen}>
+        <DialogContent className="rounded-3xl border-primary/10 max-w-sm max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Add Debt</DialogTitle>
+            <DialogDescription className="text-xs">Track a mortgage, student loan or other borrowing.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddDebt} className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="debt-name">Debt Name</Label>
+              <Input
+                id="debt-name"
+                placeholder="e.g. Flat Mortgage"
+                value={newDebt.name}
+                onChange={(e) => setNewDebt({ ...newDebt, name: e.target.value })}
+                className="rounded-xl h-10 border-primary/20 bg-background/50"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="debt-type">Debt Type</Label>
+              <Select
+                value={newDebt.type}
+                onValueChange={(val) => setNewDebt({ ...newDebt, type: val as Debt['type'] })}
+              >
+                <SelectTrigger id="debt-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-primary/10">
+                  {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="debt-repayment">How It's Repaid</Label>
+              <Select
+                value={newDebt.repaymentType}
+                onValueChange={(val) => setNewDebt({
+                  ...newDebt,
+                  repaymentType: val as Debt['repaymentType'],
+                  studentLoanPlan: val === 'income_contingent' ? (newDebt.studentLoanPlan || 'plan2') : undefined,
+                  writeOffYears: val === 'income_contingent'
+                    ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || 'plan2'])
+                    : undefined
+                })}
+              >
+                <SelectTrigger id="debt-repayment" className="bg-background/50 border-primary/20 rounded-xl h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-primary/10">
+                  <SelectItem value="amortising">Fixed monthly payment</SelectItem>
+                  <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {newDebt.repaymentType === 'income_contingent' && (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor="debt-plan">Student Loan Plan</Label>
+                  <Select
+                    value={newDebt.studentLoanPlan || 'plan2'}
+                    onValueChange={(val) => setNewDebt({
+                      ...newDebt,
+                      studentLoanPlan: val as StudentLoanPlanKey,
+                      writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey]
+                    })}
+                  >
+                    <SelectTrigger id="debt-plan" className="bg-background/50 border-primary/20 rounded-xl h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-primary/10">
+                      {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    Repays {taxConfig.studentLoanRates[newDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[newDebt.studentLoanPlan || 'plan2'] || 0)}.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="debt-writeoff">Written Off After (years)</Label>
+                  <Input
+                    id="debt-writeoff"
+                    type="number"
+                    value={newDebt.writeOffYears ?? ''}
+                    onChange={(e) => setNewDebt({ ...newDebt, writeOffYears: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  />
+                </div>
+              </>
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="debt-lender">Lender</Label>
+              <Input
+                id="debt-lender"
+                placeholder="e.g. Nationwide"
+                value={newDebt.lender}
+                onChange={(e) => setNewDebt({ ...newDebt, lender: e.target.value })}
+                className="rounded-xl h-10 border-primary/20 bg-background/50"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="debt-original">Original (£)</Label>
+                <Input
+                  id="debt-original"
+                  type="number"
+                  step="0.01"
+                  placeholder="250000"
+                  value={newDebt.draws.length > 0 ? sumDraws(newDebt.draws) : newDebt.originalAmount}
+                  onChange={(e) => setNewDebt({ ...newDebt, originalAmount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                  disabled={newDebt.draws.length > 0}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50 disabled:opacity-70"
+                />
+                {newDebt.draws.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground">Summed from borrowing history</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="debt-balance">Owed Now (£)</Label>
+                <Input
+                  id="debt-balance"
+                  type="number"
+                  step="0.01"
+                  placeholder="198400"
+                  value={newDebt.balance}
+                  onChange={(e) => setNewDebt({ ...newDebt, balance: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="debt-rate">Interest Rate (%)</Label>
+                <Input
+                  id="debt-rate"
+                  type="number"
+                  step="0.01"
+                  placeholder="4.75"
+                  value={newDebt.interestRate}
+                  onChange={(e) => setNewDebt({ ...newDebt, interestRate: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="debt-payment">Monthly (£)</Label>
+                <Input
+                  id="debt-payment"
+                  type="number"
+                  step="0.01"
+                  placeholder="1150"
+                  value={newDebt.minPayment}
+                  onChange={(e) => setNewDebt({ ...newDebt, minPayment: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="debt-start">Taken On</Label>
+                <Input
+                  id="debt-start"
+                  type="date"
+                  value={newDebt.startDate}
+                  onChange={(e) => setNewDebt({ ...newDebt, startDate: e.target.value })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="debt-payoff">Expected Payoff</Label>
+                <Input
+                  id="debt-payoff"
+                  type="date"
+                  value={newDebt.payoffDate}
+                  onChange={(e) => setNewDebt({ ...newDebt, payoffDate: e.target.value })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                />
+              </div>
+            </div>
+
+            <DebtDrawsEditor
+              draws={newDebt.draws}
+              newDraw={newDraw}
+              setNewDraw={setNewDraw}
+              onAdd={handleAddDraw}
+              onRemove={handleRemoveDraw}
+              idPrefix="add"
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="debt-emoji">Emoji</Label>
+                <Input
+                  id="debt-emoji"
+                  placeholder="🏠"
+                  value={newDebt.emoji}
+                  onChange={(e) => setNewDebt({ ...newDebt, emoji: e.target.value })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="debt-color">Colour</Label>
+                <Input
+                  id="debt-color"
+                  type="color"
+                  value={newDebt.color}
+                  onChange={(e) => setNewDebt({ ...newDebt, color: e.target.value })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50 p-1"
+                />
+              </div>
+            </div>
+            <DialogFooter className="pt-4 gap-2 sm:gap-0">
+              <Button variant="outline" type="button" onClick={() => setIsAddDebtOpen(false)} className="rounded-xl">Cancel</Button>
+              <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Debt</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: Edit Debt */}
+      <Dialog open={isEditDebtOpen} onOpenChange={setIsEditDebtOpen}>
+        <DialogContent className="rounded-3xl border-primary/10 max-w-sm max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Edit Debt</DialogTitle>
+            <DialogDescription className="text-xs">Update balance, rate or payoff schedule.</DialogDescription>
+          </DialogHeader>
+          {activeDebt && (
+            <form onSubmit={handleEditDebt} className="space-y-4 py-2">
+              <div className="space-y-1">
+                <Label htmlFor="edit-debt-name">Debt Name</Label>
+                <Input
+                  id="edit-debt-name"
+                  value={activeDebt.name}
+                  onChange={(e) => setActiveDebt({ ...activeDebt, name: e.target.value })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-debt-type">Debt Type</Label>
+                <Select
+                  value={activeDebt.type}
+                  onValueChange={(val) => setActiveDebt({ ...activeDebt, type: val as Debt['type'] })}
+                >
+                  <SelectTrigger id="edit-debt-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/10">
+                    {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-debt-repayment">How It's Repaid</Label>
+                <Select
+                  value={activeDebt.repaymentType}
+                  onValueChange={(val) => setActiveDebt({
+                    ...activeDebt,
+                    repaymentType: val as Debt['repaymentType'],
+                    studentLoanPlan: val === 'income_contingent' ? (activeDebt.studentLoanPlan || 'plan2') : undefined,
+                    writeOffYears: val === 'income_contingent'
+                      ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || 'plan2'])
+                      : undefined
+                  })}
+                >
+                  <SelectTrigger id="edit-debt-repayment" className="bg-background/50 border-primary/20 rounded-xl h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/10">
+                    <SelectItem value="amortising">Fixed monthly payment</SelectItem>
+                    <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {activeDebt.repaymentType === 'income_contingent' && (
+                <>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-plan">Student Loan Plan</Label>
+                    <Select
+                      value={activeDebt.studentLoanPlan || 'plan2'}
+                      onValueChange={(val) => setActiveDebt({
+                        ...activeDebt,
+                        studentLoanPlan: val as StudentLoanPlanKey,
+                        writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey]
+                      })}
+                    >
+                      <SelectTrigger id="edit-debt-plan" className="bg-background/50 border-primary/20 rounded-xl h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-primary/10">
+                        {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      Repays {taxConfig.studentLoanRates[activeDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[activeDebt.studentLoanPlan || 'plan2'] || 0)}.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-writeoff">Written Off After (years)</Label>
+                    <Input
+                      id="edit-debt-writeoff"
+                      type="number"
+                      value={activeDebt.writeOffYears ?? ''}
+                      onChange={(e) => setActiveDebt({ ...activeDebt, writeOffYears: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
+                      className="rounded-xl h-10 border-primary/20 bg-background/50"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="space-y-1">
+                <Label htmlFor="edit-debt-lender">Lender</Label>
+                <Input
+                  id="edit-debt-lender"
+                  value={activeDebt.lender}
+                  onChange={(e) => setActiveDebt({ ...activeDebt, lender: e.target.value })}
+                  className="rounded-xl h-10 border-primary/20 bg-background/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-original">Original (£)</Label>
+                  <Input
+                    id="edit-debt-original"
+                    type="number"
+                    step="0.01"
+                    value={activeDebt.draws.length > 0 ? sumDraws(activeDebt.draws) : activeDebt.originalAmount}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, originalAmount: parseFloat(e.target.value) || 0 })}
+                    disabled={activeDebt.draws.length > 0}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50 disabled:opacity-70"
+                  />
+                  {activeDebt.draws.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground">Summed from borrowing history</p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-balance">Owed Now (£)</Label>
+                  <Input
+                    id="edit-debt-balance"
+                    type="number"
+                    step="0.01"
+                    value={activeDebt.balance}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, balance: parseFloat(e.target.value) || 0 })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-rate">Interest Rate (%)</Label>
+                  <Input
+                    id="edit-debt-rate"
+                    type="number"
+                    step="0.01"
+                    value={activeDebt.interestRate}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, interestRate: parseFloat(e.target.value) || 0 })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-payment">Monthly (£)</Label>
+                  <Input
+                    id="edit-debt-payment"
+                    type="number"
+                    step="0.01"
+                    value={activeDebt.minPayment}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, minPayment: parseFloat(e.target.value) || 0 })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-start">Taken On</Label>
+                  <Input
+                    id="edit-debt-start"
+                    type="date"
+                    value={activeDebt.startDate || ''}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, startDate: e.target.value || undefined })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-payoff">Expected Payoff</Label>
+                  <Input
+                    id="edit-debt-payoff"
+                    type="date"
+                    value={activeDebt.payoffDate || ''}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, payoffDate: e.target.value || undefined })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  />
+                </div>
+              </div>
+
+              <DebtDrawsEditor
+                draws={activeDebt.draws}
+                newDraw={newDraw}
+                setNewDraw={setNewDraw}
+                onAdd={handleAddDraw}
+                onRemove={handleRemoveDraw}
+                idPrefix="edit"
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-emoji">Emoji</Label>
+                  <Input
+                    id="edit-debt-emoji"
+                    value={activeDebt.emoji || ''}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, emoji: e.target.value })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-color">Colour</Label>
+                  <Input
+                    id="edit-debt-color"
+                    type="color"
+                    value={activeDebt.color || '#f43f5e'}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, color: e.target.value })}
+                    className="rounded-xl h-10 border-primary/20 bg-background/50 p-1"
+                  />
+                </div>
+              </div>
+              <DialogFooter className="pt-4 gap-2 sm:gap-0">
+                <Button variant="outline" type="button" onClick={() => setIsEditDebtOpen(false)} className="rounded-xl">Cancel</Button>
                 <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
               </DialogFooter>
             </form>

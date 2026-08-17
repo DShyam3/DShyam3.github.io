@@ -552,6 +552,75 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_debts: {
+        Row: {
+          balance: number
+          color: string | null
+          created_at: string
+          draws: Json
+          emoji: string | null
+          id: string
+          interest_rate: number
+          is_default: boolean
+          lender: string | null
+          min_payment: number
+          name: string
+          notes: string | null
+          original_amount: number
+          payoff_date: string | null
+          repayment_type: string
+          start_date: string | null
+          student_loan_plan: string | null
+          type: string
+          updated_at: string
+          write_off_years: number | null
+        }
+        Insert: {
+          balance?: number
+          color?: string | null
+          created_at?: string
+          draws?: Json
+          emoji?: string | null
+          id: string
+          interest_rate?: number
+          is_default?: boolean
+          lender?: string | null
+          min_payment?: number
+          name: string
+          notes?: string | null
+          original_amount?: number
+          payoff_date?: string | null
+          repayment_type?: string
+          start_date?: string | null
+          student_loan_plan?: string | null
+          type: string
+          updated_at?: string
+          write_off_years?: number | null
+        }
+        Update: {
+          balance?: number
+          color?: string | null
+          created_at?: string
+          draws?: Json
+          emoji?: string | null
+          id?: string
+          interest_rate?: number
+          is_default?: boolean
+          lender?: string | null
+          min_payment?: number
+          name?: string
+          notes?: string | null
+          original_amount?: number
+          payoff_date?: string | null
+          repayment_type?: string
+          start_date?: string | null
+          student_loan_plan?: string | null
+          type?: string
+          updated_at?: string
+          write_off_years?: number | null
+        }
+        Relationships: []
+      }
       finance_memberships: {
         Row: {
           annual_fee: number
