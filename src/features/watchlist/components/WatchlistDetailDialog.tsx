@@ -58,7 +58,7 @@ export function WatchlistDetailDialog({
   syncing,
 }: WatchlistDetailDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false);
-  const { loadShowEpisodes } = useWatchlist();
+  const { loadShowEpisodes, loadItemDescription } = useWatchlist();
 
   // The grid only loads episode numbers and watched flags; episode titles,
   // air dates and runtimes are fetched here, for this show only, the first
@@ -68,6 +68,14 @@ export function WatchlistDetailDialog({
       void loadShowEpisodes(item.id);
     }
   }, [open, item.category, item.episodesLoaded, item.id, loadShowEpisodes]);
+
+  // Plot summaries are 61% of the movies payload and are only shown here, so
+  // the list query skips them and this fetches the one being looked at.
+  useEffect(() => {
+    if (open && !item.descriptionLoaded) {
+      void loadItemDescription(item);
+    }
+  }, [open, item, loadItemDescription]);
 
   // Reset deleting state when dialog opens/closes
   useEffect(() => {

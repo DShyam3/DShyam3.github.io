@@ -86,7 +86,13 @@ serve(async (req) => {
   const failedTitles: string[] = []
 
   try {
-    // --- Fetch current state (mirrors WatchlistContext's fetchData) ---
+    // --- Fetch current state ---
+    // This deliberately still selects '*', unlike WatchlistContext's fetchData,
+    // which drops `overview` to keep the browser payload small. Running
+    // server-side there is no payload to save, and having the real overview in
+    // hand is what makes the `!item.description` check below correct here.
+    // The browser has to ask which rows are null instead -- see needsOverview
+    // in WatchlistContext.syncWatchlist.
     const [moviesResult, showsResult] = await Promise.all([
       supabaseAdmin.from('movies').select('*'),
       supabaseAdmin.from('tv_shows').select('*, tv_show_seasons (*, tv_show_episodes (*))'),

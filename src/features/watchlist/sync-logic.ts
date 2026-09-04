@@ -15,6 +15,11 @@ import type { WatchlistItem } from './WatchlistContext';
  *
  * ANY CHANGE HERE MUST BE MIRRORED IN
  * supabase/functions/watchlist-cron-sync/index.ts.
+ *
+ * One asymmetry is intentional: the edge function selects '*' and so holds the
+ * stored `overview`, while the browser's list query skips it to keep the
+ * payload down. That is why `needsOverview` below is optional -- the browser
+ * passes it, the edge function does not need to.
  */
 
 /**
@@ -60,19 +65,31 @@ export function getPlatform(providers: any): string {
  * *missing* them, so a hand-edited value is never overwritten by TMDB, while
  * release_date and platform are always refreshed because those legitimately
  * change.
+ *
+ * `overview` is the awkward one. The list query no longer fetches it, so an
+ * item in memory has no description whether or not one is stored. Passing
+ * `item.description` alone would therefore make the sync overwrite every
+ * stored summary on every run. `needsOverview` is the set of ids the caller
+ * has confirmed are actually null in the database.
  */
 export function buildCommonUpdates(
-  item: Pick<WatchlistItem, 'image_url' | 'description' | 'genres'>,
+  item: Pick<WatchlistItem, 'id' | 'image_url' | 'description' | 'genres'>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw TMDB payload
   data: any,
   imageBaseUrl: string,
+  needsOverview?: Set<string>,
 ): Record<string, unknown> {
   const updates: Record<string, unknown> = {};
 
   if (!item.image_url && data.poster_path) {
     updates.poster = `${imageBaseUrl}${data.poster_path}`;
   }
-  if (!item.description && data.overview) {
+  // Only when the stored column is genuinely empty. Without the set, fall
+  // back to the in-memory value so a caller that does hold it still works.
+  const overviewIsEmpty = needsOverview
+    ? needsOverview.has(item.id)
+    : !item.description;
+  if (overviewIsEmpty && data.overview) {
     updates.overview = data.overview;
   }
   if (data.release_date || data.first_air_date) {
@@ -88,12 +105,13 @@ export function buildCommonUpdates(
 
 /** Movie-only columns layered on top of the common ones. */
 export function buildMovieUpdates(
-  item: Pick<WatchlistItem, 'image_url' | 'description' | 'genres' | 'year'>,
+  item: Pick<WatchlistItem, 'id' | 'image_url' | 'description' | 'genres' | 'year'>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw TMDB payload
   data: any,
   imageBaseUrl: string,
+  needsOverview?: Set<string>,
 ): Record<string, unknown> {
-  const updates = buildCommonUpdates(item, data, imageBaseUrl);
+  const updates = buildCommonUpdates(item, data, imageBaseUrl, needsOverview);
 
   if (!item.year && (data.release_date || data.first_air_date)) {
     updates.release_year = new Date(
@@ -107,10 +125,14 @@ export function buildMovieUpdates(
 
 /** TV-only columns. `status` here is the series status, not a watch status. */
 export function buildShowUpdates(
-  item: Pick<WatchlistItem, 'image_url' | 'description' | 'genres'>,
+  item: Pick<WatchlistItem, 'id' | 'image_url' | 'description' | 'genres'>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw TMDB payload
   data: any,
   imageBaseUrl: string,
+  needsOverview?: Set<string>,
 ): Record<string, unknown> {
-  return { ...buildCommonUpdates(item, data, imageBaseUrl), status: data.status };
+  return {
+    ...buildCommonUpdates(item, data, imageBaseUrl, needsOverview),
+    status: data.status,
+  };
 }

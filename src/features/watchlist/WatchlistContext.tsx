@@ -80,6 +80,12 @@ export interface WatchlistItem {
   seasons?: Season[];
   /** False until loadShowEpisodes has filled in the full episode rows. */
   episodesLoaded?: boolean;
+  /**
+   * False until loadItemDescription has fetched `overview`. Distinguishes
+   * "not fetched yet" from "genuinely has no description", which matters
+   * because the sync uses a missing description as a signal.
+   */
+  descriptionLoaded?: boolean;
   // TMDB returns the US spelling ('Canceled'); 'Cancelled' is kept for any
   // pre-existing stored rows using the British spelling.
   series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
@@ -147,6 +153,7 @@ interface WatchlistContextType {
   isSeasonWatched: (showId: string, season: Season) => boolean;
   getAutoStatus: (item: WatchlistItem) => string;
   loadShowEpisodes: (showId: string) => Promise<void>;
+  loadItemDescription: (item: WatchlistItem) => Promise<void>;
   fetchData: () => Promise<void>;
 }
 
@@ -198,6 +205,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const syncCancelRef = useRef(false);
   /** Shows whose full episode rows have been fetched, so we fetch once each. */
   const loadedShowsRef = useRef<Set<string>>(new Set());
+  /** Same, for plot summaries. */
+  const loadedDescriptionsRef = useRef<Set<string>>(new Set());
   const { isAdmin } = useAuth();
   // Public visitors can browse the watchlist (fetchData below), but the
   // auto-sync writes to sync_log/tv_shows/etc. and is admin-only -- RLS now
@@ -209,18 +218,26 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     loadedShowsRef.current.clear();
+    loadedDescriptionsRef.current.clear();
     try {
       const [moviesResult, showsResult, favouritesResult] = await Promise.all([
-        supabase.from('movies').select('*').order('title', { ascending: true }),
+        // Every column except `overview`. Plot summaries are 218 kB of the
+        // movies table's 357 kB and are only read by the detail dialog, so
+        // they load per item in loadItemDescription instead.
+        supabase
+          .from('movies')
+          .select('id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime')
+          .order('title', { ascending: true }),
         (supabase.from('tv_shows') as any)
           // Deliberately not `tv_show_episodes (*)`. Every mount of this page
           // was pulling all ~7,600 episode rows in full (~474 kB) purely to
           // render a grid of posters. The grid needs episode_number and
           // watched and nothing else (~67 kB); titles, runtimes and air dates
           // load per show in loadShowEpisodes when a detail dialog opens.
+          // As above: no `overview` (62 kB of tv_shows' 108 kB).
           .select(
             `
-                    *,
+                    id, title, platform, genre, status, poster, release_date, tmdb_id,
                     tv_show_seasons (
                       id, season_number, release_date, watched,
                       tv_show_episodes (id, episode_number, watched)
@@ -240,7 +257,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           id: movie.id.toString(),
           title: movie.title,
           category: 'Movies',
-          description: movie.overview || '',
+          description: undefined,
+          descriptionLoaded: false,
           year: movie.release_year || undefined,
           runtime: movie.runtime || undefined,
           genres: movie.genre
@@ -265,7 +283,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           title: show.title,
           category: 'TV Shows' as const,
           status: show.status || 'Plan to Watch',
-          description: show.overview || '',
+          description: undefined,
+          descriptionLoaded: false,
           year: show.release_date
             ? new Date(show.release_date).getFullYear()
             : undefined,
@@ -340,6 +359,36 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  /**
+   * Fetch one item's plot summary, which the list query deliberately skips.
+   * Called when a detail dialog opens -- the only place it is displayed.
+   */
+  const loadItemDescription = useCallback(async (item: WatchlistItem) => {
+    if (item.descriptionLoaded || loadedDescriptionsRef.current.has(item.id)) return;
+    loadedDescriptionsRef.current.add(item.id);
+
+    const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
+    const { data, error } = await (supabase.from(table) as any)
+      .select('overview')
+      .eq('id', parseInt(item.id))
+      .maybeSingle();
+
+    if (error) {
+      // Allow a retry on the next open rather than leaving the panel blank.
+      loadedDescriptionsRef.current.delete(item.id);
+      console.error('Error loading description:', error);
+      return;
+    }
+
+    setWatchlist((prev) =>
+      prev.map((i) =>
+        i.id === item.id
+          ? { ...i, description: data?.overview || '', descriptionLoaded: true }
+          : i,
+      ),
+    );
   }, []);
 
   /**
@@ -945,6 +994,22 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const changesSummary: string[] = [];
     try {
       const itemsToSync = itemsOverride ?? watchlist.filter((item) => item.tmdb_id);
+
+      // The list query does not fetch `overview`, so an item in memory has no
+      // description whether or not one is stored. Ask which rows are actually
+      // null before deciding to fill any in -- otherwise every sync would
+      // overwrite every stored summary with TMDB's. Two id-only queries.
+      const needsOverview = new Set<string>();
+      const [emptyMovies, emptyShows] = await Promise.all([
+        supabase.from('movies').select('id').is('overview', null),
+        (supabase.from('tv_shows') as any).select('id').is('overview', null),
+      ]);
+      (emptyMovies.data ?? []).forEach((row: { id: number }) =>
+        needsOverview.add(String(row.id)),
+      );
+      (emptyShows.data ?? []).forEach((row: { id: number }) =>
+        needsOverview.add(String(row.id)),
+      );
       // Use smaller chunks for better progress tracking in background tabs
       const chunkSize = 50;
       let processedCount = 0;
@@ -967,10 +1032,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               if (item.category === 'Movies') {
                 await supabase
                   .from('movies')
-                  .update(buildMovieUpdates(item, data, TMDB_IMAGE_BASE_URL))
+                  .update(buildMovieUpdates(item, data, TMDB_IMAGE_BASE_URL, needsOverview))
                   .eq('id', parseInt(item.id));
               } else {
-                const tvUpdates = buildShowUpdates(item, data, TMDB_IMAGE_BASE_URL);
+                const tvUpdates = buildShowUpdates(item, data, TMDB_IMAGE_BASE_URL, needsOverview);
                 if (data.status && item.series_status && data.status !== item.series_status) {
                   changesSummary.push(`${item.title}: status → ${data.status}`);
                 }
@@ -1376,6 +1441,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       isSeasonWatched: stableIsSeasonWatched,
       getAutoStatus,
       loadShowEpisodes,
+      loadItemDescription,
       fetchData,
     }),
     [
@@ -1403,6 +1469,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableIsSeasonWatched,
       getAutoStatus,
       loadShowEpisodes,
+      loadItemDescription,
       fetchData,
     ],
   );
