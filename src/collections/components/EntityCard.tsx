@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { BookOpen, ExternalLink, Trash2, X } from 'lucide-react';
+import { BookOpen, ExternalLink, Image, Quote, Trash2, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
 import { cn } from '@/lib/utils';
@@ -20,9 +21,23 @@ export const CARD_LAYOUT: Record<CardVariant, { grid: string; skeleton: string }
     grid: 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-12 gap-4 py-6',
     skeleton: 'aspect-[2/3] rounded-lg',
   },
+  square: {
+    grid: 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 py-6',
+    skeleton: 'aspect-square rounded-lg',
+  },
+  feature: {
+    grid: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 py-6',
+    skeleton: 'h-48 rounded-lg',
+  },
+  text: {
+    grid: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-6',
+    skeleton: 'h-32 rounded-lg',
+  },
 };
 
 interface FaceProps {
+  /** Shown when an item has no image. Comes from the collection's config. */
+  Fallback: LucideIcon;
   title: string;
   subtitle?: string;
   image?: string;
@@ -34,7 +49,7 @@ interface FaceProps {
 }
 
 /** Wide row: small icon on the left, text on the right. Links, inventory. */
-function TileFace({ title, subtitle, image, excerpt, href, index, actions, onOpen }: FaceProps) {
+function TileFace({ Fallback, title, subtitle, image, excerpt, href, index, actions, onOpen }: FaceProps) {
   return (
     <article
       className="group relative bg-card rounded-lg p-5 opacity-0 animate-fade-in transition-[box-shadow] duration-300 cursor-pointer hover:shadow-md [box-shadow:var(--shadow-border)]"
@@ -50,7 +65,7 @@ function TileFace({ title, subtitle, image, excerpt, href, index, actions, onOpe
           {image ? (
             <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
           ) : (
-            <ExternalLink className="w-6 h-6 text-muted-foreground" />
+            <Fallback className="w-6 h-6 text-muted-foreground" />
           )}
         </div>
 
@@ -76,7 +91,7 @@ function TileFace({ title, subtitle, image, excerpt, href, index, actions, onOpe
 }
 
 /** 2:3 cover with text beneath, actions overlaid on the image. Books, photos. */
-function PosterFace({ title, subtitle, image, excerpt, actions, onOpen }: FaceProps) {
+function PosterFace({ Fallback, title, subtitle, image, excerpt, actions, onOpen }: FaceProps) {
   return (
     <div className="item-card group relative cursor-pointer" onClick={onOpen}>
       <div className="aspect-[2/3] bg-muted relative overflow-hidden">
@@ -84,7 +99,7 @@ function PosterFace({ title, subtitle, image, excerpt, actions, onOpen }: FacePr
           <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <BookOpen className="h-12 w-12 text-muted-foreground/30" />
+            <Fallback className="h-12 w-12 text-muted-foreground/30" />
           </div>
         )}
 
@@ -116,9 +131,76 @@ function PosterFace({ title, subtitle, image, excerpt, actions, onOpen }: FacePr
   );
 }
 
+/**
+ * Image on top, text beneath, in a card-shaped box. `square` uses a 1:1 crop
+ * (recipes, inspiration); `feature` uses a fixed-height banner (articles).
+ */
+function mediaFace(shape: 'square' | 'feature') {
+  return function MediaFace({ Fallback, title, subtitle, image, excerpt, actions, onOpen }: FaceProps) {
+    const box = shape === 'square' ? 'aspect-square' : 'h-40';
+    return (
+      <div className="item-card group relative cursor-pointer" onClick={onOpen}>
+        <div className={cn(box, 'bg-muted relative overflow-hidden')}>
+          {image ? (
+            <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Fallback className="h-14 w-14 text-muted-foreground/30" />
+            </div>
+          )}
+          <div
+            className="absolute top-2 right-2 flex gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {actions}
+          </div>
+        </div>
+        <div className="p-4">
+          <h3 className="text-sm font-medium line-clamp-2">{title}</h3>
+          {subtitle && (
+            <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{subtitle}</p>
+          )}
+          {excerpt && (
+            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{excerpt}</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+}
+
+/** No image: the text is the content. Beliefs. */
+function TextFace({ title, subtitle, actions, onOpen }: FaceProps) {
+  return (
+    <div className="item-card p-6 group relative cursor-pointer" onClick={onOpen}>
+      <Quote className="h-6 w-6 text-muted-foreground/20 absolute top-4 left-4" />
+      <p className="text-base font-serif italic pl-8 line-clamp-4">"{title}"</p>
+      {subtitle && <p className="text-sm text-muted-foreground mt-2 pl-8">— {subtitle}</p>}
+      <div
+        className="flex items-center justify-end gap-1 mt-4 pl-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {actions}
+      </div>
+    </div>
+  );
+}
+
 const FACES: Record<CardVariant, (props: FaceProps) => JSX.Element> = {
   tile: TileFace,
   poster: PosterFace,
+  square: mediaFace('square'),
+  feature: mediaFace('feature'),
+  text: TextFace,
+};
+
+/** Used when a collection does not name its own fallback icon. */
+const DEFAULT_FALLBACK: Record<CardVariant, LucideIcon> = {
+  tile: ExternalLink,
+  poster: BookOpen,
+  square: Image,
+  feature: Image,
+  text: Quote,
 };
 
 interface EntityCardProps<T extends CollectionRow, R> {
@@ -154,7 +236,7 @@ export function EntityCard<T extends CollectionRow, R>({
   const excerpt = card.excerpt?.(item);
   const badge = card.badge?.(item);
 
-  const isPoster = card.variant === 'poster';
+  const isOverlay = card.variant !== 'tile' && card.variant !== 'text';
   const Face = FACES[card.variant];
 
   const actions = (
@@ -168,7 +250,7 @@ export function EntityCard<T extends CollectionRow, R>({
         />
       )}
       {onRemove &&
-        (isPoster ? (
+        (isOverlay ? (
           <Button
             variant="secondary"
             size="icon"
@@ -193,6 +275,7 @@ export function EntityCard<T extends CollectionRow, R>({
   return (
     <>
       <Face
+        Fallback={card.fallbackIcon ?? DEFAULT_FALLBACK[card.variant]}
         title={title}
         subtitle={subtitle}
         image={image}

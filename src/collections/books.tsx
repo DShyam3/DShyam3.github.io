@@ -1,3 +1,4 @@
+import { BookOpen } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { useGoogleBooks, type GoogleBookResult } from '@/hooks/useGoogleBooks';
 import type { CollectionConfig, CollectionRow } from './types';
@@ -48,6 +49,7 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
 
   card: {
     variant: 'poster',
+    fallbackIcon: BookOpen,
     title: (book) => book.title,
     subtitle: (book) => book.author,
     image: (book) => book.cover_url ?? undefined,

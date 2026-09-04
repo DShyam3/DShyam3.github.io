@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,6 +35,10 @@ export function CollectionPage<T extends CollectionRow, R>({
   } = useCollection(config);
 
   const layout = CARD_LAYOUT[config.card.variant];
+
+  // Beliefs is private. Hooks run first so this stays a valid hook order.
+  if (config.adminOnly && !isAdmin) return <Navigate to="/" replace />;
+
   const count = items.length;
   const noun = count === 1 ? config.noun.singular : config.noun.plural;
 

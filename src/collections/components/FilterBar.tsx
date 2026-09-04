@@ -30,6 +30,10 @@ export function FilterBar<T extends CollectionRow, R>({
 }: FilterBarProps<T, R>) {
   const showSearch = Boolean(config.searchFields?.length);
 
+  // Photos and beliefs have neither facets nor search; render nothing rather
+  // than an empty bordered strip.
+  if (!config.facets.length && !showSearch) return null;
+
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
       <div className="flex flex-col gap-2 flex-1 min-w-0">

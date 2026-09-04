@@ -1,5 +1,9 @@
+import { articlesCollection } from './articles';
+import { beliefsCollection } from './beliefs';
 import { booksCollection } from './books';
+import { inspirationsCollection } from './inspirations';
 import { linksCollection } from './links';
+import { recipesCollection } from './recipes';
 import type { CollectionConfig, CollectionRow } from './types';
 
 /**
@@ -17,8 +21,12 @@ import type { CollectionConfig, CollectionRow } from './types';
 export const collections: CollectionConfig<any, any>[] = [
   linksCollection,
   booksCollection,
-  // articles, recipes, inspirations, photos, inventory and beliefs land here
-  // as Phase 4 converts them.
+  articlesCollection,
+  inspirationsCollection,
+  recipesCollection,
+  beliefsCollection,
+  // photos (file upload) and inventory (subcategory grouping, sort toggle,
+  // valuation summary) need config mechanics that do not exist yet.
 ];
 
 export function collectionByPath(

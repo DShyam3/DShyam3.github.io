@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 /**
@@ -35,8 +36,16 @@ export interface FacetDef<T> {
 /** Field types the generated add/edit form knows how to render. */
 export type FieldType = 'text' | 'textarea' | 'url' | 'select' | 'image';
 
-/** Card face shapes. Each one owns its grid and skeleton -- see CARD_LAYOUT. */
-export type CardVariant = 'tile' | 'poster';
+/**
+ * Card face shapes. Each one owns its grid and skeleton -- see CARD_LAYOUT.
+ *
+ *   tile     icon on the left, text on the right      links
+ *   poster   2:3 cover, dense grid                    books
+ *   square   1:1 image, text beneath                  recipes, inspiration
+ *   feature  wide image on top, text beneath          articles
+ *   text     no image at all                          beliefs
+ */
+export type CardVariant = 'tile' | 'poster' | 'square' | 'feature' | 'text';
 
 export interface FieldDef<T> {
   name: keyof T & string;
@@ -89,6 +98,8 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
   table: string;
   /** Route path, e.g. '/links'. */
   path: string;
+  /** Redirect non-admins to '/' instead of rendering. */
+  adminOnly?: boolean;
   /** Page header. */
   title: string;
   subtitle: string;
@@ -124,6 +135,8 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     excerpt?: (item: T) => string | undefined;
     /** Corner label in the detail dialog. */
     badge?: (item: T) => string | undefined;
+    /** Shown when an item has no image. Defaults per variant. */
+    fallbackIcon?: LucideIcon;
   };
 
   /** Drives both the add and the edit dialog. */

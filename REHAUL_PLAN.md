@@ -261,6 +261,19 @@ visibility and the badge. Merging `future` and `wishlist` is a data migration
 plus a naming decision, so it is left for you: pick the survivor, and it is a
 one-line `UPDATE` plus a one-line config change.
 
+**H-8 — The Recipes category nav filtered on the wrong column.**
+
+`useRecipes` offered "Personal" and "Reference" tabs and filtered
+`category === 'personal' | 'reference'`. But personal-vs-reference is the
+separate `is_personal` boolean; `category` holds meal types. Live data is
+`main` (2), `breakfast` (2), `desserts` (1), and `is_personal` is true for all
+five. So both tabs matched nothing and only "All" worked. The add dialog
+compounded it by hardcoding `category: 'main'` whatever was chosen.
+
+`collections/recipes.tsx` facets on the three real meal types, and
+`is_personal` drives the card subtitle and detail badge instead of pretending
+to be a category. Fixed.
+
 **H-6 — README advertises a `kitchen` inventory category that doesn't exist.**
 
 Live categories are `tech-edc`, `wardrobe`, `homelab`, `hygiene`, `sports-gear`.
