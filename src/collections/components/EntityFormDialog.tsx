@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Image as ImageIcon, Loader2, Pencil, Plus, Search, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/shared/ActionButton';
 import {
   Dialog,
   DialogContent,
@@ -354,10 +355,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {mode === 'add' ? (
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add {config.noun.singular}
-          </Button>
+          <ActionButton icon={Plus} label={`Add ${config.noun.singular}`} />
         ) : (
           <Button
             variant="ghost"
