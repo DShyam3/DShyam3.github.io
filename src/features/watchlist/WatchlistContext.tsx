@@ -95,10 +95,13 @@ export interface FavouriteItem {
   category: string;
 }
 
-// 'manual' = admin clicked "Sync Updates"; 'daily' = the client-side check
-// (an admin had the Watchlist page open) found the 6 AM sync was due;
-// 'auto' = the server-side pg_cron edge function fired on schedule with no
-// browser involved at all. See watchlist-cron-sync/index.ts.
+// 'auto'   = the pg_cron edge function fired on schedule, no browser involved
+//             (watchlist-cron-sync/index.ts). This is the only scheduled path.
+// 'manual' = an admin clicked "Sync Updates".
+// 'daily'  = historic only. A client-side fallback used to sync whenever an
+//             admin opened the page and the local 6 AM window looked unmet;
+//             it was removed because it duplicated the cron at arbitrary
+//             times. Kept in the union so existing log rows still parse.
 interface SyncLogEntry {
   id: number;
   synced_at: string;
@@ -151,27 +154,21 @@ const WatchlistContext = createContext<WatchlistContextType | undefined>(
   undefined,
 );
 
-// Auto-sync target hour (6 AM in user's local timezone)
-const AUTO_SYNC_HOUR = 6;
+/**
+ * The pg_cron job is scheduled `0 6 * * *`, which pg_cron evaluates in UTC.
+ * This has to match, or the countdown shown to the user is wrong -- it used
+ * to compute 6 AM *local*, so through British Summer Time the page promised
+ * 06:00 while the sync actually landed at 07:00.
+ */
+const AUTO_SYNC_UTC_HOUR = 6;
 
-/** Get the most recent 6 AM timestamp (today if past 6 AM, yesterday if before 6 AM) */
-const getMostRecent6AM = () => {
+/** The next time the server-side cron will run, as a Date. */
+const getNextAutoSync = () => {
   const now = new Date();
   const target = new Date(now);
-  target.setHours(AUTO_SYNC_HOUR, 0, 0, 0);
-  if (now < target) {
-    target.setDate(target.getDate() - 1);
-  }
-  return target;
-};
-
-/** Get the next upcoming 6 AM */
-const getNext6AM = () => {
-  const now = new Date();
-  const target = new Date(now);
-  target.setHours(AUTO_SYNC_HOUR, 0, 0, 0);
+  target.setUTCHours(AUTO_SYNC_UTC_HOUR, 0, 0, 0);
   if (now >= target) {
-    target.setDate(target.getDate() + 1);
+    target.setUTCDate(target.getUTCDate() + 1);
   }
   return target;
 };
@@ -189,7 +186,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const [lastAutoSyncTime, setLastAutoSyncTime] = useState<string | null>(null);
   const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
   const [nextAutoSyncTime, setNextAutoSyncTime] = useState<string>(
-    getNext6AM().toISOString(),
+    getNextAutoSync().toISOString(),
   );
   // Tracks TV shows/movies currently mid-add so a rapid double-click (or a
   // slow network + impatient user) can't insert the same item twice while
@@ -207,7 +204,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   // enforces that at the DB level, so gate it client-side too rather than
   // let it fail with permission errors for every non-admin visitor.
   const autoSyncEnabled = isAdmin;
-  const autoSyncTriggeredRef = useRef(false);
   const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
@@ -1263,7 +1259,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             ? `${failedTitles.length} item(s) failed: ${failedTitles.join(', ')}`
             : undefined,
       );
-      setNextAutoSyncTime(getNext6AM().toISOString());
+      setNextAutoSyncTime(getNextAutoSync().toISOString());
       if (type === 'daily') {
         console.log(
           `[Daily Sync] Completed at ${syncTime}. ${itemsSynced} items synced in ${(durationMs / 1000).toFixed(1)}s`,
@@ -1331,57 +1327,15 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     syncCancelRef.current = true;
   };
 
-  // Daily sync: Check on load and every 15 minutes if a sync is due (this is
-  // the client-side fallback for while an admin has the tab open -- the
-  // server-side pg_cron edge function covers the case where nobody does;
-  // see watchlist-cron-sync/index.ts, logged as sync_type 'auto').
-  useEffect(() => {
-    if (!autoSyncEnabled || loading || watchlist.length === 0) return;
-
-    const checkAndAutoSync = async () => {
-      // Prevent multiple triggers in the same session
-      if (autoSyncTriggeredRef.current || syncing) return;
-
-      const mostRecent6AM = getMostRecent6AM();
-
-      // Check if any successful sync has happened since the most recent 6 AM
-      const { data: recentSyncs } = await (supabase.from('sync_log') as any)
-        .select('id')
-        .gte('synced_at', mostRecent6AM.toISOString())
-        .eq('status', 'success')
-        .limit(1);
-
-      if (!recentSyncs || recentSyncs.length === 0) {
-        console.log(
-          `[Daily Sync] No sync since ${mostRecent6AM.toISOString()}. Triggering daily sync...`,
-        );
-        autoSyncTriggeredRef.current = true;
-        await syncWatchlist('daily');
-      } else {
-        console.log(
-          `[Daily Sync] Already synced since ${mostRecent6AM.toISOString()}. Skipping.`,
-        );
-      }
-    };
-
-    // Check immediately on load (with a small delay to let data settle)
-    const initialTimer = setTimeout(checkAndAutoSync, 3000);
-
-    // Also check every 15 minutes (for when the tab stays open overnight)
-    const intervalTimer = setInterval(
-      () => {
-        autoSyncTriggeredRef.current = false; // Reset so it can trigger again for new 6 AM windows
-        checkAndAutoSync();
-      },
-      15 * 60 * 1000,
-    );
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(intervalTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, watchlist.length, autoSyncEnabled]);
+  // There is deliberately no client-side auto-sync here any more.
+  //
+  // It used to fire whenever an admin opened the page and no successful sync
+  // had happened since the most recent local 6 AM, logging as sync_type
+  // 'daily'. Once the pg_cron job became reliable that only produced
+  // duplicate syncs at arbitrary times -- 21:34, 06:06, 09:37 -- which is
+  // what made the sync history look erratic. The cron
+  // (watchlist-cron-sync, logged as 'auto') is the scheduled path; the
+  // Sync Updates button is the manual one.
 
   const stableSyncWatchlist = useStableCallback(syncWatchlist);
   const stableSyncSingleItem = useStableCallback(syncSingleItem);

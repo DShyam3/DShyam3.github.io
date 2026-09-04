@@ -108,6 +108,19 @@ const ALL_GENRES = [
   'Western',
 ];
 
+/** "just now" / "12m ago" / "2h ago" / "3d ago", then a plain date. */
+function relativeTime(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(diffMs / 3600000);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(diffMs / 86400000);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
 const Watchlist = () => {
   const { isAdmin } = useAuth();
   const {
@@ -664,37 +677,6 @@ const Watchlist = () => {
                       <History className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="flex flex-col items-center gap-0.5">
-                    {lastSyncTime && (
-                      <span className="text-[10px] text-muted-foreground">
-                        Last synced:{' '}
-                        {(() => {
-                          const now = new Date();
-                          const syncDate = new Date(lastSyncTime);
-                          const diffMs = now.getTime() - syncDate.getTime();
-                          const diffMins = Math.floor(diffMs / 60000);
-                          const diffHours = Math.floor(diffMs / 3600000);
-                          const diffDays = Math.floor(diffMs / 86400000);
-
-                          if (diffMins < 1) return 'just now';
-                          if (diffMins < 60) return `${diffMins}m ago`;
-                          if (diffHours < 24) return `${diffHours}h ago`;
-                          if (diffDays < 7) return `${diffDays}d ago`;
-                          return syncDate.toLocaleDateString();
-                        })()}
-                      </span>
-                    )}
-                    {autoSyncEnabled && (
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Timer className="h-2.5 w-2.5" />
-                        Next auto:{' '}
-                        {new Date(nextAutoSyncTime).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    )}
-                  </div>
                 </div>
               )}
               <Button
@@ -779,17 +761,20 @@ const Watchlist = () => {
                   ))}
                 </div>
               )}
-              {autoSyncEnabled && (
-                <div className="text-[9px] text-muted-foreground border-t border-border/50 pt-1.5 flex items-center gap-1">
-                  <Timer className="h-2.5 w-2.5" />
-                  Next auto-sync:{' '}
-                  {new Date(nextAutoSyncTime).toLocaleString([], {
-                    weekday: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </div>
-              )}
+              <div className="text-[9px] text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                {lastSyncTime && <span>Last synced: {relativeTime(lastSyncTime)}</span>}
+                {autoSyncEnabled && (
+                  <span className="flex items-center gap-1">
+                    <Timer className="h-2.5 w-2.5" />
+                    Next auto-sync:{' '}
+                    {new Date(nextAutoSyncTime).toLocaleString([], {
+                      weekday: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
