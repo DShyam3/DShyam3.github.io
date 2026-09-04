@@ -177,6 +177,12 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     excerpt?: (item: T) => string | undefined;
     /** Corner label in the detail dialog. */
     badge?: (item: T) => string | undefined;
+    /**
+     * Show the image large in the detail dialog rather than as a thumbnail
+     * beside the text, and offer it as a download. For collections where the
+     * picture is the content -- photographs -- rather than a cover for it.
+     */
+    imageIsContent?: boolean;
     /** Shown when an item has no image. Defaults per variant. */
     fallbackIcon?: LucideIcon;
     /**

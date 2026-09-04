@@ -45,7 +45,8 @@ export const recipesCollection: CollectionConfig<RecipeRow> = {
   card: {
     variant: 'media',
     // Food photography, square.
-    aspect: '1 / 1',
+    // Food photography reads better with more room than a square gives.
+    aspect: '4 / 5',
     fallbackIcon: ChefHat,
     title: (recipe) => recipe.title,
     subtitle: (recipe) => (recipe.is_personal ? 'My Recipe' : 'Reference Recipe'),

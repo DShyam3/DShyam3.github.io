@@ -7,6 +7,7 @@ export interface PhotoRow extends CollectionRow {
   image_url: string;
   caption: string | null;
   location: string | null;
+  photographer: string | null;
   created_at: string;
 }
 
@@ -32,8 +33,12 @@ export const photosCollection: CollectionConfig<PhotoRow> = {
     // Square crop suits a mixed photo set.
     aspect: '1 / 1',
     fallbackIcon: ImageIcon,
+    // The photograph is the content here, so the dialog shows it large and
+    // offers it as a download rather than treating it as a cover image.
+    imageIsContent: true,
     title: (photo) => photo.caption ?? 'Untitled',
     subtitle: (photo) => photo.location ?? undefined,
+    excerpt: (photo) => (photo.photographer ? `by ${photo.photographer}` : undefined),
     image: (photo) => photo.image_url,
   },
 
@@ -59,17 +64,29 @@ export const photosCollection: CollectionConfig<PhotoRow> = {
       type: 'text',
       placeholder: 'Where was this taken?',
     },
+    {
+      name: 'photographer',
+      label: 'Photographer',
+      type: 'text',
+      placeholder: 'Leave blank if you took it',
+    },
   ],
 
   uploadFile: uploadPhoto,
 
-  renderDetail: (photo) =>
-    photo.location ? (
-      <DetailSection label="Location">
-        <p className="flex items-center gap-1.5">
-          <MapPin className="h-3.5 w-3.5" />
-          {photo.location}
-        </p>
-      </DetailSection>
-    ) : null,
+  renderDetail: (photo) => (
+    <>
+      {photo.location && (
+        <DetailSection label="Location">
+          <p className="flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5" />
+            {photo.location}
+          </p>
+        </DetailSection>
+      )}
+      {photo.photographer && (
+        <DetailSection label="Photographer">{photo.photographer}</DetailSection>
+      )}
+    </>
+  ),
 };

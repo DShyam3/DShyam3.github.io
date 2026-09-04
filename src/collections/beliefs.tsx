@@ -24,6 +24,9 @@ export const beliefsCollection: CollectionConfig<BeliefRow> = {
 
   card: {
     variant: 'text',
+    // The quote is fully visible on the card, so there is nothing a dialog
+    // would add.
+    openable: false,
     title: (belief) => belief.quote,
     subtitle: (belief) => belief.author ?? undefined,
   },

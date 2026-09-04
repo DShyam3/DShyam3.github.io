@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS "public"."photos" (
     "image_url" "text" NOT NULL,
     "caption" "text",
     "location" "text",
+    "photographer" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 

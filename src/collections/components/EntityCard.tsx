@@ -118,7 +118,7 @@ function MediaFace({
             )}
           </h3>
           {meta && (
-            <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
+            <span className="text-sm font-medium text-foreground/90 whitespace-nowrap shrink-0 tabular-nums">
               {meta}
             </span>
           )}
@@ -257,6 +257,8 @@ export function EntityCard<T extends CollectionRow, R>({
         imageUrl={image}
         link={href}
         badge={badge}
+        imageIsContent={card.imageIsContent}
+        downloadName={title}
         onDelete={
           onRemove
             ? () => {

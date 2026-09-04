@@ -1,10 +1,17 @@
 import { ReactNode } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ExternalLink, Trash2, CalendarDays } from 'lucide-react';
+import { ExternalLink, Trash2, CalendarDays, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface CardDetailDialogProps {
+  /**
+   * Render the image large instead of as a thumbnail, with a download link.
+   * For collections where the picture is the point rather than a cover.
+   */
+  imageIsContent?: boolean;
+  /** Filename offered when downloading. Defaults to the title. */
+  downloadName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -27,6 +34,8 @@ export function CardDetailDialog({
   link,
   children,
   badge,
+  imageIsContent,
+  downloadName,
   onDelete,
   onSchedule,
   isScheduled,
@@ -37,11 +46,14 @@ export function CardDetailDialog({
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (
-            <div className="w-full h-48 overflow-hidden">
+            <div className={cn('w-full overflow-hidden', imageIsContent ? 'max-h-[52vh]' : 'h-48')}>
               <img
                 src={imageUrl}
                 alt={title}
-                className="w-full h-full object-cover"
+                className={cn(
+                  'w-full',
+                  imageIsContent ? 'h-auto object-contain' : 'h-full object-cover',
+                )}
               />
             </div>
           )}
@@ -95,7 +107,19 @@ export function CardDetailDialog({
             <div className="mt-4 space-y-4">
               {children}
             </div>
-            {onDelete && (
+            {imageIsContent && imageUrl && (
+          <a
+            href={imageUrl}
+            download={downloadName || title}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
+        )}
+        {onDelete && (
               <div className="mt-6 pt-4 border-t flex justify-end">
                 <Button
                   variant="ghost"
@@ -114,11 +138,19 @@ export function CardDetailDialog({
         {/* Desktop Layout */}
         <div className="hidden sm:flex">
           {imageUrl && (
-            <div className="shrink-0 p-6 flex items-start bg-secondary/5">
+            <div
+              className={cn(
+                'shrink-0 flex items-start bg-secondary/5',
+                imageIsContent ? 'p-4 w-auto' : 'p-6',
+              )}
+            >
               <img
                 src={imageUrl}
                 alt={title}
-                className="w-40 h-auto rounded-lg shadow-lg object-cover"
+                className={cn(
+                  'h-auto rounded-lg shadow-lg object-contain',
+                  imageIsContent ? 'max-w-[46vw] max-h-[74vh]' : 'w-40 object-cover',
+                )}
               />
             </div>
           )}

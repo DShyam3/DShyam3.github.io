@@ -20,6 +20,7 @@ const Inventory = lazy(() => import('./pages/Inventory'));
 const Links = lazy(() => import('./pages/Links'));
 const Books = lazy(() => import('./pages/Books'));
 const Beliefs = lazy(() => import('./pages/Beliefs'));
+const Thoughts = lazy(() => import('./pages/Thoughts'));
 const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
 const Inspiration = lazy(() => import('./pages/Inspiration'));
 const Photos = lazy(() => import('./pages/Photos'));
@@ -105,6 +106,7 @@ const App = () => {
                   <Route path="/links" element={<Links />} />
                   <Route path="/books" element={<Books />} />
                   <Route path="/beliefs" element={<Beliefs />} />
+                  <Route path="/thoughts" element={<Thoughts />} />
                   <Route path="/watchlist" element={<WatchlistPage />} />
                   <Route path="/inspiration" element={<Inspiration />} />
                   <Route path="/photos" element={<Photos />} />

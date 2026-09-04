@@ -6,6 +6,7 @@ import { inventoryCollection } from './inventory';
 import { linksCollection } from './links';
 import { photosCollection } from './photos';
 import { recipesCollection } from './recipes';
+import { thoughtsCollection } from './thoughts';
 import type { CollectionConfig, CollectionRow } from './types';
 
 /**
@@ -29,6 +30,7 @@ export const collections: CollectionConfig<any, any>[] = [
   photosCollection,
   inventoryCollection,
   beliefsCollection,
+  thoughtsCollection,
 ];
 
 export function collectionByPath(

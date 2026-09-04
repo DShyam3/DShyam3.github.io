@@ -1138,6 +1138,7 @@ export type Database = {
           id: string
           image_url: string
           location: string | null
+          photographer: string | null
         }
         Insert: {
           caption?: string | null
@@ -1145,6 +1146,7 @@ export type Database = {
           id?: string
           image_url: string
           location?: string | null
+          photographer?: string | null
         }
         Update: {
           caption?: string | null
@@ -1152,6 +1154,7 @@ export type Database = {
           id?: string
           image_url?: string
           location?: string | null
+          photographer?: string | null
         }
         Relationships: []
       }
@@ -1248,6 +1251,36 @@ export type Database = {
           status?: string
           sync_type?: string
           synced_at?: string
+        }
+        Relationships: []
+      }
+      thoughts: {
+        Row: {
+          body: string | null
+          category: string
+          created_at: string
+          excerpt: string | null
+          id: string
+          image_url: string | null
+          title: string
+        }
+        Insert: {
+          body?: string | null
+          category?: string
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          image_url?: string | null
+          title: string
+        }
+        Update: {
+          body?: string | null
+          category?: string
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          image_url?: string | null
+          title?: string
         }
         Relationships: []
       }
