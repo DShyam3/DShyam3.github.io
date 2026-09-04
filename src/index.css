@@ -273,3 +273,38 @@
     border-radius: 999px;
   }
 }
+
+/* ─── Scroll areas ──────────────────────────────────────────────────────
+   The default scrollbar is a heavy grey slab that reads as browser chrome
+   rather than part of the page. This is a thin, trackless bar in the site's
+   own border colour, which only shows itself on hover. */
+
+.app-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.app-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.app-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-scroll::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 999px;
+  /* Sit slightly in from the edge so it reads as floating over the content. */
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+.app-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.app-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}

@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/layout/AppShell';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -5,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
 import { Loader2, Lock } from 'lucide-react';
 
 const Auth = () => {
@@ -47,9 +46,8 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col selection:bg-primary/30">
-      <div className="wide-container flex-1 flex flex-col">
-        <Header title="Authentication" subtitle="Admin Access" />
+    <AppShell title="Authentication" subtitle="Admin Access">
+      <div className="flex-1 flex flex-col selection:bg-primary/30">
         
         <main className="flex-1 flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-md bg-card/40 backdrop-blur-md rounded-[2rem] p-8 border border-primary/10 shadow-2xl animate-in zoom-in-95 duration-500">
@@ -103,9 +101,8 @@ const Auth = () => {
           </div>
         </main>
 
-        <Footer />
       </div>
-    </div>
+    </AppShell>
   );
 };
 

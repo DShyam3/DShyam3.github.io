@@ -146,10 +146,17 @@ export function DotMatrixGlobe({
             // Longitudes converge at the poles, so an evenly-spaced lat/lon
             // grid piles every column onto nearly the same screen position
             // there -- which is what made Antarctica render as a bright ring
-            // pattern with a hot spot at the pole. Keeping one column in
-            // every 1/cos(lat) restores roughly even spacing on the sphere.
-            // Only applied in globe mode; the flat 2D map needs them all.
-            const stride = Math.max(1, Math.round(1 / Math.max(0.08, Math.cos(lat))));
+            // with a hot spot at the pole.
+            //
+            // Only the extreme polar caps need thinning. An earlier version
+            // started at roughly 60 degrees and stripped Russia and northern
+            // Canada, leaving them visibly grey and streaked. Beyond 78
+            // degrees there is almost no populated land, so the correction is
+            // invisible except where it is needed.
+            const cosLat = Math.cos(lat);
+            const stride = cosLat < 0.21
+                ? Math.min(6, Math.max(1, Math.round(1 / Math.max(0.06, cosLat))))
+                : 1;
 
             return {
                 code,
@@ -955,7 +962,19 @@ export function DotMatrixGlobe({
     return (
         <div
             className={`dot-matrix-map-container ${className}`}
-            style={{ width: '100%', aspectRatio: `${dotData?.cols ?? 168} / ${dotData?.rows ?? 84}` }}
+            // Height leads and width follows the aspect ratio, capped so the
+            // canvas never outgrows its box. Deriving height from width alone
+            // made a wide column produce a canvas taller than the space
+            // available, clipping the globe and pushing the 2D/3D toggle --
+            // which is anchored to the bottom -- out of view.
+            style={{
+                aspectRatio: `${dotData?.cols ?? 168} / ${dotData?.rows ?? 84}`,
+                height: '100%',
+                width: 'auto',
+                maxWidth: '100%',
+                maxHeight: '100%',
+                margin: '0 auto',
+            }}
         >
             {!dotData && (
                 <div className="dot-matrix-loading">

@@ -40,7 +40,11 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
   return (
     <nav
       className={cn(
-        'flex flex-wrap md:flex-nowrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 px-4 overflow-x-auto scrollbar-hide py-1',
+        // -mx-1 px-1 keeps the first item visually flush with the container
+        // edge while moving the overflow clip 4px further out. The active
+        // link is font-bold, so its glyphs are wider, and the first item was
+        // losing its leading pixels to the scroll container's edge.
+        'flex flex-wrap md:flex-nowrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 -mx-1 px-1 overflow-x-auto scrollbar-hide py-1',
         justifyClass,
         className,
       )}

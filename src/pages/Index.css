@@ -75,7 +75,7 @@
 }
 
 .travel-sidebar::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .travel-sidebar::-webkit-scrollbar-track {
@@ -84,7 +84,11 @@
 
 .travel-sidebar::-webkit-scrollbar-thumb {
   background: hsl(var(--border));
-  border-radius: 2px;
+  border-radius: 999px;
+}
+
+.travel-sidebar:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.5);
 }
 
 @media (max-width: 767px) {

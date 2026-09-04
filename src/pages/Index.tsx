@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
+import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
 import { Button } from '@/components/ui/button';
@@ -71,11 +70,9 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col selection:bg-primary/30">
-      <div className="wide-container flex-1 flex flex-col">
-        <Header />
-
-        <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-0 py-12 md:py-20 max-w-6xl mx-auto w-full">
+    <AppShell>
+      <div className="selection:bg-primary/30">
+        <div className="flex flex-col px-4 md:px-0 py-8 max-w-6xl mx-auto w-full">
           {/* Bento Grid Layout */}
           <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
             {/* LEFT COLUMN: About Me, Experience & Education */}
@@ -366,9 +363,7 @@ const Index = () => {
               </div>
             </div>
           </div>
-        </main>
-
-        <Footer />
+        </div>
       </div>
 
       <ExperienceDialog
@@ -396,7 +391,7 @@ const Index = () => {
           }
         }}
       />
-    </div>
+    </AppShell>
   );
 };
 

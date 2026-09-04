@@ -1,5 +1,4 @@
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
+import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import React, {
   useState,
@@ -593,11 +592,9 @@ const Watchlist = () => {
   }, [filteredWatchlist, visibleCount]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="wide-container">
-        <Header title="Watchlist" subtitle="What I'm watching" />
-
-        <div className="px-4 md:px-0 pt-6 space-y-4">
+    <AppShell title="Watchlist" subtitle="What I'm watching">
+      <div>
+        <div className="px-4 md:px-0 pt-2 space-y-4">
           <div className="flex flex-wrap items-start gap-2 justify-between">
             <div className="flex flex-wrap items-center gap-2 md:gap-4">
               {CATEGORIES.map((cat, index) => (
@@ -1309,9 +1306,8 @@ const Watchlist = () => {
           </DialogContent>
         </Dialog>
 
-        <Footer />
       </div>
-    </div>
+    </AppShell>
   );
 };
 

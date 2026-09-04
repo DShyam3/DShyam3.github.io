@@ -4,8 +4,9 @@ import { Footer } from '@/components/layout/Footer';
 import { cn } from '@/lib/utils';
 
 interface AppShellProps {
-  title: string;
-  subtitle: string;
+  /** Omitted on the About page, which uses Header's own defaults. */
+  title?: string;
+  subtitle?: string;
   children: ReactNode;
   /**
    * False for pages that size themselves to the viewport and must never
@@ -46,7 +47,7 @@ export function AppShell({
       <main
         className={cn(
           'flex-1 min-h-0 wide-container',
-          scrollable ? 'overflow-y-auto' : 'overflow-hidden flex flex-col',
+          scrollable ? 'overflow-y-auto app-scroll' : 'overflow-hidden flex flex-col',
         )}
       >
         {children}

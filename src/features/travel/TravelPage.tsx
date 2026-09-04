@@ -218,7 +218,7 @@ const Travel = () => {
                 <div className="flex-1 min-h-0 flex flex-col px-4 md:px-0 py-4">
 
                     {/* WHERE I'VE BEEN */}
-                    <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
+                    <div className="w-full flex-1 min-h-0 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
                         <div className="travel-layout">
 
                             {/* LEFT — title above, country list in card below */}
