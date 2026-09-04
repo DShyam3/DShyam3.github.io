@@ -56,7 +56,7 @@ export const inspirationsCollection: CollectionConfig<InspirationRow> = {
   renderDetail: (person) => (
     <>
       {person.why_i_like && (
-        <DetailSection label="Why I Like Them">
+        <DetailSection label="What I Take From Them">
           <p className="whitespace-pre-wrap">{person.why_i_like}</p>
         </DetailSection>
       )}

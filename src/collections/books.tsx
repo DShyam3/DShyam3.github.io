@@ -10,6 +10,7 @@ export interface BookRow extends CollectionRow {
   description: string | null;
   link: string | null;
   category: string;
+  genre: string | null;
   created_at: string;
 }
 
@@ -54,7 +55,9 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
     subtitle: (book) => book.author,
     image: (book) => book.cover_url ?? undefined,
     href: (book) => book.link ?? undefined,
-    excerpt: (book) => book.description ?? undefined,
+    // Genre, not the blurb -- the description belongs in the dialog, where
+    // there is room to read it.
+    excerpt: (book) => book.genre ?? undefined,
     badge: (book) => labelFor(book.category),
   },
 
@@ -62,6 +65,12 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
     { name: 'title', label: 'Title', type: 'text', required: true },
     { name: 'author', label: 'Author', type: 'text', required: true },
     { name: 'category', label: 'Category', type: 'select', defaultValue: 'future' },
+    {
+      name: 'genre',
+      label: 'Genre',
+      type: 'text',
+      placeholder: 'Fantasy, Horror, Finance...',
+    },
     { name: 'description', label: 'Description', type: 'textarea' },
     { name: 'cover_url', label: 'Cover Image URL', type: 'image' },
     { name: 'link', label: 'Purchase/Info Link', type: 'url' },
@@ -80,6 +89,8 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
         description: info.description ?? '',
         cover_url: info.imageLinks?.thumbnail?.replace('http:', 'https:') ?? '',
         link: info.infoLink ?? info.previewLink ?? '',
+        // Google Books returns a list; the first is usually the useful one.
+        genre: info.categories?.[0] ?? '',
       };
     },
     renderResult: (result) => {
@@ -107,10 +118,14 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
     },
   },
 
-  renderDetail: (book) =>
-    book.description ? (
-      <DetailSection label="Description">
-        <p className="whitespace-pre-wrap">{book.description}</p>
-      </DetailSection>
-    ) : null,
+  renderDetail: (book) => (
+    <>
+      {book.genre && <DetailSection label="Genre">{book.genre}</DetailSection>}
+      {book.description && (
+        <DetailSection label="Blurb">
+          <p className="whitespace-pre-wrap">{book.description}</p>
+        </DetailSection>
+      )}
+    </>
+  ),
 };

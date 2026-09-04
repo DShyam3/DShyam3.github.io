@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
 import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
+import { CARD_GRID } from '@/theme/layout';
 import type { CardVariant, CollectionConfig, CollectionRow } from '../types';
 
 /**
@@ -12,32 +13,24 @@ import type { CardVariant, CollectionConfig, CollectionRow } from '../types';
  * cards sit in and the skeleton shown while loading. CollectionPage reads it
  * so the page layout and the card face can never drift apart.
  */
+/**
+ * Every variant shares one grid -- see CARD_GRID -- so the wall does not
+ * reflow between tabs. Only the loading skeleton differs, to match the shape
+ * of the image that variant renders.
+ */
 export const CARD_LAYOUT: Record<CardVariant, { grid: string; skeleton: string }> = {
-  tile: {
-    grid: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8',
-    skeleton: 'h-32 rounded-lg',
-  },
-  poster: {
-    grid: 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-12 gap-4 py-6',
-    skeleton: 'aspect-[2/3] rounded-lg',
-  },
-  square: {
-    grid: 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 py-6',
-    skeleton: 'aspect-square rounded-lg',
-  },
-  feature: {
-    grid: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 py-6',
-    skeleton: 'h-48 rounded-lg',
-  },
-  text: {
-    grid: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-6',
-    skeleton: 'h-32 rounded-lg',
-  },
+  tile: { grid: CARD_GRID, skeleton: 'h-32 rounded-lg' },
+  poster: { grid: CARD_GRID, skeleton: 'aspect-[2/3] rounded-lg' },
+  square: { grid: CARD_GRID, skeleton: 'aspect-square rounded-lg' },
+  feature: { grid: CARD_GRID, skeleton: 'h-48 rounded-lg' },
+  text: { grid: CARD_GRID, skeleton: 'h-32 rounded-lg' },
 };
 
 interface FaceProps {
   /** Shown when an item has no image. Comes from the collection's config. */
   Fallback: LucideIcon;
+  /** Right-aligned beside the title, e.g. a price. */
+  meta?: string;
   title: string;
   subtitle?: string;
   image?: string;
@@ -46,6 +39,8 @@ interface FaceProps {
   index: number;
   actions: ReactNode;
   onOpen: () => void;
+  /** False when the collection has no detail dialog worth opening. */
+  openable: boolean;
 }
 
 /** Wide row: small icon on the left, text on the right. Links, inventory. */
@@ -136,10 +131,15 @@ function PosterFace({ Fallback, title, subtitle, image, excerpt, actions, onOpen
  * (recipes, inspiration); `feature` uses a fixed-height banner (articles).
  */
 function mediaFace(shape: 'square' | 'feature') {
-  return function MediaFace({ Fallback, title, subtitle, image, excerpt, actions, onOpen }: FaceProps) {
+  return function MediaFace({
+    Fallback, title, subtitle, image, excerpt, meta, href, actions, onOpen, openable,
+  }: FaceProps) {
     const box = shape === 'square' ? 'aspect-square' : 'h-40';
     return (
-      <div className="item-card group relative cursor-pointer" onClick={onOpen}>
+      <div
+        className={cn('item-card group relative', openable && 'cursor-pointer')}
+        onClick={openable ? onOpen : undefined}
+      >
         <div className={cn(box, 'bg-muted relative overflow-hidden')}>
           {image ? (
             <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
@@ -156,7 +156,29 @@ function mediaFace(shape: 'square' | 'feature') {
           </div>
         </div>
         <div className="p-4">
-          <h3 className="text-sm font-medium line-clamp-2">{title}</h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-sm font-medium line-clamp-2 min-w-0">
+              {/* When the card does not open, the title is the way out. */}
+              {!openable && href ? (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {title}
+                </a>
+              ) : (
+                title
+              )}
+            </h3>
+            {meta && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
+                {meta}
+              </span>
+            )}
+          </div>
           {subtitle && (
             <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{subtitle}</p>
           )}
@@ -235,6 +257,9 @@ export function EntityCard<T extends CollectionRow, R>({
   const href = card.href?.(item);
   const excerpt = card.excerpt?.(item);
   const badge = card.badge?.(item);
+  const meta = card.meta?.(item);
+  const openable = card.openable !== false;
+  const dimmed = card.dimmed?.(item) ?? false;
 
   const isOverlay = card.variant !== 'tile' && card.variant !== 'text';
   const Face = FACES[card.variant];
@@ -274,18 +299,23 @@ export function EntityCard<T extends CollectionRow, R>({
 
   return (
     <>
-      <Face
-        Fallback={card.fallbackIcon ?? DEFAULT_FALLBACK[card.variant]}
-        title={title}
-        subtitle={subtitle}
-        image={image}
-        excerpt={excerpt}
-        href={href}
-        index={index}
-        actions={actions}
-        onOpen={() => setDetailOpen(true)}
-      />
+      <div className={cn(dimmed && 'opacity-60 hover:opacity-100 transition-opacity')}>
+        <Face
+          Fallback={card.fallbackIcon ?? DEFAULT_FALLBACK[card.variant]}
+          title={title}
+          subtitle={subtitle}
+          image={image}
+          excerpt={excerpt}
+          meta={meta}
+          href={href}
+          index={index}
+          actions={actions}
+          openable={openable}
+          onOpen={() => setDetailOpen(true)}
+        />
+      </div>
 
+      {openable && (
       <CardDetailDialog
         open={detailOpen}
         onOpenChange={setDetailOpen}
@@ -305,6 +335,7 @@ export function EntityCard<T extends CollectionRow, R>({
       >
         {config.renderDetail?.(item)}
       </CardDetailDialog>
+      )}
     </>
   );
 }

@@ -57,6 +57,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { Filter } from 'lucide-react';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
+import { CARD_GRID } from '@/theme/layout';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
 import { formatRuntime, getPlatformColor } from '@/features/watchlist/watchlist-utils';
@@ -1052,7 +1053,7 @@ const Watchlist = () => {
         ) : selectedCategory === 'Favourites' ? (
           <div className="px-4 md:px-0 py-6 space-y-8">
             {loading ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+              <div className={CARD_GRID}>
                 {[...Array(12)].map((_, i) => (
                   <Skeleton key={i} className="h-64 rounded-lg" />
                 ))}
@@ -1086,7 +1087,7 @@ const Watchlist = () => {
                             <Film className="h-3.5 w-3.5" />
                             <span>Movies ({catMovies.length})</span>
                           </div>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+                          <div className={CARD_GRID}>
                             {catMovies.map((fav) => (
                               <div key={fav.id} className="item-card group">
                                 <div className="aspect-[2/3] bg-muted relative overflow-hidden">
@@ -1135,7 +1136,7 @@ const Watchlist = () => {
                             <Tv className="h-3.5 w-3.5" />
                             <span>TV Shows ({catTVShows.length})</span>
                           </div>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+                          <div className={CARD_GRID}>
                             {catTVShows.map((fav) => (
                               <div key={fav.id} className="item-card group">
                                 <div className="aspect-[2/3] bg-muted relative overflow-hidden">
@@ -1185,7 +1186,7 @@ const Watchlist = () => {
           </div>
         ) : (
           <div className="px-4 md:px-0 py-6">
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+            <div className={CARD_GRID}>
               {loading ? (
                 [...Array(12)].map((_, i) => (
                   <Skeleton key={i} className="h-64 rounded-lg" />

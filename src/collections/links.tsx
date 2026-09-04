@@ -91,23 +91,12 @@ export const linksCollection: CollectionConfig<LinkRow> = {
       ? { url: 'Enter a valid URL' }
       : null,
 
-  renderDetail: (link) => (
-    <>
-      {link.description && (
-        <DetailSection label="Description">
-          <p className="whitespace-pre-wrap">{link.description}</p>
-        </DetailSection>
-      )}
-      <DetailSection label="URL">
-        <a
-          href={link.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline break-all"
-        >
-          {link.url}
-        </a>
+  // No URL row: the dialog title is already a link out, so repeating the
+  // address underneath was noise.
+  renderDetail: (link) =>
+    link.description ? (
+      <DetailSection label="Description">
+        <p className="whitespace-pre-wrap">{link.description}</p>
       </DetailSection>
-    </>
-  ),
+    ) : null,
 };

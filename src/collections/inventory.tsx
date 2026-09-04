@@ -1,5 +1,4 @@
 import { ArrowDownAZ, Clock, Package } from 'lucide-react';
-import { DetailSection } from '@/components/cards/CardDetailDialog';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface InventoryRow extends CollectionRow {
@@ -146,13 +145,19 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
   card: {
     variant: 'square',
     fallbackIcon: Package,
+    // Nothing here needs a dialog: an item is a picture, a name, a brand and
+    // a price. The title links straight to where you'd buy it.
+    openable: false,
     title: (item) => item.name,
     subtitle: (item) => item.brand ?? undefined,
     image: (item) => item.image ?? undefined,
     href: (item) => item.link ?? undefined,
-    excerpt: (item) => item.description ?? undefined,
-    badge: (item) =>
-      item.is_wishlist ? 'Wishlist' : item.is_new ? 'New' : undefined,
+    meta: (item) =>
+      item.price != null && Number(item.price) > 0
+        ? formatPrice(Number(item.price))
+        : undefined,
+    // Wishlist items are things not owned yet, so they sit back until hovered.
+    dimmed: (item) => Boolean(item.is_wishlist),
   },
 
   fields: [
@@ -170,17 +175,4 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     { name: 'link', label: 'Link', type: 'url' },
     { name: 'description', label: 'Description', type: 'textarea' },
   ],
-
-  renderDetail: (item) => (
-    <>
-      {item.description && (
-        <DetailSection label="Description">
-          <p className="whitespace-pre-wrap">{item.description}</p>
-        </DetailSection>
-      )}
-      {item.price != null && Number(item.price) > 0 && (
-        <DetailSection label="Price">{formatPrice(Number(item.price))}</DetailSection>
-      )}
-    </>
-  ),
 };

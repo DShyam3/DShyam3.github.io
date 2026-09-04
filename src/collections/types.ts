@@ -174,6 +174,16 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     badge?: (item: T) => string | undefined;
     /** Shown when an item has no image. Defaults per variant. */
     fallbackIcon?: LucideIcon;
+    /**
+     * Set false for collections with nothing worth a dialog. The card stops
+     * being clickable and its title becomes the outbound link instead --
+     * inventory items and links go straight to the shop or the site.
+     */
+    openable?: boolean;
+    /** Right-aligned on the card face, e.g. an inventory item's price. */
+    meta?: (item: T) => string | undefined;
+    /** Dims the whole card, e.g. inventory items that are only wished for. */
+    dimmed?: (item: T) => boolean;
   };
 
   /** Drives both the add and the edit dialog. */

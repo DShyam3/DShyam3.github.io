@@ -227,18 +227,20 @@
 
   @media (min-width: 1280px) {
     .wide-container {
-      padding-left: 3rem;
-      padding-right: 3rem;
+      padding-left: 4rem;
+      padding-right: 4rem;
     }
   }
 
-  /* On a wide monitor the old 5rem padding plus a 1920px cap left roughly
-     400px of dead space each side. Keep a cap so line lengths stay sane on
-     ultrawides, but a much higher one, with less padding on top of it. */
+  /* The dead space on a wide monitor came from the 1920px cap, not the
+     padding: on a 2560px display that was 320px of centring margin before any
+     padding was added. Raising the cap is what reclaims it. Padding stays at
+     4rem so mid-size screens keep their breathing room -- dropping it to 3rem
+     pulled the nav and header uncomfortably close to the edge. */
   @media (min-width: 1536px) {
     .wide-container {
-      padding-left: 3rem;
-      padding-right: 3rem;
+      padding-left: 4rem;
+      padding-right: 4rem;
       max-width: 2400px;
     }
   }
