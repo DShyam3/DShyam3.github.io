@@ -114,7 +114,8 @@ This repo has a graphify knowledge graph at `graphify-out/` (gitignored, local-o
 
 ## 🗄️ Database schema / recreating the backend from scratch
 
-See [SUPABASE_INTEGRATION.md](SUPABASE_INTEGRATION.md).
+See [supabase/README.md](supabase/README.md) — the schema layout, how to make a
+change, and a step-by-step build from an empty Supabase project.
 
 ## ⚖️ License
 

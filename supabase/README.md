@@ -44,6 +44,91 @@ Storage bucket policies and the pg_cron schedule are **not** in `schemas/`.
 They live outside the `public` schema, are not covered by the schema diff, and
 are maintained by hand in the baseline migration.
 
+## From an empty project
+
+Everything below is what `migrations/` cannot recreate on its own. Work down
+the list; the database itself is one command.
+
+### 1. Create the project and link it
+
+```bash
+npx supabase link --project-ref <your-ref>
+```
+
+`config.toml` holds the project ref for the current project. Change it if you
+are pointing at a new one.
+
+### 2. Build the database
+
+```bash
+npx supabase db push
+```
+
+This replays `migrations/` from empty and produces the schema, RLS policies,
+grants, triggers and the storage bucket policies. No Docker needed -- only
+`db diff` wants Docker, and only to generate new migrations.
+
+### 3. Create the storage buckets
+
+Not covered by `migrations/`, because buckets live outside the `public` schema.
+Two, both **public read**:
+
+| Bucket | Holds | Written by |
+|---|---|---|
+| `photos` | Every uploaded image: photos, book covers, inventory shots, recipe images | `src/lib/storage.ts` -> `uploadPhoto` |
+| `documents` | `cv.pdf`, served from the About page | `src/lib/storage.ts` -> `uploadDocument` |
+
+Public read is deliberate: the site serves these URLs directly to anonymous
+visitors. Writes are admin-only, enforced by the storage policies in the
+baseline migration -- create the buckets before pushing, or re-run the policy
+statements afterwards.
+
+### 4. Create the admin account
+
+The site has exactly one privileged user. `is_admin()` compares the caller's
+JWT email against a hardcoded address, so:
+
+1. Create the account in Supabase Auth (Authentication -> Users -> Add user).
+2. Check the address in `supabase/schemas/01_functions.sql` matches it, and
+   push the change if not.
+3. Set `VITE_ADMIN_EMAIL` to the same address -- the frontend uses it only to
+   decide what to render; the database decides what is *allowed*.
+
+Public signup should be off. A second account would be harmless today, since
+`is_admin()` gates every write, but there is no reason to allow one.
+
+### 5. Add the vault secret for the cron job
+
+The `watchlist-daily-sync` cron job reads a vault secret named
+`service_role_key`. Without it the job runs, calls the function, and the
+function rejects the call -- a failure that looks like a working schedule.
+
+Project Settings -> Vault -> new secret named `service_role_key`, value is the
+project's service role key.
+
+### 6. Deploy the edge functions
+
+Pushing to `main` does not deploy these. See **Edge functions** below. Each
+needs its own secrets set in the dashboard (`TMDB_API_KEY` for the proxy, the
+TrueLayer credentials for the bank sync).
+
+### 7. Set the frontend environment
+
+`.env` locally, repository secrets for the GitHub Actions build:
+
+| Variable | Purpose |
+|---|---|
+| `VITE_SUPABASE_URL` | Project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | The anon key |
+| `VITE_ADMIN_EMAIL` | Which account the UI treats as admin |
+| `VITE_TMDB_IMAGE_BASE_URL` | `https://image.tmdb.org/t/p/w500` |
+
+**Everything with a `VITE_` prefix is compiled into the bundle and readable by
+anyone.** That is fine for all four above: the URL and anon key are public by
+design, and are safe only because RLS is correct. Nothing else may carry that
+prefix. The TMDB API key belongs to the `tmdb-proxy` edge function, and the
+service role key to the vault -- neither goes in `.env`.
+
 ## Making a change
 
 ```bash
