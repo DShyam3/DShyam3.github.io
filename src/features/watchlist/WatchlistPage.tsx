@@ -11,6 +11,7 @@ import React, {
 import { useWatchlist, WatchlistItem, FavouriteItem } from '@/features/watchlist/useWatchlist';
 import { useSchedule } from '@/features/watchlist/useSchedule';
 import { useTMDB } from '@/features/watchlist/useTMDB';
+import type { TMDBResult } from '@/features/watchlist/useTMDB';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,6 +57,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { Filter } from 'lucide-react';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
+import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
 import { formatRuntime, getPlatformColor } from '@/features/watchlist/watchlist-utils';
 
@@ -193,6 +195,74 @@ const Watchlist = () => {
   const [moveItem, setMoveItem] = useState<WatchlistItem | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [selectedFavCategory, setSelectedFavCategory] = useState<'Bollywood' | 'Hollywood' | 'Anime' | 'Others'>('Hollywood');
+
+  /**
+   * Auto-tag a favourite from TMDB's original_language. Shown as the "Auto:"
+   * chip in the search results and stored as the favourite's category.
+   */
+  const favouriteCategoryFor = (result: TMDBResult) =>
+    result.original_language === 'hi'
+      ? 'Bollywood'
+      : result.original_language === 'ja'
+        ? 'Anime'
+        : result.original_language === 'en'
+          ? 'Hollywood'
+          : 'Others';
+
+  const handleAddFavourite = useCallback(
+    async (result: TMDBResult) => {
+      const itemKey = `${result.media_type}-${result.id}`;
+      await addFavourite({
+        title: result.title || result.name || '',
+        poster: result.poster_path ? getPosterUrl(result.poster_path) || undefined : undefined,
+        media_type: result.media_type,
+        tmdb_id: result.id,
+        category: favouriteCategoryFor(result),
+      });
+      setFavAddedItems((prev) => new Set(prev).add(itemKey));
+    },
+    [addFavourite, getPosterUrl],
+  );
+
+  const handleAddWatchlistItem = useCallback(
+    async (result: TMDBResult) => {
+      // Inline in JSX this was narrowed by the surrounding branch. As a
+      // callback it needs the guard stated: the dialog's search is disabled
+      // for Upcoming and Currently Watching, and Favourites has its own
+      // dialog, so only these two can actually reach here.
+      if (selectedCategory !== 'TV Shows' && selectedCategory !== 'Movies') return;
+
+      // pendingResultIds covers the whole click-to-completion span, including
+      // the getMovieDetails fetch before addWatchlistItem is even called.
+      setPendingResultIds((prev) => new Set(prev).add(result.id));
+      try {
+        const details = await getMovieDetails(result.id, result.media_type);
+        if (!details) return;
+        await addWatchlistItem({
+          title: details.release_year
+            ? `${details.title} (${details.release_year})`
+            : details.title,
+          category: selectedCategory,
+          description: details.overview,
+          year: details.release_year || undefined,
+          image_url: details.poster || undefined,
+          runtime: details.runtime || undefined,
+          genres: details.genres,
+          tmdb_id: details.tmdb_id,
+          release_date: details.release_date,
+          streaming_platform: details.platform,
+        });
+        setAddedItems((prev) => new Set(prev).add(result.id));
+      } finally {
+        setPendingResultIds((prev) => {
+          const next = new Set(prev);
+          next.delete(result.id);
+          return next;
+        });
+      }
+    },
+    [addWatchlistItem, getMovieDetails, selectedCategory],
+  );
 
   const handleOpenMoveDialog = useCallback((item: WatchlistItem) => {
     setMoveItem(item);
@@ -895,343 +965,82 @@ const Watchlist = () => {
                   : `${filteredWatchlist.length} ${selectedCategory.toLowerCase()}`}
             </p>
             {isAdmin && selectedCategory === 'Favourites' && (
-              <Dialog open={favDialogOpen} onOpenChange={setFavDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" />
-                    Add Favourite
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90vh] flex flex-col p-0">
-                  <div className="p-6 pb-0">
-                    <DialogHeader>
-                      <DialogTitle className="font-serif">
-                        Add to Favourites
-                      </DialogTitle>
-                      <DialogDescription className="sr-only">
-                        Search and add movies or TV shows to your favourites.
-                      </DialogDescription>
-                    </DialogHeader>
-                  </div>
-                  <div className="flex-1 flex flex-col min-h-0 p-6 pt-4">
-                    <div className="space-y-2 flex-shrink-0 mb-2">
-                      <Label htmlFor="fav-search">Search Movies & TV Shows *</Label>
-                      <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                        <Input
-                          id="fav-search"
-                          value={favSearchQuery}
-                          onChange={(e) => setFavSearchQuery(e.target.value)}
-                          required
-                          placeholder="Type a movie or TV show name..."
-                          autoComplete="off"
-                          className="h-14 text-base pl-12 pr-12"
-                        />
-                        {favSearchQuery && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 hover:bg-transparent"
-                            onClick={() => setFavSearchQuery('')}
-                          >
-                            <X className="w-5 h-5 text-muted-foreground" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto min-h-0 mt-4 -mx-6 px-6 border-t border-b border-border/50 bg-secondary/5">
-                      {favSearchQuery.length >= 2 &&
-                      (searchResults.length > 0 || searchLoading) ? (
-                        <div className="divide-y divide-border/50">
-                          {searchLoading ? (
-                            <div className="p-12 text-base text-muted-foreground text-center animate-pulse">
-                              Searching TMDB...
-                            </div>
-                          ) : (
-                            searchResults.map((result) => {
-                              const itemKey = `${result.media_type}-${result.id}`;
-                              return (
-                                <div
-                                  key={itemKey}
-                                  className="flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-[background-color] duration-200 -mx-6 px-6"
-                                  onClick={async (e) => {
-                                    e.preventDefault();
-                                    if (favAddedItems.has(itemKey)) return;
-                                    const posterUrl = result.poster_path
-                                      ? getPosterUrl(result.poster_path)
-                                      : null;
-                                    const displayTitle = result.title || result.name || '';
-                                    
-                                    // Auto tag logic based on TMDB metadata
-                                    const resolvedCategory =
-                                      result.original_language === 'hi' ? 'Bollywood' :
-                                      result.original_language === 'ja' ? 'Anime' :
-                                      result.original_language === 'en' ? 'Hollywood' :
-                                      'Others';
-
-                                    await addFavourite({
-                                      title: displayTitle,
-                                      poster: posterUrl || undefined,
-                                      media_type: result.media_type,
-                                      tmdb_id: result.id,
-                                      category: resolvedCategory,
-                                    });
-                                    setFavAddedItems((prev) =>
-                                      new Set(prev).add(itemKey),
-                                    );
-                                  }}
-                                >
-                                  <div className="h-32 w-20 flex-shrink-0 bg-secondary rounded-md overflow-hidden shadow-md">
-                                    {result.poster_path ? (
-                                      <img
-                                        src={
-                                          getPosterUrl(result.poster_path) || ''
-                                        }
-                                        alt={result.title || result.name}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground p-2 text-center bg-muted">
-                                        No Poster
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-col min-w-0 py-1 flex-1">
-                                    <div className="flex items-baseline justify-between gap-2 mb-1">
-                                      <div className="flex items-baseline gap-2">
-                                        <span className="text-lg font-semibold truncate leading-tight tracking-tight">
-                                          {result.title || result.name}
-                                        </span>
-                                        <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                          (
-                                          {result.release_date ||
-                                          result.first_air_date
-                                            ? new Date(
-                                                result.release_date ||
-                                                  result.first_air_date ||
-                                                  '',
-                                              ).getFullYear()
-                                            : 'N/A'}
-                                          )
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className={cn(
-                                          'text-[10px] px-2 py-0.5 rounded font-medium',
-                                          result.media_type === 'movie'
-                                            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                                            : 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-                                        )}>
-                                          {result.media_type === 'movie' ? 'Movie' : 'TV Show'}
-                                        </span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
-                                          Auto: {result.original_language === 'hi' ? 'Bollywood' : result.original_language === 'ja' ? 'Anime' : 'Hollywood'}
-                                        </span>
-                                        {favAddedItems.has(itemKey) && (
-                                          <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
-                                            Added
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {result.overview && (
-                                      <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
-                                        {result.overview}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-12 text-center">
-                          {favSearchQuery.length < 2
-                            ? 'Start typing to see recommendations...'
-                            : 'No recommendations found'}
-                        </div>
+              <TmdbSearchDialog
+                open={favDialogOpen}
+                onOpenChange={setFavDialogOpen}
+                triggerLabel="Add Favourite"
+                title="Add to Favourites"
+                description="Search and add movies or TV shows to your favourites."
+                searchLabel="Search Movies & TV Shows"
+                placeholder="Type a movie or TV show name..."
+                query={favSearchQuery}
+                onQueryChange={setFavSearchQuery}
+                results={searchResults}
+                loading={searchLoading}
+                getPosterUrl={getPosterUrl}
+                resultKey={(r) => `${r.media_type}-${r.id}`}
+                isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
+                onSelect={handleAddFavourite}
+                renderStatus={(r) => (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        'text-[10px] px-2 py-0.5 rounded font-medium',
+                        r.media_type === 'movie'
+                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                          : 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
                       )}
-                    </div>
+                    >
+                      {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
+                      Auto: {favouriteCategoryFor(r)}
+                    </span>
+                    {favAddedItems.has(`${r.media_type}-${r.id}`) && (
+                      <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
+                        Added
+                      </span>
+                    )}
                   </div>
-                </DialogContent>
-              </Dialog>
+                )}
+              />
             )}
             {isAdmin && selectedCategory !== 'Favourites' && (
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" />
-                    Add Item
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90vh] flex flex-col p-0">
-                  <div className="p-6 pb-0">
-                    <DialogHeader>
-                      <DialogTitle className="font-serif">
-                        Add to Watchlist
-                      </DialogTitle>
-                      <DialogDescription className="sr-only">
-                        Search and add items to your watchlist.
-                      </DialogDescription>
-                    </DialogHeader>
-                  </div>
-                  <div className="flex-1 flex flex-col min-h-0 p-6 pt-4">
-                    <div className="space-y-2 flex-shrink-0">
-                      <Label htmlFor="title">Search {selectedCategory} *</Label>
-                      <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                        <Input
-                          id="title"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          required
-                          placeholder={`Type a ${selectedCategory.toLowerCase().slice(0, -1)} name...`}
-                          autoComplete="off"
-                          className="h-14 text-base pl-12 pr-12"
-                        />
-                        {title && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 hover:bg-transparent"
-                            onClick={() => setTitle('')}
-                          >
-                            <X className="w-5 h-5 text-muted-foreground" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto min-h-0 mt-4 -mx-6 px-6 border-t border-b border-border/50 bg-secondary/5">
-                      {selectedCategory !== 'Upcoming' &&
-                      selectedCategory !== 'Currently Watching' &&
-                      title.length >= 2 &&
-                      (searchResults.length > 0 || searchLoading) ? (
-                        <div className="divide-y divide-border/50">
-                          {searchLoading ? (
-                            <div className="p-12 text-base text-muted-foreground text-center animate-pulse">
-                              Searching TMDB...
-                            </div>
-                          ) : (
-                            searchResults.map((result) => {
-                              const isPending = pendingResultIds.has(result.id);
-                              const isAdded = addedItems.has(result.id);
-                              return (
-                              <div
-                                key={result.id}
-                                className={cn(
-                                  "flex items-start gap-5 py-6 hover:bg-secondary/40 cursor-pointer transition-[background-color] duration-200 -mx-6 px-6",
-                                  (isPending || isAdded) && "pointer-events-none opacity-60",
-                                )}
-                                onClick={async (e) => {
-                                  e.preventDefault();
-                                  if (isAdded || isPending) return;
-                                  setPendingResultIds((prev) => new Set(prev).add(result.id));
-                                  try {
-                                    const details = await getMovieDetails(
-                                      result.id,
-                                      result.media_type,
-                                    );
-                                    if (details) {
-                                      const formattedTitle = details.release_year
-                                        ? `${details.title} (${details.release_year})`
-                                        : details.title;
-                                      await addWatchlistItem({
-                                        title: formattedTitle,
-                                        category: selectedCategory,
-                                        description: details.overview,
-                                        year: details.release_year || undefined,
-                                        image_url: details.poster || undefined,
-                                        runtime: details.runtime || undefined,
-                                        genres: details.genres,
-                                        tmdb_id: details.tmdb_id,
-                                        release_date: details.release_date,
-                                        streaming_platform: details.platform,
-                                      });
-                                      setAddedItems((prev) =>
-                                        new Set(prev).add(result.id),
-                                      );
-                                    }
-                                  } finally {
-                                    setPendingResultIds((prev) => {
-                                      const next = new Set(prev);
-                                      next.delete(result.id);
-                                      return next;
-                                    });
-                                  }
-                                }}
-                              >
-                                <div className="h-32 w-20 flex-shrink-0 bg-secondary rounded-md overflow-hidden shadow-md">
-                                  {result.poster_path ? (
-                                    <img
-                                      src={
-                                        getPosterUrl(result.poster_path) || ''
-                                      }
-                                      alt={result.title || result.name}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground p-2 text-center bg-muted">
-                                      No Poster
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex flex-col min-w-0 py-1 flex-1">
-                                  <div className="flex items-baseline justify-between gap-2 mb-1">
-                                    <div className="flex items-baseline gap-2">
-                                      <span className="text-lg font-semibold truncate leading-tight tracking-tight">
-                                        {result.title || result.name}
-                                      </span>
-                                      <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                        (
-                                        {result.release_date ||
-                                        result.first_air_date
-                                          ? new Date(
-                                              result.release_date ||
-                                                result.first_air_date ||
-                                                '',
-                                            ).getFullYear()
-                                          : 'N/A'}
-                                        )
-                                      </span>
-                                    </div>
-                                    {isPending ? (
-                                      <span className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        Adding...
-                                      </span>
-                                    ) : isAdded ? (
-                                      <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
-                                        Item Added
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  {result.overview && (
-                                    <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
-                                      {result.overview}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-12 text-center">
-                          {title.length < 2
-                            ? 'Start typing to see recommendations...'
-                            : 'No recommendations found'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <TmdbSearchDialog
+                open={open}
+                onOpenChange={setOpen}
+                triggerLabel="Add Item"
+                title="Add to Watchlist"
+                description="Search and add items to your watchlist."
+                searchLabel={`Search ${selectedCategory}`}
+                placeholder={`Type a ${selectedCategory.toLowerCase().slice(0, -1)} name...`}
+                query={title}
+                onQueryChange={setTitle}
+                results={searchResults}
+                loading={searchLoading}
+                getPosterUrl={getPosterUrl}
+                resultKey={(r) => String(r.id)}
+                searchDisabled={
+                  selectedCategory === 'Upcoming' ||
+                  selectedCategory === 'Currently Watching'
+                }
+                isDisabled={(r) =>
+                  addedItems.has(r.id) || pendingResultIds.has(r.id)
+                }
+                onSelect={handleAddWatchlistItem}
+                renderStatus={(r) =>
+                  pendingResultIds.has(r.id) ? (
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Adding...
+                    </span>
+                  ) : addedItems.has(r.id) ? (
+                    <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
+                      Item Added
+                    </span>
+                  ) : null
+                }
+              />
             )}
           </div>
         </div>
