@@ -42,7 +42,7 @@ export function CardDetailDialog({
 }: CardDetailDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl h-fit max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="sm:max-w-3xl h-fit max-h-[90vh] overflow-y-auto p-0 gap-0">
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (
@@ -149,7 +149,11 @@ export function CardDetailDialog({
                 alt={title}
                 className={cn(
                   'h-auto rounded-lg shadow-lg object-contain',
-                  imageIsContent ? 'max-w-[46vw] max-h-[74vh]' : 'w-40 object-cover',
+                  // A recipe or a book cover is worth looking at, and at
+                  // w-40 it was a thumbnail beside a column of text. The
+                  // dialog widened to 3xl to pay for it, so the text column
+                  // is wider than it was too.
+                  imageIsContent ? 'max-w-[46vw] max-h-[74vh]' : 'w-56 object-cover',
                 )}
               />
             </div>
