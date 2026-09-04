@@ -1,4 +1,7 @@
+import { Fragment } from 'react';
 import { ArrowDownAZ, Clock, Package } from 'lucide-react';
+import { DetailSection } from '@/components/cards/CardDetailDialog';
+import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
@@ -13,6 +16,7 @@ export interface InventoryRow extends CollectionRow {
   is_new: boolean | null;
   is_wishlist: boolean | null;
   description: string | null;
+  specs: string | null;
   created_at: string;
 }
 
@@ -66,6 +70,22 @@ const SUBCATEGORIES: Record<string, { key: string; label: string }[]> = {
   homelab: HOMELAB_SUBCATEGORIES,
 };
 
+/**
+ * Specs are written one per line as "Label: value" -- "CPU: Ryzen 9 5950X".
+ * Anything without a colon is kept as a line of its own, so a rushed note is
+ * still shown rather than swallowed.
+ */
+const parseSpecs = (specs: string) =>
+  specs
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const colon = line.indexOf(':');
+      if (colon === -1) return { label: null, value: line };
+      return { label: line.slice(0, colon).trim(), value: line.slice(colon + 1).trim() };
+    });
+
 const formatPrice = (value: number) =>
   new Intl.NumberFormat('en-GB', {
     style: 'currency',
@@ -101,6 +121,10 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
         { key: 'false', label: 'Owned' },
         { key: 'true', label: 'Wishlist' },
       ],
+      // The page is called "things I own", so it opens on what is owned and
+      // keeps All as the last stop rather than the first.
+      allLast: true,
+      defaultValue: 'false',
     },
   ],
 
@@ -136,9 +160,17 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       0,
     );
     return (
-      <div className="text-right">
-        <p className="text-xs text-muted-foreground">Total Value</p>
-        <p className="text-sm font-semibold">{formatPrice(total)}</p>
+      // Dot matrix, like the count on the left of this row and the button on
+      // its right -- everything the toolbar says about the collection is set
+      // in the same face.
+      <div className="flex flex-col items-end leading-tight">
+        <DotMatrixText
+          text="Total Value"
+          size="xs"
+          wrap={false}
+          className="text-muted-foreground"
+        />
+        <DotMatrixText text={formatPrice(total)} size="xs" wrap={false} />
       </div>
     );
   },
@@ -148,9 +180,11 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     // Product shots, square.
     aspect: '1 / 1',
     fallbackIcon: Package,
-    // Nothing here needs a dialog: an item is a picture, a name, a brand and
-    // a price. The title links straight to where you'd buy it.
-    openable: false,
+    // Most items need no dialog: a picture, a name, a brand and a price, with
+    // the title linking straight to where you'd buy it. The exceptions are the
+    // homelab boxes, where the specs and the notes are the whole point -- those
+    // open, the rest stay flat.
+    openable: (item) => Boolean(item.specs || item.description),
     title: (item) => item.name,
     subtitle: (item) => item.brand ?? undefined,
     image: (item) => item.image ?? undefined,
@@ -181,5 +215,43 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     { name: 'image', label: 'Image URL', type: 'image' },
     { name: 'link', label: 'Link', type: 'url' },
     { name: 'description', label: 'Description', type: 'textarea' },
+    {
+      name: 'specs',
+      label: 'Specs',
+      type: 'textarea',
+      rows: 6,
+      placeholder: 'One per line, e.g.\nCPU: Ryzen 9 5950X\nRAM: 128GB DDR4\nStorage: 2x 4TB NVMe',
+    },
   ],
+
+  renderDetail: (item) => {
+    const specs = item.specs ? parseSpecs(item.specs) : [];
+    return (
+      <>
+        {specs.length > 0 && (
+          <DetailSection label="Specs">
+            <dl className="grid grid-cols-[minmax(0,8rem)_1fr] gap-x-4 gap-y-1">
+              {specs.map((spec, index) =>
+                spec.label ? (
+                  <Fragment key={index}>
+                    <dt className="text-muted-foreground truncate">{spec.label}</dt>
+                    <dd className="min-w-0">{spec.value}</dd>
+                  </Fragment>
+                ) : (
+                  <dd key={index} className="col-span-2 min-w-0">
+                    {spec.value}
+                  </dd>
+                ),
+              )}
+            </dl>
+          </DetailSection>
+        )}
+        {item.description && (
+          <DetailSection label="Notes">
+            <p className="whitespace-pre-wrap">{item.description}</p>
+          </DetailSection>
+        )}
+      </>
+    );
+  },
 };
