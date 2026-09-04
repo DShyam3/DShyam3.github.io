@@ -42,6 +42,11 @@ async function fetchTMDBProxy(endpoint: string, params: Record<string, string> =
 export interface Episode {
   id?: number;
   episode_number: number;
+  /**
+   * Empty until the show's episodes are loaded in full. The grid only needs
+   * episode_number and watched to compute a status badge; titles, runtimes
+   * and air dates arrive when a detail dialog opens.
+   */
   title: string;
   release_date?: string;
   runtime?: number;
@@ -72,6 +77,8 @@ export interface WatchlistItem {
   tmdb_id?: number;
   release_date?: string;
   seasons?: Season[];
+  /** False until loadShowEpisodes has filled in the full episode rows. */
+  episodesLoaded?: boolean;
   // TMDB returns the US spelling ('Canceled'); 'Cancelled' is kept for any
   // pre-existing stored rows using the British spelling.
   series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
@@ -135,6 +142,7 @@ interface WatchlistContextType {
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
   getAutoStatus: (item: WatchlistItem) => string;
+  loadShowEpisodes: (showId: string) => Promise<void>;
   fetchData: () => Promise<void>;
 }
 
@@ -190,6 +198,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   // than aborting in-flight requests, so "stop" takes effect after the
   // current batch finishes rather than instantly.
   const syncCancelRef = useRef(false);
+  /** Shows whose full episode rows have been fetched, so we fetch once each. */
+  const loadedShowsRef = useRef<Set<string>>(new Set());
   const { isAdmin } = useAuth();
   // Public visitors can browse the watchlist (fetchData below), but the
   // auto-sync writes to sync_log/tv_shows/etc. and is admin-only -- RLS now
@@ -201,14 +211,23 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    loadedShowsRef.current.clear();
     try {
       const [moviesResult, showsResult, favouritesResult] = await Promise.all([
         supabase.from('movies').select('*').order('title', { ascending: true }),
         (supabase.from('tv_shows') as any)
+          // Deliberately not `tv_show_episodes (*)`. Every mount of this page
+          // was pulling all ~7,600 episode rows in full (~474 kB) purely to
+          // render a grid of posters. The grid needs episode_number and
+          // watched and nothing else (~67 kB); titles, runtimes and air dates
+          // load per show in loadShowEpisodes when a detail dialog opens.
           .select(
             `
                     *,
-                    tv_show_seasons (*, tv_show_episodes (*))
+                    tv_show_seasons (
+                      id, season_number, release_date, watched,
+                      tv_show_episodes (id, episode_number, watched)
+                    )
                 `,
           )
           .order('title', { ascending: true }),
@@ -267,6 +286,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             : new Date().toISOString(),
           streaming_platform: show.platform,
           series_status: show.status as any,
+          episodesLoaded: false,
           seasons: (show.tv_show_seasons || [])
             .sort((a: any, b: any) => a.season_number - b.season_number)
             .map((season: any) => ({
@@ -282,9 +302,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 .map((ep: any) => ({
                   id: ep.id,
                   episode_number: ep.episode_number,
-                  title: ep.title || `Episode ${ep.episode_number}`,
-                  release_date: ep.release_date || undefined,
-                  runtime: ep.runtime || undefined,
+                  // Filled in by loadShowEpisodes.
+                  title: '',
                   watched: ep.watched,
                 })),
             })),
@@ -324,6 +343,67 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  /**
+   * Load a single show's episodes in full -- titles, air dates and runtimes --
+   * and merge them into the item already in state. Called when a detail dialog
+   * opens, so the page mount stays cheap.
+   *
+   * A no-op if the show has already been loaded.
+   */
+  const loadShowEpisodes = useCallback(async (showId: string) => {
+    if (loadedShowsRef.current.has(showId)) return;
+    loadedShowsRef.current.add(showId);
+
+    const { data, error } = await (supabase.from('tv_show_seasons') as any)
+      .select('id, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)')
+      .eq('tv_show_id', showId);
+
+    if (error) {
+      // Allow a retry on the next open rather than leaving the show blank.
+      loadedShowsRef.current.delete(showId);
+      console.error('Error loading episodes:', error);
+      return;
+    }
+
+    // season id -> its full episode rows, keyed by episode number
+    const bySeason = new Map<number, Map<number, any>>();
+    (data || []).forEach((season: any) => {
+      bySeason.set(
+        season.id,
+        new Map(
+          (season.tv_show_episodes || []).map((ep: any) => [ep.episode_number, ep]),
+        ),
+      );
+    });
+
+    setWatchlist((prev) =>
+      prev.map((item) => {
+        if (item.id !== showId) return item;
+        return {
+          ...item,
+          episodesLoaded: true,
+          seasons: item.seasons?.map((season) => {
+            const full = season.id ? bySeason.get(season.id) : undefined;
+            if (!full) return season;
+            return {
+              ...season,
+              episodes: season.episodes.map((ep) => {
+                const row = full.get(ep.episode_number);
+                if (!row) return ep;
+                return {
+                  ...ep,
+                  title: row.title || `Episode ${ep.episode_number}`,
+                  release_date: row.release_date || undefined,
+                  runtime: row.runtime || undefined,
+                };
+              }),
+            };
+          }),
+        };
+      }),
+    );
   }, []);
 
   // Fetch sync log from Supabase
@@ -1398,6 +1478,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       isEpisodeWatched: stableIsEpisodeWatched,
       isSeasonWatched: stableIsSeasonWatched,
       getAutoStatus,
+      loadShowEpisodes,
       fetchData,
     }),
     [
@@ -1424,6 +1505,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableIsEpisodeWatched,
       stableIsSeasonWatched,
       getAutoStatus,
+      loadShowEpisodes,
       fetchData,
     ],
   );

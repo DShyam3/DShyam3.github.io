@@ -9,7 +9,7 @@ import {
 import { ExternalLink, Trash2, CalendarDays, Calendar, Clock, Heart, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
+import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { formatRuntime, getPlatformColor, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 
@@ -57,6 +57,16 @@ export function WatchlistDetailDialog({
   syncing,
 }: WatchlistDetailDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const { loadShowEpisodes } = useWatchlist();
+
+  // The grid only loads episode numbers and watched flags; episode titles,
+  // air dates and runtimes are fetched here, for this show only, the first
+  // time its dialog is opened.
+  useEffect(() => {
+    if (open && item.category === 'TV Shows' && !item.episodesLoaded) {
+      void loadShowEpisodes(item.id);
+    }
+  }, [open, item.category, item.episodesLoaded, item.id, loadShowEpisodes]);
 
   // Reset deleting state when dialog opens/closes
   useEffect(() => {
