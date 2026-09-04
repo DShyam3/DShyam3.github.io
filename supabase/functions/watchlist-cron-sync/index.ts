@@ -35,6 +35,8 @@ async function fetchTMDB(endpoint: string, params: Record<string, string> = {}) 
   return res.json()
 }
 
+// Mirror of src/features/watchlist/sync-logic.ts. Deno cannot import from
+// src/, so this is a hand-maintained copy -- change both together.
 function getPlatform(providers: any): string {
   if (!providers) return 'Online'
   const available = [

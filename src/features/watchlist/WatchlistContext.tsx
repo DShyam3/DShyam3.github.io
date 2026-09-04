@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { buildMovieUpdates, buildShowUpdates } from './sync-logic';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Returns a referentially-stable function that always calls the latest
@@ -938,37 +939,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const startTime = Date.now();
     const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 
-    const getPlatform = (providers: any) => {
-      if (!providers) return 'Online';
-      const available = [
-        ...(providers.flatrate || []),
-        ...(providers.free || []),
-        ...(providers.ads || []),
-      ];
-      const allowed = [
-        { tmdbNames: ['Netflix'], displayName: 'Netflix' },
-        { tmdbNames: ['Disney Plus', 'Disney+'], displayName: 'Disney+' },
-        { tmdbNames: ['Amazon Prime Video'], displayName: 'Prime Video' },
-        {
-          tmdbNames: ['Apple TV Plus', 'Apple TV+', 'Apple TV'],
-          displayName: 'Apple TV+',
-        },
-        { tmdbNames: ['BBC iPlayer'], displayName: 'BBC iPlayer' },
-      ];
-      for (const a of allowed) {
-        if (
-          available.some((p: any) =>
-            a.tmdbNames.some(
-              (name) => p.provider_name?.toLowerCase() === name.toLowerCase(),
-            ),
-          )
-        ) {
-          return a.displayName;
-        }
-      }
-      return 'Online';
-    };
-
     let itemsSynced = 0;
     // Individual item/season failures used to just be console.error'd and
     // silently skipped -- the completion toast looked identical whether
@@ -998,40 +968,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               });
               if (!data.id) return;
 
-              // Common fields for both movies and TV shows
-              const commonUpdates: any = {};
-              if (!item.image_url && data.poster_path)
-                commonUpdates.poster = `${TMDB_IMAGE_BASE_URL}${data.poster_path}`;
-              if (!item.description && data.overview)
-                commonUpdates.overview = data.overview;
-              if (data.release_date || data.first_air_date)
-                commonUpdates.release_date =
-                  data.release_date || data.first_air_date;
-              if (!item.genres?.length && data.genres)
-                commonUpdates.genre = data.genres
-                  .map((g: any) => g.name)
-                  .join(', ');
-              commonUpdates.platform = getPlatform(
-                data['watch/providers']?.results?.GB,
-              );
-
               if (item.category === 'Movies') {
-                // Movies have release_year and runtime columns
-                const movieUpdates = { ...commonUpdates };
-                if (!item.year && (data.release_date || data.first_air_date)) {
-                  movieUpdates.release_year = new Date(
-                    data.release_date || data.first_air_date,
-                  ).getFullYear();
-                }
-                if (data.runtime) movieUpdates.runtime = data.runtime;
                 await supabase
                   .from('movies')
-                  .update(movieUpdates)
+                  .update(buildMovieUpdates(item, data, TMDB_IMAGE_BASE_URL))
                   .eq('id', parseInt(item.id));
               } else {
-                // TV shows only have status (no release_year or runtime columns)
-                const tvUpdates = { ...commonUpdates };
-                tvUpdates.status = data.status;
+                const tvUpdates = buildShowUpdates(item, data, TMDB_IMAGE_BASE_URL);
                 if (data.status && item.series_status && data.status !== item.series_status) {
                   changesSummary.push(`${item.title}: status → ${data.status}`);
                 }
