@@ -19,3 +19,11 @@ CREATE POLICY "Admin update" ON "public"."beliefs" FOR UPDATE TO "authenticated"
 CREATE POLICY "Public Read Access" ON "public"."beliefs" FOR SELECT USING (true);
 
 ALTER TABLE "public"."beliefs" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT ALL ON TABLE "public"."beliefs" TO "anon";
+
+GRANT ALL ON TABLE "public"."beliefs" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."beliefs" TO "service_role";

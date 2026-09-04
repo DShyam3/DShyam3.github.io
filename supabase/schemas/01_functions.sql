@@ -57,9 +57,6 @@ $$;
 
 ALTER FUNCTION "public"."update_season_watched_status"() OWNER TO "postgres";
 
-CREATE OR REPLACE TRIGGER "tr_update_episodes_watched" AFTER UPDATE OF "watched" ON "public"."tv_show_seasons" FOR EACH ROW EXECUTE FUNCTION "public"."update_episodes_watched_status"();
-
-CREATE OR REPLACE TRIGGER "tr_update_season_watched" AFTER INSERT OR DELETE OR UPDATE OF "watched" ON "public"."tv_show_episodes" FOR EACH ROW EXECUTE FUNCTION "public"."update_season_watched_status"();
 
 GRANT ALL ON FUNCTION "public"."is_admin"() TO "anon";
 

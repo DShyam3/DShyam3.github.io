@@ -21,3 +21,11 @@ CREATE POLICY "Admin update" ON "public"."site_content" FOR UPDATE TO "authentic
 CREATE POLICY "Public Read Site Content" ON "public"."site_content" FOR SELECT USING (true);
 
 ALTER TABLE "public"."site_content" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT ALL ON TABLE "public"."site_content" TO "anon";
+
+GRANT ALL ON TABLE "public"."site_content" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."site_content" TO "service_role";

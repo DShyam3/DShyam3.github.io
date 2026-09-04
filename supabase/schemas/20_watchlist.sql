@@ -296,3 +296,99 @@ ALTER TABLE "public"."tv_show_seasons" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."tv_shows" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."weekly_schedule" ENABLE ROW LEVEL SECURITY;
+
+-- Triggers live here rather than with the functions in 01_functions.sql:
+-- schema files run in filename order, so the tables must exist first.
+
+CREATE OR REPLACE TRIGGER "tr_update_episodes_watched" AFTER UPDATE OF "watched" ON "public"."tv_show_seasons" FOR EACH ROW EXECUTE FUNCTION "public"."update_episodes_watched_status"();
+
+CREATE OR REPLACE TRIGGER "tr_update_season_watched" AFTER INSERT OR DELETE OR UPDATE OF "watched" ON "public"."tv_show_episodes" FOR EACH ROW EXECUTE FUNCTION "public"."update_season_watched_status"();
+
+-- Grants
+
+GRANT ALL ON TABLE "public"."favourites" TO "anon";
+
+GRANT ALL ON TABLE "public"."favourites" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."favourites" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."favourites_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."favourites_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."favourites_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."movies" TO "anon";
+
+GRANT ALL ON TABLE "public"."movies" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."movies" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."movies_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."movies_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."movies_id_seq" TO "service_role";
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."sync_log" TO "anon";
+
+GRANT ALL ON TABLE "public"."sync_log" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."sync_log" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."sync_log_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."sync_log_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."sync_log_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."tv_show_episodes" TO "anon";
+
+GRANT ALL ON TABLE "public"."tv_show_episodes" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."tv_show_episodes" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."tv_show_episodes_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."tv_show_episodes_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."tv_show_episodes_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."tv_show_seasons" TO "anon";
+
+GRANT ALL ON TABLE "public"."tv_show_seasons" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."tv_show_seasons" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."tv_show_seasons_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."tv_show_seasons_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."tv_show_seasons_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."tv_shows" TO "anon";
+
+GRANT ALL ON TABLE "public"."tv_shows" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."tv_shows" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."tv_shows_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."tv_shows_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."tv_shows_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."weekly_schedule" TO "anon";
+
+GRANT ALL ON TABLE "public"."weekly_schedule" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."weekly_schedule" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."weekly_schedule_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."weekly_schedule_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."weekly_schedule_id_seq" TO "service_role";
+
+-- Revoked privileges (see the note in 40_finance.sql)
+REVOKE DELETE, INSERT ON TABLE "public"."sync_log" FROM "anon";

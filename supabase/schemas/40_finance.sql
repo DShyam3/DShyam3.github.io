@@ -457,3 +457,156 @@ ALTER TABLE "public"."finance_transactions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_truelayer_connection" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."finance_user_holidays" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_bank_accounts" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_bank_accounts" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_bank_accounts" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_categories" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_budget_categories" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_budget_categories" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_items" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_budget_items" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_budget_items" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_presets" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_budget_presets" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_budget_presets" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_bureaus" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_credit_bureaus" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_credit_bureaus" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_scores" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_credit_scores" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_credit_scores" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_data" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_data" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_data" TO "service_role";
+
+GRANT ALL ON TABLE "public"."finance_debts" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_debts" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_defaults" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_defaults" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_defaults" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goal_contributions" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_goal_contributions" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_goal_contributions" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goals" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_goals" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_goals" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_holiday_defaults" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_holiday_defaults" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_holiday_defaults" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_memberships" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_memberships" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_memberships" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_recurring_bills" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_recurring_templates" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_recurring_templates" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_recurring_templates" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_settings" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_settings" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_settings" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_tax_configs" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_tax_configs" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_tax_configs" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_transactions" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_transactions" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_transactions" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_truelayer_connection" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "service_role";
+
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_user_holidays" TO "anon";
+
+GRANT ALL ON TABLE "public"."finance_user_holidays" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_user_holidays" TO "service_role";
+
+-- Revoked privileges
+--
+-- pg_dump emits GRANT but never REVOKE, so these have to be stated explicitly
+-- or the differ will try to hand `anon` back its SELECT on every finance table
+-- (including finance_truelayer_connection, which holds live bank tokens).
+--
+-- The inconsistency is real and preserved: finance_debts has every anon
+-- privilege revoked, the rest only SELECT. See S-10 in REHAUL_PLAN.md.
+
+REVOKE SELECT ON TABLE
+  "public"."finance_bank_accounts",
+  "public"."finance_budget_categories",
+  "public"."finance_budget_items",
+  "public"."finance_budget_presets",
+  "public"."finance_credit_bureaus",
+  "public"."finance_credit_scores",
+  "public"."finance_data",
+  "public"."finance_defaults",
+  "public"."finance_goal_contributions",
+  "public"."finance_goals",
+  "public"."finance_holiday_defaults",
+  "public"."finance_memberships",
+  "public"."finance_recurring_bills",
+  "public"."finance_recurring_templates",
+  "public"."finance_settings",
+  "public"."finance_tax_configs",
+  "public"."finance_transactions",
+  "public"."finance_truelayer_connection",
+  "public"."finance_user_holidays"
+FROM "anon";
+
+REVOKE ALL ON TABLE "public"."finance_debts" FROM "anon";

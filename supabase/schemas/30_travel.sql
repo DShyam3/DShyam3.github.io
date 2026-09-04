@@ -77,3 +77,32 @@ CREATE POLICY "Public read" ON "public"."visited_cities" FOR SELECT USING (true)
 ALTER TABLE "public"."visited_cities" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."visited_countries" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."visited_cities" TO "anon";
+
+GRANT ALL ON TABLE "public"."visited_cities" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."visited_cities" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "service_role";
+
+GRANT ALL ON TABLE "public"."visited_countries" TO "anon";
+
+GRANT ALL ON TABLE "public"."visited_countries" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."visited_countries" TO "service_role";
+
+GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "anon";
+
+GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "authenticated";
+
+GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "service_role";
+
+-- Revoked privileges (see the note in 40_finance.sql)
+REVOKE DELETE, INSERT ON TABLE "public"."visited_cities" FROM "anon";

@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       articles: {
@@ -104,33 +129,6 @@ export type Database = {
           price?: number | null
           tags?: string[] | null
           title?: string
-        }
-        Relationships: []
-      }
-      creators: {
-        Row: {
-          category: string
-          created_at: string
-          id: string
-          image_url: string | null
-          link: string | null
-          name: string
-        }
-        Insert: {
-          category?: string
-          created_at?: string
-          id?: string
-          image_url?: string | null
-          link?: string | null
-          name: string
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          id?: string
-          image_url?: string | null
-          link?: string | null
-          name?: string
         }
         Relationships: []
       }
@@ -415,143 +413,6 @@ export type Database = {
         }
         Relationships: []
       }
-      finance_defaults: {
-        Row: {
-          content: string | null
-          key: string
-          updated_at: string
-        }
-        Insert: {
-          content?: string | null
-          key: string
-          updated_at?: string
-        }
-        Update: {
-          content?: string | null
-          key?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      finance_goal_contributions: {
-        Row: {
-          amount: number
-          bank_account_id: string | null
-          created_at: string
-          date: string
-          goal_id: string
-          id: string
-          is_default: boolean
-          note: string | null
-          updated_at: string
-        }
-        Insert: {
-          amount?: number
-          bank_account_id?: string | null
-          created_at?: string
-          date: string
-          goal_id: string
-          id: string
-          is_default?: boolean
-          note?: string | null
-          updated_at?: string
-        }
-        Update: {
-          amount?: number
-          bank_account_id?: string | null
-          created_at?: string
-          date?: string
-          goal_id?: string
-          id?: string
-          is_default?: boolean
-          note?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_goal_contributions_goal_id_fkey"
-            columns: ["goal_id"]
-            isOneToOne: false
-            referencedRelation: "finance_goals"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_goals: {
-        Row: {
-          created_at: string
-          current_amount: number
-          id: string
-          is_default: boolean
-          name: string
-          start_date: string | null
-          target_amount: number
-          target_date: string | null
-          updated_at: string
-          status: string
-          emoji: string | null
-        }
-        Insert: {
-          created_at?: string
-          current_amount?: number
-          id: string
-          is_default?: boolean
-          name: string
-          start_date?: string | null
-          target_amount?: number
-          target_date?: string | null
-          updated_at?: string
-          status?: string
-          emoji?: string | null
-        }
-        Update: {
-          created_at?: string
-          current_amount?: number
-          id?: string
-          is_default?: boolean
-          name?: string
-          start_date?: string | null
-          target_amount?: number
-          target_date?: string | null
-          updated_at?: string
-          status?: string
-          emoji?: string | null
-        }
-        Relationships: []
-      }
-      finance_holiday_defaults: {
-        Row: {
-          count: number
-          created_at: string
-          dates: string | null
-          id: string
-          is_default: boolean
-          month_index: number
-          occasion: string | null
-          updated_at: string
-        }
-        Insert: {
-          count?: number
-          created_at?: string
-          dates?: string | null
-          id?: string
-          is_default?: boolean
-          month_index: number
-          occasion?: string | null
-          updated_at?: string
-        }
-        Update: {
-          count?: number
-          created_at?: string
-          dates?: string | null
-          id?: string
-          is_default?: boolean
-          month_index?: number
-          occasion?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       finance_debts: {
         Row: {
           balance: number
@@ -618,6 +479,143 @@ export type Database = {
           type?: string
           updated_at?: string
           write_off_years?: number | null
+        }
+        Relationships: []
+      }
+      finance_defaults: {
+        Row: {
+          content: string | null
+          key: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          key: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      finance_goal_contributions: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          created_at: string
+          date: string
+          goal_id: string
+          id: string
+          is_default: boolean
+          note: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          bank_account_id?: string | null
+          created_at?: string
+          date: string
+          goal_id: string
+          id: string
+          is_default?: boolean
+          note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          created_at?: string
+          date?: string
+          goal_id?: string
+          id?: string
+          is_default?: boolean
+          note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_goal_contributions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "finance_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_goals: {
+        Row: {
+          created_at: string
+          current_amount: number
+          emoji: string | null
+          id: string
+          is_default: boolean
+          name: string
+          start_date: string | null
+          status: string
+          target_amount: number
+          target_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_amount?: number
+          emoji?: string | null
+          id: string
+          is_default?: boolean
+          name: string
+          start_date?: string | null
+          status?: string
+          target_amount?: number
+          target_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_amount?: number
+          emoji?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          start_date?: string | null
+          status?: string
+          target_amount?: number
+          target_date?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      finance_holiday_defaults: {
+        Row: {
+          count: number
+          created_at: string
+          dates: string | null
+          id: string
+          is_default: boolean
+          month_index: number
+          occasion: string | null
+          updated_at: string
+        }
+        Insert: {
+          count?: number
+          created_at?: string
+          dates?: string | null
+          id?: string
+          is_default?: boolean
+          month_index: number
+          occasion?: string | null
+          updated_at?: string
+        }
+        Update: {
+          count?: number
+          created_at?: string
+          dates?: string | null
+          id?: string
+          is_default?: boolean
+          month_index?: number
+          occasion?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -872,7 +870,7 @@ export type Database = {
           goal_id: string | null
           id: string
           is_default: boolean
-          is_recurring: boolean
+          is_recurring: boolean | null
           is_reviewed: boolean
           name: string
           notes: string | null
@@ -889,7 +887,7 @@ export type Database = {
           goal_id?: string | null
           id: string
           is_default?: boolean
-          is_recurring?: boolean
+          is_recurring?: boolean | null
           is_reviewed?: boolean
           name: string
           notes?: string | null
@@ -906,11 +904,46 @@ export type Database = {
           goal_id?: string | null
           id?: string
           is_default?: boolean
-          is_recurring?: boolean
+          is_recurring?: boolean | null
           is_reviewed?: boolean
           name?: string
           notes?: string | null
           tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "finance_bank_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_truelayer_connection: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          refresh_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          refresh_token?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1422,7 +1455,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       content_type:
@@ -1450,12 +1483,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1479,11 +1512,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1504,11 +1537,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1529,11 +1562,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1546,11 +1579,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1560,6 +1593,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       content_type: [

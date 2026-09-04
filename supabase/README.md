@@ -25,12 +25,15 @@ exactly.
 |---|---|
 | `00_extensions.sql` | extensions, `content_type` enum |
 | `01_functions.sql` | `is_admin()`, the two watchlist trigger functions |
-| `02_privileges.sql` | role grants (mostly Supabase defaults -- see S-10 in `REHAUL_PLAN.md`) |
-| `03_realtime.sql` | the `supabase_realtime` publication |
-| `10_books` … `19_creators` | one file per content collection |
-| `20_watchlist.sql` | movies, shows, seasons, episodes, schedule, favourites, sync_log |
+| `10_books` … `18_site_content` | one file per content collection |
+| `20_watchlist.sql` | movies, shows, seasons, episodes, schedule, favourites, sync_log, triggers |
 | `30_travel.sql` | visited countries + cities |
 | `40_finance.sql` | the 19 `finance_*` tables |
+| `90_privileges.sql` | schema-level grants and default privileges only |
+| `91_realtime.sql` | the `supabase_realtime` publication |
+
+Each collection file is self-contained: table, constraints, indexes, RLS
+policies, grants, and any revokes.
 
 Grouping follows the frontend collections, except where tables form one graph
 joined by foreign keys (watchlist, travel, finance), which stay together. Files
@@ -45,25 +48,65 @@ are maintained by hand in the baseline migration.
 
 ```bash
 # 1. edit the relevant file in supabase/schemas/
-# 2. generate the migration
-npx supabase db diff -f describe_the_change
-# 3. read the generated SQL -- it is a draft, not gospel
+# 2. generate the migration -- ALWAYS pass --schema public
+npx supabase db diff -f describe_the_change --schema public
+# 3. READ the generated SQL. See the warning below.
 # 4. apply
 npx supabase db push
 ```
 
 `db diff` needs a running Docker daemon. It starts a throwaway Postgres
 matching your remote's version, replays `migrations/` into it, and compares
-that against the target. Your data never touches it.
+that against your `schemas/` files. Your data never touches it.
 
-Two known limits of the diff engine, both relevant here:
+### Always pass `--schema public`
 
-- **RLS policy renames and DML are not tracked.** This schema is mostly RLS
-  policies, so read every generated migration before pushing.
-- **Revoked privileges do not appear.** `pg_dump` emits `GRANT` but never
-  `REVOKE`, so a revoked privilege shows up only as an absent grant. Section 4
-  of the baseline restores these explicitly; anything similar in future needs
-  adding by hand.
+Without it, the diff also covers `storage`. Nothing in `schemas/` describes
+storage, so the differ concludes the storage policies should not exist and
+generates a `drop policy` for every one of them. That would break public image
+and CV serving *and* remove the admin-only write protection.
+
+This actually happened while dropping the `creators` table. The generated
+migration was discarded, not pushed.
+
+### Read every generated migration
+
+The same discarded migration also contained:
+
+```sql
+grant select on table "public"."finance_truelayer_connection" to "anon";
+```
+
+…and the same for every other finance table. The cause: `pg_dump` emits `GRANT`
+but never `REVOKE`, so the schema files did not record privileges this database
+had deliberately taken away, and the differ "helpfully" tried to restore them.
+Those revokes are now stated explicitly at the bottom of `40_finance.sql`,
+`20_watchlist.sql` and `30_travel.sql`.
+
+The lesson generalises: **the differ proposes, you dispose.** Two known limits
+that matter for this schema in particular:
+
+- RLS policy renames and DML are not tracked, and this schema is mostly RLS.
+- Revoked privileges never appear on their own; state them by hand.
+
+### File ordering matters
+
+Schema files run in filename order, so anything that depends on a table must
+sort after it:
+
+- `01_functions.sql` holds functions only. The two watchlist **triggers** live
+  in `20_watchlist.sql`, because `CREATE TRIGGER` needs its table to exist.
+- Per-table `GRANT`s live in each collection file, not in a shared privileges
+  file -- so deleting a collection removes everything about it at once, and
+  grants can never run before their table.
+- `90_privileges.sql` keeps only schema-level grants and default privileges.
+
+### Migration timestamps
+
+The baseline is stamped `20260904130000`. `db diff` names new migrations with
+the current wall-clock time, so anything generated before 13:00 on 2026-09-04
+sorted *before* the baseline and `db push` refused it. If that happens, rename
+the file to a later timestamp rather than passing `--include-all`.
 
 ## History
 

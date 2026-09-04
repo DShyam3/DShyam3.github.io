@@ -27,3 +27,11 @@ CREATE POLICY "Admin update" ON "public"."inventory_items" FOR UPDATE TO "authen
 CREATE POLICY "Public Read Access" ON "public"."inventory_items" FOR SELECT USING (true);
 
 ALTER TABLE "public"."inventory_items" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT ALL ON TABLE "public"."inventory_items" TO "anon";
+
+GRANT ALL ON TABLE "public"."inventory_items" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."inventory_items" TO "service_role";

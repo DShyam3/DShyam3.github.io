@@ -5049,7 +5049,12 @@ export default function Finance() {
           )}
         </div>
 
-        <main className="flex-1 flex flex-col py-6 sm:py-8 max-w-6xl mx-auto w-full min-w-0">
+        {/* No max-width here: this is a dense dashboard of tables and charts,
+            so it fills `.wide-container` (which caps at 1920px and handles its
+            own responsive padding) rather than throwing away ~700px a side on
+            a large monitor. `min-w-0` keeps the overflow-x-auto tables from
+            forcing the flex parent wider than the viewport on narrow screens. */}
+        <main className="flex-1 flex flex-col py-6 sm:py-8 w-full min-w-0">
           {/* ==========================================
               TAB 1: DASHBOARD
               ========================================== */}

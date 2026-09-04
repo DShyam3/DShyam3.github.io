@@ -22,3 +22,11 @@ CREATE POLICY "Admin update" ON "public"."links" FOR UPDATE TO "authenticated" U
 CREATE POLICY "Public Read Access" ON "public"."links" FOR SELECT USING (true);
 
 ALTER TABLE "public"."links" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT ALL ON TABLE "public"."links" TO "anon";
+
+GRANT ALL ON TABLE "public"."links" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."links" TO "service_role";

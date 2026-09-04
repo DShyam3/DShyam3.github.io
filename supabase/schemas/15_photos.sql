@@ -20,3 +20,11 @@ CREATE POLICY "Admin update" ON "public"."photos" FOR UPDATE TO "authenticated" 
 CREATE POLICY "Public Read Access" ON "public"."photos" FOR SELECT USING (true);
 
 ALTER TABLE "public"."photos" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT ALL ON TABLE "public"."photos" TO "anon";
+
+GRANT ALL ON TABLE "public"."photos" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."photos" TO "service_role";

@@ -25,3 +25,11 @@ CREATE POLICY "Admin update" ON "public"."recipes" FOR UPDATE TO "authenticated"
 CREATE POLICY "Public Read Access" ON "public"."recipes" FOR SELECT USING (true);
 
 ALTER TABLE "public"."recipes" ENABLE ROW LEVEL SECURITY;
+
+-- Grants
+
+GRANT ALL ON TABLE "public"."recipes" TO "anon";
+
+GRANT ALL ON TABLE "public"."recipes" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."recipes" TO "service_role";
