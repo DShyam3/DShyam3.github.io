@@ -25,7 +25,7 @@ makes something easier to locate.
 |---|---|---|---|
 | 0 | Apply pending storage migration | closes a live hole | **done** |
 | 1 | Supabase quick wins (indexes, policies) | fewer surprises | **done** |
-| 1.5 | Declarative schemas, one file per collection | read one file, know the schema | next |
+| 1.5 | Declarative schemas, one file per collection | read one file, know the schema | **done** |
 | 2 | Delete dead frontend code | nothing left to read | **done** |
 | 3 | Build card + collection system, convert one page | one card system instead of three | **done** |
 | 4 | Convert remaining collection pages | one file per collection | **done** |
@@ -34,9 +34,11 @@ makes something easier to locate.
 | 7 | Finance rehaul | separate project | next |
 | — | `features/` reorg | **reinstated** — measured against findability rather than line count, co-location is the point | **done** |
 
-The dropped row is worth keeping visible. It was originally Phase 6. Measured
-against "view / find / lean" it moves code around without making there be less
-of it, so it only happens if it falls out of Phases 3–5 naturally.
+The last row is worth keeping visible as a record of a reversal. It was
+originally Phase 6, then dropped on the grounds that it "relocates files
+without reducing them" — true, but that judged it by line count. Judged by
+"can I find things", co-location is the whole point, so it was reinstated and
+done as part of Phase 5.
 
 ---
 
