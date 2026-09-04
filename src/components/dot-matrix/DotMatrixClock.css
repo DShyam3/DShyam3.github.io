@@ -14,7 +14,7 @@
 .dot-matrix-digit {
     display: flex;
     flex-direction: column;
-    gap: 0.5px;
+    gap: 1px;
     backface-visibility: hidden;
 }
 
@@ -81,19 +81,26 @@
     }
 }
 
-/* A digit is 7 rows of dots, so the pitch below decides its height: at 2px
-   dots and a 1px gap it stood 20px tall next to 18.4px footer text whose
-   glyphs are only ~13px, and the clock read as the loudest thing down there.
-   1.5px on a 0.5px pitch puts the digits at 13.5px -- the same visual weight
-   as the words either side of them. */
+/* A digit is 7 rows of dots, so the values below decide both its height and
+   its texture, and the two have to be solved together.
+
+   Height: 7 rows at a 2px pitch is 13px, which matches the ~13px glyphs of
+   the 18.4px footer text. At the old 3px pitch the clock stood 20px tall and
+   was the loudest thing in the footer.
+
+   Texture: Doto draws its dots about as wide as the gaps between them. A dot
+   wider than its gap fills in and reads as a solid block rather than a
+   matrix -- which is what 1.5px dots on a 0.5px gap did, fixing the height
+   but making the clock denser than the words beside it. Equal dot and gap
+   keeps the dots reading as dots. */
 .dot-matrix-row {
     display: flex;
-    gap: 0.5px;
+    gap: 1px;
 }
 
 .dot-matrix-dot {
-    width: 1.5px;
-    height: 1.5px;
+    width: 1px;
+    height: 1px;
     border-radius: 50%;
     background-color: transparent;
 }
