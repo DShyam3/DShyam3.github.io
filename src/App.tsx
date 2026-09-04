@@ -8,19 +8,19 @@ import { ThemeProvider } from 'next-themes';
 import { OpeningSequence } from '@/components/layout/OpeningSequence';
 import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
 
-import { WatchlistProvider } from './contexts/WatchlistContext';
+import { WatchlistProvider } from './features/watchlist/WatchlistContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DotMatrixProvider } from './contexts/DotMatrixContext';
 
 // Lazy loaded pages for code splitting
 const Index = lazy(() => import('./pages/Index'));
-const Finance = lazy(() => import('./pages/Finance'));
-const Travel = lazy(() => import('./pages/Travel'));
+const Finance = lazy(() => import('./features/finance/FinancePage'));
+const Travel = lazy(() => import('./features/travel/TravelPage'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const Links = lazy(() => import('./pages/Links'));
 const Books = lazy(() => import('./pages/Books'));
 const Beliefs = lazy(() => import('./pages/Beliefs'));
-const Watchlist = lazy(() => import('./pages/Watchlist'));
+const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
 const Inspiration = lazy(() => import('./pages/Inspiration'));
 const Photos = lazy(() => import('./pages/Photos'));
 const Articles = lazy(() => import('./pages/Articles'));

@@ -1,4 +1,4 @@
-import { WatchlistItem, Season } from '@/hooks/useWatchlist';
+import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { ScheduleItem } from './ScheduleItem';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 

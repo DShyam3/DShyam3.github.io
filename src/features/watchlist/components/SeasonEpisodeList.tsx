@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Season } from '@/hooks/useWatchlist';
+import { Season } from '@/features/watchlist/useWatchlist';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
 
 interface SeasonEpisodeListProps {

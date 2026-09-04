@@ -1,4 +1,4 @@
-import { BankAccount, BudgetCategory, BudgetItem, RecurringBill } from '@/types/finance';
+import { BankAccount, BudgetCategory, BudgetItem, RecurringBill } from '@/features/finance/finance-types';
 import defaultPresets from '@/data/presets.json';
 
 const { DEFAULT_CATEGORY_PRESETS } = defaultPresets;

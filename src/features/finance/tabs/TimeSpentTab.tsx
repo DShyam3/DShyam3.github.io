@@ -1,5 +1,5 @@
 import React from 'react';
-import { FinanceSettings, TimeSpentInputs } from '@/types/finance';
+import { FinanceSettings, TimeSpentInputs } from '@/features/finance/finance-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';

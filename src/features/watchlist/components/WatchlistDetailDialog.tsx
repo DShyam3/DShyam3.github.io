@@ -9,9 +9,9 @@ import {
 import { ExternalLink, Trash2, CalendarDays, Calendar, Clock, Heart, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { WatchlistItem, Season } from '@/hooks/useWatchlist';
+import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
-import { formatRuntime, getPlatformColor, getStatusColor, isUpcomingStatus } from '@/lib/watchlist-utils';
+import { formatRuntime, getPlatformColor, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 
 interface WatchlistDetailDialogProps {
   open: boolean;

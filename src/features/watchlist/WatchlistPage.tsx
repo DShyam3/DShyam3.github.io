@@ -8,9 +8,9 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
-import { useWatchlist, WatchlistItem, FavouriteItem } from '@/hooks/useWatchlist';
-import { useSchedule } from '@/hooks/useSchedule';
-import { useTMDB } from '@/hooks/useTMDB';
+import { useWatchlist, WatchlistItem, FavouriteItem } from '@/features/watchlist/useWatchlist';
+import { useSchedule } from '@/features/watchlist/useSchedule';
+import { useTMDB } from '@/features/watchlist/useTMDB';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -55,9 +55,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { Filter } from 'lucide-react';
-import { WatchlistCard } from '@/components/watchlist/WatchlistCard';
-import { WeeklySchedule } from '@/components/watchlist/WeeklySchedule';
-import { formatRuntime, getPlatformColor } from '@/lib/watchlist-utils';
+import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
+import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
+import { formatRuntime, getPlatformColor } from '@/features/watchlist/watchlist-utils';
 
 const CATEGORIES = [
   'TV Shows',

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import defaultPresets from '../data/presets.json';
+import defaultPresets from '@/data/presets.json';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -56,7 +56,7 @@ import {
   Shield,
   Landmark
 } from 'lucide-react';
-import type { PackageBenefit } from '@/types/finance';
+import type { PackageBenefit } from '@/features/finance/finance-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -80,12 +80,12 @@ import {
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { RecurringsTab } from '@/components/finance/tabs/RecurringsTab';
-import { TimeSpentTab } from '@/components/finance/tabs/TimeSpentTab';
-import { TransactionsTab } from '@/components/finance/tabs/TransactionsTab';
-import { InvestmentsTab } from '@/components/finance/tabs/InvestmentsTab';
-import { AddRecurringDialog } from '@/components/finance/dialogs/AddRecurringDialog';
-import { EditRecurringDialog } from '@/components/finance/dialogs/EditRecurringDialog';
+import { RecurringsTab } from '@/features/finance/tabs/RecurringsTab';
+import { TimeSpentTab } from '@/features/finance/tabs/TimeSpentTab';
+import { TransactionsTab } from '@/features/finance/tabs/TransactionsTab';
+import { InvestmentsTab } from '@/features/finance/tabs/InvestmentsTab';
+import { AddRecurringDialog } from '@/features/finance/dialogs/AddRecurringDialog';
+import { EditRecurringDialog } from '@/features/finance/dialogs/EditRecurringDialog';
 import {
   DEFAULT_GROUPS,
   calculateWeekends,
@@ -100,7 +100,7 @@ import {
   getAccountDefaultColor,
   sanitizeBankAccounts,
   sanitizeBudgetCategories,
-} from '@/components/finance/utils/calculations';
+} from '@/features/finance/utils/calculations';
 import {
   AreaChart,
   Area,

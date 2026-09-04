@@ -17,8 +17,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Tv, Film, X, Clock, Calendar, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WatchlistItem, Season } from '@/hooks/useWatchlist';
-import { formatRuntime, getPlatformColor } from '@/lib/watchlist-utils';
+import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
+import { formatRuntime, getPlatformColor } from '@/features/watchlist/watchlist-utils';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
 
 interface ScheduleItemProps {

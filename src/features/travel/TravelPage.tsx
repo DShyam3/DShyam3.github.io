@@ -3,18 +3,18 @@ import { Footer } from '@/components/layout/Footer';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
 import { useAuth } from '@/contexts/AuthContext';
-import { useVisitedCountries } from '@/hooks/useVisitedCountries';
-import { useVisitedCities } from '@/hooks/useVisitedCities';
-import { useCityMap } from '@/hooks/useCityMap';
+import { useVisitedCountries } from '@/features/travel/useVisitedCountries';
+import { useVisitedCities } from '@/features/travel/useVisitedCities';
+import { useCityMap } from '@/features/travel/useCityMap';
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { CONTINENT_ORDER } from '@/data/continents';
-import { useContinentMap } from '@/hooks/useContinentMap';
+import { CONTINENT_ORDER } from '@/features/travel/continents';
+import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Globe, MapPin, Search, Plus, X, Loader2 } from 'lucide-react';
-import { CountryCityPanel } from '@/components/travel/CountryCityPanel';
+import { CountryCityPanel } from '@/features/travel/CountryCityPanel';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import './Index.css';
+import '@/pages/Index.css';
 
 type ViewMode = 'countries' | 'cities';
 

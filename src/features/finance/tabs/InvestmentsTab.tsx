@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { InvestmentHolding, BankAccount } from '@/types/finance';
+import { InvestmentHolding, BankAccount } from '@/features/finance/finance-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

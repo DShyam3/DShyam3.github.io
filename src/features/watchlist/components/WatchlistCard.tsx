@@ -17,9 +17,9 @@ import {
 } from '@/components/ui/select';
 import { Trash2, Calendar, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WatchlistItem, Season } from '@/hooks/useWatchlist';
+import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
-import { getPlatformColor, getStatusColor, isUpcomingStatus } from '@/lib/watchlist-utils';
+import { getPlatformColor, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 
 interface WatchlistCardProps {
   item: WatchlistItem;

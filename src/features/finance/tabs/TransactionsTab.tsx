@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { MockTransaction, BankAccount, Goal, BudgetCategory } from '@/types/finance';
+import { MockTransaction, BankAccount, Goal, BudgetCategory } from '@/features/finance/finance-types';
 import {
   Search,
   Filter,

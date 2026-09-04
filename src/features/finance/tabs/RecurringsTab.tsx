@@ -1,5 +1,5 @@
 import React from 'react';
-import { RecurringBill } from '@/types/finance';
+import { RecurringBill } from '@/features/finance/finance-types';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
