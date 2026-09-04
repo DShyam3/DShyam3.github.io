@@ -6,12 +6,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, Trash2, CalendarDays, Calendar, Clock, Heart, RefreshCcw } from 'lucide-react';
+import { ExternalLink, Trash2, CalendarDays, Calendar, Heart, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
-import { formatRuntime, getPlatformColor, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
+import { getPlatformColor, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -208,37 +209,16 @@ export function WatchlistDetailDialog({
             </DialogHeader>
 
             {item.description && (
-              <p className="text-sm text-muted-foreground mt-4 line-clamp-4">
-                {item.description}
-              </p>
+              <DetailDescription text={item.description} className="line-clamp-4" />
             )}
 
-            {/* Movie runtime */}
             {!isTVShow && item.runtime && (
-              <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                <span>{formatRuntime(item.runtime)}</span>
-              </div>
+              <RuntimeRow runtime={item.runtime} className="mt-3 text-muted-foreground" />
             )}
 
-            {/* TV Show series status */}
             {isTVShow && item.series_status && (
               <div className="mt-3">
-                <span
-                  className={cn(
-                    'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                    item.series_status === 'Returning Series' &&
-                      'bg-green-500/10 text-green-600 dark:text-green-400',
-                    item.series_status === 'In Production' &&
-                      'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-                    item.series_status === 'Ended' &&
-                      'bg-gray-500/10 text-gray-600 dark:text-gray-400',
-                    item.series_status === 'Cancelled' &&
-                      'bg-red-500/10 text-red-600 dark:text-red-400',
-                  )}
-                >
-                  {item.series_status}
-                </span>
+                <SeriesStatusPill status={item.series_status} className="px-2 py-1" />
               </div>
             )}
 
@@ -487,39 +467,19 @@ export function WatchlistDetailDialog({
               )}
             </div>
 
-            {/* Description */}
-            {item.description && (
-              <p className="text-sm text-muted-foreground mt-4">
-                {item.description}
-              </p>
-            )}
+            {item.description && <DetailDescription text={item.description} />}
 
-            {/* Movie runtime */}
             {!isTVShow && item.runtime && (
-              <div className="flex items-center gap-2 mt-4 text-sm">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>{formatRuntime(item.runtime)}</span>
-              </div>
+              <RuntimeRow
+                runtime={item.runtime}
+                className="mt-4"
+                iconClassName="text-muted-foreground"
+              />
             )}
 
-            {/* TV Show series status */}
             {isTVShow && item.series_status && (
               <div className="mt-4">
-                <span
-                  className={cn(
-                    'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium',
-                    item.series_status === 'Returning Series' &&
-                      'bg-green-500/10 text-green-600 dark:text-green-400',
-                    item.series_status === 'In Production' &&
-                      'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-                    item.series_status === 'Ended' &&
-                      'bg-gray-500/10 text-gray-600 dark:text-gray-400',
-                    item.series_status === 'Cancelled' &&
-                      'bg-red-500/10 text-red-600 dark:text-red-400',
-                  )}
-                >
-                  {item.series_status}
-                </span>
+                <SeriesStatusPill status={item.series_status} className="px-3 py-1" />
               </div>
             )}
 
