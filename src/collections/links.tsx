@@ -1,5 +1,5 @@
 import { DetailSection } from '@/components/cards/CardDetailDialog';
-import type { CollectionConfig, CollectionRow } from '@/lib/collections/types';
+import type { CollectionConfig, CollectionRow } from './types';
 
 export interface LinkRow extends CollectionRow {
   name: string;

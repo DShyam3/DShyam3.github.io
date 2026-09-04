@@ -1,8 +1,8 @@
 import { cn } from '@/lib/utils';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { SearchBar } from '@/components/shared/SearchBar';
-import { ALL } from '@/hooks/useCollection';
-import type { CollectionConfig, CollectionRow } from '@/lib/collections/types';
+import { ALL } from '../useCollection';
+import type { CollectionConfig, CollectionRow } from '../types';
 
 interface FilterBarProps<T extends CollectionRow> {
   config: CollectionConfig<T>;

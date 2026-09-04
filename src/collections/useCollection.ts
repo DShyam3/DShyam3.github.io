@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useSupabaseTable } from './useSupabaseTable';
-import type { CollectionConfig, CollectionRow } from '@/lib/collections/types';
+import { useSupabaseTable } from '@/hooks/useSupabaseTable';
+import type { CollectionConfig, CollectionRow } from './types';
 
 export const ALL = 'all';
 

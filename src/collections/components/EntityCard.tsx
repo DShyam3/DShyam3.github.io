@@ -3,7 +3,7 @@ import { ExternalLink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
 import { EntityFormDialog } from './EntityFormDialog';
-import type { CollectionConfig, CollectionRow } from '@/lib/collections/types';
+import type { CollectionConfig, CollectionRow } from '../types';
 
 interface EntityCardProps<T extends CollectionRow> {
   item: T;

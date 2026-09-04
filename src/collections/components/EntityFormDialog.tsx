@@ -20,13 +20,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { ALL } from '@/hooks/useCollection';
+import { ALL } from '../useCollection';
 import type {
   CollectionConfig,
   CollectionRow,
   FieldDef,
   FormValues,
-} from '@/lib/collections/types';
+} from '../types';
 
 interface EntityFormDialogProps<T extends CollectionRow> {
   mode: 'add' | 'edit';

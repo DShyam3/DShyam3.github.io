@@ -2,11 +2,11 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCollection } from '@/hooks/useCollection';
+import { useCollection } from '../useCollection';
 import { FilterBar } from './FilterBar';
 import { EntityCard } from './EntityCard';
 import { EntityFormDialog } from './EntityFormDialog';
-import type { CollectionConfig, CollectionRow } from '@/lib/collections/types';
+import type { CollectionConfig, CollectionRow } from '../types';
 
 interface CollectionPageProps<T extends CollectionRow> {
   config: CollectionConfig<T>;
