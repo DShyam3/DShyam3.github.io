@@ -629,55 +629,23 @@ const Watchlist = () => {
               ))}
             </div>
             <div className="flex flex-col sm:flex-row sm:items-start gap-2 w-full sm:w-auto">
+              {/* Syncing is the cron's job. The manual trigger lives inside
+                  this panel rather than on the toolbar, so the page does not
+                  advertise a button nobody should normally need. */}
               {isAdmin && (
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => syncWatchlist('manual')}
-                      disabled={syncing}
-                      className="gap-1.5 relative overflow-hidden h-8 sm:h-9"
-                    >
-                      {syncing && (
-                        <div
-                          className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-[width] duration-300 ease-out"
-                          style={{ width: `${syncProgress}%` }}
-                        />
-                      )}
-                      <span className="relative z-10 flex items-center gap-1.5">
-                        <RefreshCcw
-                          className={cn('h-4 w-4', syncing && 'animate-spin')}
-                        />
-                        {syncing ? (
-                          `${syncProgress}%`
-                        ) : (
-                          <DotMatrixText text="SYNC UPDATES" size="xs" wrap={false} />
-                        )}
-                      </span>
-                    </Button>
-                    {syncing && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cancelSync}
-                        className="h-8 sm:h-9 px-2 text-muted-foreground hover:text-destructive"
-                        title="Stop sync"
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowSyncLog(!showSyncLog)}
-                      className="h-8 sm:h-9 px-2"
-                      title="View sync history"
-                    >
-                      <History className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  variant={showSyncLog ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setShowSyncLog(!showSyncLog)}
+                  className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
+                >
+                  <History className={cn('h-4 w-4', syncing && 'animate-spin')} />
+                  <DotMatrixText
+                    text={syncing ? `SYNCING ${syncProgress}%` : 'SYNC'}
+                    size="xs"
+                    wrap={false}
+                  />
+                </Button>
               )}
               <Button
                 variant={showSchedule ? 'default' : 'ghost'}
@@ -699,14 +667,49 @@ const Watchlist = () => {
                   <History className="h-3 w-3" />
                   <DotMatrixText text="SYNC HISTORY" size="xs" />
                 </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSyncLog(false)}
-                  className="h-5 w-5 p-0"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => syncWatchlist('manual')}
+                    disabled={syncing}
+                    className="gap-1.5 relative overflow-hidden h-7"
+                  >
+                    {syncing && (
+                      <div
+                        className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-[width] duration-300 ease-out"
+                        style={{ width: `${syncProgress}%` }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-1.5">
+                      <RefreshCcw className={cn('h-3.5 w-3.5', syncing && 'animate-spin')} />
+                      <DotMatrixText
+                        text={syncing ? `${syncProgress}%` : 'SYNC NOW'}
+                        size="xs"
+                        wrap={false}
+                      />
+                    </span>
+                  </Button>
+                  {syncing && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelSync}
+                      className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                      title="Stop sync"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSyncLog(false)}
+                    className="h-5 w-5 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
               {syncLog.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground text-center py-2">

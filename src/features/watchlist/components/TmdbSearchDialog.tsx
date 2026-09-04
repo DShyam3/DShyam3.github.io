@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { cn } from '@/lib/utils';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
 
@@ -77,9 +78,9 @@ export function TmdbSearchDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5">
+        <Button variant="ghost" size="sm" className="gap-1.5 h-8 sm:h-9">
           <Plus className="h-4 w-4" />
-          {triggerLabel}
+          <DotMatrixText text={triggerLabel.toUpperCase()} size="xs" wrap={false} />
         </Button>
       </DialogTrigger>
 
