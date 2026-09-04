@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/layout/AppShell';
+import { buildMemberships, countMembers, assertTotals } from '@/features/travel/memberships';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +10,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { CONTINENT_ORDER } from '@/features/travel/continents';
 import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Globe, MapPin, Search, Plus, X, Loader2 } from 'lucide-react';
+import { Globe, MapPin, Search, Plus, X, Loader2, ChevronDown } from 'lucide-react';
 import { CountryCityPanel } from '@/features/travel/CountryCityPanel';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -96,6 +97,27 @@ const Travel = () => {
     // The headline counts everything visitable -- every country and territory
     // in the dataset -- with UN membership shown per row instead.
     const totalPlaces = Object.keys(continentByCode).length || 250;
+
+    // Counts against the bodies that publish a membership list. See
+    // memberships.ts -- FIFA and the IOC do not count countries the way ISO
+    // does, and the differences are documented there rather than guessed at.
+    const [showStats, setShowStats] = useState(false);
+    const memberships = useMemo(() => buildMemberships(sovereignCodes), [sovereignCodes]);
+    const membershipStats = useMemo(
+        () =>
+            memberships.map((body) => ({
+                body,
+                visited: countMembers(body, visitedCodes, citiesByCountry),
+            })),
+        [memberships, visitedCodes, citiesByCountry],
+    );
+
+    // A wrong list would produce a confident but false percentage, so say so.
+    useEffect(() => {
+        if (sovereignCodes.size === 0) return;
+        const problems = assertTotals(memberships);
+        if (problems.length) console.error('[Travel] membership totals:', problems);
+    }, [memberships, sovereignCodes.size]);
     const sovereignCount = sovereignVisited.length;
 
     const [hovered, setHovered] = useState<{ code: string; name: string; flagUrl: string; dotKey?: string | null } | null>(null);
@@ -237,7 +259,51 @@ const Travel = () => {
                                         wrap={false}
                                         className="text-muted-foreground whitespace-nowrap"
                                     />
+                                    <button
+                                        onClick={() => setShowStats((v) => !v)}
+                                        className="ml-1 text-muted-foreground/70 hover:text-foreground transition-colors"
+                                        aria-expanded={showStats}
+                                        aria-label="Membership breakdown"
+                                    >
+                                        <ChevronDown
+                                            className={`h-3.5 w-3.5 transition-transform ${showStats ? 'rotate-180' : ''}`}
+                                        />
+                                    </button>
                                 </div>
+
+                                {showStats && (
+                                    <div className="rounded-lg border border-border bg-card/60 px-3 py-2 space-y-1.5">
+                                        {/* Say where the headline denominator comes from, since
+                                            250 is not a number anyone recognises on sight. */}
+                                        <div className="flex items-baseline justify-between gap-3 pb-1.5 border-b border-border/50">
+                                            <span
+                                                className="text-xs text-muted-foreground"
+                                                title="Every country and territory with an ISO 3166-1 alpha-2 code, including dependencies like Gibraltar and Hong Kong."
+                                            >
+                                                ISO 3166-1
+                                            </span>
+                                            <span className="text-xs tabular-nums">
+                                                {visitedCountries.length}/{totalPlaces}
+                                                <span className="text-muted-foreground/60 ml-1.5">
+                                                    {Math.round((visitedCountries.length / totalPlaces) * 100)}%
+                                                </span>
+                                            </span>
+                                        </div>
+                                        {membershipStats.map(({ body, visited }) => (
+                                            <div key={body.key} className="flex items-baseline justify-between gap-3">
+                                                <span className="text-xs text-muted-foreground" title={body.note}>
+                                                    {body.label}
+                                                </span>
+                                                <span className="text-xs tabular-nums">
+                                                    {visited}/{body.total}
+                                                    <span className="text-muted-foreground/60 ml-1.5">
+                                                        {Math.round((visited / body.total) * 100)}%
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {/* View mode toggle — Countries / Cities */}
                                 <div className="travel-view-toggle">

@@ -19,7 +19,8 @@ import { Trash2, Calendar, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
-import { getPlatformColor, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { PlatformBadge } from './PlatformLogo';
 
 interface WatchlistCardProps {
   item: WatchlistItem;
@@ -236,16 +237,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
           {/* Platform and Status badges */}
           <div className="flex flex-col items-start gap-1 mt-2">
-            {item.streaming_platform && (
-              <span
-                className={cn(
-                  'text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap',
-                  getPlatformColor(item.streaming_platform),
-                )}
-              >
-                {item.streaming_platform}
-              </span>
-            )}
+            <PlatformBadge platform={item.streaming_platform} size={22} />
             {status && (
               isUpcomingStatus(status) && upcomingReleaseDate ? (
                 <div

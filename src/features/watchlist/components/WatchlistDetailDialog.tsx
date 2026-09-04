@@ -12,7 +12,8 @@ import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
-import { getPlatformColor, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { PlatformBadge } from './PlatformLogo';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -174,16 +175,11 @@ export function WatchlistDetailDialog({
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                {item.streaming_platform && (
-                  <span
-                    className={cn(
-                      'text-xs px-2 py-1 rounded font-medium',
-                      getPlatformColor(item.streaming_platform),
-                    )}
-                  >
-                    {item.streaming_platform}
-                  </span>
-                )}
+                <PlatformBadge
+                  platform={item.streaming_platform}
+                  showLabel
+                  size={22}
+                />
                 {status && (
                   isUpcomingStatus(status) && upcomingReleaseDate ? (
                     <div
@@ -434,16 +430,11 @@ export function WatchlistDetailDialog({
 
             {/* Status and platform */}
             <div className="flex flex-wrap items-center gap-2 mt-3">
-              {item.streaming_platform && (
-                <span
-                  className={cn(
-                    'text-xs px-2 py-1 rounded font-medium',
-                    getPlatformColor(item.streaming_platform),
-                  )}
-                >
-                  {item.streaming_platform}
-                </span>
-              )}
+              <PlatformBadge
+                platform={item.streaming_platform}
+                showLabel
+                size={22}
+              />
               {status && (
                 isUpcomingStatus(status) && upcomingReleaseDate ? (
                   <div

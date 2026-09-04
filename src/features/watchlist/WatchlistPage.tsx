@@ -59,7 +59,8 @@ import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
 import { CARD_GRID } from '@/theme/layout';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
-import { formatRuntime, getPlatformColor } from '@/features/watchlist/watchlist-utils';
+import { formatRuntime } from '@/features/watchlist/watchlist-utils';
+import { PlatformLogo } from '@/features/watchlist/components/PlatformLogo';
 
 const CATEGORIES = [
   'TV Shows',
@@ -82,6 +83,7 @@ const ALL_PLATFORMS = [
   'Disney+',
   'Apple TV+',
   'BBC iPlayer',
+  'ITVX',
   'Online',
 ];
 
@@ -813,7 +815,11 @@ const Watchlist = () => {
                   >
                     <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
                       <div className="flex items-center gap-2 truncate">
-                        <Filter className="h-3 w-3 opacity-50" />
+                        {selectedPlatform ? (
+                          <PlatformLogo platform={selectedPlatform} size={16} />
+                        ) : (
+                          <Filter className="h-3 w-3 opacity-50" />
+                        )}
                         <SelectValue placeholder="Platform" />
                       </div>
                     </SelectTrigger>
@@ -823,7 +829,10 @@ const Watchlist = () => {
                         (p) => (
                           <SelectItem key={p} value={p}>
                             <div className="flex items-center justify-between gap-4 w-full">
-                              <span>{p}</span>
+                              <span className="flex items-center gap-2">
+                                <PlatformLogo platform={p} size={18} />
+                                {p}
+                              </span>
                               <span className="text-xs opacity-50">
                                 ({getPlatformCount(p)})
                               </span>
