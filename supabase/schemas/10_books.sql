@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS "public"."books" (
     "category" "text" DEFAULT 'favourite'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "price" numeric,
-    "tags" "text"[]
+    "tags" "text"[],
+    "genre" "text"
 );
 
 ALTER TABLE "public"."books" OWNER TO "postgres";

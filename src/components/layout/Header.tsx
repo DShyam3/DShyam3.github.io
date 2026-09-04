@@ -60,11 +60,11 @@ export function Header({
               <img
                 src={`${ASSETS_URL}/memoji.png`}
                 alt="Dhyan Shyam memoji avatar"
-                className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-secondary object-cover flex-shrink-0"
+                className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-secondary object-cover flex-shrink-0"
                 loading="eager"
               />
 
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col items-start gap-0.5 leading-none">
                 <DotMatrixText
                   text="DHYAN SHYAM"
                   size="md"

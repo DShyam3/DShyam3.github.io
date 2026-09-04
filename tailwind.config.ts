@@ -18,9 +18,12 @@ export default {
       },
     },
     extend: {
+      // Both names resolve to Space Mono -- see src/theme/README.md. The site
+      // has two faces: Doto (display, via DotMatrixText) and Space Mono (read).
       fontFamily: {
-        serif: ['JetBrains Mono', 'monospace'],
-        sans: ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+        serif: ['"Space Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['"Space Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        matrix: ['Doto', 'monospace'],
       },
       colors: {
         border: 'hsl(var(--border))',

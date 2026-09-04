@@ -100,6 +100,7 @@ export type Database = {
           cover_url: string | null
           created_at: string
           description: string | null
+          genre: string | null
           id: string
           link: string | null
           price: number | null
@@ -112,6 +113,7 @@ export type Database = {
           cover_url?: string | null
           created_at?: string
           description?: string | null
+          genre?: string | null
           id?: string
           link?: string | null
           price?: number | null
@@ -124,6 +126,7 @@ export type Database = {
           cover_url?: string | null
           created_at?: string
           description?: string | null
+          genre?: string | null
           id?: string
           link?: string | null
           price?: number | null

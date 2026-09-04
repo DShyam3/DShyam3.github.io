@@ -41,9 +41,14 @@
     --badge-new: 25 80% 50%;
     --badge-new-foreground: 0 0% 100%;
 
+    /* See src/theme/fonts.ts and src/theme/README.md.
+       --font-serif and --font-sans both resolve to Space Mono: the names are
+       Tailwind's, kept so existing font-serif/font-sans classes keep working,
+       but the site only has two faces -- Doto to display, Space Mono to read. */
     --font-matrix: 'Doto', monospace;
-    --font-serif: 'JetBrains Mono', monospace;
-    --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-body: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-serif: var(--font-body);
+    --font-sans: var(--font-body);
 
     --shadow-card:
       0 1px 3px 0 hsl(30 10% 15% / 0.04), 0 1px 2px -1px hsl(30 10% 15% / 0.04);
