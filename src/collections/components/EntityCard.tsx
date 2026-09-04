@@ -31,6 +31,7 @@ interface FaceProps {
   /** Shown when an item has no image. Comes from the collection's config. */
   Fallback: LucideIcon;
   imageFit: 'cover' | 'contain';
+  aspect: string;
   title: string;
   subtitle?: string;
   image?: string;
@@ -53,8 +54,15 @@ interface FaceProps {
  * neighbours and the wall lost its rhythm.
  */
 function MediaFace({
-  Fallback, imageFit, title, subtitle, image, excerpt, meta, href, actions, onOpen, openable,
+  Fallback, imageFit, aspect, title, subtitle, image, excerpt, meta, href, actions, onOpen, openable,
 }: FaceProps) {
+  // Stored image URLs go stale -- a cover moves, a shop takes a product photo
+  // down -- and a broken <img> renders as alt text on a grey box. Falling back
+  // to the collection's icon costs nothing and needs no pre-flight request,
+  // which a HEAD check would (and CORS would usually block anyway).
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = image && !imageFailed;
+
   return (
     <div
       className={cn(
@@ -63,8 +71,11 @@ function MediaFace({
       )}
       onClick={openable ? onOpen : undefined}
     >
-      <div className="aspect-[3/4] bg-muted relative overflow-hidden shrink-0">
-        {image ? (
+      <div
+        className="bg-muted relative overflow-hidden shrink-0"
+        style={{ aspectRatio: aspect }}
+      >
+        {showImage ? (
           <img
             src={image}
             alt={title}
@@ -73,6 +84,7 @@ function MediaFace({
               imageFit === 'contain' ? 'object-contain p-4' : 'object-cover',
             )}
             loading="lazy"
+            onError={() => setImageFailed(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -223,6 +235,7 @@ export function EntityCard<T extends CollectionRow, R>({
         <Face
           Fallback={card.fallbackIcon ?? DEFAULT_FALLBACK[card.variant]}
           imageFit={card.imageFit ?? 'cover'}
+          aspect={card.aspect ?? '1 / 1'}
           title={title}
           subtitle={subtitle}
           image={image}

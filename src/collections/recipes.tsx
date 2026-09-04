@@ -1,5 +1,6 @@
 import { ChefHat } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
+import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface RecipeRow extends CollectionRow {
@@ -43,6 +44,8 @@ export const recipesCollection: CollectionConfig<RecipeRow> = {
 
   card: {
     variant: 'media',
+    // Food photography, square.
+    aspect: '1 / 1',
     fallbackIcon: ChefHat,
     title: (recipe) => recipe.title,
     subtitle: (recipe) => (recipe.is_personal ? 'My Recipe' : 'Reference Recipe'),
@@ -51,6 +54,10 @@ export const recipesCollection: CollectionConfig<RecipeRow> = {
     excerpt: (recipe) => recipe.description ?? undefined,
     badge: (recipe) => (recipe.is_personal ? 'Personal' : 'Reference'),
   },
+
+  // Image fields take a pasted URL or an upload; uploads go to the photos
+  // bucket, which avoids depending on a third-party URL staying alive.
+  uploadFile: uploadPhoto,
 
   fields: [
     { name: 'title', label: 'Title', type: 'text', required: true },

@@ -29,6 +29,8 @@ export const photosCollection: CollectionConfig<PhotoRow> = {
 
   card: {
     variant: 'media',
+    // Square crop suits a mixed photo set.
+    aspect: '1 / 1',
     fallbackIcon: ImageIcon,
     title: (photo) => photo.caption ?? 'Untitled',
     subtitle: (photo) => photo.location ?? undefined,

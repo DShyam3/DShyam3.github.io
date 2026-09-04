@@ -1,5 +1,6 @@
 import { FileText } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
+import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface ArticleRow extends CollectionRow {
@@ -32,6 +33,8 @@ export const articlesCollection: CollectionConfig<ArticleRow> = {
 
   card: {
     variant: 'media',
+    // Article hero images are landscape.
+    aspect: '16 / 9',
     fallbackIcon: FileText,
     title: (article) => article.title,
     subtitle: (article) => (article.author ? `by ${article.author}` : undefined),
@@ -40,6 +43,10 @@ export const articlesCollection: CollectionConfig<ArticleRow> = {
     excerpt: (article) => article.notes ?? undefined,
     badge: (article) => labelFor(article.category),
   },
+
+  // Image fields take a pasted URL or an upload; uploads go to the photos
+  // bucket, which avoids depending on a third-party URL staying alive.
+  uploadFile: uploadPhoto,
 
   fields: [
     { name: 'title', label: 'Title', type: 'text', required: true },

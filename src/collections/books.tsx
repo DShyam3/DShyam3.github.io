@@ -1,6 +1,7 @@
 import { BookOpen } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { useGoogleBooks, type GoogleBookResult } from '@/hooks/useGoogleBooks';
+import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface BookRow extends CollectionRow {
@@ -50,6 +51,8 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
 
   card: {
     variant: 'media',
+    // Book covers are 2:3.
+    aspect: '2 / 3',
     fallbackIcon: BookOpen,
     title: (book) => book.title,
     subtitle: (book) => book.author,
@@ -60,6 +63,10 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
     excerpt: (book) => book.genre ?? undefined,
     badge: (book) => labelFor(book.category),
   },
+
+  // Image fields take a pasted URL or an upload; uploads go to the photos
+  // bucket, which avoids depending on a third-party URL staying alive.
+  uploadFile: uploadPhoto,
 
   fields: [
     { name: 'title', label: 'Title', type: 'text', required: true },

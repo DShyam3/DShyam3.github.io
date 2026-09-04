@@ -1,4 +1,5 @@
 import { ArrowDownAZ, Clock, Package } from 'lucide-react';
+import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface InventoryRow extends CollectionRow {
@@ -144,6 +145,8 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
 
   card: {
     variant: 'media',
+    // Product shots, square.
+    aspect: '1 / 1',
     fallbackIcon: Package,
     // Nothing here needs a dialog: an item is a picture, a name, a brand and
     // a price. The title links straight to where you'd buy it.
@@ -159,6 +162,10 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     // Wishlist items are things not owned yet, so they sit back until hovered.
     dimmed: (item) => Boolean(item.is_wishlist),
   },
+
+  // Image fields take a pasted URL or an upload; uploads go to the photos
+  // bucket, which avoids depending on a third-party URL staying alive.
+  uploadFile: uploadPhoto,
 
   fields: [
     { name: 'name', label: 'Name', type: 'text', required: true },

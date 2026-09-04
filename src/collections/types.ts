@@ -71,16 +71,18 @@ export interface SortOptionDef<T> {
 export type FieldType = 'text' | 'textarea' | 'url' | 'select' | 'image' | 'file';
 
 /**
- * Card face shapes. There are only two, deliberately.
+ * Card face shapes.
  *
- *   media  a 3:4 image with text beneath. Everything with a picture.
+ *   media  an image with text beneath. Everything with a picture.
  *   text   no image at all. Beliefs, where the quote is the content.
  *
- * There used to be five -- tile, poster, square, feature, text -- each with
- * its own image ratio and column count, so a card was a different size on
- * every tab. One ratio and one grid means a card is the same object
- * everywhere; 3:4 splits the difference between 2:3 posters and square
- * photographs, and `imageFit` handles the one case that must not be cropped.
+ * The image's aspect ratio is per collection (`card.aspect`), because the
+ * source images genuinely differ: book covers are 2:3, product shots and
+ * photographs are square. Forcing one ratio on all of them cropped the covers.
+ *
+ * What is shared is the grid and the text block beneath the image, so every
+ * card within a tab is exactly the same height and the columns line up
+ * between tabs.
  */
 export type CardVariant = 'media' | 'text';
 
@@ -178,11 +180,16 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     /** Shown when an item has no image. Defaults per variant. */
     fallbackIcon?: LucideIcon;
     /**
-     * `cover` fills the 3:4 box and crops, which is right for artwork and
-     * photographs. `contain` fits the whole image in, for logos and favicons
-     * that would look wrong cropped.
+     * `cover` fills the box and crops; `contain` fits the whole image in, for
+     * logos and favicons that would look wrong cropped.
      */
     imageFit?: 'cover' | 'contain';
+    /**
+     * CSS aspect-ratio for the image box, e.g. '2 / 3' for book covers or
+     * '1 / 1' for product shots. Match it to the source images and `cover`
+     * will not crop anything. Defaults to '1 / 1'.
+     */
+    aspect?: string;
     /**
      * Set false for collections with nothing worth a dialog. The card stops
      * being clickable and its title becomes the outbound link instead --

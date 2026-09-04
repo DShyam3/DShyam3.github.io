@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Image as ImageIcon, Loader2, Pencil, Plus, Search, Upload } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Pencil, Plus, Search, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -73,6 +73,43 @@ function FileField<T extends CollectionRow>({
         id={id}
         type="file"
         accept={field.accept}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(file);
+        }}
+      />
+    </>
+  );
+}
+
+/** Upload / clear control sat beside an image URL field. */
+function ImageUploadButton({
+  onPick,
+  hasFile,
+  onClear,
+}: {
+  onPick: (file: File) => void;
+  hasFile: boolean;
+  onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="shrink-0"
+        title={hasFile ? 'Remove upload' : 'Upload an image'}
+        onClick={() => (hasFile ? onClear() : inputRef.current?.click())}
+      >
+        {hasFile ? <X className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+      </Button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/heic"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -393,16 +430,35 @@ export function EntityFormDialog<T extends CollectionRow, R>({
                     <Input
                       id={id}
                       type="url"
-                      value={value}
+                      value={files[field.name] ? files[field.name].name : value}
+                      readOnly={Boolean(files[field.name])}
                       onChange={(e) => {
                         setValue(field.name, e.target.value);
                         setImageFailed((p) => ({ ...p, [field.name]: false }));
                       }}
                       placeholder={field.placeholder}
                     />
-                    {value && !imageFailed[field.name] && (
+                    {/* Paste a URL, or upload -- URLs go stale, and some
+                        images were never online to begin with. */}
+                    <ImageUploadButton
+                      onPick={(file) => pickFile(field, file)}
+                      hasFile={Boolean(files[field.name])}
+                      onClear={() => {
+                        setFiles((prev) => {
+                          const next = { ...prev };
+                          delete next[field.name];
+                          return next;
+                        });
+                        setPreviews((prev) => {
+                          const next = { ...prev };
+                          delete next[field.name];
+                          return next;
+                        });
+                      }}
+                    />
+                    {(previews[field.name] || (value && !imageFailed[field.name])) && (
                       <img
-                        src={value}
+                        src={previews[field.name] || value}
                         alt="Preview"
                         className="h-8 w-8 shrink-0 rounded object-contain bg-secondary/30"
                         onError={() =>

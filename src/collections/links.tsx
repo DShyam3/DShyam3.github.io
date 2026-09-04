@@ -1,4 +1,5 @@
 import { DetailSection } from '@/components/cards/CardDetailDialog';
+import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface LinkRow extends CollectionRow {
@@ -51,6 +52,8 @@ export const linksCollection: CollectionConfig<LinkRow> = {
 
   card: {
     variant: 'media',
+    // Favicons, square and never cropped.
+    aspect: '1 / 1',
     // Favicons are logos, not artwork -- fit them whole rather than cropping.
     imageFit: 'contain',
     title: (link) => link.name,
@@ -59,6 +62,10 @@ export const linksCollection: CollectionConfig<LinkRow> = {
     href: (link) => link.url,
     excerpt: (link) => link.description ?? undefined,
   },
+
+  // Image fields take a pasted URL or an upload; uploads go to the photos
+  // bucket, which avoids depending on a third-party URL staying alive.
+  uploadFile: uploadPhoto,
 
   fields: [
     { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'Figma' },

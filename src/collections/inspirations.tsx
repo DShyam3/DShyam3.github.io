@@ -1,5 +1,6 @@
 import { User } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
+import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface InspirationRow extends CollectionRow {
@@ -35,6 +36,8 @@ export const inspirationsCollection: CollectionConfig<InspirationRow> = {
 
   card: {
     variant: 'media',
+    // Portraits, square.
+    aspect: '1 / 1',
     fallbackIcon: User,
     title: (person) => person.name,
     subtitle: (person) => labelFor(person.category),
@@ -43,6 +46,10 @@ export const inspirationsCollection: CollectionConfig<InspirationRow> = {
     excerpt: (person) => person.why_i_like ?? undefined,
     badge: (person) => labelFor(person.category),
   },
+
+  // Image fields take a pasted URL or an upload; uploads go to the photos
+  // bucket, which avoids depending on a third-party URL staying alive.
+  uploadFile: uploadPhoto,
 
   fields: [
     { name: 'name', label: 'Name', type: 'text', required: true },
