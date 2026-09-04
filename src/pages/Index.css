@@ -2,8 +2,12 @@
 
 .travel-layout {
   display: grid;
-  grid-template-columns: 450px 1fr;
-  gap: 20px;
+  /* The sidebar is a fixed-width list; the globe takes whatever is left, and
+     its ResizeObserver grows it to fit. This block used to sit inside a
+     max-w-6xl wrapper, so on a wide monitor the globe stayed small while most
+     of the page was empty. */
+  grid-template-columns: 460px minmax(0, 1fr);
+  gap: 32px;
   align-items: start;
 }
 

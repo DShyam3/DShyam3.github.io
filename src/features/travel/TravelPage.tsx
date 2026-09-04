@@ -147,6 +147,51 @@ const Travel = () => {
         a.country_name.localeCompare(b.country_name)
     );
 
+    /**
+     * Adding a city implies having been to the country -- you cannot have
+     * visited Lisbon without visiting Portugal -- so the country is recorded
+     * too if it is not already.
+     */
+    const handleAddCity = useCallback(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CountryCityPanel's City shape
+        async (city: any): Promise<void> => {
+            if (!selectedCountry) return;
+            if (!visitedCodes.includes(selectedCountry.code)) {
+                await addCountry(selectedCountry.code, selectedCountry.name);
+            }
+            await addCity(
+                selectedCountry.code,
+                city.city_name,
+                city.lat,
+                city.lon,
+                city.dot_col,
+                city.dot_row,
+            );
+        },
+        [selectedCountry, visitedCodes, addCountry, addCity],
+    );
+
+    /**
+     * Adding a country almost always means there is a city to add with it, so
+     * this drops straight into that country's city list rather than leaving
+     * the row sitting there with no detail.
+     */
+    const handleAddCountry = useCallback(
+        (country: { code: string; name: string }) => {
+            addCountry(country.code, country.name);
+            setCountrySearch('');
+            setShowCountryResults(false);
+            setViewMode('cities');
+            setSelectedCountry({
+                code: country.code,
+                name: country.name,
+                flagUrl: `https://flagcdn.com/w80/${country.code.toLowerCase()}.png`,
+            });
+            setFocusTrigger((prev) => prev + 1);
+        },
+        [addCountry],
+    );
+
     // Handle clicking a country row to drill into cities
     const handleCountryClick = useCallback((code: string, name: string) => {
         const flagUrl = `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
@@ -170,10 +215,10 @@ const Travel = () => {
             <div className="wide-container flex-1 flex flex-col">
                 <Header title="Travel" subtitle="Where I've been" />
 
-                <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-0 py-12 md:py-24 space-y-16">
+                <main className="flex-1 flex flex-col px-4 md:px-0 py-8 md:py-12 space-y-16">
 
                     {/* WHERE I'VE BEEN */}
-                    <div className="w-full max-w-6xl animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
+                    <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
                         <div className="travel-layout">
 
                             {/* LEFT — title above, country list in card below */}
@@ -187,7 +232,11 @@ const Travel = () => {
                                         className="text-muted-foreground whitespace-nowrap"
                                     />
                                     <DotMatrixText
-                                        text={`${sovereignCount}/${totalCountries}  ${Math.round((sovereignCount / totalCountries) * 100)}%`}
+                                        text={
+                                            territoryVisited.length > 0
+                                                ? `${sovereignCount}/${totalCountries} UN  ${Math.round((sovereignCount / totalCountries) * 100)}%  +${territoryVisited.length}`
+                                                : `${sovereignCount}/${totalCountries} UN  ${Math.round((sovereignCount / totalCountries) * 100)}%`
+                                        }
                                         size={isMobile ? "xs" : "sm"}
                                         wrap={false}
                                         className="text-muted-foreground whitespace-nowrap"
@@ -231,14 +280,7 @@ const Travel = () => {
                                             })) : []}
                                             visitedCities={citiesByCountry[selectedCountry.code] ?? []}
                                             isAdmin={isAdmin}
-                                            onAddCity={(city: any) => addCity(
-                                                selectedCountry.code,
-                                                city.city_name,
-                                                city.lat,
-                                                city.lon,
-                                                city.dot_col,
-                                                city.dot_row
-                                            )}
+                                            onAddCity={(city: any) => handleAddCity(city)}
                                              onRemoveCity={(id: string) => removeCity(Number(id))}
                                             onBack={handleCityPanelBack}
                                         />
@@ -267,11 +309,7 @@ const Travel = () => {
                                                                 <button
                                                                     key={country.code}
                                                                     className="w-full text-left px-3 py-2 text-xs hover:bg-accent flex items-center justify-between group"
-                                                                    onClick={() => {
-                                                                        addCountry(country.code, country.name);
-                                                                        setCountrySearch('');
-                                                                        setShowCountryResults(false);
-                                                                    }}
+                                                                    onClick={() => handleAddCountry(country)}
                                                                 >
                                                                     <span className="flex items-center gap-2 uppercase">
                                                                         <img 
@@ -280,6 +318,17 @@ const Travel = () => {
                                                                             alt=""
                                                                         />
                                                                         {country.name}
+                                                                        {/* The list is every country and territory -- the ones
+                                                                            that count toward the x/195 stat are marked. */}
+                                                                        {sovereignCodes.has(country.code) ? (
+                                                                            <span className="text-xs px-1 py-px rounded bg-secondary text-muted-foreground normal-case">
+                                                                                UN
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-xs text-muted-foreground/50 normal-case">
+                                                                                territory
+                                                                            </span>
+                                                                        )}
                                                                     </span>
                                                                     <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100" />
                                                                 </button>
