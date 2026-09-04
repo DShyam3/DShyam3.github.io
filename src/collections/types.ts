@@ -24,17 +24,51 @@ export interface CollectionRow {
 export interface FacetDef<T> {
   /** Stable key used in the filter state, e.g. 'category'. */
   key: string;
-  /** Column this facet filters on. */
+  /** Column this facet filters on. Compared as a string, so booleans work. */
   field: keyof T & string;
   /**
-   * Options in display order. `all` is added automatically as the first
-   * option and means "no filter".
+   * Options in display order. `all` is prepended automatically and means "no
+   * filter", unless `includeAll` is false.
    */
   options: { key: string; label: string }[];
+  /**
+   * Inventory always shows exactly one category -- there is no "everything"
+   * view -- so it opts out of the All option and starts on a real one.
+   */
+  includeAll?: boolean;
+  /** Option selected on first render. Defaults to `all`. */
+  defaultValue?: string;
+}
+
+/**
+ * Section headings inside the grid. Wardrobe and homelab items are grouped by
+ * subcategory; every other inventory category is a flat list.
+ */
+export interface GroupByDef<T> {
+  field: keyof T & string;
+  /**
+   * Ordered groups for the current filter state, or undefined to not group.
+   * Returning a list also fixes the display order of the sections.
+   */
+  groupsFor: (
+    filters: Record<string, string>,
+  ) => { key: string; label: string }[] | undefined;
+  /** Heading for items whose group field is empty. */
+  ungroupedLabel?: string;
+}
+
+/** A user-selectable sort order, shown as a toggle button above the grid. */
+export interface SortOptionDef<T> {
+  key: string;
+  label: string;
+  icon?: LucideIcon;
+  compare: (a: T, b: T) => number;
+  /** Hide the toggle while these filter values are active. */
+  hiddenWhen?: (filters: Record<string, string>) => boolean;
 }
 
 /** Field types the generated add/edit form knows how to render. */
-export type FieldType = 'text' | 'textarea' | 'url' | 'select' | 'image';
+export type FieldType = 'text' | 'textarea' | 'url' | 'select' | 'image' | 'file';
 
 /**
  * Card face shapes. Each one owns its grid and skeleton -- see CARD_LAYOUT.
@@ -59,6 +93,9 @@ export interface FieldDef<T> {
   options?: { key: string; label: string }[];
   /** Value used when the add form is opened. */
   defaultValue?: string;
+  /** `file` only: accepted MIME types, and the size cap in bytes. */
+  accept?: string;
+  maxBytes?: number;
 }
 
 /** Values the form holds while being edited -- every input is a string. */
@@ -144,6 +181,21 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
 
   /** Optional lookup step at the top of the add dialog. */
   externalSearch?: ExternalSearch<R>;
+
+  /**
+   * Required when any field has type 'file'. Uploads the chosen file and
+   * returns the public URL to store in that column.
+   */
+  uploadFile?: (file: File) => Promise<string>;
+
+  /** Group the grid into labelled sections. */
+  groupBy?: GroupByDef<T>;
+
+  /** Sort orders the reader can toggle between. */
+  sortOptions?: SortOptionDef<T>[];
+
+  /** Extra content in the row above the grid, e.g. a total valuation. */
+  summary?: (items: T[], isAdmin: boolean) => ReactNode;
 
   /** Contents of the detail dialog, below the shared chrome. */
   renderDetail?: (item: T) => ReactNode;

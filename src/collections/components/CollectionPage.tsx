@@ -1,7 +1,9 @@
 import { Navigate } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '../useCollection';
 import { FilterBar } from './FilterBar';
@@ -23,6 +25,10 @@ export function CollectionPage<T extends CollectionRow, R>({
   const { isAdmin } = useAuth();
   const {
     items,
+    groups,
+    sortKey,
+    setSortKey,
+    sortOptions,
     loading,
     filters,
     setFilter,
@@ -35,6 +41,22 @@ export function CollectionPage<T extends CollectionRow, R>({
   } = useCollection(config);
 
   const layout = CARD_LAYOUT[config.card.variant];
+
+  const activeSort = sortOptions.find((o) => o.key === sortKey);
+  const showSortToggle =
+    sortOptions.length > 1 && !activeSort?.hiddenWhen?.(filters);
+
+  const cardsFor = (list: typeof items, offset = 0) =>
+    list.map((item, index) => (
+      <EntityCard
+        key={item.id}
+        item={item}
+        config={config}
+        index={offset + index}
+        onUpdate={isAdmin ? updateItem : undefined}
+        onRemove={isAdmin ? removeItem : undefined}
+      />
+    ));
 
   // Beliefs is private. Hooks run first so this stays a valid hook order.
   if (config.adminOnly && !isAdmin) return <Navigate to="/" replace />;
@@ -57,9 +79,31 @@ export function CollectionPage<T extends CollectionRow, R>({
         />
 
         <div className="flex items-center justify-between px-4 md:px-0 pt-6">
-          <p className="text-sm text-muted-foreground">
-            {loading ? '...' : `${count} ${noun.toLowerCase()}`}
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground">
+              {loading ? '...' : `${count} ${noun.toLowerCase()}`}
+            </p>
+            {showSortToggle && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const next =
+                    sortOptions[
+                      (sortOptions.findIndex((o) => o.key === sortKey) + 1) %
+                        sortOptions.length
+                    ];
+                  setSortKey(next.key);
+                }}
+                className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
+              >
+                {activeSort?.icon && <activeSort.icon className="h-3.5 w-3.5" />}
+                <DotMatrixText text={(activeSort?.label ?? '').toUpperCase()} size="xs" />
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            {config.summary?.(items, isAdmin)}
           {isAdmin && (
             <EntityFormDialog
               mode="add"
@@ -67,6 +111,7 @@ export function CollectionPage<T extends CollectionRow, R>({
               onSubmit={(values) => addItem(values)}
             />
           )}
+          </div>
         </div>
 
         <div className="px-4 md:px-0">
@@ -85,19 +130,25 @@ export function CollectionPage<T extends CollectionRow, R>({
                 Try adjusting your search or add new {config.noun.plural.toLowerCase()}
               </p>
             </div>
-          ) : (
-            <div className={layout.grid}>
-              {items.map((item, index) => (
-                <EntityCard
-                  key={item.id}
-                  item={item}
-                  config={config}
-                  index={index}
-                  onUpdate={isAdmin ? updateItem : undefined}
-                  onRemove={isAdmin ? removeItem : undefined}
-                />
+          ) : groups ? (
+            <div className="space-y-8 pt-6 pb-4">
+              {groups.map((group) => (
+                <section key={group.key}>
+                  <div className="flex items-center gap-4 mb-5">
+                    <h3 className="text-lg font-semibold tracking-wide whitespace-nowrap">
+                      <DotMatrixText text={group.label.toUpperCase()} size="xs" />
+                    </h3>
+                    <div className="h-px bg-border flex-1" />
+                    <span className="text-sm text-muted-foreground">
+                      {group.items.length}
+                    </span>
+                  </div>
+                  <div className={layout.grid}>{cardsFor(group.items)}</div>
+                </section>
               ))}
             </div>
+          ) : (
+            <div className={layout.grid}>{cardsFor(items)}</div>
           )}
         </div>
 

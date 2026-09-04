@@ -2,7 +2,9 @@ import { articlesCollection } from './articles';
 import { beliefsCollection } from './beliefs';
 import { booksCollection } from './books';
 import { inspirationsCollection } from './inspirations';
+import { inventoryCollection } from './inventory';
 import { linksCollection } from './links';
+import { photosCollection } from './photos';
 import { recipesCollection } from './recipes';
 import type { CollectionConfig, CollectionRow } from './types';
 
@@ -24,9 +26,9 @@ export const collections: CollectionConfig<any, any>[] = [
   articlesCollection,
   inspirationsCollection,
   recipesCollection,
+  photosCollection,
+  inventoryCollection,
   beliefsCollection,
-  // photos (file upload) and inventory (subcategory grouping, sort toggle,
-  // valuation summary) need config mechanics that do not exist yet.
 ];
 
 export function collectionByPath(

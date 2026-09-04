@@ -20,11 +20,18 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
       : undefined,
   );
 
-  // One entry per facet, all starting at ALL (no filter).
+  // One entry per facet. Most start at ALL (no filter); a facet that opts out
+  // of the All option starts on its declared default, or its first option.
   const [filters, setFilters] = useState<Record<string, string>>(() =>
-    Object.fromEntries(config.facets.map((f) => [f.key, ALL])),
+    Object.fromEntries(
+      config.facets.map((f) => [
+        f.key,
+        f.defaultValue ?? (f.includeAll === false ? f.options[0]?.key : ALL),
+      ]),
+    ),
   );
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState(() => config.sortOptions?.[0]?.key ?? '');
 
   const setFilter = useCallback((key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -40,7 +47,8 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
       config.facets.reduce((acc, facet) => {
         const value = filters[facet.key];
         if (facet.key === exceptKey || !value || value === ALL) return acc;
-        return acc.filter((item) => item[facet.field] === value);
+        // String comparison so boolean columns (is_wishlist) work as facets.
+        return acc.filter((item) => String(item[facet.field]) === value);
       }, items),
     [config.facets, filters],
   );
@@ -54,7 +62,41 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
     );
   }, [data, search, config.searchFields]);
 
-  const items = useMemo(() => applyFacets(searched), [searched, applyFacets]);
+  const faceted = useMemo(() => applyFacets(searched), [searched, applyFacets]);
+
+  const sortOption = config.sortOptions?.find((o) => o.key === sortKey);
+
+  const items = useMemo(
+    () => (sortOption ? [...faceted].sort(sortOption.compare) : faceted),
+    [faceted, sortOption],
+  );
+
+  /**
+   * The grid split into labelled sections, or null when this collection does
+   * not group (or the current filters do not call for it).
+   */
+  const groups = useMemo(() => {
+    const spec = config.groupBy;
+    const defined = spec?.groupsFor(filters);
+    if (!spec || !defined) return null;
+
+    const sections = defined
+      .map((group) => ({
+        ...group,
+        items: items.filter((item) => item[spec.field] === group.key),
+      }))
+      .filter((group) => group.items.length > 0);
+
+    const ungrouped = items.filter((item) => !item[spec.field]);
+    if (ungrouped.length) {
+      sections.push({
+        key: '__ungrouped',
+        label: spec.ungroupedLabel ?? 'Uncategorized',
+        items: ungrouped,
+      });
+    }
+    return sections;
+  }, [items, config.groupBy, filters]);
 
   /**
    * How many items an option would show if selected. Counts respect the search
@@ -66,15 +108,19 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
       if (!facet) return 0;
       const pool = applyFacets(searched, facetKey);
       if (optionKey === ALL) return pool.length;
-      return pool.filter((item) => item[facet.field] === optionKey).length;
+      return pool.filter((item) => String(item[facet.field]) === optionKey).length;
     },
     [config.facets, searched, applyFacets],
   );
 
   return {
     items,
+    groups,
     all: data,
     loading,
+    sortKey,
+    setSortKey,
+    sortOptions: config.sortOptions ?? [],
     filters,
     setFilter,
     search,

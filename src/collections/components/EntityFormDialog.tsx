@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Pencil, Plus, Search } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Pencil, Plus, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +27,61 @@ import type {
   FieldDef,
   FormValues,
 } from '../types';
+
+/** Click-to-select file input with a preview. Photos upload rather than paste a URL. */
+function FileField<T extends CollectionRow>({
+  id,
+  field,
+  preview,
+  fileName,
+  onPick,
+}: {
+  id: string;
+  field: FieldDef<T>;
+  preview?: string;
+  fileName?: string;
+  onPick: (file: File) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <div
+        className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
+        onClick={() => inputRef.current?.click()}
+      >
+        {preview ? (
+          <div className="space-y-2">
+            <img src={preview} alt="Preview" className="max-h-48 mx-auto rounded-md object-cover" />
+            {fileName && <p className="text-xs text-muted-foreground">{fileName}</p>}
+            <p className="text-xs text-muted-foreground">Click to change</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <ImageIcon className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">Click to select a file</p>
+            {field.placeholder && (
+              <p className="text-xs text-muted-foreground">{field.placeholder}</p>
+            )}
+          </div>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        id={id}
+        type="file"
+        accept={field.accept}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(file);
+        }}
+      />
+    </>
+  );
+}
 
 interface EntityFormDialogProps<T extends CollectionRow, R> {
   mode: 'add' | 'edit';
@@ -149,6 +204,11 @@ export function EntityFormDialog<T extends CollectionRow, R>({
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imageFailed, setImageFailed] = useState<Record<string, boolean>>({});
+  // `file` fields hold a File plus a data-URL preview; `values` only ever holds
+  // strings, and the uploaded public URL lands there on submit.
+  const [files, setFiles] = useState<Record<string, File>>({});
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
 
   // Re-seed on open so an edit dialog never shows a stale row, and an add
   // dialog starts clean after a previous submit.
@@ -157,6 +217,8 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       setValues(initialValues(config.fields, item));
       setErrors({});
       setImageFailed({});
+      setFiles({});
+      setPreviews({});
     }
   }, [open, item, config.fields]);
 
@@ -170,11 +232,32 @@ export function EntityFormDialog<T extends CollectionRow, R>({
     if (merged) setValues((prev) => ({ ...prev, ...merged }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const pickFile = (field: FieldDef<T>, file: File) => {
+    if (field.accept && !field.accept.split(',').includes(file.type)) {
+      setErrors((prev) => ({ ...prev, [field.name]: 'Unsupported file type' }));
+      return;
+    }
+    if (field.maxBytes && file.size > field.maxBytes) {
+      const mb = Math.round(field.maxBytes / 1024 / 1024);
+      setErrors((prev) => ({ ...prev, [field.name]: `Maximum file size is ${mb}MB` }));
+      return;
+    }
+    setErrors((prev) => ({ ...prev, [field.name]: '' }));
+    setFiles((prev) => ({ ...prev, [field.name]: file }));
+    const reader = new FileReader();
+    reader.onloadend = () =>
+      setPreviews((prev) => ({ ...prev, [field.name]: reader.result as string }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const missing = config.fields.filter(
-      (f) => f.required && !values[f.name]?.trim(),
+    // A file field counts as filled if a file is staged or a URL already exists.
+    const missing = config.fields.filter((f) =>
+      f.required && f.type === 'file'
+        ? !files[f.name] && !values[f.name]?.trim()
+        : f.required && !values[f.name]?.trim(),
     );
     if (missing.length) {
       setErrors(Object.fromEntries(missing.map((f) => [f.name, 'Required'])));
@@ -188,13 +271,36 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       return;
     }
 
+    // Upload any staged files first; the public URL becomes the column value.
+    const uploaded: FormValues = {};
+    const staged = Object.entries(files);
+    if (staged.length) {
+      if (!config.uploadFile) {
+        toast.error('This collection has a file field but no uploader');
+        return;
+      }
+      setUploading(true);
+      try {
+        for (const [name, file] of staged) {
+          uploaded[name] = await config.uploadFile(file);
+        }
+      } catch (error) {
+        console.error('Upload error:', error);
+        toast.error('Failed to upload', { description: (error as Error).message });
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
     // Empty optional fields are sent as undefined rather than '' so the column
     // stays null instead of collecting blank strings.
-    onSubmit(
-      Object.fromEntries(
+    onSubmit({
+      ...(Object.fromEntries(
         config.fields.map((f) => [f.name, values[f.name]?.trim() || undefined]),
-      ) as FormValues,
-    );
+      ) as FormValues),
+      ...uploaded,
+    });
 
     toast.success(`${config.noun.singular} ${mode === 'add' ? 'added' : 'updated'}`);
     setOpen(false);
@@ -274,6 +380,14 @@ export function EntityFormDialog<T extends CollectionRow, R>({
                       ))}
                     </SelectContent>
                   </Select>
+                ) : field.type === 'file' ? (
+                  <FileField
+                    id={id}
+                    field={field}
+                    preview={previews[field.name] ?? values[field.name]}
+                    fileName={files[field.name]?.name}
+                    onPick={(file) => pickFile(field, file)}
+                  />
                 ) : field.type === 'image' ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -330,8 +444,17 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             >
               Cancel
             </Button>
-            <Button type="submit" className="flex-1">
-              {mode === 'add' ? `Add ${config.noun.singular}` : 'Save Changes'}
+            <Button type="submit" className="flex-1 gap-2" disabled={uploading}>
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : mode === 'add' ? (
+                `Add ${config.noun.singular}`
+              ) : (
+                'Save Changes'
+              )}
             </Button>
           </div>
         </form>
