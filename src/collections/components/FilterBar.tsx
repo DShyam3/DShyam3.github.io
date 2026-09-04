@@ -41,10 +41,13 @@ export function FilterBar<T extends CollectionRow, R>({
     <div className="flex flex-col md:flex-row md:items-start justify-between border-b border-border/50 px-4 md:px-0 gap-4 md:gap-6 py-3 md:py-2">
       <div className="flex flex-col flex-1 min-w-0">
         {config.facets.map((facet) => {
+          const all = { key: ALL, label: 'All' };
           const options =
             facet.includeAll === false
               ? facet.options
-              : [{ key: ALL, label: 'All' }, ...facet.options];
+              : facet.allLast
+                ? [...facet.options, all]
+                : [all, ...facet.options];
           const active = filters[facet.key] ?? ALL;
 
           return (

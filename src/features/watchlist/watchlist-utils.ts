@@ -21,3 +21,24 @@ export const getStatusColor = (status: string) => {
     if (status === 'Released') return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
     return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
 };
+
+/**
+ * Titles come out of TMDB with a disambiguating year on some entries
+ * ("Hell's Paradise (2023)"). Every surface already prints the year on its own
+ * line, so strip it when it is the same year rather than showing it twice.
+ */
+export const displayTitle = (title: string, year?: number | null) => {
+    if (!year) return title;
+    return title.replace(new RegExp(`\\s*\\(${year}\\)\\s*$`), '');
+};
+
+/**
+ * "S1 releases in 46 days" -> "S1 in 46d", so an upcoming title's badge is the
+ * same single-line pill as every other status instead of a two-line block.
+ */
+export const compactUpcomingStatus = (status: string) =>
+    status
+        .replace(/\s*releases in\s*/i, ' in ')
+        .replace(/\s*days?$/i, 'd')
+        .replace(/^Coming Soon$/i, 'Coming Soon')
+        .trim();

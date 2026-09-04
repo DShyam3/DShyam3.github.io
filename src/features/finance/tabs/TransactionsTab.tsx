@@ -52,6 +52,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 interface TransactionsTabProps {
   transactions: MockTransaction[];
@@ -72,6 +73,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 }) => {
   // Navigation & UI States
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
+  const { askDelete, deleteDialog } = useDeleteConfirm();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -342,13 +344,19 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     onUpdateTransactions(updated);
   };
 
-  const handleDeleteSingle = (id: string) => {
+  const performDeleteSingle = (id: string) => {
     const updated = transactions.filter(tx => tx.id !== id);
     onUpdateTransactions(updated);
     if (selectedTxId === id) {
       setSelectedTxId(null);
     }
   };
+
+  const handleDeleteSingle = (id: string) =>
+    askDelete({
+      name: transactions.find(tx => tx.id === id)?.name,
+      onConfirm: () => performDeleteSingle(id),
+    });
 
   // Bulk Actions
   const handleBulkReview = (isReviewed: boolean) => {
@@ -362,11 +370,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     setSelectedTxIds(new Set());
   };
 
-  const handleBulkDelete = () => {
-    const updated = transactions.filter(tx => !selectedTxIds.has(tx.id));
-    onUpdateTransactions(updated);
-    setSelectedTxIds(new Set());
-  };
+  const handleBulkDelete = () =>
+    askDelete({
+      title: `Delete ${selectedTxIds.size} transaction${selectedTxIds.size === 1 ? '' : 's'}`,
+      description: `Delete the ${selectedTxIds.size} selected transaction${selectedTxIds.size === 1 ? '' : 's'}? This action cannot be undone.`,
+      onConfirm: () => {
+        const updated = transactions.filter(tx => !selectedTxIds.has(tx.id));
+        onUpdateTransactions(updated);
+        setSelectedTxIds(new Set());
+      },
+    });
 
   const handleBulkCategory = (catName: string) => {
     const updated = transactions.map(tx => {
@@ -1248,6 +1261,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {deleteDialog}
     </div>
   );
 };

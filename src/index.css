@@ -23,7 +23,7 @@
     --secondary-foreground: 30 10% 25%;
 
     --muted: 35 10% 92%;
-    --muted-foreground: 30 8% 50%;
+    --muted-foreground: 30 8% 38%;
 
     --accent: 25 60% 55%;
     --accent-foreground: 0 0% 100%;
@@ -83,7 +83,7 @@
     --secondary-foreground: 210 15% 88%;
 
     --muted: 220 14% 18%;
-    --muted-foreground: 215 12% 65%;
+    --muted-foreground: 215 14% 72%;
 
     --accent: 35 85% 55%;
     --accent-foreground: 0 0% 100%;
@@ -168,7 +168,7 @@
   }
 
   .nav-link {
-    @apply text-sm font-medium text-foreground/60 transition-colors duration-200 hover:text-foreground;
+    @apply text-sm font-medium text-foreground/75 transition-colors duration-200 hover:text-foreground;
   }
 
   .nav-link-active {

@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
-import { BookOpen, ExternalLink, Image, Quote, Trash2, X } from 'lucide-react';
+import { BookOpen, ExternalLink, Image, Pencil, Quote, Trash2, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
 import { CARD_GRID } from '@/theme/layout';
@@ -201,10 +202,25 @@ export function EntityCard<T extends CollectionRow, R>({
   const excerpt = card.excerpt?.(item);
   const badge = card.badge?.(item);
   const meta = card.meta?.(item);
-  const openable = card.openable !== false;
+  const openable =
+    typeof card.openable === 'function' ? card.openable(item) : card.openable !== false;
   const dimmed = card.dimmed?.(item) ?? false;
 
   const Face = FACES[card.variant];
+
+  // A card's trash icon sits over the image, a mis-click away from the card
+  // itself, so it asks first.
+  const { askDelete, deleteDialog } = useDeleteConfirm();
+  const confirmRemove = onRemove
+    ? (after?: () => void) =>
+        askDelete({
+          name: title,
+          onConfirm: () => {
+            onRemove(item.id);
+            after?.();
+          },
+        })
+    : undefined;
 
   const actions = (
     <>
@@ -221,13 +237,34 @@ export function EntityCard<T extends CollectionRow, R>({
           variant="secondary"
           size="icon"
           className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-          onClick={() => onRemove(item.id)}
+          onClick={() => confirmRemove?.()}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
     </>
   );
+
+  // The same form as the pencil over the card, wearing a label instead: inside
+  // the dialog there is room for one, and no image for it to sit on top of.
+  const editAction = onUpdate ? (
+    <EntityFormDialog
+      mode="edit"
+      config={config}
+      item={item}
+      onSubmit={(values) => onUpdate(item.id, values as Partial<T>)}
+      trigger={
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+        >
+          <Pencil className="h-4 w-4" />
+          Edit
+        </Button>
+      }
+    />
+  ) : undefined;
 
   return (
     <>
@@ -259,18 +296,16 @@ export function EntityCard<T extends CollectionRow, R>({
         badge={badge}
         imageIsContent={card.imageIsContent}
         downloadName={title}
+        editAction={editAction}
         onDelete={
-          onRemove
-            ? () => {
-                onRemove(item.id);
-                setDetailOpen(false);
-              }
-            : undefined
+          confirmRemove ? () => confirmRemove(() => setDetailOpen(false)) : undefined
         }
       >
         {config.renderDetail?.(item)}
       </CardDetailDialog>
       )}
+
+      {deleteDialog}
     </>
   );
 }

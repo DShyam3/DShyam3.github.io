@@ -47,7 +47,16 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
 
   searchFields: ['title', 'author'],
 
-  facets: [{ key: 'category', field: 'category', options: CATEGORIES }],
+  facets: [
+    {
+      key: 'category',
+      field: 'category',
+      options: CATEGORIES,
+      // Books read opens first; the unread piles and All sit after it.
+      allLast: true,
+      defaultValue: 'completed',
+    },
+  ],
 
   card: {
     variant: 'media',

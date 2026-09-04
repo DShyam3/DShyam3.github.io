@@ -80,7 +80,7 @@ export function SeasonEpisodeList({
 
   return (
     <DetailSection label="Seasons & Episodes">
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="flex gap-1.5 mb-4 flex-wrap">
         {seasons.map((season) => {
           const seasonWatched = isSeasonWatched(showId, season);
           const watchedCount = getWatchedCount(season);
@@ -93,7 +93,7 @@ export function SeasonEpisodeList({
               }
               size="sm"
               onClick={() => setSelectedSeason(season.season_number)}
-              className="text-xs relative"
+              className="h-7 px-2.5 text-xs relative"
             >
               Season {season.season_number}
               {seasonWatched && <span className="ml-1.5 text-xs">✓</span>}

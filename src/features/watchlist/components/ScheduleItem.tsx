@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 interface ScheduleItemProps {
   scheduleItem: any;
@@ -69,6 +70,7 @@ export function ScheduleItem({
   onMoveToFavourites,
 }: ScheduleItemProps) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const { askDelete, deleteDialog } = useDeleteConfirm();
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [changeDayDialogOpen, setChangeDayDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<
@@ -174,7 +176,13 @@ export function ScheduleItem({
               className="h-5 w-5 bg-background/90 backdrop-blur-sm"
               onClick={(e) => {
                 e.stopPropagation();
-                removeFromSchedule(scheduleItem.id);
+                askDelete({
+                  name: item.title,
+                  title: 'Remove from schedule',
+                  confirmLabel: 'Remove',
+                  description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
+                  onConfirm: () => removeFromSchedule(scheduleItem.id),
+                });
               }}
             >
               <X className="h-2.5 w-2.5" />
@@ -308,10 +316,17 @@ export function ScheduleItem({
         }
         onRemoveFromSchedule={
           removeFromSchedule
-            ? () => {
-                removeFromSchedule(scheduleItem.id);
-                setDetailOpen(false);
-              }
+            ? () =>
+                askDelete({
+                  name: item.title,
+                  title: 'Remove from schedule',
+                  confirmLabel: 'Remove',
+                  description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
+                  onConfirm: () => {
+                    removeFromSchedule(scheduleItem.id);
+                    setDetailOpen(false);
+                  },
+                })
             : undefined
         }
         isScheduled={isInSchedule(item.id)}
@@ -327,6 +342,8 @@ export function ScheduleItem({
             : undefined
         }
       />
+
+      {deleteDialog}
     </>
   );
 }

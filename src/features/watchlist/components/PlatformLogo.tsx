@@ -1,12 +1,16 @@
-import { Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LogoSpec {
   src: string;
   /** Wordmarks are wide; the square TMDB tiles are 1:1. */
   square?: boolean;
-  /** Single-colour dark marks need flipping on a dark background. */
-  invertInDark?: boolean;
+  /**
+   * Single-colour dark marks disappear on a dark background. These get drawn
+   * white there, which is how both brands present themselves on dark anyway.
+   */
+  whiteInDark?: boolean;
+  /** Height multiplier for marks that are stacked rather than wide. */
+  scale?: number;
 }
 
 /**
@@ -18,8 +22,13 @@ interface LogoSpec {
 const PLATFORM_LOGOS: Record<string, LogoSpec> = {
   Netflix: { src: '/platform-logos/netflix.svg' },
   'Prime Video': { src: '/platform-logos/prime-video.svg' },
-  'Disney+': { src: '/platform-logos/disney-plus.svg' },
-  'Apple TV+': { src: '/platform-logos/apple-tv-plus.svg', invertInDark: true },
+  'Disney+': {
+    src: '/platform-logos/disney-plus.svg',
+    whiteInDark: true,
+    // The wordmark sits under its arc, so it needs the extra height to read.
+    scale: 1.5,
+  },
+  'Apple TV+': { src: '/platform-logos/apple-tv-plus.svg', whiteInDark: true },
   'BBC iPlayer': { src: '/platform-logos/bbc-iplayer.svg' },
   ITVX: { src: '/platform-logos/itvx.png', square: true },
 };
@@ -44,20 +53,7 @@ export function PlatformLogo({
 }: PlatformLogoProps) {
   const logo = platform ? PLATFORM_LOGOS[platform] : undefined;
 
-  if (!logo) {
-    return (
-      <span
-        className={cn(
-          'inline-flex items-center justify-center rounded-[4px] bg-muted text-muted-foreground shrink-0',
-          className,
-        )}
-        style={{ width: size, height: size }}
-        aria-hidden="true"
-      >
-        <Globe style={{ width: size * 0.6, height: size * 0.6 }} />
-      </span>
-    );
-  }
+  if (!logo) return null;
 
   return (
     <img
@@ -66,13 +62,15 @@ export function PlatformLogo({
       loading="lazy"
       decoding="async"
       className={cn(
-        'object-contain shrink-0',
+        // `no-outline` opts out of the global img outline, which is meant for
+        // photos and draws a box around a transparent wordmark.
+        'object-contain shrink-0 no-outline',
         logo.square && 'rounded-[4px] ring-1 ring-border/40',
-        logo.invertInDark && 'dark:invert',
+        logo.whiteInDark && 'dark:brightness-0 dark:invert',
         className,
       )}
       style={{
-        height: size,
+        height: size * (logo.scale ?? 1),
         width: logo.square ? size : 'auto',
         maxWidth: logo.square ? undefined : maxWidth,
       }}
@@ -88,9 +86,9 @@ interface PlatformBadgeProps {
 }
 
 /**
- * Platform indicator for cards and the detail dialog. Platforms with a mark of
- * their own show it on its own (named for screen readers and on hover);
- * anything else keeps a plain text pill.
+ * Platform indicator for cards and the detail dialog: the wordmark where the
+ * platform has one, otherwise its name as a plain pill. "Online" is not a
+ * brand, so it reads better spelled out than as a stand-in icon.
  */
 export function PlatformBadge({
   platform,
@@ -104,11 +102,10 @@ export function PlatformBadge({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1.5 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground whitespace-nowrap',
+          'rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground whitespace-nowrap',
           className,
         )}
       >
-        <PlatformLogo platform={platform} size={size * 0.75} />
         {platform}
       </span>
     );

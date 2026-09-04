@@ -27,8 +27,11 @@
 export const CARD_GRID = [
   'grid gap-4 md:gap-5 py-4 md:py-5',
   '[grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr))]',
-  'sm:[grid-template-columns:repeat(auto-fill,minmax(10rem,1fr))]',
-  'xl:[grid-template-columns:repeat(auto-fill,minmax(11rem,1fr))]',
+  // 11.5rem, not 10: a 10rem column left ~142px of card body, and a platform
+  // wordmark plus a status pill needs ~163px to stay on one line. Below sm the
+  // badges wrap instead, which is the right trade on a phone.
+  'sm:[grid-template-columns:repeat(auto-fill,minmax(11.5rem,1fr))]',
+  'xl:[grid-template-columns:repeat(auto-fill,minmax(12rem,1fr))]',
   '2xl:[grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr))]',
   'min-[1920px]:[grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))]',
   'min-[2400px]:[grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))]',

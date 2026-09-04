@@ -79,8 +79,11 @@ export function CollectionPage<T extends CollectionRow, R>({
             setSearch={setSearch}
           />
 
-          <div className="flex items-center justify-between px-4 md:px-0 py-3">
-            <div className="flex items-center gap-4">
+          {/* Two groups that stay on one line each. On a phone there is not
+              room for both, so the row wraps between them rather than
+              squeezing the sort label onto two lines. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 md:px-0 py-3">
+            <div className="flex items-center gap-3 sm:gap-4">
               <CountLabel
                 count={loading ? undefined : count}
                 noun={noun.toLowerCase()}
@@ -104,7 +107,7 @@ export function CollectionPage<T extends CollectionRow, R>({
                 </Button>
               )}
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               {config.summary?.(items, isAdmin)}
               {isAdmin && (
                 <EntityFormDialog

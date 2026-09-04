@@ -21,6 +21,12 @@ interface CardDetailDialogProps {
   link?: string;
   children: ReactNode;
   badge?: string;
+  /**
+   * Opens the edit form. The pencil over a card is a small target that only
+   * appears on hover, and once a card opens a dialog that is where you are when
+   * you notice the typo -- so editing lives here too.
+   */
+  editAction?: ReactNode;
   onDelete?: () => void;
   onSchedule?: () => void;
   isScheduled?: boolean;
@@ -37,6 +43,7 @@ export function CardDetailDialog({
   badge,
   imageIsContent,
   downloadName,
+  editAction,
   onDelete,
   onSchedule,
   isScheduled,
@@ -111,17 +118,20 @@ export function CardDetailDialog({
             {imageIsContent && imageUrl && (
               <DownloadLink href={imageUrl} name={downloadName || title} />
             )}
-            {onDelete && (
-              <div className="mt-6 pt-4 border-t flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onDelete}
-                  className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </Button>
+            {(editAction || onDelete) && (
+              <div className="mt-6 pt-4 border-t flex justify-end gap-2">
+                {editAction}
+                {onDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onDelete}
+                    className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -205,17 +215,20 @@ export function CardDetailDialog({
                 <DownloadLink href={imageUrl} name={downloadName || title} />
               </div>
             )}
-            {onDelete && (
-              <div className="mt-6 pt-4 border-t flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onDelete}
-                  className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </Button>
+            {(editAction || onDelete) && (
+              <div className="mt-6 pt-4 border-t flex justify-end gap-2">
+                {editAction}
+                {onDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onDelete}
+                    className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                )}
               </div>
             )}
           </div>

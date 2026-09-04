@@ -3,6 +3,7 @@ import { ArrowDownAZ, Clock, Package } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { uploadPhoto } from '@/lib/storage';
+import { cn } from '@/lib/utils';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface InventoryRow extends CollectionRow {
@@ -71,20 +72,169 @@ const SUBCATEGORIES: Record<string, { key: string; label: string }[]> = {
 };
 
 /**
- * Specs are written one per line as "Label: value" -- "CPU: Ryzen 9 5950X".
- * Anything without a colon is kept as a line of its own, so a rushed note is
- * still shown rather than swallowed.
+ * A spec line is written as "Label: value", one per line, and the values that
+ * came out of a build list carry two extras worth pulling apart rather than
+ * printing raw: a markdown link around the part name, and a trailing "(£372.00)".
+ *
+ *   - GPU: [MSI GeForce RTX 5080](https://...) (£1179.90)
+ *
+ * Left as text that reads as a wall of URLs. Split into label, linked value and
+ * price, it reads as a parts table.
  */
-const parseSpecs = (specs: string) =>
+interface SpecSegment {
+  text: string;
+  href?: string;
+}
+
+interface SpecLine {
+  label: string | null;
+  value: SpecSegment[];
+  price: string | null;
+}
+
+/** "(£372.00)" or "($42)" at the end of a line. */
+const TRAILING_PRICE = /\s*\(\s*([£$€]\s*[\d,]+(?:\.\d+)?)\s*\)\s*$/;
+/** Markdown link: [text](url). */
+const MARKDOWN_LINK = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+
+/**
+ * Only treat text before a colon as a label when it looks like one: short, and
+ * free of the brackets and slashes that mean the colon belongs to a URL.
+ */
+const splitLabel = (line: string): [string | null, string] => {
+  const colon = line.indexOf(':');
+  if (colon <= 0) return [null, line];
+  const label = line.slice(0, colon);
+  if (label.length > 28 || /[[\](/]/.test(label)) return [null, line];
+  return [label.trim(), line.slice(colon + 1).trim()];
+};
+
+const linkify = (value: string): SpecSegment[] => {
+  const segments: SpecSegment[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(MARKDOWN_LINK)) {
+    const start = match.index ?? 0;
+    if (start > cursor) segments.push({ text: value.slice(cursor, start) });
+    segments.push({ text: match[1], href: match[2] });
+    cursor = start + match[0].length;
+  }
+  if (cursor < value.length) segments.push({ text: value.slice(cursor) });
+  return segments.length > 0 ? segments : [{ text: value }];
+};
+
+const parseSpecs = (specs: string): SpecLine[] =>
   specs
     .split('\n')
-    .map((line) => line.trim())
+    .map((line) => line.trim().replace(/^[-*•]\s+/, ''))
     .filter(Boolean)
     .map((line) => {
-      const colon = line.indexOf(':');
-      if (colon === -1) return { label: null, value: line };
-      return { label: line.slice(0, colon).trim(), value: line.slice(colon + 1).trim() };
+      const priceMatch = line.match(TRAILING_PRICE);
+      const price = priceMatch ? priceMatch[1].replace(/\s+/, '') : null;
+      const rest = priceMatch ? line.slice(0, priceMatch.index) : line;
+      const [label, value] = splitLabel(rest);
+      return { label, value: linkify(value), price };
     });
+
+/**
+ * Descriptions predate the specs column, and some of them -- the build lists --
+ * were already written in this shape. Render those as a table too rather than
+ * as a paragraph of markdown source; a real paragraph stays a paragraph.
+ */
+const looksLikeSpecs = (text: string) => {
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) return false;
+  return lines.every((line) => /^[-*•]\s+/.test(line) || splitLabel(line)[0] !== null);
+};
+
+/**
+ * A build list is a list of receipts, so it is worth adding up. The item's own
+ * price is what the whole thing cost; this is that same number arrived at from
+ * the parts, which is the check you actually want when you edit one of them.
+ */
+const specsTotal = (lines: SpecLine[]) => {
+  const priced = lines.filter((line) => line.price);
+  if (priced.length < 2) return null;
+  const symbol = priced[0].price!.slice(0, 1);
+  const sum = priced.reduce(
+    (total, line) => total + Number(line.price!.slice(1).replace(/,/g, '')),
+    0,
+  );
+  if (!Number.isFinite(sum)) return null;
+  return `${symbol}${sum.toLocaleString('en-GB', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+const SpecTable = ({ lines }: { lines: SpecLine[] }) => {
+  const total = specsTotal(lines);
+  // A column of prices is worth the width when it adds up to something -- a
+  // build list. One lone price right-aligned across empty space lines up with
+  // nothing, so it sits next to the value it belongs to instead.
+  const priceColumn = total !== null;
+
+  const value = (line: SpecLine) =>
+    line.value.map((segment, index) =>
+      segment.href ? (
+        <a
+          key={index}
+          href={segment.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline decoration-dotted underline-offset-2 hover:text-primary transition-colors"
+        >
+          {segment.text}
+        </a>
+      ) : (
+        <Fragment key={index}>{segment.text}</Fragment>
+      ),
+    );
+
+  return (
+    <dl
+      className={cn(
+        'grid gap-x-4 gap-y-1.5',
+        priceColumn ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[auto_1fr]',
+      )}
+    >
+      {lines.map((line, index) => (
+        <Fragment key={index}>
+          <dt
+            className={cn(
+              'text-muted-foreground whitespace-nowrap',
+              line.label === null && 'sr-only',
+            )}
+          >
+            {line.label ?? `Line ${index + 1}`}
+          </dt>
+          <dd
+            className={cn('min-w-0', line.label === null && 'col-start-1 col-span-2')}
+          >
+            {value(line)}
+            {!priceColumn && line.price && (
+              <span className="text-muted-foreground tabular-nums"> · {line.price}</span>
+            )}
+          </dd>
+          {priceColumn && (
+            <dd className="text-muted-foreground tabular-nums text-right whitespace-nowrap">
+              {line.price ?? '\u00a0'}
+            </dd>
+          )}
+        </Fragment>
+      ))}
+      {total && (
+        <>
+          <dt className="col-span-2 mt-2 pt-2 border-t border-border/60 text-muted-foreground">
+            Total
+          </dt>
+          <dd className="mt-2 pt-2 border-t border-border/60 tabular-nums text-right whitespace-nowrap font-medium">
+            {total}
+          </dd>
+        </>
+      )}
+    </dl>
+  );
+};
 
 const formatPrice = (value: number) =>
   new Intl.NumberFormat('en-GB', {
@@ -229,29 +379,21 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
 
   renderDetail: (item) => {
     const specs = item.specs ? parseSpecs(item.specs) : [];
+    const description = item.description ?? '';
     return (
       <>
         {specs.length > 0 && (
           <DetailSection label="Specs">
-            <dl className="grid grid-cols-[minmax(0,8rem)_1fr] gap-x-4 gap-y-1">
-              {specs.map((spec, index) =>
-                spec.label ? (
-                  <Fragment key={index}>
-                    <dt className="text-muted-foreground truncate">{spec.label}</dt>
-                    <dd className="min-w-0">{spec.value}</dd>
-                  </Fragment>
-                ) : (
-                  <dd key={index} className="col-span-2 min-w-0">
-                    {spec.value}
-                  </dd>
-                ),
-              )}
-            </dl>
+            <SpecTable lines={specs} />
           </DetailSection>
         )}
-        {item.description && (
+        {description && (
           <DetailSection label="Notes">
-            <p className="whitespace-pre-wrap">{item.description}</p>
+            {looksLikeSpecs(description) ? (
+              <SpecTable lines={parseSpecs(description)} />
+            ) : (
+              <p className="whitespace-pre-wrap">{description}</p>
+            )}
           </DetailSection>
         )}
       </>

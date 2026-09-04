@@ -1030,6 +1030,7 @@ export type Database = {
           link: string | null
           name: string
           price: number | null
+          specs: string | null
           subcategory: string | null
         }
         Insert: {
@@ -1044,6 +1045,7 @@ export type Database = {
           link?: string | null
           name: string
           price?: number | null
+          specs?: string | null
           subcategory?: string | null
         }
         Update: {
@@ -1058,6 +1060,7 @@ export type Database = {
           link?: string | null
           name?: string
           price?: number | null
+          specs?: string | null
           subcategory?: string | null
         }
         Relationships: []

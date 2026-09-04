@@ -3,6 +3,7 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { MapPin, ArrowLeft, Search, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 interface City {
   id: string;
@@ -37,6 +38,7 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
+  const { askDelete, deleteDialog } = useDeleteConfirm();
 
   const filteredCities = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -113,7 +115,14 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
                 <span className="city-list-name text-xs font-medium flex-1 uppercase tracking-tight">{city.city_name}</span>
                 {isAdmin && (
                   <button
-                    onClick={() => onRemoveCity(city.id)}
+                    onClick={() =>
+                      askDelete({
+                        name: city.city_name,
+                        title: `Remove ${city.city_name}`,
+                        confirmLabel: 'Remove',
+                        onConfirm: () => onRemoveCity(city.id),
+                      })
+                    }
                     className="city-remove-btn opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 hover:text-destructive transition-all"
                   >
                     <X className="w-3 h-3" />
@@ -124,6 +133,8 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
           </ul>
         )}
       </div>
+
+      {deleteDialog}
     </div>
   );
 };

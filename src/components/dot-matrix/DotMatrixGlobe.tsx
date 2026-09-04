@@ -288,6 +288,9 @@ export function DotMatrixGlobe({
         return segments;
     }, [dotData]);
 
+    const cols = dotData?.cols ?? 168;
+    const rows = dotData?.rows ?? 84;
+
     // Draw the map
     const draw = useCallback((time: number) => {
         const canvas = canvasRef.current;
@@ -747,6 +750,51 @@ export function DotMatrixGlobe({
         return () => observer.disconnect();
     }, [draw]);
 
+    /** Which country's dot sits under a viewport point, if any. */
+    const countryAtPoint = useCallback((clientX: number, clientY: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return { code: null as string | null, dotKey: null as string | null };
+
+        const rect = canvas.getBoundingClientRect();
+        const mx = clientX - rect.left;
+        const my = clientY - rect.top;
+
+        let bestDist = Infinity;
+        let foundCode: string | null = null;
+        let foundDotKey: string | null = null;
+        const { progress } = animRef.current;
+
+        for (const p of projectedDotsRef.current) {
+            if (p.isBack && progress > 0.5) continue;
+
+            // Fast boundary check before square distance
+            if (Math.abs(mx - p.x) > p.r * 3 || Math.abs(my - p.y) > p.r * 3) continue;
+
+            const dist = Math.sqrt((mx - p.x) ** 2 + (my - p.y) ** 2);
+            if (dist < p.r * 2.5 && dist < bestDist) {
+                bestDist = dist;
+                foundCode = p.code;
+                foundDotKey = p.dotKey;
+            }
+        }
+
+        return { code: foundCode, dotKey: foundDotKey };
+    }, []);
+
+    /** Select whatever is under a point: shared by a mouse click and a tap. */
+    const selectAtPoint = useCallback((clientX: number, clientY: number) => {
+        const { code, dotKey } = countryAtPoint(clientX, clientY);
+        if (!code) return;
+
+        // A tap has no hover pass before it, so light up the country as well as
+        // selecting it -- otherwise the map would jump with nothing highlighted.
+        setHoveredCountry(code);
+        dragRef.current.hoveredDotKey = dotKey;
+        const name = countryNames[code] ?? code;
+        onCountryHover?.(code, name, `https://flagcdn.com/w80/${code.toLowerCase()}.png`, dotKey);
+        onCountryClick?.(code, name);
+    }, [countryAtPoint, countryNames, onCountryHover, onCountryClick]);
+
     // Mouse events
     useEffect(() => {
         const handleWheel = (e: WheelEvent) => {
@@ -845,9 +893,22 @@ export function DotMatrixGlobe({
 
         const handleTouchEnd = (e: TouchEvent) => {
             // No strict preventDefault here to allow tap-to-click events if needed natively
+            const wasDragging = dragRef.current.isDragging;
             dragRef.current.isDragging = false;
             dragRef.current.pinchDist = 0;
             dragRef.current.lastInteractionTime = performance.now();
+
+            // touchstart calls preventDefault to stop iOS scrolling the page
+            // while you spin the globe, which also cancels the synthetic click
+            // a tap would otherwise produce -- so selection has to be done
+            // here. A finger that travelled more than 5px was a drag, not a tap.
+            const touch = e.changedTouches[0];
+            if (!wasDragging || !touch) return;
+            const dx = touch.clientX - dragRef.current.startX;
+            const dy = touch.clientY - dragRef.current.startY;
+            if (Math.sqrt(dx * dx + dy * dy) > 5) return;
+
+            selectAtPoint(touch.clientX, touch.clientY);
         };
 
         const canvas = canvasRef.current;
@@ -867,7 +928,7 @@ export function DotMatrixGlobe({
                 canvas.removeEventListener('touchcancel', handleTouchEnd);
             }
         };
-    }, [dotData, mode, draw]);
+    }, [dotData, mode, draw, selectAtPoint]);
 
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         if (!dotData) return;
@@ -919,28 +980,7 @@ export function DotMatrixGlobe({
             // but still do hover logic!
         }
 
-        const rect = canvasRef.current.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-
-        let bestDist = Infinity;
-        let foundCode: string | null = null;
-        let foundDotKey: string | null = null;
-        const { progress } = animRef.current;
-
-        for (const p of projectedDotsRef.current) {
-            if (p.isBack && progress > 0.5) continue;
-
-            // Fast boundary check before square distance
-            if (Math.abs(mx - p.x) > p.r * 3 || Math.abs(my - p.y) > p.r * 3) continue;
-
-            const dist = Math.sqrt((mx - p.x) ** 2 + (my - p.y) ** 2);
-            if (dist < p.r * 2.5 && dist < bestDist) {
-                bestDist = dist;
-                foundCode = p.code;
-                foundDotKey = p.dotKey;
-            }
-        }
+        const { code: foundCode, dotKey: foundDotKey } = countryAtPoint(e.clientX, e.clientY);
 
         if (foundCode !== hoveredCountry || foundDotKey !== dragRef.current.hoveredDotKey) {
             setHoveredCountry(foundCode);
@@ -948,7 +988,7 @@ export function DotMatrixGlobe({
             const flagUrl = foundCode ? `https://flagcdn.com/w80/${foundCode.toLowerCase()}.png` : null;
             onCountryHover?.(foundCode, foundCode ? (countryNames[foundCode] ?? foundCode) : null, flagUrl, foundDotKey);
         }
-    }, [hoveredCountry, countryNames, onCountryHover, mode]);
+    }, [hoveredCountry, countryNames, onCountryHover, mode, countryAtPoint]);
 
     const handleMouseLeave = useCallback(() => {
         setHoveredCountry(null);
@@ -968,29 +1008,36 @@ export function DotMatrixGlobe({
             return;
         }
 
-        if (hoveredCountry) {
-            onCountryClick?.(hoveredCountry, countryNames[hoveredCountry] ?? hoveredCountry);
-        }
-    }, [hoveredCountry, countryNames, onCountryClick]);
+        selectAtPoint(e.clientX, e.clientY);
+    }, [selectAtPoint]);
 
 
     return (
-        <div
-            className={`dot-matrix-map-container ${className}`}
-            // Height leads and width follows the aspect ratio, capped so the
-            // canvas never outgrows its box. Deriving height from width alone
-            // made a wide column produce a canvas taller than the space
-            // available, clipping the globe and pushing the 2D/3D toggle --
-            // which is anchored to the bottom -- out of view.
-            style={{
-                aspectRatio: `${dotData?.cols ?? 168} / ${dotData?.rows ?? 84}`,
-                height: '100%',
-                width: 'auto',
-                maxWidth: '100%',
-                maxHeight: '100%',
-                margin: '0 auto',
-            }}
-        >
+        // The canvas spaces its dots by width/cols and height/rows separately,
+        // so the box has to carry the grid's exact aspect ratio or the map
+        // stretches. Sizing by height alone (with max-width as the cap) let a
+        // narrow, tall column -- an iPad, say -- clamp the width while the
+        // height stayed at 100%, which smeared the continents vertically.
+        // Measuring the slot as a query container instead lets the box take
+        // whichever of the two fits, so it is never stretched or clipped.
+        <div className={`dot-matrix-map-slot ${className}`}>
+            <div
+                className="dot-matrix-map-container"
+                // Flat, the dots are spaced by width/cols and height/rows, so
+                // the box has to hold the grid's ratio or the map smears. A
+                // globe is a circle of min(width, height), so that same ratio
+                // would waste half the height a tall column offers -- it gets
+                // the whole slot instead. The two sizes are eased into each
+                // other (see the CSS) so the box keeps step with the morph.
+                style={
+                    mode === '2d'
+                        ? {
+                              width: `min(100cqw, calc(100cqh * ${cols} / ${rows}))`,
+                              height: `min(100cqh, calc(100cqw * ${rows} / ${cols}))`,
+                          }
+                        : { width: '100cqw', height: '100cqh' }
+                }
+            >
             {!dotData && (
                 <div className="dot-matrix-loading">
                     <div className="dot-matrix-loading-dots">
@@ -1018,6 +1065,7 @@ export function DotMatrixGlobe({
                     {mode === '2d' ? '3D Globe' : '2D Map'}
                 </button>
             )}
+            </div>
         </div>
     );
 }

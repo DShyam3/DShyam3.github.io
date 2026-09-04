@@ -55,6 +55,7 @@ import {
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { Filter } from 'lucide-react';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
 import { CARD_GRID } from '@/theme/layout';
@@ -164,6 +165,8 @@ const Watchlist = () => {
   // (watchlist and schedule are separate hooks/tables) -- always clear the
   // schedule entry too so deleting a show doesn't leave a stale "scheduled"
   // count on some day of the week.
+  const { askDelete, deleteDialog } = useDeleteConfirm();
+
   const removeWatchlistItemAndSchedule = useCallback(
     async (id: string) => {
       await removeWatchlistItem(id);
@@ -818,15 +821,17 @@ const Watchlist = () => {
                           <Filter className="h-3 w-3 opacity-50" />
                         )}
                         <SelectValue placeholder="Platform">
-                          {selectedPlatform ? (
-                            <PlatformLogo
-                              platform={selectedPlatform}
-                              size={16}
-                              maxWidth={90}
-                            />
-                          ) : (
-                            'All Platforms'
-                          )}
+                          {!selectedPlatform
+                            ? 'All Platforms'
+                            : hasPlatformLogo(selectedPlatform) ? (
+                                <PlatformLogo
+                                  platform={selectedPlatform}
+                                  size={16}
+                                  maxWidth={90}
+                                />
+                              ) : (
+                                selectedPlatform
+                              )}
                         </SelectValue>
                       </div>
                     </SelectTrigger>
@@ -1137,7 +1142,12 @@ const Watchlist = () => {
                                         variant="secondary"
                                         size="icon"
                                         className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-                                        onClick={() => removeFavourite(fav.id)}
+                                        onClick={() =>
+                                          askDelete({
+                                            name: fav.title,
+                                            onConfirm: () => removeFavourite(fav.id),
+                                          })
+                                        }
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </Button>
@@ -1186,7 +1196,12 @@ const Watchlist = () => {
                                         variant="secondary"
                                         size="icon"
                                         className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-                                        onClick={() => removeFavourite(fav.id)}
+                                        onClick={() =>
+                                          askDelete({
+                                            name: fav.title,
+                                            onConfirm: () => removeFavourite(fav.id),
+                                          })
+                                        }
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </Button>
@@ -1335,6 +1350,8 @@ const Watchlist = () => {
         </Dialog>
 
       </div>
+
+      {deleteDialog}
     </AppShell>
   );
 };

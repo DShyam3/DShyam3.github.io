@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Image as ImageIcon, Loader2, Pencil, Plus, Search, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -127,6 +127,12 @@ interface EntityFormDialogProps<T extends CollectionRow, R> {
   /** Required in edit mode; the row being edited. */
   item?: T;
   onSubmit: (values: FormValues) => void;
+  /**
+   * What opens the form. Defaults to the pencil that sits over a card; the
+   * detail dialog passes a labelled button instead, since it has the room and
+   * nothing there is hovering over an image.
+   */
+  trigger?: ReactNode;
 }
 
 /**
@@ -235,6 +241,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
   config,
   item,
   onSubmit,
+  trigger,
 }: EntityFormDialogProps<T, R>) {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<FormValues>(() =>
@@ -354,7 +361,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {mode === 'add' ? (
+        {trigger ?? (mode === 'add' ? (
           <ActionButton icon={Plus} label={`Add ${config.noun.singular}`} />
         ) : (
           <Button
@@ -364,17 +371,26 @@ export function EntityFormDialog<T extends CollectionRow, R>({
           >
             <Pencil className="w-3.5 h-3.5" />
           </Button>
-        )}
+        ))}
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      {/*
+        The form is as long as the collection has fields, which on a tablet in
+        portrait is taller than the screen: the title ran off the top and Save
+        off the bottom, with nothing to scroll. So the dialog is capped at the
+        viewport, the fields scroll, and the title and buttons stay put.
+      */}
+      <DialogContent className="sm:max-w-md p-0 max-h-[90dvh] flex flex-col overflow-hidden">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle className="font-serif text-xl">
             {mode === 'add' ? `Add New ${config.noun.singular}` : `Edit ${config.noun.singular}`}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 mt-4 flex-1 min-h-0 overflow-y-auto px-6"
+        >
           {mode === 'add' && config.externalSearch && (
             <ExternalSearchField
               search={config.externalSearch}
@@ -489,7 +505,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             );
           })}
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 pb-6 sticky bottom-0 bg-background">
             <Button
               type="button"
               variant="outline"

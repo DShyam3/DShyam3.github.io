@@ -10,6 +10,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { CONTINENT_ORDER } from '@/features/travel/continents';
 import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { Globe, MapPin, Search, Plus, X, Loader2, ChevronDown } from 'lucide-react';
 import { CountryCityPanel } from '@/features/travel/CountryCityPanel';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,19 @@ const Travel = () => {
     const isMobile = useIsMobile();
     const { isAdmin } = useAuth();
     const { visitedCountries, addCountry, removeCountry } = useVisitedCountries();
+    const { askDelete, deleteDialog } = useDeleteConfirm();
+    // Removing a country takes its cities with it, so it asks first.
+    const confirmRemoveCountry = useCallback(
+        (code: string, name: string) =>
+            askDelete({
+                name,
+                title: `Remove ${name}`,
+                confirmLabel: 'Remove',
+                description: `Remove ${name} from your visited countries? Any cities saved under it go too.`,
+                onConfirm: async () => { await removeCountry(code); },
+            }),
+        [askDelete, removeCountry],
+    );
     const visitedCodes = visitedCountries.map(c => c.country_code);
     const { byCode: continentByCode, totals: continentTotals, sovereignCodes, loading: continentLoading } = useContinentMap();
 
@@ -343,7 +357,7 @@ const Travel = () => {
                                             visitedCities={citiesByCountry[selectedCountry.code] ?? []}
                                             isAdmin={isAdmin}
                                             onAddCity={(city: any) => handleAddCity(city)}
-                                             onRemoveCity={(id: string) => removeCity(Number(id))}
+                                            onRemoveCity={async (id: string) => { await removeCity(Number(id)); }}
                                             onBack={handleCityPanelBack}
                                         />
                                     ) : (
@@ -458,7 +472,7 @@ const Travel = () => {
                                                                         {isAdmin && (
                                                                             <button
                                                                                 className="travel-remove-btn"
-                                                                                onClick={(e) => { e.stopPropagation(); removeCountry(country.country_code); }}
+                                                                                onClick={(e) => { e.stopPropagation(); confirmRemoveCountry(country.country_code, country.country_name); }}
                                                                                 title={`Remove ${country.country_name}`}
                                                                             >
                                                                                 <X className="w-3 h-3" />
@@ -514,7 +528,7 @@ const Travel = () => {
                                                                     {isAdmin && (
                                                                         <button
                                                                             className="travel-remove-btn"
-                                                                            onClick={(e) => { e.stopPropagation(); removeCountry(country.country_code); }}
+                                                                            onClick={(e) => { e.stopPropagation(); confirmRemoveCountry(country.country_code, country.country_name); }}
                                                                             title={`Remove ${country.country_name}`}
                                                                         >
                                                                             <X className="w-3 h-3" />
@@ -574,6 +588,8 @@ const Travel = () => {
 
                 </div>
             </div>
+
+            {deleteDialog}
         </AppShell>
     );
 };

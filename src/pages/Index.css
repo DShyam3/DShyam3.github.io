@@ -55,7 +55,9 @@
 
 @media (max-width: 767px) {
   .travel-sidebar-labels {
-    gap: 2px;
+    /* 2px read as no gap at all against the dot-matrix face: the title and the
+       counter ran together as "WHERE I'VE BEEN24/250". */
+    gap: 8px;
   }
 }
 
@@ -255,6 +257,17 @@
 .travel-map-col > *:last-child {
   flex: 1;
   min-height: 0;
+}
+
+/* Stacked on mobile the column has no height of its own, so "fill the parent"
+   resolves to nothing and the map disappeared entirely. Give the slot a
+   viewport-relative height there instead; the map sizes itself inside it. */
+@media (max-width: 767px) {
+  .travel-map-col > *:last-child {
+    flex: none;
+    height: min(80vw, 55vh);
+    min-height: 240px;
+  }
 }
 
 /* ─── Heading row: title + counter ──────────────────────────────────── */

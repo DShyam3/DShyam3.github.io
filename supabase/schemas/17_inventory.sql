@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_items" (
     "link" "text",
     "subcategory" "text",
     "is_wishlist" boolean DEFAULT false,
-    "description" "text"
+    "description" "text",
+    "specs" "text"
 );
 
 ALTER TABLE "public"."inventory_items" OWNER TO "postgres";

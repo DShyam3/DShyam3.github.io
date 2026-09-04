@@ -19,8 +19,14 @@ import { Trash2, Calendar, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
-import { getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import {
+  compactUpcomingStatus,
+  displayTitle,
+  getStatusColor,
+  isUpcomingStatus,
+} from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 interface WatchlistCardProps {
   item: WatchlistItem;
@@ -64,6 +70,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   syncing,
 }: WatchlistCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const { askDelete, deleteDialog } = useDeleteConfirm();
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<
@@ -190,7 +197,15 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isInSchedule(item.id)) {
-                    if (removeFromSchedule) removeFromSchedule(item.id);
+                    if (removeFromSchedule) {
+                      askDelete({
+                        name: item.title,
+                        title: 'Remove from schedule',
+                        confirmLabel: 'Remove',
+                        description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
+                        onConfirm: () => removeFromSchedule(item.id),
+                      });
+                    }
                   } else {
                     if (addToSchedule) setScheduleDialogOpen(true);
                   }
@@ -222,44 +237,46 @@ export const WatchlistCard = React.memo(function WatchlistCard({
           )}
         </div>
 
-        <div className="p-3">
-          {/* Title */}
-          <h3 className="font-serif text-sm font-medium leading-tight">
-            <span className="line-clamp-2" style={{ textWrap: 'balance' }}>{item.title}</span>
+        <div className="p-2.5">
+          {/* Title and meta get a fixed two-line box: a one-line title used to
+              pull its card's badges up out of line with its neighbours'. */}
+          <h3 className="font-serif text-sm font-medium leading-tight h-[2.5rem]">
+            <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
+              {displayTitle(item.title, item.year)}
+            </span>
           </h3>
 
           {/* Year and first genre on same line */}
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {item.year}
             {item.year && item.genres && item.genres.length > 0 && ' · '}
             {item.genres?.[0]}
           </p>
 
-          {/* Platform and Status badges */}
-          <div className="flex flex-col items-start gap-1 mt-2">
+          {/* Platform on the left, status and release date on the right, so the
+              card keeps its height whether or not a title has both. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-1.5 min-h-[22px]">
             <PlatformBadge platform={item.streaming_platform} size={18} />
             {status && (
               isUpcomingStatus(status) && upcomingReleaseDate ? (
-                <div
+                <span
                   className={cn(
-                    'flex flex-col gap-0.5 px-2 py-1 rounded',
+                    'flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap',
                     getStatusColor(status),
                   )}
+                  title={`${status} — ${upcomingReleaseDate.toLocaleDateString([], {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}`}
                 >
-                  <span className="text-xs font-medium">{status}</span>
-                  <span className="text-xs opacity-70 flex items-center gap-1">
-                    <Calendar className="h-2.5 w-2.5" />
-                    {upcomingReleaseDate.toLocaleDateString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </span>
-                </div>
+                  <Calendar className="h-2.5 w-2.5 opacity-70" />
+                  {compactUpcomingStatus(status)}
+                </span>
               ) : (
                 <span
                   className={cn(
-                    'text-xs px-2 py-0.5 rounded font-medium',
+                    'text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap',
                     getStatusColor(status),
                   )}
                 >
@@ -384,10 +401,17 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         }
         onRemoveFromSchedule={
           removeFromSchedule
-            ? () => {
-                removeFromSchedule(item.id);
-                setDetailOpen(false);
-              }
+            ? () =>
+                askDelete({
+                  name: item.title,
+                  title: 'Remove from schedule',
+                  confirmLabel: 'Remove',
+                  description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
+                  onConfirm: () => {
+                    removeFromSchedule(item.id);
+                    setDetailOpen(false);
+                  },
+                })
             : undefined
         }
         isScheduled={isInSchedule(item.id)}
@@ -406,6 +430,8 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         onResync={onResync ? () => onResync(item.id) : undefined}
         syncing={syncing}
       />
+
+      {deleteDialog}
     </>
   );
 });

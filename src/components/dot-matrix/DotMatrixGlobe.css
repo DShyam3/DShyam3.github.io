@@ -1,9 +1,36 @@
 /* ─── Dot Matrix World Map ─────────────────────────────────────────── */
 
+/* The slot the map lives in: whatever space the layout hands the component.
+   The box inside it is measured against this. */
+.dot-matrix-map-slot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    container-type: size;
+}
+
+/* Sized from the view mode (see the component); the transition matches the
+   ~500ms the dots take to morph between flat map and globe. */
 .dot-matrix-map-container {
     position: relative;
     width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     overflow: hidden;
+    transition: width 500ms cubic-bezier(0.4, 0, 0.2, 1),
+        height 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dot-matrix-map-container {
+        transition: none;
+    }
 }
 
 .dot-matrix-map-canvas {

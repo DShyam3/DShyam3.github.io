@@ -119,6 +119,7 @@ import {
   Bar,
   ReferenceLine
 } from 'recharts';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 // ==========================================
 // TYPES & INTERFACES
@@ -1361,6 +1362,7 @@ const Sparkline = ({ data }: { data: number[] }) => {
 export default function Finance() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
+  const { askDelete, deleteDialog } = useDeleteConfirm();
 
   // TrueLayer state
   const [trueLayerStatus, setTrueLayerStatus] = useState<TrueLayerStatus | null>(null);
@@ -1691,11 +1693,17 @@ export default function Finance() {
     toast({ title: 'Benefit Added', description: `${newBenefit.name} added to package.` });
   };
 
-  const handleDeleteBenefit = (id: string) => {
+  const performDeleteBenefit = (id: string) => {
     const updatedBenefits = (settings.packageBenefits || []).filter(b => b.id !== id);
     setSettings(prev => ({ ...prev, packageBenefits: updatedBenefits }));
     toast({ title: 'Benefit Removed', description: 'Benefit removed from package.' });
   };
+
+  const handleDeleteBenefit = (id: string) =>
+    askDelete({
+      name: (settings.packageBenefits || []).find(b => b.id === id)?.name,
+      onConfirm: () => performDeleteBenefit(id),
+    });
 
   const handleAddPresetBenefit = (preset: { name: string; amount: number; type: 'monetary' | 'percentage'; emoji: string }) => {
     const newBenefit: PackageBenefit = {
@@ -3660,7 +3668,7 @@ export default function Finance() {
     toast({ title: 'Goal Added', description: `Successfully created goal "${created.name}".` });
   };
 
-  const handleDeleteGoal = (id: string) => {
+  const performDeleteGoal = (id: string) => {
     const updated = goals.filter(g => g.id !== id);
     setGoals(updated);
     saveDataToSupabase('goals', updated);
@@ -3669,6 +3677,13 @@ export default function Finance() {
     }
     toast({ title: 'Goal Deleted', description: 'Savings goal removed.' });
   };
+
+  const handleDeleteGoal = (id: string) =>
+    askDelete({
+      name: goals.find(g => g.id === id)?.name,
+      description: 'Deleting this savings goal also removes its contribution history. This action cannot be undone.',
+      onConfirm: () => performDeleteGoal(id),
+    });
 
   const handleToggleArchiveGoal = (id: string) => {
     const targetGoal = goals.find(g => g.id === id);
@@ -3771,7 +3786,7 @@ export default function Finance() {
     toast({ title: 'Contribution Logged', description: `Added ${formatGBP(newContribution.amount === '' ? 0 : newContribution.amount)} and updated linked account.` });
   };
 
-  const handleDeleteContribution = (goalId: string, contribId: string) => {
+  const performDeleteContribution = (goalId: string, contribId: string) => {
     let updatedAccounts = [...bankAccounts];
     const updated = goals.map(g => {
       if (g.id === goalId) {
@@ -3811,6 +3826,13 @@ export default function Finance() {
     toast({ title: 'Contribution Deleted', description: 'Contribution removed and account balance reverted.' });
   };
 
+  const handleDeleteContribution = (goalId: string, contribId: string) =>
+    askDelete({
+      title: 'Delete contribution',
+      description: 'Deleting this contribution reverts the linked account balance. This action cannot be undone.',
+      onConfirm: () => performDeleteContribution(goalId, contribId),
+    });
+
   // ==========================================
   // HANDLERS: ACCOUNTS CRUD
   // ==========================================
@@ -3848,12 +3870,18 @@ export default function Finance() {
     toast({ title: 'Account Updated', description: 'Successfully saved changes.' });
   };
 
-  const handleDeleteAccount = (id: string) => {
+  const performDeleteAccount = (id: string) => {
     const updated = bankAccounts.filter(a => a.id !== id);
     setBankAccounts(updated);
     saveDataToSupabase('accounts', { bankAccounts: updated, memberships, creditScores });
     toast({ title: 'Account Deleted', description: 'Bank account removed.' });
   };
+
+  const handleDeleteAccount = (id: string) =>
+    askDelete({
+      name: bankAccounts.find(a => a.id === id)?.name,
+      onConfirm: () => performDeleteAccount(id),
+    });
 
   // ==========================================
   // HANDLERS: INVESTMENTS CRUD
@@ -3875,7 +3903,7 @@ export default function Finance() {
     toast({ title: 'Asset Updated', description: `Successfully updated ${holding.name}.` });
   };
 
-  const handleDeleteHolding = (id: string) => {
+  const performDeleteHolding = (id: string) => {
     const deleted = investmentHoldings.find(h => h.id === id);
     const updated = investmentHoldings.filter(h => h.id !== id);
     setInvestmentHoldings(updated);
@@ -3883,6 +3911,12 @@ export default function Finance() {
       toast({ title: 'Asset Deleted', description: `Removed ${deleted.name} from portfolio.` });
     }
   };
+
+  const handleDeleteHolding = (id: string) =>
+    askDelete({
+      name: investmentHoldings.find(h => h.id === id)?.name,
+      onConfirm: () => performDeleteHolding(id),
+    });
 
 
   const handleAddMembership = (e: React.FormEvent) => {
@@ -3915,12 +3949,18 @@ export default function Finance() {
     toast({ title: 'Membership Updated', description: 'Membership details saved.' });
   };
 
-  const handleDeleteMembership = (id: string) => {
+  const performDeleteMembership = (id: string) => {
     const updated = memberships.filter(m => m.id !== id);
     setMemberships(updated);
     saveDataToSupabase('accounts', { bankAccounts, memberships: updated, creditScores });
     toast({ title: 'Membership Deleted', description: 'Membership removed.' });
   };
+
+  const handleDeleteMembership = (id: string) =>
+    askDelete({
+      name: memberships.find(m => m.id === id)?.name,
+      onConfirm: () => performDeleteMembership(id),
+    });
 
   // ==========================================
   // HANDLERS: DEBT
@@ -3967,13 +4007,21 @@ export default function Finance() {
     setNewDraw({ date: '', amount: '', label: '' });
   };
 
-  const handleRemoveDraw = (drawId: string) => {
+  const performRemoveDraw = (drawId: string) => {
     if (isEditDebtOpen && activeDebt) {
       setActiveDebt({ ...activeDebt, draws: activeDebt.draws.filter(d => d.id !== drawId) });
     } else {
       setNewDebt({ ...newDebt, draws: newDebt.draws.filter(d => d.id !== drawId) });
     }
   };
+
+  const handleRemoveDraw = (drawId: string) =>
+    askDelete({
+      title: 'Remove borrowing',
+      confirmLabel: 'Remove',
+      description: 'Remove this borrowing from the debt? This action cannot be undone.',
+      onConfirm: () => performRemoveDraw(drawId),
+    });
 
   const handleAddDebt = (e: React.FormEvent) => {
     e.preventDefault();
@@ -4030,13 +4078,19 @@ export default function Finance() {
     toast({ title: 'Debt Updated', description: 'Debt details saved.' });
   };
 
-  const handleDeleteDebt = (id: string) => {
+  const performDeleteDebt = (id: string) => {
     const updated = debts.filter(d => d.id !== id);
     setDebts(updated);
     saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores, debts: updated });
     if (selectedDebtId === id) setSelectedDebtId(null);
     toast({ title: 'Debt Deleted', description: 'Debt removed.' });
   };
+
+  const handleDeleteDebt = (id: string) =>
+    askDelete({
+      name: debts.find(d => d.id === id)?.name,
+      onConfirm: () => performDeleteDebt(id),
+    });
 
   // ==========================================
   // HANDLERS: CREDIT SCORES
@@ -4065,7 +4119,7 @@ export default function Finance() {
     toast({ title: 'Credit Score Added', description: `Logged ${newCreditScore.bureau.charAt(0).toUpperCase() + newCreditScore.bureau.slice(1)} score of ${newCreditScore.score === '' ? 0 : newCreditScore.score}.` });
   };
 
-  const handleDeleteCreditScore = (bureau: 'experian' | 'transunion' | 'equifax', entryId: string) => {
+  const performDeleteCreditScore = (bureau: 'experian' | 'transunion' | 'equifax', entryId: string) => {
     const updated = {
       ...creditScores,
       [bureau]: creditScores[bureau].filter(e => e.id !== entryId)
@@ -4074,6 +4128,16 @@ export default function Finance() {
     saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores: updated });
     toast({ title: 'Score Entry Deleted', description: 'Credit score entry removed.' });
   };
+
+  const handleDeleteCreditScore = (
+    bureau: 'experian' | 'transunion' | 'equifax',
+    entryId: string,
+  ) =>
+    askDelete({
+      title: 'Delete score entry',
+      description: 'Delete this credit score entry? This action cannot be undone.',
+      onConfirm: () => performDeleteCreditScore(bureau, entryId),
+    });
 
   // ==========================================
   // HANDLERS: BUDGET CRUD
@@ -4141,12 +4205,19 @@ export default function Finance() {
     toast({ title: 'Category Updated', description: 'Updated category name and budget limit.' });
   };
 
-  const handleDeleteCategory = (catId: string) => {
+  const performDeleteCategory = (catId: string) => {
     const updated = budgetCategories.filter(cat => cat.id !== catId);
     setBudgetCategories(updated);
     saveDataToSupabase('budget', updated);
     toast({ title: 'Category Deleted', description: 'Category and items removed.' });
   };
+
+  const handleDeleteCategory = (catId: string) =>
+    askDelete({
+      name: budgetCategories.find(cat => cat.id === catId)?.name,
+      description: 'Deleting this budget category also deletes every line item inside it. This action cannot be undone.',
+      onConfirm: () => performDeleteCategory(catId),
+    });
 
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -4210,7 +4281,7 @@ export default function Finance() {
     toast({ title: 'Budget Updated', description: 'Successfully saved changes.' });
   };
 
-  const handleDeleteItem = (catId: string, itemId: string) => {
+  const performDeleteItem = (catId: string, itemId: string) => {
     const updated = budgetCategories.map(cat => {
       if (cat.id === catId) {
         return {
@@ -4224,6 +4295,14 @@ export default function Finance() {
     saveDataToSupabase('budget', updated);
     toast({ title: 'Item Deleted', description: 'Item removed.' });
   };
+
+  const handleDeleteItem = (catId: string, itemId: string) =>
+    askDelete({
+      name: budgetCategories
+        .find(cat => cat.id === catId)
+        ?.items.find(item => item.id === itemId)?.name,
+      onConfirm: () => performDeleteItem(catId, itemId),
+    });
 
   // ==========================================
   // HANDLERS: RECURRINGS CRUD
@@ -4337,7 +4416,7 @@ export default function Finance() {
     toast({ title: 'Recurring Bill Updated', description: 'Bill details saved.' });
   };
 
-  const handleDeleteRecurring = (id: string) => {
+  const performDeleteRecurring = (id: string) => {
     let updatedAccounts = [...bankAccounts];
     const bill = recurrings.find(r => r.id === id);
     if (bill && bill.isPaid && bill.linkedAccountId) {
@@ -4359,6 +4438,12 @@ export default function Finance() {
     }
     toast({ title: 'Recurring Bill Deleted', description: 'Recurring bill removed.' });
   };
+
+  const handleDeleteRecurring = (id: string) =>
+    askDelete({
+      name: recurrings.find(r => r.id === id)?.name,
+      onConfirm: () => performDeleteRecurring(id),
+    });
 
   const toggleRecurringPaid = (id: string) => {
     let updatedAccounts = [...bankAccounts];
@@ -4474,7 +4559,7 @@ export default function Finance() {
     });
   };
 
-  const handleDeleteHoliday = (holidayId: string) => {
+  const performDeleteHoliday = (holidayId: string) => {
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
     const updatedHolidaysList = normalizedHolidays.filter(h => h.id !== holidayId);
 
@@ -4490,6 +4575,13 @@ export default function Finance() {
     }
     toast({ title: 'Holiday deleted', description: 'Booked leave has been successfully removed.' });
   };
+
+  const handleDeleteHoliday = (holidayId: string) =>
+    askDelete({
+      title: 'Delete holiday',
+      description: 'Delete this holiday? This action cannot be undone.',
+      onConfirm: () => performDeleteHoliday(holidayId),
+    });
 
   // ==========================================
   // HANDLERS: SETTINGS CONFIG SAVE & RESET
@@ -12130,6 +12222,7 @@ export default function Finance() {
 
 
 
+      {deleteDialog}
     </div>
   );
 }

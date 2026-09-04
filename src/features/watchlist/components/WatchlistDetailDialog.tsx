@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
-import { getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
 
 interface WatchlistDetailDialogProps {
@@ -131,7 +131,7 @@ export function WatchlistDetailDialog({
         className={cn(
           'max-h-[85vh] overflow-y-auto p-0 rounded-xl items-start',
           // Wider dialog for TV shows with seasons
-          hasSeasons ? 'sm:max-w-4xl' : 'sm:max-w-2xl',
+          hasSeasons ? 'sm:max-w-4xl lg:max-w-5xl' : 'sm:max-w-2xl',
         )}
       >
         <DialogDescription className="sr-only">
@@ -158,11 +158,11 @@ export function WatchlistDetailDialog({
                     rel="noopener noreferrer"
                     className="hover:text-primary transition-colors inline-flex items-center gap-2"
                   >
-                    {item.title}
+                    {displayTitle(item.title, item.year)}
                     <ExternalLink className="w-4 h-4 opacity-60" />
                   </a>
                 ) : (
-                  item.title
+                  displayTitle(item.title, item.year)
                 )}
               </DialogTitle>
               <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
@@ -346,11 +346,11 @@ export function WatchlistDetailDialog({
                         rel="noopener noreferrer"
                         className="hover:text-primary transition-colors inline-flex items-center gap-2"
                       >
-                        {item.title}
+                        {displayTitle(item.title, item.year)}
                         <ExternalLink className="w-4 h-4 opacity-60" />
                       </a>
                     ) : (
-                      item.title
+                      displayTitle(item.title, item.year)
                     )}
                   </DialogTitle>
                   <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
@@ -512,7 +512,7 @@ export function WatchlistDetailDialog({
 
           {/* Right: Seasons (TV Shows only) */}
           {hasSeasons && (
-            <div className="w-72 shrink-0 p-4 overflow-y-auto max-h-[70vh] bg-muted/30">
+            <div className="w-80 lg:w-96 shrink-0 p-4 overflow-y-auto max-h-[70vh] bg-muted/30">
               <h3 className="text-sm font-medium mb-3">Seasons & Episodes</h3>
               <SeasonEpisodeList
                 showId={item.id}
