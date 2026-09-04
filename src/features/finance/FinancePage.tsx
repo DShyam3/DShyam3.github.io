@@ -705,12 +705,12 @@ const MONTH_NAMES = [
 
 const { DEFAULT_CATEGORY_PRESETS } = defaultPresets;
 
-const presetsToDefaultCategories = (presets: CategoryPreset[]): BudgetCategory[] =>
+const presetsToDefaultCategories = (presets: { name: string; emoji: string; group: string }[]): BudgetCategory[] =>
   presets.map(preset => ({
     id: `preset_${preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
     name: preset.name,
     budgeted: 0,
-    group: preset.group,
+    group: (['needs', 'wants', 'savings'].includes(preset.group) ? preset.group : 'needs') as 'needs' | 'wants' | 'savings',
     items: [],
     emoji: preset.emoji,
   }));
@@ -1777,14 +1777,14 @@ export default function Finance() {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
   const [activeAccount, setActiveAccount] = useState<BankAccount | null>(null);
-  const [newAccount, setNewAccount] = useState<Omit<BankAccount, 'id'> & { balance: number | ''; annualFee: number | ''; }>({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: '#475569' });
+  const [newAccount, setNewAccount] = useState<Omit<BankAccount, 'id' | 'balance' | 'annualFee'> & { balance: number | ''; annualFee: number | ''; }>({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: '#475569' });
 
   const [activeMembership, setActiveMembership] = useState<Membership | null>(null);
-  const [newMembership, setNewMembership] = useState<Omit<Membership, 'id'> & { annualFee: number | ''; }>({ name: '', type: 'points', status: 'Active', annualFee: '', useCase: '' });
+  const [newMembership, setNewMembership] = useState<Omit<Membership, 'id' | 'annualFee'> & { annualFee: number | ''; }>({ name: '', type: 'points', status: 'Active', annualFee: '', useCase: '' });
 
   const [activeDebt, setActiveDebt] = useState<Debt | null>(null);
   const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
-  const [newDebt, setNewDebt] = useState<Omit<Debt, 'id'> & { originalAmount: number | ''; balance: number | ''; interestRate: number | ''; minPayment: number | ''; }>({
+  const [newDebt, setNewDebt] = useState<Omit<Debt, 'id' | 'originalAmount' | 'balance' | 'interestRate' | 'minPayment'> & { originalAmount: number | ''; balance: number | ''; interestRate: number | ''; minPayment: number | ''; }>({
     name: '',
     type: 'mortgage',
     lender: '',
@@ -1805,7 +1805,7 @@ export default function Finance() {
   const [newDraw, setNewDraw] = useState<{ date: string; amount: number | ''; label: string }>({ date: '', amount: '', label: '' });
 
   const [activeRecurring, setActiveRecurring] = useState<RecurringBill | null>(null);
-  const [newRecurring, setNewRecurring] = useState<Omit<RecurringBill, 'id'> & { amount: number | ''; }>({
+  const [newRecurring, setNewRecurring] = useState<Omit<RecurringBill, 'id' | 'amount'> & { amount: number | ''; }>({
     name: '',
     amount: '',
     dueDate: 15,
@@ -3651,7 +3651,7 @@ export default function Finance() {
     const created: Goal = {
       id: 'g_' + Date.now(),
       name: newGoal.name,
-      targetAmount: newGoal.targetAmount === '' ? 0 : newGoal.targetAmount,
+      targetAmount: newGoal.targetAmount,
       currentAmount: 0,
       targetDate: newGoal.targetDate || todayStr,
       startDate: newGoal.startDate || todayStr,
@@ -3741,11 +3741,11 @@ export default function Finance() {
       toast({ title: 'Invalid Amount', description: 'Contribution must be greater than £0.00.', variant: 'destructive' });
       return;
     }
+    const contribAmount = newContribution.amount;
 
     let updatedAccounts = [...bankAccounts];
     if (newContribution.bankAccountId) {
       const accId = newContribution.bankAccountId;
-      const amt = newContribution.amount === '' ? 0 : newContribution.amount;
       const selectedAcc = bankAccounts.find(a => a.id === accId);
       if (selectedAcc) {
         const isSavingsOrInvestment = selectedAcc.type === 'savings' || selectedAcc.type === 'investment';
@@ -3753,7 +3753,7 @@ export default function Finance() {
           if (acc.id === accId) {
             return {
               ...acc,
-              balance: acc.balance + (isSavingsOrInvestment ? amt : -amt)
+              balance: acc.balance + (isSavingsOrInvestment ? contribAmount : -contribAmount)
             };
           }
           return acc;
@@ -3767,9 +3767,9 @@ export default function Finance() {
       if (g.id === goalId) {
         const contrib = {
           id: 'c_' + Date.now(),
-          amount: newContribution.amount === '' ? 0 : newContribution.amount,
+          amount: contribAmount,
           date: newContribution.date || new Date().toISOString().split('T')[0],
-          note: newContribution.note,
+          note: newContribution.note || undefined,
           bankAccountId: newContribution.bankAccountId || undefined
         };
         return {
@@ -3783,7 +3783,7 @@ export default function Finance() {
     setGoals(updated);
     saveDataToSupabase('goals', updated);
     setNewContribution({ amount: '', note: '', date: new Date().toISOString().split('T')[0], bankAccountId: '' });
-    toast({ title: 'Contribution Logged', description: `Added ${formatGBP(newContribution.amount === '' ? 0 : newContribution.amount)} and updated linked account.` });
+    toast({ title: 'Contribution Logged', description: `Added ${formatGBP(contribAmount)} and updated linked account.` });
   };
 
   const performDeleteContribution = (goalId: string, contribId: string) => {
@@ -3966,7 +3966,12 @@ export default function Finance() {
   // HANDLERS: DEBT
   // ==========================================
 
-  const emptyDebtForm = {
+  const emptyDebtForm: Omit<Debt, 'id' | 'originalAmount' | 'balance' | 'interestRate' | 'minPayment'> & {
+    originalAmount: number | '';
+    balance: number | '';
+    interestRate: number | '';
+    minPayment: number | '';
+  } = {
     name: '',
     type: 'mortgage' as Debt['type'],
     lender: '',
@@ -4106,7 +4111,7 @@ export default function Finance() {
     const entry: CreditScoreEntry = {
       id: 'cs_' + Date.now(),
       date: newCreditScore.date,
-      score: newCreditScore.score === '' ? 0 : newCreditScore.score
+      score: newCreditScore.score
     };
     const updated = {
       ...creditScores,
@@ -4116,7 +4121,7 @@ export default function Finance() {
     saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores: updated });
     setIsAddCreditScoreOpen(false);
     setNewCreditScore({ bureau: 'experian', score: '', date: new Date().toISOString().split('T')[0] });
-    toast({ title: 'Credit Score Added', description: `Logged ${newCreditScore.bureau.charAt(0).toUpperCase() + newCreditScore.bureau.slice(1)} score of ${newCreditScore.score === '' ? 0 : newCreditScore.score}.` });
+    toast({ title: 'Credit Score Added', description: `Logged ${newCreditScore.bureau.charAt(0).toUpperCase() + newCreditScore.bureau.slice(1)} score of ${newCreditScore.score}.` });
   };
 
   const performDeleteCreditScore = (bureau: 'experian' | 'transunion' | 'equifax', entryId: string) => {
@@ -4353,7 +4358,7 @@ export default function Finance() {
 
     const created: RecurringBill = {
       ...newRecurring,
-      amount: newRecurring.amount === '' ? 0 : newRecurring.amount,
+      amount: newRecurring.amount,
       id: 'rec_' + Date.now(),
       emoji: resolvedEmoji,
       category: resolvedCategory,

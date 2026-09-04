@@ -38,11 +38,11 @@ export function useSupabaseTable<T extends Record<string, any>>(
            // Try again without sorting at all to be safe
            const { data: dataFallback, error: errorFallback } = await supabase.from(tableName as any).select('*');
            if (errorFallback) throw errorFallback;
-           return dataFallback as T[];
+           return dataFallback as unknown as T[];
         }
         throw error;
       }
-      return data as T[];
+      return data as unknown as T[];
     },
   });
 
@@ -55,7 +55,7 @@ export function useSupabaseTable<T extends Record<string, any>>(
         .single();
 
       if (error) throw error;
-      return data as T;
+      return data as unknown as T;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [tableName] });
