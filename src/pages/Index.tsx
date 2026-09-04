@@ -109,7 +109,7 @@ const Index = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-[10px] font-bold border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200 h-8 rounded-full flex items-center gap-1.5 px-3 uppercase font-sans flex-shrink-0"
+                      className="text-xs font-bold border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200 h-8 rounded-full flex items-center gap-1.5 px-3 uppercase font-sans flex-shrink-0"
                       asChild
                     >
                       <a href="https://cloud.umami.is/analytics/eu/websites" target="_blank" rel="noopener noreferrer">
@@ -207,7 +207,7 @@ const Index = () => {
                                 e.currentTarget.nextElementSibling!.classList.remove('hidden');
                               }}
                             />
-                            <span className="hidden font-black text-foreground text-[10px] tracking-widest w-full h-full flex items-center justify-center text-center leading-tight">
+                            <span className="hidden font-bold text-foreground text-xs tracking-widest w-full h-full flex items-center justify-center text-center leading-tight">
                               {item.company.substring(0, 4).toUpperCase()}
                             </span>
                           </div>

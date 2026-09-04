@@ -234,7 +234,7 @@ export function SeasonEpisodeList({
                         <Calendar className="h-3 w-3" />
                         {formatDate(episode.release_date)}
                         {watched && (
-                          <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-green-500 text-white">
+                          <span className="ml-auto px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider bg-green-500 text-white">
                             Watched
                           </span>
                         )}

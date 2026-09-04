@@ -31,6 +31,26 @@ prevent. It had already happened once: `--font-serif` named JetBrains Mono for
 months while `index.html` only ever loaded Doto, so every piece of body text on
 the site silently fell back to the system monospace default.
 
+## Type
+
+`src/theme/typography.ts` holds the scale. The short version:
+
+- **Sizes**: 12, 14, 16, 18, 20, 24, 30, 36, 48, 60, 72. Nothing below 12.
+  Tailwind's default `text-*` classes land exactly on this ladder, so the rule
+  is simply to use them and never an arbitrary `text-[11px]`.
+- **Body is 16px** (`text-base`), secondary 14 (`text-sm`), fine print 12
+  (`text-xs`).
+- **Display steps down on mobile**: 48 to 36, 36 to 30. Body and small sizes
+  stay put.
+- **Two weights**: 400/500 normal, 600/700 emphasis. No `font-extrabold`,
+  `font-black`, `font-light` or `font-thin` -- except a light weight is
+  allowed on display text 60px and above.
+
+Known debt: `src/features/finance/` still has 263 arbitrary sub-12px sizes and
+19 off-scale weights. Everything else on the site is on the scale. Finance is
+being rewritten separately (Phase 7 in REHAUL_PLAN.md) and gets fixed there
+rather than by a find-and-replace across a 12,000-line file.
+
 ## Colours
 
 Colour tokens live in `src/index.css` as HSL triples, with a `:root` block for

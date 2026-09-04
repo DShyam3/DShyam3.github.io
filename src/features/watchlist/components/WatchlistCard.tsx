@@ -239,7 +239,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             {item.streaming_platform && (
               <span
                 className={cn(
-                  'text-[10px] px-2 py-0.5 rounded font-medium whitespace-nowrap',
+                  'text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap',
                   getPlatformColor(item.streaming_platform),
                 )}
               >
@@ -254,8 +254,8 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                     getStatusColor(status),
                   )}
                 >
-                  <span className="text-[10px] font-medium">{status}</span>
-                  <span className="text-[10px] opacity-70 flex items-center gap-1">
+                  <span className="text-xs font-medium">{status}</span>
+                  <span className="text-xs opacity-70 flex items-center gap-1">
                     <Calendar className="h-2.5 w-2.5" />
                     {upcomingReleaseDate.toLocaleDateString([], {
                       month: 'short',
@@ -267,7 +267,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               ) : (
                 <span
                   className={cn(
-                    'text-[10px] px-2 py-0.5 rounded font-medium',
+                    'text-xs px-2 py-0.5 rounded font-medium',
                     getStatusColor(status),
                   )}
                 >

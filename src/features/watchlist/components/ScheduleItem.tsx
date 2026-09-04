@@ -135,7 +135,7 @@ export function ScheduleItem({
           )}
 
           <div className="min-w-0 flex-1 pr-4">
-            <p className="text-[11px] font-medium truncate leading-tight">
+            <p className="text-xs font-medium truncate leading-tight">
               {item.title}
             </p>
             <div className="flex items-center gap-1 mt-0.5">
@@ -145,7 +145,7 @@ export function ScheduleItem({
                 <Film className="h-2.5 w-2.5 text-muted-foreground" />
               )}
               {item.category === 'TV Shows' && getAutoStatus(item) && (
-                <span className="text-[9px] text-muted-foreground opacity-70 truncate">
+                <span className="text-xs text-muted-foreground opacity-70 truncate">
                   {getAutoStatus(item)}
                 </span>
               )}

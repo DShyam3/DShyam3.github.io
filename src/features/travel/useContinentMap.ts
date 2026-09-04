@@ -41,8 +41,15 @@ export function useContinentMap(): ContinentMap {
                     if (!country.cca2 || !country.region) continue;
                     // Map every entry so territories still get a continent label
                     byCode[country.cca2] = country.region;
-                    // Only sovereign UN member states count toward stats
-                    if (country.independent === true && country.status === 'officially-assigned') {
+                    // The denominator is the 195 the UN recognises: 193 member
+                    // states plus the 2 permanent observers, the Holy See and
+                    // Palestine. REST Countries marks the Holy See independent
+                    // but not Palestine, which is why this used to read 194.
+                    const isUnObserver = country.cca2 === 'PS';
+                    if (
+                        (country.independent === true || isUnObserver) &&
+                        country.status === 'officially-assigned'
+                    ) {
                         totals[country.region] = (totals[country.region] ?? 0) + 1;
                         sovereignCodes.add(country.cca2);
                     }

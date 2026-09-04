@@ -193,7 +193,7 @@ export function WatchlistDetailDialog({
                       )}
                     >
                       <span className="text-xs font-medium">{status}</span>
-                      <span className="text-[11px] opacity-70 flex items-center gap-1">
+                      <span className="text-xs opacity-70 flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {upcomingReleaseDate.toLocaleDateString([], {
                           month: 'short',
@@ -453,7 +453,7 @@ export function WatchlistDetailDialog({
                     )}
                   >
                     <span className="text-xs font-medium">{status}</span>
-                    <span className="text-[11px] opacity-70 flex items-center gap-1">
+                    <span className="text-xs opacity-70 flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {upcomingReleaseDate.toLocaleDateString([], {
                         month: 'short',

@@ -713,7 +713,7 @@ const Watchlist = () => {
                 </div>
               </div>
               {syncLog.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground text-center py-2">
+                <p className="text-xs text-muted-foreground text-center py-2">
                   No sync history yet
                 </p>
               ) : (
@@ -724,7 +724,7 @@ const Watchlist = () => {
                   {syncLog.map((entry) => (
                     <div
                       key={entry.id}
-                      className="flex items-center justify-between gap-2 text-[11px] py-1 px-1.5 rounded bg-secondary/30"
+                      className="flex items-center justify-between gap-2 text-xs py-1 px-1.5 rounded bg-secondary/30"
                     >
                       <div className="flex items-center gap-1.5">
                         {entry.status === 'success' ? (
@@ -734,7 +734,7 @@ const Watchlist = () => {
                         )}
                         <span
                           className={cn(
-                            'px-1 py-px rounded text-[9px] font-semibold tracking-wide',
+                            'px-1 py-px rounded text-xs font-semibold tracking-wide',
                             entry.sync_type === 'auto'
                               ? 'bg-purple-500/20 text-purple-400'
                               : entry.sync_type === 'daily'
@@ -753,7 +753,7 @@ const Watchlist = () => {
                           {(entry.duration_ms / 1000).toFixed(1)}s
                         </span>
                       </div>
-                      <span className="text-muted-foreground text-[10px] whitespace-nowrap">
+                      <span className="text-muted-foreground text-xs whitespace-nowrap">
                         {new Date(entry.synced_at).toLocaleString([], {
                           month: 'short',
                           day: 'numeric',
@@ -765,7 +765,7 @@ const Watchlist = () => {
                   ))}
                 </div>
               )}
-              <div className="text-[9px] text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <div className="text-xs text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
                 {lastSyncTime && <span>Last synced: {relativeTime(lastSyncTime)}</span>}
                 {autoSyncEnabled && (
                   <span className="flex items-center gap-1">
@@ -827,7 +827,7 @@ const Watchlist = () => {
                           <SelectItem key={p} value={p}>
                             <div className="flex items-center justify-between gap-4 w-full">
                               <span>{p}</span>
-                              <span className="text-[10px] opacity-50">
+                              <span className="text-xs opacity-50">
                                 ({getPlatformCount(p)})
                               </span>
                             </div>
@@ -856,7 +856,7 @@ const Watchlist = () => {
                           <SelectItem key={g} value={g}>
                             <div className="flex items-center justify-between gap-4 w-full">
                               <span>{g}</span>
-                              <span className="text-[10px] opacity-50">
+                              <span className="text-xs opacity-50">
                                 ({getGenreCount(g)})
                               </span>
                             </div>
@@ -887,7 +887,7 @@ const Watchlist = () => {
                             <SelectItem key={status} value={status}>
                               <div className="flex items-center justify-between gap-4 w-full">
                                 <span>{status === 'Canceled' ? 'Cancelled' : status}</span>
-                                <span className="text-[10px] opacity-50">
+                                <span className="text-xs opacity-50">
                                   ({getStatusCount(status)})
                                 </span>
                               </div>
@@ -974,7 +974,7 @@ const Watchlist = () => {
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
-                        'text-[10px] px-2 py-0.5 rounded font-medium',
+                        'text-xs px-2 py-0.5 rounded font-medium',
                         r.media_type === 'movie'
                           ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                           : 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
@@ -982,7 +982,7 @@ const Watchlist = () => {
                     >
                       {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
+                    <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
                       Auto: {favouriteCategoryFor(r)}
                     </span>
                     {favAddedItems.has(`${r.media_type}-${r.id}`) && (

@@ -149,7 +149,7 @@ export function TmdbSearchDialog({
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground p-2 text-center bg-muted">
+                          <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground p-2 text-center bg-muted">
                             No Poster
                           </div>
                         )}

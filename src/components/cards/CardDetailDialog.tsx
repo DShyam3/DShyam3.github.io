@@ -70,7 +70,7 @@ export function CardDetailDialog({
                         <span className="text-sm text-muted-foreground">{subtitle}</span>
                       )}
                       {badge && (
-                        <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-secondary text-muted-foreground">
+                        <span className="text-xs font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-secondary text-muted-foreground">
                           {badge}
                         </span>
                       )}
@@ -147,7 +147,7 @@ export function CardDetailDialog({
                         <span className="text-sm text-muted-foreground">{subtitle}</span>
                       )}
                       {badge && (
-                        <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-secondary text-muted-foreground">
+                        <span className="text-xs font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-secondary text-muted-foreground">
                           {badge}
                         </span>
                       )}

@@ -251,7 +251,7 @@ const Travel = () => {
                                                         <Input
                                                             type="text"
                                                             placeholder="ADD COUNTRY..."
-                                                            className="pl-8 h-8 text-[11px] uppercase bg-background"
+                                                            className="pl-8 h-8 text-xs uppercase bg-background"
                                                             value={countrySearch}
                                                             onChange={(e) => {
                                                                 setCountrySearch(e.target.value);
@@ -266,7 +266,7 @@ const Travel = () => {
                                                             {filteredSearchCountries.map((country) => (
                                                                 <button
                                                                     key={country.code}
-                                                                    className="w-full text-left px-3 py-2 text-[11px] hover:bg-accent flex items-center justify-between group"
+                                                                    className="w-full text-left px-3 py-2 text-xs hover:bg-accent flex items-center justify-between group"
                                                                     onClick={() => {
                                                                         addCountry(country.code, country.name);
                                                                         setCountrySearch('');
