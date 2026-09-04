@@ -8,12 +8,20 @@
      of the page was empty. */
   grid-template-columns: 460px minmax(0, 1fr);
   gap: 32px;
-  align-items: start;
+  /* Both columns fill one viewport-height row, so the page does not scroll:
+     the globe sizes itself to the space left rather than setting the height
+     and pushing the footer off-screen, and the sidebar matches it exactly.
+     The subtracted space is the site header, the section heading and the
+     page footer. */
+  height: clamp(420px, calc(100vh - 340px), 900px);
+  align-items: stretch;
 }
 
 @media (max-width: 767px) {
   .travel-layout {
     grid-template-columns: 1fr;
+    /* Stacked on mobile, so let it grow and scroll normally. */
+    height: auto;
   }
 
   .travel-map-col {
@@ -31,6 +39,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
 }
 
 /* Title + counter above the card — on one line */
@@ -58,9 +67,10 @@
   border: 1px solid hsl(var(--border));
   background: hsl(var(--card));
   overflow-y: auto;
+  /* Fill whatever the map column leaves, and scroll inside. This used to be a
+     hardcoded 420px chosen to match the old, much smaller map. */
   flex: 1;
-  /* cap at map height — map is ~2:1 aspect, right col ~900px wide → ~450px tall */
-  max-height: 420px;
+  min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
@@ -235,7 +245,13 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  align-self: start;
+  min-height: 0;
+}
+
+/* The canvas fills what the heading row leaves. */
+.travel-map-col > *:last-child {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ─── Heading row: title + counter ──────────────────────────────────── */
@@ -523,4 +539,16 @@
 
 .city-remove-btn:hover {
   color: hsl(var(--destructive));
+}
+
+/* ─── UN membership marker on a country row ─────────────────────────── */
+
+.travel-un-badge {
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
 }

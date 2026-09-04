@@ -94,6 +94,9 @@ const Travel = () => {
 
     // Sovereign count drives all the stats
     const totalCountries = Object.values(continentTotals).reduce((a, b) => a + b, 0) || 195;
+    // The headline counts everything visitable -- every country and territory
+    // in the dataset -- with UN membership shown per row instead.
+    const totalPlaces = Object.keys(continentByCode).length || 250;
     const sovereignCount = sovereignVisited.length;
 
     const [hovered, setHovered] = useState<{ code: string; name: string; flagUrl: string; dotKey?: string | null } | null>(null);
@@ -215,7 +218,7 @@ const Travel = () => {
             <div className="wide-container flex-1 flex flex-col">
                 <Header title="Travel" subtitle="Where I've been" />
 
-                <main className="flex-1 flex flex-col px-4 md:px-0 py-8 md:py-12 space-y-16">
+                <main className="flex-1 flex flex-col px-4 md:px-0 py-6 space-y-16">
 
                     {/* WHERE I'VE BEEN */}
                     <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
@@ -232,11 +235,7 @@ const Travel = () => {
                                         className="text-muted-foreground whitespace-nowrap"
                                     />
                                     <DotMatrixText
-                                        text={
-                                            territoryVisited.length > 0
-                                                ? `${sovereignCount}/${totalCountries} UN  ${Math.round((sovereignCount / totalCountries) * 100)}%  +${territoryVisited.length}`
-                                                : `${sovereignCount}/${totalCountries} UN  ${Math.round((sovereignCount / totalCountries) * 100)}%`
-                                        }
+                                        text={`${visitedCountries.length}/${totalPlaces}  ${Math.round((visitedCountries.length / totalPlaces) * 100)}%`}
                                         size={isMobile ? "xs" : "sm"}
                                         wrap={false}
                                         className="text-muted-foreground whitespace-nowrap"
@@ -376,6 +375,9 @@ const Travel = () => {
                                                                             />
                                                                         </div>
                                                                         <span className="travel-country-name">{country.country_name}</span>
+                                                                        {sovereignCodes.has(country.country_code) && (
+                                                                            <span className="travel-un-badge" title="UN member or observer state">UN</span>
+                                                                        )}
                                                                         {cityCount > 0 && (
                                                                             <span style={{
                                                                                 fontSize: '0.65rem',

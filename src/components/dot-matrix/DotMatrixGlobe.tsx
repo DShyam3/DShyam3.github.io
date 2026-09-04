@@ -143,9 +143,19 @@ export function DotMatrixGlobe({
             const cyNorm = (row + 0.5) / rows;
             const lon = cxNorm * 2 * Math.PI - Math.PI;
             const lat = Math.PI / 2 - cyNorm * Math.PI;
+            // Longitudes converge at the poles, so an evenly-spaced lat/lon
+            // grid piles every column onto nearly the same screen position
+            // there -- which is what made Antarctica render as a bright ring
+            // pattern with a hot spot at the pole. Keeping one column in
+            // every 1/cos(lat) restores roughly even spacing on the sphere.
+            // Only applied in globe mode; the flat 2D map needs them all.
+            const stride = Math.max(1, Math.round(1 / Math.max(0.08, Math.cos(lat))));
+
             return {
                 code,
                 dotKey: `${col},${row}`,  // for city-level dot lookup
+                col,
+                stride,
                 cxNorm,
                 cyNorm,
                 ux: Math.cos(lat) * Math.sin(lon),
@@ -559,6 +569,11 @@ export function DotMatrixGlobe({
         const frontDots: ProjectedDot[] = [];
 
         for (const dot of optimizedDots) {
+            // Thin the polar pile-up once we are mostly in globe mode.
+            if (progress > 0.5 && dot.stride > 1 && dot.col % dot.stride !== 0) {
+                continue;
+            }
+
             const cx2d = dot.cxNorm * W_zoom + W_offset;
             const cy2d = dot.cyNorm * H_zoom + H_offset;
 
