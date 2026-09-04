@@ -212,6 +212,31 @@ populated. Either the add-dialog never collects it or the field isn't wanted.
 Decide before it gets carried into the new collection config — it is a free
 deletion if unwanted.
 
+**S-10 — `anon` holds write privileges on every table, including all 19 finance tables.**
+
+Surfaced by the schema dump. Table-level grants (separate from RLS) are:
+
+| Tables | `anon` privileges |
+|---|---|
+| all 19 `finance_*` | DELETE, INSERT, REFERENCES, TRIGGER, TRUNCATE, UPDATE |
+| content + watchlist + travel | the above **plus SELECT** |
+| `sync_log`, `visited_cities` | SELECT, REFERENCES, TRIGGER, TRUNCATE, UPDATE |
+
+These are Supabase's defaults for the `public` schema, not something that was
+set deliberately. SELECT was revoked on the finance tables at some point; the
+write privileges were left.
+
+**Not currently exploitable.** RLS is enabled on all 39 tables and gates
+INSERT/UPDATE/DELETE to `is_admin()`, so an anonymous write matches zero rows.
+PostgREST also exposes no verb that maps to TRUNCATE.
+
+**Why it still matters:** TRUNCATE is *not* filtered by RLS — Postgres applies
+row-level security to SELECT/INSERT/UPDATE/DELETE only. So the grant is a
+latent privilege whose only barrier is that no API surface reaches it. Belt and
+braces would be `REVOKE ALL ON <finance tables> FROM anon`, so that an RLS
+mistake on a finance table cannot become data loss. Low severity, worth a
+migration.
+
 **H-6 — README advertises a `kitchen` inventory category that doesn't exist.**
 
 Live categories are `tech-edc`, `wardrobe`, `homelab`, `hygiene`, `sports-gear`.

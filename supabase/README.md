@@ -6,6 +6,10 @@ Project ref: `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2).
 
 ```
 supabase/
+  schemas/        Declarative schema, one file per collection. This is the
+                  readable source of truth: to know what a table looks like,
+                  open its file. Verified byte-for-byte against production
+                  (491 statements, identical set).
   migrations/     CLI-managed migrations. Filename version matches the applied
                   migration history exactly. Everything new goes here.
   functions/      Deno edge functions, deployed separately from the frontend.
@@ -13,6 +17,22 @@ supabase/
                   Historical record only -- see "Known drift" below.
   config.toml     Currently only project_id.
 ```
+
+## Schema files
+
+| File | Contents |
+|---|---|
+| `00_extensions.sql` | extensions, `content_type` enum |
+| `01_functions.sql` | `is_admin()`, the two watchlist trigger functions |
+| `02_privileges.sql` | role grants (mostly Supabase defaults -- see S-10 in `REHAUL_PLAN.md`) |
+| `03_realtime.sql` | the `supabase_realtime` publication |
+| `10_books` … `19_creators` | one file per content collection |
+| `20_watchlist.sql` | movies, shows, seasons, episodes, schedule, favourites, sync_log |
+| `30_travel.sql` | visited countries + cities |
+| `40_finance.sql` | the 19 `finance_*` tables |
+
+Storage bucket policies are **not** here -- they live in `storage.objects`,
+outside the dumped `public` schema, and stay as hand-written migrations.
 
 ## Known drift
 
@@ -30,13 +50,28 @@ with the applied migration history:
   `20260718_add_account_id_to_transactions.sql`,
   `20260725_schedule_watchlist_sync.sql`.
 
-**Do not run the flat files.** They are kept for provenance until the
-declarative-schema baseline lands (Phase 1.5 in `REHAUL_PLAN.md`), which
-replaces them with per-collection files under `supabase/schemas/` and a
-reconciled history.
+**Do not run the flat files.** They are kept for provenance until the history is
+reconciled.
 
 Everything from `20260904110337_secure_storage_object_policies` onward lives in
 `migrations/` and is correctly versioned.
+
+### The migrations folder cannot yet rebuild the database
+
+`supabase db diff` builds a shadow database by replaying `migrations/` from
+empty. That currently fails on the very first file:
+
+```
+Applying migration 20260904110337_secure_storage_object_policies.sql...
+ERROR: function public.is_admin() does not exist (SQLSTATE 42883)
+```
+
+`is_admin()` was created by a legacy migration that only exists in the remote
+history, not in `migrations/`. Until a baseline migration fills that gap,
+`db diff` and `db reset` do not work, and generated migrations are unavailable.
+
+`supabase/schemas/` is still accurate and useful on its own -- it was dumped
+straight from production -- it just is not yet wired to the diff tooling.
 
 ## Applying changes
 
