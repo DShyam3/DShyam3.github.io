@@ -159,7 +159,7 @@ const Index = () => {
                       variant="outline"
                       size="sm"
                       className="h-8 gap-2 text-xs rounded-full hover:bg-primary hover:text-primary-foreground border-primary/20 hover:border-transparent transition-[color,background-color,border-color] duration-200 shrink-0 max-w-full"
-                      onClick={() => openAndDownload(cvUrl, 'Dhyan Shyam CV')}
+                      onClick={() => openAndDownload(cvUrl, 'Dhyan_Shyam_CV')}
                     >
                       <Download className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">Download CV / Resume</span>
