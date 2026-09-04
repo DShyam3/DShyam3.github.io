@@ -154,8 +154,10 @@ export function DotMatrixGlobe({
             // degrees there is almost no populated land, so the correction is
             // invisible except where it is needed.
             const cosLat = Math.cos(lat);
-            const stride = cosLat < 0.21
-                ? Math.min(6, Math.max(1, Math.round(1 / Math.max(0.06, cosLat))))
+            // Only the last few degrees need dropping outright; everything
+            // else is handled by shrinking the dots (see the draw loop).
+            const stride = cosLat < 0.12
+                ? Math.min(8, Math.max(1, Math.round(1 / Math.max(0.05, cosLat))))
                 : 1;
 
             return {
@@ -163,6 +165,7 @@ export function DotMatrixGlobe({
                 dotKey: `${col},${row}`,  // for city-level dot lookup
                 col,
                 stride,
+                cosLat,
                 cxNorm,
                 cyNorm,
                 ux: Math.cos(lat) * Math.sin(lon),
@@ -576,7 +579,8 @@ export function DotMatrixGlobe({
         const frontDots: ProjectedDot[] = [];
 
         for (const dot of optimizedDots) {
-            // Thin the polar pile-up once we are mostly in globe mode.
+            // Drop dots only in the last few degrees, where even shrinking
+            // them cannot keep them apart.
             if (progress > 0.5 && dot.stride > 1 && dot.col % dot.stride !== 0) {
                 continue;
             }
@@ -618,7 +622,18 @@ export function DotMatrixGlobe({
                 isBack = z_tilt < 0;
             }
 
-            const activeRadius = baseRadius * (1 * (1 - progress) + Math.max(0.4, 0.6 + 0.4 * zNorm) * progress);
+            // On a sphere, dots in a row sit cos(lat) apart, so towards the
+            // poles they overlap and merge into solid arcs -- the banding
+            // across the Arctic and Antarctic. Shrinking them by the same
+            // factor keeps the gaps open. Doing it by size rather than by
+            // removing dots matters: thinning left visible grey holes across
+            // Russia and northern Canada, whereas this stays continuous and
+            // simply reads as finer detail towards the poles.
+            const polarScale = Math.max(0.32, Math.min(1, dot.cosLat / 0.55));
+            const activeRadius =
+                baseRadius *
+                (1 * (1 - progress) +
+                    Math.max(0.4, 0.6 + 0.4 * zNorm) * polarScale * progress);
             const activeOpacity = 1 * (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
 
             const pDot: ProjectedDot = {

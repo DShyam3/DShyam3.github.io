@@ -175,11 +175,7 @@ export function WatchlistDetailDialog({
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                <PlatformBadge
-                  platform={item.streaming_platform}
-                  showLabel
-                  size={22}
-                />
+                <PlatformBadge platform={item.streaming_platform} size={20} />
                 {status && (
                   isUpcomingStatus(status) && upcomingReleaseDate ? (
                     <div
@@ -430,11 +426,7 @@ export function WatchlistDetailDialog({
 
             {/* Status and platform */}
             <div className="flex flex-wrap items-center gap-2 mt-3">
-              <PlatformBadge
-                platform={item.streaming_platform}
-                showLabel
-                size={22}
-              />
+              <PlatformBadge platform={item.streaming_platform} size={20} />
               {status && (
                 isUpcomingStatus(status) && upcomingReleaseDate ? (
                   <div

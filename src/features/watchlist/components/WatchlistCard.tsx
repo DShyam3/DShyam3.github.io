@@ -237,7 +237,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
           {/* Platform and Status badges */}
           <div className="flex flex-col items-start gap-1 mt-2">
-            <PlatformBadge platform={item.streaming_platform} size={22} />
+            <PlatformBadge platform={item.streaming_platform} size={18} />
             {status && (
               isUpcomingStatus(status) && upcomingReleaseDate ? (
                 <div

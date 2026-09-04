@@ -815,12 +815,20 @@ const Watchlist = () => {
                   >
                     <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
                       <div className="flex items-center gap-2 truncate">
-                        {selectedPlatform ? (
-                          <PlatformLogo platform={selectedPlatform} size={16} />
-                        ) : (
+                        {!selectedPlatform && (
                           <Filter className="h-3 w-3 opacity-50" />
                         )}
-                        <SelectValue placeholder="Platform" />
+                        <SelectValue placeholder="Platform">
+                          {selectedPlatform ? (
+                            <PlatformLogo
+                              platform={selectedPlatform}
+                              size={16}
+                              maxWidth={90}
+                            />
+                          ) : (
+                            'All Platforms'
+                          )}
+                        </SelectValue>
                       </div>
                     </SelectTrigger>
                     <SelectContent>
@@ -831,7 +839,7 @@ const Watchlist = () => {
                             <div className="flex items-center justify-between gap-4 w-full">
                               <span className="flex items-center gap-2">
                                 <PlatformLogo platform={p} size={18} />
-                                {p}
+                                <span className="sr-only">{p}</span>
                               </span>
                               <span className="text-xs opacity-50">
                                 ({getPlatformCount(p)})
