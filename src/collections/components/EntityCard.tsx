@@ -1,39 +1,149 @@
-import { useState } from 'react';
-import { ExternalLink, X } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { BookOpen, ExternalLink, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
+import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
-import type { CollectionConfig, CollectionRow } from '../types';
+import type { CardVariant, CollectionConfig, CollectionRow } from '../types';
 
-interface EntityCardProps<T extends CollectionRow> {
+/**
+ * Everything that differs between card shapes, in one table: the grid the
+ * cards sit in and the skeleton shown while loading. CollectionPage reads it
+ * so the page layout and the card face can never drift apart.
+ */
+export const CARD_LAYOUT: Record<CardVariant, { grid: string; skeleton: string }> = {
+  tile: {
+    grid: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8',
+    skeleton: 'h-32 rounded-lg',
+  },
+  poster: {
+    grid: 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-12 gap-4 py-6',
+    skeleton: 'aspect-[2/3] rounded-lg',
+  },
+};
+
+interface FaceProps {
+  title: string;
+  subtitle?: string;
+  image?: string;
+  excerpt?: string;
+  href?: string;
+  index: number;
+  actions: ReactNode;
+  onOpen: () => void;
+}
+
+/** Wide row: small icon on the left, text on the right. Links, inventory. */
+function TileFace({ title, subtitle, image, excerpt, href, index, actions, onOpen }: FaceProps) {
+  return (
+    <article
+      className="group relative bg-card rounded-lg p-5 opacity-0 animate-fade-in transition-[box-shadow] duration-300 cursor-pointer hover:shadow-md [box-shadow:var(--shadow-border)]"
+      style={{ animationDelay: `${Math.min(index, 20) * 50}ms` }}
+      onClick={onOpen}
+    >
+      <div className="absolute top-3 right-3 flex gap-1" onClick={(e) => e.stopPropagation()}>
+        {actions}
+      </div>
+
+      <div className="flex gap-4 items-start">
+        <div className="w-14 h-14 rounded-lg bg-secondary/50 overflow-hidden flex-shrink-0 flex items-center justify-center">
+          {image ? (
+            <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <ExternalLink className="w-6 h-6 text-muted-foreground" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 pr-16">
+          <h3 className="font-serif text-base font-medium leading-tight group-hover:text-primary transition-colors block w-full mb-1">
+            <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
+              {title}
+              {href && (
+                <ExternalLink className="inline-block w-3 h-3 text-muted-foreground opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity ml-2 align-baseline" />
+              )}
+            </span>
+          </h3>
+          {subtitle && (
+            <span className="inline-block text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded mb-2">
+              {subtitle}
+            </span>
+          )}
+          {excerpt && <p className="text-sm text-muted-foreground line-clamp-2">{excerpt}</p>}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** 2:3 cover with text beneath, actions overlaid on the image. Books, photos. */
+function PosterFace({ title, subtitle, image, excerpt, actions, onOpen }: FaceProps) {
+  return (
+    <div className="item-card group relative cursor-pointer" onClick={onOpen}>
+      <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+        {image ? (
+          <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <BookOpen className="h-12 w-12 text-muted-foreground/30" />
+          </div>
+        )}
+
+        <div
+          className={cn(
+            'absolute top-2 right-2 flex gap-1 transition-opacity duration-200',
+            'opacity-100 lg:opacity-0 lg:group-hover:opacity-100',
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {actions}
+        </div>
+      </div>
+
+      <div className="p-4">
+        <h3 className="text-sm font-medium">
+          <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
+            {title}
+          </span>
+        </h3>
+        {subtitle && (
+          <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{subtitle}</p>
+        )}
+        {excerpt && (
+          <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{excerpt}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const FACES: Record<CardVariant, (props: FaceProps) => JSX.Element> = {
+  tile: TileFace,
+  poster: PosterFace,
+};
+
+interface EntityCardProps<T extends CollectionRow, R> {
   item: T;
-  config: CollectionConfig<T>;
+  config: CollectionConfig<T, R>;
   index: number;
   onUpdate?: (id: string, updates: Partial<T>) => void;
   onRemove?: (id: string) => void;
 }
 
 /**
- * The card face. Chrome is fixed -- image, title, subtitle, excerpt, admin
- * actions, click-to-open -- and everything that varies comes from the config:
- * which fields those slots read, and what the detail dialog body contains.
+ * The shell every card shares: detail-open state, admin actions, and the
+ * detail dialog. Only the face differs, and which face comes from the config.
  *
- * The detail dialog itself is CardDetailDialog, which already worked this way
- * across seven call sites. This is the same idea applied to the face, which
- * had been copy-pasted into BookCard, LinkCard, ItemCard and CreatorCard.
- *
- * Only the `tile` variant exists so far, because only Links has been converted.
- * `poster` (books, photos, watchlist) and `text` (articles, recipes) get added
- * when those pages land -- widening the union in types.ts is a compile-checked
- * change, so nothing silently falls through.
+ * The detail dialog is CardDetailDialog, which already worked this way across
+ * seven call sites. This applies the same idea to the face, which had been
+ * copy-pasted into BookCard, LinkCard, ItemCard and CreatorCard.
  */
-export function EntityCard<T extends CollectionRow>({
+export function EntityCard<T extends CollectionRow, R>({
   item,
   config,
   index,
   onUpdate,
   onRemove,
-}: EntityCardProps<T>) {
+}: EntityCardProps<T, R>) {
   const [detailOpen, setDetailOpen] = useState(false);
 
   const { card } = config;
@@ -42,77 +152,56 @@ export function EntityCard<T extends CollectionRow>({
   const image = card.image?.(item);
   const href = card.href?.(item);
   const excerpt = card.excerpt?.(item);
+  const badge = card.badge?.(item);
 
-  const handleDelete = () => {
-    onRemove?.(item.id);
-    setDetailOpen(false);
-  };
+  const isPoster = card.variant === 'poster';
+  const Face = FACES[card.variant];
+
+  const actions = (
+    <>
+      {onUpdate && (
+        <EntityFormDialog
+          mode="edit"
+          config={config}
+          item={item}
+          onSubmit={(values) => onUpdate(item.id, values as Partial<T>)}
+        />
+      )}
+      {onRemove &&
+        (isPoster ? (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+            onClick={() => onRemove(item.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(item.id)}
+            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        ))}
+    </>
+  );
 
   return (
     <>
-      <article
-        className="group relative bg-card rounded-lg p-5 opacity-0 animate-fade-in transition-[box-shadow] duration-300 cursor-pointer hover:shadow-md [box-shadow:var(--shadow-border)]"
-        style={{ animationDelay: `${Math.min(index, 20) * 50}ms` }}
-        onClick={() => setDetailOpen(true)}
-      >
-        <div
-          className="absolute top-3 right-3 flex gap-1"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {onUpdate && (
-            <EntityFormDialog
-              mode="edit"
-              config={config}
-              item={item}
-              onSubmit={(values) => onUpdate(item.id, values as Partial<T>)}
-            />
-          )}
-          {onRemove && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onRemove(item.id)}
-              className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex gap-4 items-start">
-          <div className="w-14 h-14 rounded-lg bg-secondary/50 overflow-hidden flex-shrink-0 flex items-center justify-center">
-            {image ? (
-              <img
-                src={image}
-                alt={title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <ExternalLink className="w-6 h-6 text-muted-foreground" />
-            )}
-          </div>
-
-          <div className="flex-1 min-w-0 pr-16">
-            <h3 className="font-serif text-base font-medium leading-tight group-hover:text-primary transition-colors block w-full mb-1">
-              <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
-                {title}
-                {href && (
-                  <ExternalLink className="inline-block w-3 h-3 text-muted-foreground opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity ml-2 align-baseline" />
-                )}
-              </span>
-            </h3>
-            {subtitle && (
-              <span className="inline-block text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded mb-2">
-                {subtitle}
-              </span>
-            )}
-            {excerpt && (
-              <p className="text-sm text-muted-foreground line-clamp-2">{excerpt}</p>
-            )}
-          </div>
-        </div>
-      </article>
+      <Face
+        title={title}
+        subtitle={subtitle}
+        image={image}
+        excerpt={excerpt}
+        href={href}
+        index={index}
+        actions={actions}
+        onOpen={() => setDetailOpen(true)}
+      />
 
       <CardDetailDialog
         open={detailOpen}
@@ -121,7 +210,15 @@ export function EntityCard<T extends CollectionRow>({
         subtitle={subtitle}
         imageUrl={image}
         link={href}
-        onDelete={onRemove ? handleDelete : undefined}
+        badge={badge}
+        onDelete={
+          onRemove
+            ? () => {
+                onRemove(item.id);
+                setDetailOpen(false);
+              }
+            : undefined
+        }
       >
         {config.renderDetail?.(item)}
       </CardDetailDialog>

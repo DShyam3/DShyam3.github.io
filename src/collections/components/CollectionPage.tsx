@@ -4,21 +4,21 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '../useCollection';
 import { FilterBar } from './FilterBar';
-import { EntityCard } from './EntityCard';
+import { EntityCard, CARD_LAYOUT } from './EntityCard';
 import { EntityFormDialog } from './EntityFormDialog';
 import type { CollectionConfig, CollectionRow } from '../types';
 
-interface CollectionPageProps<T extends CollectionRow> {
-  config: CollectionConfig<T>;
+interface CollectionPageProps<T extends CollectionRow, R> {
+  config: CollectionConfig<T, R>;
 }
 
 /**
  * The whole page for any collection: header, filter bar, count, add button,
  * grid, footer. Pages in src/pages/ become a one-line render of this.
  */
-export function CollectionPage<T extends CollectionRow>({
+export function CollectionPage<T extends CollectionRow, R>({
   config,
-}: CollectionPageProps<T>) {
+}: CollectionPageProps<T, R>) {
   const { isAdmin } = useAuth();
   const {
     items,
@@ -33,6 +33,7 @@ export function CollectionPage<T extends CollectionRow>({
     removeItem,
   } = useCollection(config);
 
+  const layout = CARD_LAYOUT[config.card.variant];
   const count = items.length;
   const noun = count === 1 ? config.noun.singular : config.noun.plural;
 
@@ -65,9 +66,9 @@ export function CollectionPage<T extends CollectionRow>({
 
         <div className="px-4 md:px-0">
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
+            <div className={layout.grid}>
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className={layout.skeleton} />
               ))}
             </div>
           ) : count === 0 ? (
@@ -80,7 +81,7 @@ export function CollectionPage<T extends CollectionRow>({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8">
+            <div className={layout.grid}>
               {items.map((item, index) => (
                 <EntityCard
                   key={item.id}

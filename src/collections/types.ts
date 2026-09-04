@@ -35,6 +35,9 @@ export interface FacetDef<T> {
 /** Field types the generated add/edit form knows how to render. */
 export type FieldType = 'text' | 'textarea' | 'url' | 'select' | 'image';
 
+/** Card face shapes. Each one owns its grid and skeleton -- see CARD_LAYOUT. */
+export type CardVariant = 'tile' | 'poster';
+
 export interface FieldDef<T> {
   name: keyof T & string;
   label: string;
@@ -52,7 +55,36 @@ export interface FieldDef<T> {
 /** Values the form holds while being edited -- every input is a string. */
 export type FormValues = Record<string, string>;
 
-export interface CollectionConfig<T extends CollectionRow> {
+/**
+ * An optional lookup step at the top of the add dialog: search an external
+ * source, pick a result, and have the form prefilled from it.
+ *
+ * Books searches Google Books; the watchlist will search TMDB. Same shape.
+ */
+export interface ExternalSearch<R> {
+  placeholder: string;
+  /** Any hook returning debounced results, e.g. useGoogleBooks. */
+  useSearch: () => {
+    results: R[];
+    loading: boolean;
+    search: (query: string) => void;
+  };
+  /** A row in the results dropdown. */
+  renderResult: (result: R) => ReactNode;
+  /** Stable key for the result list. */
+  resultKey: (result: R) => string;
+  /** Form values to apply when a result is picked. */
+  toValues: (result: R) => FormValues;
+  /** Toast shown after picking, e.g. `Selected "Dune"`. */
+  pickedMessage?: (result: R) => string;
+}
+
+/**
+ * `R` is the external search result type, only used by collections that
+ * declare `externalSearch`. It defaults to `never` so the common case stays
+ * `CollectionConfig<SomeRow>`.
+ */
+export interface CollectionConfig<T extends CollectionRow, R = never> {
   /** Supabase table name. */
   table: string;
   /** Route path, e.g. '/links'. */
@@ -73,22 +105,32 @@ export interface CollectionConfig<T extends CollectionRow> {
   /** Filter dimensions. Usually one. */
   facets: FacetDef<T>[];
 
-  /** How a card looks. Only 'tile' exists so far -- see EntityCard. */
+  /**
+   * How a card looks. `tile` is a wide row with a small icon (links,
+   * inventory); `poster` is a 2:3 cover with text beneath (books, photos).
+   * Each variant owns its grid and skeleton shape -- see CARD_LAYOUT in
+   * EntityCard.tsx.
+   */
   card: {
-    variant: 'tile';
+    variant: CardVariant;
     title: (item: T) => string;
-    /** Small line under the title, typically the category label. */
+    /** Small line under the title: a category label, or "by <author>". */
     subtitle?: (item: T) => string | undefined;
-    /** Thumbnail or icon. */
+    /** Thumbnail, icon or cover. */
     image?: (item: T) => string | undefined;
     /** External link the detail dialog opens. */
     href?: (item: T) => string | undefined;
     /** Body text on the card face. */
     excerpt?: (item: T) => string | undefined;
+    /** Corner label in the detail dialog. */
+    badge?: (item: T) => string | undefined;
   };
 
   /** Drives both the add and the edit dialog. */
   fields: FieldDef<T>[];
+
+  /** Optional lookup step at the top of the add dialog. */
+  externalSearch?: ExternalSearch<R>;
 
   /** Contents of the detail dialog, below the shared chrome. */
   renderDetail?: (item: T) => ReactNode;

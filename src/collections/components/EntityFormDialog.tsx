@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Pencil, Plus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, Pencil, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,12 +28,94 @@ import type {
   FormValues,
 } from '../types';
 
-interface EntityFormDialogProps<T extends CollectionRow> {
+interface EntityFormDialogProps<T extends CollectionRow, R> {
   mode: 'add' | 'edit';
-  config: CollectionConfig<T>;
+  config: CollectionConfig<T, R>;
   /** Required in edit mode; the row being edited. */
   item?: T;
   onSubmit: (values: FormValues) => void;
+}
+
+/**
+ * The optional lookup step at the top of the add dialog: type, pick a result,
+ * and the form fills itself in. Books searches Google Books; the watchlist
+ * will search TMDB through the same interface.
+ *
+ * Split out so the hook it calls (config.externalSearch.useSearch) is only
+ * mounted when a collection actually declares one -- calling it conditionally
+ * inside EntityFormDialog would break the rules of hooks.
+ */
+function ExternalSearchField<R>({
+  search: spec,
+  onPick,
+}: {
+  search: NonNullable<CollectionConfig<CollectionRow, R>['externalSearch']>;
+  onPick: (values: FormValues) => void;
+}) {
+  const [term, setTerm] = useState('');
+  const [showResults, setShowResults] = useState(false);
+  const { results, loading, search } = spec.useSearch();
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(event.target as Node)) {
+        setShowResults(false);
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const handleChange = (value: string) => {
+    setTerm(value);
+    if (value.trim().length >= 2) {
+      setShowResults(true);
+      search(value);
+    } else {
+      setShowResults(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 relative" ref={boxRef}>
+      <Label htmlFor="external-search">Search</Label>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          id="external-search"
+          value={term}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder={spec.placeholder}
+          className="pl-9"
+        />
+        {loading && (
+          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+        )}
+      </div>
+
+      {showResults && results.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 max-h-72 overflow-y-auto rounded-md border bg-popover shadow-md">
+          {results.map((result) => (
+            <button
+              key={spec.resultKey(result as R)}
+              type="button"
+              className="w-full text-left px-3 py-2 hover:bg-accent transition-colors"
+              onClick={() => {
+                onPick(spec.toValues(result as R));
+                setShowResults(false);
+                setTerm('');
+                const message = spec.pickedMessage?.(result as R);
+                if (message) toast.info(message);
+              }}
+            >
+              {spec.renderResult(result as R)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function initialValues<T extends CollectionRow>(
@@ -55,12 +137,12 @@ function initialValues<T extends CollectionRow>(
  * options were written out four separate times (add, edit, the hook, and the
  * card's label lookup). Here they come from the config's facet.
  */
-export function EntityFormDialog<T extends CollectionRow>({
+export function EntityFormDialog<T extends CollectionRow, R>({
   mode,
   config,
   item,
   onSubmit,
-}: EntityFormDialogProps<T>) {
+}: EntityFormDialogProps<T, R>) {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<FormValues>(() =>
     initialValues(config.fields, item),
@@ -152,6 +234,13 @@ export function EntityFormDialog<T extends CollectionRow>({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+          {mode === 'add' && config.externalSearch && (
+            <ExternalSearchField
+              search={config.externalSearch}
+              onPick={(picked) => setValues((prev) => ({ ...prev, ...picked }))}
+            />
+          )}
+
           {config.fields.map((field) => {
             const id = `${mode}-${config.table}-${field.name}`;
             const error = errors[field.name];

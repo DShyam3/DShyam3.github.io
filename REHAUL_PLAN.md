@@ -237,6 +237,30 @@ braces would be `REVOKE ALL ON <finance tables> FROM anon`, so that an RLS
 mistake on a finance table cannot become data loss. Low severity, worth a
 migration.
 
+**H-7 — The `books` table has two categories meaning the same thing.**
+
+Live data: `completed` (4), `future` (1), `wishlist` (1). `future` and
+`wishlist` are plainly the same idea introduced twice.
+
+This only became visible during the Books conversion, because four files had
+four different ideas of what the categories were:
+
+| Source | Categories |
+|---|---|
+| live data | `completed`, `future`, `wishlist` |
+| `types/books.ts` | `favourite`, `future` |
+| `useBooks` nav | `reading`, `completed`, `wishlist` |
+| both dialogs | `favourite`, `future` |
+
+So the "Reading" tab matched nothing, and the single `future` book was
+unreachable from any tab except All. `BookCard` also badged every non-favourite
+book "To Read", so completed books were mislabelled in the detail dialog.
+
+`collections/books.tsx` now declares the three that exist, which fixes the
+visibility and the badge. Merging `future` and `wishlist` is a data migration
+plus a naming decision, so it is left for you: pick the survivor, and it is a
+one-line `UPDATE` plus a one-line config change.
+
 **H-6 — README advertises a `kitchen` inventory category that doesn't exist.**
 
 Live categories are `tech-edc`, `wardrobe`, `homelab`, `hygiene`, `sports-gear`.

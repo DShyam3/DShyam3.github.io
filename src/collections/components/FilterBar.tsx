@@ -4,8 +4,8 @@ import { SearchBar } from '@/components/shared/SearchBar';
 import { ALL } from '../useCollection';
 import type { CollectionConfig, CollectionRow } from '../types';
 
-interface FilterBarProps<T extends CollectionRow> {
-  config: CollectionConfig<T>;
+interface FilterBarProps<T extends CollectionRow, R> {
+  config: CollectionConfig<T, R>;
   filters: Record<string, string>;
   setFilter: (key: string, value: string) => void;
   countFor: (facetKey: string, optionKey: string) => number;
@@ -20,14 +20,14 @@ interface FilterBarProps<T extends CollectionRow> {
  * searchQuery/onSearchChange to <Header>, which accepts neither, so the props
  * were silently dropped and the page's search state drove nothing.
  */
-export function FilterBar<T extends CollectionRow>({
+export function FilterBar<T extends CollectionRow, R>({
   config,
   filters,
   setFilter,
   countFor,
   search,
   setSearch,
-}: FilterBarProps<T>) {
+}: FilterBarProps<T, R>) {
   const showSearch = Boolean(config.searchFields?.length);
 
   return (

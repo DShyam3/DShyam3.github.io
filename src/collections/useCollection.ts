@@ -12,7 +12,7 @@ export const ALL = 'all';
  * noun. The facet model also covers the watchlist's six filters, so that page
  * does not need its own copy either.
  */
-export function useCollection<T extends CollectionRow>(config: CollectionConfig<T>) {
+export function useCollection<T extends CollectionRow, R>(config: CollectionConfig<T, R>) {
   const { data, loading, addItem, updateItem, removeItem } = useSupabaseTable<T>(
     config.table,
     config.sortColumn

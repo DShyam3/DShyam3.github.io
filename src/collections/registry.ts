@@ -1,3 +1,4 @@
+import { booksCollection } from './books';
 import { linksCollection } from './links';
 import type { CollectionConfig, CollectionRow } from './types';
 
@@ -11,15 +12,17 @@ import type { CollectionConfig, CollectionRow } from './types';
  * Adding a collection: write `src/collections/<name>.tsx`, add it here, add a
  * route in App.tsx, and add the schema file in `supabase/schemas/`.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const collections: CollectionConfig<any>[] = [
+/* eslint-disable @typescript-eslint/no-explicit-any -- the registry holds
+   configs with different row and search-result types. */
+export const collections: CollectionConfig<any, any>[] = [
   linksCollection,
-  // books, articles, recipes, inspirations, photos, inventory and beliefs
-  // land here as Phase 4 converts them.
+  booksCollection,
+  // articles, recipes, inspirations, photos, inventory and beliefs land here
+  // as Phase 4 converts them.
 ];
 
 export function collectionByPath(
   path: string,
-): CollectionConfig<CollectionRow> | undefined {
+): CollectionConfig<CollectionRow, any> | undefined {
   return collections.find((c) => c.path === path);
 }
