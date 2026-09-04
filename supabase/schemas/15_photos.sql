@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS "public"."photos" (
     "caption" "text",
     "location" "text",
     "photographer" "text",
+    "description" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 

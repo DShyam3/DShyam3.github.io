@@ -108,18 +108,9 @@ export function CardDetailDialog({
               {children}
             </div>
             {imageIsContent && imageUrl && (
-          <a
-            href={imageUrl}
-            download={downloadName || title}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download
-          </a>
-        )}
-        {onDelete && (
+              <DownloadLink href={imageUrl} name={downloadName || title} />
+            )}
+            {onDelete && (
               <div className="mt-6 pt-4 border-t flex justify-end">
                 <Button
                   variant="ghost"
@@ -208,6 +199,11 @@ export function CardDetailDialog({
             <div className="mt-4 space-y-4 flex-1">
               {children}
             </div>
+            {imageIsContent && imageUrl && (
+              <div className="mt-4">
+                <DownloadLink href={imageUrl} name={downloadName || title} />
+              </div>
+            )}
             {onDelete && (
               <div className="mt-6 pt-4 border-t flex justify-end">
                 <Button
@@ -225,6 +221,26 @@ export function CardDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Offered whenever the image is the content rather than a cover. It lived
+ * inline in the mobile branch and was simply absent from the desktop one, so
+ * the download the dialog promised only existed on a phone.
+ */
+function DownloadLink({ href, name }: { href: string; name: string }) {
+  return (
+    <a
+      href={href}
+      download={name}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <Download className="h-3.5 w-3.5" />
+      Download
+    </a>
   );
 }
 

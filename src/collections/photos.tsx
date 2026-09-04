@@ -8,10 +8,15 @@ export interface PhotoRow extends CollectionRow {
   caption: string | null;
   location: string | null;
   photographer: string | null;
+  description: string | null;
   created_at: string;
 }
 
 /**
+ * The card carries the three things you can see from the wall -- the photo,
+ * where it was taken and who took it -- and the dialog adds the description,
+ * which is the one thing worth reading rather than glancing at.
+ *
  * The only collection whose add flow uploads a file rather than taking a URL,
  * hence the `file` field type and `uploadFile`. The image goes to the `photos`
  * storage bucket and the returned public URL is what lands in the column.
@@ -70,12 +75,24 @@ export const photosCollection: CollectionConfig<PhotoRow> = {
       type: 'text',
       placeholder: 'Leave blank if you took it',
     },
+    {
+      name: 'description',
+      label: 'Description',
+      type: 'textarea',
+      rows: 4,
+      placeholder: 'What was happening, why it was worth taking...',
+    },
   ],
 
   uploadFile: uploadPhoto,
 
   renderDetail: (photo) => (
     <>
+      {photo.description && (
+        <DetailSection label="About">
+          <p className="whitespace-pre-wrap leading-relaxed">{photo.description}</p>
+        </DetailSection>
+      )}
       {photo.location && (
         <DetailSection label="Location">
           <p className="flex items-center gap-1.5">
