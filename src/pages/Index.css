@@ -8,12 +8,11 @@
      of the page was empty. */
   grid-template-columns: 460px minmax(0, 1fr);
   gap: 32px;
-  /* Both columns fill one viewport-height row, so the page does not scroll:
-     the globe sizes itself to the space left rather than setting the height
-     and pushing the footer off-screen, and the sidebar matches it exactly.
-     The subtracted space is the site header, the section heading and the
-     page footer. */
-  height: clamp(420px, calc(100vh - 340px), 900px);
+  /* AppShell owns the viewport now and hands this whatever the header and
+     footer leave, so the row just fills its parent. The globe sizes itself to
+     that rather than setting the height and pushing the footer off screen. */
+  flex: 1;
+  min-height: 0;
   align-items: stretch;
 }
 

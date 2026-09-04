@@ -1,6 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
+import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -65,95 +64,95 @@ export function CollectionPage<T extends CollectionRow, R>({
   const noun = count === 1 ? config.noun.singular : config.noun.plural;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="wide-container">
-        <Header title={config.title} subtitle={config.subtitle} />
+    <AppShell
+      title={config.title}
+      subtitle={config.subtitle}
+      toolbar={
+        <>
+          <FilterBar
+            config={config}
+            filters={filters}
+            setFilter={setFilter}
+            countFor={countFor}
+            search={search}
+            setSearch={setSearch}
+          />
 
-        <FilterBar
-          config={config}
-          filters={filters}
-          setFilter={setFilter}
-          countFor={countFor}
-          search={search}
-          setSearch={setSearch}
-        />
-
-        <div className="flex items-center justify-between px-4 md:px-0 pt-6">
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              {loading ? '...' : `${count} ${noun.toLowerCase()}`}
+          <div className="flex items-center justify-between px-4 md:px-0 py-4">
+            <div className="flex items-center gap-4">
+              <p className="text-sm text-muted-foreground">
+                {loading ? '...' : `${count} ${noun.toLowerCase()}`}
+              </p>
+              {showSortToggle && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const next =
+                      sortOptions[
+                        (sortOptions.findIndex((o) => o.key === sortKey) + 1) %
+                          sortOptions.length
+                      ];
+                    setSortKey(next.key);
+                  }}
+                  className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
+                >
+                  {activeSort?.icon && <activeSort.icon className="h-3.5 w-3.5" />}
+                  <DotMatrixText text={(activeSort?.label ?? '').toUpperCase()} size="xs" />
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {config.summary?.(items, isAdmin)}
+              {isAdmin && (
+                <EntityFormDialog
+                  mode="add"
+                  config={config}
+                  onSubmit={(values) => addItem(values)}
+                />
+              )}
+            </div>
+          </div>
+        </>
+      }
+    >
+      <div className="px-4 md:px-0">
+        {loading ? (
+          <div className={layout.grid}>
+            {[...Array(8)].map((_, i) => (
+              <Skeleton key={i} className={layout.skeleton} />
+            ))}
+          </div>
+        ) : count === 0 ? (
+          <div className="py-20 text-center">
+            <p className="text-muted-foreground font-serif text-lg italic">
+              No {config.noun.plural.toLowerCase()} found
             </p>
-            {showSortToggle && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const next =
-                    sortOptions[
-                      (sortOptions.findIndex((o) => o.key === sortKey) + 1) %
-                        sortOptions.length
-                    ];
-                  setSortKey(next.key);
-                }}
-                className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
-              >
-                {activeSort?.icon && <activeSort.icon className="h-3.5 w-3.5" />}
-                <DotMatrixText text={(activeSort?.label ?? '').toUpperCase()} size="xs" />
-              </Button>
-            )}
+            <p className="text-sm text-muted-foreground/70 mt-2">
+              Try adjusting your search or add new {config.noun.plural.toLowerCase()}
+            </p>
           </div>
-          <div className="flex items-center gap-4">
-            {config.summary?.(items, isAdmin)}
-          {isAdmin && (
-            <EntityFormDialog
-              mode="add"
-              config={config}
-              onSubmit={(values) => addItem(values)}
-            />
-          )}
+        ) : groups ? (
+          <div className="space-y-8 pb-4">
+            {groups.map((group) => (
+              <section key={group.key}>
+                <div className="flex items-center gap-4 mb-5">
+                  <h3 className="text-lg font-semibold tracking-wide whitespace-nowrap">
+                    <DotMatrixText text={group.label.toUpperCase()} size="xs" />
+                  </h3>
+                  <div className="h-px bg-border flex-1" />
+                  <span className="text-sm text-muted-foreground">
+                    {group.items.length}
+                  </span>
+                </div>
+                <div className={layout.grid}>{cardsFor(group.items)}</div>
+              </section>
+            ))}
           </div>
-        </div>
-
-        <div className="px-4 md:px-0">
-          {loading ? (
-            <div className={layout.grid}>
-              {[...Array(8)].map((_, i) => (
-                <Skeleton key={i} className={layout.skeleton} />
-              ))}
-            </div>
-          ) : count === 0 ? (
-            <div className="py-20 text-center">
-              <p className="text-muted-foreground font-serif text-lg italic">
-                No {config.noun.plural.toLowerCase()} found
-              </p>
-              <p className="text-sm text-muted-foreground/70 mt-2">
-                Try adjusting your search or add new {config.noun.plural.toLowerCase()}
-              </p>
-            </div>
-          ) : groups ? (
-            <div className="space-y-8 pt-6 pb-4">
-              {groups.map((group) => (
-                <section key={group.key}>
-                  <div className="flex items-center gap-4 mb-5">
-                    <h3 className="text-lg font-semibold tracking-wide whitespace-nowrap">
-                      <DotMatrixText text={group.label.toUpperCase()} size="xs" />
-                    </h3>
-                    <div className="h-px bg-border flex-1" />
-                    <span className="text-sm text-muted-foreground">
-                      {group.items.length}
-                    </span>
-                  </div>
-                  <div className={layout.grid}>{cardsFor(group.items)}</div>
-                </section>
-              ))}
-            </div>
-          ) : (
-            <div className={layout.grid}>{cardsFor(items)}</div>
-          )}
-        </div>
-
-        <Footer />
+        ) : (
+          <div className={layout.grid}>{cardsFor(items)}</div>
+        )}
       </div>
-    </div>
+    </AppShell>
   );
 }

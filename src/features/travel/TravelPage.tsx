@@ -1,5 +1,4 @@
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
+import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
 import { useAuth } from '@/contexts/AuthContext';
@@ -214,11 +213,9 @@ const Travel = () => {
     const totalCitiesVisited = visitedCities.length;
 
     return (
-        <div className="min-h-screen bg-background flex flex-col">
-            <div className="wide-container flex-1 flex flex-col">
-                <Header title="Travel" subtitle="Where I've been" />
-
-                <main className="flex-1 flex flex-col px-4 md:px-0 py-6 space-y-16">
+        <AppShell title="Travel" subtitle="Where I've been" scrollable={false}>
+            <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-0 flex flex-col px-4 md:px-0 py-4">
 
                     {/* WHERE I'VE BEEN */}
                     <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
@@ -509,11 +506,9 @@ const Travel = () => {
                         </div>
                     </div>
 
-                </main>
-
-                <Footer />
+                </div>
             </div>
-        </div>
+        </AppShell>
     );
 };
 
