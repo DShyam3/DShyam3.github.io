@@ -26,13 +26,13 @@ makes something easier to locate.
 | 0 | Apply pending storage migration | closes a live hole | **done** |
 | 1 | Supabase quick wins (indexes, policies) | fewer surprises | **done** |
 | 1.5 | Declarative schemas, one file per collection | read one file, know the schema | next |
-| 2 | Delete dead frontend code | −450 lines, nothing to read | |
-| 3 | Build card + collection system, convert one page | one card system instead of three | |
-| 4 | Convert remaining collection pages | −1,000 lines | |
-| 5 | Watchlist decomposition | −1,800 lines | |
-| 6 | Finance boundary move (not rewrite) | containment, no size change | |
-| 7 | Finance rehaul | separate project | |
-| — | ~~`features/` reorg~~ | **fails** — relocates files without reducing them | dropped |
+| 2 | Delete dead frontend code | nothing left to read | **done** |
+| 3 | Build card + collection system, convert one page | one card system instead of three | **done** |
+| 4 | Convert remaining collection pages | one file per collection | **done** |
+| 5 | Watchlist decomposition | one folder, named modules | **done** |
+| 6 | Finance boundary move (not rewrite) | containment | **done** |
+| 7 | Finance rehaul | separate project | next |
+| — | `features/` reorg | **reinstated** — measured against findability rather than line count, co-location is the point | **done** |
 
 The dropped row is worth keeping visible. It was originally Phase 6. Measured
 against "view / find / lean" it moves code around without making there be less
@@ -607,25 +607,55 @@ Zero behaviour change. ~450 frontend lines, 2 tables.
 
 This is the decision point. If the slot API feels awkward on Links, it is far cheaper to find out at 200 lines than at 1,200. Do not proceed to Phase 4 until Links is converted and looks identical to today.
 
-### Phase 4 — Convert the rest
+### Phase 4 — Convert the rest — **DONE**
 
-Books, Articles, Recipes, Inspiration, Photos, Inventory, Beliefs. Delete each clone folder as its page lands. Add column projection per collection while converting (P-5).
+All eight collections are one file in `src/collections/`, and all eight pages
+are six lines. Card variants settled at five — `tile`, `poster`, `square`,
+`feature`, `text` — shared rather than one per page.
 
-Expected: `Books.tsx` 71 → ~12 lines, `Links.tsx` 60 → ~12. Books + links component folders ~1,200 lines → ~150 of config.
+Config grew five options along the way, each earned by a real page and each
+reusable: `externalSearch` (Books/Google Books, and the watchlist's TMDB flow
+later), `file` fields with `uploadFile` (Photos), `groupBy` (Inventory's
+wardrobe sections), `sortOptions` with `hiddenWhen`, `summary`, plus
+`facets[].includeAll` / `defaultValue` and `adminOnly`.
 
-### Phase 5 — Watchlist
+Three broken category navs found and fixed on the way — Books (H-7), Recipes
+(H-8) and Links' dead search box — all the same root cause: the category list
+living in three or four places at once.
 
-1. Adopt `useCollection` for the filter layer.
-2. Extract `AddFromTMDB`.
-3. Extract sync into pure functions; keep the context as a thin shell.
-4. Make the episode tree lazy — fetch a show's seasons/episodes when its detail dialog opens, not on page mount (P-5).
-5. Split `WatchlistDetailDialog` (570 lines).
+### Phase 5 — Watchlist — **DONE**
 
-Target: ~2,965 lines → ~1,100 across real modules.
+1. ~~Adopt `useCollection` for the filter layer~~ — **not done, deliberately.**
+   `useCollection` reads through `useSupabaseTable`; the watchlist's data comes
+   from its own context with sync, episode tracking and favourites attached.
+   Forcing it through would have bent the collection model to fit one page.
+   The filters stay in the page.
+2. ~~Extract the TMDB add flow~~ — one `TmdbSearchDialog` now serves both the
+   watchlist and favourites add flows, which were ~340 lines of duplicated
+   markup differing only in the click handler and the row's status badges.
+3. ~~Extract sync into pure functions~~ — `sync-logic.ts` holds the decisions
+   (`getPlatform`, `buildCommonUpdates` / `buildMovieUpdates` /
+   `buildShowUpdates`). `getPlatform` had been duplicated verbatim in the Deno
+   cron function; both sides now point at each other.
+4. ~~Make the episode tree lazy~~ — the mount query drops from all ~7,600
+   episode rows in full (474 kB) to three columns (67 kB), with
+   `loadShowEpisodes(showId)` fetching the rest when a dialog opens.
+5. ~~Split `WatchlistDetailDialog`~~ — `WatchlistDetailParts` holds the
+   fragments its mobile and desktop layouts had been copy-pasting.
 
-### Phase 6 — Finance containment
+Plus the `features/` co-location covering watchlist, travel and finance.
 
-Move to `features/finance/`. Boundary rule only. No internal changes.
+**H-9 — the series-status pill ignored TMDB's spelling of "Canceled".** Both
+layouts matched `'Cancelled'` only, so the 21 shows TMDB marks `Canceled`
+rendered the pill with no background colour. Fixed in `WatchlistDetailParts`.
+
+Watchlist page + context: 3,047 → 2,799 lines, with the dialogs, sync
+decisions and shared fragments now in named modules rather than inline.
+
+### Phase 6 — Finance containment — **DONE**
+
+Moved to `features/finance/` as part of the Phase 5 co-location. Boundary
+only; no internal changes. Phase 7 remains untouched.
 
 ### Phase 7 — Finance rehaul
 
