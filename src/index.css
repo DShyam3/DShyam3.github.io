@@ -222,16 +222,19 @@
 
   @media (min-width: 1280px) {
     .wide-container {
-      padding-left: 4rem;
-      padding-right: 4rem;
+      padding-left: 3rem;
+      padding-right: 3rem;
     }
   }
 
+  /* On a wide monitor the old 5rem padding plus a 1920px cap left roughly
+     400px of dead space each side. Keep a cap so line lengths stay sane on
+     ultrawides, but a much higher one, with less padding on top of it. */
   @media (min-width: 1536px) {
     .wide-container {
-      padding-left: 5rem;
-      padding-right: 5rem;
-      max-width: 1920px;
+      padding-left: 3rem;
+      padding-right: 3rem;
+      max-width: 2400px;
     }
   }
 
