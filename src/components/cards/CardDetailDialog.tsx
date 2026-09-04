@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ExternalLink, Trash2, CalendarDays, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { openAndDownload } from '@/lib/download';
 
 interface CardDetailDialogProps {
   /**
@@ -231,16 +232,17 @@ export function CardDetailDialog({
  */
 function DownloadLink({ href, name }: { href: string; name: string }) {
   return (
-    <a
-      href={href}
-      download={name}
-      target="_blank"
-      rel="noopener noreferrer"
+    <button
+      type="button"
+      // openAndDownload does both halves itself, so the click must not also
+      // navigate -- a plain <a download> would be ignored anyway, the file
+      // being on another origin.
+      onClick={() => openAndDownload(href, name)}
       className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
     >
       <Download className="h-3.5 w-3.5" />
       Download
-    </a>
+    </button>
   );
 }
 

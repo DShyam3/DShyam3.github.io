@@ -9,15 +9,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useRef, useEffect } from 'react';
 import { uploadDocument } from '@/lib/storage';
+import { openAndDownload } from '@/lib/download';
 import { supabase } from '@/integrations/supabase/client';
 import { ASSETS_URL } from '@/lib/constants';
 import { useSiteContent } from '@/hooks/useSiteContent';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 
 import { useExperience, useEducation, Experience, Education } from '@/hooks/useResume';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ExperienceDialog, EducationDialog } from '@/components/admin/ResumeDialogs';
-import { Plus, Pencil, Trash2, BarChart3 } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -28,6 +30,7 @@ const Index = () => {
   const cvInputRef = useRef<HTMLInputElement>(null);
   const { experience, loading: expLoading, addExperience, updateExperience, removeExperience } = useExperience();
   const { education, loading: eduLoading, addEducation, updateEducation, removeEducation } = useEducation();
+  const { askDelete, deleteDialog } = useDeleteConfirm();
   const { content: siteContent } = useSiteContent(['about_me_1', 'about_me_2']);
 
   const [expDialogOpen, setExpDialogOpen] = useState(false);
@@ -94,39 +97,20 @@ const Index = () => {
               </div>
 
               <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2 mb-6 w-full overflow-hidden">
-                  <div className="w-full sm:w-auto overflow-hidden">
-                    <DotMatrixText
-                      text="ABOUT ME"
-                      size="lg"
-                      className="text-foreground tracking-widest pl-1"
-                    />
-                  </div>
-                  {isAdmin && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs font-bold border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200 h-8 rounded-full flex items-center gap-1.5 px-3 uppercase font-sans flex-shrink-0"
-                      asChild
-                    >
-                      <a href="https://cloud.umami.is/analytics/eu/websites" target="_blank" rel="noopener noreferrer">
-                        <BarChart3 className="w-3.5 h-3.5" />
-                        <span>Umami Analytics</span>
-                      </a>
-                    </Button>
-                  )}
+                <div className="mb-6 w-full overflow-hidden">
+                  <DotMatrixText
+                    text="ABOUT ME"
+                    size="lg"
+                    className="text-foreground tracking-widest pl-1"
+                  />
                 </div>
-                <div className="space-y-6">
-                  <DotMatrixText
-                    text={siteContent.about_me_1 || "Welcome to my digital garden. I am Dhyan, a Robotic Engineer with a passion for building things that exist in both the physical and digital worlds."}
-                    size="sm"
-                    className="text-muted-foreground opacity-90"
-                  />
-                  <DotMatrixText
-                    text={siteContent.about_me_2 || "This space is a curated collection of my beliefs, inspirations, and the tools I use to navigate life and engineering."}
-                    size="sm"
-                    className="text-muted-foreground opacity-90"
-                  />
+                <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+                  <p>
+                    {siteContent.about_me_1 || "Welcome to my digital garden. I am Dhyan, a Robotic Engineer with a passion for building things that exist in both the physical and digital worlds."}
+                  </p>
+                  <p>
+                    {siteContent.about_me_2 || "This space is a curated collection of my beliefs, inspirations, and the tools I use to navigate life and engineering."}
+                  </p>
                 </div>
               </div>
 
@@ -175,7 +159,7 @@ const Index = () => {
                       variant="outline"
                       size="sm"
                       className="h-8 gap-2 text-xs rounded-full hover:bg-primary hover:text-primary-foreground border-primary/20 hover:border-transparent transition-[color,background-color,border-color] duration-200 shrink-0 max-w-full"
-                      onClick={() => window.open(cvUrl, '_blank')}
+                      onClick={() => openAndDownload(cvUrl, 'Dhyan Shyam CV')}
                     >
                       <Download className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">Download CV / Resume</span>
@@ -209,18 +193,12 @@ const Index = () => {
                             </span>
                           </div>
                           <div>
-                            <DotMatrixText
-                              text={`${item.title} // ${item.company}`}
-                              size="xs"
-                              className="text-foreground font-medium"
-                            />
-                            <div className="mt-2 text-muted-foreground">
-                              <DotMatrixText
-                                text={`- ${item.location} | ${item.start_date} - ${item.end_date}`}
-                                size="xs"
-                                className="opacity-80"
-                              />
-                            </div>
+                            <p className="text-sm font-medium leading-snug text-foreground">
+                              {item.title} // {item.company}
+                            </p>
+                            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground/80">
+                              {item.location} | {item.start_date} - {item.end_date}
+                            </p>
                           </div>
                           {isAdmin && (
                             <div className="ml-auto flex items-center gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
@@ -236,7 +214,12 @@ const Index = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-destructive"
-                                onClick={() => removeExperience(item.id)}
+                                onClick={() =>
+                                  askDelete({
+                                    name: `${item.title} // ${item.company}`,
+                                    onConfirm: () => removeExperience(item.id),
+                                  })
+                                }
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
@@ -286,18 +269,12 @@ const Index = () => {
                             className="w-16 h-16 object-contain mt-1 group-hover/item:scale-105 transition-transform shrink-0"
                           />
                           <div>
-                            <DotMatrixText
-                              text={item.degree}
-                              size="xs"
-                              className="text-foreground font-medium"
-                            />
-                            <div className="mt-2 text-muted-foreground">
-                              <DotMatrixText
-                                text={`${item.school} | ${item.start_date} - ${item.end_date}`}
-                                size="xs"
-                                className="opacity-80"
-                              />
-                            </div>
+                            <p className="text-sm font-medium leading-snug text-foreground">
+                              {item.degree}
+                            </p>
+                            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground/80">
+                              {item.school} | {item.start_date} - {item.end_date}
+                            </p>
                           </div>
                           {isAdmin && (
                             <div className="ml-auto flex items-center gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
@@ -313,7 +290,12 @@ const Index = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-destructive"
-                                onClick={() => removeEducation(item.id)}
+                                onClick={() =>
+                                  askDelete({
+                                    name: item.degree,
+                                    onConfirm: () => removeEducation(item.id),
+                                  })
+                                }
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
@@ -355,16 +337,16 @@ const Index = () => {
                   size="md"
                   className="text-foreground mb-4 font-bold"
                 />
-                <DotMatrixText
-                  text="Curating my life's work. A collection of physical and digital creations is coming soon."
-                  size="xs"
-                  className="text-muted-foreground max-w-xs justify-center"
-                />
+                <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+                  Curating my life's work. A collection of physical and digital creations is coming soon.
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {deleteDialog}
 
       <ExperienceDialog
         open={expDialogOpen}
