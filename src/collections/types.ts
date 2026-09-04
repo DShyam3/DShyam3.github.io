@@ -36,8 +36,24 @@ export interface FacetDef<T> {
    * view -- so it opts out of the All option and starts on a real one.
    */
   includeAll?: boolean;
+  /**
+   * Put All after the real options instead of before them. Facets with a
+   * meaningful default -- inventory's Owned, books' Completed -- read better
+   * with the escape hatch at the end rather than sitting first and unselected.
+   */
+  allLast?: boolean;
   /** Option selected on first render. Defaults to `all`. */
   defaultValue?: string;
+  /**
+   * Picking an option here returns every other facet to its default.
+   *
+   * Inventory's categories are separate collections of things rather than
+   * views of one list, so a status carried over from the last category was
+   * never a considered choice -- you'd click Homelab and land on whatever
+   * Wishlist/All you happened to leave Tech + EDC on. Switching category
+   * starts from Owned again.
+   */
+  resetsOthers?: boolean;
 }
 
 /**
@@ -200,8 +216,12 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
      * Set false for collections with nothing worth a dialog. The card stops
      * being clickable and its title becomes the outbound link instead --
      * inventory items and links go straight to the shop or the site.
+     *
+     * A predicate makes that per item, for collections where only some rows
+     * carry something to open: a homelab box with its specs written down is
+     * worth a dialog, the t-shirt next to it is not.
      */
-    openable?: boolean;
+    openable?: boolean | ((item: T) => boolean);
     /** Right-aligned on the card face, e.g. an inventory item's price. */
     meta?: (item: T) => string | undefined;
     /** Dims the whole card, e.g. inventory items that are only wished for. */

@@ -1,8 +1,16 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSupabaseTable } from '@/hooks/useSupabaseTable';
-import type { CollectionConfig, CollectionRow } from './types';
+import type { CollectionConfig, CollectionRow, FacetDef } from './types';
 
 export const ALL = 'all';
+
+/**
+ * The option a facet starts on, and returns to when a resetsOthers facet
+ * changes. One function so first render and reset cannot disagree.
+ */
+function defaultFor<T extends CollectionRow>(facet: FacetDef<T>): string {
+  return facet.defaultValue ?? (facet.includeAll === false ? facet.options[0]?.key : ALL);
+}
 
 /**
  * Data + filtering for one collection, driven entirely by its config.
@@ -23,19 +31,29 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
   // One entry per facet. Most start at ALL (no filter); a facet that opts out
   // of the All option starts on its declared default, or its first option.
   const [filters, setFilters] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      config.facets.map((f) => [
-        f.key,
-        f.defaultValue ?? (f.includeAll === false ? f.options[0]?.key : ALL),
-      ]),
-    ),
+    Object.fromEntries(config.facets.map((f) => [f.key, defaultFor(f)])),
   );
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState(() => config.sortOptions?.[0]?.key ?? '');
 
-  const setFilter = useCallback((key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  const setFilter = useCallback(
+    (key: string, value: string) => {
+      const changed = config.facets.find((f) => f.key === key);
+      setFilters((prev) => {
+        const next = { ...prev, [key]: value };
+        // A facet marked resetsOthers switches to a different set of things
+        // rather than a different view of the same ones, so the other facets
+        // start over -- see FacetDef.resetsOthers.
+        if (changed?.resetsOthers) {
+          for (const facet of config.facets) {
+            if (facet.key !== key) next[facet.key] = defaultFor(facet);
+          }
+        }
+        return next;
+      });
+    },
+    [config.facets],
+  );
 
   /**
    * Applies every facet except one. Used both for the visible list (excluding

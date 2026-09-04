@@ -110,6 +110,9 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       options: CATEGORIES,
       includeAll: false,
       defaultValue: 'tech-edc',
+      // Each category is its own set of things, so picking one starts from
+      // Owned rather than inheriting whatever the last category was showing.
+      resetsOthers: true,
     },
     {
       // is_wishlist is a boolean column; facet values are compared as strings.
