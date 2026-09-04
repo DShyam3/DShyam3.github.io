@@ -14,7 +14,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
-supabase/config.toml
+# supabase/config.toml is committed: it holds only project_id (no secrets)
+# and a fresh clone needs it to run any CLI command.
 supabase/.temp/
 
 # Editor directories and files

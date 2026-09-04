@@ -523,25 +523,36 @@ all cleared. Remaining: the two accepted `is_admin` RPC lints (S-4), the three
 dashboard items above, and four `unused_index` INFO lints for the FK indexes
 just created — expected, they clear once queries hit them.
 
-### Phase 1.5 — Declarative schemas
+### Phase 1.5 — Declarative schemas — **DONE**
 
-Adopt `supabase/schemas/` so the repo states what the database *is* rather than
-the sequence of edits that produced it. Layout and rationale in Part 1b.
+1. ~~Start Docker~~ — done; CLI linked to the project.
+2. ~~Dump and split into per-collection files~~ — 17 files in
+   `supabase/schemas/`. Verified lossless: 491 statements in the production
+   dump, 491 in the files, identical as sets.
+3. ~~Baseline migration~~ — `20260904130000_baseline.sql`. Contains the public
+   schema dump, plus storage buckets/policies and the pg_cron job (neither is
+   covered by a `public` dump), plus an explicit REVOKE section.
+4. ~~Reconcile history~~ — baseline marked applied, the 20 superseded versions
+   marked reverted. `migration list` now shows one entry, local and remote.
+   `db push --dry-run` reports up to date.
+5. ~~Delete legacy flat files~~ — removed; they remain in git history.
+6. ~~Verify~~ — `db diff --linked` reports **no schema changes**. The repo can
+   now rebuild the database from empty.
 
-1. Start Docker (installed, daemon not running — the only blocker; supabase CLI
-   2.75.0 is already present).
-2. `npx supabase db dump > supabase/schemas/prod.sql` to baseline.
-3. Split `prod.sql` into the per-collection files.
-4. `npx supabase migration repair` to reconcile the drifted legacy history.
-5. Delete the legacy flat `*.sql` files once history and repo agree.
-6. Verify with `npx supabase db diff` — a clean baseline produces no diff.
+**Two things the process surfaced that the audit had wrong:**
 
-From then on: edit the schema file, `db diff -f <name>`, review the generated
-migration, `db push`.
+- `20260725_schedule_watchlist_sync.sql` *was* applied — the cron job
+  `watchlist-daily-sync` runs at 06:00 daily. It was applied without being
+  recorded in migration history, not skipped. H-1's list of "never applied"
+  files overstated the case for this one.
+- `pg_dump` emits `GRANT` but never `REVOKE`, so the first baseline attempt
+  diffed against production with 30 stray revokes. Section 4 of the baseline
+  restores them explicitly. Worth remembering: any future privilege revocation
+  will not round-trip through the differ either.
 
-Caveat to hold in mind: the differ does not handle RLS policy renames or DML,
-and this project is mostly RLS. Treat generated migrations as drafts to read,
-not output to trust.
+Workflow from here: edit the schema file, `db diff -f <name>`, **read** the
+generated migration, `db push`. The differ does not handle RLS policy renames
+or DML, and this schema is mostly RLS — treat generated migrations as drafts.
 
 ### Phase 2 — Delete dead code
 

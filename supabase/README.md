@@ -1,22 +1,23 @@
 # Supabase directory
 
-Project ref: `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2).
+Project ref: `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2, Postgres 15).
 
-## Current layout
+## Layout
 
 ```
 supabase/
-  schemas/        Declarative schema, one file per collection. This is the
-                  readable source of truth: to know what a table looks like,
-                  open its file. Verified byte-for-byte against production
-                  (491 statements, identical set).
-  migrations/     CLI-managed migrations. Filename version matches the applied
-                  migration history exactly. Everything new goes here.
+  schemas/        Declarative schema, one file per collection. The readable
+                  source of truth: to know what a table looks like, open its
+                  file.
+  migrations/     Versioned migrations. Currently one baseline; new changes are
+                  generated from schemas/ and land here.
   functions/      Deno edge functions, deployed separately from the frontend.
-  *.sql           Legacy flat files, pre-dating the migrations/ directory.
-                  Historical record only -- see "Known drift" below.
-  config.toml     Currently only project_id.
+  config.toml     Project link config. Committed -- holds only project_id.
 ```
+
+The repo can rebuild this database from empty. `supabase db diff --linked`
+reports **no schema changes**, meaning `migrations/` reproduces production
+exactly.
 
 ## Schema files
 
@@ -31,63 +32,54 @@ supabase/
 | `30_travel.sql` | visited countries + cities |
 | `40_finance.sql` | the 19 `finance_*` tables |
 
-Storage bucket policies are **not** here -- they live in `storage.objects`,
-outside the dumped `public` schema, and stay as hand-written migrations.
+Grouping follows the frontend collections, except where tables form one graph
+joined by foreign keys (watchlist, travel, finance), which stay together. Files
+run in lexicographic order, so numeric prefixes handle dependency order --
+`is_admin()` must exist before any policy that references it.
 
-## Known drift
+Storage bucket policies and the pg_cron schedule are **not** in `schemas/`.
+They live outside the `public` schema, are not covered by the schema diff, and
+are maintained by hand in the baseline migration.
 
-The flat `*.sql` files in this directory were applied ad hoc through the
-dashboard and MCP rather than through `supabase db push`, so they do not line up
-with the applied migration history:
-
-- Timestamps differ. `20260724_secure_content_tables_rls.sql` was applied as
-  version `20260817221404`.
-- One applied migration has no file here at all
-  (`20260817221725_revoke_anon_select_truelayer_connection`).
-- Four files were never applied as migrations:
-  `20260716_finance_relational_schema.sql`,
-  `20260718_add_truelayer_table.sql`,
-  `20260718_add_account_id_to_transactions.sql`,
-  `20260725_schedule_watchlist_sync.sql`.
-
-**Do not run the flat files.** They are kept for provenance until the history is
-reconciled.
-
-Everything from `20260904110337_secure_storage_object_policies` onward lives in
-`migrations/` and is correctly versioned.
-
-### The migrations folder cannot yet rebuild the database
-
-`supabase db diff` builds a shadow database by replaying `migrations/` from
-empty. That currently fails on the very first file:
-
-```
-Applying migration 20260904110337_secure_storage_object_policies.sql...
-ERROR: function public.is_admin() does not exist (SQLSTATE 42883)
-```
-
-`is_admin()` was created by a legacy migration that only exists in the remote
-history, not in `migrations/`. Until a baseline migration fills that gap,
-`db diff` and `db reset` do not work, and generated migrations are unavailable.
-
-`supabase/schemas/` is still accurate and useful on its own -- it was dumped
-straight from production -- it just is not yet wired to the diff tooling.
-
-## Applying changes
-
-Until the declarative baseline lands, new changes go in `migrations/` with a
-timestamp matching what the server records.
-
-After the baseline, the workflow becomes:
+## Making a change
 
 ```bash
-# edit the relevant file in supabase/schemas/
-npx supabase db diff -f describe_the_change   # generates the migration
-npx supabase db push                          # applies it
+# 1. edit the relevant file in supabase/schemas/
+# 2. generate the migration
+npx supabase db diff -f describe_the_change
+# 3. read the generated SQL -- it is a draft, not gospel
+# 4. apply
+npx supabase db push
 ```
 
-`db diff` needs a running Docker daemon -- it starts a shadow Postgres to
-compute the difference.
+`db diff` needs a running Docker daemon. It starts a throwaway Postgres
+matching your remote's version, replays `migrations/` into it, and compares
+that against the target. Your data never touches it.
+
+Two known limits of the diff engine, both relevant here:
+
+- **RLS policy renames and DML are not tracked.** This schema is mostly RLS
+  policies, so read every generated migration before pushing.
+- **Revoked privileges do not appear.** `pg_dump` emits `GRANT` but never
+  `REVOKE`, so a revoked privilege shows up only as an absent grant. Section 4
+  of the baseline restores these explicitly; anything similar in future needs
+  adding by hand.
+
+## History
+
+The migration history was squashed to a single baseline on 2026-09-04
+(`20260904130000_baseline.sql`).
+
+Before that, the repo could not rebuild the database. Changes had been applied
+through the dashboard without matching files, so replaying `migrations/` from
+empty failed on `function public.is_admin() does not exist`. Timestamps in the
+repo did not match the applied history, one applied migration had no file at
+all, and several files had been applied without ever being recorded.
+
+The baseline was dumped from production, verified with `db diff` (no schema
+changes), and the twenty superseded versions were marked reverted so the local
+and remote histories agree. Every superseded migration remains in git history;
+their combined end state is what the baseline contains.
 
 ## Edge functions
 
@@ -102,3 +94,7 @@ npx supabase functions deploy <name>
 | `tmdb-proxy` | Keeps the TMDB key server-side | Public, restricted to an endpoint allowlist |
 | `truelayer-sync` | Open-banking pull for Finance | Verifies JWT + admin email |
 | `watchlist-cron-sync` | Scheduled port of the browser sync | Service role key |
+
+The cron job `watchlist-daily-sync` calls `watchlist-cron-sync` at 06:00 daily.
+It reads a vault secret named `service_role_key`, which must exist on any fresh
+project or the job will run but the function will reject the call.
