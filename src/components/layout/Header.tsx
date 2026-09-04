@@ -153,7 +153,7 @@ export function Header({
 
         {/* Bottom row: Navigation links */}
         <div className="flex items-center">
-          <SiteNav align="start" className="mb-0 px-0 flex-1" />
+          <SiteNav align="start" className="mb-0 flex-1" />
         </div>
       </div>
     </header>

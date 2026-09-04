@@ -40,14 +40,20 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
   return (
     <nav
       className={cn(
-        // -mx-1 px-1 keeps the first item visually flush with the container
-        // edge while moving the overflow clip 4px further out. The active
-        // link is font-bold, so its glyphs are wider, and the first item was
-        // losing its leading pixels to the scroll container's edge.
-        'flex flex-wrap md:flex-nowrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 -mx-1 px-1 overflow-x-auto scrollbar-hide py-1',
+        // -mx-1.5 plus 6px of inline padding keeps the first item visually
+        // flush with the
+        // container edge while moving the overflow clip 6px further out. The
+        // active link is font-bold, so its glyphs are wider, and the first
+        // item was losing its leading pixels to the scroll container's edge.
+        //
+        // The padding is deliberately not something a caller can override:
+        // cn() runs tailwind-merge, so a consumer passing px-0 silently
+        // deleted it and the clipping came straight back.
+        'flex flex-wrap md:flex-nowrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 -mx-1.5 overflow-x-auto scrollbar-hide py-1',
         justifyClass,
         className,
       )}
+      style={{ paddingLeft: 6, paddingRight: 6 }}
     >
       {links.map((link) => (
         <Link
