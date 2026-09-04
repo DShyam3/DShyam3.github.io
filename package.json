@@ -10,6 +10,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "ship-check": "npx should-i-ship@latest scan",
     "preview": "vite preview"
   },
   "dependencies": {

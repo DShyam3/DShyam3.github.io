@@ -50,3 +50,6 @@ coverage/
 # Python bytecode cache (scripts/*.py font-build tooling)
 __pycache__/
 *.pyc
+# Launch-readiness scan reports (should-i-ship). Regenerated per run, and they
+# name specific files and weaknesses -- not something to publish in a repo.
+.should-i-ship/
