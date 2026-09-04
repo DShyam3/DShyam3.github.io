@@ -308,3 +308,54 @@
 .app-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* ─── Short viewports ───────────────────────────────────────────────────
+   The pinned shell splits a fixed viewport between chrome and content, so on
+   a laptop or an iPad in landscape every pixel the header and footer take is
+   a pixel the card wall does not get -- at 800px tall the chrome left room
+   for a single row. Below 900px of height the chrome gives some back: tighter
+   padding, and the two display faces drop one step down the type scale.
+   Width-based breakpoints cannot see this; only a height query can. */
+
+@media (min-width: 768px) and (max-height: 900px) {
+  .app-header {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .app-header .dot-matrix-text-md {
+    font-size: 1.4rem;
+  }
+
+  .app-header .dot-matrix-text-sm {
+    font-size: 1.15rem;
+  }
+
+  .app-footer {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* ─── Phones ────────────────────────────────────────────────────────────
+   Doto is set large because its dots read smaller than the nominal size, but
+   the sizes chosen for a monitor are simply too wide for a 375px screen --
+   the site name alone filled a line. Each face drops one step below md. */
+
+@media (max-width: 767px) {
+  .dot-matrix-text-xs {
+    font-size: 0.875rem;
+  }
+
+  .dot-matrix-text-sm {
+    font-size: 1.15rem;
+  }
+
+  .dot-matrix-text-md {
+    font-size: 1.4rem;
+  }
+
+  .dot-matrix-text-lg {
+    font-size: 1.75rem;
+  }
+}

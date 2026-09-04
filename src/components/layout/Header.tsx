@@ -40,10 +40,10 @@ export function Header({
   };
 
   return (
-    <header className="pt-8 pb-6 md:pt-10 md:pb-8 border-b border-border/50">
+    <header className="app-header pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50">
       <div className="px-4 md:px-0">
         {/* Top row: Profile on left, Theme on right */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
           {/* Left side: Profile with social links */}
           <div className="flex items-start md:items-center justify-between w-full md:w-auto gap-2 md:gap-3">
             <div

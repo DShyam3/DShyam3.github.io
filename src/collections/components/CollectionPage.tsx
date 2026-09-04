@@ -3,6 +3,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { CountLabel } from '@/components/shared/CountLabel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '../useCollection';
 import { FilterBar } from './FilterBar';
@@ -78,11 +79,12 @@ export function CollectionPage<T extends CollectionRow, R>({
             setSearch={setSearch}
           />
 
-          <div className="flex items-center justify-between px-4 md:px-0 py-4">
+          <div className="flex items-center justify-between px-4 md:px-0 py-3">
             <div className="flex items-center gap-4">
-              <p className="text-sm text-muted-foreground">
-                {loading ? '...' : `${count} ${noun.toLowerCase()}`}
-              </p>
+              <CountLabel
+                count={loading ? undefined : count}
+                noun={noun.toLowerCase()}
+              />
               {showSortToggle && (
                 <Button
                   variant="outline"
@@ -141,9 +143,7 @@ export function CollectionPage<T extends CollectionRow, R>({
                     <DotMatrixText text={group.label.toUpperCase()} size="xs" />
                   </h3>
                   <div className="h-px bg-border flex-1" />
-                  <span className="text-sm text-muted-foreground">
-                    {group.items.length}
-                  </span>
+                  <CountLabel count={group.items.length} />
                 </div>
                 <div className={layout.grid}>{cardsFor(group.items)}</div>
               </section>

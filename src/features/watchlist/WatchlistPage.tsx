@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { CountLabel } from '@/components/shared/CountLabel';
 import React, {
   useState,
   useEffect,
@@ -60,7 +61,7 @@ import { CARD_GRID } from '@/theme/layout';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
-import { PlatformLogo } from '@/features/watchlist/components/PlatformLogo';
+import { PlatformLogo, hasPlatformLogo } from '@/features/watchlist/components/PlatformLogo';
 
 const CATEGORIES = [
   'TV Shows',
@@ -616,9 +617,7 @@ const Watchlist = () => {
                   >
                     <span className="shrink-0">{getCategoryIcon(cat)}</span>
                     <DotMatrixText text={cat.toUpperCase()} size="xs" />
-                    <span className="text-xs text-muted-foreground/60">
-                      ({categoryCounts[cat]})
-                    </span>
+                    <DotMatrixText text={`(${categoryCounts[cat]})`} size="xs" />
                   </button>
                   {index < CATEGORIES.length - 1 && (
                     <span className="text-muted-foreground/30 hidden md:inline">
@@ -839,7 +838,9 @@ const Watchlist = () => {
                             <div className="flex items-center justify-between gap-4 w-full">
                               <span className="flex items-center gap-2">
                                 <PlatformLogo platform={p} size={18} />
-                                <span className="sr-only">{p}</span>
+                                <span className={cn(hasPlatformLogo(p) && 'sr-only')}>
+                                  {p}
+                                </span>
                               </span>
                               <span className="text-xs opacity-50">
                                 ({getPlatformCount(p)})
@@ -913,10 +914,15 @@ const Watchlist = () => {
 
                   {selectedCategory === 'TV Shows' && (
                     <Button
-                      variant={hideCompleted ? 'default' : 'outline'}
+                      variant={hideCompleted ? 'secondary' : 'outline'}
                       size="sm"
                       onClick={() => setHideCompleted(!hideCompleted)}
-                      className="h-9 px-3 text-xs whitespace-nowrap"
+                      className={cn(
+                        'h-9 px-3 text-xs whitespace-nowrap',
+                        // The filled `default` variant is near-white in dark
+                        // mode, which shouts next to the other filter chips.
+                        hideCompleted && 'border border-border text-foreground',
+                      )}
                     >
                       {hideCompleted ? (
                         <DotMatrixText text="SHOW ALL" size="xs" wrap={false} />
@@ -960,13 +966,20 @@ const Watchlist = () => {
           )}
 
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {loading
-                ? '...'
-                : selectedCategory === 'Favourites'
-                  ? `${favourites.length} favourites`
-                  : `${filteredWatchlist.length} ${selectedCategory.toLowerCase()}`}
-            </p>
+            <CountLabel
+              count={
+                loading
+                  ? undefined
+                  : selectedCategory === 'Favourites'
+                    ? favourites.length
+                    : filteredWatchlist.length
+              }
+              noun={
+                selectedCategory === 'Favourites'
+                  ? 'favourites'
+                  : selectedCategory.toLowerCase()
+              }
+            />
             {isAdmin && selectedCategory === 'Favourites' && (
               <TmdbSearchDialog
                 open={favDialogOpen}
@@ -1090,9 +1103,7 @@ const Watchlist = () => {
                     <div key={cat} className="space-y-4 border-b border-border/40 pb-6 last:border-b-0">
                       <div className="flex items-center gap-2">
                         <DotMatrixText text={cat.toUpperCase()} size="xs" />
-                        <span className="text-xs text-muted-foreground/60 text-sm font-semibold">
-                          ({catFavs.length})
-                        </span>
+                        <DotMatrixText text={`(${catFavs.length})`} size="xs" />
                       </div>
 
                       {catMovies.length > 0 && (

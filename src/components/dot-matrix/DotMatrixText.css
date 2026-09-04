@@ -54,5 +54,9 @@
 
 .nav-link-active .dot-matrix-text {
   transform: scale(1.04);
+  /* Grow rightwards only. Scaling from the centre pushed the first label ~2.5px
+     past the left edge of the nav's scroll box, where it was clipped -- the
+     leading letter of the active category lost a column of dots. */
+  transform-origin: left center;
 }
 

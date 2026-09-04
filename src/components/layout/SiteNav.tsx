@@ -24,6 +24,7 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
     { to: '/photos', label: 'Photos' },
     { to: '/recipes', label: 'Recipes' },
     { to: '/beliefs', label: 'Beliefs', requiresAuth: true },
+    { to: '/thoughts', label: 'Thoughts' },
     { to: '/watchlist', label: 'Watchlist' },
   ];
 
@@ -49,7 +50,11 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
         // The padding is deliberately not something a caller can override:
         // cn() runs tailwind-merge, so a consumer passing px-0 silently
         // deleted it and the clipping came straight back.
-        'flex flex-wrap md:flex-nowrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 -mx-1.5 overflow-x-auto scrollbar-hide py-1',
+        //
+        // flex-nowrap at every width: wrapping put thirteen links on five
+        // lines on a phone, and the nav alone was half the screen. It scrolls
+        // sideways instead.
+        'flex flex-nowrap gap-4 md:gap-3 lg:gap-4 xl:gap-6 -mx-1.5 overflow-x-auto scrollbar-hide py-1',
         justifyClass,
         className,
       )}
@@ -60,7 +65,7 @@ export function SiteNav({ align = 'center', className }: SiteNavProps) {
           key={link.to}
           to={link.to}
           className={cn(
-            'nav-link relative',
+            'nav-link relative shrink-0',
             location.pathname === link.to && 'nav-link-active'
           )}
         >

@@ -38,22 +38,28 @@ export function AppShell({
   toolbar,
 }: AppShellProps) {
   return (
-    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
-      <div className="shrink-0 wide-container">
+    // Phones get an ordinary scrolling document. The pinned shell divides a
+    // viewport between chrome and content, and on a phone the chrome alone is
+    // taller than the screen -- the grid was left a ~30px slot and the page
+    // was unusable. The shell is a desktop and tablet idea, so it starts at md.
+    <div className="min-h-[100dvh] md:h-[100dvh] flex flex-col bg-background md:overflow-hidden">
+      <div className="md:shrink-0 wide-container">
         <Header title={title} subtitle={subtitle} />
         {toolbar}
       </div>
 
       <main
         className={cn(
-          'flex-1 min-h-0 wide-container',
-          scrollable ? 'overflow-y-auto app-scroll' : 'overflow-hidden flex flex-col',
+          'md:flex-1 md:min-h-0 wide-container',
+          scrollable
+            ? 'app-scroll md:overflow-y-auto'
+            : 'md:overflow-hidden md:flex md:flex-col',
         )}
       >
         {children}
       </main>
 
-      <div className="shrink-0 wide-container">
+      <div className="md:shrink-0 wide-container">
         <Footer />
       </div>
     </div>

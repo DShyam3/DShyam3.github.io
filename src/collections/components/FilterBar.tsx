@@ -35,8 +35,11 @@ export function FilterBar<T extends CollectionRow, R>({
   if (!config.facets.length && !showSearch) return null;
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
-      <div className="flex flex-col gap-2 flex-1 min-w-0">
+    // items-start, not items-center: the search box lines up with the *first*
+    // facet row rather than floating between two of them, which is what left
+    // the gap between "Tech + EDC" and "All" looking like dead space.
+    <div className="flex flex-col md:flex-row md:items-start justify-between border-b border-border/50 px-4 md:px-0 gap-4 md:gap-6 py-3 md:py-2">
+      <div className="flex flex-col flex-1 min-w-0">
         {config.facets.map((facet) => {
           const options =
             facet.includeAll === false
@@ -47,7 +50,7 @@ export function FilterBar<T extends CollectionRow, R>({
           return (
             <nav
               key={facet.key}
-              className="flex flex-nowrap items-center gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide"
+              className="flex flex-nowrap items-center gap-2 md:gap-4 py-1.5 overflow-x-auto scrollbar-hide"
             >
               {options.map((option, index) => (
                 <div key={option.key} className="flex items-center gap-2 md:gap-4 shrink-0">
@@ -63,9 +66,12 @@ export function FilterBar<T extends CollectionRow, R>({
                       size="xs"
                       wrap={false}
                     />
-                    <span className="ml-1.5 text-xs text-muted-foreground/60 whitespace-nowrap">
-                      ({countFor(facet.key, option.key)})
-                    </span>
+                    <DotMatrixText
+                      text={`(${countFor(facet.key, option.key)})`}
+                      size="xs"
+                      wrap={false}
+                      className="ml-1.5"
+                    />
                   </button>
                   {index < options.length - 1 && (
                     <span className="text-muted-foreground/30 hidden md:inline">·</span>
@@ -78,7 +84,7 @@ export function FilterBar<T extends CollectionRow, R>({
       </div>
 
       {showSearch && (
-        <div className="w-full md:w-[200px] lg:w-[260px] pb-4 md:pb-0">
+        <div className="w-full md:w-[200px] lg:w-[260px] shrink-0">
           <SearchBar
             query={search}
             onChange={setSearch}
