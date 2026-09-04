@@ -31,7 +31,7 @@ export const articlesCollection: CollectionConfig<ArticleRow> = {
   facets: [{ key: 'category', field: 'category', options: CATEGORIES }],
 
   card: {
-    variant: 'feature',
+    variant: 'media',
     fallbackIcon: FileText,
     title: (article) => article.title,
     subtitle: (article) => (article.author ? `by ${article.author}` : undefined),

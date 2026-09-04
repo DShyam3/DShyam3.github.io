@@ -50,7 +50,9 @@ export const linksCollection: CollectionConfig<LinkRow> = {
   facets: [{ key: 'category', field: 'category', options: CATEGORIES }],
 
   card: {
-    variant: 'tile',
+    variant: 'media',
+    // Favicons are logos, not artwork -- fit them whole rather than cropping.
+    imageFit: 'contain',
     title: (link) => link.name,
     subtitle: (link) => labelFor(link.category),
     image: (link) => link.icon ?? undefined,

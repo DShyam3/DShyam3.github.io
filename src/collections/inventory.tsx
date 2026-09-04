@@ -143,7 +143,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
   },
 
   card: {
-    variant: 'square',
+    variant: 'media',
     fallbackIcon: Package,
     // Nothing here needs a dialog: an item is a picture, a name, a brand and
     // a price. The title links straight to where you'd buy it.

@@ -28,7 +28,7 @@ export const photosCollection: CollectionConfig<PhotoRow> = {
   facets: [],
 
   card: {
-    variant: 'square',
+    variant: 'media',
     fallbackIcon: ImageIcon,
     title: (photo) => photo.caption ?? 'Untitled',
     subtitle: (photo) => photo.location ?? undefined,

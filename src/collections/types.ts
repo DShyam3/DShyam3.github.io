@@ -71,15 +71,18 @@ export interface SortOptionDef<T> {
 export type FieldType = 'text' | 'textarea' | 'url' | 'select' | 'image' | 'file';
 
 /**
- * Card face shapes. Each one owns its grid and skeleton -- see CARD_LAYOUT.
+ * Card face shapes. There are only two, deliberately.
  *
- *   tile     icon on the left, text on the right      links
- *   poster   2:3 cover, dense grid                    books
- *   square   1:1 image, text beneath                  recipes, inspiration
- *   feature  wide image on top, text beneath          articles
- *   text     no image at all                          beliefs
+ *   media  a 3:4 image with text beneath. Everything with a picture.
+ *   text   no image at all. Beliefs, where the quote is the content.
+ *
+ * There used to be five -- tile, poster, square, feature, text -- each with
+ * its own image ratio and column count, so a card was a different size on
+ * every tab. One ratio and one grid means a card is the same object
+ * everywhere; 3:4 splits the difference between 2:3 posters and square
+ * photographs, and `imageFit` handles the one case that must not be cropped.
  */
-export type CardVariant = 'tile' | 'poster' | 'square' | 'feature' | 'text';
+export type CardVariant = 'media' | 'text';
 
 export interface FieldDef<T> {
   name: keyof T & string;
@@ -174,6 +177,12 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     badge?: (item: T) => string | undefined;
     /** Shown when an item has no image. Defaults per variant. */
     fallbackIcon?: LucideIcon;
+    /**
+     * `cover` fills the 3:4 box and crops, which is right for artwork and
+     * photographs. `contain` fits the whole image in, for logos and favicons
+     * that would look wrong cropped.
+     */
+    imageFit?: 'cover' | 'contain';
     /**
      * Set false for collections with nothing worth a dialog. The card stops
      * being clickable and its title becomes the outbound link instead --

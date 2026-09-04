@@ -42,7 +42,7 @@ export const recipesCollection: CollectionConfig<RecipeRow> = {
   facets: [{ key: 'category', field: 'category', options: CATEGORIES }],
 
   card: {
-    variant: 'square',
+    variant: 'media',
     fallbackIcon: ChefHat,
     title: (recipe) => recipe.title,
     subtitle: (recipe) => (recipe.is_personal ? 'My Recipe' : 'Reference Recipe'),

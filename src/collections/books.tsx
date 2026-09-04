@@ -49,7 +49,7 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
   facets: [{ key: 'category', field: 'category', options: CATEGORIES }],
 
   card: {
-    variant: 'poster',
+    variant: 'media',
     fallbackIcon: BookOpen,
     title: (book) => book.title,
     subtitle: (book) => book.author,

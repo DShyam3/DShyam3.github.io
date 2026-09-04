@@ -34,7 +34,7 @@ export const inspirationsCollection: CollectionConfig<InspirationRow> = {
   facets: [{ key: 'category', field: 'category', options: CATEGORIES }],
 
   card: {
-    variant: 'square',
+    variant: 'media',
     fallbackIcon: User,
     title: (person) => person.name,
     subtitle: (person) => labelFor(person.category),

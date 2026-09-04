@@ -18,185 +18,122 @@ import type { CardVariant, CollectionConfig, CollectionRow } from '../types';
  * reflow between tabs. Only the loading skeleton differs, to match the shape
  * of the image that variant renders.
  */
+/**
+ * One grid and one card shape -- see CARD_GRID and the CardVariant docs. Only
+ * the loading skeleton differs, and only because a text card has no image.
+ */
 export const CARD_LAYOUT: Record<CardVariant, { grid: string; skeleton: string }> = {
-  tile: { grid: CARD_GRID, skeleton: 'h-32 rounded-lg' },
-  poster: { grid: CARD_GRID, skeleton: 'aspect-[2/3] rounded-lg' },
-  square: { grid: CARD_GRID, skeleton: 'aspect-square rounded-lg' },
-  feature: { grid: CARD_GRID, skeleton: 'h-48 rounded-lg' },
-  text: { grid: CARD_GRID, skeleton: 'h-32 rounded-lg' },
+  media: { grid: CARD_GRID, skeleton: 'aspect-[3/4] rounded-lg' },
+  text: { grid: CARD_GRID, skeleton: 'h-40 rounded-lg' },
 };
 
 interface FaceProps {
   /** Shown when an item has no image. Comes from the collection's config. */
   Fallback: LucideIcon;
-  /** Right-aligned beside the title, e.g. a price. */
-  meta?: string;
+  imageFit: 'cover' | 'contain';
   title: string;
   subtitle?: string;
   image?: string;
   excerpt?: string;
+  /** Right-aligned beside the title, e.g. a price. */
+  meta?: string;
   href?: string;
-  index: number;
   actions: ReactNode;
   onOpen: () => void;
   /** False when the collection has no detail dialog worth opening. */
   openable: boolean;
 }
 
-/** Wide row: small icon on the left, text on the right. Links, inventory. */
-function TileFace({ Fallback, title, subtitle, image, excerpt, href, index, actions, onOpen }: FaceProps) {
+/**
+ * A 3:4 image with a fixed text block beneath it.
+ *
+ * The text block reserves room for two lines of title, one of subtitle and two
+ * of excerpt whether or not they are all used, so every card is exactly the
+ * same height. Without that, a two-line title made one card taller than its
+ * neighbours and the wall lost its rhythm.
+ */
+function MediaFace({
+  Fallback, imageFit, title, subtitle, image, excerpt, meta, href, actions, onOpen, openable,
+}: FaceProps) {
   return (
-    <article
-      className="group relative bg-card rounded-lg p-5 opacity-0 animate-fade-in transition-[box-shadow] duration-300 cursor-pointer hover:shadow-md [box-shadow:var(--shadow-border)]"
-      style={{ animationDelay: `${Math.min(index, 20) * 50}ms` }}
-      onClick={onOpen}
+    <div
+      className={cn(
+        'item-card group relative h-full flex flex-col overflow-hidden',
+        openable && 'cursor-pointer',
+      )}
+      onClick={openable ? onOpen : undefined}
     >
-      <div className="absolute top-3 right-3 flex gap-1" onClick={(e) => e.stopPropagation()}>
-        {actions}
-      </div>
-
-      <div className="flex gap-4 items-start">
-        <div className="w-14 h-14 rounded-lg bg-secondary/50 overflow-hidden flex-shrink-0 flex items-center justify-center">
-          {image ? (
-            <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
-          ) : (
-            <Fallback className="w-6 h-6 text-muted-foreground" />
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0 pr-16">
-          <h3 className="font-serif text-base font-medium leading-tight group-hover:text-primary transition-colors block w-full mb-1">
-            <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
-              {title}
-              {href && (
-                <ExternalLink className="inline-block w-3 h-3 text-muted-foreground opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity ml-2 align-baseline" />
-              )}
-            </span>
-          </h3>
-          {subtitle && (
-            <span className="inline-block text-[10px] font-medium uppercase tracking-wider text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded mb-2">
-              {subtitle}
-            </span>
-          )}
-          {excerpt && <p className="text-sm text-muted-foreground line-clamp-2">{excerpt}</p>}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-/** 2:3 cover with text beneath, actions overlaid on the image. Books, photos. */
-function PosterFace({ Fallback, title, subtitle, image, excerpt, actions, onOpen }: FaceProps) {
-  return (
-    <div className="item-card group relative cursor-pointer" onClick={onOpen}>
-      <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+      <div className="aspect-[3/4] bg-muted relative overflow-hidden shrink-0">
         {image ? (
-          <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
+          <img
+            src={image}
+            alt={title}
+            className={cn(
+              'w-full h-full',
+              imageFit === 'contain' ? 'object-contain p-4' : 'object-cover',
+            )}
+            loading="lazy"
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Fallback className="h-12 w-12 text-muted-foreground/30" />
+            <Fallback className="h-10 w-10 text-muted-foreground/30" />
           </div>
         )}
 
         <div
-          className={cn(
-            'absolute top-2 right-2 flex gap-1 transition-opacity duration-200',
-            'opacity-100 lg:opacity-0 lg:group-hover:opacity-100',
-          )}
+          className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
           {actions}
         </div>
       </div>
 
-      <div className="p-4">
-        <h3 className="text-sm font-medium">
-          <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
-            {title}
-          </span>
-        </h3>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{subtitle}</p>
-        )}
-        {excerpt && (
-          <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{excerpt}</p>
-        )}
+      <div className="p-3 flex flex-col gap-1 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-sm font-medium line-clamp-2 min-h-[2.5rem] min-w-0">
+            {!openable && href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {title}
+              </a>
+            ) : (
+              title
+            )}
+          </h3>
+          {meta && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
+              {meta}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground line-clamp-1 min-h-[1rem]">
+          {subtitle ?? '\u00a0'}
+        </p>
+        <p className="text-xs text-muted-foreground/80 line-clamp-2 min-h-[2rem]">
+          {excerpt ?? '\u00a0'}
+        </p>
       </div>
     </div>
   );
 }
 
-/**
- * Image on top, text beneath, in a card-shaped box. `square` uses a 1:1 crop
- * (recipes, inspiration); `feature` uses a fixed-height banner (articles).
- */
-function mediaFace(shape: 'square' | 'feature') {
-  return function MediaFace({
-    Fallback, title, subtitle, image, excerpt, meta, href, actions, onOpen, openable,
-  }: FaceProps) {
-    const box = shape === 'square' ? 'aspect-square' : 'h-40';
-    return (
-      <div
-        className={cn('item-card group relative', openable && 'cursor-pointer')}
-        onClick={openable ? onOpen : undefined}
-      >
-        <div className={cn(box, 'bg-muted relative overflow-hidden')}>
-          {image ? (
-            <img src={image} alt={title} className="w-full h-full object-cover" loading="lazy" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Fallback className="h-14 w-14 text-muted-foreground/30" />
-            </div>
-          )}
-          <div
-            className="absolute top-2 right-2 flex gap-1"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {actions}
-          </div>
-        </div>
-        <div className="p-4">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-medium line-clamp-2 min-w-0">
-              {/* When the card does not open, the title is the way out. */}
-              {!openable && href ? (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-primary transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {title}
-                </a>
-              ) : (
-                title
-              )}
-            </h3>
-            {meta && (
-              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
-                {meta}
-              </span>
-            )}
-          </div>
-          {subtitle && (
-            <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{subtitle}</p>
-          )}
-          {excerpt && (
-            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{excerpt}</p>
-          )}
-        </div>
-      </div>
-    );
-  };
-}
-
 /** No image: the text is the content. Beliefs. */
-function TextFace({ title, subtitle, actions, onOpen }: FaceProps) {
+function TextFace({ title, subtitle, actions, onOpen, openable }: FaceProps) {
   return (
-    <div className="item-card p-6 group relative cursor-pointer" onClick={onOpen}>
+    <div
+      className={cn(
+        'item-card p-6 group relative h-full flex flex-col',
+        openable && 'cursor-pointer',
+      )}
+      onClick={openable ? onOpen : undefined}
+    >
       <Quote className="h-6 w-6 text-muted-foreground/20 absolute top-4 left-4" />
-      <p className="text-base font-serif italic pl-8 line-clamp-4">"{title}"</p>
+      <p className="text-base font-serif italic pl-8 line-clamp-4 flex-1">"{title}"</p>
       {subtitle && <p className="text-sm text-muted-foreground mt-2 pl-8">— {subtitle}</p>}
       <div
         className="flex items-center justify-end gap-1 mt-4 pl-8"
@@ -209,19 +146,13 @@ function TextFace({ title, subtitle, actions, onOpen }: FaceProps) {
 }
 
 const FACES: Record<CardVariant, (props: FaceProps) => JSX.Element> = {
-  tile: TileFace,
-  poster: PosterFace,
-  square: mediaFace('square'),
-  feature: mediaFace('feature'),
+  media: MediaFace,
   text: TextFace,
 };
 
 /** Used when a collection does not name its own fallback icon. */
 const DEFAULT_FALLBACK: Record<CardVariant, LucideIcon> = {
-  tile: ExternalLink,
-  poster: BookOpen,
-  square: Image,
-  feature: Image,
+  media: Image,
   text: Quote,
 };
 
@@ -261,7 +192,6 @@ export function EntityCard<T extends CollectionRow, R>({
   const openable = card.openable !== false;
   const dimmed = card.dimmed?.(item) ?? false;
 
-  const isOverlay = card.variant !== 'tile' && card.variant !== 'text';
   const Face = FACES[card.variant];
 
   const actions = (
@@ -274,26 +204,16 @@ export function EntityCard<T extends CollectionRow, R>({
           onSubmit={(values) => onUpdate(item.id, values as Partial<T>)}
         />
       )}
-      {onRemove &&
-        (isOverlay ? (
-          <Button
-            variant="secondary"
-            size="icon"
-            className="h-8 w-8 bg-background/80 backdrop-blur-sm"
-            onClick={() => onRemove(item.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(item.id)}
-            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-destructive hover:text-destructive-foreground w-8 h-8"
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        ))}
+      {onRemove && (
+        <Button
+          variant="secondary"
+          size="icon"
+          className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+          onClick={() => onRemove(item.id)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </>
   );
 
@@ -302,13 +222,13 @@ export function EntityCard<T extends CollectionRow, R>({
       <div className={cn(dimmed && 'opacity-60 hover:opacity-100 transition-opacity')}>
         <Face
           Fallback={card.fallbackIcon ?? DEFAULT_FALLBACK[card.variant]}
+          imageFit={card.imageFit ?? 'cover'}
           title={title}
           subtitle={subtitle}
           image={image}
           excerpt={excerpt}
           meta={meta}
           href={href}
-          index={index}
           actions={actions}
           openable={openable}
           onOpen={() => setDetailOpen(true)}

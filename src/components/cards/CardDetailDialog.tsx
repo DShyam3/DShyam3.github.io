@@ -37,17 +37,12 @@ export function CardDetailDialog({
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (
-            <div className="w-full h-48 relative overflow-hidden">
+            <div className="w-full h-48 overflow-hidden">
               <img
                 src={imageUrl}
                 alt={title}
                 className="w-full h-full object-cover"
               />
-              {badge && (
-                <span className="absolute top-3 left-3 text-xs font-medium uppercase tracking-wider px-2 py-1 rounded bg-background/90 backdrop-blur-sm">
-                  {badge}
-                </span>
-              )}
             </div>
           )}
           <div className="p-6">
@@ -69,8 +64,17 @@ export function CardDetailDialog({
                       title
                     )}
                   </DialogTitle>
-                  {subtitle && (
-                    <div className="text-sm text-muted-foreground mt-1">{subtitle}</div>
+                  {(subtitle || badge) && (
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {subtitle && (
+                        <span className="text-sm text-muted-foreground">{subtitle}</span>
+                      )}
+                      {badge && (
+                        <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-secondary text-muted-foreground">
+                          {badge}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 {onSchedule && (
@@ -110,17 +114,12 @@ export function CardDetailDialog({
         {/* Desktop Layout */}
         <div className="hidden sm:flex">
           {imageUrl && (
-            <div className="shrink-0 p-6 flex items-start bg-secondary/5 relative">
+            <div className="shrink-0 p-6 flex items-start bg-secondary/5">
               <img
                 src={imageUrl}
                 alt={title}
                 className="w-40 h-auto rounded-lg shadow-lg object-cover"
               />
-              {badge && (
-                <span className="absolute top-8 left-8 text-xs font-medium uppercase tracking-wider px-2 py-1 rounded bg-background/90 backdrop-blur-sm shadow-sm">
-                  {badge}
-                </span>
-              )}
             </div>
           )}
           <div className="flex-1 p-6 min-w-0 flex flex-col">
@@ -142,8 +141,17 @@ export function CardDetailDialog({
                       title
                     )}
                   </DialogTitle>
-                  {subtitle && (
-                    <div className="text-sm text-muted-foreground mt-1">{subtitle}</div>
+                  {(subtitle || badge) && (
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {subtitle && (
+                        <span className="text-sm text-muted-foreground">{subtitle}</span>
+                      )}
+                      {badge && (
+                        <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-secondary text-muted-foreground">
+                          {badge}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 {onSchedule && (
