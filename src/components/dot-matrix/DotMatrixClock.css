@@ -14,7 +14,7 @@
 .dot-matrix-digit {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0.5px;
     backface-visibility: hidden;
 }
 
@@ -81,14 +81,19 @@
     }
 }
 
+/* A digit is 7 rows of dots, so the pitch below decides its height: at 2px
+   dots and a 1px gap it stood 20px tall next to 18.4px footer text whose
+   glyphs are only ~13px, and the clock read as the loudest thing down there.
+   1.5px on a 0.5px pitch puts the digits at 13.5px -- the same visual weight
+   as the words either side of them. */
 .dot-matrix-row {
     display: flex;
-    gap: 1px;
+    gap: 0.5px;
 }
 
 .dot-matrix-dot {
-    width: 2px;
-    height: 2px;
+    width: 1.5px;
+    height: 1.5px;
     border-radius: 50%;
     background-color: transparent;
 }
