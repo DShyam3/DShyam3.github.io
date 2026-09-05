@@ -261,3 +261,26 @@
 .privacy-card::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--muted-foreground));
 }
+
+/* Label above value, so a long value wraps against the panel edge rather
+   than into a narrow second column -- these are read on phones too. */
+.privacy-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 0;
+}
+
+.privacy-fact dt {
+    margin-bottom: 0.15rem;
+}
+
+.privacy-fact-term {
+    opacity: 0.55;
+}
+
+.privacy-fact dd {
+    margin: 0;
+    color: hsl(var(--foreground));
+    line-height: 1.5;
+}

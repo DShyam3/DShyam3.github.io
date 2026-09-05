@@ -5,6 +5,34 @@ import './PrivacyDialog.css';
 
 type Tab = 'privacy' | 'inspiration';
 
+/**
+ * Label and value on their own lines.
+ *
+ * These sections were paragraphs, which in a dot-matrix face at this size is
+ * a wall nobody reads -- and the one thing a privacy notice has to be is
+ * read. Broken into facts, the answer to "does this site track me" is two
+ * words rather than a sentence buried mid-paragraph.
+ *
+ * A <dl> because that is what this is: terms and their definitions. Screen
+ * readers announce the pairing.
+ */
+function FactList({ items }: { items: [string, string][] }) {
+  return (
+    <dl className="privacy-facts">
+      {items.map(([term, value]) => (
+        <div key={term} className="privacy-fact">
+          <dt>
+            <DotMatrixText text={term} size="xs" className="privacy-fact-term" />
+          </dt>
+          <dd>
+            <DotMatrixText text={value} size="xs" />
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function PrivacyDialog() {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<Tab>('privacy');
@@ -76,24 +104,33 @@ export function PrivacyDialog() {
                                         <h3 className="privacy-subtitle mb-4">
                                             <DotMatrixText text="Privacy" size="xs" />
                                         </h3>
-                                        <div className="privacy-text pb-2">
-                                            <DotMatrixText
-                                                text="This website is a personal portfolio. It sets no cookies and asks for no personal data. It does count page views, using Umami — cookieless analytics that records the page, the referrer and a country, and never builds a profile or follows you to other sites. Signing in as admin stores a session in your browser; nothing else is kept."
-                                                size="xs"
-                                            />
-                                        </div>
+                                        <FactList
+                                            items={[
+                                                ['Cookies', 'None'],
+                                                ['Personal data', 'None collected'],
+                                                [
+                                                    'Analytics',
+                                                    'Umami, cookieless. Page, referrer, country. No profile, no tracking across sites.',
+                                                ],
+                                                ['Admin sign-in', 'Stores a session in your browser'],
+                                            ]}
+                                        />
                                     </section>
 
                                     <section className="privacy-section mt-8">
                                         <h3 className="privacy-subtitle mb-4">
                                             <DotMatrixText text="Copyright" size="xs" />
                                         </h3>
-                                        <div className="privacy-text pb-2">
-                                            <DotMatrixText
-                                                text={`© ${new Date().getFullYear()} Dhyan Shyam. All rights reserved. The content and design of this website are original works.`}
-                                                size="xs"
-                                            />
-                                        </div>
+                                        <FactList
+                                            items={[
+                                                ['Owner', 'Dhyan Shyam'],
+                                                ['Year', String(new Date().getFullYear())],
+                                                [
+                                                    'Rights',
+                                                    'All reserved. Content and design are original work.',
+                                                ],
+                                            ]}
+                                        />
                                     </section>
                                 </div>
                             )}
