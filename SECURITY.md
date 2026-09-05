@@ -80,9 +80,36 @@ attack surface of this site is Supabase, and it was audited separately
 - **Secrets**: the TMDB API key lives only in edge function env, never in the
   bundle. Only `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
   `VITE_TMDB_IMAGE_BASE_URL` and `VITE_ADMIN_EMAIL` reach the client.
-- **Storage**: see `20260904_secure_storage_object_policies.sql` — object
-  policies were gated on the `authenticated` role rather than `is_admin()`.
+- **Storage**: see migration `20260904110337` — object policies were gated on
+  the `authenticated` role rather than `is_admin()`, and are now `is_admin()`.
+- **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
+  to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
+  row-level security. Migration `20260905160000` revokes those grants on the
+  content, watchlist and travel tables and grants back only `SELECT`. The
+  `finance_*` tables still hold the permissive defaults; they are unreachable
+  through PostgREST today, but the grant is a latent privilege and should be
+  revoked with the finance work.
 - **Auth**: public email signup is enabled on the project. Since every policy
   now checks the admin email, a self-registered user gets nothing, but signup
   should be disabled in the dashboard (Authentication → Sign In / Providers)
   because this is a single-account site.
+
+## Accepted Supabase advisor lints
+
+These show up in `get_advisors(type: "security")` on every run and are
+deliberate. Recorded here so a fresh advisor report can be triaged without
+re-deriving the reasoning.
+
+| Lint | Why it stays |
+| --- | --- |
+| `anon_security_definer_function_executable` on `is_admin()` | RLS policy expressions are evaluated with the querying role's own privileges, so revoking `EXECUTE` from `anon`/`authenticated` would break every policy on the project. The function takes no arguments and returns a single boolean about the caller — it leaks nothing an attacker did not already supply. |
+| Content tables readable by `anon` | This is a public portfolio. Anonymous `SELECT` on books, links, articles, photos, recipes, the watchlist and travel tables is the product, not a finding. Writes are `is_admin()`-only at both the policy and grant layer. |
+
+Not accepted, still open, and only fixable from the dashboard:
+
+- **Leaked-password protection is disabled** (Authentication → Policies). With a
+  single admin account that owns everything, HaveIBeenPwned checking is cheap.
+- **No MFA options enabled.** Add TOTP for the same reason.
+- **Public email signup is enabled.** See the note above.
+- **Postgres has outstanding security patches** (`supabase-postgres-15.8.1.030`).
+  Schedule an upgrade window under Settings → Infrastructure.

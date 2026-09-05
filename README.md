@@ -50,7 +50,28 @@ npm run typecheck    # tsc --noEmit -- not yet a CI gate, run it by hand
 
 ### Frontend → Supabase
 
-The browser talks to Supabase directly via `@supabase/supabase-js` (`src/integrations/supabase/client.ts`) using the anon key. **Row Level Security is the actual authorization boundary** — every table has an `is_admin()`-gated policy (see `supabase/20260724_add_is_admin_helper.sql`), checking the caller's JWT email against `VITE_ADMIN_EMAIL`. Content tables (books, links, articles, etc.) are publicly readable by design (it's a portfolio); finance and TrueLayer tables are admin-only for both read and write. See `supabase/secure_policies.sql` and the `supabase/20260724_secure_*.sql` migrations for the full policy set.
+The browser talks to Supabase directly via `@supabase/supabase-js` (`src/integrations/supabase/client.ts`) using the anon key. **Row Level Security is the actual authorization boundary** — every table has an `is_admin()`-gated policy. Content tables (books, links, articles, etc.) are publicly readable by design (it's a portfolio); finance and TrueLayer tables are admin-only for both read and write. The full policy set lives in `supabase/migrations/20260904130000_baseline.sql` and the migrations after it.
+
+> **The admin email is stored in two places, and they are not connected.**
+> `is_admin()` compares the caller's JWT email against a literal baked into the
+> function body:
+>
+> ```sql
+> SELECT auth.jwt() ->> 'email' = 'd.shyam1256@gmail.com';
+> ```
+>
+> `VITE_ADMIN_EMAIL` is a separate value that only decides whether the frontend
+> *renders* admin controls. Changing the env var does not change who the
+> database trusts — it gives you a UI full of buttons whose writes RLS
+> rejects. To change the admin, change both: the env var (and the repo secret)
+> **and** `is_admin()`, via a migration.
+
+Table-level `GRANT`s are a second, independent layer. Supabase's defaults hand
+`anon` full write privileges on every table in `public`; migration
+`20260905160000` revokes those on the content, watchlist and travel tables and
+grants back only `SELECT`. This matters because `TRUNCATE` is **not** filtered
+by RLS — Postgres applies row-level security to `SELECT`/`INSERT`/`UPDATE`/
+`DELETE` only. The `finance_*` tables still carry the permissive defaults.
 
 ### Edge Functions (`supabase/functions/`)
 
@@ -73,11 +94,11 @@ supabase functions deploy watchlist-cron-sync
 
 ### Why there are two watchlist sync implementations
 
-`src/contexts/WatchlistContext.tsx`'s `syncWatchlist` (browser) and `supabase/functions/watchlist-cron-sync/index.ts` (server) implement **the same logic twice**, deliberately — there's no module shared between the Vite/browser bundle and the Deno edge runtime. The browser version only runs while an admin has the Watchlist page open (manual sync button, or auto-triggered on page load); the edge function version runs on a schedule regardless of whether anyone has the site open. **If you change the sync logic, change both.**
+`src/features/watchlist/WatchlistContext.tsx`'s `syncWatchlist` (browser) and `supabase/functions/watchlist-cron-sync/index.ts` (server) implement **the same logic twice**, deliberately — there's no module shared between the Vite/browser bundle and the Deno edge runtime. The browser version only runs while an admin has the Watchlist page open (manual sync button, or auto-triggered on page load); the edge function version runs on a schedule regardless of whether anyone has the site open. **If you change the sync logic, change both.**
 
 ### Scheduled sync (pg_cron)
 
-`supabase/20260725_schedule_watchlist_sync.sql` schedules `watchlist-cron-sync` to run daily at 06:00 UTC via `pg_cron`/`pg_net`. It authenticates using the service role key, which it looks up from **Supabase Vault** at run time — the key is never written into the migration file or git history.
+The `cron.schedule` call at the end of `supabase/migrations/20260904130000_baseline.sql` runs `watchlist-cron-sync` daily at 06:00 UTC via `pg_cron`/`pg_net`. It authenticates using the service role key, which it looks up from **Supabase Vault** at run time — the key is never written into the migration file or git history.
 
 To set this up on a fresh project (one-time, run directly in the Supabase SQL Editor — **never commit the second command to git**):
 
@@ -86,27 +107,36 @@ To set this up on a fresh project (one-time, run directly in the Supabase SQL Ed
 select vault.create_secret('<service role key from Project Settings > API>', 'service_role_key');
 ```
 
-Then apply `supabase/20260725_schedule_watchlist_sync.sql` (SQL Editor, or `supabase db push` once the migration-history is reconciled — see note below).
+Then apply the migrations with `supabase db push`.
 
 To check it's actually running: query `sync_log` (`sync_type = 'auto'`) or `cron.job_run_details` in the SQL Editor after the scheduled time passes. Known caveat: the schedule is UTC, so it drifts an hour relative to UK local time across the BST/GMT boundary — not worth over-engineering for a "keep it roughly fresh" job.
 
 ### Applying SQL migrations
 
-The `supabase/*.sql` files are **not** in `supabase/migrations/` and don't follow the CLI's strict migration-history conventions (this predates the current maintainer's use of the CLI) — `supabase db push` will fail with a remote-history mismatch until that's reconciled. Until then, apply them directly via the Supabase SQL Editor, in filename order.
+```bash
+supabase db push
+```
+
+Migration history is reconciled: everything lives in `supabase/migrations/`,
+starting from a baseline that reproduces production, and `supabase db diff
+--linked` reports no drift. There are no loose `.sql` files at the top of
+`supabase/` any more, and nothing needs pasting into the SQL Editor. See
+`supabase/README.md` for the directory layout and the declarative schema
+files.
 
 ## 📦 Deployment
 
 **Frontend** (GitHub Pages): pushing to `main` triggers `.github/workflows/deploy.yml` — installs, lints, builds, deploys `dist/` to Pages. Required repo secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_TMDB_IMAGE_BASE_URL`, `VITE_ADMIN_EMAIL`.
 
-**Edge functions**: not part of CI. Deploy manually (`supabase functions deploy <name>`) whenever `supabase/functions/**` changes.
+**Edge functions**: not part of CI. Deploy manually (`supabase functions deploy <name>`) whenever anything under `supabase/functions/` changes.
 
-**Database changes**: apply manually via the SQL Editor (see above) whenever a new `supabase/*.sql` file is added.
+**Database changes**: not part of CI either. Run `supabase db push` after adding a migration to `supabase/migrations/`.
 
 ## 🔡 Dot-matrix text system
 
 The pixel/LED-style headings and labels ("DHYAN SHYAM", nav links, etc.) render as real text set in [Doto](https://fonts.google.com/specimen/Doto), a Google Font imported in `src/index.css` (`--font-matrix`) — `DotMatrixText` is just a `<span>` with that font applied, no per-character data or generation step involved. Doto is a variable font where the "dots" are literally circles that grow and fuse together as weight increases, so low weights (400-600, see `DotMatrixText.css`) read as distinct dots and heavy weights read as solid strokes — reach for weight, not font-size, if the dot-matrix look isn't obvious enough.
 
-Icons that can't be represented as a font glyph (theme toggle sun/moon, the `+` social-links trigger, the flip-style `DotMatrixClock`) still use the original hand-authored dot-grid approach (`DotMatrixIcon`/`DotMatrixClock` → `DotMatrixGlyph`, backed by `src/data/dot-matrix.json`) — `iconPatterns` for icons, and `charPatterns` (trimmed to just `0-9`/`:`, all `DotMatrixClock` ever renders) for the clock digits. Larger standalone glyphs use a separate 25x25 tier (`scripts/generate-hero-glyphs.py` → `src/data/hero-glyphs.json` → `DotMatrixHeroGlyph`), built from geometric primitives rather than the font.
+Icons that can't be represented as a font glyph (theme toggle sun/moon, the `+` social-links trigger, the flip-style `DotMatrixClock`) still use the original hand-authored dot-grid approach (`DotMatrixIcon`/`DotMatrixClock` → `DotMatrixGlyph`, backed by `src/data/dot-matrix.json`) — `iconPatterns` for icons, and `charPatterns` (trimmed to just `0-9`/`:`, all `DotMatrixClock` ever renders) for the clock digits.
 
 ## 🧠 Codebase knowledge graph (graphify)
 

@@ -66,7 +66,7 @@ None of these check `is_admin()`. Email signup is enabled on the project, so any
 
 Action: apply the migration, commit it, and separately disable public signup (see S-6).
 
-**S-2 — `is_admin()` hardcodes the admin email.**
+**S-2 — `is_admin()` hardcodes the admin email.** — *RESOLVED as documentation. The duplication is accepted and now written down accurately in `README.md` (it previously claimed the function reads `VITE_ADMIN_EMAIL`, which it does not). Moving the email into a config table remains an option, not a plan.*
 
 ```sql
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -85,7 +85,7 @@ The `SET search_path` on this one is correct.
 
 `public.update_episodes_watched_status` and `public.update_season_watched_status` have no `search_path` pinned. Both are `SECURITY INVOKER` so the impact is limited, but the linter flags them and the fix is one line each. Already included at the bottom of the pending `20260904_*` migration.
 
-**S-4 — `is_admin()` is callable over RPC by `anon` and `authenticated`.**
+**S-4 — `is_admin()` is callable over RPC by `anon` and `authenticated`.** — *RESOLVED as documentation, see the accepted-lints table in `SECURITY.md`.*
 
 Flagged by the linter as `anon_security_definer_function_executable`. This is expected and required — RLS policy expressions are evaluated with the querying role's privileges, so revoking `EXECUTE` from `authenticated` would break every policy on the project. The function returns only a boolean about the caller and leaks nothing.
 
@@ -150,7 +150,7 @@ a constraint name — so the surviving constraint satisfies them.
 
 `useSupabaseTable` defaults to `.order('created_at', { ascending: false })` for every table. No table has an index on `created_at`. Harmless at current row counts (most content tables are under 200 rows); it becomes a real sort cost on `tv_show_episodes` and `finance_transactions` as they grow. Add the index only where the column is actually the sort key in production.
 
-**P-5 — `select('*')` everywhere, no column projection.**
+**P-5 — `select('*')` everywhere, no column projection.** — *Watchlist resolved (Phase 5). Collections: the mechanism now exists -- `CollectionConfig.columns` passes a PostgREST select list through `useCollection` -- but measured against production no collection currently needs it. The largest, `inventory_items`, is 79 kB across 143 rows, and its two biggest columns (`image`, `link`) are both rendered on the card. Finance is Phase 7.*
 
 120 `.from(` call sites. The worst two:
 
@@ -159,11 +159,11 @@ a constraint name — so the surviving constraint satisfies them.
 
 Fix: project only the columns the view needs; fetch the episode tree lazily when a show's detail dialog opens.
 
-**P-6 — No pagination anywhere.**
+**P-6 — No pagination anywhere.** — *Deliberately not built. Measured: the largest collection is 143 rows / 79 kB, the watchlist's heaviest query is 894 ms cold, and a server-side limit with no "load more" would silently hide items. Revisit when a table passes ~1,000 rows.*
 
 Watchlist has a client-side `visibleCount = 48`, but the network fetch is unbounded. Every collection loads its full table. Fine today, unbounded by design.
 
-**P-7 — `useSupabaseTable` has a silent fallback that re-runs the query.**
+**P-7 — `useSupabaseTable` has a silent fallback that re-runs the query.** — *RESOLVED. The fallback is gone; sort columns are declared per collection, so a bad one now fails loudly.*
 
 On a sort error (`42703` / any message containing "column") it retries the whole query without ordering. That is a second round trip triggered by a schema mismatch that should be a build-time error instead. Once collections are config-driven, the sort column is known per collection and the fallback can go.
 
@@ -201,11 +201,11 @@ reconciliation happens as part of the Phase 1.5 baseline.
 
 Table exists (16 kB, ~0 rows) and the entire `src/components/creators/` folder (6 files, 411 lines) has zero importers. Drop both.
 
-**H-4 — `config.toml` contains only `project_id`.**
+**H-4 — `config.toml` contains only `project_id`.** — *RESOLVED. Local stack config now mirrors production: Postgres 15, signup off, 50 MiB storage cap, `max_rows`.*
 
 No local dev stack config, no auth settings, no seed. If local development is ever wanted, this needs filling in. Low priority.
 
-**H-5 — `inventory_items.description` is unused.**
+**H-5 — `inventory_items.description` is unused.** — *RESOLVED by the Phase 4 collection work: the field is collected by the add/edit form and rendered in the detail panel, including as a spec table.*
 
 Null in 141 of 143 rows (59/59 tech-edc, 56/56 wardrobe, 11/11 hygiene, 5/5
 sports-gear, 10/12 homelab). Added by migration
@@ -214,7 +214,7 @@ populated. Either the add-dialog never collects it or the field isn't wanted.
 Decide before it gets carried into the new collection config — it is a free
 deletion if unwanted.
 
-**S-10 — `anon` holds write privileges on every table, including all 19 finance tables.**
+**S-10 — `anon` holds write privileges on every table, including all 19 finance tables.** — *PARTIALLY RESOLVED, migration `20260905160000` (content, watchlist and travel tables only; the 19 finance tables are left for Phase 7)*
 
 Surfaced by the schema dump. Table-level grants (separate from RLS) are:
 
@@ -276,7 +276,7 @@ compounded it by hardcoding `category: 'main'` whatever was chosen.
 `is_personal` drives the card subtitle and detail badge instead of pretending
 to be a category. Fixed.
 
-**H-6 — README advertises a `kitchen` inventory category that doesn't exist.**
+**H-6 — README advertises a `kitchen` inventory category that doesn't exist.** — *RESOLVED: the category exists in `src/collections/inventory.tsx` (empty, but real).*
 
 Live categories are `tech-edc`, `wardrobe`, `homelab`, `hygiene`, `sports-gear`.
 Either stale copy or an intended category never added.
