@@ -11,6 +11,103 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 // there is no shared module between the Deno edge runtime and the browser
 // bundle, so this is a deliberate, maintained duplicate, not a mistake.
 
+// Mirror of src/features/watchlist/tmdb-types.ts. Deno cannot import from
+// src/, so these are hand-maintained copies -- change both together.
+interface TMDBProvider {
+  provider_name?: string
+}
+interface TMDBRegionProviders {
+  flatrate?: TMDBProvider[]
+  free?: TMDBProvider[]
+  ads?: TMDBProvider[]
+}
+interface TMDBSeasonSummary {
+  season_number: number
+  episode_count?: number
+  air_date?: string | null
+}
+interface TMDBEpisode {
+  episode_number: number
+  name?: string
+  air_date?: string | null
+  runtime?: number | null
+}
+interface TMDBSeasonDetails {
+  episodes?: TMDBEpisode[]
+}
+interface TMDBDetails {
+  id?: number
+  overview?: string
+  poster_path?: string | null
+  release_date?: string | null
+  first_air_date?: string | null
+  runtime?: number | null
+  episode_run_time?: number[]
+  genres?: { name: string }[]
+  status?: string
+  seasons?: TMDBSeasonSummary[]
+  'watch/providers'?: { results?: Record<string, TMDBRegionProviders | undefined> }
+}
+
+/** A TMDB episode that survived the "has an air date" filter. */
+type AiredEpisode = TMDBEpisode & { air_date: string }
+const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date)
+
+// The rows this function selects. The Deno client is untyped (there are no
+// generated Database types to import here), so the shapes are spelled out.
+interface MovieRow {
+  id: number
+  title: string
+  tmdb_id: number | null
+  poster: string | null
+  overview: string | null
+  genre: string | null
+  release_year: number | null
+}
+interface EpisodeRow {
+  id?: number
+  episode_number: number
+  watched: boolean | null
+}
+interface SeasonRow {
+  id: number
+  season_number: number
+  release_date: string | null
+  tv_show_episodes: EpisodeRow[] | null
+}
+interface ShowRow {
+  id: number
+  title: string
+  tmdb_id: number | null
+  poster: string | null
+  overview: string | null
+  genre: string | null
+  status: string | null
+  tv_show_seasons: SeasonRow[] | null
+}
+
+/** One season of an item as this function holds it in memory. */
+interface SyncSeason {
+  id: number
+  season_number: number
+  release_date?: string
+  episodes: { episode_number: number; watched: boolean | null }[]
+}
+
+/** A movie or show being synced. `seasons` is TV-only. */
+interface SyncItem {
+  id: string
+  title: string
+  category: 'Movies' | 'TV Shows'
+  tmdb_id?: number
+  image_url?: string
+  description?: string
+  genres: string[]
+  year?: number
+  series_status?: string | null
+  seasons?: SyncSeason[]
+}
+
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY')
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 
@@ -29,15 +126,15 @@ function buildCorsHeaders(req: Request) {
   }
 }
 
-async function fetchTMDB(endpoint: string, params: Record<string, string> = {}) {
+async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const query = new URLSearchParams({ ...params, api_key: TMDB_API_KEY || '' })
   const res = await fetch(`${TMDB_BASE_URL}/${endpoint}?${query.toString()}`)
-  return res.json()
+  return res.json() as Promise<T>
 }
 
 // Mirror of src/features/watchlist/sync-logic.ts. Deno cannot import from
 // src/, so this is a hand-maintained copy -- change both together.
-function getPlatform(providers: any): string {
+function getPlatform(providers: TMDBRegionProviders | undefined): string {
   if (!providers) return 'Online'
   const available = [
     ...(providers.flatrate || []),
@@ -50,9 +147,10 @@ function getPlatform(providers: any): string {
     { tmdbNames: ['Amazon Prime Video'], displayName: 'Prime Video' },
     { tmdbNames: ['Apple TV Plus', 'Apple TV+', 'Apple TV'], displayName: 'Apple TV+' },
     { tmdbNames: ['BBC iPlayer'], displayName: 'BBC iPlayer' },
+    { tmdbNames: ['ITVX'], displayName: 'ITVX' },
   ]
   for (const a of allowed) {
-    if (available.some((p: any) => a.tmdbNames.some((name) => p.provider_name?.toLowerCase() === name.toLowerCase()))) {
+    if (available.some((p) => a.tmdbNames.some((name) => p.provider_name?.toLowerCase() === name.toLowerCase()))) {
       return a.displayName
     }
   }
@@ -100,7 +198,7 @@ serve(async (req) => {
     if (moviesResult.error) throw moviesResult.error
     if (showsResult.error) throw showsResult.error
 
-    const movies = (moviesResult.data || []).map((m: any) => ({
+    const movies: SyncItem[] = ((moviesResult.data || []) as MovieRow[]).map((m) => ({
       id: String(m.id),
       title: m.title,
       category: 'Movies' as const,
@@ -111,7 +209,7 @@ serve(async (req) => {
       year: m.release_year || undefined,
     }))
 
-    const shows = (showsResult.data || []).map((s: any) => ({
+    const shows: SyncItem[] = ((showsResult.data || []) as ShowRow[]).map((s) => ({
       id: String(s.id),
       title: s.title,
       category: 'TV Shows' as const,
@@ -120,11 +218,11 @@ serve(async (req) => {
       description: s.overview || undefined,
       genres: s.genre ? s.genre.split(',').map((g: string) => g.trim()) : [],
       series_status: s.status,
-      seasons: (s.tv_show_seasons || []).map((season: any) => ({
+      seasons: (s.tv_show_seasons || []).map((season) => ({
         id: season.id,
         season_number: season.season_number,
         release_date: season.release_date || undefined,
-        episodes: (season.tv_show_episodes || []).map((ep: any) => ({
+        episodes: (season.tv_show_episodes || []).map((ep) => ({
           episode_number: ep.episode_number,
           watched: ep.watched,
         })),
@@ -135,8 +233,8 @@ serve(async (req) => {
     // that the admin has already marked as watched.
     const watchedEpisodes = new Set<string>()
     shows.forEach((show) => {
-      show.seasons.forEach((season: any) => {
-        season.episodes.forEach((ep: any) => {
+      show.seasons?.forEach((season) => {
+        season.episodes.forEach((ep) => {
           if (ep.watched) watchedEpisodes.add(`${show.id}-s${season.season_number}-e${ep.episode_number}`)
         })
       })
@@ -149,23 +247,24 @@ serve(async (req) => {
     for (let i = 0; i < itemsToSync.length; i += chunkSize) {
       const chunk = itemsToSync.slice(i, i + chunkSize)
       await Promise.all(
-        chunk.map(async (item: any) => {
+        chunk.map(async (item) => {
           try {
             const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie'
-            const data = await fetchTMDB(`${tmdbType}/${item.tmdb_id}`, { append_to_response: 'watch/providers' })
+            const data = await fetchTMDB<TMDBDetails>(`${tmdbType}/${item.tmdb_id}`, { append_to_response: 'watch/providers' })
             if (!data.id) return
 
-            const commonUpdates: any = {}
+            const commonUpdates: Record<string, unknown> = {}
             if (!item.image_url && data.poster_path) commonUpdates.poster = `https://image.tmdb.org/t/p/w500${data.poster_path}`
             if (!item.description && data.overview) commonUpdates.overview = data.overview
             if (data.release_date || data.first_air_date) commonUpdates.release_date = data.release_date || data.first_air_date
-            if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g: any) => g.name).join(', ')
+            if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g) => g.name).join(', ')
             commonUpdates.platform = getPlatform(data['watch/providers']?.results?.GB)
 
             if (item.category === 'Movies') {
               const movieUpdates = { ...commonUpdates }
-              if (!item.year && (data.release_date || data.first_air_date)) {
-                movieUpdates.release_year = new Date(data.release_date || data.first_air_date).getFullYear()
+              const airDate = data.release_date || data.first_air_date
+              if (!item.year && airDate) {
+                movieUpdates.release_year = new Date(airDate).getFullYear()
               }
               if (data.runtime) movieUpdates.runtime = data.runtime
               await supabaseAdmin.from('movies').update(movieUpdates).eq('id', parseInt(item.id))
@@ -174,13 +273,13 @@ serve(async (req) => {
               await supabaseAdmin.from('tv_shows').update(tvUpdates).eq('id', parseInt(item.id))
 
               // Season 0 cleanup (specials that TMDB removed or that duplicate a real season)
-              const tmdbSeason0 = data.seasons?.find((s: any) => s.season_number === 0)
-              const localSeason0 = item.seasons?.find((s: any) => s.season_number === 0)
+              const tmdbSeason0 = data.seasons?.find((s) => s.season_number === 0)
+              const localSeason0 = item.seasons?.find((s) => s.season_number === 0)
               if (localSeason0) {
                 let shouldDelete = !tmdbSeason0 || tmdbSeason0.episode_count === 0
                 if (!shouldDelete && localSeason0.release_date) {
-                  const otherSeasons = item.seasons.filter((s: any) => s.season_number !== 0)
-                  shouldDelete = otherSeasons.some((s: any) => s.release_date && s.release_date === localSeason0.release_date)
+                  const otherSeasons = item.seasons?.filter((s) => s.season_number !== 0) || []
+                  shouldDelete = otherSeasons.some((s) => s.release_date && s.release_date === localSeason0.release_date)
                 }
                 if (shouldDelete) {
                   await supabaseAdmin.from('tv_show_seasons').delete().eq('id', localSeason0.id)
@@ -189,11 +288,11 @@ serve(async (req) => {
 
               if (data.seasons) {
                 await Promise.all(
-                  data.seasons.map(async (s: any) => {
+                  data.seasons.map(async (s) => {
                     if (s.season_number === 0) return
 
                     if (s.episode_count === 0) {
-                      const localEmptySeason = item.seasons?.find((ls: any) => ls.season_number === s.season_number)
+                      const localEmptySeason = item.seasons?.find((ls) => ls.season_number === s.season_number)
                       if (localEmptySeason && localEmptySeason.episodes.length === 0) {
                         await supabaseAdmin.from('tv_show_seasons').delete().eq('id', localEmptySeason.id)
                       }
@@ -217,23 +316,25 @@ serve(async (req) => {
                       const ninetyDaysAgo = new Date(now)
                       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
                       const isShowCurrentlyAiring = data.status === 'Returning Series' || data.status === 'In Production'
-                      const localSeason = item.seasons?.find((ls: any) => ls.season_number === s.season_number)
+                      const localSeason = item.seasons?.find((ls) => ls.season_number === s.season_number)
                       const localEpisodeCount = localSeason?.episodes?.length || 0
                       const hasEpisodeCountChanged = localEpisodeCount !== s.episode_count
                       const shouldUpdateEpisodes = !seasonReleaseDate || seasonReleaseDate >= ninetyDaysAgo || isShowCurrentlyAiring || hasEpisodeCountChanged
 
                       if (shouldUpdateEpisodes) {
-                        const sDetails = await fetchTMDB(`tv/${item.tmdb_id}/season/${s.season_number}`)
-                        const validEpisodes = (sDetails.episodes || []).filter((v: any) => v.air_date)
+                        const sDetails = await fetchTMDB<TMDBSeasonDetails>(`tv/${item.tmdb_id}/season/${s.season_number}`)
+                        const validEpisodes = (sDetails.episodes || []).filter(hasAirDate)
 
                         if (validEpisodes.length > 0) {
                           const { data: existingEps } = await supabaseAdmin
                             .from('tv_show_episodes')
                             .select('episode_number, watched')
                             .eq('season_id', dbS.id)
-                          const watchedMap = new Map<number, boolean>((existingEps || []).map((e: any) => [e.episode_number, e.watched ?? false]))
+                          const watchedMap = new Map<number, boolean>(
+                            ((existingEps || []) as EpisodeRow[]).map((e) => [e.episode_number, e.watched ?? false]),
+                          )
 
-                          const eps = validEpisodes.map((v: any) => ({
+                          const eps = validEpisodes.map((v) => ({
                             season_id: dbS.id,
                             episode_number: v.episode_number,
                             title: v.name || `Episode ${v.episode_number}`,
@@ -243,18 +344,18 @@ serve(async (req) => {
                           }))
                           await supabaseAdmin.from('tv_show_episodes').upsert(eps, { onConflict: 'season_id,episode_number' })
 
-                          const validEpisodeNumbers = validEpisodes.map((v: any) => v.episode_number)
+                          const validEpisodeNumbers = validEpisodes.map((v) => v.episode_number)
                           const { data: existingEpisodes } = await supabaseAdmin
                             .from('tv_show_episodes')
                             .select('id, episode_number')
                             .eq('season_id', dbS.id)
-                          const toDelete = (existingEpisodes || []).filter((e: any) => !validEpisodeNumbers.includes(e.episode_number))
+                          const toDelete = ((existingEpisodes || []) as EpisodeRow[]).filter((e) => !validEpisodeNumbers.includes(e.episode_number))
                           if (toDelete.length > 0) {
-                            await supabaseAdmin.from('tv_show_episodes').delete().in('id', toDelete.map((e: any) => e.id))
+                            await supabaseAdmin.from('tv_show_episodes').delete().in('id', toDelete.map((e) => e.id))
                           }
                         } else {
-                          const localS = item.seasons?.find((ls: any) => ls.season_number === s.season_number)
-                          const hasWatched = localS?.episodes.some((ep: any) => watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`))
+                          const localS = item.seasons?.find((ls) => ls.season_number === s.season_number)
+                          const hasWatched = localS?.episodes.some((ep) => watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`))
                           if (!hasWatched) {
                             await supabaseAdmin.from('tv_show_seasons').delete().eq('id', dbS.id)
                           }
@@ -266,11 +367,11 @@ serve(async (req) => {
                   }),
                 )
 
-                const localSeasons = item.seasons?.filter((s: any) => s.season_number !== 0) || []
+                const localSeasons = item.seasons?.filter((s) => s.season_number !== 0) || []
                 for (const localSeason of localSeasons) {
-                  const existsInTmdb = data.seasons.some((ts: any) => ts.season_number === localSeason.season_number)
+                  const existsInTmdb = data.seasons.some((ts) => ts.season_number === localSeason.season_number)
                   if (!existsInTmdb) {
-                    const hasWatchedEps = localSeason.episodes.some((ep: any) => watchedEpisodes.has(`${item.id}-s${localSeason.season_number}-e${ep.episode_number}`))
+                    const hasWatchedEps = localSeason.episodes.some((ep) => watchedEpisodes.has(`${item.id}-s${localSeason.season_number}-e${ep.episode_number}`))
                     if (!hasWatchedEps) {
                       await supabaseAdmin.from('tv_show_seasons').delete().eq('id', localSeason.id)
                     }
@@ -298,7 +399,7 @@ serve(async (req) => {
     // Keep last 50 log rows, same as the client-side logSync
     const { data: oldLogs } = await supabaseAdmin.from('sync_log').select('id').order('synced_at', { ascending: false }).range(50, 1000)
     if (oldLogs && oldLogs.length > 0) {
-      await supabaseAdmin.from('sync_log').delete().in('id', oldLogs.map((l: any) => l.id))
+      await supabaseAdmin.from('sync_log').delete().in('id', oldLogs.map((l: { id: number }) => l.id))
     }
 
     console.log(`[Cron Sync] Completed. ${itemsSynced}/${itemsToSync.length} synced in ${(durationMs / 1000).toFixed(1)}s. ${failedTitles.length} failed.`)

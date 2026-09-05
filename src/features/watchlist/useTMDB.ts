@@ -1,25 +1,24 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type {
+    TMDBDetails,
+    TMDBSearchItem,
+    TMDBSearchResponse,
+} from './tmdb-types';
+import { getPlatform } from './sync-logic';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 
-export interface TMDBResult {
-    id: number;
-    title?: string;
-    name?: string;
-    release_date?: string;
-    first_air_date?: string;
-    poster_path: string | null;
-    overview: string;
+/** A search row, tagged with which endpoint it came back from. */
+export interface TMDBResult extends TMDBSearchItem {
     media_type: 'movie' | 'tv';
-    original_language?: string;
 }
 
 export function useTMDB() {
     const [results, setResults] = useState<TMDBResult[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const fetchTMDB = useCallback(async (endpoint: string, params: Record<string, string>) => {
+    const fetchTMDB = useCallback(async <T,>(endpoint: string, params: Record<string, string>): Promise<T> => {
         // Always route through the tmdb-proxy edge function so the TMDB API
         // key never has to live in (or be inlined into) the client bundle.
         // The installed @supabase/supabase-js version has no `queryParams`
@@ -32,7 +31,7 @@ export function useTMDB() {
         });
 
         if (error) throw error;
-        return data;
+        return data as T;
     }, []);
 
     const search = useCallback(async (query: string, type: 'TV Shows' | 'Movies', year?: number) => {
@@ -52,11 +51,13 @@ export function useTMDB() {
                 else params.first_air_date_year = year.toString();
             }
 
-            const data = await fetchTMDB(endpoint, params);
+            const data = await fetchTMDB<TMDBSearchResponse>(endpoint, params);
 
-            const mappedResults = (data.results || []).slice(0, 10).map((item: any) => ({
+            const mediaType: TMDBResult['media_type'] =
+                type === 'Movies' ? 'movie' : 'tv';
+            const mappedResults = (data.results || []).slice(0, 10).map((item) => ({
                 ...item,
-                media_type: type === 'Movies' ? 'movie' : 'tv'
+                media_type: mediaType,
             }));
 
             setResults(mappedResults);
@@ -76,34 +77,12 @@ export function useTMDB() {
     const getMovieDetails = useCallback(async (id: number, type: 'movie' | 'tv') => {
         setLoading(true);
         try {
-            const data = await fetchTMDB(`${type}/${id}`, { append_to_response: 'watch/providers' });
+            const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, { append_to_response: 'watch/providers' });
 
-            // Extract platform based on UK (GB) region
-            const providers = data['watch/providers']?.results?.GB;
-            let platform = 'Online';
-
-            if (providers) {
-                const available = [...(providers.flatrate || []), ...(providers.free || [])];
-                const allowedPlatforms = [
-                    { tmdbNames: ['Netflix'], displayName: 'Netflix' },
-                    { tmdbNames: ['Disney Plus', 'Disney+'], displayName: 'Disney+' },
-                    { tmdbNames: ['Amazon Prime Video'], displayName: 'Prime Video' },
-                    { tmdbNames: ['Apple TV Plus', 'Apple TV+', 'Apple TV'], displayName: 'Apple TV+' },
-                    { tmdbNames: ['BBC iPlayer'], displayName: 'BBC iPlayer' },
-                    { tmdbNames: ['ITVX'], displayName: 'ITVX' },
-                ];
-
-                for (const allowed of allowedPlatforms) {
-                    if (available.some((p: any) =>
-                        allowed.tmdbNames.some(name =>
-                            p.provider_name?.toLowerCase() === name.toLowerCase()
-                        )
-                    )) {
-                        platform = allowed.displayName;
-                        break;
-                    }
-                }
-            }
+            // Extract platform based on UK (GB) region. Same allowlist and
+            // same precedence as the sync path, so an item added by hand and
+            // the same item refreshed by the nightly sync agree.
+            const platform = getPlatform(data['watch/providers']?.results?.GB);
 
             return {
                 title: data.title || data.name,
@@ -112,7 +91,7 @@ export function useTMDB() {
                 release_date: data.release_date || data.first_air_date || null,
                 release_year: data.release_date || data.first_air_date ? new Date(data.release_date || data.first_air_date).getFullYear() : null,
                 runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : null),
-                genres: data.genres?.map((g: any) => g.name) || [],
+                genres: data.genres?.map((g) => g.name) || [],
                 tmdb_id: data.id,
                 platform: platform,
             };
@@ -134,15 +113,15 @@ export function useTMDB() {
         setLoading(true);
         try {
             const [movieData, tvData] = await Promise.all([
-                fetchTMDB('search/movie', { query: trimmedQuery }),
-                fetchTMDB('search/tv', { query: trimmedQuery }),
+                fetchTMDB<TMDBSearchResponse>('search/movie', { query: trimmedQuery }),
+                fetchTMDB<TMDBSearchResponse>('search/tv', { query: trimmedQuery }),
             ]);
 
-            const movies = (movieData.results || []).slice(0, 5).map((item: any) => ({
+            const movies = (movieData.results || []).slice(0, 5).map((item) => ({
                 ...item,
                 media_type: 'movie' as const,
             }));
-            const tvShows = (tvData.results || []).slice(0, 5).map((item: any) => ({
+            const tvShows = (tvData.results || []).slice(0, 5).map((item) => ({
                 ...item,
                 media_type: 'tv' as const,
             }));

@@ -22,11 +22,15 @@ export interface Education {
   order: number;
 }
 
+/** The `metadata` JSON column holds everything but the key and the order. */
+type ExperienceMetadata = Omit<Experience, 'id' | 'order'>;
+type EducationMetadata = Omit<Education, 'id' | 'order'>;
+
 // Internal type for the database row
 interface SiteContentRow {
   key: string;
   section: string;
-  metadata: any;
+  metadata: Partial<ExperienceMetadata> | Partial<EducationMetadata>;
   content: string;
   order: number;
 }
@@ -41,7 +45,7 @@ export function useExperience() {
   const mappedData: Experience[] = data.map(row => ({
     id: row.key,
     order: row.order,
-    ...(row.metadata as any)
+    ...(row.metadata as ExperienceMetadata)
   }));
 
   return {
@@ -56,7 +60,7 @@ export function useExperience() {
     removeExperience: removeItem,
     updateExperience: (key: string, updates: Partial<Experience>) => {
       const { order, ...metadataUpdates } = updates;
-      return updateItem({ id: key, updates: { ...(order !== undefined ? { order } : {}), metadata: metadataUpdates } as any });
+      return updateItem({ id: key, updates: { ...(order !== undefined ? { order } : {}), metadata: metadataUpdates } });
     },
   };
 }
@@ -71,7 +75,7 @@ export function useEducation() {
   const mappedData: Education[] = data.map(row => ({
     id: row.key,
     order: row.order,
-    ...(row.metadata as any)
+    ...(row.metadata as EducationMetadata)
   }));
 
   return {
@@ -86,7 +90,7 @@ export function useEducation() {
     removeEducation: removeItem,
     updateEducation: (key: string, updates: Partial<Education>) => {
       const { order, ...metadataUpdates } = updates;
-      return updateItem({ id: key, updates: { ...(order !== undefined ? { order } : {}), metadata: metadataUpdates } as any });
+      return updateItem({ id: key, updates: { ...(order !== undefined ? { order } : {}), metadata: metadataUpdates } });
     },
   };
 }

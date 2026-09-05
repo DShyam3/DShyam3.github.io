@@ -20,7 +20,7 @@ export function useVisitedCountries() {
 
     const fetchCountries = useCallback(async () => {
         try {
-            const { data, error } = await (supabase.from('visited_countries') as any)
+            const { data, error } = await supabase.from('visited_countries')
                 .select('*')
                 .order('country_name', { ascending: true });
             if (error) throw error;
@@ -39,7 +39,7 @@ export function useVisitedCountries() {
     const addCountry = async (countryCode: string, countryName: string) => {
         try {
             const flag_url = getFlagUrl(countryCode);
-            const { error } = await (supabase.from('visited_countries') as any)
+            const { error } = await supabase.from('visited_countries')
                 .insert({ country_code: countryCode, country_name: countryName, flag_url });
             if (error) throw error;
             await fetchCountries();
@@ -52,7 +52,7 @@ export function useVisitedCountries() {
 
     const removeCountry = async (countryCode: string) => {
         try {
-            const { error } = await (supabase.from('visited_countries') as any)
+            const { error } = await supabase.from('visited_countries')
                 .delete()
                 .eq('country_code', countryCode);
             if (error) throw error;

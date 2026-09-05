@@ -43,7 +43,7 @@ export function useSchedule() {
       const mapped: ScheduleItem[] = (data || []).map((item) => ({
         id: item.id.toString(),
         watchlistItemId: (item.tv_show_id || item.movie_id || '').toString(),
-        day: item.day_of_week as any,
+        day: item.day_of_week as ScheduleItem['day'],
         category: item.tv_show_id ? 'TV Shows' : 'Movies',
       }));
 
@@ -62,7 +62,7 @@ export function useSchedule() {
   const addToSchedule = async (item: Omit<ScheduleItem, 'id'>) => {
     try {
       const isTVShow = item.category === 'TV Shows';
-      const payload: any = {
+      const payload = {
         day_of_week: item.day,
         tv_show_id: isTVShow ? parseInt(item.watchlistItemId) : null,
         movie_id: !isTVShow ? parseInt(item.watchlistItemId) : null,

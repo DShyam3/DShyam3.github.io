@@ -21,9 +21,10 @@ import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 
 interface ScheduleItemProps {
-  scheduleItem: any;
+  scheduleItem: ScheduleEntry;
   item: WatchlistItem;
   removeFromSchedule?: (id: string) => void;
   updateScheduleDay?: (
@@ -50,7 +51,7 @@ interface ScheduleItemProps {
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
   getAutoStatus: (item: WatchlistItem) => string | undefined;
-  addToSchedule?: (item: Omit<any, 'id'>) => void;
+  addToSchedule?: (item: Omit<ScheduleEntry, 'id'>) => void;
   isInSchedule: (watchlistItemId: string) => boolean;
   onMoveToFavourites?: (item: WatchlistItem) => void;
 }

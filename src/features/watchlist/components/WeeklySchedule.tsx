@@ -1,10 +1,11 @@
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { ScheduleItem } from './ScheduleItem';
+import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 
 interface WeeklyScheduleProps {
     DAYS: readonly ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
-    getScheduleForDay: (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => any[];
+    getScheduleForDay: (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => ScheduleEntry[];
     removeFromSchedule?: (id: string) => void;
     updateScheduleDay?: (id: string, newDay: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => void;
     watchlist: WatchlistItem[];
@@ -13,7 +14,7 @@ interface WeeklyScheduleProps {
     isSeasonWatched: (showId: string, season: Season) => boolean;
     getAutoStatus: (item: WatchlistItem) => string | undefined;
     onRemoveWatchlist?: (id: string) => void;
-    addToSchedule?: (item: Omit<any, 'id'>) => void;
+    addToSchedule?: (item: Omit<ScheduleEntry, 'id'>) => void;
     isInSchedule: (watchlistItemId: string) => boolean;
     onMoveToFavourites?: (item: WatchlistItem) => void;
 }

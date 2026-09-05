@@ -42,7 +42,7 @@ export function useGoogleBooks() {
       const data = await response.json();
 
       const filteredResults = (data.items || []).filter(
-        (item: any) => item.volumeInfo,
+        (item: GoogleBookResult) => item.volumeInfo,
       );
       setResults(filteredResults);
     } catch (error) {

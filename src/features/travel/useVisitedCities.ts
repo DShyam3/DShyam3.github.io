@@ -18,7 +18,7 @@ export function useVisitedCities() {
 
     const fetchCities = useCallback(async () => {
         try {
-            const { data, error } = await (supabase.from('visited_cities') as any)
+            const { data, error } = await supabase.from('visited_cities')
                 .select('*')
                 .order('city_name', { ascending: true });
             if (error) throw error;
@@ -62,7 +62,7 @@ export function useVisitedCities() {
         dotRow: number
     ) => {
         try {
-            const { error } = await (supabase.from('visited_cities') as any)
+            const { error } = await supabase.from('visited_cities')
                 .insert({
                     country_code: countryCode,
                     city_name: cityName,
@@ -82,7 +82,7 @@ export function useVisitedCities() {
 
     const removeCity = async (id: number) => {
         try {
-            const { error } = await (supabase.from('visited_cities') as any)
+            const { error } = await supabase.from('visited_cities')
                 .delete()
                 .eq('id', id);
             if (error) throw error;

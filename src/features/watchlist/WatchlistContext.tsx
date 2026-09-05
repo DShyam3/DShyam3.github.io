@@ -11,6 +11,25 @@ import React, {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { buildMovieUpdates, buildShowUpdates } from './sync-logic';
+import type {
+  TMDBDetails,
+  TMDBEpisode,
+  TMDBSeasonDetails,
+} from './tmdb-types';
+
+/** A TMDB episode that survived the "has an air date" filter. */
+type AiredEpisode = TMDBEpisode & { air_date: string };
+
+/** One `tv_show_episodes` row on its way into an upsert. */
+interface EpisodeUpsert {
+  season_id: number;
+  episode_number: number;
+  title: string;
+  runtime?: number;
+  release_date: string;
+  watched: boolean;
+}
+const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
 
 // Returns a referentially-stable function that always calls the latest
@@ -18,7 +37,7 @@ import { useAuth } from '@/contexts/AuthContext';
 // function reference on every render (which defeats React.memo on
 // downstream components like WatchlistCard) without having to hand-audit
 // dependency arrays for every handler in this file.
-function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
+function useStableCallback<T extends (...args: never[]) => unknown>(fn: T): T {
   const ref = useRef(fn);
   ref.current = fn;
   return useCallback((...args: Parameters<T>) => ref.current(...args), []) as T;
@@ -26,7 +45,10 @@ function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
 
 // Routes TMDB requests through the tmdb-proxy edge function so the TMDB API
 // key never has to live in (or be inlined into) the client bundle.
-async function fetchTMDBProxy(endpoint: string, params: Record<string, string> = {}) {
+async function fetchTMDBProxy<T>(
+  endpoint: string,
+  params: Record<string, string> = {},
+): Promise<T> {
   // The installed @supabase/supabase-js version has no `queryParams` option
   // on invoke() -- it's silently dropped, not an error, so this failed
   // with no indication why. invoke() just concatenates its first argument
@@ -37,7 +59,7 @@ async function fetchTMDBProxy(endpoint: string, params: Record<string, string> =
     method: 'GET',
   });
   if (error) throw error;
-  return data;
+  return data as T;
 }
 
 export interface Episode {
@@ -91,6 +113,9 @@ export interface WatchlistItem {
   series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
 }
 
+/** The four buckets the favourites grid groups by. */
+export type FavouriteCategory = 'Bollywood' | 'Hollywood' | 'Anime' | 'Others';
+
 export interface FavouriteItem {
   id: string;
   title: string;
@@ -98,7 +123,7 @@ export interface FavouriteItem {
   media_type: 'movie' | 'tv';
   tmdb_id?: number;
   created_at: string;
-  category: string;
+  category: FavouriteCategory;
 }
 
 // 'auto'   = the pg_cron edge function fired on schedule, no browser involved
@@ -228,7 +253,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           .from('movies')
           .select('id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime')
           .order('title', { ascending: true }),
-        (supabase.from('tv_shows') as any)
+        supabase.from('tv_shows')
           // Deliberately not `tv_show_episodes (*)`. Every mount of this page
           // was pulling all ~7,600 episode rows in full (~474 kB) purely to
           // render a grid of posters. The grid needs episode_number and
@@ -245,7 +270,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 `,
           )
           .order('title', { ascending: true }),
-        (supabase.from('favourites') as any).select('*').order('title', { ascending: true }),
+        supabase.from('favourites').select('*').order('title', { ascending: true }),
       ]);
 
       if (moviesResult.error) throw moviesResult.error;
@@ -278,7 +303,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       );
 
       const mappedShows: WatchlistItem[] = (showsResult.data || []).map(
-        (show: any) => ({
+        (show) => ({
           id: show.id.toString(),
           title: show.title,
           category: 'TV Shows' as const,
@@ -301,21 +326,21 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             ? new Date(show.release_date).toISOString()
             : new Date().toISOString(),
           streaming_platform: show.platform,
-          series_status: show.status as any,
+          series_status: show.status as WatchlistItem['series_status'],
           episodesLoaded: false,
           seasons: (show.tv_show_seasons || [])
-            .sort((a: any, b: any) => a.season_number - b.season_number)
-            .map((season: any) => ({
+            .sort((a, b) => a.season_number - b.season_number)
+            .map((season) => ({
               id: season.id,
               season_number: season.season_number,
               release_date: season.release_date || undefined,
               watched: season.watched,
               episodes: (season.tv_show_episodes || [])
                 .sort(
-                  (a: any, b: any) =>
+                  (a, b) =>
                     (a.episode_number || 0) - (b.episode_number || 0),
                 )
-                .map((ep: any) => ({
+                .map((ep) => ({
                   id: ep.id,
                   episode_number: ep.episode_number,
                   // Filled in by loadShowEpisodes.
@@ -329,14 +354,16 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       setWatchlist([...mappedMovies, ...mappedShows]);
 
       const mappedFavourites: FavouriteItem[] = (favouritesResult.data || []).map(
-        (fav: any) => ({
+        (fav) => ({
           id: fav.id.toString(),
           title: fav.title,
           poster: fav.poster || undefined,
-          media_type: fav.media_type,
+          // Both are plain text columns; the unions are this file's contract
+          // for what the add flows are allowed to write.
+          media_type: fav.media_type as FavouriteItem['media_type'],
           tmdb_id: fav.tmdb_id || undefined,
           created_at: fav.created_at || new Date().toISOString(),
-          category: fav.category || 'Hollywood',
+          category: (fav.category as FavouriteCategory) || 'Hollywood',
         }),
       );
       setFavourites(mappedFavourites);
@@ -370,7 +397,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     loadedDescriptionsRef.current.add(item.id);
 
     const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
-    const { data, error } = await (supabase.from(table) as any)
+    const { data, error } = await supabase.from(table)
       .select('overview')
       .eq('id', parseInt(item.id))
       .maybeSingle();
@@ -402,9 +429,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     if (loadedShowsRef.current.has(showId)) return;
     loadedShowsRef.current.add(showId);
 
-    const { data, error } = await (supabase.from('tv_show_seasons') as any)
+    const { data, error } = await supabase.from('tv_show_seasons')
       .select('id, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)')
-      .eq('tv_show_id', showId);
+      .eq('tv_show_id', parseInt(showId));
 
     if (error) {
       // Allow a retry on the next open rather than leaving the show blank.
@@ -413,13 +440,21 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    /** One episode row as `loadShowEpisodes` selects it. */
+    type LoadedEpisode = {
+      episode_number: number;
+      title: string | null;
+      release_date: string | null;
+      runtime: number | null;
+    };
+
     // season id -> its full episode rows, keyed by episode number
-    const bySeason = new Map<number, Map<number, any>>();
-    (data || []).forEach((season: any) => {
+    const bySeason = new Map<number, Map<number, LoadedEpisode>>();
+    (data || []).forEach((season) => {
       bySeason.set(
         season.id,
         new Map(
-          (season.tv_show_episodes || []).map((ep: any) => [ep.episode_number, ep]),
+          (season.tv_show_episodes || []).map((ep) => [ep.episode_number, ep]),
         ),
       );
     });
@@ -452,26 +487,34 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     );
   }, []);
 
-  // Fetch sync log from Supabase
+  // Fetch sync log from Supabase. Admin-only, and not just as a matter of
+  // taste: `sync_log`'s RLS restricts reads to is_admin(), and migration
+  // 20260905160000 revoked anon's table grant on it outright, so calling this
+  // as a public visitor is a guaranteed 42501 -- a wasted round trip and a
+  // console error on every load of the page.
   const fetchSyncLog = useCallback(async () => {
+    if (!isAdmin) return;
     try {
-      const { data, error } = await (supabase.from('sync_log') as any)
+      const { data, error } = await supabase.from('sync_log')
         .select('*')
         .order('synced_at', { ascending: false })
         .limit(20);
       if (error) throw error;
       if (data) {
-        setSyncLog(data);
+        // `sync_type` and `status` are plain text columns; the union below is
+        // this file's contract for what the sync writers put in them.
+        const entries = data as SyncLogEntry[];
+        setSyncLog(entries);
         // Find most recent successful sync of any type
-        const lastSuccessful = data.find(
-          (e: SyncLogEntry) => e.status === 'success',
+        const lastSuccessful = entries.find(
+          (e) => e.status === 'success',
         );
         if (lastSuccessful) {
           setLastSyncTime(lastSuccessful.synced_at);
         }
         // Find most recent successful auto sync
-        const lastAutoSuccess = data.find(
-          (e: SyncLogEntry) => e.sync_type === 'auto' && e.status === 'success',
+        const lastAutoSuccess = entries.find(
+          (e) => e.sync_type === 'auto' && e.status === 'success',
         );
         if (lastAutoSuccess) {
           setLastAutoSyncTime(lastAutoSuccess.synced_at);
@@ -480,7 +523,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Error fetching sync log:', error);
     }
-  }, []);
+  }, [isAdmin]);
 
   // Log a sync event to Supabase
   const logSync = useCallback(
@@ -492,7 +535,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       errorMessage?: string,
     ) => {
       try {
-        await (supabase.from('sync_log') as any).insert({
+        await supabase.from('sync_log').insert({
           sync_type: syncType,
           status,
           items_synced: itemsSynced,
@@ -500,14 +543,14 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           error_message: errorMessage || null,
         });
         // Clean up old logs (keep last 50)
-        const { data: oldLogs } = await (supabase.from('sync_log') as any)
+        const { data: oldLogs } = await supabase.from('sync_log')
           .select('id')
           .order('synced_at', { ascending: false })
           .range(50, 1000);
         if (oldLogs && oldLogs.length > 0) {
-          await (supabase.from('sync_log') as any).delete().in(
+          await supabase.from('sync_log').delete().in(
             'id',
-            oldLogs.map((l: any) => l.id),
+            oldLogs.map((l) => l.id),
           );
         }
         await fetchSyncLog();
@@ -670,9 +713,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         }
       } else if (item.category === 'TV Shows') {
         try {
-          const { data: show, error: showError } = await (
-            supabase.from('tv_shows') as any
-          )
+          const { data: show, error: showError } = await supabase.from('tv_shows')
             .insert({
               title: item.title,
               platform: item.streaming_platform || 'Online',
@@ -691,19 +732,19 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           let failedSeasonCount = 0;
 
           if (item.tmdb_id) {
-            const showDetails = await fetchTMDBProxy(`tv/${item.tmdb_id}`);
+            const showDetails = await fetchTMDBProxy<TMDBDetails>(`tv/${item.tmdb_id}`);
             const validSeasons = (showDetails.seasons || []).filter(
               // Skip Season 0 and seasons with no episodes
-              (s: any) => s.season_number !== 0 && s.episode_count !== 0,
+              (s) => s.season_number !== 0 && s.episode_count !== 0,
             );
 
             // Seasons are independent of each other, so fetch/write them all
             // in parallel instead of one at a time.
             const results = await Promise.all(
-              validSeasons.map(async (s: any) => {
+              validSeasons.map(async (s) => {
                 try {
                   const [{ data: season, error: sErr }, sDetails] = await Promise.all([
-                    (supabase.from('tv_show_seasons') as any)
+                    supabase.from('tv_show_seasons')
                       .insert({
                         tv_show_id: show.id,
                         season_number: s.season_number,
@@ -711,26 +752,26 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       })
                       .select()
                       .single(),
-                    fetchTMDBProxy(`tv/${item.tmdb_id}/season/${s.season_number}`),
+                    fetchTMDBProxy<TMDBSeasonDetails>(
+                      `tv/${item.tmdb_id}/season/${s.season_number}`,
+                    ),
                   ]);
                   if (sErr) return false;
 
                   // Filter out TBA episodes (episodes with no air date)
-                  const validEpisodes = (sDetails.episodes || []).filter(
-                    (v: any) => v.air_date,
-                  );
+                  const validEpisodes = (sDetails.episodes || []).filter(hasAirDate);
                   if (validEpisodes.length > 0) {
-                    const eps = validEpisodes.map((v: any) => ({
+                    const eps = validEpisodes.map((v) => ({
                       season_id: season.id,
                       episode_number: v.episode_number,
                       title: v.name,
                       runtime: v.runtime || null,
                       release_date: v.air_date,
                     }));
-                    await (supabase.from('tv_show_episodes') as any).insert(eps);
+                    await supabase.from('tv_show_episodes').insert(eps);
                   } else {
                     // No valid episodes, remove the season
-                    await (supabase.from('tv_show_seasons') as any)
+                    await supabase.from('tv_show_seasons')
                       .delete()
                       .eq('id', season.id);
                   }
@@ -782,28 +823,26 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       if (itemToRemove.category === 'TV Shows') {
         // For TV shows, manually cascade delete seasons and episodes
         // First, get all seasons for this show
-        const { data: seasons } = await (
-          supabase.from('tv_show_seasons') as any
-        )
+        const { data: seasons } = await supabase.from('tv_show_seasons')
           .select('id')
           .eq('tv_show_id', parseInt(id));
 
         if (seasons && seasons.length > 0) {
-          const seasonIds = seasons.map((s: any) => s.id);
+          const seasonIds = seasons.map((s) => s.id);
 
           // Delete all episodes for these seasons
-          await (supabase.from('tv_show_episodes') as any)
+          await supabase.from('tv_show_episodes')
             .delete()
             .in('season_id', seasonIds);
 
           // Delete all seasons
-          await (supabase.from('tv_show_seasons') as any)
+          await supabase.from('tv_show_seasons')
             .delete()
             .eq('tv_show_id', parseInt(id));
         }
 
         // Finally, delete the TV show itself
-        const { error } = await (supabase.from('tv_shows') as any)
+        const { error } = await supabase.from('tv_shows')
           .delete()
           .eq('id', parseInt(id));
         if (error) throw error;
@@ -845,7 +884,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const { error } = await (supabase.from('favourites') as any).insert({
+      const { error } = await supabase.from('favourites').insert({
         title: item.title,
         poster: item.poster || null,
         media_type: item.media_type,
@@ -866,7 +905,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
   const removeFavourite = async (id: string) => {
     try {
-      const { error } = await (supabase.from('favourites') as any)
+      const { error } = await supabase.from('favourites')
         .delete()
         .eq('id', parseInt(id));
       if (error) throw error;
@@ -907,7 +946,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         (e) => e.episode_number === episodeNumber,
       );
       if (episode?.id) {
-        await (supabase.from('tv_show_episodes') as any)
+        await supabase.from('tv_show_episodes')
           .update({
             watched: nextWatched,
           })
@@ -960,7 +999,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         .filter((ep) => ep.id)
         .map((ep) => ep.id!);
       if (episodeIds.length > 0) {
-        await (supabase.from('tv_show_episodes') as any)
+        await supabase.from('tv_show_episodes')
           .update({ watched: nextWatched })
           .in('id', episodeIds);
       }
@@ -1002,7 +1041,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       const needsOverview = new Set<string>();
       const [emptyMovies, emptyShows] = await Promise.all([
         supabase.from('movies').select('id').is('overview', null),
-        (supabase.from('tv_shows') as any).select('id').is('overview', null),
+        supabase.from('tv_shows').select('id').is('overview', null),
       ]);
       (emptyMovies.data ?? []).forEach((row: { id: number }) =>
         needsOverview.add(String(row.id)),
@@ -1024,7 +1063,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           chunk.map(async (item) => {
             try {
               const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie';
-              const data = await fetchTMDBProxy(`${tmdbType}/${item.tmdb_id}`, {
+              const data = await fetchTMDBProxy<TMDBDetails>(`${tmdbType}/${item.tmdb_id}`, {
                 append_to_response: 'watch/providers',
               });
               if (!data.id) return;
@@ -1039,13 +1078,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 if (data.status && item.series_status && data.status !== item.series_status) {
                   changesSummary.push(`${item.title}: status → ${data.status}`);
                 }
-                await (supabase.from('tv_shows') as any)
+                await supabase.from('tv_shows')
                   .update(tvUpdates)
                   .eq('id', parseInt(item.id));
 
                 // Season 0 Cleanup Logic
                 const tmdbSeason0 = data.seasons?.find(
-                  (s: any) => s.season_number === 0,
+                  (s) => s.season_number === 0,
                 );
                 const localSeason0 = item.seasons?.find(
                   (s) => s.season_number === 0,
@@ -1074,7 +1113,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                   }
 
                   if (shouldDelete) {
-                    await (supabase.from('tv_show_seasons') as any)
+                    await supabase.from('tv_show_seasons')
                       .delete()
                       .eq('id', localSeason0.id);
                   }
@@ -1083,7 +1122,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                 // Sync regular seasons (skip Season 0 and empty announced seasons)
                 if (data.seasons) {
                   await Promise.all(
-                    data.seasons.map(async (s: any) => {
+                    data.seasons.map(async (s) => {
                       if (s.season_number === 0) return;
 
                       // Skip seasons that have been announced but have no episodes yet
@@ -1096,7 +1135,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                           localEmptySeason &&
                           localEmptySeason.episodes.length === 0
                         ) {
-                          await (supabase.from('tv_show_seasons') as any)
+                          await supabase.from('tv_show_seasons')
                             .delete()
                             .eq('id', localEmptySeason.id);
                         }
@@ -1104,9 +1143,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       }
 
                       try {
-                        const { data: dbS, error: sErr } = await (
-                          supabase.from('tv_show_seasons') as any
-                        )
+                        const { data: dbS, error: sErr } = await supabase.from('tv_show_seasons')
                           .upsert(
                             {
                               tv_show_id: parseInt(item.id),
@@ -1145,16 +1182,14 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                           hasEpisodeCountChanged;
 
                         if (shouldUpdateEpisodes) {
-                          const sDetails = await fetchTMDBProxy(
+                          const sDetails = await fetchTMDBProxy<TMDBSeasonDetails>(
                             `tv/${item.tmdb_id}/season/${s.season_number}`,
                           );
                           if (
                             sDetails.episodes &&
                             sDetails.episodes.length > 0
                           ) {
-                            const validEpisodes = sDetails.episodes.filter(
-                              (v: any) => v.air_date,
-                            );
+                            const validEpisodes = sDetails.episodes.filter(hasAirDate);
 
                             if (validEpisodes.length > 0) {
                               if (validEpisodes.length > localEpisodeCount) {
@@ -1163,37 +1198,33 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                 );
                               }
                               // Read existing watched states to preserve them during upsert
-                              const { data: existingEps } = await (
-                                supabase.from('tv_show_episodes') as any
-                              )
+                              const { data: existingEps } = await supabase.from('tv_show_episodes')
                                 .select('episode_number, watched')
                                 .eq('season_id', dbS.id);
                               const watchedMap = new Map<number, boolean>(
-                                (existingEps || []).map((e: any) => [
+                                (existingEps || []).map((e) => [
                                   e.episode_number,
                                   e.watched ?? false,
                                 ]),
                               );
 
-                              const eps = validEpisodes.map((v: any) => {
-                                const ep: any = {
+                              const eps = validEpisodes.map((v) => {
+                                const ep: EpisodeUpsert = {
                                   season_id: dbS.id,
                                   episode_number: v.episode_number,
+                                  title:
+                                    v.name || `Episode ${v.episode_number}`,
+                                  release_date: v.air_date,
+                                  // Preserve existing watched state
+                                  watched:
+                                    watchedMap.get(v.episode_number) ?? false,
                                 };
-                                ep.title =
-                                  v.name || `Episode ${v.episode_number}`;
                                 if (v.runtime) ep.runtime = v.runtime;
                                 else if (data.episode_run_time?.[0])
                                   ep.runtime = data.episode_run_time[0];
-                                ep.release_date = v.air_date;
-                                // Preserve existing watched state
-                                ep.watched =
-                                  watchedMap.get(v.episode_number) ?? false;
                                 return ep;
                               });
-                              const { error: upsertError } = await (
-                                supabase.from('tv_show_episodes') as any
-                              ).upsert(eps, {
+                              const { error: upsertError } = await supabase.from('tv_show_episodes').upsert(eps, {
                                 onConflict: 'season_id,episode_number',
                               });
                               if (upsertError)
@@ -1203,30 +1234,26 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                 );
 
                               const validEpisodeNumbers = validEpisodes.map(
-                                (v: any) => v.episode_number,
+                                (v) => v.episode_number,
                               );
-                              const { data: existingEpisodes } = await (
-                                supabase.from('tv_show_episodes') as any
-                              )
+                              const { data: existingEpisodes } = await supabase.from('tv_show_episodes')
                                 .select('id, episode_number')
                                 .eq('season_id', dbS.id);
 
                               if (existingEpisodes) {
                                 const episodesToDelete =
                                   existingEpisodes.filter(
-                                    (e: any) =>
+                                    (e) =>
                                       !validEpisodeNumbers.includes(
                                         e.episode_number,
                                       ),
                                   );
                                 if (episodesToDelete.length > 0) {
-                                  await (
-                                    supabase.from('tv_show_episodes') as any
-                                  )
+                                  await supabase.from('tv_show_episodes')
                                     .delete()
                                     .in(
                                       'id',
-                                      episodesToDelete.map((e: any) => e.id),
+                                      episodesToDelete.map((e) => e.id),
                                     );
                                 }
                               }
@@ -1242,7 +1269,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                   ),
                               );
                               if (!hasWatched) {
-                                await (supabase.from('tv_show_seasons') as any)
+                                await supabase.from('tv_show_seasons')
                                   .delete()
                                   .eq('id', dbS.id);
                               }
@@ -1259,7 +1286,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                                 ),
                             );
                             if (!hasWatched) {
-                              await (supabase.from('tv_show_seasons') as any)
+                              await supabase.from('tv_show_seasons')
                                 .delete()
                                 .eq('id', dbS.id);
                             }
@@ -1276,7 +1303,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                     item.seasons?.filter((s) => s.season_number !== 0) || [];
                   for (const localSeason of localSeasons) {
                     const existsInTmdb = data.seasons.some(
-                      (ts: any) =>
+                      (ts) =>
                         ts.season_number === localSeason.season_number,
                     );
                     if (!existsInTmdb) {
@@ -1288,7 +1315,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                           ),
                       );
                       if (!hasWatchedEps) {
-                        await (supabase.from('tv_show_seasons') as any)
+                        await supabase.from('tv_show_seasons')
                           .delete()
                           .eq('id', localSeason.id);
                       }

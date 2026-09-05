@@ -4,13 +4,16 @@ import { MapPin, ArrowLeft, Search, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import type { VisitedCity } from './useVisitedCities';
 
-interface City {
+export interface City {
   id: string;
   city_name: string;
   country_code: string;
   dot_col: number;
   dot_row: number;
+  lat: number;
+  lon: number;
 }
 
 interface CountryCityPanelProps {
@@ -18,7 +21,7 @@ interface CountryCityPanelProps {
   countryName: string;
   flagUrl: string;
   cities: City[];
-  visitedCities: any[];
+  visitedCities: VisitedCity[];
   isAdmin?: boolean;
   onAddCity: (city: City) => Promise<void>;
   onRemoveCity: (id: string) => Promise<void>;
@@ -120,7 +123,7 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
                         name: city.city_name,
                         title: `Remove ${city.city_name}`,
                         confirmLabel: 'Remove',
-                        onConfirm: () => onRemoveCity(city.id),
+                        onConfirm: () => onRemoveCity(String(city.id)),
                       })
                     }
                     className="city-remove-btn opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 hover:text-destructive transition-all"

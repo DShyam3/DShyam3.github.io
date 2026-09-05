@@ -12,10 +12,16 @@ import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { Globe, MapPin, Search, Plus, X, Loader2, ChevronDown } from 'lucide-react';
-import { CountryCityPanel } from '@/features/travel/CountryCityPanel';
+import { CountryCityPanel, type City } from '@/features/travel/CountryCityPanel';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import '@/pages/Index.css';
+
+/** The slice of restcountries.com's shape that `public/countries.json` is read for. */
+interface RestCountry {
+    cca2: string;
+    name: { common: string };
+}
 
 type ViewMode = 'countries' | 'cities';
 
@@ -64,11 +70,11 @@ const Travel = () => {
                 try {
                     const res = await fetch('/countries.json');
                     if (!res.ok) return;
-                    const data = await res.json();
-                    setAllCountries(data.map((c: any) => ({
+                    const data: RestCountry[] = await res.json();
+                    setAllCountries(data.map((c) => ({
                         code: c.cca2,
                         name: c.name.common
-                    })).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+                    })).sort((a, b) => a.name.localeCompare(b.name)));
                 } catch (e) {
                     console.error('[Travel] Failed to fetch countries list:', e);
                 }
@@ -191,8 +197,7 @@ const Travel = () => {
      * too if it is not already.
      */
     const handleAddCity = useCallback(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CountryCityPanel's City shape
-        async (city: any): Promise<void> => {
+        async (city: City): Promise<void> => {
             if (!selectedCountry) return;
             if (!visitedCodes.includes(selectedCountry.code)) {
                 await addCountry(selectedCountry.code, selectedCountry.name);
@@ -345,7 +350,7 @@ const Travel = () => {
                                             countryCode={selectedCountry.code}
                                             countryName={selectedCountry.name}
                                             flagUrl={selectedCountry.flagUrl}
-                                            cities={cityMapLoaded ? getCitiesForCountry(selectedCountry.code).map((c: any) => ({
+                                            cities={cityMapLoaded ? getCitiesForCountry(selectedCountry.code).map((c) => ({
                                                 id: `${c.lat},${c.lon}`,
                                                 city_name: c.name,
                                                 country_code: selectedCountry.code,
@@ -356,7 +361,7 @@ const Travel = () => {
                                             })) : []}
                                             visitedCities={citiesByCountry[selectedCountry.code] ?? []}
                                             isAdmin={isAdmin}
-                                            onAddCity={(city: any) => handleAddCity(city)}
+                                            onAddCity={(city) => handleAddCity(city)}
                                             onRemoveCity={async (id: string) => { await removeCity(Number(id)); }}
                                             onBack={handleCityPanelBack}
                                         />

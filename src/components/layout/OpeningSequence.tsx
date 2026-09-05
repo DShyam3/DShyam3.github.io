@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { ASSETS_URL } from '@/lib/constants';
 
@@ -9,6 +9,24 @@ interface OpeningSequenceProps {
     onComplete: () => void;
 }
 
+// Module scope, not component scope: none of this depends on props or state,
+// and keeping it here is what lets the intro effect below honestly declare an
+// empty dependency array.
+const CONFIG = {
+    fullText: "Hi, I'm Dhyan Shyam",
+    typeSpeed: 100,
+    initialDelay: 600
+};
+
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const typeText = async (fullText: string, setter: (value: string) => void) => {
+    for (let i = 0; i <= fullText.length; i++) {
+        setter(fullText.slice(0, i));
+        await wait(CONFIG.typeSpeed);
+    }
+};
+
 export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
     const [text, setText] = useState('');
     const [showPressStart, setShowPressStart] = useState(false);
@@ -16,26 +34,11 @@ export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
     const [typingDone, setTypingDone] = useState(false);
     const matrixRef = useRef<HTMLDivElement>(null);
 
-    const CONFIG = {
-        fullText: "Hi, I'm Dhyan Shyam",
-        typeSpeed: 100,
-        initialDelay: 600
-    };
-
-    const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    const typeText = async (fullText: string, setter: (value: string) => void) => {
-        for (let i = 0; i <= fullText.length; i++) {
-            setter(fullText.slice(0, i));
-            await wait(CONFIG.typeSpeed);
-        }
-    };
-
     // Delete animation via simple JS interval + direct DOM visibility toggling.
     // We avoid CSS transitions because mobile browsers (especially Safari) 
     // aggressively coalesce simultaneous transition delays, causing "blocky" deletion.
     // We avoid React state to prevent slow, full-component re-renders.
-    const deleteTextDOM = (): Promise<void> => {
+    const deleteTextDOM = useCallback((): Promise<void> => {
         return new Promise(resolve => {
             const wrapper = matrixRef.current;
             if (!wrapper) { resolve(); return; }
@@ -75,7 +78,7 @@ export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
 
             requestAnimationFrame(hideNext);
         });
-    };
+    }, []);
 
 
     useEffect(() => {
@@ -96,7 +99,7 @@ export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
         };
     }, []);
 
-    const handleStart = async () => {
+    const handleStart = useCallback(async () => {
         if (isAnimating) return;
         setIsAnimating(true);
         setShowPressStart(false);
@@ -118,7 +121,7 @@ export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
         // Restore scroll before completing
         document.body.style.overflow = '';
         onComplete();
-    };
+    }, [isAnimating, deleteTextDOM, onComplete]);
 
     useEffect(() => {
         const handleKeyPress = (e: KeyboardEvent) => {
@@ -130,7 +133,7 @@ export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
 
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [showPressStart, isAnimating]);
+    }, [showPressStart, isAnimating, handleStart]);
 
     // Use the final full text once typing is done to avoid re-renders
     const displayText = typingDone ? CONFIG.fullText : text;

@@ -23,9 +23,17 @@ function defaultFor<T extends CollectionRow>(facet: FacetDef<T>): string {
 export function useCollection<T extends CollectionRow, R>(config: CollectionConfig<T, R>) {
   const { data, loading, addItem, updateItem, removeItem } = useSupabaseTable<T>(
     config.table,
-    config.sortColumn
-      ? { orderBy: { column: config.sortColumn, ascending: config.sortAscending ?? false } }
-      : undefined,
+    {
+      columns: config.columns,
+      ...(config.sortColumn
+        ? {
+            orderBy: {
+              column: config.sortColumn,
+              ascending: config.sortAscending ?? false,
+            },
+          }
+        : {}),
+    },
   );
 
   // One entry per facet. Most start at ALL (no filter); a facet that opts out

@@ -1,4 +1,5 @@
 import type { WatchlistItem } from './WatchlistContext';
+import type { TMDBDetails, TMDBRegionProviders } from './tmdb-types';
 
 /**
  * The decisions the watchlist sync makes, with no Supabase client, no React
@@ -32,11 +33,11 @@ export const PLATFORM_ALLOWLIST: { tmdbNames: string[]; displayName: string }[] 
   { tmdbNames: ['Amazon Prime Video'], displayName: 'Prime Video' },
   { tmdbNames: ['Apple TV Plus', 'Apple TV+', 'Apple TV'], displayName: 'Apple TV+' },
   { tmdbNames: ['BBC iPlayer'], displayName: 'BBC iPlayer' },
+  { tmdbNames: ['ITVX'], displayName: 'ITVX' },
 ];
 
 /** Pick a display platform from a TMDB `watch/providers` region block. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw TMDB payload
-export function getPlatform(providers: any): string {
+export function getPlatform(providers: TMDBRegionProviders | undefined): string {
   if (!providers) return 'Online';
 
   const available = [
@@ -74,8 +75,7 @@ export function getPlatform(providers: any): string {
  */
 export function buildCommonUpdates(
   item: Pick<WatchlistItem, 'id' | 'image_url' | 'description' | 'genres'>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw TMDB payload
-  data: any,
+  data: TMDBDetails,
   imageBaseUrl: string,
   needsOverview?: Set<string>,
 ): Record<string, unknown> {
@@ -96,7 +96,7 @@ export function buildCommonUpdates(
     updates.release_date = data.release_date || data.first_air_date;
   }
   if (!item.genres?.length && data.genres) {
-    updates.genre = data.genres.map((g: { name: string }) => g.name).join(', ');
+    updates.genre = data.genres.map((g) => g.name).join(', ');
   }
   updates.platform = getPlatform(data['watch/providers']?.results?.GB);
 
@@ -106,8 +106,7 @@ export function buildCommonUpdates(
 /** Movie-only columns layered on top of the common ones. */
 export function buildMovieUpdates(
   item: Pick<WatchlistItem, 'id' | 'image_url' | 'description' | 'genres' | 'year'>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw TMDB payload
-  data: any,
+  data: TMDBDetails,
   imageBaseUrl: string,
   needsOverview?: Set<string>,
 ): Record<string, unknown> {
@@ -126,8 +125,7 @@ export function buildMovieUpdates(
 /** TV-only columns. `status` here is the series status, not a watch status. */
 export function buildShowUpdates(
   item: Pick<WatchlistItem, 'id' | 'image_url' | 'description' | 'genres'>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw TMDB payload
-  data: any,
+  data: TMDBDetails,
   imageBaseUrl: string,
   needsOverview?: Set<string>,
 ): Record<string, unknown> {
