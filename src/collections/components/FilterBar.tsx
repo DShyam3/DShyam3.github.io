@@ -38,6 +38,13 @@ export function FilterBar<T extends CollectionRow, R>({
     // items-start, not items-center: the search box lines up with the *first*
     // facet row rather than floating between two of them, which is what left
     // the gap between "Tech + EDC" and "All" looking like dead space.
+    //
+    // Each facet row wraps rather than scrolling. The old `overflow-x-auto
+    // scrollbar-hide` hid options off the right edge with no scrollbar, no
+    // fade and no arrows, so on a narrow viewport a scrolled row silently
+    // dropped "Tech + EDC" with nothing to say it was still there. The
+    // interpuncts went with it: a wrapped row leaves one dangling at the end
+    // of a line, so spacing carries the separation instead.
     <div className="flex flex-col md:flex-row md:items-start justify-between border-b border-border/50 px-4 md:px-0 gap-4 md:gap-6 py-3 md:py-2">
       <div className="flex flex-col flex-1 min-w-0">
         {config.facets.map((facet) => {
@@ -53,33 +60,31 @@ export function FilterBar<T extends CollectionRow, R>({
           return (
             <nav
               key={facet.key}
-              className="flex flex-nowrap items-center gap-2 md:gap-4 py-1.5 overflow-x-auto scrollbar-hide"
+              aria-label={`${facet.key} filter`}
+              className="flex flex-wrap items-center gap-x-4 md:gap-x-5 gap-y-1 py-1.5"
             >
-              {options.map((option, index) => (
-                <div key={option.key} className="flex items-center gap-2 md:gap-4 shrink-0">
-                  <button
-                    onClick={() => setFilter(facet.key, option.key)}
-                    className={cn(
-                      'nav-link relative py-1 shrink-0',
-                      active === option.key && 'nav-link-active',
-                    )}
-                  >
-                    <DotMatrixText
-                      text={option.label.toUpperCase()}
-                      size="xs"
-                      wrap={false}
-                    />
-                    <DotMatrixText
-                      text={`(${countFor(facet.key, option.key)})`}
-                      size="xs"
-                      wrap={false}
-                      className="ml-1.5"
-                    />
-                  </button>
-                  {index < options.length - 1 && (
-                    <span className="text-muted-foreground/30 hidden md:inline">·</span>
+              {options.map((option) => (
+                <button
+                  key={option.key}
+                  onClick={() => setFilter(facet.key, option.key)}
+                  aria-pressed={active === option.key}
+                  className={cn(
+                    'nav-link relative py-1',
+                    active === option.key && 'nav-link-active',
                   )}
-                </div>
+                >
+                  <DotMatrixText
+                    text={option.label.toUpperCase()}
+                    size="xs"
+                    wrap={false}
+                  />
+                  <DotMatrixText
+                    text={`(${countFor(facet.key, option.key)})`}
+                    size="xs"
+                    wrap={false}
+                    className="ml-1.5"
+                  />
+                </button>
               ))}
             </nav>
           );

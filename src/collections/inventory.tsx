@@ -348,6 +348,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
         : undefined,
     // Wishlist items are things not owned yet, so they sit back until hovered.
     dimmed: (item) => Boolean(item.is_wishlist),
+    badge: (item) => (item.is_wishlist ? 'Wishlist' : undefined),
   },
 
   // Image fields take a pasted URL or an upload; uploads go to the photos

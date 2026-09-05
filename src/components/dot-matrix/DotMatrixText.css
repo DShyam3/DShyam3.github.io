@@ -52,6 +52,13 @@
   background-color: transparent;
 }
 
+/* Square cells for the glyphs that are a grid rather than a drawing: a round
+   dot large enough to read at a distance turns into a bubble, where a lit
+   square still reads as one pixel of a matrix. */
+.dot-matrix-glyph-dot-square {
+  border-radius: 1px;
+}
+
 .nav-link-active .dot-matrix-text {
   transform: scale(1.04);
   /* Grow rightwards only. Scaling from the centre pushed the first label ~2.5px

@@ -27,6 +27,7 @@ interface FaceProps {
   subtitle?: string;
   image?: string;
   excerpt?: string;
+  badge?: string;
   /** Right-aligned beside the title, e.g. a price. */
   meta?: string;
   href?: string;
@@ -74,7 +75,7 @@ function openableProps(openable: boolean, title: string, onOpen: () => void) {
  * neighbours and the wall lost its rhythm.
  */
 function MediaFace({
-  Fallback, imageFit, aspect, title, subtitle, image, excerpt, meta, href, actions, onOpen, openable,
+  Fallback, imageFit, aspect, title, subtitle, image, excerpt, badge, meta, href, actions, onOpen, openable,
 }: FaceProps) {
   // Stored image URLs go stale -- a cover moves, a shop takes a product photo
   // down -- and a broken <img> renders as alt text on a grey box. Falling back
@@ -112,6 +113,14 @@ function MediaFace({
           </div>
         )}
 
+        {badge && (
+          <div className="absolute top-2 left-2 z-10 pointer-events-none">
+            <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-background/80 text-muted-foreground backdrop-blur-sm shadow-sm border border-border/40">
+              {badge}
+            </span>
+          </div>
+        )}
+
         <div
           className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
@@ -121,31 +130,39 @@ function MediaFace({
       </div>
 
       <div className="p-3 flex flex-col gap-1 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-medium line-clamp-2 min-h-[2.5rem] min-w-0">
-            {!openable && href ? (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-primary transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {title}
-              </a>
-            ) : (
-              title
-            )}
-          </h3>
+        {/* The title gets the line to itself. It used to share one with the
+            price, which is `whitespace-nowrap shrink-0` and so took what it
+            needed first -- on a narrow card that left the title ~40px and
+            "Hades Wireless Gaming Headset" rendered as "Ha:". Letting the
+            price wrap under the title instead only moved the problem: it
+            landed at a different height on every card, according to how many
+            lines the title above it ran to, and the wall stopped lining up.
+            It sits with the brand instead, on a row that is always there. */}
+        <h3 className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+          {!openable && href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {title}
+            </a>
+          ) : (
+            title
+          )}
+        </h3>
+        <div className="flex items-baseline justify-between gap-2 min-h-[1rem]">
+          <p className="text-xs text-muted-foreground line-clamp-1 min-w-0">
+            {subtitle ?? '\u00a0'}
+          </p>
           {meta && (
             <span className="text-sm font-medium text-foreground/90 whitespace-nowrap shrink-0 tabular-nums">
               {meta}
             </span>
           )}
         </div>
-        <p className="text-xs text-muted-foreground line-clamp-1 min-h-[1rem]">
-          {subtitle ?? '\u00a0'}
-        </p>
         <p className="text-xs text-muted-foreground/80 line-clamp-2 min-h-[2rem]">
           {excerpt ?? '\u00a0'}
         </p>
@@ -155,7 +172,7 @@ function MediaFace({
 }
 
 /** No image: the text is the content. Beliefs. */
-function TextFace({ title, subtitle, actions, onOpen, openable }: FaceProps) {
+function TextFace({ title, subtitle, badge, actions, onOpen, openable }: FaceProps) {
   return (
     <div
       className={cn(
@@ -165,6 +182,11 @@ function TextFace({ title, subtitle, actions, onOpen, openable }: FaceProps) {
       onClick={openable ? onOpen : undefined}
     >
       <Quote className="h-6 w-6 text-muted-foreground/20 absolute top-4 left-4" />
+      {badge && (
+        <span className="absolute top-4 right-4 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+          {badge}
+        </span>
+      )}
       <p className="text-base font-serif italic pl-8 line-clamp-4 flex-1">"{title}"</p>
       {subtitle && <p className="text-sm text-muted-foreground mt-2 pl-8">— {subtitle}</p>}
       <div
@@ -296,6 +318,7 @@ export function EntityCard<T extends CollectionRow, R>({
           subtitle={subtitle}
           image={image}
           excerpt={excerpt}
+          badge={badge}
           meta={meta}
           href={href}
           actions={actions}

@@ -78,43 +78,72 @@ const Index = () => {
       <div className="selection:bg-primary/30">
         <div className="flex flex-col px-4 md:px-0 py-8 max-w-6xl mx-auto w-full">
           {/* Bento Grid Layout */}
-          <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
-            {/* LEFT COLUMN: About Me, Experience & Education */}
-            <div className="md:col-span-6 flex flex-col gap-6">
-              {/* Profile Image (Mobile Only) */}
-              <div className="flex md:hidden bg-primary/5 border hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative shrink-0 w-fit mx-auto">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
-                <img
-                  src={`${ASSETS_URL}/selfie.webp`}
-                  alt="Me"
-                  width={1952}
-                  height={2252}
-                  fetchPriority="high"
-                  className="max-w-[240px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
-                  onError={(e) => {
-                    e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
-                  }}
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+            {/* Profile Image (Mobile Only) */}
+            <div className="flex md:hidden bg-primary/5 border hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative shrink-0 w-fit mx-auto">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
+              <img
+                src={`${ASSETS_URL}/selfie.webp`}
+                alt="Me"
+                width={1952}
+                height={2252}
+                // Spread, and lowercase. React 18 does not recognise the
+                // camelCase `fetchPriority` -- that landed in 19 -- so it
+                // reached the DOM as an unknown attribute and warned on
+                // every render. The DOM attribute is lowercase, but
+                // @types/react only declares the camelCase prop, so the
+                // spelling the browser wants has to go in as a spread.
+                {...{ fetchpriority: 'high' }}
+                className="max-w-[240px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
+                onError={(e) => {
+                  e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
+                }}
+              />
+            </div>
+
+            <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div className="mb-6 w-full overflow-hidden">
+                <DotMatrixText
+                  text="ABOUT ME"
+                  size="lg"
+                  className="text-foreground tracking-widest pl-1"
                 />
               </div>
-
-              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="mb-6 w-full overflow-hidden">
-                  <DotMatrixText
-                    text="ABOUT ME"
-                    size="lg"
-                    className="text-foreground tracking-widest pl-1"
-                  />
-                </div>
-                <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
-                  <p>
-                    {siteContent.about_me_1 || "Welcome to my digital garden. I am Dhyan, a Robotic Engineer with a passion for building things that exist in both the physical and digital worlds."}
-                  </p>
-                  <p>
-                    {siteContent.about_me_2 || "This space is a curated collection of my beliefs, inspirations, and the tools I use to navigate life and engineering."}
-                  </p>
-                </div>
+              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+                <p>
+                  {siteContent.about_me_1 || "Welcome to my digital garden. I am Dhyan, a Robotic Engineer with a passion for building things that exist in both the physical and digital worlds."}
+                </p>
+                <p>
+                  {siteContent.about_me_2 || "This space is a curated collection of my beliefs, inspirations, and the tools I use to navigate life and engineering."}
+                </p>
               </div>
+            </div>
 
+            {/* Profile Image (Desktop Only) */}
+            <div className="hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
+              <img
+                src={`${ASSETS_URL}/selfie.webp`}
+                alt="Me"
+                width={1952}
+                height={2252}
+                // Spread, and lowercase. React 18 does not recognise the
+                // camelCase `fetchPriority` -- that landed in 19 -- so it
+                // reached the DOM as an unknown attribute and warned on
+                // every render. The DOM attribute is lowercase, but
+                // @types/react only declares the camelCase prop, so the
+                // spelling the browser wants has to go in as a spread.
+                {...{ fetchpriority: 'high' }}
+                className="max-w-[280px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
+                onError={(e) => {
+                  e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
+                }}
+              />
+            </div>
+
+            {/* Experience & Education, stacked so they share row 2 with
+                the projects card and both columns end level. */}
+            <div className="flex flex-col gap-6">
               {/* Experience */}
               <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
@@ -308,38 +337,19 @@ const Index = () => {
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Image, Projects */}
-            <div className="md:col-span-6 flex flex-col gap-6">
-              {/* Profile Image (Desktop Only) */}
-              <div className="hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
-                <img
-                  src={`${ASSETS_URL}/selfie.webp`}
-                  alt="Me"
-                  width={1952}
-                  height={2252}
-                  fetchPriority="high"
-                  className="max-w-[280px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
-                  onError={(e) => {
-                    e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
-                  }}
-                />
+            {/* Projects Portfolio (Full Fill Bottom) */}
+            <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
+                <FolderGit2 className="w-8 h-8 text-primary/70" />
               </div>
-
-              {/* Projects Portfolio (Full Fill Bottom) */}
-              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
-                  <FolderGit2 className="w-8 h-8 text-primary/70" />
-                </div>
-                <DotMatrixText
-                  text="PROJECTS PORTFOLIO"
-                  size="md"
-                  className="text-foreground mb-4 font-bold"
-                />
-                <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                  Curating my life's work. A collection of physical and digital creations is coming soon.
-                </p>
-              </div>
+              <DotMatrixText
+                text="PROJECTS PORTFOLIO"
+                size="md"
+                className="text-foreground mb-4 font-bold"
+              />
+              <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+                Curating my life's work. A collection of physical and digital creations is coming soon.
+              </p>
             </div>
           </div>
         </div>

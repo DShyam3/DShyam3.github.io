@@ -116,6 +116,19 @@ export function DotMatrixGlobe({
     }
     const projectedDotsRef = useRef<ProjectedDot[]>([]);
 
+    /** A point on the unit sphere, as `get3D` returns it. */
+    interface UnitVector {
+        ux: number;
+        uy: number;
+        uz: number;
+    }
+
+    // `draw` is declared further down the component, so it cannot go in the
+    // dependency array of the focus effect above it without a TDZ error. This
+    // ref hands that effect the current version without re-running it every
+    // time draw is rebuilt.
+    const drawRef = useRef<(time: number) => void>(() => {});
+
     const stars = useMemo(() => {
         return Array.from({ length: 400 }).map(() => ({
             x: Math.random(),
@@ -203,7 +216,7 @@ export function DotMatrixGlobe({
                 
                 requestRef.current = requestAnimationFrame((t) => {
                     animRef.current.lastTime = t;
-                    draw(t);
+                    drawRef.current(t);
                 });
             }
         }
@@ -515,7 +528,7 @@ export function DotMatrixGlobe({
                     let zNorm1 = 1, zNorm2 = 1;
 
                     if (progress > 0) {
-                        const projectP = (p: any) => {
+                        const projectP = (p: UnitVector) => {
                             const x3d = R * p.ux;
                             const y3d = R * p.uy;
                             const z3d = R * p.uz;
@@ -727,6 +740,8 @@ export function DotMatrixGlobe({
         }
 
     }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars]);
+
+    drawRef.current = draw;
 
     // Force animation loop restart when dependencies change
     useEffect(() => {

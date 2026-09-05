@@ -168,6 +168,16 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
   sortColumn?: string;
   sortAscending?: boolean;
 
+  /**
+   * Columns to fetch, as a PostgREST select list. Defaults to `*`.
+   *
+   * Worth setting when a table has a column the list does not render -- a long
+   * body or description that only the detail dialog shows. Every column named
+   * here has to exist, because the sort column, the search fields, the facet
+   * accessors and the edit form all read from the same rows.
+   */
+  columns?: string;
+
   /** Columns searched by the search box. Omit to hide the search box. */
   searchFields?: (keyof T & string)[];
 
@@ -191,7 +201,7 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     href?: (item: T) => string | undefined;
     /** Body text on the card face. */
     excerpt?: (item: T) => string | undefined;
-    /** Corner label in the detail dialog. */
+    /** Corner label on the card face and in the detail dialog. */
     badge?: (item: T) => string | undefined;
     /**
      * Show the image large in the detail dialog rather than as a thumbnail

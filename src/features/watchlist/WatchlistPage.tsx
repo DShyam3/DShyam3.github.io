@@ -8,7 +8,12 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
-import { useWatchlist, WatchlistItem, FavouriteItem } from '@/features/watchlist/useWatchlist';
+import {
+  useWatchlist,
+  WatchlistItem,
+  FavouriteItem,
+  type FavouriteCategory,
+} from '@/features/watchlist/useWatchlist';
 import { useSchedule } from '@/features/watchlist/useSchedule';
 import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
@@ -62,7 +67,10 @@ import { CardGrid } from '@/components/shared/CardGrid';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
-import { PlatformLogo, hasPlatformLogo } from '@/features/watchlist/components/PlatformLogo';
+import {
+  PlatformLogo,
+  hasPlatformLogo,
+} from '@/features/watchlist/components/PlatformLogo';
 
 const CATEGORIES = [
   'TV Shows',
@@ -72,12 +80,7 @@ const CATEGORIES = [
   'Favourites',
 ] as const;
 
-const FAV_CATEGORIES = [
-  'Bollywood',
-  'Hollywood',
-  'Anime',
-  'Others',
-] as const;
+const FAV_CATEGORIES = ['Bollywood', 'Hollywood', 'Anime', 'Others'] as const;
 
 const ALL_PLATFORMS = [
   'Netflix',
@@ -193,7 +196,9 @@ const Watchlist = () => {
   // fetch that happens before addWatchlistItem is even called -- without
   // this, a second click during that window (or the multi-second TV season
   // fetch) could kick off a duplicate add.
-  const [pendingResultIds, setPendingResultIds] = useState<Set<number>>(new Set());
+  const [pendingResultIds, setPendingResultIds] = useState<Set<number>>(
+    new Set(),
+  );
   const [showSyncLog, setShowSyncLog] = useState(false);
   const [visibleCount, setVisibleCount] = useState(48);
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -213,7 +218,8 @@ const Watchlist = () => {
 
   const [moveItem, setMoveItem] = useState<WatchlistItem | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
-  const [selectedFavCategory, setSelectedFavCategory] = useState<'Bollywood' | 'Hollywood' | 'Anime' | 'Others'>('Hollywood');
+  const [selectedFavCategory, setSelectedFavCategory] =
+    useState<FavouriteCategory>('Hollywood');
 
   /**
    * Auto-tag a favourite from TMDB's original_language. Shown as the "Auto:"
@@ -233,7 +239,9 @@ const Watchlist = () => {
       const itemKey = `${result.media_type}-${result.id}`;
       await addFavourite({
         title: result.title || result.name || '',
-        poster: result.poster_path ? getPosterUrl(result.poster_path) || undefined : undefined,
+        poster: result.poster_path
+          ? getPosterUrl(result.poster_path) || undefined
+          : undefined,
         media_type: result.media_type,
         tmdb_id: result.id,
         category: favouriteCategoryFor(result),
@@ -249,7 +257,8 @@ const Watchlist = () => {
       // callback it needs the guard stated: the dialog's search is disabled
       // for Upcoming and Currently Watching, and Favourites has its own
       // dialog, so only these two can actually reach here.
-      if (selectedCategory !== 'TV Shows' && selectedCategory !== 'Movies') return;
+      if (selectedCategory !== 'TV Shows' && selectedCategory !== 'Movies')
+        return;
 
       // pendingResultIds covers the whole click-to-completion span, including
       // the getMovieDetails fetch before addWatchlistItem is even called.
@@ -285,19 +294,23 @@ const Watchlist = () => {
 
   const handleOpenMoveDialog = useCallback((item: WatchlistItem) => {
     setMoveItem(item);
-    
+
     // Guess category based on title or genres
     const titleLower = item.title.toLowerCase();
-    const genresLower = item.genres?.map(g => g.toLowerCase()) || [];
-    
+    const genresLower = item.genres?.map((g) => g.toLowerCase()) || [];
+
     if (genresLower.includes('anime') || genresLower.includes('animation')) {
       setSelectedFavCategory('Anime');
-    } else if (titleLower.includes('hindi') || titleLower.includes('bollywood') || item.genres?.includes('Bollywood')) {
+    } else if (
+      titleLower.includes('hindi') ||
+      titleLower.includes('bollywood') ||
+      item.genres?.includes('Bollywood')
+    ) {
       setSelectedFavCategory('Bollywood');
     } else {
       setSelectedFavCategory('Hollywood');
     }
-    
+
     setMoveDialogOpen(true);
   }, []);
 
@@ -422,7 +435,9 @@ const Watchlist = () => {
       if (item.category === 'TV Shows' && item.series_status) {
         const rawStatus = item.series_status;
         const normalizedStatus =
-          rawStatus === 'Canceled' || rawStatus === 'Cancelled' || rawStatus === 'Ended'
+          rawStatus === 'Canceled' ||
+          rawStatus === 'Cancelled' ||
+          rawStatus === 'Ended'
             ? 'Ended / Cancelled'
             : rawStatus;
         counts[normalizedStatus] = (counts[normalizedStatus] || 0) + 1;
@@ -597,475 +612,485 @@ const Watchlist = () => {
     return filteredWatchlist.slice(0, visibleCount);
   }, [filteredWatchlist, visibleCount]);
 
-  return (
-    <AppShell title="Watchlist" subtitle="What I'm watching">
-      <div>
-        <div className="px-4 md:px-0 pt-2 space-y-4">
-          <div className="flex flex-wrap items-start gap-2 justify-between">
-            <div className="flex flex-wrap items-center gap-2 md:gap-4">
-              {CATEGORIES.map((cat, index) => (
-                <div key={cat} className="flex items-center gap-2 md:gap-4">
-                  <button
-                    onClick={() => {
-                      setSelectedCategory(cat);
-                      setShowSchedule(false);
-                      setSelectedPlatform(null);
-                      setSelectedGenre(null);
-                      setSelectedStatus(null);
-                    }}
-                    className={cn(
-                      'nav-link relative py-1 flex items-center gap-1.5',
-                      selectedCategory === cat && 'nav-link-active',
-                    )}
-                  >
-                    <span className="shrink-0">{getCategoryIcon(cat)}</span>
-                    <DotMatrixText text={cat.toUpperCase()} size="xs" />
-                    <DotMatrixText text={`(${categoryCounts[cat]})`} size="xs" />
-                  </button>
-                  {index < CATEGORIES.length - 1 && (
-                    <span className="text-muted-foreground/30 hidden md:inline">
-                      ·
-                    </span>
-                  )}
-                </div>
-              ))}
+  /* Handed to AppShell's toolbar slot, so it is pinned between the header and
+     the scroll area: the categories, the search and the filters stay put
+     while the wall scrolls under them.
+
+     pt-2 and space-y-4 are the phone's rhythm; from md up
+     `.watchlist-toolbar` in src/index.css scales both with the viewport
+     height. That still matters, and matters more now -- pinned chrome comes
+     out of a fixed viewport, so every pixel spent here is a pixel the card
+     wall never gets back. */
+  const toolbar = (
+    <div className="watchlist-toolbar px-4 md:px-0 pt-2 space-y-4">
+      <div className="flex flex-wrap items-start gap-2 justify-between">
+        <div className="flex flex-wrap items-center gap-2 md:gap-4">
+          {CATEGORIES.map((cat, index) => (
+            <div key={cat} className="flex items-center gap-2 md:gap-4">
+              <button
+                onClick={() => {
+                  setSelectedCategory(cat);
+                  setShowSchedule(false);
+                  setSelectedPlatform(null);
+                  setSelectedGenre(null);
+                  setSelectedStatus(null);
+                }}
+                className={cn(
+                  'nav-link relative py-1 flex items-center gap-1.5',
+                  selectedCategory === cat && 'nav-link-active',
+                )}
+              >
+                <span className="shrink-0">{getCategoryIcon(cat)}</span>
+                <DotMatrixText text={cat.toUpperCase()} size="xs" />
+                <DotMatrixText text={`(${categoryCounts[cat]})`} size="xs" />
+              </button>
+              {index < CATEGORIES.length - 1 && (
+                <span className="text-muted-foreground/30 hidden md:inline">
+                  ·
+                </span>
+              )}
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-start gap-2 w-full sm:w-auto">
-              {/* Syncing is the cron's job. The manual trigger lives inside
-                  this panel rather than on the toolbar, so the page does not
-                  advertise a button nobody should normally need. */}
-              {isAdmin && (
-                <Button
-                  variant={showSyncLog ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setShowSyncLog(!showSyncLog)}
-                  className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
-                >
-                  <History className={cn('h-4 w-4', syncing && 'animate-spin')} />
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 w-full sm:w-auto">
+          {/* Syncing is the cron's job. The manual trigger lives inside
+              this panel rather than on the toolbar, so the page does not
+              advertise a button nobody should normally need. */}
+          {isAdmin && (
+            <Button
+              variant={showSyncLog ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setShowSyncLog(!showSyncLog)}
+              className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
+            >
+              <History className={cn('h-4 w-4', syncing && 'animate-spin')} />
+              <DotMatrixText
+                text={syncing ? `SYNCING ${syncProgress}%` : 'SYNC'}
+                size="xs"
+                wrap={false}
+              />
+            </Button>
+          )}
+          <Button
+            variant={showSchedule ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setShowSchedule(!showSchedule)}
+            className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
+          >
+            <CalendarDays className="h-4 w-4" />
+            <DotMatrixText text="WEEKLY SCHEDULE" size="xs" wrap={false} />
+          </Button>
+        </div>
+      </div>
+
+      {/* Sync Log Panel */}
+      {isAdmin && showSyncLog && (
+        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm px-3 py-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
+              <History className="h-3 w-3" />
+              <DotMatrixText text="SYNC HISTORY" size="xs" />
+            </h3>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => syncWatchlist('manual')}
+                disabled={syncing}
+                className="gap-1.5 relative overflow-hidden h-7"
+              >
+                {syncing && (
+                  <div
+                    className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-[width] duration-300 ease-out"
+                    style={{ width: `${syncProgress}%` }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <RefreshCcw
+                    className={cn('h-3.5 w-3.5', syncing && 'animate-spin')}
+                  />
                   <DotMatrixText
-                    text={syncing ? `SYNCING ${syncProgress}%` : 'SYNC'}
+                    text={syncing ? `${syncProgress}%` : 'SYNC NOW'}
                     size="xs"
                     wrap={false}
                   />
+                </span>
+              </Button>
+              {syncing && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={cancelSync}
+                  className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                  title="Stop sync"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
                 </Button>
               )}
               <Button
-                variant={showSchedule ? 'default' : 'ghost'}
+                variant="ghost"
                 size="sm"
-                onClick={() => setShowSchedule(!showSchedule)}
-                className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
+                onClick={() => setShowSyncLog(false)}
+                className="h-5 w-5 p-0"
               >
-                <CalendarDays className="h-4 w-4" />
-                <DotMatrixText text="WEEKLY SCHEDULE" size="xs" wrap={false} />
+                <X className="h-3 w-3" />
               </Button>
             </div>
           </div>
-
-          {/* Sync Log Panel */}
-          {isAdmin && showSyncLog && (
-            <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm px-3 py-2 space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
-                  <History className="h-3 w-3" />
-                  <DotMatrixText text="SYNC HISTORY" size="xs" />
-                </h3>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => syncWatchlist('manual')}
-                    disabled={syncing}
-                    className="gap-1.5 relative overflow-hidden h-7"
-                  >
-                    {syncing && (
-                      <div
-                        className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-[width] duration-300 ease-out"
-                        style={{ width: `${syncProgress}%` }}
-                      />
-                    )}
-                    <span className="relative z-10 flex items-center gap-1.5">
-                      <RefreshCcw className={cn('h-3.5 w-3.5', syncing && 'animate-spin')} />
-                      <DotMatrixText
-                        text={syncing ? `${syncProgress}%` : 'SYNC NOW'}
-                        size="xs"
-                        wrap={false}
-                      />
-                    </span>
-                  </Button>
-                  {syncing && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={cancelSync}
-                      className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                      title="Stop sync"
-                    >
-                      <XCircle className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowSyncLog(false)}
-                    className="h-5 w-5 p-0"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-              {syncLog.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  No sync history yet
-                </p>
-              ) : (
+          {syncLog.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-2">
+              No sync history yet
+            </p>
+          ) : (
+            <div
+              className="space-y-1 overflow-y-auto pr-0.5"
+              style={{ maxHeight: '96px' }}
+            >
+              {syncLog.map((entry) => (
                 <div
-                  className="space-y-1 overflow-y-auto pr-0.5"
-                  style={{ maxHeight: '96px' }}
+                  key={entry.id}
+                  className="flex items-center justify-between gap-2 text-xs py-1 px-1.5 rounded bg-secondary/30"
                 >
-                  {syncLog.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="flex items-center justify-between gap-2 text-xs py-1 px-1.5 rounded bg-secondary/30"
+                  <div className="flex items-center gap-1.5">
+                    {entry.status === 'success' ? (
+                      <CheckCircle className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />
+                    ) : (
+                      <XCircle className="h-2.5 w-2.5 text-destructive flex-shrink-0" />
+                    )}
+                    <span
+                      className={cn(
+                        'px-1 py-px rounded text-xs font-semibold tracking-wide bg-secondary text-muted-foreground',
+                      )}
                     >
-                      <div className="flex items-center gap-1.5">
-                        {entry.status === 'success' ? (
-                          <CheckCircle className="h-2.5 w-2.5 text-green-500 flex-shrink-0" />
-                        ) : (
-                          <XCircle className="h-2.5 w-2.5 text-red-500 flex-shrink-0" />
-                        )}
-                        <span
-                          className={cn(
-                            'px-1 py-px rounded text-xs font-semibold tracking-wide',
-                            entry.sync_type === 'auto'
-                              ? 'bg-purple-500/20 text-purple-400'
-                              : entry.sync_type === 'daily'
-                                ? 'bg-blue-500/20 text-blue-400'
-                                : 'bg-orange-500/20 text-orange-400',
-                          )}
-                        >
-                          {entry.sync_type === 'auto'
-                            ? 'AUTO'
-                            : entry.sync_type === 'daily'
-                              ? 'DAILY'
-                              : 'MAN'}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {entry.items_synced} items ·{' '}
-                          {(entry.duration_ms / 1000).toFixed(1)}s
-                        </span>
-                      </div>
-                      <span className="text-muted-foreground text-xs whitespace-nowrap">
-                        {new Date(entry.synced_at).toLocaleString([], {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="text-xs text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                {lastSyncTime && <span>Last synced: {relativeTime(lastSyncTime)}</span>}
-                {autoSyncEnabled && (
-                  <span className="flex items-center gap-1">
-                    <Timer className="h-2.5 w-2.5" />
-                    Next auto-sync:{' '}
-                    {new Date(nextAutoSyncTime).toLocaleString([], {
-                      weekday: 'short',
+                      {entry.sync_type === 'auto'
+                        ? 'AUTO'
+                        : entry.sync_type === 'daily'
+                          ? 'DAILY'
+                          : 'MAN'}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {entry.items_synced} items ·{' '}
+                      {(entry.duration_ms / 1000).toFixed(1)}s
+                    </span>
+                  </div>
+                  <span className="text-muted-foreground text-xs whitespace-nowrap">
+                    {new Date(entry.synced_at).toLocaleString([], {
+                      month: 'short',
+                      day: 'numeric',
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
                   </span>
-                )}
-              </div>
+                </div>
+              ))}
             </div>
           )}
-
-          {!showSchedule && selectedCategory !== 'Favourites' && (
-            <div className="space-y-4">
-              <div className="flex flex-col lg:flex-row gap-3">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder={`Search ${selectedCategory.toLowerCase()}...`}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-10"
-                    />
-                    {searchQuery && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 hover:bg-transparent"
-                        onClick={() => setSearchQuery('')}
-                      >
-                        <X className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Select
-                    value={selectedPlatform || 'all'}
-                    onValueChange={(v) =>
-                      setSelectedPlatform(v === 'all' ? null : v)
-                    }
-                  >
-                    <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
-                      <div className="flex items-center gap-2 truncate">
-                        {!selectedPlatform && (
-                          <Filter className="h-3 w-3 opacity-50" />
-                        )}
-                        <SelectValue placeholder="Platform">
-                          {!selectedPlatform
-                            ? 'All Platforms'
-                            : hasPlatformLogo(selectedPlatform) ? (
-                                <PlatformLogo
-                                  platform={selectedPlatform}
-                                  size={16}
-                                  maxWidth={90}
-                                />
-                              ) : (
-                                selectedPlatform
-                              )}
-                        </SelectValue>
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Platforms</SelectItem>
-                      {ALL_PLATFORMS.filter((p) => getPlatformCount(p) > 0).map(
-                        (p) => (
-                          <SelectItem key={p} value={p}>
-                            <div className="flex items-center justify-between gap-4 w-full">
-                              <span className="flex items-center gap-2">
-                                <PlatformLogo platform={p} size={18} />
-                                <span className={cn(hasPlatformLogo(p) && 'sr-only')}>
-                                  {p}
-                                </span>
-                              </span>
-                              <span className="text-xs opacity-50">
-                                ({getPlatformCount(p)})
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-
-                  <Select
-                    value={selectedGenre || 'all'}
-                    onValueChange={(v) =>
-                      setSelectedGenre(v === 'all' ? null : v)
-                    }
-                  >
-                    <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
-                      <div className="flex items-center gap-2 truncate">
-                        <Filter className="h-3 w-3 opacity-50" />
-                        <SelectValue placeholder="Genre" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Genres</SelectItem>
-                      {ALL_GENRES.filter((g) => getGenreCount(g) > 0).map(
-                        (g) => (
-                          <SelectItem key={g} value={g}>
-                            <div className="flex items-center justify-between gap-4 w-full">
-                              <span>{g}</span>
-                              <span className="text-xs opacity-50">
-                                ({getGenreCount(g)})
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-
-                  {selectedCategory === 'TV Shows' && Object.keys(statusCounts).length > 0 && (
-                    <Select
-                      value={selectedStatus || 'all'}
-                      onValueChange={(v) =>
-                        setSelectedStatus(v === 'all' ? null : v)
-                      }
-                    >
-                      <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs">
-                        <div className="flex items-center gap-2 truncate">
-                          <Filter className="h-3 w-3 opacity-50" />
-                          <SelectValue placeholder="Status" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        {Object.keys(statusCounts)
-                          .sort()
-                          .map((status) => (
-                            <SelectItem key={status} value={status}>
-                              <div className="flex items-center justify-between gap-4 w-full">
-                                <span>{status === 'Canceled' ? 'Cancelled' : status}</span>
-                                <span className="text-xs opacity-50">
-                                  ({getStatusCount(status)})
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {selectedCategory === 'TV Shows' && (
-                    <Button
-                      variant={hideCompleted ? 'secondary' : 'outline'}
-                      size="sm"
-                      onClick={() => setHideCompleted(!hideCompleted)}
-                      className={cn(
-                        'h-9 px-3 text-xs whitespace-nowrap',
-                        // The filled `default` variant is near-white in dark
-                        // mode, which shouts next to the other filter chips.
-                        hideCompleted && 'border border-border text-foreground',
-                      )}
-                    >
-                      {hideCompleted ? (
-                        <DotMatrixText text="SHOW ALL" size="xs" wrap={false} />
-                      ) : (
-                        <DotMatrixText text="HIDE COMPLETED" size="xs" wrap={false} />
-                      )}
-                    </Button>
-                  )}
-
-                  {(selectedCategory === 'Movies' ||
-                    selectedCategory === 'TV Shows') && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSortOrder(
-                          sortOrder === 'alphabetical'
-                            ? 'recent'
-                            : 'alphabetical',
-                        );
-                      }}
-                      className="h-9 px-3 text-xs whitespace-nowrap gap-1.5"
-                    >
-                      {sortOrder === 'alphabetical' && (
-                        <>
-                          <ArrowDownAZ className="h-3.5 w-3.5" />
-                          <DotMatrixText text="A-Z" size="xs" />
-                        </>
-                      )}
-                      {sortOrder === 'recent' && (
-                        <>
-                          <Clock className="h-3.5 w-3.5" />
-                          <DotMatrixText text="RECENT" size="xs" />
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <CountLabel
-              count={
-                loading
-                  ? undefined
-                  : selectedCategory === 'Favourites'
-                    ? favourites.length
-                    : filteredWatchlist.length
-              }
-              noun={
-                selectedCategory === 'Favourites'
-                  ? 'favourites'
-                  : selectedCategory.toLowerCase()
-              }
-            />
-            {isAdmin && selectedCategory === 'Favourites' && (
-              <TmdbSearchDialog
-                open={favDialogOpen}
-                onOpenChange={setFavDialogOpen}
-                triggerLabel="Add Favourite"
-                title="Add to Favourites"
-                description="Search and add movies or TV shows to your favourites."
-                searchLabel="Search Movies & TV Shows"
-                placeholder="Type a movie or TV show name..."
-                query={favSearchQuery}
-                onQueryChange={setFavSearchQuery}
-                results={searchResults}
-                loading={searchLoading}
-                getPosterUrl={getPosterUrl}
-                resultKey={(r) => `${r.media_type}-${r.id}`}
-                isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
-                onSelect={handleAddFavourite}
-                renderStatus={(r) => (
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        'text-xs px-2 py-0.5 rounded font-medium',
-                        r.media_type === 'movie'
-                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                          : 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-                      )}
-                    >
-                      {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
-                      Auto: {favouriteCategoryFor(r)}
-                    </span>
-                    {favAddedItems.has(`${r.media_type}-${r.id}`) && (
-                      <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
-                        Added
-                      </span>
-                    )}
-                  </div>
-                )}
-              />
+          <div className="text-xs text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {lastSyncTime && (
+              <span>Last synced: {relativeTime(lastSyncTime)}</span>
             )}
-            {isAdmin && selectedCategory !== 'Favourites' && (
-              <TmdbSearchDialog
-                open={open}
-                onOpenChange={setOpen}
-                triggerLabel="Add Item"
-                title="Add to Watchlist"
-                description="Search and add items to your watchlist."
-                searchLabel={`Search ${selectedCategory}`}
-                placeholder={`Type a ${selectedCategory.toLowerCase().slice(0, -1)} name...`}
-                query={title}
-                onQueryChange={setTitle}
-                results={searchResults}
-                loading={searchLoading}
-                getPosterUrl={getPosterUrl}
-                resultKey={(r) => String(r.id)}
-                searchDisabled={
-                  selectedCategory === 'Upcoming' ||
-                  selectedCategory === 'Currently Watching'
-                }
-                isDisabled={(r) =>
-                  addedItems.has(r.id) || pendingResultIds.has(r.id)
-                }
-                onSelect={handleAddWatchlistItem}
-                renderStatus={(r) =>
-                  pendingResultIds.has(r.id) ? (
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Adding...
-                    </span>
-                  ) : addedItems.has(r.id) ? (
-                    <span className="text-xs font-bold text-green-500 uppercase tracking-wider">
-                      Item Added
-                    </span>
-                  ) : null
-                }
-              />
+            {autoSyncEnabled && (
+              <span className="flex items-center gap-1">
+                <Timer className="h-2.5 w-2.5" />
+                Next auto-sync:{' '}
+                {new Date(nextAutoSyncTime).toLocaleString([], {
+                  weekday: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
             )}
           </div>
         </div>
+      )}
 
+      {!showSchedule && selectedCategory !== 'Favourites' && (
+        <div className="space-y-4">
+          <div className="flex flex-col lg:flex-row gap-3">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder={`Search ${selectedCategory.toLowerCase()}...`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 hover:bg-transparent"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <X className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Select
+                value={selectedPlatform || 'all'}
+                onValueChange={(v) =>
+                  setSelectedPlatform(v === 'all' ? null : v)
+                }
+              >
+                <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    {!selectedPlatform && (
+                      <Filter className="h-3 w-3 opacity-50" />
+                    )}
+                    <SelectValue placeholder="Platform">
+                      {!selectedPlatform ? (
+                        'All Platforms'
+                      ) : hasPlatformLogo(selectedPlatform) ? (
+                        <PlatformLogo
+                          platform={selectedPlatform}
+                          size={16}
+                          maxWidth={90}
+                        />
+                      ) : (
+                        selectedPlatform
+                      )}
+                    </SelectValue>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Platforms</SelectItem>
+                  {ALL_PLATFORMS.filter((p) => getPlatformCount(p) > 0).map(
+                    (p) => (
+                      <SelectItem key={p} value={p}>
+                        <div className="flex items-center justify-between gap-4 w-full">
+                          <span className="flex items-center gap-2">
+                            <PlatformLogo platform={p} size={18} />
+                            <span
+                              className={cn(hasPlatformLogo(p) && 'sr-only')}
+                            >
+                              {p}
+                            </span>
+                          </span>
+                          <span className="text-xs opacity-50">
+                            ({getPlatformCount(p)})
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={selectedGenre || 'all'}
+                onValueChange={(v) => setSelectedGenre(v === 'all' ? null : v)}
+              >
+                <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <Filter className="h-3 w-3 opacity-50" />
+                    <SelectValue placeholder="Genre" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Genres</SelectItem>
+                  {ALL_GENRES.filter((g) => getGenreCount(g) > 0).map((g) => (
+                    <SelectItem key={g} value={g}>
+                      <div className="flex items-center justify-between gap-4 w-full">
+                        <span>{g}</span>
+                        <span className="text-xs opacity-50">
+                          ({getGenreCount(g)})
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedCategory === 'TV Shows' &&
+                Object.keys(statusCounts).length > 0 && (
+                  <Select
+                    value={selectedStatus || 'all'}
+                    onValueChange={(v) =>
+                      setSelectedStatus(v === 'all' ? null : v)
+                    }
+                  >
+                    <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <Filter className="h-3 w-3 opacity-50" />
+                        <SelectValue placeholder="Status" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {Object.keys(statusCounts)
+                        .sort()
+                        .map((status) => (
+                          <SelectItem key={status} value={status}>
+                            <div className="flex items-center justify-between gap-4 w-full">
+                              <span>
+                                {status === 'Canceled' ? 'Cancelled' : status}
+                              </span>
+                              <span className="text-xs opacity-50">
+                                ({getStatusCount(status)})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+              {selectedCategory === 'TV Shows' && (
+                <Button
+                  variant={hideCompleted ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setHideCompleted(!hideCompleted)}
+                  className={cn(
+                    'h-9 px-3 text-xs whitespace-nowrap',
+                    // The filled `default` variant is near-white in dark
+                    // mode, which shouts next to the other filter chips.
+                    hideCompleted && 'border border-border text-foreground',
+                  )}
+                >
+                  {hideCompleted ? (
+                    <DotMatrixText text="SHOW ALL" size="xs" wrap={false} />
+                  ) : (
+                    <DotMatrixText
+                      text="HIDE COMPLETED"
+                      size="xs"
+                      wrap={false}
+                    />
+                  )}
+                </Button>
+              )}
+
+              {(selectedCategory === 'Movies' ||
+                selectedCategory === 'TV Shows') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSortOrder(
+                      sortOrder === 'alphabetical' ? 'recent' : 'alphabetical',
+                    );
+                  }}
+                  className="h-9 px-3 text-xs whitespace-nowrap gap-1.5"
+                >
+                  {sortOrder === 'alphabetical' && (
+                    <>
+                      <ArrowDownAZ className="h-3.5 w-3.5" />
+                      <DotMatrixText text="A-Z" size="xs" />
+                    </>
+                  )}
+                  {sortOrder === 'recent' && (
+                    <>
+                      <Clock className="h-3.5 w-3.5" />
+                      <DotMatrixText text="RECENT" size="xs" />
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <CountLabel
+          count={
+            loading
+              ? undefined
+              : selectedCategory === 'Favourites'
+                ? favourites.length
+                : filteredWatchlist.length
+          }
+          noun={
+            selectedCategory === 'Favourites'
+              ? 'favourites'
+              : selectedCategory.toLowerCase()
+          }
+        />
+        {isAdmin && selectedCategory === 'Favourites' && (
+          <TmdbSearchDialog
+            open={favDialogOpen}
+            onOpenChange={setFavDialogOpen}
+            triggerLabel="Add Favourite"
+            title="Add to Favourites"
+            description="Search and add movies or TV shows to your favourites."
+            searchLabel="Search Movies & TV Shows"
+            placeholder="Type a movie or TV show name..."
+            query={favSearchQuery}
+            onQueryChange={setFavSearchQuery}
+            results={searchResults}
+            loading={searchLoading}
+            getPosterUrl={getPosterUrl}
+            resultKey={(r) => `${r.media_type}-${r.id}`}
+            isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
+            onSelect={handleAddFavourite}
+            renderStatus={(r) => (
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'text-xs px-2 py-0.5 rounded font-medium bg-secondary text-muted-foreground',
+                  )}
+                >
+                  {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
+                  Auto: {favouriteCategoryFor(r)}
+                </span>
+                {favAddedItems.has(`${r.media_type}-${r.id}`) && (
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    Added
+                  </span>
+                )}
+              </div>
+            )}
+          />
+        )}
+        {isAdmin && selectedCategory !== 'Favourites' && (
+          <TmdbSearchDialog
+            open={open}
+            onOpenChange={setOpen}
+            triggerLabel="Add Item"
+            title="Add to Watchlist"
+            description="Search and add items to your watchlist."
+            searchLabel={`Search ${selectedCategory}`}
+            placeholder={`Type a ${selectedCategory.toLowerCase().slice(0, -1)} name...`}
+            query={title}
+            onQueryChange={setTitle}
+            results={searchResults}
+            loading={searchLoading}
+            getPosterUrl={getPosterUrl}
+            resultKey={(r) => String(r.id)}
+            searchDisabled={
+              selectedCategory === 'Upcoming' ||
+              selectedCategory === 'Currently Watching'
+            }
+            isDisabled={(r) =>
+              addedItems.has(r.id) || pendingResultIds.has(r.id)
+            }
+            onSelect={handleAddWatchlistItem}
+            renderStatus={(r) =>
+              pendingResultIds.has(r.id) ? (
+                <span className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Adding...
+                </span>
+              ) : addedItems.has(r.id) ? (
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  Item Added
+                </span>
+              ) : null
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <AppShell title="Watchlist" subtitle="What I'm watching" toolbar={toolbar}>
+      <div>
         {showSchedule ? (
           <WeeklySchedule
             DAYS={DAYS}
@@ -1077,7 +1102,9 @@ const Watchlist = () => {
             isEpisodeWatched={isEpisodeWatched}
             isSeasonWatched={isSeasonWatched}
             getAutoStatus={getAutoStatus}
-            onRemoveWatchlist={isAdmin ? removeWatchlistItemAndSchedule : undefined}
+            onRemoveWatchlist={
+              isAdmin ? removeWatchlistItemAndSchedule : undefined
+            }
             addToSchedule={isAdmin ? addToSchedule : undefined}
             isInSchedule={isInSchedule}
             onMoveToFavourites={isAdmin ? handleOpenMoveDialog : undefined}
@@ -1101,11 +1128,18 @@ const Watchlist = () => {
                   const catFavs = favourites.filter((f) => f.category === cat);
                   if (catFavs.length === 0) return null;
 
-                  const catMovies = catFavs.filter((f) => f.media_type === 'movie');
-                  const catTVShows = catFavs.filter((f) => f.media_type === 'tv');
+                  const catMovies = catFavs.filter(
+                    (f) => f.media_type === 'movie',
+                  );
+                  const catTVShows = catFavs.filter(
+                    (f) => f.media_type === 'tv',
+                  );
 
                   return (
-                    <div key={cat} className="space-y-4 border-b border-border/40 pb-6 last:border-b-0">
+                    <div
+                      key={cat}
+                      className="space-y-4 border-b border-border/40 pb-6 last:border-b-0"
+                    >
                       <div className="flex items-center gap-2">
                         <DotMatrixText text={cat.toUpperCase()} size="xs" />
                         <DotMatrixText text={`(${catFavs.length})`} size="xs" />
@@ -1145,7 +1179,8 @@ const Watchlist = () => {
                                         onClick={() =>
                                           askDelete({
                                             name: fav.title,
-                                            onConfirm: () => removeFavourite(fav.id),
+                                            onConfirm: () =>
+                                              removeFavourite(fav.id),
                                           })
                                         }
                                       >
@@ -1156,7 +1191,12 @@ const Watchlist = () => {
                                 </div>
                                 <div className="p-3">
                                   <h3 className="font-serif text-sm font-medium leading-tight">
-                                    <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
+                                    <span
+                                      className="line-clamp-2"
+                                      style={{ textWrap: 'balance' }}
+                                    >
+                                      {fav.title}
+                                    </span>
                                   </h3>
                                 </div>
                               </div>
@@ -1199,7 +1239,8 @@ const Watchlist = () => {
                                         onClick={() =>
                                           askDelete({
                                             name: fav.title,
-                                            onConfirm: () => removeFavourite(fav.id),
+                                            onConfirm: () =>
+                                              removeFavourite(fav.id),
                                           })
                                         }
                                       >
@@ -1210,7 +1251,12 @@ const Watchlist = () => {
                                 </div>
                                 <div className="p-3">
                                   <h3 className="font-serif text-sm font-medium leading-tight">
-                                    <span className="line-clamp-2" style={{ textWrap: 'balance' as any }}>{fav.title}</span>
+                                    <span
+                                      className="line-clamp-2"
+                                      style={{ textWrap: 'balance' }}
+                                    >
+                                      {fav.title}
+                                    </span>
                                   </h3>
                                 </div>
                               </div>
@@ -1240,7 +1286,9 @@ const Watchlist = () => {
                   <WatchlistCard
                     key={item.id}
                     item={item}
-                    onRemove={isAdmin ? removeWatchlistItemAndSchedule : undefined}
+                    onRemove={
+                      isAdmin ? removeWatchlistItemAndSchedule : undefined
+                    }
                     getCategoryIcon={getCategoryIcon}
                     toggleEpisodeWatched={
                       isAdmin ? toggleEpisodeWatched : undefined
@@ -1256,7 +1304,9 @@ const Watchlist = () => {
                       isAdmin ? removeFromScheduleByWatchlistId : undefined
                     }
                     isInSchedule={isInSchedule}
-                    onMoveToFavourites={isAdmin ? handleOpenMoveDialog : undefined}
+                    onMoveToFavourites={
+                      isAdmin ? handleOpenMoveDialog : undefined
+                    }
                     onResync={isAdmin ? syncSingleItem : undefined}
                     syncing={syncing}
                   />
@@ -1277,13 +1327,18 @@ const Watchlist = () => {
                 Move to Favourites
               </DialogTitle>
               <DialogDescription className="sr-only">
-                Add this item to favourites and optionally remove it from your watchlist.
+                Add this item to favourites and optionally remove it from your
+                watchlist.
               </DialogDescription>
             </DialogHeader>
             {moveItem && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Add <span className="font-medium text-foreground">"{moveItem.title}"</span> to your favourites.
+                  Add{' '}
+                  <span className="font-medium text-foreground">
+                    "{moveItem.title}"
+                  </span>{' '}
+                  to your favourites.
                 </p>
 
                 <div className="space-y-2">
@@ -1291,7 +1346,7 @@ const Watchlist = () => {
                   <Select
                     value={selectedFavCategory}
                     onValueChange={(value) =>
-                      setSelectedFavCategory(value as any)
+                      setSelectedFavCategory(value as FavouriteCategory)
                     }
                   >
                     <SelectTrigger>
@@ -1317,7 +1372,8 @@ const Watchlist = () => {
                   </Button>
                   <Button
                     onClick={async () => {
-                      const mediaType = moveItem.category === 'Movies' ? 'movie' : 'tv';
+                      const mediaType =
+                        moveItem.category === 'Movies' ? 'movie' : 'tv';
                       const posterUrl = moveItem.image_url || undefined;
 
                       try {
@@ -1335,7 +1391,10 @@ const Watchlist = () => {
                         }
                         setMoveDialogOpen(false);
                       } catch (error) {
-                        console.error('Error moving item to favourites:', error);
+                        console.error(
+                          'Error moving item to favourites:',
+                          error,
+                        );
                       }
                     }}
                     className="flex-1 gap-1.5"
@@ -1348,7 +1407,6 @@ const Watchlist = () => {
             )}
           </DialogContent>
         </Dialog>
-
       </div>
 
       {deleteDialog}

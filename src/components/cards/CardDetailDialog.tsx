@@ -1,5 +1,11 @@
 import { ReactNode } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ExternalLink, Trash2, CalendarDays, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -51,6 +57,16 @@ export function CardDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl h-fit max-h-[90vh] overflow-y-auto p-0 gap-0">
+        {/* Radix wires `aria-describedby` from this, and warns when a dialog
+            has none: a screen reader was announcing the title and then going
+            silent about what the dialog is. It is `sr-only` rather than
+            visible because the two layouts below already show the subtitle to
+            anyone who can see it -- and it is declared once here, outside
+            both, since two of them would fight over the same id. */}
+        <DialogDescription className="sr-only">
+          {subtitle ? `${title} -- ${subtitle}` : `Details for ${title}`}
+        </DialogDescription>
+
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (

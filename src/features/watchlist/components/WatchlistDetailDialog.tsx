@@ -258,7 +258,7 @@ export function WatchlistDetailDialog({
                   variant="outline"
                   size="sm"
                   onClick={onMoveToFavourites}
-                  className="gap-1.5 flex-1 sm:flex-initial justify-center hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30"
+                  className="gap-1.5 flex-1 sm:flex-initial justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
                 >
                   <Heart className="h-4 w-4" />
                   Move to Favourites
@@ -388,7 +388,7 @@ export function WatchlistDetailDialog({
                       variant="ghost"
                       size="icon"
                       onClick={onMoveToFavourites}
-                      className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                      className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       title="Move to Favourites"
                     >
                       <Heart className="h-4 w-4" />

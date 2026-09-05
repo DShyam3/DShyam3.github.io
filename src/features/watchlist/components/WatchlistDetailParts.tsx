@@ -9,16 +9,23 @@ import type { WatchlistItem } from '@/features/watchlist/useWatchlist';
  * and margin, so each was a place a fix could be applied to one half.
  */
 
+/**
+ * Neutral like the status pills in watchlist-utils, and for the same reason:
+ * a green "Returning Series" next to a green "Watched" next to an amber
+ * countdown read as three unrelated signals. Only a cancellation is coloured,
+ * and it uses the theme's destructive token rather than a raw Tailwind red.
+ */
 const SERIES_STATUS_COLOURS: Record<string, string> = {
-  'Returning Series': 'bg-green-500/10 text-green-600 dark:text-green-400',
-  'In Production': 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  Ended: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+  'Returning Series': 'bg-secondary text-muted-foreground',
+  'In Production':
+    'bg-transparent text-muted-foreground ring-1 ring-inset ring-border',
+  Ended: 'bg-secondary text-muted-foreground',
   // TMDB returns the US spelling; the British one is kept for rows stored
   // before that was noticed. Both layouts previously only matched
   // 'Cancelled', so a show TMDB had marked 'Canceled' rendered with no
   // colour at all.
-  Canceled: 'bg-red-500/10 text-red-600 dark:text-red-400',
-  Cancelled: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  Canceled: 'bg-destructive/10 text-destructive',
+  Cancelled: 'bg-destructive/10 text-destructive',
 };
 
 export function SeriesStatusPill({

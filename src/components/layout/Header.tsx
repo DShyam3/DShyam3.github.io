@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { SiteNav } from './SiteNav';
+import { NavMenu } from './NavMenu';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixIcon } from '@/components/dot-matrix/DotMatrixIcon';
+import { socialIcons } from '@/components/icons/SocialIcons';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ASSETS_URL } from '@/lib/constants';
@@ -40,10 +41,15 @@ export function Header({
   };
 
   return (
-    <header className="app-header pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50">
+    // `relative` is what NavMenu's panel hangs off: it spans the header's
+    // full width from the bottom edge, so it has to resolve against the
+    // header rather than the right-hand cluster the button sits in.
+    <header className="app-header relative pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50">
       <div className="px-4 md:px-0">
-        {/* Top row: Profile on left, Theme on right */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+        {/* One row: identity on the left, page title and controls on the
+            right. The nav strip that used to sit underneath is now the menu
+            button in that right-hand cluster. */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           {/* Left side: Profile with social links */}
           <div className="flex items-start md:items-center justify-between w-full md:w-auto gap-2 md:gap-3">
             <div
@@ -107,27 +113,29 @@ export function Header({
                     : 'max-w-0 opacity-0 mr-0',
                 )}
               >
-                {socialLinks.map(({ label, href, icon }) => (
-                  <a
-                    key={label}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={label}
-                    className="p-1.5 md:p-2 hover:bg-secondary/50 rounded transition-colors flex-shrink-0"
-                  >
-                    <img
-                      src={`${ASSETS_URL}/${icon === 'mail' ? 'gmail' : icon}.svg`}
-                      alt={label}
-                      className="h-5 w-5 md:h-6 md:w-6 dark:invert dark:brightness-0 dark:contrast-200"
-                    />
-                  </a>
-                ))}
+                {socialLinks.map(({ label, href, icon }) => {
+                  const Icon = socialIcons[icon];
+                  return (
+                    <a
+                      key={label}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={label}
+                      className="p-1.5 md:p-2 text-foreground hover:bg-secondary/50 rounded transition-colors flex-shrink-0"
+                    >
+                      <Icon className="h-5 w-5 md:h-6 md:w-6" />
+                    </a>
+                  );
+                })}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Ahead of the page title, not after it: the menu is how you
+                leave this page, the title only says which page it is. */}
+            <NavMenu />
             <div
               className="text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity"
               onClick={handleTitleClick}
@@ -149,11 +157,6 @@ export function Header({
             </div>
             <ThemeToggle />
           </div>
-        </div>
-
-        {/* Bottom row: Navigation links */}
-        <div className="flex items-center">
-          <SiteNav align="start" className="mb-0 flex-1" />
         </div>
       </div>
     </header>

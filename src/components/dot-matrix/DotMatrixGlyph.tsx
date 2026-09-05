@@ -20,7 +20,9 @@ function buildGlyphShadow(pattern: number[][], dot: number, gap: number): string
   const shadows: string[] = [];
   pattern.forEach((row, rowIndex) => {
     row.forEach((value, colIndex) => {
-      if (value) shadows.push(`${rem(colIndex * step)} ${rem(rowIndex * step)} 0 0 currentColor`);
+      // 0,0 is the element itself, painted as its background -- see below.
+      if (!value || (rowIndex === 0 && colIndex === 0)) return;
+      shadows.push(`${rem(colIndex * step)} ${rem(rowIndex * step)} 0 0 currentColor`);
     });
   });
   return shadows.length > 0 ? shadows.join(', ') : undefined;
@@ -30,9 +32,10 @@ interface DotMatrixGlyphProps {
   pattern: number[][];
   dot: number;
   gap: number;
+  shape?: 'round' | 'square';
 }
 
-export function DotMatrixGlyph({ pattern, dot, gap }: DotMatrixGlyphProps) {
+export function DotMatrixGlyph({ pattern, dot, gap, shape = 'round' }: DotMatrixGlyphProps) {
   const rows = pattern.length;
   const cols = pattern[0]?.length || 0;
   const step = dot + gap;
@@ -42,10 +45,18 @@ export function DotMatrixGlyph({ pattern, dot, gap }: DotMatrixGlyphProps) {
   return (
     <div className="dot-matrix-glyph" style={{ width: rem(width), height: rem(height) }}>
       <div
-        className="dot-matrix-glyph-dot"
+        className={
+          shape === 'square' ? 'dot-matrix-glyph-dot dot-matrix-glyph-dot-square' : 'dot-matrix-glyph-dot'
+        }
         style={{
           width: rem(dot),
           height: rem(dot),
+          // The dot at 0,0 cannot come from the box-shadow list: an outer
+          // shadow at zero offset and zero spread is clipped away behind its
+          // own border box. It has to be painted as the element's own
+          // background, or a pattern lit in its top-left corner silently
+          // renders one dot short.
+          backgroundColor: pattern[0]?.[0] ? 'currentColor' : undefined,
           boxShadow: buildGlyphShadow(pattern, dot, gap),
         }}
       />

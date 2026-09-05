@@ -50,7 +50,9 @@ export function SeasonEpisodeList({
         });
       }, 100);
     }
-  }, [selectedSeason, unwatchedEpisodeRef.current]);
+    // Only `selectedSeason`. A ref's `.current` is not a valid dependency --
+    // mutating it does not re-render, so listing it never triggered anything.
+  }, [selectedSeason]);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'TBA';
@@ -133,7 +135,7 @@ export function SeasonEpisodeList({
                   className={cn(
                     'w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-2',
                     seasonFullyWatched
-                      ? 'border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500/10'
+                      ? 'text-muted-foreground hover:bg-secondary'
                       : '',
                   )}
                 >
@@ -200,7 +202,7 @@ export function SeasonEpisodeList({
                           toggleEpisodeWatched &&
                           'hover:bg-secondary/50',
                         watched &&
-                          'bg-secondary/60 opacity-60 border-l-green-500',
+                          'bg-secondary/60 opacity-60 border-l-foreground/40',
                         watched &&
                           toggleEpisodeWatched &&
                           'hover:bg-secondary/70',
@@ -234,7 +236,7 @@ export function SeasonEpisodeList({
                         <Calendar className="h-3 w-3" />
                         {formatDate(episode.release_date)}
                         {watched && (
-                          <span className="ml-auto px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider bg-green-500 text-white">
+                          <span className="ml-auto px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider bg-foreground/10 text-muted-foreground">
                             Watched
                           </span>
                         )}

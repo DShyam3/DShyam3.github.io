@@ -12,14 +12,26 @@ export const isUpcomingStatus = (status?: string) =>
     !!status &&
     (status.toLowerCase().includes('releases in') || status === 'Coming Soon');
 
+/**
+ * Status pills carry their meaning through weight, not hue. The page already
+ * has one accent colour and a wall of poster art; giving every status its own
+ * Tailwind hue -- orange watching, green watched, amber upcoming, purple
+ * coming soon -- turned the grid into a colour chart. Three tiers instead:
+ *
+ *   solid    a title being watched now, the one state worth spotting
+ *   muted    everything settled -- to watch, watched, released
+ *   outline  nothing to watch yet, so nothing filled in
+ */
+const STATUS_ACTIVE = 'bg-foreground/10 text-foreground';
+const STATUS_SETTLED = 'bg-secondary text-muted-foreground';
+const STATUS_PENDING =
+    'bg-transparent text-muted-foreground ring-1 ring-inset ring-border';
+
 export const getStatusColor = (status: string) => {
-    if (status === 'Watching') return 'bg-orange-500/10 text-orange-600 dark:text-orange-400';
-    if (status === 'To Watch') return 'bg-primary/10 text-primary';
-    if (status === 'Completed' || status === 'Watched') return 'bg-green-500/10 text-green-600 dark:text-green-400';
-    if (status === 'Coming Soon') return 'bg-purple-500/10 text-purple-600 dark:text-purple-400';
-    if (status.toLowerCase().includes('releases in')) return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
-    if (status === 'Released') return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
-    return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
+    if (status === 'Watching') return STATUS_ACTIVE;
+    if (status === 'Coming Soon') return STATUS_PENDING;
+    if (status.toLowerCase().includes('releases in')) return STATUS_PENDING;
+    return STATUS_SETTLED;
 };
 
 /**

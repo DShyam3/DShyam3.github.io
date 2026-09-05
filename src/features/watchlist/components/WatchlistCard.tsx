@@ -27,6 +27,7 @@ import {
 } from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 
 interface WatchlistCardProps {
   item: WatchlistItem;
@@ -45,7 +46,7 @@ interface WatchlistCardProps {
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
   getAutoStatus: (item: WatchlistItem) => string | undefined;
-  addToSchedule?: (item: Omit<any, 'id'>) => void;
+  addToSchedule?: (item: Omit<ScheduleEntry, 'id'>) => void;
   removeFromSchedule?: (watchlistItemId: string) => void;
   isInSchedule: (watchlistItemId: string) => boolean;
   onMoveToFavourites?: (item: WatchlistItem) => void;
@@ -176,7 +177,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               <Button
                 variant="secondary"
                 size="icon"
-                className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:text-red-500"
+                className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   onMoveToFavourites(item);
@@ -238,16 +239,20 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         </div>
 
         <div className="p-2.5">
-          {/* Title and meta get a fixed two-line box: a one-line title used to
-              pull its card's badges up out of line with its neighbours'. */}
-          <h3 className="font-serif text-sm font-medium leading-tight h-[2.5rem]">
-            <span className="line-clamp-2" style={{ textWrap: 'balance' }}>
+          {/* Two lines is the floor, not the ceiling: `min-h` keeps a
+              one-line title from pulling its card's badges up out of line
+              with its neighbours', while a long one is allowed a third line
+              rather than ending in an ellipsis. Only the rare long title
+              makes its row taller, which is the cheaper of the two. */}
+          <h3 className="font-serif text-sm font-medium leading-tight min-h-[2.5rem]">
+            <span className="line-clamp-3" style={{ textWrap: 'balance' }}>
               {displayTitle(item.title, item.year)}
             </span>
           </h3>
 
-          {/* Year and first genre on same line */}
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          {/* Year and first genre. It wraps rather than truncating -- on a
+              narrow card `truncate` was cutting the genre to "Animat...". */}
+          <p className="text-xs text-muted-foreground mt-0.5 min-h-[1rem]">
             {item.year}
             {item.year && item.genres && item.genres.length > 0 && ' · '}
             {item.genres?.[0]}
