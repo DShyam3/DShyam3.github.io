@@ -71,7 +71,58 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), cspPlugin(env.VITE_SUPABASE_URL)].filter(Boolean),
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "./src"),
+        "@": path.resolve(import.meta.dirname, "./src"),
+      },
+    },
+    // Vitest reads this config too. Node environment only: the suites here
+    // cover pure logic (sync decisions, formatting), which is the part worth
+    // testing without a DOM.
+    test: {
+      include: ["src/**/*.test.ts"],
+      environment: "node",
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          /**
+           * Group node_modules into a few stable chunks.
+           *
+           * Vite's default splitting produced ~20 chunks of 4 kB each -- one
+           * per lucide icon, one per Radix primitive -- and a route pulled
+           * about twenty of them before it could render. On the dev server
+           * that is free; on GitHub Pages it is twenty cold round trips every
+           * time you open a section you have not visited yet, which is why
+           * navigation felt fine locally and slow in production.
+           *
+           * Only libraries every page already needs are grouped. Route chunks
+           * and route-specific libraries are left alone -- recharts above all,
+           * which is reachable only from the finance page and would push
+           * ~400 kB onto every other page if it were hoisted.
+           */
+          manualChunks(id: string) {
+            if (!id.includes("node_modules")) return;
+            if (id.includes("recharts") || id.includes("/d3-")) return;
+            if (id.includes("react-router")) return "vendor-react";
+            if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) {
+              return "vendor-react";
+            }
+            if (id.includes("@supabase")) return "vendor-supabase";
+            if (id.includes("@tanstack")) return "vendor-query";
+            if (
+              id.includes("lucide-react") ||
+              id.includes("class-variance-authority") ||
+              id.includes("clsx") ||
+              id.includes("tailwind-merge")
+            ) {
+              return "vendor-ui";
+            }
+            // No catch-all bucket. Anything not named above (date-fns,
+            // react-day-picker, sonner, ...) is reachable from only some
+            // routes, and a catch-all would make the entry chunk eagerly
+            // pull it on every page load.
+            return undefined;
+          },
+        },
       },
     },
   };

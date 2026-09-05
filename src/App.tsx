@@ -95,7 +95,10 @@ const App = () => {
           <Toaster />
           <Sonner />
 
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          {/* The v7_startTransition / v7_relativeSplatPath opt-ins are gone:
+              both are the default behaviour in react-router 7, and the prop no
+              longer exists. */}
+          <BrowserRouter>
             <AppProviders>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
