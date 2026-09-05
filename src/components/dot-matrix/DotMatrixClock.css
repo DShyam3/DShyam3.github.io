@@ -1,6 +1,6 @@
 .dot-matrix-clock {
     display: inline-flex;
-    gap: 2px;
+    gap: 0.125rem;
     align-items: center;
 }
 
@@ -14,7 +14,7 @@
 .dot-matrix-digit {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0.0625rem;
     backface-visibility: hidden;
 }
 
@@ -92,15 +92,19 @@
    wider than its gap fills in and reads as a solid block rather than a
    matrix -- which is what 1.5px dots on a 0.5px gap did, fixing the height
    but making the clock denser than the words beside it. Equal dot and gap
-   keeps the dots reading as dots. */
+   keeps the dots reading as dots.
+
+   Both are written in rem -- 0.0625rem is the 1px above at the default root
+   size -- so the clock keeps matching the footer text after the root size
+   grows on a wide screen, instead of staying 13px tall beside 28px words. */
 .dot-matrix-row {
     display: flex;
-    gap: 1px;
+    gap: 0.0625rem;
 }
 
 .dot-matrix-dot {
-    width: 1px;
-    height: 1px;
+    width: 0.0625rem;
+    height: 0.0625rem;
     border-radius: 50%;
     background-color: transparent;
 }

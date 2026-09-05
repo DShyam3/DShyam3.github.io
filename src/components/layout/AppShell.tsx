@@ -29,6 +29,9 @@ interface AppShellProps {
  *
  * A toolbar can sit outside the scroll area, so filters and counts stay put
  * while their results scroll underneath.
+ *
+ * The `<main>` element is the scroll container, which CardGrid measures
+ * itself against to keep two rows of cards above the fold.
  */
 export function AppShell({
   title,
@@ -43,12 +46,25 @@ export function AppShell({
     // taller than the screen -- the grid was left a ~30px slot and the page
     // was unusable. The shell is a desktop and tablet idea, so it starts at md.
     <div className="min-h-[100dvh] md:h-[100dvh] flex flex-col bg-background md:overflow-hidden">
+      {/* Thirteen nav links sit before the content on every page, so a
+          keyboard user would otherwise tab through all of them on each one.
+          Off-screen until focused, which is the point: it is for the people
+          who will find it, not for everyone. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:rounded focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:ring-2 focus:ring-foreground"
+      >
+        Skip to content
+      </a>
+
       <div className="md:shrink-0 wide-container">
         <Header title={title} subtitle={subtitle} />
         {toolbar}
       </div>
 
       <main
+        id="main"
+        tabIndex={-1}
         className={cn(
           'md:flex-1 md:min-h-0 wide-container',
           scrollable

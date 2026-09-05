@@ -6,26 +6,16 @@ import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
-import { CARD_GRID } from '@/theme/layout';
 import type { CardVariant, CollectionConfig, CollectionRow } from '../types';
 
 /**
- * Everything that differs between card shapes, in one table: the grid the
- * cards sit in and the skeleton shown while loading. CollectionPage reads it
- * so the page layout and the card face can never drift apart.
+ * Every variant sits in the same grid -- CardGrid, one wall for the whole
+ * site -- so nothing reflows as you move between tabs. All that is left to
+ * vary is the loading skeleton, and only because a text card has no image.
  */
-/**
- * Every variant shares one grid -- see CARD_GRID -- so the wall does not
- * reflow between tabs. Only the loading skeleton differs, to match the shape
- * of the image that variant renders.
- */
-/**
- * One grid and one card shape -- see CARD_GRID and the CardVariant docs. Only
- * the loading skeleton differs, and only because a text card has no image.
- */
-export const CARD_LAYOUT: Record<CardVariant, { grid: string; skeleton: string }> = {
-  media: { grid: CARD_GRID, skeleton: 'aspect-[3/4] rounded-lg' },
-  text: { grid: CARD_GRID, skeleton: 'h-40 rounded-lg' },
+export const CARD_LAYOUT: Record<CardVariant, { skeleton: string }> = {
+  media: { skeleton: 'aspect-[3/4] rounded-lg' },
+  text: { skeleton: 'h-40 rounded-lg' },
 };
 
 interface FaceProps {
@@ -44,6 +34,35 @@ interface FaceProps {
   onOpen: () => void;
   /** False when the collection has no detail dialog worth opening. */
   openable: boolean;
+}
+
+/**
+ * Props that make a clickable card reachable without a mouse.
+ *
+ * The card was a plain <div onClick>: pointer-only, invisible to the keyboard
+ * and announced as nothing. On Books, Photos, Recipes, Articles, Inspiration
+ * and Thoughts that meant the dialog -- the whole point of the card -- could
+ * not be opened at all without a mouse.
+ *
+ * role + tabIndex + Enter/Space is the pattern rather than wrapping the card
+ * in a real <button>, because the card already contains a link and the
+ * edit/delete buttons, and a button may not contain interactive children.
+ * Those inner controls stopPropagation, so they still act on their own.
+ */
+function openableProps(openable: boolean, title: string, onOpen: () => void) {
+  if (!openable) return {};
+  return {
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': `${title} -- open details`,
+    onClick: onOpen,
+    onKeyDown: (event: React.KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      // Space scrolls the page otherwise, and the card is the target here.
+      event.preventDefault();
+      onOpen();
+    },
+  };
 }
 
 /**
@@ -70,7 +89,7 @@ function MediaFace({
         'item-card group relative h-full flex flex-col overflow-hidden',
         openable && 'cursor-pointer',
       )}
-      onClick={openable ? onOpen : undefined}
+      {...openableProps(openable, title, onOpen)}
     >
       <div
         className="bg-muted relative overflow-hidden shrink-0"

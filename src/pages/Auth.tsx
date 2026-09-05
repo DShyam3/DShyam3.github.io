@@ -74,8 +74,17 @@ const Auth = () => {
             ) : (
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-2">
+                  {/* A placeholder is not a label: it disappears the moment
+                      you type, and a screen reader may never announce it.
+                      Visually hidden, so the design is unchanged. */}
+                  <label htmlFor="admin-password" className="sr-only">
+                    Password
+                  </label>
                   <Input
+                    id="admin-password"
+                    name="password"
                     type="password"
+                    autoComplete="current-password"
                     placeholder="Enter password..."
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

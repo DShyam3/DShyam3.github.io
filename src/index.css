@@ -110,7 +110,20 @@
     @apply border-border;
   }
 
+  /* One knob for the whole site.
+     Every size on the page -- type, padding, gaps, card columns -- is in rem,
+     so the root size is the single place the site's scale is decided. Below
+     ~1600px 1vw is under 16px and the clamp floors it, so nothing changes on
+     a laptop. Above that the site grows with the viewport instead of leaving
+     the extra pixels as centring margin, which is what made a 5K display
+     render laptop-sized chrome in the middle of an empty page.
+
+     The vh term is the brake. The shell splits a fixed viewport between
+     chrome and content, so on a short, very wide monitor (an ultrawide, an
+     iPad in landscape) scaling on width alone would spend the scarce height
+     on a bigger header. min() lets whichever axis is tighter decide. */
   html {
+    font-size: clamp(16px, min(1vw, 2vh), 24px);
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -195,6 +208,77 @@
     background-color: hsl(var(--badge-new));
     color: hsl(var(--badge-new-foreground));
   }
+
+  /* ─── The card wall ────────────────────────────────────────────────────
+     Every page that shows a grid of cards uses this one class, so the wall
+     does not reflow as you move between Books, Inventory and the Watchlist.
+     See src/theme/layout.ts, which exports the class name.
+
+     A card is as wide as the screen can afford (--card-ideal) but never so
+     wide that a second row falls below the fold. That second rule is the one
+     that matters: the shell pins the header and footer, so the grid gets a
+     fixed slice of the viewport, and on a short screen -- an iPad in
+     landscape, a laptop -- a width-only rule drew one row and a sliver of the
+     next. A card is an image of a known aspect plus a text block, so the
+     width whose two rows fill height h is
+
+         ((h - 2 * gap) / 2 - text) * aspect
+
+     -- two gaps because one sits above the first row and one between the two.
+     The aspect is the collection's own (--card-aspect, set by CollectionPage),
+     defaulting to the 2:3 poster the watchlist and books use, which is the
+     tallest card on the site.
+
+     CardGrid measures the space it actually has -- the scroll area less
+     whatever chrome sits above the first card -- and publishes it as
+     --card-avail-h. The 100vh fallback is for phones, where the shell is an
+     ordinary scrolling document and there is no fold to fit two rows above.
+
+     The cap lands on the card rather than the column because `1fr` columns
+     share out the leftover width, so a column is always at least --card-min
+     and usually wider -- capping the minimum would not stop the stretch from
+     pushing row two off screen. The column still stretches; the card inside
+     it stops at --card-max and centres, which costs a few pixels of extra
+     gutter and keeps the arithmetic above honest. */
+  .card-grid {
+    --card-text-h: 6.75rem;
+    --card-gap: 1rem;
+    --card-aspect: 2 / 3;
+    --card-ideal: 8.5rem;
+    --card-two-rows: calc(
+      ((var(--card-avail-h, 100vh) - var(--card-gap) * 2) / 2 - var(--card-text-h)) *
+        var(--card-aspect)
+    );
+    --card-min: clamp(8.5rem, min(var(--card-ideal), var(--card-two-rows)), 20rem);
+    --card-max: clamp(var(--card-min), var(--card-two-rows), 22rem);
+
+    display: grid;
+    gap: var(--card-gap);
+    padding-top: var(--card-gap);
+    padding-bottom: var(--card-gap);
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+  }
+
+  .card-grid > * {
+    width: 100%;
+    max-width: var(--card-max);
+    margin-inline: auto;
+  }
+
+  /* 11.5rem, not 8.5: a 10rem column left ~142px of card body, and a platform
+     wordmark plus a status pill needs ~163px to stay on one line. Below sm the
+     badges wrap instead, which is the right trade on a phone. */
+  @media (min-width: 640px) {
+    .card-grid {
+      --card-ideal: clamp(11.5rem, 12vw, 18rem);
+    }
+  }
+
+  @media (min-width: 768px) {
+    .card-grid {
+      --card-gap: 1.25rem;
+    }
+  }
 }
 
 @layer utilities {
@@ -202,47 +286,22 @@
     text-wrap: balance;
   }
 
-  /* Wide container - uses more screen space on large monitors */
+  /* The page's own width.
+
+     There is no max-width. Every cap this had -- 1920, then 2400 -- was a
+     number chosen for the monitor in front of whoever set it, and on anything
+     wider it turned into centring margin: on a 5120px display the 2400px cap
+     left 1360px of empty page down each side. The padding is fluid instead,
+     so the gutter grows with the screen while the content keeps the rest.
+
+     Padding is in vw rather than steps, because the steps had the same
+     problem in miniature -- the 1280px rule was still in force at 5000px. */
   .wide-container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
-  @media (min-width: 640px) {
-    .wide-container {
-      padding-left: 1.5rem;
-      padding-right: 1.5rem;
-    }
-  }
-
-  @media (min-width: 1024px) {
-    .wide-container {
-      padding-left: 3rem;
-      padding-right: 3rem;
-    }
-  }
-
-  @media (min-width: 1280px) {
-    .wide-container {
-      padding-left: 4rem;
-      padding-right: 4rem;
-    }
-  }
-
-  /* The dead space on a wide monitor came from the 1920px cap, not the
-     padding: on a 2560px display that was 320px of centring margin before any
-     padding was added. Raising the cap is what reclaims it. Padding stays at
-     4rem so mid-size screens keep their breathing room -- dropping it to 3rem
-     pulled the nav and header uncomfortably close to the edge. */
-  @media (min-width: 1536px) {
-    .wide-container {
-      padding-left: 4rem;
-      padding-right: 4rem;
-      max-width: 2400px;
-    }
+    padding-left: clamp(1rem, 2.5vw, 4rem);
+    padding-right: clamp(1rem, 2.5vw, 4rem);
   }
 
   .scrollbar-hide {
@@ -357,5 +416,25 @@
 
   .dot-matrix-text-lg {
     font-size: 1.75rem;
+  }
+}
+
+/* ─── Reduced motion ────────────────────────────────────────────────────
+   The site leans on motion: the opening sequence, the theme toggle sweep,
+   cards lifting on hover, the globe turning. All of it is decoration, and
+   for a reader who gets motion sickness or vestibular symptoms it is the
+   difference between a usable page and an unusable one.
+
+   Near-zero rather than `none`, so transitionend and animationend still
+   fire -- code that waits for one to advance its state keeps working. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

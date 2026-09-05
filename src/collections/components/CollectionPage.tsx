@@ -1,8 +1,10 @@
+import type { CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { CardGrid } from '@/components/shared/CardGrid';
 import { CountLabel } from '@/components/shared/CountLabel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCollection } from '../useCollection';
@@ -121,13 +123,25 @@ export function CollectionPage<T extends CollectionRow, R>({
         </>
       }
     >
-      <div className="px-4 md:px-0">
+      {/* `.card-grid` sizes a card so two rows clear the fold, and to do that
+          it has to know how tall a card is -- which is this collection's image
+          aspect plus the text block. It defaults to the tallest shape on the
+          site (2:3), so a collection of 16:9 stills would otherwise draw
+          needlessly small cards. */}
+      <div
+        className="px-4 md:px-0"
+        style={
+          {
+            '--card-aspect': config.card.aspect ?? '2 / 3',
+          } as CSSProperties
+        }
+      >
         {loading ? (
-          <div className={layout.grid}>
+          <CardGrid>
             {[...Array(8)].map((_, i) => (
               <Skeleton key={i} className={layout.skeleton} />
             ))}
-          </div>
+          </CardGrid>
         ) : count === 0 ? (
           <div className="py-20 text-center">
             <p className="text-muted-foreground font-serif text-lg italic">
@@ -148,12 +162,12 @@ export function CollectionPage<T extends CollectionRow, R>({
                   <div className="h-px bg-border flex-1" />
                   <CountLabel count={group.items.length} />
                 </div>
-                <div className={layout.grid}>{cardsFor(group.items)}</div>
+                <CardGrid>{cardsFor(group.items)}</CardGrid>
               </section>
             ))}
           </div>
         ) : (
-          <div className={layout.grid}>{cardsFor(items)}</div>
+          <CardGrid>{cardsFor(items)}</CardGrid>
         )}
       </div>
     </AppShell>

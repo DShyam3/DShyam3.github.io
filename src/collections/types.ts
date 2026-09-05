@@ -177,7 +177,7 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
   /**
    * How a card looks. `tile` is a wide row with a small icon (links,
    * inventory); `poster` is a 2:3 cover with text beneath (books, photos).
-   * Each variant owns its grid and skeleton shape -- see CARD_LAYOUT in
+   * Each variant owns its skeleton shape -- see CARD_LAYOUT in
    * EntityCard.tsx.
    */
   card: {

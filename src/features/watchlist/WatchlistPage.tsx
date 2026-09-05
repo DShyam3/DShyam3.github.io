@@ -58,7 +58,7 @@ import { cn } from '@/lib/utils';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { Filter } from 'lucide-react';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
-import { CARD_GRID } from '@/theme/layout';
+import { CardGrid } from '@/components/shared/CardGrid';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
@@ -1085,11 +1085,11 @@ const Watchlist = () => {
         ) : selectedCategory === 'Favourites' ? (
           <div className="px-4 md:px-0 py-6 space-y-8">
             {loading ? (
-              <div className={CARD_GRID}>
+              <CardGrid>
                 {[...Array(12)].map((_, i) => (
                   <Skeleton key={i} className="h-64 rounded-lg" />
                 ))}
-              </div>
+              </CardGrid>
             ) : favourites.length === 0 ? (
               <p className="text-center py-16 text-muted-foreground">
                 No favourites yet
@@ -1117,7 +1117,7 @@ const Watchlist = () => {
                             <Film className="h-3.5 w-3.5" />
                             <span>Movies ({catMovies.length})</span>
                           </div>
-                          <div className={CARD_GRID}>
+                          <CardGrid>
                             {catMovies.map((fav) => (
                               <div key={fav.id} className="item-card group">
                                 <div className="aspect-[2/3] bg-muted relative overflow-hidden">
@@ -1161,7 +1161,7 @@ const Watchlist = () => {
                                 </div>
                               </div>
                             ))}
-                          </div>
+                          </CardGrid>
                         </div>
                       )}
 
@@ -1171,7 +1171,7 @@ const Watchlist = () => {
                             <Tv className="h-3.5 w-3.5" />
                             <span>TV Shows ({catTVShows.length})</span>
                           </div>
-                          <div className={CARD_GRID}>
+                          <CardGrid>
                             {catTVShows.map((fav) => (
                               <div key={fav.id} className="item-card group">
                                 <div className="aspect-[2/3] bg-muted relative overflow-hidden">
@@ -1215,7 +1215,7 @@ const Watchlist = () => {
                                 </div>
                               </div>
                             ))}
-                          </div>
+                          </CardGrid>
                         </div>
                       )}
                     </div>
@@ -1226,7 +1226,7 @@ const Watchlist = () => {
           </div>
         ) : (
           <div className="px-4 md:px-0 py-6">
-            <div className={CARD_GRID}>
+            <CardGrid>
               {loading ? (
                 [...Array(12)].map((_, i) => (
                   <Skeleton key={i} className="h-64 rounded-lg" />
@@ -1262,7 +1262,7 @@ const Watchlist = () => {
                   />
                 ))
               )}
-            </div>
+            </CardGrid>
             {visibleCount < filteredWatchlist.length && (
               <div ref={observerTarget} className="h-20 w-full" />
             )}

@@ -78,7 +78,7 @@ export function PrivacyDialog() {
                                         </h3>
                                         <div className="privacy-text pb-2">
                                             <DotMatrixText
-                                                text="This website is a personal portfolio and does not collect, store, or share any personal data. No cookies are used, and no analytics are tracked. Your privacy is fully respected."
+                                                text="This website is a personal portfolio. It sets no cookies and asks for no personal data. It does count page views, using Umami — cookieless analytics that records the page, the referrer and a country, and never builds a profile or follows you to other sites. Signing in as admin stores a session in your browser; nothing else is kept."
                                                 size="xs"
                                             />
                                         </div>

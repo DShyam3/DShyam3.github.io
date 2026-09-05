@@ -9,30 +9,11 @@
  * Card *height* still varies, because the images genuinely do: a book or film
  * poster is 2:3 while an inventory photo is square. Same width, same columns,
  * different height -- which is the most consistency the source images allow.
+ *
+ * The rules themselves live in `.card-grid` in src/index.css, because they
+ * are arithmetic over CSS custom properties -- a column width that satisfies
+ * both the width available and the height the shell hands the grid -- and
+ * Tailwind's arbitrary-value syntax cannot express a calc() over a variable
+ * another component sets at runtime. See AppShell, which measures the height.
  */
-/**
- * Columns come from the width actually available, not from a breakpoint. Fixed
- * column counts sized every card to the widest screen it might appear on, so a
- * laptop drew the same big cards a monitor did and only one row survived
- * inside the fixed shell. auto-fill packs as many minimum-width columns as fit,
- * so a narrower window gets narrower cards and more of them stay on screen.
- */
-/**
- * The minimum grows with the screen. auto-fill on its own keeps the card the
- * same size and just adds columns, so a 2560px monitor drew thirteen tiny
- * cards where it used to draw eight readable ones. Raising the minimum at the
- * wide end holds the card count roughly steady and lets the cards themselves
- * get bigger, which is what a bigger screen is for.
- */
-export const CARD_GRID = [
-  'grid gap-4 md:gap-5 py-4 md:py-5',
-  '[grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr))]',
-  // 11.5rem, not 10: a 10rem column left ~142px of card body, and a platform
-  // wordmark plus a status pill needs ~163px to stay on one line. Below sm the
-  // badges wrap instead, which is the right trade on a phone.
-  'sm:[grid-template-columns:repeat(auto-fill,minmax(11.5rem,1fr))]',
-  'xl:[grid-template-columns:repeat(auto-fill,minmax(12rem,1fr))]',
-  '2xl:[grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr))]',
-  'min-[1920px]:[grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))]',
-  'min-[2400px]:[grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))]',
-].join(' ');
+export const CARD_GRID = 'card-grid';
