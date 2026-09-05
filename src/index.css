@@ -119,11 +119,17 @@
      render laptop-sized chrome in the middle of an empty page.
 
      The vh term is the brake. The shell splits a fixed viewport between
-     chrome and content, so on a short, very wide monitor (an ultrawide, an
-     iPad in landscape) scaling on width alone would spend the scarce height
-     on a bigger header. min() lets whichever axis is tighter decide. */
+     chrome and content, so on a short, very wide monitor (an ultrawide, a
+     tablet in landscape) scaling on width alone would spend the scarce height
+     on a bigger header. min() lets whichever axis is tighter decide.
+
+     The coefficients are deliberately shy of 1vw. Growing everything in step
+     with the width means the card text block and the chrome grow too, and on
+     a 16:9 monitor that ate the second row of cards faster than the extra
+     width added columns. As set: nothing below ~2000px changes at all, a
+     1440p monitor lands near 20px, and 4K and up sit at the 22px cap. */
   html {
-    font-size: clamp(16px, min(1vw, 2vh), 24px);
+    font-size: clamp(16px, min(0.8vw, 1.8vh), 22px);
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -212,45 +218,47 @@
   /* ─── The card wall ────────────────────────────────────────────────────
      Every page that shows a grid of cards uses this one class, so the wall
      does not reflow as you move between Books, Inventory and the Watchlist.
-     See src/theme/layout.ts, which exports the class name.
+     CardGrid renders it; src/theme/layout.ts exports the class name.
 
-     A card is as wide as the screen can afford (--card-ideal) but never so
+     A card is as wide as the screen can afford (--card-ideal), but never so
      wide that a second row falls below the fold. That second rule is the one
      that matters: the shell pins the header and footer, so the grid gets a
-     fixed slice of the viewport, and on a short screen -- an iPad in
-     landscape, a laptop -- a width-only rule drew one row and a sliver of the
-     next. A card is an image of a known aspect plus a text block, so the
-     width whose two rows fill height h is
+     fixed slice of the viewport, and on a short screen -- a laptop, a tablet
+     in landscape -- a width-only rule drew one row and a sliver of the next.
 
-         ((h - 2 * gap) / 2 - text) * aspect
-
-     -- two gaps because one sits above the first row and one between the two.
-     The aspect is the collection's own (--card-aspect, set by CollectionPage),
-     defaulting to the 2:3 poster the watchlist and books use, which is the
-     tallest card on the site.
-
-     CardGrid measures the space it actually has -- the scroll area less
-     whatever chrome sits above the first card -- and publishes it as
-     --card-avail-h. The 100vh fallback is for phones, where the shell is an
-     ordinary scrolling document and there is no fold to fit two rows above.
+     --card-fit is that second-row width, and CardGrid computes it, because
+     the sum it comes from is not one CSS can do. It needs the height the grid
+     actually has (everything above the first card -- header, filter bar,
+     count row, the watchlist's category tabs -- varies with the viewport),
+     and it needs to be dropped entirely when it lands below --card-floor: a
+     wall that cannot show two readable rows is better off with big cards and
+     one row than with small cards and still one row. Absent, the fallbacks
+     below leave --card-ideal in charge.
 
      The cap lands on the card rather than the column because `1fr` columns
      share out the leftover width, so a column is always at least --card-min
      and usually wider -- capping the minimum would not stop the stretch from
      pushing row two off screen. The column still stretches; the card inside
-     it stops at --card-max and centres, which costs a few pixels of extra
-     gutter and keeps the arithmetic above honest. */
+     it stops at --card-max and centres, which costs a few pixels of gutter
+     and keeps the fit honest. */
   .card-grid {
-    --card-text-h: 6.75rem;
+    /* Read by CardGrid, which does the arithmetic. --card-text-h is the block
+       under the image; it is the generous end of what that block measures,
+       since guessing high costs a slightly small card and guessing low costs
+       the second row. It is not a constant in reality -- a narrower card
+       wraps the title and the platform badges onto more lines -- so this is
+       the tallest it was measured at, not the average.
+
+       The image's aspect is deliberately NOT declared here: CollectionPage
+       sets --card-aspect on an ancestor per collection, and a declaration on
+       this element would shadow it. CardGrid falls back to the 2:3 poster
+       when nothing above it says otherwise. */
+    --card-floor: 8.5rem;
+    --card-text-h: 8rem;
     --card-gap: 1rem;
-    --card-aspect: 2 / 3;
     --card-ideal: 8.5rem;
-    --card-two-rows: calc(
-      ((var(--card-avail-h, 100vh) - var(--card-gap) * 2) / 2 - var(--card-text-h)) *
-        var(--card-aspect)
-    );
-    --card-min: clamp(8.5rem, min(var(--card-ideal), var(--card-two-rows)), 20rem);
-    --card-max: clamp(var(--card-min), var(--card-two-rows), 22rem);
+    --card-min: clamp(var(--card-floor), min(var(--card-ideal), var(--card-fit, 100vw)), 20rem);
+    --card-max: clamp(var(--card-min), var(--card-fit, 22rem), 22rem);
 
     display: grid;
     gap: var(--card-gap);
@@ -263,6 +271,13 @@
     width: 100%;
     max-width: var(--card-max);
     margin-inline: auto;
+  }
+
+  /* Anything spanning the whole wall is not a card -- the empty states say
+     "no items in upcoming yet" across the grid -- and capping it to a card's
+     width squeezed the sentence into a column. */
+  .card-grid > .col-span-full {
+    max-width: none;
   }
 
   /* 11.5rem, not 8.5: a 10rem column left ~142px of card body, and a platform
@@ -281,6 +296,23 @@
   }
 }
 
+/* ─── Footer ────────────────────────────────────────────────────────────
+   The footer's three labels were set at the same 1.15rem as the nav, which
+   reads as fine print rather than as part of the site: on a wide monitor the
+   sign-off was the smallest thing on the page. One step up -- but only where
+   there is room for it: a phone footer has three labels to fit across 375px
+   and keeps the smaller face. The clock beside the words steps at the same
+   breakpoint; see DotMatrixClock.css. */
+.app-footer .dot-matrix-text-xs {
+  font-size: 1.15rem;
+}
+
+@media (min-width: 768px) {
+  .app-footer .dot-matrix-text-xs {
+    font-size: 1.5rem;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -295,13 +327,15 @@
      so the gutter grows with the screen while the content keeps the rest.
 
      Padding is in vw rather than steps, because the steps had the same
-     problem in miniature -- the 1280px rule was still in force at 5000px. */
+     problem in miniature -- the 1280px rule was still in force at 5000px. It
+     is deliberately tight: this is a wall of cards, and a gutter's job here
+     is to keep the first card off the bezel, not to frame the page. */
   .wide-container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: clamp(1rem, 2.5vw, 4rem);
-    padding-right: clamp(1rem, 2.5vw, 4rem);
+    padding-left: clamp(0.75rem, 1.25vw, 2rem);
+    padding-right: clamp(0.75rem, 1.25vw, 2rem);
   }
 
   .scrollbar-hide {
@@ -370,13 +404,19 @@
 
 /* ─── Short viewports ───────────────────────────────────────────────────
    The pinned shell splits a fixed viewport between chrome and content, so on
-   a laptop or an iPad in landscape every pixel the header and footer take is
-   a pixel the card wall does not get -- at 800px tall the chrome left room
-   for a single row. Below 900px of height the chrome gives some back: tighter
-   padding, and the two display faces drop one step down the type scale.
-   Width-based breakpoints cannot see this; only a height query can. */
+   a laptop or a tablet in landscape every pixel the header and footer take is
+   a pixel the card wall does not get. Below 1100px of height the chrome gives
+   it back: tighter padding, and the display faces drop one step down the type
+   scale. Width-based breakpoints cannot see this; only a height query can.
 
-@media (min-width: 768px) and (max-height: 900px) {
+   1100px, not the 900px this started at, because 900 missed the case it was
+   written for. A tablet in landscape is 1024 tall, and there the chrome and
+   the grid's own padding came to nearly 400px -- enough that the card wall
+   could not show two rows however small the cards were made, so CardGrid gave
+   up and drew one row of big ones. Trimming the chrome is what buys the
+   second row; shrinking the cards alone could not. */
+
+@media (min-width: 768px) and (max-height: 1100px) {
   .app-header {
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
@@ -393,6 +433,17 @@
   .app-footer {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
+  }
+
+  /* The footer face steps back down too. It was raised because a footer set
+     in fine print reads as an afterthought, but that is an argument about a
+     wide monitor, and here the height is what is scarce. */
+  .app-footer .dot-matrix-text-xs {
+    font-size: 1.15rem;
+  }
+
+  .card-grid {
+    --card-gap: 0.75rem;
   }
 }
 

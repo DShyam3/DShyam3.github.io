@@ -34,47 +34,60 @@ function buildCorsHeaders(req: Request) {
 // The origin allowlist above is enforced by *browsers*. curl ignores it, so
 // without this the endpoint allowlist bounds what can be proxied but not how
 // much: a loop could burn the whole TMDB quota and leave the public Watchlist
-// showing nothing.
+// with nothing to show.
 //
-// A sliding window per caller IP. Held in memory rather than in Postgres,
-// which is a deliberate trade: a database counter would be exact across
-// instances but costs a write on every request, and the thing being protected
-// is a free API quota, not data. In memory this is per instance and resets on
-// a cold start -- it stops a script hammering the endpoint, which is the
-// actual threat, and does not pretend to stop a distributed one.
-const WINDOW_MS = 60_000
+// The counter lives in Postgres, not in this module. An in-memory Map was the
+// obvious cheap answer and it does nothing here -- the Edge Runtime does not
+// reuse an isolate between requests at this traffic level, so module state is
+// empty on every call. Measured: 90 requests in 2 seconds all passed, with a
+// diagnostic header reporting a map size of 0 every time.
+const WINDOW_SECONDS = 60
 const MAX_REQUESTS_PER_WINDOW = 60
 
-const hits = new Map<string, number[]>()
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 /**
- * Best available caller identity. Supabase sits in front of the function and
- * appends the real client IP to x-forwarded-for, so the *first* entry is the
- * client's own claim and can be spoofed. That is acceptable here: spoofing it
- * costs an attacker nothing but also gains them nothing beyond what a pool of
- * real IPs would, and no decision more serious than "wait a minute" hangs on
- * it.
+ * Best available caller identity. Supabase sits in front of this function and
+ * appends the real client IP to x-forwarded-for, so the first entry is the
+ * client's own claim and can be spoofed. Acceptable here: spoofing costs an
+ * attacker nothing but gains them nothing a pool of real IPs would not, and
+ * no decision more serious than "wait a minute" hangs on it.
  */
 function callerKey(req: Request): string {
     const forwarded = req.headers.get('x-forwarded-for') || ''
     return forwarded.split(',')[0].trim() || 'unknown'
 }
 
-function isRateLimited(key: string): boolean {
-    const now = Date.now()
-    const recent = (hits.get(key) ?? []).filter((t) => now - t < WINDOW_MS)
-    recent.push(now)
-    hits.set(key, recent)
-
-    // Drop keys that have gone quiet, so a long-lived instance does not hold
-    // an entry for every IP it has ever seen.
-    if (hits.size > 5_000) {
-        for (const [k, times] of hits) {
-            if (times.every((t) => now - t >= WINDOW_MS)) hits.delete(k)
-        }
+/**
+ * Counts the hit and reports whether the caller is over the limit.
+ *
+ * Fails open. If the database is unreachable the visitor still gets their
+ * page: a rate limiter that takes the site down when it breaks is worse than
+ * the abuse it prevents, and what is being protected here is a free API
+ * quota rather than data.
+ */
+async function isRateLimited(key: string): Promise<boolean> {
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/check_rate_limit`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                apikey: SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+                p_key: key,
+                p_limit: MAX_REQUESTS_PER_WINDOW,
+                p_window_seconds: WINDOW_SECONDS,
+            }),
+        })
+        if (!response.ok) return false
+        return (await response.json()) === true
+    } catch (error) {
+        console.error('rate limit check failed, allowing request:', error)
+        return false
     }
-
-    return recent.length > MAX_REQUESTS_PER_WINDOW
 }
 
 serve(async (req) => {
@@ -85,13 +98,13 @@ serve(async (req) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    if (isRateLimited(callerKey(req))) {
+    if (await isRateLimited(callerKey(req))) {
         return new Response(JSON.stringify({ error: 'Too many requests' }), {
             status: 429,
             headers: {
                 ...corsHeaders,
                 'Content-Type': 'application/json',
-                'Retry-After': String(WINDOW_MS / 1000),
+                'Retry-After': String(WINDOW_SECONDS),
             },
         })
     }

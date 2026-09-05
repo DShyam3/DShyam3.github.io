@@ -1,49 +1,42 @@
 import { useEffect, useRef, useState } from 'react';
-import { useDotMatrix } from '@/contexts/DotMatrixContext';
 
 import './DotMatrixClock.css';
 
-const DotMatrixPattern = ({ char, patterns }: { char: string, patterns: Record<string, number[][]> }) => {
-  const pattern = patterns[char] || patterns['0'];
-
-  return (
-    <>
-      {pattern.map((row, rowIndex) => (
-        <div key={rowIndex} className="dot-matrix-row">
-          {row.map((dot, colIndex) => (
-            <div key={colIndex} className={`dot-matrix-dot ${dot ? 'active' : ''}`} />
-          ))}
-        </div>
-      ))}
-    </>
-  );
-};
-
+/**
+ * One character of the clock, mounted twice: the face you see and the face
+ * waiting behind it. Flipping swaps them.
+ */
 const DotMatrixDigit = ({
   char,
   prevChar,
   isFlipping,
-  patterns,
 }: {
   char: string;
   prevChar: string;
   isFlipping: boolean;
-  patterns: Record<string, number[][]>;
 }) => {
   return (
-    <div className={`dot-matrix-digit-wrapper ${isFlipping ? 'flipping' : ''}`}>
-      <div className="dot-matrix-digit dot-matrix-digit-front">
-        <DotMatrixPattern char={isFlipping ? prevChar : char} patterns={patterns} />
-      </div>
-      <div className="dot-matrix-digit dot-matrix-digit-back">
-        <DotMatrixPattern char={char} patterns={patterns} />
-      </div>
-    </div>
+    <span className={`dot-matrix-digit-wrapper ${isFlipping ? 'flipping' : ''}`}>
+      <span className="dot-matrix-digit dot-matrix-digit-front">
+        {isFlipping ? prevChar : char}
+      </span>
+      <span className="dot-matrix-digit dot-matrix-digit-back">{char}</span>
+    </span>
   );
 };
 
+/**
+ * The footer clock.
+ *
+ * The digits are Doto, the same face as the words either side of them, and
+ * not the hand-drawn dot grid this used to build out of `charPatterns`. That
+ * grid could only be sized in whole pixels -- a dot is a div, and a
+ * fractional one smears under its own border-radius -- so it could not follow
+ * the text as the footer face and the root size grew, and it read as a blur
+ * beside crisp glyphs. A font has no such problem: it is the same glyphs at
+ * whatever size it is set to.
+ */
 export const DotMatrixClock = () => {
-  const { data, loading } = useDotMatrix();
   const [time, setTime] = useState('');
   const [prevTime, setPrevTime] = useState('');
   const [flippingIndices, setFlippingIndices] = useState<Set<number>>(new Set());
@@ -54,7 +47,6 @@ export const DotMatrixClock = () => {
   const timeRef = useRef('');
 
   useEffect(() => {
-    if (loading || !data) return;
     const updateTime = () => {
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
@@ -95,22 +87,18 @@ export const DotMatrixClock = () => {
     const interval = setInterval(updateTime, 1000);
 
     return () => clearInterval(interval);
-  }, [loading, data]);
-
-  if (loading || !data) return null;
-  const { charPatterns } = data;
+  }, []);
 
   return (
-    <div className="dot-matrix-clock">
+    <span className="dot-matrix-clock dot-matrix-text dot-matrix-text-xs">
       {time.split('').map((char, index) => (
         <DotMatrixDigit
           key={index}
           char={char}
           prevChar={prevTime[index] || char}
           isFlipping={flippingIndices.has(index)}
-          patterns={charPatterns}
         />
       ))}
-    </div>
+    </span>
   );
 };

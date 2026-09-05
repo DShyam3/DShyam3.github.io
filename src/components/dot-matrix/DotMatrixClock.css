@@ -1,20 +1,23 @@
+/* The clock is Doto, like the words either side of it -- see the component --
+   so it needs no size of its own: it takes the face of whatever
+   .dot-matrix-text-* class it is given, and the footer's rule for that class
+   sizes all three labels together. */
 .dot-matrix-clock {
     display: inline-flex;
-    gap: 0.125rem;
     align-items: center;
 }
 
 .dot-matrix-digit-wrapper {
-    perspective: 200px;
+    /* In em so the flip's depth scales with the digit rather than getting
+       flatter as the footer face grows. */
+    perspective: 12em;
     display: inline-block;
     position: relative;
     transform-style: preserve-3d;
 }
 
 .dot-matrix-digit {
-    display: flex;
-    flex-direction: column;
-    gap: 0.0625rem;
+    display: block;
     backface-visibility: hidden;
 }
 
@@ -81,34 +84,3 @@
     }
 }
 
-/* A digit is 7 rows of dots, so the values below decide both its height and
-   its texture, and the two have to be solved together.
-
-   Height: 7 rows at a 2px pitch is 13px, which matches the ~13px glyphs of
-   the 18.4px footer text. At the old 3px pitch the clock stood 20px tall and
-   was the loudest thing in the footer.
-
-   Texture: Doto draws its dots about as wide as the gaps between them. A dot
-   wider than its gap fills in and reads as a solid block rather than a
-   matrix -- which is what 1.5px dots on a 0.5px gap did, fixing the height
-   but making the clock denser than the words beside it. Equal dot and gap
-   keeps the dots reading as dots.
-
-   Both are written in rem -- 0.0625rem is the 1px above at the default root
-   size -- so the clock keeps matching the footer text after the root size
-   grows on a wide screen, instead of staying 13px tall beside 28px words. */
-.dot-matrix-row {
-    display: flex;
-    gap: 0.0625rem;
-}
-
-.dot-matrix-dot {
-    width: 0.0625rem;
-    height: 0.0625rem;
-    border-radius: 50%;
-    background-color: transparent;
-}
-
-.dot-matrix-dot.active {
-    background-color: currentColor;
-}
