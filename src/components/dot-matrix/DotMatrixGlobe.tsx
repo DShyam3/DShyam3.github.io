@@ -2,18 +2,13 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Globe, Map as MapIcon } from 'lucide-react';
 import { ASSETS_URL } from '@/lib/constants';
 import {
-    FLAT_PROJECTIONS,
-    FLAT_PROJECTION_ORDER,
-    type FlatProjection,
-} from '@/lib/mapProjections';
-
-// The flat map morphs between exactly two projections -- the one the UN
-// replaced and the one it adopted -- so the toggle has two sides and the
-// dots carry a position for each. A third would mean choosing which pair to
-// morph between; two does not.
-const [PROJECTION_A, PROJECTION_B] = FLAT_PROJECTION_ORDER;
-const SPEC_A = FLAT_PROJECTIONS[PROJECTION_A];
-const SPEC_B = FLAT_PROJECTIONS[PROJECTION_B];
+    EQUAL_EARTH_ASPECT,
+    EQUAL_EARTH_LABEL,
+    EQUAL_EARTH_NOTE,
+    EQUAL_EARTH_ROW_UNIT,
+    equalEarthRowScale,
+    projectEqualEarth,
+} from '@/lib/equalEarth';
 
 // Removed d3-geo and topojson
 import './DotMatrixGlobe.css';
@@ -86,7 +81,6 @@ export function DotMatrixGlobe({
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
     const visitedSet = useMemo(() => new Set(visitedCountryCodes), [visitedCountryCodes]);
     const [mode, setMode] = useState<'2d' | '3d'>('3d');
-    const [projection, setProjection] = useState<FlatProjection>(PROJECTION_B);
 
     // Drag to rotate state
     const dragRef = useRef({
@@ -115,9 +109,6 @@ export function DotMatrixGlobe({
     const animRef = useRef({
         progress: 0,
         rotation: 0,
-        // 0 is projection A, 1 is projection B. Eased so the two can be
-        // compared by watching the continents move between them.
-        flatMix: 1,
         lastTime: performance.now(),
     });
     const requestRef = useRef<number>();
@@ -173,10 +164,10 @@ export function DotMatrixGlobe({
         return dots.map(([col, row, code]) => {
             const lon = ((col + 0.5) / cols) * 2 * Math.PI - Math.PI;
             const lat = Math.PI / 2 - ((row + 0.5) / rows) * Math.PI;
-            // Only the flat positions differ between projections -- the grid is
+            // Only the flat position comes from the projection -- the grid is
             // still lon/lat, so the globe below reads the very same dots.
-            const flatA = { ...SPEC_A.project(lon, lat), ...SPEC_A.rowScale(lat) };
-            const flatB = { ...SPEC_B.project(lon, lat), ...SPEC_B.rowScale(lat) };
+            const flat = projectEqualEarth(lon, lat);
+            const { hScale, vScale } = equalEarthRowScale(lat);
             // Longitudes converge at the poles, so an evenly-spaced lat/lon
             // grid piles every column onto nearly the same screen position
             // there -- which is what made Antarctica render as a bright ring
@@ -200,8 +191,10 @@ export function DotMatrixGlobe({
                 col,
                 stride,
                 cosLat,
-                flatA,
-                flatB,
+                fx: flat.nx,
+                fy: flat.ny,
+                hScale,
+                vScale,
                 ux: Math.cos(lat) * Math.sin(lon),
                 uy: -Math.sin(lat),
                 uz: Math.cos(lat) * Math.cos(lon),
@@ -229,10 +222,10 @@ export function DotMatrixGlobe({
                 dragRef.current.targetRotation = lon;
                 dragRef.current.targetOffsetLat = -lat;
 
-                // The flat map is not a straight col/row scale in either
-                // projection, so the pan target has to go through the one on
-                // show or 2D focus lands beside the country instead of on it.
-                const flatCentre = FLAT_PROJECTIONS[projection].project(lon, lat);
+                // The flat map is not a straight col/row scale, so the pan
+                // target has to go through the projection too or 2D focus
+                // lands beside the country instead of on it.
+                const flatCentre = projectEqualEarth(lon, lat);
                 dragRef.current.targetPanXNorm = flatCentre.nx;
                 dragRef.current.targetPanYNorm = flatCentre.ny;
 
@@ -245,7 +238,7 @@ export function DotMatrixGlobe({
                 });
             }
         }
-    }, [focusedCountryCode, focusTrigger, dotData, mode, projection]);
+    }, [focusedCountryCode, focusTrigger, dotData, mode]);
 
     const borderSegments = useMemo(() => {
         if (!dotData) return [];
@@ -260,7 +253,8 @@ export function DotMatrixGlobe({
         const getLonLat = (x: number, y: number) => {
             const lon = (x / cols) * 2 * Math.PI - Math.PI;
             const lat = Math.PI / 2 - (y / rows) * Math.PI;
-            return { lon, lat, a: SPEC_A.project(lon, lat), b: SPEC_B.project(lon, lat) };
+            const flat = projectEqualEarth(lon, lat);
+            return { lon, lat, fx: flat.nx, fy: flat.ny };
         };
 
         const get3D = (lon: number, lat: number) => {
@@ -280,13 +274,8 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    ax1: p1.a.nx, ay1: p1.a.ny, ax2: p2.a.nx, ay2: p2.a.ny,
-                    bx1: p1.b.nx, by1: p1.b.ny, bx2: p2.b.nx, by2: p2.b.ny,
-                    // A border that only exists because the projection clamped
-                    // it to the edge is a line across the top of the map, not a
-                    // coastline. Dropped while that projection is on show.
-                    croppedA: p1.a.cropped || p2.a.cropped,
-                    croppedB: p1.b.cropped || p2.b.cropped,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
             // Bottom edge
@@ -297,13 +286,8 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    ax1: p1.a.nx, ay1: p1.a.ny, ax2: p2.a.nx, ay2: p2.a.ny,
-                    bx1: p1.b.nx, by1: p1.b.ny, bx2: p2.b.nx, by2: p2.b.ny,
-                    // A border that only exists because the projection clamped
-                    // it to the edge is a line across the top of the map, not a
-                    // coastline. Dropped while that projection is on show.
-                    croppedA: p1.a.cropped || p2.a.cropped,
-                    croppedB: p1.b.cropped || p2.b.cropped,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
             // Left edge
@@ -314,13 +298,8 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    ax1: p1.a.nx, ay1: p1.a.ny, ax2: p2.a.nx, ay2: p2.a.ny,
-                    bx1: p1.b.nx, by1: p1.b.ny, bx2: p2.b.nx, by2: p2.b.ny,
-                    // A border that only exists because the projection clamped
-                    // it to the edge is a line across the top of the map, not a
-                    // coastline. Dropped while that projection is on show.
-                    croppedA: p1.a.cropped || p2.a.cropped,
-                    croppedB: p1.b.cropped || p2.b.cropped,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
             // Top edge
@@ -331,13 +310,8 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    ax1: p1.a.nx, ay1: p1.a.ny, ax2: p2.a.nx, ay2: p2.a.ny,
-                    bx1: p1.b.nx, by1: p1.b.ny, bx2: p2.b.nx, by2: p2.b.ny,
-                    // A border that only exists because the projection clamped
-                    // it to the edge is a line across the top of the map, not a
-                    // coastline. Dropped while that projection is on show.
-                    croppedA: p1.a.cropped || p2.a.cropped,
-                    croppedB: p1.b.cropped || p2.b.cropped,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
         }
@@ -363,16 +337,6 @@ export function DotMatrixGlobe({
             animRef.current.progress = Math.max(target, animRef.current.progress - dt * speed);
         }
 
-        // Sliding between the two projections rather than cutting is the point
-        // of having both: the swelling of Greenland is far easier to read as a
-        // movement than as two stills.
-        const flatTarget = projection === PROJECTION_B ? 1 : 0;
-        if (animRef.current.flatMix < flatTarget) {
-            animRef.current.flatMix = Math.min(flatTarget, animRef.current.flatMix + dt * speed);
-        } else if (animRef.current.flatMix > flatTarget) {
-            animRef.current.flatMix = Math.max(flatTarget, animRef.current.flatMix - dt * speed);
-        }
-        const flatMix = animRef.current.flatMix;
 
         if (animRef.current.progress > 0) {
             // Apply momentum / velocity if not dragging
@@ -413,14 +377,11 @@ export function DotMatrixGlobe({
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, W, H);
 
-        // The two projections are different shapes -- Mercator is square,
-        // Equal Earth is ~2.05:1 -- so the flat map is fitted inside the canvas
-        // rather than the canvas being resized to it. A CSS box transition and
-        // this morph would ease on separate clocks and pull the continents out
-        // of shape between them; one clock cannot.
-        const flatAspect = SPEC_A.aspect + (SPEC_B.aspect - SPEC_A.aspect) * flatMix;
-        const mapW = Math.min(W, H * flatAspect);
-        const mapH = mapW / flatAspect;
+        // The flat map is fitted inside the canvas rather than the canvas
+        // being resized to it, so the box never moves underneath the drawing
+        // and the 2D/3D morph has nothing to keep step with.
+        const mapW = Math.min(W, H * EQUAL_EARTH_ASPECT);
+        const mapH = mapW / EQUAL_EARTH_ASPECT;
 
         const isDark = document.documentElement.classList.contains('dark');
 
@@ -551,13 +512,11 @@ export function DotMatrixGlobe({
         const radiusMultiplier = isMobile ? (progress === 0 ? 0.25 : 0.32) : 0.38;
         const baseRadius = Math.min(dotSpacingX, dotSpacingY) * radiusMultiplier * curZoom;
 
-        // Neither projection leaves the grid even: Equal Earth squeezes it
-        // towards the poles, Mercator stretches it. Either way a dot sized for
-        // the equator is wrong everywhere else, so these are the equatorial
-        // spacings each dot's own spacing is measured against.
-        const rowUnit = SPEC_A.rowUnit + (SPEC_B.rowUnit - SPEC_A.rowUnit) * flatMix;
+        // Equal Earth does not leave the grid even -- it squeezes towards the
+        // poles -- so a dot sized for the equator is wrong everywhere else.
+        // These are the equatorial spacings each dot's own is measured against.
         const flatSpacingX = mapW / cols;
-        const flatSpacingY = (mapH * rowUnit) / rows;
+        const flatSpacingY = (mapH * EQUAL_EARTH_ROW_UNIT) / rows;
         const flatUnit = Math.min(dotSpacingX, dotSpacingY);
 
         const cosRot = Math.cos(rotation);
@@ -594,14 +553,10 @@ export function DotMatrixGlobe({
                 ctx.globalAlpha = dynamicAlpha;
                 ctx.beginPath();
                 for (const seg of borderSegments) {
-                    // Skip a border the projection on show only has because it
-                    // clamped the pole to the edge.
-                    if (progress < 0.5 && (flatMix < 0.5 ? seg.croppedA : seg.croppedB)) continue;
-
-                    let x1 = (seg.ax1 + (seg.bx1 - seg.ax1) * flatMix) * W_zoom + W_offset;
-                    let y1 = (seg.ay1 + (seg.by1 - seg.ay1) * flatMix) * H_zoom + H_offset;
-                    let x2 = (seg.ax2 + (seg.bx2 - seg.ax2) * flatMix) * W_zoom + W_offset;
-                    let y2 = (seg.ay2 + (seg.by2 - seg.ay2) * flatMix) * H_zoom + H_offset;
+                    let x1 = seg.fx1 * W_zoom + W_offset;
+                    let y1 = seg.fy1 * H_zoom + H_offset;
+                    let x2 = seg.fx2 * W_zoom + W_offset;
+                    let y2 = seg.fy2 * H_zoom + H_offset;
                     let zNorm1 = 1, zNorm2 = 1;
 
                     if (progress > 0) {
@@ -678,9 +633,8 @@ export function DotMatrixGlobe({
                 continue;
             }
 
-            const { flatA, flatB } = dot;
-            const cx2d = (flatA.nx + (flatB.nx - flatA.nx) * flatMix) * W_zoom + W_offset;
-            const cy2d = (flatA.ny + (flatB.ny - flatA.ny) * flatMix) * H_zoom + H_offset;
+            const cx2d = dot.fx * W_zoom + W_offset;
+            const cy2d = dot.fy * H_zoom + H_offset;
 
             // 2D Viewport culling optimization:
             // Use a generous safety margin to prevent dots from popping out at edges
@@ -728,31 +682,19 @@ export function DotMatrixGlobe({
             // whether this dot touches its neighbour. The floor keeps the last
             // couple of degrees from fading out entirely -- they overlap a
             // little there, which reads as solid ice rather than as a gap.
-            // A flat dot is an ellipse, because no projection stretches a
-            // grid cell equally in both directions. Mercator holds the columns
-            // still and spreads the rows by sec φ, so a round dot sized to the
-            // columns leaves Canada and Russia in horizontal stripes; Equal
-            // Earth squeezes the rows harder than the columns, so a round dot
-            // sized to the rows leaves gaps the other way. Sizing each axis to
-            // its own spacing leaves the same proportional gap in both, which
-            // is what reads as an even matrix.
-            const hScale = flatA.hScale + (flatB.hScale - flatA.hScale) * flatMix;
-            const vScale = flatA.vScale + (flatB.vScale - flatA.vScale) * flatMix;
-            const flatScaleX = Math.max(0.25, (hScale * flatSpacingX) / flatUnit);
-            const flatScaleY = Math.max(0.25, (vScale * flatSpacingY) / flatUnit);
+            // A flat dot is an ellipse, because the projection does not
+            // stretch a grid cell equally in both directions: Equal Earth
+            // squeezes the rows harder than the columns, so a round dot sized
+            // to the rows leaves horizontal gaps. Sizing each axis to its own
+            // spacing leaves the same proportional gap both ways, which is what
+            // reads as an even matrix.
+            const flatScaleX = Math.max(0.25, (dot.hScale * flatSpacingX) / flatUnit);
+            const flatScaleY = Math.max(0.25, (dot.vScale * flatSpacingY) / flatUnit);
             // A globe has no such stretch: the dots go back to round.
             const sphereScale = Math.max(0.4, 0.6 + 0.4 * zNorm) * polarScale;
             const activeRadiusX = baseRadius * (flatScaleX * (1 - progress) + sphereScale * progress);
             const activeRadiusY = baseRadius * (flatScaleY * (1 - progress) + sphereScale * progress);
-            // A dot the projection cannot place sits clamped to the edge, so
-            // it fades out as that projection takes over instead of stacking
-            // into a bright bar along the top. The globe crops nothing, so the
-            // fade lifts as the map rolls up into it.
-            const cropFade =
-                (flatA.cropped ? flatMix : 1) * (flatB.cropped ? 1 - flatMix : 1);
-            const activeOpacity =
-                (1 * (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress) *
-                (1 - (1 - cropFade) * (1 - progress));
+            const activeOpacity = 1 * (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
 
             const pDot: ProjectedDot = {
                 x: cx, y: cy,
@@ -835,14 +777,14 @@ export function DotMatrixGlobe({
             dragRef.current.panY *= 0.9;
         }
 
-        if (progress > 0 || animRef.current.progress !== target || flatMix !== flatTarget) {
+        if (progress > 0 || animRef.current.progress !== target) {
             requestRef.current = requestAnimationFrame((t) => draw(t));
         } else if (mode === '2d' && (Math.abs(dragRef.current.targetZoom - curZoom) > 0.01 || Math.abs(panX) > 1 || Math.abs(panY) > 1)) {
             // keep 2D drawing alive ONLY if it's currently actively zooming/panning
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, projection, stars]);
+    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars]);
 
     drawRef.current = draw;
 
@@ -884,8 +826,6 @@ export function DotMatrixGlobe({
 
         for (const p of projectedDotsRef.current) {
             if (p.isBack && progress > 0.5) continue;
-            // Cropped off the edge of the projection on show, so not there to hit.
-            if (p.opacity < 0.02) continue;
 
             // Fast boundary check before the elliptical distance
             if (Math.abs(mx - p.x) > p.rx * 3 || Math.abs(my - p.y) > p.ry * 3) continue;
@@ -1160,43 +1100,19 @@ export function DotMatrixGlobe({
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             />
-            {/* Projection picker. It stays on the globe rather than vanishing,
-                but greyed out: a globe has no projection to pick, and saying so
-                in place makes the point better than an empty corner does. It
-                still shows which projection the map will unroll back into.
-                Fades over the same 500ms the dots take to morph. */}
+            {/* Says what you are looking at, and nothing more -- there is one
+                projection now. Hidden over the globe, which is in no projection
+                at all, so the label never names something the map is not.
+                Fades over the 500ms the dots take to roll up into the sphere. */}
             {dotData && (
                 <div
-                    className={`absolute bottom-4 left-4 z-10 flex items-center gap-0.5 p-0.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm transition-opacity duration-500 ${
-                        mode === '3d' ? 'opacity-40 pointer-events-none' : 'pointer-events-auto'
+                    className={`absolute bottom-4 left-4 z-10 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-[10px] sm:text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
+                        mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
                     }`}
-                    role="group"
-                    aria-label="Map projection"
+                    title={EQUAL_EARTH_NOTE}
+                    aria-hidden={mode === '3d'}
                 >
-                    {FLAT_PROJECTION_ORDER.map((id) => {
-                        const spec = FLAT_PROJECTIONS[id];
-                        const active = projection === id;
-                        return (
-                            <button
-                                key={id}
-                                onClick={() => setProjection(id)}
-                                disabled={mode === '3d'}
-                                aria-pressed={active}
-                                title={
-                                    mode === '3d'
-                                        ? 'A globe has no projection to pick -- switch to the 2D map.'
-                                        : spec.note
-                                }
-                                className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold tracking-wider whitespace-nowrap transition-[background-color,color] duration-300 disabled:cursor-default ${
-                                    active
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground enabled:hover:text-foreground'
-                                }`}
-                            >
-                                {spec.label}
-                            </button>
-                        );
-                    })}
+                    {EQUAL_EARTH_LABEL}
                 </div>
             )}
             {dotData && (
