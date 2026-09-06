@@ -328,7 +328,21 @@ function useProvideFinanceData() {
   // The profile every non-template row is written against (Phase 7.1). One
   // operator, several subjects; a profile switcher arrives in 7.2d, once
   // reads are filtered by profile too.
+  // Every profile the operator configures, and which one is on screen. The
+  // self profile is the default; the switcher in the finance shell changes it,
+  // and changing it refetches (7.2d).
+  const [profiles, setProfiles] = useState<{ id: string; name: string; is_self: boolean; emoji: string | null }[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
+
+  /**
+   * A scoped table holds this profile's rows plus the shared templates, which
+   * carry a null profile_id (7.1). Both are wanted: the page separates them by
+   * `is_default` once they arrive.
+   */
+  const scoped = <T,>(q: T): T => {
+    if (!profileId) return q;
+    return (q as { or: (f: string) => T }).or(`profile_id.eq.${profileId},is_default.eq.true`);
+  };
 
   const fetchSupabaseData = async () => {
     if (!isAdmin) return;
@@ -354,29 +368,32 @@ function useProvideFinanceData() {
           budgetPresetsRes,
           selfProfileRes
         ] = await Promise.all([
-          supabase.from('finance_settings').select('*'),
-          supabase.from('finance_user_holidays').select('*'),
-          supabase.from('finance_goals').select('*'),
-          supabase.from('finance_goal_contributions').select('*'),
-          supabase.from('finance_bank_accounts').select('*'),
-          supabase.from('finance_memberships').select('*'),
-          supabase.from('finance_debts').select('*'),
-          supabase.from('finance_credit_scores').select('*'),
-          supabase.from('finance_budget_categories').select('*'),
-          supabase.from('finance_budget_items').select('*'),
-          supabase.from('finance_recurring_bills').select('*'),
-          supabase.from('finance_transactions').select('*'),
+          scoped(supabase.from('finance_settings').select('*')),
+          scoped(supabase.from('finance_user_holidays').select('*')),
+          scoped(supabase.from('finance_goals').select('*')),
+          scoped(supabase.from('finance_goal_contributions').select('*')),
+          scoped(supabase.from('finance_bank_accounts').select('*')),
+          scoped(supabase.from('finance_memberships').select('*')),
+          scoped(supabase.from('finance_debts').select('*')),
+          scoped(supabase.from('finance_credit_scores').select('*')),
+          scoped(supabase.from('finance_budget_categories').select('*')),
+          scoped(supabase.from('finance_budget_items').select('*')),
+          scoped(supabase.from('finance_recurring_bills').select('*')),
+          scoped(supabase.from('finance_transactions').select('*')),
           supabase.from('finance_tax_configs').select('*'),
           supabase.from('finance_recurring_templates').select('*'),
           supabase.from('finance_credit_bureaus').select('*'),
           supabase.from('finance_holiday_defaults').select('*'),
           supabase.from('finance_budget_presets').select('*'),
-          supabase.from('finance_profiles').select('id').eq('is_self', true).maybeSingle()
+          supabase.from('finance_profiles').select('id, name, is_self, emoji').order('is_self', { ascending: false })
         ]);
 
-        // Written by the 7.1 migration, so this is present unless someone has
-        // deleted it. `saveDataToSupabase` refuses to write without it.
-        setProfileId(selfProfileRes.data?.id ?? null);
+        // Written by the 7.1 migration, so at least the self profile is present
+        // unless someone has deleted it. `saveDataToSupabase` refuses to write
+        // without one.
+        const loadedProfiles = selfProfileRes.data ?? [];
+        setProfiles(loadedProfiles);
+        if (!profileId) setProfileId(loadedProfiles.find(p => p.is_self)?.id ?? loadedProfiles[0]?.id ?? null);
 
         // A single failing table used to `throw` here, aborting the whole load
         // and silently dropping the page back to localStorage — which is how a
@@ -935,7 +952,10 @@ function useProvideFinanceData() {
     if (isAdmin) {
       fetchSupabaseData();
     }
-  }, [isAdmin]);
+    // Refetches when the switcher changes profile: `scoped` filters on
+    // profileId, so the whole ledger is a different set of rows (7.2d).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, profileId]);
 
   const saveDataToSupabase = async (key: string, contentData: any) => {
     if (!isAdmin) return;
@@ -1300,6 +1320,8 @@ function useProvideFinanceData() {
   };
 
   const value = {
+    profiles,
+    setProfiles,
     fetchingHolidays,
     setFetchingHolidays,
     bankHolidaysList,

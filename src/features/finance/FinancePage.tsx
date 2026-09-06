@@ -349,6 +349,7 @@ function FinanceView() {
     setBankHolidaysMap,
     includeWorkLeaveInActual,
     setIncludeWorkLeaveInActual,
+    profiles,
   } = useFinanceData();
 
   // The visible section comes from the URL, not from state: a surface is a
@@ -1185,6 +1186,20 @@ function FinanceView() {
           );
         })}
       </nav>
+      {profiles.length > 1 && (
+        <Select value={profileId ?? undefined} onValueChange={setProfileId}>
+          <SelectTrigger className="h-7 w-auto gap-1.5 rounded-lg border-primary/20 bg-background/60 px-2.5 text-xs font-sans shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {profiles.map(p => (
+              <SelectItem key={p.id} value={p.id} className="text-xs font-sans">
+                {p.emoji ? `${p.emoji} ` : ''}{p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
       {loadingDb && (
         <span className="text-[10px] text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
           <Loader2 className="h-3 w-3 animate-spin text-primary" /> syncing...

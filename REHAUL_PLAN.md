@@ -922,7 +922,8 @@ data lives. The prop lists collapse on their own after that.
 | 7.2b | Lift the data state and the load/save into a provider, so surfaces can be separate components — **DONE** | 7.2a |
 | 7.2c | Extract the six inline sections into `surfaces/*.tsx`; per-surface chunks — **DONE** | 7.2b |
 | 7.2c-i | Move each dialog to the surface that opens it, and lift the page-computed totals — **DONE** | 7.2c |
-| 7.2d | Per-surface queries, profile switcher, profile-filtered reads | 7.2c |
+| 7.2d | Profile switcher and profile-filtered reads — **DONE** | 7.2c |
+| 7.2e | Per-surface queries: retire the 17-query mount so a surface loads only what it renders | 7.2d |
 | 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |
 | 7.4 | Snapshots — balance, net worth, per profile | none |
 | 7.5 | Scenario engine — "what happens if I do X?" | 7.0 |
