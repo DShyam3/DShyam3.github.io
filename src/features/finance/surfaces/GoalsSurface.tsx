@@ -498,8 +498,8 @@ export default function GoalsSurface() {
                 <AreaChart data={chartData} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="goalProgressGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(var(--positive))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--positive))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -524,13 +524,13 @@ export default function GoalsSurface() {
                       borderColor: 'rgba(255, 255, 255, 0.1)',
                       borderRadius: '16px',
                       fontSize: '11px',
-                      color: '#cdd6f4'
+                      color: 'hsl(var(--foreground))'
                     }}
                   />
                   <Area
                     type="monotone"
                     dataKey="amount"
-                    stroke="#10b981"
+                    stroke="hsl(var(--positive))"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#goalProgressGrad)"

@@ -743,7 +743,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                             <div className="w-1.5 flex justify-center shrink-0">
                               {!tx.isReviewed && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#3b82f6] animate-pulse" />
+                                <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--chart-3))] animate-pulse" />
                               )}
                             </div>
 

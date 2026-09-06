@@ -65,13 +65,13 @@ const HOLDING_CATEGORIES = [
 type HoldingCategory = typeof HOLDING_CATEGORIES[number];
 
 const CATEGORY_COLORS: Record<HoldingCategory, string> = {
-  Stock: '#3b82f6',       // Blue
-  ETF: '#10b981',         // Emerald
-  Crypto: '#8b5cf6',      // Purple
-  'Mutual Fund': '#06b6d4', // Cyan
-  'Real Estate': '#f59e0b', // Amber
-  Cash: '#ec4899',        // Pink
-  Other: '#6b7280'        // Gray
+  Stock: 'hsl(var(--chart-3))',       // Blue
+  ETF: 'hsl(var(--positive))',         // Emerald
+  Crypto: 'hsl(var(--chart-5))',      // Purple
+  'Mutual Fund': 'hsl(var(--chart-2))', // Cyan
+  'Real Estate': 'hsl(var(--chart-4))', // Amber
+  Cash: 'hsl(var(--chart-5))',        // Pink
+  Other: 'hsl(var(--muted-foreground))'        // Gray
 };
 
 export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
@@ -146,7 +146,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       .map(([name, value]) => ({
         name,
         value,
-        color: CATEGORY_COLORS[name as HoldingCategory] || '#6b7280'
+        color: CATEGORY_COLORS[name as HoldingCategory] || 'hsl(var(--muted-foreground))'
       }))
       .filter(item => item.value > 0);
   }, [holdings, portfolioStats.investmentAccountsCash]);
@@ -627,12 +627,12 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                 >
                   <defs>
                     <linearGradient id="colorFV" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(var(--positive))" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="hsl(var(--positive))" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorTC" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -672,7 +672,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     type="monotone"
                     name="Future Value"
                     dataKey="Future Value"
-                    stroke="#10b981"
+                    stroke="hsl(var(--positive))"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorFV)"
@@ -681,7 +681,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     type="monotone"
                     name="Total Contributions"
                     dataKey="Total Contributions"
-                    stroke="#3b82f6"
+                    stroke="hsl(var(--chart-3))"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorTC)"

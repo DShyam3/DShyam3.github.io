@@ -32,11 +32,11 @@ import { useTrueLayer } from '../useTrueLayer';
  * a lift not a restyle; Phase 7.C replaces them with design tokens.
  */
 const CREDIT_TIER_COLORS: Record<CreditTier, string> = {
-  1: '#ef4444',
-  2: '#f59e0b',
-  3: '#84cc16',
-  4: '#10b981',
-  5: '#047857',
+  1: 'hsl(var(--destructive))',
+  2: 'hsl(var(--chart-4))',
+  3: 'hsl(var(--positive))',
+  4: 'hsl(var(--positive))',
+  5: 'hsl(var(--positive))',
 };
 
 const CREDIT_TIER_CLASSES: Record<CreditTier, string> = {
@@ -190,7 +190,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   const [newCreditScore, setNewCreditScore] = useState<{ bureau: 'experian' | 'transunion' | 'equifax'; score: number | ''; date: string }>({ bureau: 'experian', score: '', date: new Date().toISOString().split('T')[0] });
 
   const [activeAccount, setActiveAccount] = useState<BankAccount | null>(null);
-  const [newAccount, setNewAccount] = useState<Omit<BankAccount, 'id' | 'balance' | 'annualFee'> & { balance: number | ''; annualFee: number | ''; }>({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: '#475569' });
+  const [newAccount, setNewAccount] = useState<Omit<BankAccount, 'id' | 'balance' | 'annualFee'> & { balance: number | ''; annualFee: number | ''; }>({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: 'hsl(var(--muted-foreground))' });
 
   const [activeMembership, setActiveMembership] = useState<Membership | null>(null);
   const [newMembership, setNewMembership] = useState<Omit<Membership, 'id' | 'annualFee'> & { annualFee: number | ''; }>({ name: '', type: 'points', status: 'Active', annualFee: '', useCase: '' });
@@ -213,7 +213,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
     draws: [],
     notes: '',
     emoji: '',
-    color: '#f43f5e'
+    color: 'hsl(var(--destructive))'
   });
   const [newDraw, setNewDraw] = useState<{ date: string; amount: number | ''; label: string }>({ date: '', amount: '', label: '' });
 
@@ -235,7 +235,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
     setBankAccounts(updated);
     saveDataToSupabase('accounts', { bankAccounts: updated, memberships, creditScores });
     setIsAddAccountOpen(false);
-    setNewAccount({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: '#475569' });
+    setNewAccount({ name: '', type: 'checking', issuer: '', balance: '', annualFee: '', useCase: '', emoji: '', color: 'hsl(var(--muted-foreground))' });
     toast({ title: 'Account Added', description: `Added ${created.name}.` });
   };
 
@@ -327,7 +327,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
     draws: [] as DebtDraw[],
     notes: '',
     emoji: '',
-    color: '#f43f5e'
+    color: 'hsl(var(--destructive))'
   };
 
   const sumDraws = (draws: DebtDraw[]) => draws.reduce((sum, d) => sum + d.amount, 0);
@@ -536,7 +536,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               <td className="py-3 px-3 font-semibold text-foreground flex items-center gap-2">
                 <span
                   className="w-1.5 h-6 rounded-full shrink-0"
-                  style={{ backgroundColor: account.color || '#475569' }}
+                  style={{ backgroundColor: account.color || 'hsl(var(--muted-foreground))' }}
                 />
                 <span className="text-base shrink-0 leading-none">{account.emoji || '💰'}</span>
                 <span>{account.name}</span>
@@ -731,7 +731,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                   <div className="flex items-center gap-2">
                     <span
                       className="w-1.5 h-6 rounded-full shrink-0"
-                      style={{ backgroundColor: debt.color || '#f43f5e' }}
+                      style={{ backgroundColor: debt.color || 'hsl(var(--destructive))' }}
                     />
                     <span className="text-base shrink-0 leading-none">{debt.emoji || '🏦'}</span>
                     <span>{debt.name}</span>
@@ -853,12 +853,12 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             <AreaChart data={selectedDebtProjection} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="debtBalanceFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="debtPaidFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--positive))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--positive))" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" vertical={false} />
@@ -884,7 +884,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                 type="monotone"
                 dataKey="balance"
                 name="Outstanding"
-                stroke="#f43f5e"
+                stroke="hsl(var(--destructive))"
                 strokeWidth={2}
                 fill="url(#debtBalanceFill)"
               />
@@ -892,7 +892,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                 type="monotone"
                 dataKey="paid"
                 name="Repaid"
-                stroke="#10b981"
+                stroke="hsl(var(--positive))"
                 strokeWidth={2}
                 fill="url(#debtPaidFill)"
               />
@@ -1025,7 +1025,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               band: found,
             };
           }
-          return { text: 'Unknown', cls: 'text-muted-foreground', color: '#6b7280', band: null };
+          return { text: 'Unknown', cls: 'text-muted-foreground', color: 'hsl(var(--muted-foreground))', band: null };
         };
 
         const rating = latest ? getRatingFromBands(latest.score, bureau.key) : null;
@@ -1127,7 +1127,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                       cx={dotPos.x}
                       cy={dotPos.y}
                       r="6"
-                      fill="#ffffff"
+                      fill="hsl(var(--background))"
                       stroke={rating?.color || bureau.color}
                       strokeWidth="2.5"
                       filter={`url(#shadow-${bureau.key})`}
@@ -1375,13 +1375,13 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             <Input
               id="acc-color"
               type="color"
-              value={newAccount.color || '#475569'}
+              value={newAccount.color || 'hsl(var(--muted-foreground))'}
               onChange={(e) => setNewAccount({ ...newAccount, color: e.target.value })}
               className="rounded-xl h-10 w-12 border-primary/20 bg-background/50 p-1 cursor-pointer"
             />
             <Input
               type="text"
-              value={newAccount.color || '#475569'}
+              value={newAccount.color || 'hsl(var(--muted-foreground))'}
               onChange={(e) => setNewAccount({ ...newAccount, color: e.target.value })}
               className="rounded-xl h-10 border-primary/20 bg-background/50 font-mono text-xs uppercase flex-1"
             />
@@ -1461,13 +1461,13 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               <Input
                 id="edit-acc-color"
                 type="color"
-                value={activeAccount.color || '#475569'}
+                value={activeAccount.color || 'hsl(var(--muted-foreground))'}
                 onChange={(e) => setActiveAccount({ ...activeAccount, color: e.target.value })}
                 className="rounded-xl h-10 w-12 border-primary/20 bg-background/50 p-1 cursor-pointer"
               />
               <Input
                 type="text"
-                value={activeAccount.color || '#475569'}
+                value={activeAccount.color || 'hsl(var(--muted-foreground))'}
                 onChange={(e) => setActiveAccount({ ...activeAccount, color: e.target.value })}
                 className="rounded-xl h-10 border-primary/20 bg-background/50 font-mono text-xs uppercase flex-1"
               />
@@ -2034,7 +2034,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             <Input
               id="edit-debt-color"
               type="color"
-              value={activeDebt.color || '#f43f5e'}
+              value={activeDebt.color || 'hsl(var(--destructive))'}
               onChange={(e) => setActiveDebt({ ...activeDebt, color: e.target.value })}
               className="rounded-xl h-10 border-primary/20 bg-background/50 p-1"
             />

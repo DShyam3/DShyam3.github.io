@@ -106,14 +106,14 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   .map((item, idx) => ({
     ...item,
     color: [
-      '#3b82f6',
-      '#10b981',
-      '#f59e0b',
-      '#ef4444',
-      '#8b5cf6',
-      '#ec4899',
-      '#14b8a6',
-      '#f97316',
+      'hsl(var(--chart-3))',
+      'hsl(var(--positive))',
+      'hsl(var(--chart-4))',
+      'hsl(var(--destructive))',
+      'hsl(var(--chart-5))',
+      'hsl(var(--chart-5))',
+      'hsl(var(--chart-2))',
+      'hsl(var(--chart-4))',
     ][idx % 8]
   }));
 

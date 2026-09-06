@@ -116,6 +116,15 @@ export const getAccountDefaultEmoji = (type: string, name: string): string => {
   return '💰';
 };
 
+/**
+ * Brand colours, deliberately left as hex rather than design tokens.
+ *
+ * Everything else in the finance feature moved onto --chart-1..5, --positive
+ * and --destructive in 7.C. These are the exception: Monzo's coral and Amex's
+ * blue are identity, the same kind of thing as a logo, and the whole point is
+ * that you recognise an account by its colour. Tokenising them would make the
+ * accounts list less informative, not more consistent.
+ */
 export const getAccountDefaultColor = (name: string): string => {
   const lower = name.toLowerCase();
   if (lower.includes('chase')) return '#115e59'; // teal

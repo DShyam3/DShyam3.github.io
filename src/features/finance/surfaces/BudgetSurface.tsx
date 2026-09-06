@@ -473,9 +473,9 @@ const totalSpent = needsTotal + wantsTotal + totalSavings;
 const showWarning = totalBudgetLimit > 0 && totalSpent > totalBudgetLimit;
 
 const allocationData = [
-  { name: 'Needs', value: needsTotal, color: '#3b82f6' },
-  { name: 'Savings', value: totalSavings, color: '#10b981' },
-  { name: 'Wants', value: wantsTotal, color: '#8892b0' }
+  { name: 'Needs', value: needsTotal, color: 'hsl(var(--chart-3))' },
+  { name: 'Savings', value: totalSavings, color: 'hsl(var(--positive))' },
+  { name: 'Wants', value: wantsTotal, color: 'hsl(var(--muted-foreground))' }
 ].filter(d => d.value > 0);
 
 const currentMonthName = new Date().toLocaleDateString('en-GB', { month: 'short' });
@@ -561,14 +561,14 @@ const categoryData = budgetCategories
       name: cat.name,
       value: spent,
       color: [
-        '#3b82f6', // blue
-        '#10b981', // emerald
-        '#f59e0b', // amber
-        '#ef4444', // red
-        '#8b5cf6', // violet
-        '#ec4899', // pink
-        '#14b8a6', // teal
-        '#f97316', // orange
+        'hsl(var(--chart-3))', // blue
+        'hsl(var(--positive))', // emerald
+        'hsl(var(--chart-4))', // amber
+        'hsl(var(--destructive))', // red
+        'hsl(var(--chart-5))', // violet
+        'hsl(var(--chart-5))', // pink
+        'hsl(var(--chart-2))', // teal
+        'hsl(var(--chart-4))', // orange
       ][idx % 8]
     };
   })
@@ -703,16 +703,16 @@ return (
                               name: item.name,
                               value: item.value,
                               color: [
-                                '#10b981', // emerald
-                                '#14b8a6', // teal
-                                '#06b6d4', // cyan
-                                '#3b82f6', // blue
-                                '#6366f1', // indigo
-                                '#8b5cf6', // violet
-                                '#ec4899', // pink
-                                '#f59e0b', // amber
-                                '#ef4444', // red
-                                '#f97316', // orange
+                                'hsl(var(--positive))', // emerald
+                                'hsl(var(--chart-2))', // teal
+                                'hsl(var(--chart-2))', // cyan
+                                'hsl(var(--chart-3))', // blue
+                                'hsl(var(--chart-5))', // indigo
+                                'hsl(var(--chart-5))', // violet
+                                'hsl(var(--chart-5))', // pink
+                                'hsl(var(--chart-4))', // amber
+                                'hsl(var(--destructive))', // red
+                                'hsl(var(--chart-4))', // orange
                               ][idx % 10]
                             }))}
                             cx="50%"
@@ -727,16 +727,16 @@ return (
                               <Cell
                                 key={`cell-savings-${idx}`}
                                 fill={[
-                                  '#10b981', // emerald
-                                  '#14b8a6', // teal
-                                  '#06b6d4', // cyan
-                                  '#3b82f6', // blue
-                                  '#6366f1', // indigo
-                                  '#8b5cf6', // violet
-                                  '#ec4899', // pink
-                                  '#f59e0b', // amber
-                                  '#ef4444', // red
-                                  '#f97316', // orange
+                                  'hsl(var(--positive))', // emerald
+                                  'hsl(var(--chart-2))', // teal
+                                  'hsl(var(--chart-2))', // cyan
+                                  'hsl(var(--chart-3))', // blue
+                                  'hsl(var(--chart-5))', // indigo
+                                  'hsl(var(--chart-5))', // violet
+                                  'hsl(var(--chart-5))', // pink
+                                  'hsl(var(--chart-4))', // amber
+                                  'hsl(var(--destructive))', // red
+                                  'hsl(var(--chart-4))', // orange
                                 ][idx % 10]}
                               />
                             ))}
@@ -750,16 +750,16 @@ return (
                         {savingsItems.map((item, idx) => {
                           const pct = totalSavings > 0 ? (item.value / totalSavings) * 100 : 0;
                           const color = [
-                            '#10b981', // emerald
-                            '#14b8a6', // teal
-                            '#06b6d4', // cyan
-                            '#3b82f6', // blue
-                            '#6366f1', // indigo
-                            '#8b5cf6', // violet
-                            '#ec4899', // pink
-                            '#f59e0b', // amber
-                            '#ef4444', // red
-                            '#f97316', // orange
+                            'hsl(var(--positive))', // emerald
+                            'hsl(var(--chart-2))', // teal
+                            'hsl(var(--chart-2))', // cyan
+                            'hsl(var(--chart-3))', // blue
+                            'hsl(var(--chart-5))', // indigo
+                            'hsl(var(--chart-5))', // violet
+                            'hsl(var(--chart-5))', // pink
+                            'hsl(var(--chart-4))', // amber
+                            'hsl(var(--destructive))', // red
+                            'hsl(var(--chart-4))', // orange
                           ][idx % 10];
                           return (
                             <div key={idx} className="flex items-center gap-1">
@@ -797,7 +797,7 @@ return (
                       <tr className="hover:bg-muted/10">
                         <td className="p-3 font-sans font-medium text-foreground">
                           <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] shrink-0" /> Needs
+                            <span className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--chart-3))] shrink-0" /> Needs
                           </div>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
@@ -807,7 +807,7 @@ return (
                       <tr className="hover:bg-muted/10">
                         <td className="p-3 font-sans font-medium text-foreground">
                           <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] shrink-0" /> Savings
+                            <span className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--positive))] shrink-0" /> Savings
                           </div>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
@@ -817,7 +817,7 @@ return (
                       <tr className="hover:bg-muted/10">
                         <td className="p-3 font-sans font-medium text-foreground">
                           <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#8892b0] shrink-0" /> Wants
+                            <span className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--muted-foreground))] shrink-0" /> Wants
                           </div>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
@@ -913,8 +913,8 @@ return (
       {budgetCategories.filter(isCategoryActive).map((cat, idx) => {
         const isSelected = selectedBudgetCategoryFilter === cat.id;
         const catColor = [
-          '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
-          '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'
+          'hsl(var(--chart-3))', 'hsl(var(--positive))', 'hsl(var(--chart-4))', 'hsl(var(--destructive))',
+          'hsl(var(--chart-5))', 'hsl(var(--chart-5))', 'hsl(var(--chart-2))', 'hsl(var(--chart-4))'
         ][idx % 8];
         return (
           <button
@@ -985,7 +985,7 @@ return (
                   {multiMonthChartData.map((entry, index) => (
                     <Cell
                       key={`cell-hist-${index}`}
-                      fill={entry.spent > entry.budget ? '#ef4444' : '#10b981'}
+                      fill={entry.spent > entry.budget ? 'hsl(var(--destructive))' : 'hsl(var(--positive))'}
                     />
                   ))}
                 </Bar>
@@ -1063,14 +1063,14 @@ return (
             const isExpanded = expandedCategories[category.id] !== false; // expanded by default!
 
             const catColor = [
-              '#3b82f6', // blue
-              '#10b981', // emerald
-              '#f59e0b', // amber
-              '#ef4444', // red
-              '#8b5cf6', // violet
-              '#ec4899', // pink
-              '#14b8a6', // teal
-              '#f97316', // orange
+              'hsl(var(--chart-3))', // blue
+              'hsl(var(--positive))', // emerald
+              'hsl(var(--chart-4))', // amber
+              'hsl(var(--destructive))', // red
+              'hsl(var(--chart-5))', // violet
+              'hsl(var(--chart-5))', // pink
+              'hsl(var(--chart-2))', // teal
+              'hsl(var(--chart-4))', // orange
             ][idx % 8];
 
             return (
@@ -1155,7 +1155,7 @@ return (
                       <div
                         className={cn(
                           "h-full rounded-full transition-all duration-300",
-                          isOver ? "bg-[#ef4444]" : "bg-[#10b981]"
+                          isOver ? "bg-[hsl(var(--destructive))]" : "bg-[hsl(var(--positive))]"
                         )}
                         style={{ width: `${Math.min(100, catBudget > 0 ? (catSpent / catBudget) * 100 : 0)}%` }}
                       />
@@ -1219,7 +1219,7 @@ return (
                               <div
                                 className={cn(
                                   "h-full rounded-full transition-all duration-300",
-                                  isItemOver ? "bg-[#ef4444]" : "bg-[#10b981]"
+                                  isItemOver ? "bg-[hsl(var(--destructive))]" : "bg-[hsl(var(--positive))]"
                                 )}
                                 style={{ width: `${Math.min(100, item.budgeted > 0 ? (spentVal / item.budgeted) * 100 : 0)}%` }}
                               />

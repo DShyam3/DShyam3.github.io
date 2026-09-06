@@ -782,11 +782,22 @@ colours, no new dependencies. `recharts@2.15.4` is already installed.
   section headings only, exactly as the rest of the site. The scale in
   `src/theme/typography.ts` is the ladder, and 12px is the floor.
 - **Colour.** Only the tokens in `src/index.css`. No palette is added.
-- **Charts.** This is the one place a naive port would introduce colour. It
-  does not: series are a monochrome ramp of `--foreground` at stepped opacity,
-  with `--accent` reserved for the single highlighted series, and
-  `--destructive` for negative values only. That is both faithful to "nothing
-  new" and a close match for how Treasury actually looks.
+- **Charts.** The plan originally called for a monochrome ramp of
+  `--foreground` at stepped opacity. That was written before checking what
+  shadcn — which this project already follows, tokens and all — says about the
+  problem: its Charts work defines `--chart-1` … `--chart-5` as themed tokens
+  for exactly this. Adopting those is staying inside the system rather than
+  adding to it, and it keeps the information a category legend carries, which a
+  grey ramp would have flattened. `--chart-1` is the accent itself, so a
+  single-series chart still matches the page.
+- **One addition beyond the standard contract: `--positive`.** shadcn ships
+  `--destructive` and deliberately no success token, but a finance view has to
+  tell a gain from a loss, and the site's accent is a warm orange that reads as
+  a warning. It is shaped exactly like `--destructive`.
+- **Brand colours stay as data.** Monzo's coral and Amex's blue live in
+  `getAccountDefaultColor`; they are identity, like a logo, and the point is
+  that you recognise an account by its colour. Tokenising them would make the
+  accounts list less informative, not more consistent.
 - **Surfaces.** `ui/card.tsx`, `--shadow-card`, `--radius`. Nothing bespoke.
 
 **Navigation — ten tabs become five surfaces.** Ten top-level tabs is the other

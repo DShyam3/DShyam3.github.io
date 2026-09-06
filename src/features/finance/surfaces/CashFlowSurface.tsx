@@ -109,27 +109,27 @@ const activePeriodLabel = CF_PERIOD_OPTIONS.find(o => o.key === cfPeriod)?.label
 // Category Details & Color Resolver
 const getCategoryDetails = (categoryName: string) => {
   const catLower = categoryName.toLowerCase();
-  if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) return { emoji: '🏠', color: '#3b82f6' };
-  if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) return { emoji: '🛍️', color: '#a855f7' };
-  if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('dining')) return { emoji: '🍔', color: '#f97316' };
-  if (catLower.includes('groceries')) return { emoji: '🥑', color: '#10b981' };
-  if (catLower.includes('insurance')) return { emoji: '🚘', color: '#eab308' };
-  if (catLower.includes('gas') || catLower.includes('fuel')) return { emoji: '⛽', color: '#ef4444' };
-  if (catLower.includes('personal') || catLower.includes('health') || catLower.includes('care')) return { emoji: '💆', color: '#ec4899' };
-  if (catLower.includes('phone') || catLower.includes('mobile')) return { emoji: '📱', color: '#06b6d4' };
-  if (catLower.includes('uber') || catLower.includes('taxi') || catLower.includes('ride')) return { emoji: '🚗', color: '#8b5cf6' };
-  if (catLower.includes('transport') || catLower.includes('travel')) return { emoji: '🚗', color: '#eab308' };
-  if (catLower.includes('entertainment') || catLower.includes('movie') || catLower.includes('cinema')) return { emoji: '🎬', color: '#f43f5e' };
-  if (catLower.includes('electric') || catLower.includes('power') || catLower.includes('utilities')) return { emoji: '⚡', color: '#3b82f6' };
-  if (catLower.includes('internet') || catLower.includes('wifi')) return { emoji: '🌐', color: '#0284c7' };
-  if (catLower.includes('gym') || catLower.includes('fitness') || catLower.includes('sports')) return { emoji: '🏋️', color: '#84cc16' };
-  if (catLower.includes('pet') || catLower.includes('vet')) return { emoji: '🐶', color: '#d97706' };
-  if (catLower.includes('gift') || catLower.includes('presents')) return { emoji: '🎁', color: '#f43f5e' };
-  if (catLower.includes('donations') || catLower.includes('charity')) return { emoji: '🤝', color: '#78716c' };
-  if (catLower.includes('spotify') || catLower.includes('music')) return { emoji: '🎵', color: '#10b981' };
-  if (catLower.includes('netflix') || catLower.includes('hulu') || catLower.includes('tv')) return { emoji: '📺', color: '#e11d48' };
-  if (catLower.includes('audible') || catLower.includes('books')) return { emoji: '🎧', color: '#f59e0b' };
-  return { emoji: '📦', color: '#71717a' };
+  if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) return { emoji: '🏠', color: 'hsl(var(--chart-3))' };
+  if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) return { emoji: '🛍️', color: 'hsl(var(--chart-5))' };
+  if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('dining')) return { emoji: '🍔', color: 'hsl(var(--chart-4))' };
+  if (catLower.includes('groceries')) return { emoji: '🥑', color: 'hsl(var(--positive))' };
+  if (catLower.includes('insurance')) return { emoji: '🚘', color: 'hsl(var(--chart-4))' };
+  if (catLower.includes('gas') || catLower.includes('fuel')) return { emoji: '⛽', color: 'hsl(var(--destructive))' };
+  if (catLower.includes('personal') || catLower.includes('health') || catLower.includes('care')) return { emoji: '💆', color: 'hsl(var(--chart-5))' };
+  if (catLower.includes('phone') || catLower.includes('mobile')) return { emoji: '📱', color: 'hsl(var(--chart-2))' };
+  if (catLower.includes('uber') || catLower.includes('taxi') || catLower.includes('ride')) return { emoji: '🚗', color: 'hsl(var(--chart-5))' };
+  if (catLower.includes('transport') || catLower.includes('travel')) return { emoji: '🚗', color: 'hsl(var(--chart-4))' };
+  if (catLower.includes('entertainment') || catLower.includes('movie') || catLower.includes('cinema')) return { emoji: '🎬', color: 'hsl(var(--destructive))' };
+  if (catLower.includes('electric') || catLower.includes('power') || catLower.includes('utilities')) return { emoji: '⚡', color: 'hsl(var(--chart-3))' };
+  if (catLower.includes('internet') || catLower.includes('wifi')) return { emoji: '🌐', color: 'hsl(var(--chart-3))' };
+  if (catLower.includes('gym') || catLower.includes('fitness') || catLower.includes('sports')) return { emoji: '🏋️', color: 'hsl(var(--positive))' };
+  if (catLower.includes('pet') || catLower.includes('vet')) return { emoji: '🐶', color: 'hsl(var(--chart-4))' };
+  if (catLower.includes('gift') || catLower.includes('presents')) return { emoji: '🎁', color: 'hsl(var(--destructive))' };
+  if (catLower.includes('donations') || catLower.includes('charity')) return { emoji: '🤝', color: 'hsl(var(--muted-foreground))' };
+  if (catLower.includes('spotify') || catLower.includes('music')) return { emoji: '🎵', color: 'hsl(var(--positive))' };
+  if (catLower.includes('netflix') || catLower.includes('hulu') || catLower.includes('tv')) return { emoji: '📺', color: 'hsl(var(--destructive))' };
+  if (catLower.includes('audible') || catLower.includes('books')) return { emoji: '🎧', color: 'hsl(var(--chart-4))' };
+  return { emoji: '📦', color: 'hsl(var(--muted-foreground))' };
 };
 
 // Build monthly data buckets covering the period
@@ -313,7 +313,7 @@ const StackedCategoryBar = (props: any) => {
         y={y}
         width={width}
         height={height}
-        fill="#f43f5e"
+        fill="hsl(var(--destructive))"
         opacity={bucket.isFuture ? 0.15 : 0.85}
       />
     );
@@ -521,7 +521,7 @@ return (
                 return (
                   <RoundedBar
                     {...props as { x: number; y: number; width: number; height: number }}
-                    fill={val >= 0 ? '#10b981' : '#f43f5e'}
+                    fill={val >= 0 ? 'hsl(var(--positive))' : 'hsl(var(--destructive))'}
                     opacity={dataPoint?.isFuture ? 0.15 : 1}
                   />
                 );
@@ -621,7 +621,7 @@ return (
                   return (
                     <RoundedBar
                       {...props as { x: number; y: number; width: number; height: number }}
-                      fill="#06b6d4"
+                      fill="hsl(var(--chart-2))"
                       opacity={dataPoint?.isFuture ? 0.15 : 0.85}
                     />
                   );

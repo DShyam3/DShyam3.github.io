@@ -195,9 +195,9 @@ function useProvideFinanceData() {
   });
   const [creditBureaus, setCreditBureaus] = useState<CreditBureauConfig[]>(() => {
     return [
-      { key: 'experian', label: 'Experian', emoji: '🟣', color: '#8b5cf6', maxScore: 1250, gradient: 'from-violet-500/10 to-violet-500/5' },
-      { key: 'transunion', label: 'Credit Karma', emoji: '🔵', color: '#06b6d4', maxScore: 710, gradient: 'from-cyan-500/10 to-cyan-500/5' },
-      { key: 'equifax', label: 'ClearScore', emoji: '🟡', color: '#f59e0b', maxScore: 1000, gradient: 'from-amber-500/10 to-amber-500/5' }
+      { key: 'experian', label: 'Experian', emoji: '🟣', color: 'hsl(var(--chart-5))', maxScore: 1250, gradient: 'from-violet-500/10 to-violet-500/5' },
+      { key: 'transunion', label: 'Credit Karma', emoji: '🔵', color: 'hsl(var(--chart-2))', maxScore: 710, gradient: 'from-cyan-500/10 to-cyan-500/5' },
+      { key: 'equifax', label: 'ClearScore', emoji: '🟡', color: 'hsl(var(--chart-4))', maxScore: 1000, gradient: 'from-amber-500/10 to-amber-500/5' }
     ];
   });
   const [holidayDefaults, setHolidayDefaults] = useState<Record<number, { count: number; dates: string; occasion: string }>>(() => {

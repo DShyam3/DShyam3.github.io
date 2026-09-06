@@ -2281,7 +2281,7 @@ function MonthYearPicker({ value, onChange, isEnd }: MonthYearPickerProps) {
               className={cn(
                 "py-2 text-xs font-medium transition-all text-center rounded-xl",
                 isSelected
-                  ? "bg-[#1d70b8] text-white font-semibold shadow-sm"
+                  ? "bg-[hsl(var(--chart-3))] text-white font-semibold shadow-sm"
                   : "text-foreground/80 hover:bg-muted/50 hover:text-foreground"
               )}
             >

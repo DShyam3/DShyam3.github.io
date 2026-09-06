@@ -164,9 +164,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
   // Spent progress color bar
   const getProgressColor = (spent: number, budgeted: number) => {
-    if (budgeted <= 0) return spent > 0 ? 'bg-rose-500' : 'bg-[#40a02b] dark:bg-[#a6e3a1]';
+    if (budgeted <= 0) return spent > 0 ? 'bg-rose-500' : 'bg-[hsl(var(--positive))] dark:bg-[hsl(var(--positive))]';
     const percent = spent / budgeted;
-    if (percent <= 0.75) return 'bg-[#40a02b] dark:bg-[#a6e3a1]';
+    if (percent <= 0.75) return 'bg-[hsl(var(--positive))] dark:bg-[hsl(var(--positive))]';
     if (percent <= 1.0) return 'bg-orange-500';
     return 'bg-rose-500';
   };
@@ -334,8 +334,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     xAxisKey: dashboardSpendXAxisKey,
   } = getDashboardSpendData();
 
-  const progressLineColor = isDashboardSpendOverBudget ? '#f97316' : '#10b981'; // orange/amber vs emerald
-  const progressGradientColor = isDashboardSpendOverBudget ? '#f97316' : '#10b981';
+  const progressLineColor = isDashboardSpendOverBudget ? 'hsl(var(--chart-4))' : 'hsl(var(--positive))'; // orange/amber vs emerald
+  const progressGradientColor = isDashboardSpendOverBudget ? 'hsl(var(--chart-4))' : 'hsl(var(--positive))';
 
   return (
     <>
@@ -451,7 +451,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             <Line
               type="monotone"
               dataKey="Ideal Limit"
-              stroke="#64748b"
+              stroke="hsl(var(--muted-foreground))"
               strokeDasharray="4 4"
               dot={false}
               strokeWidth={1.5}
@@ -712,9 +712,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                             <span 
                               className="text-xs font-sans font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 select-none"
                               style={{ 
-                                backgroundColor: `${linkedAccount.color || '#4f46e5'}15`, 
-                                color: linkedAccount.color || '#4f46e5',
-                                borderColor: `${linkedAccount.color || '#4f46e5'}35`
+                                backgroundColor: `${linkedAccount.color || 'hsl(var(--chart-5))'}15`, 
+                                color: linkedAccount.color || 'hsl(var(--chart-5))',
+                                borderColor: `${linkedAccount.color || 'hsl(var(--chart-5))'}35`
                               }}
                             >
                               <span>{linkedAccount.emoji || '💰'}</span>

@@ -41,6 +41,23 @@
     --badge-new: 25 80% 50%;
     --badge-new-foreground: 0 0% 100%;
 
+    /* Data-viz palette. shadcn's Charts work defines --chart-1..5 as themed
+       tokens for exactly this, and finance was reaching for raw hex literals
+       instead -- which cannot follow the theme. Tuned to sit with the warm
+       accent rather than Tailwind's defaults; chart-1 IS the accent, so a
+       single-series chart matches the rest of the page. */
+    --chart-1: 25 60% 55%;
+    --chart-2: 173 45% 38%;
+    --chart-3: 210 40% 45%;
+    --chart-4: 43 70% 50%;
+    --chart-5: 340 45% 55%;
+
+    /* shadcn ships --destructive but deliberately no success token. A finance
+       view has to tell a gain from a loss, so this is the one addition beyond
+       the standard contract, shaped the same way. */
+    --positive: 152 45% 34%;
+    --positive-foreground: 0 0% 100%;
+
     /* See src/theme/fonts.ts and src/theme/README.md.
        --font-serif and --font-sans both resolve to Space Mono: the names are
        Tailwind's, kept so existing font-serif/font-sans classes keep working,
@@ -90,6 +107,15 @@
 
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
+
+    --chart-1: 35 85% 55%;
+    --chart-2: 173 55% 48%;
+    --chart-3: 210 60% 62%;
+    --chart-4: 43 85% 62%;
+    --chart-5: 340 60% 65%;
+
+    --positive: 152 50% 50%;
+    --positive-foreground: 222 20% 6%;
 
     --border: 220 14% 18%;
     --input: 220 14% 18%;
