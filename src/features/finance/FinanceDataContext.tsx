@@ -957,6 +957,49 @@ function useProvideFinanceData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, profileId]);
 
+  type ScopedFinanceTable =
+    | 'finance_bank_accounts'
+    | 'finance_budget_categories'
+    | 'finance_budget_items'
+    | 'finance_credit_scores'
+    | 'finance_debts'
+    | 'finance_goal_contributions'
+    | 'finance_goals'
+    | 'finance_memberships'
+    | 'finance_recurring_bills'
+    | 'finance_transactions'
+    | 'finance_user_holidays';
+
+  /**
+   * Removes this profile's rows that are no longer in `keepIds`.
+   *
+   * Saves used to delete every non-template row and then insert the new set,
+   * which leaves a window where the data is simply gone -- a constraint
+   * violation or a dropped connection between the two took the lot. Each save
+   * now upserts first and calls this after, so a failure leaves the previous
+   * rows intact. Template rows (is_default) and other profiles are untouched.
+   */
+  const pruneScoped = async (
+    table: ScopedFinanceTable,
+    keepIds: string[],
+    isTemplate?: boolean,
+  ) => {
+    const ids = keepIds.filter(Boolean);
+    // `from` is generic per table, so the builder is typed differently for
+    // each name in the union. The delete filters are identical across them and
+    // touch no column-specific types, which is what this narrowing asserts.
+    const base = supabase
+      .from<ScopedFinanceTable, never>(table)
+      .delete()
+      .eq('is_default', false)
+      .eq('profile_id', profileId);
+    const scopedBase = isTemplate === undefined ? base : base.eq('is_template', isTemplate);
+    const { error } = await (ids.length > 0
+      ? scopedBase.not('id', 'in', `(${ids.join(',')})`)
+      : scopedBase);
+    if (error) throw error;
+  };
+
   const saveDataToSupabase = async (key: string, contentData: any) => {
     if (!isAdmin) return;
     // Every non-template finance row carries a profile_id, and the database
@@ -1009,12 +1052,12 @@ function useProvideFinanceData() {
           await supabase.from('finance_settings').insert(settingsRow);
         }
 
-        await supabase.from('finance_user_holidays').delete().eq('is_default', false);
         const holidaysList = Array.isArray(settingsObj.holidaysByUser)
           ? settingsObj.holidaysByUser
           : Object.values(settingsObj.holidaysByUser || {});
+        await pruneScoped('finance_user_holidays', holidaysList.map(h => h.id));
         if (holidaysList.length > 0) {
-          await supabase.from('finance_user_holidays').insert(holidaysList.map(h => ({
+          await supabase.from('finance_user_holidays').upsert(holidaysList.map(h => ({
             id: h.id,
             is_default: false,
             profile_id: profileId,
@@ -1022,14 +1065,13 @@ function useProvideFinanceData() {
             end_date: h.endDate,
             occasion: h.occasion || null,
             count: h.count
-          })));
+          })), { onConflict: 'id' });
         }
       } else if (key === 'goals') {
         const goalsList = contentData as Goal[];
-        await supabase.from('finance_goal_contributions').delete().eq('is_default', false);
-        await supabase.from('finance_goals').delete().eq('is_default', false);
+        await pruneScoped('finance_goals', goalsList.map(g => g.id));
         if (goalsList.length > 0) {
-          await supabase.from('finance_goals').insert(goalsList.map(g => ({
+          await supabase.from('finance_goals').upsert(goalsList.map(g => ({
             id: g.id,
             is_default: false,
             profile_id: profileId,
@@ -1040,7 +1082,7 @@ function useProvideFinanceData() {
             start_date: g.startDate || null,
             status: g.status || 'active',
             emoji: g.emoji || null
-          })));
+          })), { onConflict: 'id' });
           const contribs = goalsList.flatMap(g => (g.contributions || []).map(c => ({
             id: c.id,
             is_default: false,
@@ -1051,8 +1093,9 @@ function useProvideFinanceData() {
             note: c.note || null,
             bank_account_id: c.bankAccountId || null
           })));
+          await pruneScoped('finance_goal_contributions', goalsList.flatMap(g => (g.contributions || []).map(c => c.id)));
           if (contribs.length > 0) {
-            await supabase.from('finance_goal_contributions').insert(contribs);
+            await supabase.from('finance_goal_contributions').upsert(contribs, { onConflict: 'id' });
           }
         }
       } else if (key === 'accounts') {
@@ -1060,9 +1103,9 @@ function useProvideFinanceData() {
         // don't all have to thread it through; fall back to current state.
         const accsObj = contentData as { bankAccounts: BankAccount[]; memberships: Membership[]; creditScores: CreditScores; debts?: Debt[] };
         const debtsToSave = accsObj.debts ?? debts;
-        await supabase.from('finance_bank_accounts').delete().eq('is_default', false);
+        await pruneScoped('finance_bank_accounts', (accsObj.bankAccounts || []).map(a => a.id));
         if (accsObj.bankAccounts?.length > 0) {
-          await supabase.from('finance_bank_accounts').insert(accsObj.bankAccounts.map(a => ({
+          await supabase.from('finance_bank_accounts').upsert(accsObj.bankAccounts.map(a => ({
             id: a.id,
             is_default: false,
             profile_id: profileId,
@@ -1074,11 +1117,11 @@ function useProvideFinanceData() {
             use_case: a.useCase || null,
             emoji: a.emoji || null,
             color: a.color || null
-          })));
+          })), { onConflict: 'id' });
         }
-        await supabase.from('finance_memberships').delete().eq('is_default', false);
+        await pruneScoped('finance_memberships', (accsObj.memberships || []).map(m => m.id));
         if (accsObj.memberships?.length > 0) {
-          await supabase.from('finance_memberships').insert(accsObj.memberships.map(m => ({
+          await supabase.from('finance_memberships').upsert(accsObj.memberships.map(m => ({
             id: m.id,
             is_default: false,
             profile_id: profileId,
@@ -1087,11 +1130,11 @@ function useProvideFinanceData() {
             status: m.status || null,
             annual_fee: m.annualFee,
             use_case: m.useCase || null
-          })));
+          })), { onConflict: 'id' });
         }
-        await supabase.from('finance_debts').delete().eq('is_default', false);
+        await pruneScoped('finance_debts', debtsToSave.map(d => d.id));
         if (debtsToSave.length > 0) {
-          await supabase.from('finance_debts').insert(debtsToSave.map(d => ({
+          await supabase.from('finance_debts').upsert(debtsToSave.map(d => ({
             id: d.id,
             is_default: false,
             profile_id: profileId,
@@ -1111,30 +1154,30 @@ function useProvideFinanceData() {
             notes: d.notes || null,
             emoji: d.emoji || null,
             color: d.color || null
-          })));
+          })), { onConflict: 'id' });
         }
-        await supabase.from('finance_credit_scores').delete().eq('is_default', false);
         const scores = [
           ...(accsObj.creditScores?.experian || []).map(s => ({ ...s, bureau: 'experian' })),
           ...(accsObj.creditScores?.transunion || []).map(s => ({ ...s, bureau: 'transunion' })),
           ...(accsObj.creditScores?.equifax || []).map(s => ({ ...s, bureau: 'equifax' }))
         ];
+        await pruneScoped('finance_credit_scores', scores.map(s => s.id));
         if (scores.length > 0) {
-          await supabase.from('finance_credit_scores').insert(scores.map(s => ({
+          await supabase.from('finance_credit_scores').upsert(scores.map(s => ({
             id: s.id,
             is_default: false,
             profile_id: profileId,
             bureau: s.bureau,
             date: s.date,
             score: s.score
-          })));
+          })), { onConflict: 'id' });
         }
       } else if (key === 'budget') {
         const budgetCats = contentData as BudgetCategory[];
-        await supabase.from('finance_budget_items').delete().eq('is_default', false).eq('is_template', false);
-        await supabase.from('finance_budget_categories').delete().eq('is_default', false).eq('is_template', false);
+        await pruneScoped('finance_budget_items', budgetCats.flatMap(c => (c.items || []).map(i => i.id)), false);
+        await pruneScoped('finance_budget_categories', budgetCats.map(c => c.id), false);
         if (budgetCats.length > 0) {
-          await supabase.from('finance_budget_categories').insert(budgetCats.map(c => ({
+          await supabase.from('finance_budget_categories').upsert(budgetCats.map(c => ({
             id: c.id,
             is_default: false,
             profile_id: profileId,
@@ -1143,7 +1186,7 @@ function useProvideFinanceData() {
             budgeted: c.budgeted,
             group_type: c.group || null,
             emoji: c.emoji || null
-          })));
+          })), { onConflict: 'id' });
           const items = budgetCats.flatMap(c => (c.items || []).map(i => ({
             id: i.id,
             is_default: false,
@@ -1157,14 +1200,14 @@ function useProvideFinanceData() {
             emoji: i.emoji || null
           })));
           if (items.length > 0) {
-            await supabase.from('finance_budget_items').insert(items);
+            await supabase.from('finance_budget_items').upsert(items, { onConflict: 'id' });
           }
         }
       } else if (key === 'recurrings') {
         const recurringsList = contentData as RecurringBill[];
-        await supabase.from('finance_recurring_bills').delete().eq('is_default', false);
+        await pruneScoped('finance_recurring_bills', recurringsList.map(r => r.id));
         if (recurringsList.length > 0) {
-          await supabase.from('finance_recurring_bills').insert(recurringsList.map(r => ({
+          await supabase.from('finance_recurring_bills').upsert(recurringsList.map(r => ({
             id: r.id,
             is_default: false,
             profile_id: profileId,
@@ -1179,13 +1222,13 @@ function useProvideFinanceData() {
             tag: r.tag || null,
             linked_budget_item_id: r.linkedBudgetItemId || null,
             linked_account_id: r.linkedAccountId || null
-          })));
+          })), { onConflict: 'id' });
         }
       } else if (key === 'transactions') {
         const txList = contentData as MockTransaction[];
-        await supabase.from('finance_transactions').delete().eq('is_default', false);
+        await pruneScoped('finance_transactions', txList.map(t => t.id));
         if (txList.length > 0) {
-          await supabase.from('finance_transactions').insert(txList.map(t => ({
+          await supabase.from('finance_transactions').upsert(txList.map(t => ({
             id: t.id,
             is_default: false,
             profile_id: profileId,
@@ -1200,7 +1243,7 @@ function useProvideFinanceData() {
             notes: t.notes || null,
             tags: t.tags || null,
             is_recurring: t.isRecurring || false
-          })));
+          })), { onConflict: 'id' });
         }
       } else if (key === 'tax_config') {
         const tcObj = contentData as TaxConfig;
@@ -1269,10 +1312,10 @@ function useProvideFinanceData() {
         }
       } else if (key === 'default_budget_categories') {
         const defaultBudgetCats = contentData as BudgetCategory[];
-        await supabase.from('finance_budget_items').delete().eq('is_default', false).eq('is_template', true);
-        await supabase.from('finance_budget_categories').delete().eq('is_default', false).eq('is_template', true);
+        await pruneScoped('finance_budget_items', defaultBudgetCats.flatMap(c => (c.items || []).map(i => i.id)), true);
+        await pruneScoped('finance_budget_categories', defaultBudgetCats.map(c => c.id), true);
         if (defaultBudgetCats.length > 0) {
-          await supabase.from('finance_budget_categories').insert(defaultBudgetCats.map(c => ({
+          await supabase.from('finance_budget_categories').upsert(defaultBudgetCats.map(c => ({
             id: c.id,
             is_default: false,
             profile_id: profileId,
@@ -1281,7 +1324,7 @@ function useProvideFinanceData() {
             budgeted: c.budgeted,
             group_type: c.group || null,
             emoji: c.emoji || null
-          })));
+          })), { onConflict: 'id' });
           const items = defaultBudgetCats.flatMap(c => (c.items || []).map(i => ({
             id: i.id,
             is_default: false,
@@ -1295,7 +1338,7 @@ function useProvideFinanceData() {
             emoji: i.emoji || null
           })));
           if (items.length > 0) {
-            await supabase.from('finance_budget_items').insert(items);
+            await supabase.from('finance_budget_items').upsert(items, { onConflict: 'id' });
           }
         }
       } else if (key === 'budget_presets') {

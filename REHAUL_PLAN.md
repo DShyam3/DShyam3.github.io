@@ -924,7 +924,8 @@ data lives. The prop lists collapse on their own after that.
 | 7.2c-i | Move each dialog to the surface that opens it, and lift the page-computed totals — **DONE** | 7.2c |
 | 7.2d | Profile switcher and profile-filtered reads — **DONE** | 7.2c |
 | 7.2e | Per-surface queries: retire the 17-query mount so a surface loads only what it renders | 7.2d |
-| 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |
+| 7.3a | Targeted mutations: upsert-then-prune instead of delete-then-insert — **DONE** | 7.2d |
+| 7.3b | Retire the remaining `localStorage` seeds | 7.3a |
 | 7.4 | Snapshots — balance, net worth, per profile | none |
 | 7.5 | Scenario engine — "what happens if I do X?" | 7.0 |
 | 7.6 | AI tool layer: typed tools over 7.0 + 7.5 | Edge Function + API key |
