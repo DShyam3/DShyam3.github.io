@@ -76,9 +76,9 @@ const Index = () => {
   return (
     <AppShell>
       <div className="selection:bg-primary/30">
-        <div className="flex flex-col px-4 md:px-0 py-8 max-w-6xl mx-auto w-full">
+        <div className="flex flex-col px-4 md:px-0 2xl:px-8 py-8 2xl:py-6 max-w-6xl 2xl:max-w-[112rem] mx-auto w-full">
           {/* Bento Grid Layout */}
-          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-[280px_1.15fr_1fr] gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
             {/* Profile Image (Mobile Only) */}
             <div className="flex md:hidden bg-primary/5 border hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative shrink-0 w-fit mx-auto">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
@@ -101,7 +101,7 @@ const Index = () => {
               />
             </div>
 
-            <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+            <div className="2xl:col-start-2 2xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="mb-6 w-full overflow-hidden">
                 <DotMatrixText
                   text="ABOUT ME"
@@ -120,7 +120,7 @@ const Index = () => {
             </div>
 
             {/* Profile Image (Desktop Only) */}
-            <div className="hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto" style={{ boxShadow: 'var(--shadow-border)' }}>
+            <div className="2xl:col-start-1 2xl:row-start-1 hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto 2xl:w-full 2xl:mx-0" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
               <img
                 src={`${ASSETS_URL}/selfie.webp`}
@@ -134,18 +134,21 @@ const Index = () => {
                 // @types/react only declares the camelCase prop, so the
                 // spelling the browser wants has to go in as a spread.
                 {...{ fetchpriority: 'high' }}
-                className="max-w-[280px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
+                className="relative max-w-[280px] w-full h-auto object-contain 2xl:absolute 2xl:inset-0 2xl:max-w-none 2xl:h-full 2xl:object-cover 2xl:object-center z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
                 onError={(e) => {
                   e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
                 }}
               />
             </div>
 
-            {/* Experience & Education, stacked so they share row 2 with
-                the projects card and both columns end level. */}
-            <div className="flex flex-col gap-6">
+            {/* Experience & Education. Two columns: stacked so they share row
+                2 with the projects card and both columns end level. Three
+                columns: `contents` dissolves this wrapper so each card takes
+                its own cell -- experience under About Me, education above
+                projects -- leaving column 1 free for a full-height portrait. */}
+            <div className="flex flex-col gap-6 2xl:contents">
               {/* Experience */}
-              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div className="2xl:col-start-1 2xl:col-span-2 2xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
                   <div className="w-full lg:w-auto lg:shrink-0">
                     <DotMatrixText
@@ -206,11 +209,11 @@ const Index = () => {
                     experience.map((item) => (
                       <div key={item.id} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
                         <div className="flex items-start gap-4">
-                          <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white/5 rounded-md p-1 group-hover/item:scale-105 transition-transform overflow-hidden">
+                          <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
                             <img
                               src={item.logo_url}
                               alt={item.company}
-                              className="w-full h-full object-contain"
+                              className="w-full h-full object-contain no-outline"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
                                 e.currentTarget.nextElementSibling!.classList.remove('hidden');
@@ -222,7 +225,10 @@ const Index = () => {
                           </div>
                           <div>
                             <p className="text-sm font-medium leading-snug text-foreground">
-                              {item.title} // {item.company}
+                              {item.title}
+                            </p>
+                            <p className="text-sm font-medium leading-snug text-foreground">
+                              {item.company}
                             </p>
                             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground/80">
                               {item.location} | {item.start_date} - {item.end_date}
@@ -261,7 +267,7 @@ const Index = () => {
               </div>
 
               {/* Education */}
-              <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div className="2xl:col-start-3 2xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="flex items-center justify-between mb-4">
                   <DotMatrixText
                     text="EDUCATION"
@@ -291,11 +297,13 @@ const Index = () => {
                     education.map((item) => (
                       <div key={item.id} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
                         <div className="flex items-start gap-4">
-                          <img
-                            src={item.logo_url}
-                            alt={item.school}
-                            className="w-16 h-16 object-contain mt-1 group-hover/item:scale-105 transition-transform shrink-0"
-                          />
+                          <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
+                            <img
+                              src={item.logo_url}
+                              alt={item.school}
+                              className="w-full h-full object-contain no-outline"
+                            />
+                          </div>
                           <div>
                             <p className="text-sm font-medium leading-snug text-foreground">
                               {item.degree}
@@ -338,7 +346,7 @@ const Index = () => {
             </div>
 
             {/* Projects Portfolio (Full Fill Bottom) */}
-            <div className="bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
+            <div className="2xl:col-start-3 2xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
                 <FolderGit2 className="w-8 h-8 text-primary/70" />
               </div>
