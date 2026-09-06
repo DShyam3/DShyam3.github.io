@@ -992,6 +992,29 @@ open-ended.
 extraction is unaffected by everything below it — and doing 7.1 before 7.2
 means the queries get rewritten once rather than twice.
 
+#### 7.E-pre2 The four reference tables keep delete-then-insert, and have to
+
+`finance_recurring_templates`, `finance_credit_bureaus`,
+`finance_holiday_defaults` and `finance_budget_presets` were left on the old
+delete-then-insert shape when the other thirteen moved to upsert-then-prune in
+7.3a. That is not an oversight to finish later: those four insert rows **with no
+`id`**, letting the database generate one, so there is no client-side identity
+to upsert against or to prune by. Upserting would duplicate every row on every
+save.
+
+Closing the window properly means giving them natural unique keys — a preset is
+identified by `(preset_type, name)`, a holiday default by `month_index`, a
+bureau by `key` — and upserting on those. That is a migration for admin-only
+reference data that is edited rarely.
+
+It is left undone deliberately, because the blast radius is small and
+recoverable: these tables hold seed data, not the ledger, and the code carries
+the fallbacks already (`ALL_PRESETS_FALLBACK`, `DEFAULT_RECURRING_TEMPLATES`,
+`DEFAULT_CATEGORY_TEMPLATES`). A failed save loses defaults that the app can
+regenerate, not money that happened.
+
+Worth doing if these ever stop being regenerable from code.
+
 #### 7.E-pre Per-surface queries: measured, not built
 
 The plan called for splitting the mount so a surface loads only what it
