@@ -1,4 +1,4 @@
-import { BankAccount, BudgetCategory, BudgetItem, RecurringBill } from '@/features/finance/finance-types';
+import { BankAccount, BudgetCategory } from '@/features/finance/finance-types';
 import defaultPresets from '@/data/presets.json';
 
 const { DEFAULT_CATEGORY_PRESETS } = defaultPresets;
@@ -162,16 +162,4 @@ export const sanitizeBudgetCategories = (categories: any[]): BudgetCategory[] =>
       emoji: cat.emoji || getCategoryDefaultEmoji(cat.name || '')
     };
   });
-};
-
-export const getBudgetItemSpent = (item: BudgetItem, bankAccounts: BankAccount[], recurrings: RecurringBill[]) => {
-  if (item.linkedAccountId) {
-    const account = bankAccounts.find(a => a.id === item.linkedAccountId);
-    if (account) return Math.abs(account.balance);
-  }
-  const matchingBills = recurrings.filter(r => r.linkedBudgetItemId === item.id);
-  if (matchingBills.length > 0) {
-    return matchingBills.reduce((sum, b) => sum + b.amount, 0);
-  }
-  return item.spent || 0;
 };

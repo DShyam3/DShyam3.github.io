@@ -1,3 +1,5 @@
+import type { StudentLoanPlanKey } from '@/lib/finance';
+
 export interface FinanceSettings {
   grossSalary: number;
   pensionType: 'net_pay' | 'salary_sacrifice' | 'relief_at_source';
@@ -202,4 +204,32 @@ export interface InvestmentHolding {
   category: 'Stock' | 'ETF' | 'Crypto' | 'Mutual Fund' | 'Real Estate' | 'Cash' | 'Other';
 }
 
+export interface DebtDraw {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  label?: string; // e.g. "Year 1 tuition"
+}
 
+export interface Debt {
+  id: string;
+  name: string;
+  type: 'mortgage' | 'student' | 'auto' | 'personal' | 'credit' | 'other';
+  lender: string;
+  originalAmount: number; // Amount borrowed; derived from draws when present
+  balance: number; // Outstanding amount owed, stored positive
+  interestRate: number; // Annual percentage rate
+  minPayment: number; // Contractual monthly payment (amortising debts)
+  startDate?: string; // When the debt was taken on (YYYY-MM-DD)
+  payoffDate?: string; // Expected final payment (YYYY-MM-DD)
+  // 'amortising' = fixed monthly payment (mortgage, car, personal loan).
+  // 'income_contingent' = UK student loan: % of income above a threshold,
+  // written off after a set number of years.
+  repaymentType: 'amortising' | 'income_contingent';
+  studentLoanPlan?: StudentLoanPlanKey;
+  writeOffYears?: number; // income_contingent only
+  draws: DebtDraw[];
+  notes?: string;
+  emoji?: string;
+  color?: string;
+}
