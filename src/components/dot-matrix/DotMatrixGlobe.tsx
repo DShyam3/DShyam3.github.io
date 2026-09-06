@@ -1160,12 +1160,16 @@ export function DotMatrixGlobe({
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             />
-            {/* Projection picker -- flat only, because a globe has no projection
-                to pick. That it disappears on the globe is the point being
-                made: the distortion belongs to flattening, not to the Earth. */}
-            {dotData && mode === '2d' && (
+            {/* Projection picker. It stays on the globe rather than vanishing,
+                but greyed out: a globe has no projection to pick, and saying so
+                in place makes the point better than an empty corner does. It
+                still shows which projection the map will unroll back into.
+                Fades over the same 500ms the dots take to morph. */}
+            {dotData && (
                 <div
-                    className="absolute bottom-4 left-4 z-10 flex items-center gap-0.5 p-0.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm pointer-events-auto"
+                    className={`absolute bottom-4 left-4 z-10 flex items-center gap-0.5 p-0.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm transition-opacity duration-500 ${
+                        mode === '3d' ? 'opacity-40 pointer-events-none' : 'pointer-events-auto'
+                    }`}
                     role="group"
                     aria-label="Map projection"
                 >
@@ -1176,12 +1180,17 @@ export function DotMatrixGlobe({
                             <button
                                 key={id}
                                 onClick={() => setProjection(id)}
+                                disabled={mode === '3d'}
                                 aria-pressed={active}
-                                title={spec.note}
-                                className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold tracking-wider whitespace-nowrap transition-[background-color,color] duration-300 ${
+                                title={
+                                    mode === '3d'
+                                        ? 'A globe has no projection to pick -- switch to the 2D map.'
+                                        : spec.note
+                                }
+                                className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold tracking-wider whitespace-nowrap transition-[background-color,color] duration-300 disabled:cursor-default ${
                                     active
                                         ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground hover:text-foreground'
+                                        : 'text-muted-foreground enabled:hover:text-foreground'
                                 }`}
                             >
                                 {spec.label}
