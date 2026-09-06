@@ -178,11 +178,15 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       const todayProgress = chartData.find(d => d.day === todayDayNum);
       const isOverBudgetToday = todayProgress && todayProgress["Actual Spent"] !== undefined && todayProgress["Actual Spent"] > todayProgress["Ideal Limit"];
       
+      // With no budget set there is no pace to be ahead or behind of. Saying
+      // "Under pace by £0.00" reads as reassurance drawn from absent data.
       let statusText = '';
-      if (todayProgress) {
+      if (totalBudget <= 0) {
+        statusText = 'No budget set';
+      } else if (todayProgress) {
         const diff = Math.abs((todayProgress["Actual Spent"] || 0) - todayProgress["Ideal Limit"]);
-        statusText = isOverBudgetToday 
-          ? `Over pace by ${formatGBP(diff)}` 
+        statusText = isOverBudgetToday
+          ? `Over pace by ${formatGBP(diff)}`
           : `Under pace by ${formatGBP(diff)}`;
       }
 
@@ -388,7 +392,13 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             <div className="text-right hidden sm:block">
               <span className={cn(
                 "text-xs font-bold font-mono px-2 py-0.5 rounded-full inline-block",
-                isDashboardSpendOverBudget ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
+                // "No budget set" is neither good nor bad news, so it must not
+                // borrow the reassuring colour of being under pace.
+                totalBudget <= 0
+                  ? "bg-muted/40 text-muted-foreground"
+                  : isDashboardSpendOverBudget
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-positive/10 text-positive"
               )}>
                 {dashboardSpendStatusText}
               </span>

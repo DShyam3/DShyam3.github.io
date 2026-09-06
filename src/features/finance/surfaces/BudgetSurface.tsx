@@ -470,7 +470,14 @@ const wantsTotal = budgetCategories
 
 const totalBudgetLimit = budgetCategories.reduce((sum, cat) => sum + getCategoryBudget(cat), 0);
 const totalSpent = needsTotal + wantsTotal + totalSavings;
-const showWarning = totalBudgetLimit > 0 && totalSpent > totalBudgetLimit;
+/**
+ * Three states, not two. With no budget set at all, "within budget" is as
+ * false as "over budget" -- there is nothing to be within. Guarding only the
+ * warning left the else branch claiming you were fine against a £0 limit.
+ */
+const budgetStatus: 'unset' | 'within' | 'over' =
+  totalBudgetLimit <= 0 ? 'unset' : totalSpent > totalBudgetLimit ? 'over' : 'within';
+const showWarning = budgetStatus === 'over';
 
 const allocationData = [
   { name: 'Needs', value: needsTotal, color: 'hsl(var(--chart-3))' },
@@ -831,13 +838,19 @@ return (
                       <tr className="font-bold border-t border-border/20">
                         <td className="p-3 font-sans text-xs text-foreground">Spend Status</td>
                         <td className="p-3 text-right text-xs">
-                          {showWarning ? (
-                            <span className="inline-flex items-center text-rose-500 gap-1 font-sans" title="Spent exceeds budget limit!">
+                          {budgetStatus === 'over' && (
+                            <span className="inline-flex items-center text-destructive gap-1 font-sans" title="Spent exceeds budget limit!">
                               ⚠️ Over Limit
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center text-emerald-500 gap-1 font-sans">
+                          )}
+                          {budgetStatus === 'within' && (
+                            <span className="inline-flex items-center text-positive gap-1 font-sans">
                               ✓ Within Budget
+                            </span>
+                          )}
+                          {budgetStatus === 'unset' && (
+                            <span className="inline-flex items-center text-muted-foreground gap-1 font-sans" title="Set a budget limit on a category to track this.">
+                              No budget set
                             </span>
                           )}
                         </td>
