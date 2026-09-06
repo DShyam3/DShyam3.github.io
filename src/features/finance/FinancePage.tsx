@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import defaultPresets from '@/data/presets.json';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -12,6 +12,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import {
+  pathForSurface,
+  SURFACES,
+  TAB_LABELS,
+  tabFromPath,
+  surfaceForTab,
+  pathForTab,
+  type TabKey,
+} from './surfaces';
 import {
   BUREAU_BANDS,
   calculateActualPayday,
@@ -401,19 +410,6 @@ export interface TrueLayerStatus {
 // ==========================================
 // CONSTANTS & DEFAULTS
 // ==========================================
-
-const TABS = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'transactions', label: 'Transactions' },
-  { key: 'goals', label: 'Goals' },
-  { key: 'cash-flow', label: 'Cash Flow' },
-  { key: 'budget', label: 'Budget' },
-  { key: 'recurrings', label: 'Recurrings' },
-  { key: 'accounts', label: 'Accounts' },
-  { key: 'investments', label: 'Investments' },
-  { key: 'tax-income', label: 'Tax & Income' },
-  { key: 'time-spent', label: 'Time Spent' },
-] as const;
 
 /**
  * Editor for a debt's borrowing tranches — e.g. one row per academic year of
@@ -995,15 +991,16 @@ export default function Finance() {
     return presetsToDefaultCategories(DEFAULT_CATEGORY_PRESETS);
   }, [DEFAULT_CATEGORY_PRESETS]);
 
-  // Tab State with LocalStorage Persistence
-  const [activeTab, setActiveTab] = useState<typeof TABS[number]['key']>(() => {
-    const saved = localStorage.getItem('finance_active_tab');
-    if (saved) {
-      const isValid = TABS.some(tab => tab.key === saved);
-      if (isValid) return saved as typeof TABS[number]['key'];
-    }
-    return 'dashboard';
-  });
+  // The visible section comes from the URL, not from state: a surface is a
+  // route (REHAUL_PLAN.md 7.C), so a view is linkable and the back button
+  // works. `setActiveTab` keeps its old signature so the cross-links further
+  // down this file did not have to change.
+  const navigate = useNavigate();
+  const [, surfaceSeg, sectionSeg] = useLocation().pathname.split('/').slice(1);
+  const activeTab = tabFromPath(surfaceSeg, sectionSeg);
+  const activeSurface = surfaceForTab(activeTab);
+  const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
+  const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
 
   // Dashboard spending progress period
   const [dashboardSpendRange, setDashboardSpendRange] = useState<'this_month' | 'last_3m' | 'ytd' | 'all_time'>('this_month');
@@ -2503,11 +2500,6 @@ export default function Finance() {
   useEffect(() => {
     localStorage.setItem('finance_time_spent_inputs', JSON.stringify(timeSpentInputs));
   }, [timeSpentInputs]);
-
-  // Save active tab selection
-  useEffect(() => {
-    localStorage.setItem('finance_active_tab', activeTab);
-  }, [activeTab]);
 
   // Scroll to current month in holiday tracker when tax-income tab is selected
   useEffect(() => {
@@ -4732,23 +4724,23 @@ export default function Finance() {
       <div className="wide-container flex-1 flex flex-col">
         <Header title="Finance" subtitle="Personal Income & Tax Dashboard" />
 
-        {/* Sub Navigation Bar matching Inventory CategoryNav layout */}
+        {/* Primary navigation: the five surfaces. */}
         <div className="flex items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
           <nav className="flex flex-nowrap items-center justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
-            {TABS.map((tab, index) => {
-              const isActive = activeTab === tab.key;
+            {SURFACES.map((surface, index) => {
+              const isActive = activeSurface === surface.key;
               return (
-                <div key={tab.key} className="flex items-center gap-2 md:gap-4">
+                <div key={surface.key} className="flex items-center gap-2 md:gap-4">
                   <button
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => navigate(pathForSurface(surface.key))}
                     className={cn(
                       'nav-link relative py-1 text-xs whitespace-nowrap flex items-center gap-1.5',
                       isActive && 'nav-link-active'
                     )}
                   >
-                    <DotMatrixText text={tab.label.toUpperCase()} size="xs" />
+                    <DotMatrixText text={surface.label.toUpperCase()} size="xs" />
                   </button>
-                  {index < TABS.length - 1 && (
+                  {index < SURFACES.length - 1 && (
                     <span className="text-muted-foreground/30 hidden md:inline">·</span>
                   )}
                 </div>
@@ -4761,6 +4753,27 @@ export default function Finance() {
             </span>
           )}
         </div>
+
+        {/* Secondary navigation: sections within a surface. Home has one
+            section, so it renders no second row. */}
+        {activeSections.length > 1 && (
+          <nav className="flex flex-nowrap items-center gap-4 md:gap-5 py-3 px-4 md:px-0 overflow-x-auto scrollbar-hide border-b border-border/30">
+            {activeSections.map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'text-xs whitespace-nowrap font-sans transition-colors',
+                  activeTab === tab
+                    ? 'text-foreground font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {TAB_LABELS[tab]}
+              </button>
+            ))}
+          </nav>
+        )}
 
         {/* No max-width here: this is a dense dashboard of tables and charts,
             so it fills `.wide-container` (which is uncapped and handles its

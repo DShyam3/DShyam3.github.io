@@ -162,7 +162,7 @@ const App = () => {
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/finance" element={<Finance />} />
+                  <Route path="/finance/*" element={<Finance />} />
                   <Route path="/travel" element={<Travel />} />
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/links" element={<Links />} />
