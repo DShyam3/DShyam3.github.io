@@ -814,6 +814,22 @@ on Income.
 | **Wealth** | accounts + investments + debts + credit + memberships | net worth |
 | **Income** | tax & income + payroll + time spent | take-home this tax year |
 
+**Positive, but true.** Two of the four heroes opened on a large red negative,
+and neither negative was telling the truth.
+
+Plan's was an artifact: `freeToSpend` was `totalBudget - spent - bills`, so with
+no budget set it reported the spending back as a negative and called it
+overspent. It is now measured against the budget when one exists and against
+take-home income when one does not, which answers the same question honestly
+rather than alarmingly — the same figure went from −£1,285.99 to £1,922.51, and
+the second number is the accurate one. The dashboard's Free to Spend card reads
+from the same value and was wrong in the same way.
+
+Net worth's negative is real, so it stays, but it is no longer red. The minus
+sign already carries the fact; red reads as an alert, and a net worth held down
+by a student loan or a mortgage is a state of life rather than something that
+went wrong this month. Red is kept for what you can act on.
+
 Home is the exception: it is already a cockpit of several figures, and crowning
 it with one more would only repeat whichever it picked. Plan's hero is named
 "free to spend", not "projected balance" — the figure is budget minus spent

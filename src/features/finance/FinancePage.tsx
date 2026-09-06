@@ -607,6 +607,7 @@ function FinanceView() {
     dailyFreeToSpend,
     daysInMonth,
     daysRemainingInMonth,
+    hasBudget,
     freeToSpend,
     incomeFlowPercent,
     monthlyIncome,
@@ -1167,7 +1168,7 @@ function FinanceView() {
           // number is the overspend itself.
           detail={
             freeToSpend >= 0
-              ? `${formatGBP(dailyFreeToSpend)} a day across the ${daysRemainingInMonth} days left in the month`
+              ? `${formatGBP(dailyFreeToSpend)} a day across the ${daysRemainingInMonth} days left${hasBudget ? '' : ' · measured against take-home, no budget set'}`
               : `Over by ${formatGBP(Math.abs(freeToSpend))} with ${daysRemainingInMonth} days left in the month`
           }
           aside={
@@ -1184,7 +1185,11 @@ function FinanceView() {
         <SurfaceHero
           label="Net worth"
           value={formatGBP(netWorth)}
-          tone={netWorth < 0 ? 'negative' : 'positive'}
+          // Deliberately not red when negative. The minus sign already carries
+          // the fact; red reads as an alert, and a net worth held down by a
+          // student loan or a mortgage is a state of life, not something gone
+          // wrong this month. Red is kept for things you can act on.
+          tone={netWorth < 0 ? 'neutral' : 'positive'}
           detail={`Assets ${formatGBP(totalAssets)} · Debt ${formatGBP(totalDebt)}`}
           // Only when there are actual debt rows. A liability recorded as an
           // overdrawn account is already inside totalDebt above, so an empty

@@ -59,7 +59,18 @@ export function useFinanceTotals() {
   const unpaidRecurrings = recurrings
     .filter(r => isDueThisMonth(r, currentMonth) && !r.isPaid)
     .reduce((sum, r) => sum + r.amount, 0);
-  const freeToSpend = totalBudget - totalSpent - unpaidRecurrings;
+  /**
+   * What is left to spend this month.
+   *
+   * Measured against the budget when one is set, and against take-home income
+   * when one is not. The old form was always `totalBudget - spent - bills`,
+   * which with no budget just reported the spending back as a negative -- so
+   * the dashboard and Plan both opened on a red number that described nothing
+   * but the absence of a budget. Falling back to income answers the same
+   * question honestly rather than alarmingly.
+   */
+  const hasBudget = totalBudget > 0;
+  const freeToSpend = (hasBudget ? totalBudget : monthlyIncome) - totalSpent - unpaidRecurrings;
   const todayDateObj = new Date();
   const currentYear = todayDateObj.getFullYear();
   const currentMonthIdx = todayDateObj.getMonth();
@@ -78,6 +89,7 @@ export function useFinanceTotals() {
     daysInMonth,
     daysRemainingInMonth,
     freeToSpend,
+    hasBudget,
     incomeFlowPercent,
     monthlyIncome,
     netCashFlow,
