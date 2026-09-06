@@ -22,6 +22,37 @@ import {
   type TabKey,
 } from './surfaces';
 import {
+  ALL_PRESETS_FALLBACK,
+  ALL_SAVINGS_IDS,
+  DEFAULT_BUDGET_CATEGORIES,
+  DEFAULT_CATEGORY_PRESETS,
+  DEFAULT_CATEGORY_TEMPLATES,
+  DEFAULT_RECURRING_TEMPLATES,
+  MONTH_NAMES,
+  getBudgetItemSpent,
+  getDueDateText,
+  getPlanName,
+  isDiscretionaryCategory,
+  isDueThisMonth,
+  isEducationCareerCategory,
+  isFamilyKidsCategory,
+  isGiftsDonationsCategory,
+  isHealthWellnessCategory,
+  isHousingCategory,
+  isInsuranceCategory,
+  isLoansCategory,
+  isOtherCategory,
+  isPetsCategory,
+  isShoppingCategory,
+  isSubscriptionsCategory,
+  isTransportCategory,
+  isTravelHolidaysCategory,
+  mergeMissingDefaultCategories,
+  presetsToDefaultCategories,
+  resolveStoredList,
+  safeParseJSON,
+} from './finance-defaults';
+import {
   BUREAU_BANDS,
   calculateActualPayday,
   calculateWorkingDaysInRange,
@@ -315,405 +346,6 @@ const DebtDrawsEditor = ({
   );
 };
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-const { DEFAULT_CATEGORY_PRESETS } = defaultPresets;
-
-const presetsToDefaultCategories = (presets: { name: string; emoji: string; group: string }[]): BudgetCategory[] =>
-  presets.map(preset => ({
-    id: `preset_${preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-    name: preset.name,
-    budgeted: 0,
-    group: (['needs', 'wants', 'savings'].includes(preset.group) ? preset.group : 'needs') as 'needs' | 'wants' | 'savings',
-    items: [],
-    emoji: preset.emoji,
-  }));
-
-const createDefaultBudgetCategories = (): BudgetCategory[] => [
-  {
-    id: 'home',
-    name: 'Home',
-    budgeted: 0,
-    group: 'needs',
-    emoji: '🏠',
-    items: [
-      { id: 'item_rent', name: 'Rent', budgeted: 0, spent: 0 },
-      { id: 'item_phone', name: 'Phone', budgeted: 0, spent: 0 },
-      { id: 'item_electric', name: 'Electric Bill', budgeted: 0, spent: 0 },
-      { id: 'item_internet', name: 'Internet', budgeted: 0, spent: 0 },
-    ],
-  },
-  {
-    id: 'food_drink',
-    name: 'Food & Drink',
-    budgeted: 0,
-    group: 'needs',
-    emoji: '🌮',
-    items: [
-      { id: 'item_groceries', name: 'Groceries', budgeted: 0, spent: 0 },
-      { id: 'item_restaurants', name: 'Restaurants', budgeted: 0, spent: 0 },
-    ],
-  },
-  {
-    id: 'shopping',
-    name: 'Shopping',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '🛍️',
-    items: [],
-  },
-  {
-    id: 'entertainment',
-    name: 'Entertainment',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '🎬',
-    items: [],
-  },
-  {
-    id: 'transportation',
-    name: 'Transportation',
-    budgeted: 0,
-    group: 'needs',
-    emoji: '🚗',
-    items: [
-      { id: 'item_car_insurance', name: 'Car Insurance', budgeted: 0, spent: 0 },
-      { id: 'item_gas', name: 'Gas', budgeted: 0, spent: 0 },
-      { id: 'item_uber', name: 'Uber', budgeted: 0, spent: 0 },
-    ],
-  },
-  {
-    id: 'pet',
-    name: 'Pet',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '🐶',
-    items: [],
-  },
-  {
-    id: 'self_care',
-    name: 'Self Care',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '💛',
-    items: [
-      { id: 'item_personal_care', name: 'Personal Care', budgeted: 0, spent: 0 },
-      { id: 'item_gym', name: 'Gym', budgeted: 0, spent: 0 },
-    ],
-  },
-  {
-    id: 'subscriptions',
-    name: 'Subscriptions',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '💳',
-    items: [
-      { id: 'item_netflix', name: 'Netflix', budgeted: 0, spent: 0 },
-      { id: 'item_audible', name: 'Audible', budgeted: 0, spent: 0 },
-      { id: 'item_apple_tv', name: 'Apple TV+', budgeted: 0, spent: 0 },
-      { id: 'item_hulu', name: 'Hulu', budgeted: 0, spent: 0 },
-      { id: 'item_spotify', name: 'Spotify', budgeted: 0, spent: 0 },
-      { id: 'item_copilot', name: 'Copilot', budgeted: 0, spent: 0 },
-    ],
-  },
-  {
-    id: 'donations',
-    name: 'Donations',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '🤝',
-    items: [],
-  },
-  {
-    id: 'travel',
-    name: 'Travel',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '✈️',
-    items: [],
-  },
-  {
-    id: 'gifts',
-    name: 'Gifts',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '🎁',
-    items: [],
-  },
-  {
-    id: 'other',
-    name: 'Other',
-    budgeted: 0,
-    group: 'wants',
-    emoji: '🙋',
-    items: [],
-  },
-  {
-    id: 'savings',
-    name: 'Savings',
-    budgeted: 0,
-    group: 'savings',
-    emoji: '🐷',
-    items: [
-      { id: 'item_cash_isa', name: 'Cash ISA', budgeted: 0, spent: 0 },
-      { id: 'item_stocks_shares_isa', name: 'Stocks & Shares ISA', budgeted: 0, spent: 0 },
-      { id: 'item_lifetime_isa', name: 'Lifetime ISA', budgeted: 0, spent: 0 },
-      { id: 'item_innovative_finance_isa', name: 'Innovative Finance ISA', budgeted: 0, spent: 0 },
-      { id: 'item_junior_isa', name: 'Junior ISA', budgeted: 0, spent: 0 },
-      { id: 'item_company_shares', name: 'Company Shares', budgeted: 0, spent: 0 },
-      { id: 'item_investment_account', name: 'Investment account', budgeted: 0, spent: 0 },
-      { id: 'item_cryptocurrency', name: 'Cryptocurrency', budgeted: 0, spent: 0 },
-      { id: 'item_emergency_fund', name: 'Emergency Fund', budgeted: 0, spent: 0 },
-      { id: 'item_easy_access_savings', name: 'Easy Access Savings', budgeted: 0, spent: 0 },
-      { id: 'item_notice_savings_account', name: 'Notice Savings Account', budgeted: 0, spent: 0 },
-      { id: 'item_regular_saver', name: 'Regular Saver', budgeted: 0, spent: 0 },
-      { id: 'item_help_to_buy', name: 'Help to Buy ISA', budgeted: 0, spent: 0 },
-      { id: 'item_short_term', name: 'Short term', budgeted: 0, spent: 0 },
-      { id: 'item_long_term', name: 'Long term', budgeted: 0, spent: 0 },
-      { id: 'item_workplace_pensions', name: 'Workplace Pensions', budgeted: 0, spent: 0 },
-      { id: 'item_sipp', name: 'SIPP', budgeted: 0, spent: 0 },
-      { id: 'item_premium_bonds', name: 'Premium Bonds', budgeted: 0, spent: 0 },
-      { id: 'item_fixed_bonds', name: 'Fixed Bonds', budgeted: 0, spent: 0 },
-      { id: 'item_fixed_rates', name: 'Fixed Rates', budgeted: 0, spent: 0 },
-      { id: 'item_gilts_uk_government_bonds', name: 'Gilts (UK Government Bonds)', budgeted: 0, spent: 0 },
-      { id: 'item_physical_assets', name: 'Physical Assets', budgeted: 0, spent: 0 },
-    ],
-  },
-];
-
-const DEFAULT_BUDGET_CATEGORIES = createDefaultBudgetCategories();
-
-const DEFAULT_RECURRING_TEMPLATES: RecurringTemplate[] = [
-  { name: 'Rent', category: 'Rent', emoji: '🏠', tag: 'RENT', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_rent', budgetCategoryName: 'Home' },
-  { name: 'Phone Bill', category: 'Phone', emoji: '📱', tag: 'PHONE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_phone', budgetCategoryName: 'Home' },
-  { name: 'Electric Bill', category: 'Electric Bill', emoji: '💡', tag: 'ELECTRIC BILL', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_electric', budgetCategoryName: 'Home' },
-  { name: 'Internet', category: 'Internet', emoji: '📶', tag: 'INTERNET', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_internet', budgetCategoryName: 'Home' },
-  { name: 'Car Insurance', category: 'Car Insurance', emoji: '🚗', tag: 'CAR INSURANCE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_car_insurance', budgetCategoryName: 'Transportation' },
-  { name: 'Gym membership', category: 'Gym', emoji: '💪', tag: 'GYM', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_gym', budgetCategoryName: 'Self Care' },
-  { name: 'Netflix', category: 'Netflix', emoji: '🎬', tag: 'NETFLIX', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_netflix', budgetCategoryName: 'Subscriptions' },
-  { name: 'Spotify', category: 'Spotify', emoji: '🎵', tag: 'SPOTIFY', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_spotify', budgetCategoryName: 'Subscriptions' },
-  { name: 'Hulu', category: 'Hulu', emoji: '📺', tag: 'HULU', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_hulu', budgetCategoryName: 'Subscriptions' },
-  { name: 'Apple TV+', category: 'Apple TV+', emoji: '📺', tag: 'APPLE TV+', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_apple_tv', budgetCategoryName: 'Subscriptions' },
-  { name: 'Audible', category: 'Audible', emoji: '📚', tag: 'AUDIBLE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_audible', budgetCategoryName: 'Subscriptions' },
-  { name: 'Copilot', category: 'Copilot', emoji: '✨', tag: 'COPILOT', defaultAmount: 0, frequency: 'annually', linkedBudgetItemId: 'item_copilot', budgetCategoryName: 'Subscriptions' },
-  { name: 'ASPCA', category: 'Donations', emoji: '🐾', tag: 'DONATIONS', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: '', budgetCategoryName: 'Donations' },
-];
-
-const {
-  SAVINGS_PRESETS,
-  FOOD_ENTERTAINMENT_PRESETS,
-  HOUSING_PRESETS,
-  INSURANCE_PRESETS,
-  TRANSPORT_PRESETS,
-  SUBSCRIPTION_PRESETS,
-  LOANS_PRESETS,
-  GIFTS_DONATIONS_PRESETS,
-  HEALTH_WELLNESS_PRESETS,
-  PETS_PRESETS,
-  SHOPPING_PRESETS,
-  TRAVEL_HOLIDAYS_PRESETS,
-  OTHER_PRESETS,
-  FAMILY_KIDS_PRESETS,
-  EDUCATION_CAREER_PRESETS
-} = defaultPresets;
-
-const ALL_PRESETS_FALLBACK = defaultPresets;
-
-const isDiscretionaryCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  const group = cat.group;
-  return group === 'wants' || name.includes('food') || name.includes('drink') || name.includes('dining') || name.includes('entertainment');
-};
-
-const isHousingCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  const group = cat.group;
-  return group === 'needs' && (name.includes('home') || name.includes('house') || name.includes('rent') || name.includes('accommodation') || name.includes('living'));
-};
-
-const isInsuranceCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('insurance') || name.includes('protect') || name.includes('insure') || name.includes('cover');
-};
-
-const isTransportCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('transport') || name.includes('travel') || name.includes('car') || name.includes('vehicle') || name.includes('commute') || name.includes('transit');
-};
-
-const isSubscriptionsCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('subscription') || name.includes('recurring') || name.includes('member');
-};
-
-const isLoansCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('loan') || name.includes('debt') || name.includes('repayment') || name.includes('mortgage') || name.includes('borrow');
-};
-
-const isGiftsDonationsCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('gift') || name.includes('donation') || name.includes('charity') || name.includes('giving');
-};
-
-const isHealthWellnessCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('health') || name.includes('wellness') || name.includes('medical') || name.includes('gym') || name.includes('fitness') || name.includes('doctor') || name.includes('therapy');
-};
-
-const isPetsCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('pet') || name.includes('dog') || name.includes('cat') || name.includes('animal') || name.includes('vet');
-};
-
-const isShoppingCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('shopping') || name.includes('store') || name.includes('purchase') || name.includes('clothes') || name.includes('apparel');
-};
-
-const isTravelHolidaysCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('holiday') || name.includes('vacation') || name.includes('trip') || (name.includes('travel') && !name.includes('local') && !name.includes('commute'));
-};
-
-const isOtherCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('other') || name.includes('misc') || name.includes('ad-hoc') || name.includes('general') || name.includes('cash') || name.includes('uncategorised');
-};
-
-const isFamilyKidsCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('family') || name.includes('kid') || name.includes('child') || name.includes('baby') || name.includes('parent');
-};
-
-const isEducationCareerCategory = (cat?: BudgetCategory): boolean => {
-  if (!cat) return false;
-  const name = cat.name.toLowerCase();
-  return name.includes('education') || name.includes('career') || name.includes('course') || name.includes('stud') || name.includes('learn');
-};
-
-const ALL_SAVINGS_IDS = SAVINGS_PRESETS.map(p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'));
-
-const DEFAULT_CATEGORY_TEMPLATES = presetsToDefaultCategories(DEFAULT_CATEGORY_PRESETS);
-
-const mergeMissingDefaultCategories = (loaded: BudgetCategory[], defaults: BudgetCategory[]): BudgetCategory[] => {
-  const merged = [...loaded];
-  defaults.forEach(defCat => {
-    const exists = merged.some(c => c.name.toLowerCase() === defCat.name.toLowerCase() || c.id === defCat.id);
-    if (!exists) {
-      merged.push(defCat);
-    }
-  });
-  return merged;
-};
-
-// Guards against a corrupted/malformed localStorage value crashing this
-// page's mount -- these run inside useState initializers, so an uncaught
-// parse error here previously took down the entire Finance page.
-const safeParseJSON = <T,>(saved: string | null, fallback: T): T => {
-  if (!saved) return fallback;
-  try {
-    return JSON.parse(saved) as T;
-  } catch (e) {
-    console.error('Failed to parse stored finance data, using fallback:', e);
-    return fallback;
-  }
-};
-
-const resolveStoredList = <T,>(saved: string | null, fallback: T[]): T[] => {
-  if (!saved) return fallback;
-  try {
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-// ==========================================
-// UTILITY FUNCTIONS
-// ==========================================
-//
-// Note: getBudgetItemSpent below is intentionally NOT imported from
-// components/finance/utils/calculations.ts -- that module has a
-// same-named function that has diverged (different balance-sign handling
-// and recurring-bill matching). This is the version actually driving the
-// live budget calculations on this page; do not replace it without
-// reconciling the two implementations first.
-const getBudgetItemSpent = (item: BudgetItem, bankAccounts: BankAccount[], recurrings: RecurringBill[]) => {
-  if (item.linkedAccountId) {
-    const acc = bankAccounts.find(a => a.id === item.linkedAccountId);
-    return acc ? acc.balance : item.spent;
-  }
-  const linkedRecurrings = recurrings.filter(r => r.linkedBudgetItemId === item.id && r.isPaid);
-  const recurringsSpent = linkedRecurrings.reduce((sum, r) => sum + r.amount, 0);
-  return item.spent + recurringsSpent;
-};
-
-
-
-const getOrdinal = (d: number) => {
-  if (d > 3 && d < 21) return 'th';
-  switch (d % 10) {
-    case 1: return "st";
-    case 2: return "nd";
-    case 3: return "rd";
-    default: return "th";
-  }
-};
-
-const getDueDateText = (bill: RecurringBill, currentMonth: number, overrideMonth?: number) => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const dayStr = `${bill.dueDate}${getOrdinal(bill.dueDate)}`;
-  if (bill.frequency === 'monthly' || bill.frequency === 'weekly') {
-    const targetMonth = overrideMonth !== undefined ? overrideMonth : currentMonth;
-    const monthName = months[(targetMonth - 1 + 12) % 12];
-    return `${monthName} ${dayStr}`;
-  } else {
-    const monthName = months[(bill.dueMonth || 1) - 1];
-    return `${monthName} ${dayStr}`;
-  }
-};
-
-const isDueThisMonth = (bill: RecurringBill, currentMonth: number) => {
-  if (bill.frequency === 'monthly') return true;
-  if (bill.frequency === 'weekly') return true;
-  if (bill.frequency === 'annually') {
-    return bill.dueMonth === currentMonth;
-  }
-  if (bill.frequency === 'quarterly') {
-    const startMonth = bill.dueMonth || 1;
-    return (currentMonth - startMonth) % 3 === 0;
-  }
-  return true;
-};
-
-const getPlanName = (plan: FinanceSettings['studentLoanPlan']) => {
-  switch (plan) {
-    case 'none': return 'None';
-    case 'plan1': return 'Plan 1';
-    case 'plan2': return 'Plan 2';
-    case 'plan4': return 'Plan 4';
-    case 'plan5': return 'Plan 5';
-    case 'postgrad': return 'Postgraduate';
-  }
-};
 
 const Sparkline = ({ data }: { data: number[] }) => {
   if (data.length === 0) return null;
