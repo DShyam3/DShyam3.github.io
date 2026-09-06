@@ -966,7 +966,7 @@ data lives. The prop lists collapse on their own after that.
 | 7.2c | Extract the six inline sections into `surfaces/*.tsx`; per-surface chunks — **DONE** | 7.2b |
 | 7.2c-i | Move each dialog to the surface that opens it, and lift the page-computed totals — **DONE** | 7.2c |
 | 7.2d | Profile switcher and profile-filtered reads — **DONE** | 7.2c |
-| 7.2e | Per-surface queries: retire the 17-query mount so a surface loads only what it renders | 7.2d |
+| 7.2e | Per-surface queries | **measured, not built** — see below |
 | 7.3a | Targeted mutations: upsert-then-prune instead of delete-then-insert — **DONE** | 7.2d |
 | 7.3b | Retire the remaining `localStorage` seeds — **DONE** | 7.3a |
 | 7.4 | Snapshots — balance, net worth, per profile — **written, needs `db push`** | none |
@@ -991,6 +991,37 @@ open-ended.
 7.0 first is not arbitrary. Pure functions know nothing about profiles, so the
 extraction is unaffected by everything below it — and doing 7.1 before 7.2
 means the queries get rewritten once rather than twice.
+
+#### 7.E-pre Per-surface queries: measured, not built
+
+The plan called for splitting the mount so a surface loads only what it
+renders. Measured against the running app, that is not worth the risk of
+restructuring a working load path.
+
+| | |
+|---|---|
+| Distinct tables fetched on mount | 18 |
+| Wall clock for the whole mount | 1,321 ms |
+| Slowest single query | 1,050 ms |
+| Sum if they ran serially | 5,116 ms |
+
+They run in parallel, so the mount costs about one round trip — the slowest
+query, not the sum. Cutting 18 down to the 7 that `useFinanceTotals` needs
+would still be one round trip, because the remaining 7 are still concurrent.
+The saving is in connections and database work, not in anything the reader
+waits for.
+
+That matters because the heroes made the core set wider, not narrower: every
+surface now shows a figure derived from settings, tax config, budget
+categories, budget items, accounts, recurring bills and debts. Only ten tables
+are genuinely surface-specific, and deferring them would buy a fraction of one
+round trip in exchange for a lazy-loading path through the provider that every
+future query has to be aware of.
+
+Same conclusion as P-6, and for the same reason: the data is small. Revisit
+when a finance table passes ~1,000 rows, or when several profiles are in
+regular use and switching between them refetches two full ledgers often enough
+to notice.
 
 #### 7.E Security — the `documents` bucket is public
 
