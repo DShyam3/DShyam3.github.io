@@ -1015,6 +1015,29 @@ regenerate, not money that happened.
 
 Worth doing if these ever stop being regenerable from code.
 
+#### 7.E-pre00 What the ship-check says, and the one finding that is wrong
+
+`npm run ship-check` after the phase: **99/100, security 100/100, zero
+blockers.**
+
+Its one HIGH is a false positive worth writing down so it is not re-diagnosed
+every time. It reports "potential N+1 queries" in `FinanceDataContext.tsx`,
+matching on a `.map(` near an `await supabase`. Every one of those is the
+opposite of an N+1 — a single batched upsert whose *argument* is built by
+mapping the list:
+
+```ts
+await supabase.from('finance_transactions').upsert(txList.map(t => ({ ... })));
+```
+
+One query for the whole list, not one per row. Checked directly: no awaited
+query sits inside a loop body in `FinanceDataContext.tsx`, `useTrueLayer.ts` or
+`truelayer-sync`.
+
+Its MEDIUM about oversized files still names `FinancePage.tsx`, now 2,400 lines
+rather than 12,335. The remaining bulk is dialogs, which move to their surfaces
+if that number ever needs to come down further.
+
 #### 7.E-pre0 Perceived speed is not the same as speed
 
 Measured on a clean mount, the eighteen queries all start within 16 ms of each
