@@ -176,6 +176,7 @@ export type Database = {
           is_default: boolean
           issuer: string | null
           name: string
+          profile_id: string | null
           type: string
           updated_at: string
           use_case: string | null
@@ -190,6 +191,7 @@ export type Database = {
           is_default?: boolean
           issuer?: string | null
           name: string
+          profile_id?: string | null
           type: string
           updated_at?: string
           use_case?: string | null
@@ -204,11 +206,20 @@ export type Database = {
           is_default?: boolean
           issuer?: string | null
           name?: string
+          profile_id?: string | null
           type?: string
           updated_at?: string
           use_case?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_bank_accounts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_budget_categories: {
         Row: {
@@ -220,6 +231,7 @@ export type Database = {
           is_default: boolean
           is_template: boolean
           name: string
+          profile_id: string | null
           updated_at: string
         }
         Insert: {
@@ -231,6 +243,7 @@ export type Database = {
           is_default?: boolean
           is_template?: boolean
           name: string
+          profile_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -242,9 +255,18 @@ export type Database = {
           is_default?: boolean
           is_template?: boolean
           name?: string
+          profile_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_budget_categories_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_budget_items: {
         Row: {
@@ -257,6 +279,7 @@ export type Database = {
           is_template: boolean
           linked_account_id: string | null
           name: string
+          profile_id: string | null
           spent: number
           updated_at: string
         }
@@ -270,6 +293,7 @@ export type Database = {
           is_template?: boolean
           linked_account_id?: string | null
           name: string
+          profile_id?: string | null
           spent?: number
           updated_at?: string
         }
@@ -283,6 +307,7 @@ export type Database = {
           is_template?: boolean
           linked_account_id?: string | null
           name?: string
+          profile_id?: string | null
           spent?: number
           updated_at?: string
         }
@@ -292,6 +317,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "finance_budget_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_budget_items_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -375,6 +407,7 @@ export type Database = {
           date: string
           id: string
           is_default: boolean
+          profile_id: string | null
           score: number
           updated_at: string
         }
@@ -384,6 +417,7 @@ export type Database = {
           date: string
           id: string
           is_default?: boolean
+          profile_id?: string | null
           score: number
           updated_at?: string
         }
@@ -393,10 +427,19 @@ export type Database = {
           date?: string
           id?: string
           is_default?: boolean
+          profile_id?: string | null
           score?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_credit_scores_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_data: {
         Row: {
@@ -432,6 +475,7 @@ export type Database = {
           notes: string | null
           original_amount: number
           payoff_date: string | null
+          profile_id: string | null
           repayment_type: string
           start_date: string | null
           student_loan_plan: string | null
@@ -454,6 +498,7 @@ export type Database = {
           notes?: string | null
           original_amount?: number
           payoff_date?: string | null
+          profile_id?: string | null
           repayment_type?: string
           start_date?: string | null
           student_loan_plan?: string | null
@@ -476,6 +521,7 @@ export type Database = {
           notes?: string | null
           original_amount?: number
           payoff_date?: string | null
+          profile_id?: string | null
           repayment_type?: string
           start_date?: string | null
           student_loan_plan?: string | null
@@ -483,7 +529,15 @@ export type Database = {
           updated_at?: string
           write_off_years?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_debts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_defaults: {
         Row: {
@@ -513,6 +567,7 @@ export type Database = {
           id: string
           is_default: boolean
           note: string | null
+          profile_id: string | null
           updated_at: string
         }
         Insert: {
@@ -524,6 +579,7 @@ export type Database = {
           id: string
           is_default?: boolean
           note?: string | null
+          profile_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -535,6 +591,7 @@ export type Database = {
           id?: string
           is_default?: boolean
           note?: string | null
+          profile_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -543,6 +600,13 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "finance_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_goal_contributions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -555,6 +619,7 @@ export type Database = {
           id: string
           is_default: boolean
           name: string
+          profile_id: string | null
           start_date: string | null
           status: string
           target_amount: number
@@ -568,6 +633,7 @@ export type Database = {
           id: string
           is_default?: boolean
           name: string
+          profile_id?: string | null
           start_date?: string | null
           status?: string
           target_amount?: number
@@ -581,13 +647,22 @@ export type Database = {
           id?: string
           is_default?: boolean
           name?: string
+          profile_id?: string | null
           start_date?: string | null
           status?: string
           target_amount?: number
           target_date?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_goals_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_holiday_defaults: {
         Row: {
@@ -629,6 +704,7 @@ export type Database = {
           id: string
           is_default: boolean
           name: string
+          profile_id: string | null
           status: string | null
           type: string
           updated_at: string
@@ -640,6 +716,7 @@ export type Database = {
           id: string
           is_default?: boolean
           name: string
+          profile_id?: string | null
           status?: string | null
           type: string
           updated_at?: string
@@ -651,10 +728,123 @@ export type Database = {
           id?: string
           is_default?: boolean
           name?: string
+          profile_id?: string | null
           status?: string | null
           type?: string
           updated_at?: string
           use_case?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_memberships_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_profile_transfers: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          from_profile_id: string
+          from_transaction_id: string | null
+          id: string
+          note: string | null
+          to_profile_id: string
+          to_transaction_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date: string
+          from_profile_id: string
+          from_transaction_id?: string | null
+          id?: string
+          note?: string | null
+          to_profile_id: string
+          to_transaction_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          from_profile_id?: string
+          from_transaction_id?: string | null
+          id?: string
+          note?: string | null
+          to_profile_id?: string
+          to_transaction_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_profile_transfers_from_profile_id_fkey"
+            columns: ["from_profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_profile_transfers_from_transaction_id_fkey"
+            columns: ["from_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_profile_transfers_to_profile_id_fkey"
+            columns: ["to_profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_profile_transfers_to_transaction_id_fkey"
+            columns: ["to_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_profiles: {
+        Row: {
+          created_at: string
+          currency: string
+          emoji: string | null
+          id: string
+          is_self: boolean
+          name: string
+          owner_user_id: string | null
+          region: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          emoji?: string | null
+          id?: string
+          is_self?: boolean
+          name: string
+          owner_user_id?: string | null
+          region?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          emoji?: string | null
+          id?: string
+          is_self?: boolean
+          name?: string
+          owner_user_id?: string | null
+          region?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -673,6 +863,7 @@ export type Database = {
           linked_account_id: string | null
           linked_budget_item_id: string | null
           name: string
+          profile_id: string | null
           tag: string | null
           updated_at: string
         }
@@ -690,6 +881,7 @@ export type Database = {
           linked_account_id?: string | null
           linked_budget_item_id?: string | null
           name: string
+          profile_id?: string | null
           tag?: string | null
           updated_at?: string
         }
@@ -707,10 +899,19 @@ export type Database = {
           linked_account_id?: string | null
           linked_budget_item_id?: string | null
           name?: string
+          profile_id?: string | null
           tag?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_recurring_bills_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_recurring_templates: {
         Row: {
@@ -772,6 +973,7 @@ export type Database = {
           pension_type: string
           personal_allowance: number
           personal_pension_percent: number
+          profile_id: string | null
           student_loan_plan: string
           tax_code: string
           tax_year: number
@@ -795,6 +997,7 @@ export type Database = {
           pension_type?: string
           personal_allowance?: number
           personal_pension_percent?: number
+          profile_id?: string | null
           student_loan_plan?: string
           tax_code?: string
           tax_year?: number
@@ -818,6 +1021,7 @@ export type Database = {
           pension_type?: string
           personal_allowance?: number
           personal_pension_percent?: number
+          profile_id?: string | null
           student_loan_plan?: string
           tax_code?: string
           tax_year?: number
@@ -827,7 +1031,15 @@ export type Database = {
           work_holidays?: number
           working_hours_per_day?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_settings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_tax_configs: {
         Row: {
@@ -877,6 +1089,7 @@ export type Database = {
           is_reviewed: boolean
           name: string
           notes: string | null
+          profile_id: string | null
           tags: string[] | null
           updated_at: string
         }
@@ -894,6 +1107,7 @@ export type Database = {
           is_reviewed?: boolean
           name: string
           notes?: string | null
+          profile_id?: string | null
           tags?: string[] | null
           updated_at?: string
         }
@@ -911,6 +1125,7 @@ export type Database = {
           is_reviewed?: boolean
           name?: string
           notes?: string | null
+          profile_id?: string | null
           tags?: string[] | null
           updated_at?: string
         }
@@ -922,6 +1137,13 @@ export type Database = {
             referencedRelation: "finance_bank_accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "finance_transactions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       finance_truelayer_connection: {
@@ -930,6 +1152,7 @@ export type Database = {
           created_at: string
           expires_at: string | null
           id: string
+          profile_id: string
           refresh_token: string | null
           updated_at: string
         }
@@ -938,6 +1161,7 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           id?: string
+          profile_id: string
           refresh_token?: string | null
           updated_at?: string
         }
@@ -946,10 +1170,19 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           id?: string
+          profile_id?: string
           refresh_token?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_truelayer_connection_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_user_holidays: {
         Row: {
@@ -959,6 +1192,7 @@ export type Database = {
           id: string
           is_default: boolean
           occasion: string | null
+          profile_id: string | null
           start_date: string
           updated_at: string
         }
@@ -969,6 +1203,7 @@ export type Database = {
           id: string
           is_default?: boolean
           occasion?: string | null
+          profile_id?: string | null
           start_date: string
           updated_at?: string
         }
@@ -979,10 +1214,19 @@ export type Database = {
           id?: string
           is_default?: boolean
           occasion?: string | null
+          profile_id?: string | null
           start_date?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_user_holidays_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inspirations: {
         Row: {
@@ -1161,6 +1405,24 @@ export type Database = {
           image_url?: string
           location?: string | null
           photographer?: string | null
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          count: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -1497,6 +1759,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_rate_limit: {
+        Args: { p_key: string; p_limit: number; p_window_seconds: number }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
