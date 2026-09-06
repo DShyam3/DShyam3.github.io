@@ -3,8 +3,7 @@ import defaultPresets from '@/data/presets.json';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
+import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -3072,68 +3071,73 @@ function FinanceView() {
     return 'bg-rose-500';
   };
 
-  return (
-    <div className="min-h-screen bg-background flex flex-col selection:bg-primary/30">
-      <div className="wide-container flex-1 flex flex-col">
-        <Header title="Finance" subtitle="Personal Income & Tax Dashboard" />
-
-        {/* Primary navigation: the five surfaces. */}
-        <div className="flex items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
-          <nav className="flex flex-nowrap items-center justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
-            {SURFACES.map((surface, index) => {
-              const isActive = activeSurface === surface.key;
-              return (
-                <div key={surface.key} className="flex items-center gap-2 md:gap-4">
-                  <button
-                    onClick={() => navigate(pathForSurface(surface.key))}
-                    className={cn(
-                      'nav-link relative py-1 text-xs whitespace-nowrap flex items-center gap-1.5',
-                      isActive && 'nav-link-active'
-                    )}
-                  >
-                    <DotMatrixText text={surface.label.toUpperCase()} size="xs" />
-                  </button>
-                  {index < SURFACES.length - 1 && (
-                    <span className="text-muted-foreground/30 hidden md:inline">·</span>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
-          {loadingDb && (
-            <span className="text-[10px] text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
-              <Loader2 className="h-3 w-3 animate-spin text-primary" /> syncing...
-            </span>
-          )}
-        </div>
-
-        {/* Secondary navigation: sections within a surface. Home has one
-            section, so it renders no second row. */}
-        {activeSections.length > 1 && (
-          <nav className="flex flex-nowrap items-center gap-4 md:gap-5 py-3 px-4 md:px-0 overflow-x-auto scrollbar-hide border-b border-border/30">
-            {activeSections.map(tab => (
+  /* Handed to AppShell's toolbar slot, so the surface and section navs stay
+     pinned while the surface underneath scrolls. */
+  const toolbar = (
+    <div className="flex flex-col">
+    {/* Primary navigation: the five surfaces. */}
+    <div className="flex items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
+      <nav className="flex flex-nowrap items-center justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
+        {SURFACES.map((surface, index) => {
+          const isActive = activeSurface === surface.key;
+          return (
+            <div key={surface.key} className="flex items-center gap-2 md:gap-4">
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => navigate(pathForSurface(surface.key))}
                 className={cn(
-                  'text-xs whitespace-nowrap font-sans transition-colors',
-                  activeTab === tab
-                    ? 'text-foreground font-semibold'
-                    : 'text-muted-foreground hover:text-foreground'
+                  'nav-link relative py-1 text-xs whitespace-nowrap flex items-center gap-1.5',
+                  isActive && 'nav-link-active'
                 )}
               >
-                {TAB_LABELS[tab]}
+                <DotMatrixText text={surface.label.toUpperCase()} size="xs" />
               </button>
-            ))}
-          </nav>
-        )}
+              {index < SURFACES.length - 1 && (
+                <span className="text-muted-foreground/30 hidden md:inline">·</span>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+      {loadingDb && (
+        <span className="text-[10px] text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
+          <Loader2 className="h-3 w-3 animate-spin text-primary" /> syncing...
+        </span>
+      )}
+    </div>
 
-        {/* No max-width here: this is a dense dashboard of tables and charts,
-            so it fills `.wide-container` (which is uncapped and handles its
-            own fluid padding) rather than throwing away ~700px a side on
-            a large monitor. `min-w-0` keeps the overflow-x-auto tables from
-            forcing the flex parent wider than the viewport on narrow screens. */}
-        <main className="flex-1 flex flex-col py-6 sm:py-8 w-full min-w-0">
+    {/* Secondary navigation: sections within a surface. Home has one
+        section, so it renders no second row. */}
+    {activeSections.length > 1 && (
+      <nav className="flex flex-nowrap items-center gap-4 md:gap-5 py-3 px-4 md:px-0 overflow-x-auto scrollbar-hide border-b border-border/30">
+        {activeSections.map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              'text-xs whitespace-nowrap font-sans transition-colors',
+              activeTab === tab
+                ? 'text-foreground font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        ))}
+      </nav>
+    )}
+    </div>
+  );
+
+  return (
+    <>
+      <AppShell
+        title="Finance"
+        subtitle="Personal Income & Tax Dashboard"
+        toolbar={toolbar}
+      >
+        {/* The shell owns the scroll container and the fluid padding; this
+            just stacks the sections it hands us. */}
+        <div className="flex flex-col py-6 sm:py-8 w-full min-w-0">
           {/* ==========================================
               TAB 1: DASHBOARD
               ========================================== */}
@@ -7265,10 +7269,8 @@ function FinanceView() {
             />
           )}
 
-        </main>
-
-        <Footer />
-      </div>
+        </div>
+      </AppShell>
 
       {/* ==========================================
           DIALOGS & DIALOG FORMS
@@ -10208,7 +10210,7 @@ function FinanceView() {
 
 
       {deleteDialog}
-    </div>
+    </>
   );
 }
 

@@ -820,6 +820,27 @@ than tab state in `localStorage`. Three consequences, all good:
 Progressive disclosure inside each surface uses `CardDetailDialog`, which
 already exists and already behaves correctly.
 
+**Layout: the shell, and scrolling that stops at a card.** Finance was the only
+page on the site that was not inside `AppShell` — every other page, including
+Travel, Watchlist, all the collections, Auth and the About page, already sits in
+the frame where the header and footer are pinned and only the middle moves.
+Finance was `min-h-screen` with both in the flow, so the whole document
+scrolled and the page read as a long report rather than an application. That is
+the same story as the fonts and the colours: not a new idea to introduce, a
+system finance was ignoring.
+
+The surface and section navs go in `AppShell`'s `toolbar` slot, which sits
+outside the scroll area, so navigation stays put while the surface scrolls
+underneath.
+
+Inside a surface, scrolling should stop at a card rather than run the length of
+the page: a transaction list scrolls within its own card, inside the shell's
+scrolling middle. This keeps a surface roughly one screen tall whatever the row
+count, and makes the structure legible — a scroll bar tells you where one thing
+ends and the next begins. `holiday-months-container` already works this way and
+is the model. Which cards get their own scroll depends on which cards exist, so
+that lands with the rest of the visual work rather than with the shell.
+
 **Where the collection system does and does not fit.** `EntityCard`
 (`CardVariant = 'media' | 'text'`) and `CollectionConfig` exist for walls of
 entities. That fits Goals, Accounts, Memberships and Recurring bills, which are
@@ -1060,6 +1081,7 @@ still Pages. It gets revised at migration, and this table is the checklist.
 - Every non-template `finance_*` row carries a `profile_id`, enforced by CHECK
 - Zero sub-12px font sizes and zero off-scale weights in `features/finance/`
 - No `select('*')` on the finance mount path
+- Finance renders inside `AppShell`, and no surface scrolls the document
 - `anon` holds no write grant on any finance table
 - No financial document is readable without `is_admin()`
 
