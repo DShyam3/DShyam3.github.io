@@ -920,8 +920,8 @@ data lives. The prop lists collapse on their own after that.
 | 7.1b | Thread `profile_id` through the existing write paths so the page keeps working before the decomposition — **DONE** | 7.1 |
 | 7.2a | Routes and surfaces: ten tabs become five routed surfaces with a section nav — **DONE** | 7.1b |
 | 7.2b | Lift the data state and the load/save into a provider, so surfaces can be separate components — **DONE** | 7.2a |
-| 7.2c | Extract the six inline sections into `surfaces/*.tsx`; per-surface chunks — **Cash Flow done; the rest blocked on 7.2c-i** | 7.2b |
-| 7.2c-i | Move each dialog to the surface that opens it, and lift the page-computed totals, so the surface prop lists collapse | 7.2c |
+| 7.2c | Extract the six inline sections into `surfaces/*.tsx` — **DONE**; per-surface chunks still to come | 7.2b |
+| 7.2c-i | Move each dialog to the surface that opens it, and lift the page-computed totals — **DONE** | 7.2c |
 | 7.2d | Per-surface queries, profile switcher, profile-filtered reads | 7.2c |
 | 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |
 | 7.4 | Snapshots — balance, net worth, per profile | none |

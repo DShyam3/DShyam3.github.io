@@ -58,6 +58,7 @@ import {
   safeParseJSON,
 } from './finance-defaults';
 import {
+  calculateWeekends,
   sanitizeBankAccounts,
   sanitizeBudgetCategories,
 } from './utils/calculations';
@@ -266,6 +267,61 @@ function useProvideFinanceData() {
   const [paydaySchedule, setPaydaySchedule] = useState<FinanceSettings['paydaySchedule']>(() => settings.paydaySchedule || 'monthly_date');
   const [paydayWeekday, setPaydayWeekday] = useState<number>(() => settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
   const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(() => settings.paydayBiweeklyAnchor || '2026-01-02');
+
+  // UK bank holidays, fetched once from gov.uk. Shared because payday, leave
+  // and the tax view all need the same list (7.2c-i).
+  const [fetchingHolidays, setFetchingHolidays] = useState(false);
+  const [bankHolidaysList, setBankHolidaysList] = useState<string[]>([]);
+  const [bankHolidaysMap, setBankHolidaysMap] = useState<Record<string, string>>({});
+  const [includeWorkLeaveInActual, setIncludeWorkLeaveInActual] = useState(true);
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      setFetchingHolidays(true);
+      try {
+        const res = await fetch('https://www.gov.uk/bank-holidays.json');
+        if (!res.ok) throw new Error('Failed to fetch holidays');
+        const data = await res.json();
+
+        const region = settings.ukRegion || 'england-and-wales';
+        const events = (data[region]?.events || []) as any[];
+
+        const yearStr = settings.taxYear.toString();
+        const holsInYear = events
+          .filter((e) => e.date.startsWith(yearStr))
+          .map((e) => e.date);
+
+        setBankHolidaysList(holsInYear);
+
+        const holsMap: Record<string, string> = {};
+        events.forEach((e) => {
+          if (e.date.startsWith(yearStr)) {
+            holsMap[e.date] = e.title;
+          }
+        });
+        setBankHolidaysMap(holsMap);
+
+        const calculatedWeekends = calculateWeekends(settings.taxYear);
+        const calculatedHolidays = holsInYear.length;
+
+        setSettings(prev => {
+          if (prev.bankHolidays === calculatedHolidays && prev.weekends === calculatedWeekends) {
+            return prev;
+          }
+          return {
+            ...prev,
+            bankHolidays: calculatedHolidays,
+            weekends: calculatedWeekends
+          };
+        });
+      } catch (err) {
+        console.error('Error fetching bank holidays:', err);
+      } finally {
+        setFetchingHolidays(false);
+      }
+    };
+
+    fetchHolidays();
+  }, [settings.taxYear, settings.ukRegion]);
 
   const [loadingDb, setLoadingDb] = useState(false);
   const [savingDb, setSavingDb] = useState(false);
@@ -1244,6 +1300,14 @@ function useProvideFinanceData() {
   };
 
   const value = {
+    fetchingHolidays,
+    setFetchingHolidays,
+    bankHolidaysList,
+    setBankHolidaysList,
+    bankHolidaysMap,
+    setBankHolidaysMap,
+    includeWorkLeaveInActual,
+    setIncludeWorkLeaveInActual,
     bankAccounts,
     budgetCategories,
     creditBureaus,
