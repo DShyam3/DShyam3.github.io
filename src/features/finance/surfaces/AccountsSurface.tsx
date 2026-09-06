@@ -85,7 +85,7 @@ const DebtDrawsEditor = ({
       {draws.length > 0 && (
         <div className="space-y-1.5">
           {[...draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
-            <div key={draw.id} className="flex items-center justify-between gap-2 rounded-xl border border-primary/10 bg-background/40 px-3 py-1.5">
+            <div key={draw.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/30 bg-muted/20 px-3 py-1.5 font-mono">
               <div className="min-w-0">
                 <span className="text-xs font-mono font-semibold text-foreground">{formatGBP(draw.amount)}</span>
                 <span className="block text-xs text-muted-foreground truncate">
@@ -114,7 +114,7 @@ const DebtDrawsEditor = ({
           aria-label="Borrowing date"
           value={newDraw.date}
           onChange={(e) => setNewDraw({ ...newDraw, date: e.target.value })}
-          className="rounded-xl h-9 border-primary/20 bg-background/50 text-xs"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
         <Input
           id={`${idPrefix}-draw-amount`}
@@ -124,7 +124,7 @@ const DebtDrawsEditor = ({
           placeholder="Amount (£)"
           value={newDraw.amount}
           onChange={(e) => setNewDraw({ ...newDraw, amount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-          className="rounded-xl h-9 border-primary/20 bg-background/50 text-xs"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
       </div>
       <div className="flex gap-2">
@@ -134,9 +134,9 @@ const DebtDrawsEditor = ({
           placeholder="Label, e.g. Year 1 tuition"
           value={newDraw.label}
           onChange={(e) => setNewDraw({ ...newDraw, label: e.target.value })}
-          className="rounded-xl h-9 border-primary/20 bg-background/50 text-xs"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
-        <Button type="button" onClick={onAdd} variant="outline" className="rounded-xl h-9 px-3 shrink-0 gap-1 text-xs">
+        <Button type="button" onClick={onAdd} variant="outline" className="rounded-lg h-9 px-3 shrink-0 gap-1 text-xs font-mono">
           <Plus className="h-3.5 w-3.5" /> Add
         </Button>
       </div>
@@ -813,10 +813,10 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           </div>
           {debts.length > 1 && (
             <Select value={selectedDebt.id} onValueChange={setSelectedDebtId}>
-              <SelectTrigger className="bg-background/50 border-primary/20 rounded-xl h-9 text-xs w-full sm:w-56 shrink-0">
+              <SelectTrigger className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs w-full sm:w-56 shrink-0 font-mono">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-primary/10">
+              <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
                 {debts.map(d => (
                   <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                 ))}
@@ -908,9 +908,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             </span>
             <div className="flex flex-wrap gap-2">
               {[...selectedDebt.draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
-                <div key={draw.id} className="rounded-xl border border-primary/10 bg-background/40 px-3 py-2 text-xs">
+                <div key={draw.id} className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs font-mono">
                   <span className="font-mono font-bold text-foreground block">{formatGBP(draw.amount)}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground">
                     {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
                     {draw.label ? ` · ${draw.label}` : ''}
                   </span>
@@ -1009,7 +1009,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Rest of the bureau cards */}
       {creditBureaus.map(bureau => {
-        const entries = creditScores[bureau.key];
+        const entries = creditScores[bureau.key] || [];
         const latest = entries.length > 0 ? entries[entries.length - 1] : null;
         const prev = entries.length > 1 ? entries[entries.length - 2] : null;
         const delta = latest && prev ? latest.score - prev.score : 0;
@@ -1030,246 +1030,171 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
 
         const rating = latest ? getRatingFromBands(latest.score, bureau.key) : null;
         const bands = BUREAU_BANDS[bureau.key];
-        const gapAngle = 4;
-        const totalSweep = 270;
-        const N = bands.length;
-        const totalGapAngle = (N - 1) * gapAngle;
-        const remainingAngle = totalSweep - totalGapAngle;
-
-        let currentStartAngle = 135;
-        const computedSegments = bands.map((band, idx) => {
-          const span = band.max - (idx === 0 ? 0 : bands[idx - 1].max);
-          const weight = span / bureau.maxScore;
-          const segmentAngle = weight * remainingAngle;
-          const startAngle = currentStartAngle;
-          const endAngle = currentStartAngle + segmentAngle;
-          currentStartAngle = endAngle + gapAngle;
-          return { band, startAngle, endAngle };
-        });
-
-        const scoreAngle = latest ? 135 + (latest.score / bureau.maxScore) * 270 : 135;
-        const dotPos = polarToCartesian(72, 72, 54, scoreAngle);
+        const scoreAngle = latest ? 140 + (Math.min(latest.score, bureau.maxScore) / bureau.maxScore) * 260 : 140;
+        const dotPos = polarToCartesian(80, 75, 54, scoreAngle);
 
         return (
-          <Card key={bureau.key} className={cn("rounded-xl border border-border/40 bg-card/50 overflow-hidden flex flex-col justify-between hover:border-border/80 transition-colors", bureau.gradient)}>
-            <CardContent className="pt-5 pb-0 px-5 flex flex-col items-center">
-              {/* Bureau Label */}
-              <span className="text-xs uppercase tracking-wider font-mono font-semibold text-muted-foreground mb-4">{bureau.label}</span>
+          <Card key={bureau.key} className="rounded-xl border border-border/40 bg-card/50 hover:border-border/80 transition-colors p-5 flex flex-col justify-between space-y-4 shadow-none">
+            {/* Bureau Card Header */}
+            <div className="flex items-center justify-between border-b border-border/30 pb-3">
+              <div className="space-y-0.5">
+                <span className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
+                  {bureau.label}
+                </span>
+                <p className="text-[11px] font-mono text-muted-foreground">
+                  Scale 0–{bureau.maxScore}
+                </p>
+              </div>
+              {rating && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-muted/30 text-foreground border border-border/40">
+                  {rating.text}
+                </span>
+              )}
+            </div>
 
-              {/* Circular/Arch Gauge */}
-              <div className="relative w-36 h-36 flex items-center justify-center">
-                <svg className="w-36 h-36 overflow-visible" viewBox="0 0 144 144">
-                  <defs>
-                    <filter id={`shadow-${bureau.key}`} x="-20%" y="-20%" width="140%" height="140%">
-                      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" floodOpacity="0.25"/>
-                    </filter>
-                  </defs>
+            {/* Minimal SVG Arch Gauge */}
+            <div className="flex flex-col items-center justify-center py-1">
+              <svg className="w-48 h-32 overflow-visible mx-auto" viewBox="0 15 160 105">
+                {/* Background Track Arc */}
+                <path
+                  d={describeArc(80, 75, 54, 140, 400)}
+                  fill="none"
+                  stroke="currentColor"
+                  className="text-muted/20"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                />
 
-                  {/* Outer background thin ring */}
-                  <circle
-                    cx="72"
-                    cy="72"
-                    r="64"
-                    stroke="currentColor"
-                    className="text-primary/10"
-                    strokeWidth="1"
-                    fill="transparent"
-                  />
-
-                  {/* Base background track */}
+                {/* Progress Arc */}
+                {latest && latest.score > 0 && (
                   <path
-                    d={describeArc(72, 72, 54, 135, 405)}
-                    fill="transparent"
+                    d={describeArc(80, 75, 54, 140, scoreAngle)}
+                    fill="none"
                     stroke="currentColor"
-                    className="text-primary/10"
-                    strokeWidth="10"
+                    className="text-foreground"
+                    strokeWidth="7"
                     strokeLinecap="round"
                   />
+                )}
 
-                  {/* Segmented Bands */}
-                  {computedSegments.map(({ band, startAngle, endAngle }) => {
-                    const isHovered = hoveredBands[bureau.key]?.name === band.name;
-                    const hasHover = hoveredBands[bureau.key] !== null;
+                {/* Indicator Dot */}
+                {latest && latest.score > 0 && (
+                  <circle
+                    cx={dotPos.x}
+                    cy={dotPos.y}
+                    r="4.5"
+                    fill="hsl(var(--foreground))"
+                    stroke="hsl(var(--card))"
+                    strokeWidth="2"
+                  />
+                )}
 
-                    let opacity = 1;
-                    let strokeWidth = 10;
+                {/* Centered Score Figure inside SVG */}
+                <text
+                  x="80"
+                  y="68"
+                  textAnchor="middle"
+                  className="font-mono text-3xl font-bold tracking-tight fill-foreground"
+                >
+                  {latest ? latest.score : '—'}
+                </text>
+                <text
+                  x="80"
+                  y="84"
+                  textAnchor="middle"
+                  className="font-mono text-[11px] fill-muted-foreground"
+                >
+                  of {bureau.maxScore}
+                </text>
+                {delta !== 0 && (
+                  <text
+                    x="80"
+                    y="98"
+                    textAnchor="middle"
+                    className={cn(
+                      "font-mono text-[11px] font-semibold",
+                      delta > 0 ? "fill-positive" : delta < 0 ? "fill-destructive" : "fill-muted-foreground"
+                    )}
+                  >
+                    {delta > 0 ? '+' : ''}{delta} pts
+                  </text>
+                )}
+              </svg>
+            </div>
 
-                    if (hasHover) {
-                      opacity = isHovered ? 1 : 0.25;
-                      strokeWidth = isHovered ? 12 : 10;
-                    } else if (latest) {
-                      const isFutureBand = latest.score < band.min;
-                      opacity = isFutureBand ? 0.25 : 1;
-                    }
-
-                    return (
-                      <path
-                        key={band.name}
-                        d={describeArc(72, 72, 54, startAngle, endAngle)}
-                        fill="transparent"
-                        stroke={CREDIT_TIER_COLORS[band.tier]}
-                        strokeWidth={strokeWidth}
-                        strokeLinecap="round"
-                        style={{
-                          opacity,
-                          transition: 'all 0.3s ease',
-                          cursor: 'pointer'
-                        }}
-                        onMouseEnter={() => setHoveredBands(prev => ({ ...prev, [bureau.key]: band }))}
-                        onMouseLeave={() => setHoveredBands(prev => ({ ...prev, [bureau.key]: null }))}
-                      />
-                    );
-                  })}
-
-                  {/* Score Indicator Dot */}
-                  {latest && (
-                    <circle
-                      cx={dotPos.x}
-                      cy={dotPos.y}
-                      r="6"
-                      fill="hsl(var(--background))"
-                      stroke={rating?.color || bureau.color}
-                      strokeWidth="2.5"
-                      filter={`url(#shadow-${bureau.key})`}
-                      style={{
-                        transition: 'all 0.7s ease-out'
-                      }}
-                    />
-                  )}
-
-                  {/* Center Text content inside SVG */}
-                  {hoveredBands[bureau.key] ? (
-                    <g>
-                      <text
-                        x="72"
-                        y="64"
-                        textAnchor="middle"
-                        className="font-bold text-xs uppercase tracking-wider"
-                        fill={bandColor(hoveredBands[bureau.key])}
-                      >
-                        {hoveredBands[bureau.key]?.name}
-                      </text>
-                      <text
-                        x="72"
-                        y="82"
-                        textAnchor="middle"
-                        className="font-mono font-bold text-xs"
-                        fill="currentColor"
-                      >
-                        {hoveredBands[bureau.key]?.min} - {hoveredBands[bureau.key]?.max}
-                      </text>
-                    </g>
-                  ) : (
-                    <g>
-                      <text
-                        x="72"
-                        y="68"
-                        textAnchor="middle"
-                        className="font-mono font-bold text-3xl"
-                        fill={bureau.color}
-                      >
-                        {latest ? latest.score : '—'}
-                      </text>
-                      <text
-                        x="72"
-                        y="84"
-                        textAnchor="middle"
-                        className="text-xs font-medium"
-                        fill="currentColor"
-                        opacity="0.6"
-                      >
-                        of {bureau.maxScore}
-                      </text>
-                      {rating && (
-                        <text
-                          x="72"
-                          y="98"
-                          textAnchor="middle"
-                          className="font-bold text-xs uppercase tracking-wider"
-                          fill={rating.color}
-                        >
-                          {rating.text}
-                        </text>
+            {/* Tier Range Segment Bar */}
+            <div className="space-y-1.5 w-full pt-1">
+              <div className="flex items-center gap-1 w-full h-1.5 rounded-full overflow-hidden bg-muted/20">
+                {bands.map(b => {
+                  const isCurrent = latest && latest.score >= b.min && latest.score <= b.max;
+                  const widthPct = ((b.max - b.min) / bureau.maxScore) * 100;
+                  return (
+                    <div
+                      key={b.name}
+                      style={{ width: `${widthPct}%` }}
+                      className={cn(
+                        "h-full transition-all cursor-pointer",
+                        isCurrent ? "bg-primary opacity-100" : "bg-muted/40 hover:bg-muted/60 opacity-50"
                       )}
-                    </g>
-                  )}
-                </svg>
+                      title={`${b.name}: ${b.min}–${b.max}`}
+                      onMouseEnter={() => setHoveredBands(prev => ({ ...prev, [bureau.key]: b }))}
+                      onMouseLeave={() => setHoveredBands(prev => ({ ...prev, [bureau.key]: null }))}
+                    />
+                  );
+                })}
               </div>
 
-              {/* Delta + Date */}
-              <div className="flex items-center gap-3 mt-3 mb-4">
-                {delta !== 0 && (
-                  <span className={cn("text-xs font-bold font-mono flex items-center gap-0.5", delta > 0 ? "text-positive" : "text-destructive")}>
-                    {delta > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                    {delta > 0 ? '+' : ''}{delta}
+              <div className="flex items-center justify-between text-[11px] font-mono min-h-[18px]">
+                <span className="text-muted-foreground">
+                  {hoveredBands[bureau.key]?.name ?? (rating?.text || 'Unrated')}
+                </span>
+                <span className="text-muted-foreground/60 tabular-nums">
+                  {hoveredBands[bureau.key]
+                    ? `${hoveredBands[bureau.key]?.min}–${hoveredBands[bureau.key]?.max}`
+                    : rating?.band
+                      ? `${rating.band.min}–${rating.band.max}`
+                      : `0–${bureau.maxScore}`}
+                </span>
+              </div>
+            </div>
+
+            {/* Score History Section */}
+            <div className="border-t border-border/30 pt-3 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-mono font-semibold text-muted-foreground">
+                <span className="uppercase tracking-wider">Score History</span>
+                {latest && (
+                  <span className="font-normal text-muted-foreground/70">
+                    Last: {latest.date}
                   </span>
                 )}
-                {latest && (
-                  <span className="text-xs text-muted-foreground">Last checked: {latest.date}</span>
-                )}
               </div>
-            </CardContent>
 
-            {/* Interactive History / Hover Overlay Area */}
-            <div className="px-6 pb-5 pt-2 border-t border-border/10 min-h-[145px] relative overflow-hidden">
-              <AnimatePresence mode="wait">
-                {hoveredBands[bureau.key] ? (
-                  <motion.div
-                    key="overlay"
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 15 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute inset-x-6 bottom-5 top-2 flex flex-col justify-center bg-background/95 dark:bg-card/95 backdrop-blur-sm z-10"
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-bold uppercase tracking-widest" style={{ color: bandColor(hoveredBands[bureau.key]) }}>
-                        {hoveredBands[bureau.key]?.name}
-                      </span>
-                      <span className="text-xs font-bold font-mono text-muted-foreground bg-primary/5 px-2 py-0.5 rounded-md border border-border/40">
-                        {hoveredBands[bureau.key]?.min} - {hoveredBands[bureau.key]?.max}
-                      </span>
+              {entries.length > 0 ? (
+                <div className="space-y-1 max-h-[100px] overflow-y-auto pr-1 scrollbar-thin">
+                  {[...entries].reverse().map(entry => (
+                    <div
+                      key={entry.id}
+                      className="group flex items-center justify-between py-1 px-2 rounded hover:bg-muted/20 transition-colors text-xs font-mono"
+                    >
+                      <span className="text-muted-foreground text-[11px]">{entry.date}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-foreground tabular-nums text-xs">{entry.score}</span>
+                        <button
+                          onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
+                          className="text-muted-foreground hover:text-destructive p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete entry"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {hoveredBands[bureau.key]?.description}
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="history"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="h-full flex flex-col"
-                  >
-                    <div className="text-xs uppercase tracking-wider font-bold text-muted-foreground mb-2">History</div>
-                    {entries.length > 0 ? (
-                      <div className="space-y-1 max-h-[100px] overflow-y-auto pr-1">
-                        {[...entries].reverse().map(entry => (
-                          <div key={entry.id} className="group flex items-center justify-between py-1 border-b border-border/10 last:border-b-0">
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs text-muted-foreground font-mono w-20">{entry.date}</span>
-                              <span className="text-xs font-mono font-bold" style={{ color: bureau.color }}>{entry.score}</span>
-                            </div>
-                            <button
-                              onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
-                              className="text-destructive hover:text-destructive p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground/60 italic flex-1 flex items-center justify-center">
-                        No credit history recorded.
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground/60 italic py-3 text-center font-mono">
+                  No score history logged.
+                </div>
+              )}
             </div>
           </Card>
         );
@@ -1279,33 +1204,33 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
 
 </div>
 <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Bank Account</DialogTitle>
-      <DialogDescription className="text-xs">Add a new personal bank account or credit card.</DialogDescription>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Add a new personal bank account or credit card.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddAccount} className="space-y-4 py-2">
       <div className="space-y-1">
-        <Label htmlFor="acc-name">Account Name</Label>
+        <Label htmlFor="acc-name" className="text-xs font-mono text-muted-foreground">Account Name</Label>
         <Input
           id="acc-name"
           placeholder="e.g. Chase Saver"
           value={newAccount.name}
           onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="acc-type">Account Type</Label>
+        <Label htmlFor="acc-type" className="text-xs font-mono text-muted-foreground">Account Type</Label>
         <Select
           value={newAccount.type}
           onValueChange={(val) => setNewAccount({ ...newAccount, type: val as BankAccount['type'] })}
         >
-          <SelectTrigger id="acc-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
+          <SelectTrigger id="acc-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-primary/10">
+          <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
             <SelectItem value="checking">Checking</SelectItem>
             <SelectItem value="savings">Savings</SelectItem>
             <SelectItem value="credit">Credit Card</SelectItem>
@@ -1314,18 +1239,18 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         </Select>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="acc-issuer">Issuer / Bank</Label>
+        <Label htmlFor="acc-issuer" className="text-xs font-mono text-muted-foreground">Issuer / Bank</Label>
         <Input
           id="acc-issuer"
           placeholder="e.g. Chase Bank"
           value={newAccount.issuer}
           onChange={(e) => setNewAccount({ ...newAccount, issuer: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="acc-balance">Balance (£)</Label>
+        <Label htmlFor="acc-balance" className="text-xs font-mono text-muted-foreground">Balance (£)</Label>
         <Input
           id="acc-balance"
           type="number"
@@ -1333,183 +1258,183 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           placeholder="e.g. 5200 (Use negative for credit balance)"
           value={newAccount.balance}
           onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="acc-fee">Annual Fee (£)</Label>
+        <Label htmlFor="acc-fee" className="text-xs font-mono text-muted-foreground">Annual Fee (£)</Label>
         <Input
           id="acc-fee"
           type="number"
           placeholder="e.g. 195"
           value={newAccount.annualFee}
           onChange={(e) => setNewAccount({ ...newAccount, annualFee: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="acc-use">Primary Use Case</Label>
+        <Label htmlFor="acc-use" className="text-xs font-mono text-muted-foreground">Primary Use Case</Label>
         <Input
           id="acc-use"
           placeholder="e.g. Salary deposits, tech purchases"
           value={newAccount.useCase}
           onChange={(e) => setNewAccount({ ...newAccount, useCase: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="acc-emoji">Emoji Icon</Label>
+          <Label htmlFor="acc-emoji" className="text-xs font-mono text-muted-foreground">Emoji Icon</Label>
           <Input
             id="acc-emoji"
             placeholder="e.g. 🏦"
             value={newAccount.emoji || ''}
             onChange={(e) => setNewAccount({ ...newAccount, emoji: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-center text-sm font-mono"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="acc-color">Accent Color</Label>
+          <Label htmlFor="acc-color" className="text-xs font-mono text-muted-foreground">Accent Color</Label>
           <div className="flex gap-2">
             <Input
               id="acc-color"
               type="color"
               value={newAccount.color || 'hsl(var(--muted-foreground))'}
               onChange={(e) => setNewAccount({ ...newAccount, color: e.target.value })}
-              className="rounded-xl h-10 w-12 border-primary/20 bg-background/50 p-1 cursor-pointer"
+              className="rounded-lg h-9 w-12 border border-border/40 bg-background/50 p-1 cursor-pointer"
             />
             <Input
               type="text"
               value={newAccount.color || 'hsl(var(--muted-foreground))'}
               onChange={(e) => setNewAccount({ ...newAccount, color: e.target.value })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50 font-mono text-xs uppercase flex-1"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs uppercase flex-1"
             />
           </div>
         </div>
       </div>
       <DialogFooter className="pt-4 gap-2 sm:gap-0">
-        <Button variant="outline" type="button" onClick={() => setIsAddAccountOpen(false)} className="rounded-xl">Cancel</Button>
-        <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Account</Button>
+        <Button variant="outline" type="button" onClick={() => setIsAddAccountOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
+        <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Account</Button>
       </DialogFooter>
     </form>
   </DialogContent>
 </Dialog>
 <Dialog open={isEditAccountOpen} onOpenChange={setIsEditAccountOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Account</DialogTitle>
-      <DialogDescription className="text-xs">Update account metrics.</DialogDescription>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Update account metrics.</DialogDescription>
     </DialogHeader>
     {activeAccount && (
       <form onSubmit={handleEditAccount} className="space-y-4 py-2">
         <div className="space-y-1">
-          <Label htmlFor="edit-acc-name">Account Name</Label>
+          <Label htmlFor="edit-acc-name" className="text-xs font-mono text-muted-foreground">Account Name</Label>
           <Input
             id="edit-acc-name"
             value={activeAccount.name}
             onChange={(e) => setActiveAccount({ ...activeAccount, name: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             required
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-acc-balance">Balance (£)</Label>
+          <Label htmlFor="edit-acc-balance" className="text-xs font-mono text-muted-foreground">Balance (£)</Label>
           <Input
             id="edit-acc-balance"
             type="number"
             step="0.01"
             value={activeAccount.balance}
             onChange={(e) => setActiveAccount({ ...activeAccount, balance: parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             required
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-acc-fee">Annual Fee (£)</Label>
+          <Label htmlFor="edit-acc-fee" className="text-xs font-mono text-muted-foreground">Annual Fee (£)</Label>
           <Input
             id="edit-acc-fee"
             type="number"
             value={activeAccount.annualFee}
             onChange={(e) => setActiveAccount({ ...activeAccount, annualFee: parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-acc-use">Primary Use Case</Label>
+          <Label htmlFor="edit-acc-use" className="text-xs font-mono text-muted-foreground">Primary Use Case</Label>
           <Input
             id="edit-acc-use"
             value={activeAccount.useCase || ''}
             onChange={(e) => setActiveAccount({ ...activeAccount, useCase: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label htmlFor="edit-acc-emoji">Emoji Icon</Label>
+            <Label htmlFor="edit-acc-emoji" className="text-xs font-mono text-muted-foreground">Emoji Icon</Label>
             <Input
               id="edit-acc-emoji"
               placeholder="e.g. 🏦"
               value={activeAccount.emoji || ''}
               onChange={(e) => setActiveAccount({ ...activeAccount, emoji: e.target.value })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-center text-sm font-mono"
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-acc-color">Accent Color</Label>
+            <Label htmlFor="edit-acc-color" className="text-xs font-mono text-muted-foreground">Accent Color</Label>
             <div className="flex gap-2">
               <Input
                 id="edit-acc-color"
                 type="color"
                 value={activeAccount.color || 'hsl(var(--muted-foreground))'}
                 onChange={(e) => setActiveAccount({ ...activeAccount, color: e.target.value })}
-                className="rounded-xl h-10 w-12 border-primary/20 bg-background/50 p-1 cursor-pointer"
+                className="rounded-lg h-9 w-12 border border-border/40 bg-background/50 p-1 cursor-pointer"
               />
               <Input
                 type="text"
                 value={activeAccount.color || 'hsl(var(--muted-foreground))'}
                 onChange={(e) => setActiveAccount({ ...activeAccount, color: e.target.value })}
-                className="rounded-xl h-10 border-primary/20 bg-background/50 font-mono text-xs uppercase flex-1"
+                className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs uppercase flex-1"
               />
             </div>
           </div>
         </div>
         <DialogFooter className="pt-4 gap-2 sm:gap-0">
-          <Button variant="outline" type="button" onClick={() => setIsEditAccountOpen(false)} className="rounded-xl">Cancel</Button>
-          <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
+          <Button variant="outline" type="button" onClick={() => setIsEditAccountOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
+          <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Changes</Button>
         </DialogFooter>
       </form>
     )}
   </DialogContent>
 </Dialog>
 <Dialog open={isAddMembershipOpen} onOpenChange={setIsAddMembershipOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Reward Membership</DialogTitle>
-      <DialogDescription className="text-xs">Add a new point, loyalty or reward system.</DialogDescription>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Add a new point, loyalty or reward system.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddMembership} className="space-y-4 py-2">
       <div className="space-y-1">
-        <Label htmlFor="mem-name">Membership Program</Label>
+        <Label htmlFor="mem-name" className="text-xs font-mono text-muted-foreground">Membership Program</Label>
         <Input
           id="mem-name"
           placeholder="e.g. Tesco Clubcard"
           value={newMembership.name}
           onChange={(e) => setNewMembership({ ...newMembership, name: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="mem-type">Program Type</Label>
+        <Label htmlFor="mem-type" className="text-xs font-mono text-muted-foreground">Program Type</Label>
         <Select
           value={newMembership.type}
           onValueChange={(val) => setNewMembership({ ...newMembership, type: val as Membership['type'] })}
         >
-          <SelectTrigger id="mem-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
+          <SelectTrigger id="mem-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-primary/10">
+          <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
             <SelectItem value="points">Points Program</SelectItem>
             <SelectItem value="cashback">Cashback Reward</SelectItem>
             <SelectItem value="miles">Airline Miles</SelectItem>
@@ -1518,127 +1443,127 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         </Select>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="mem-status">Status / Tier / Point Count</Label>
+        <Label htmlFor="mem-status" className="text-xs font-mono text-muted-foreground">Status / Tier / Point Count</Label>
         <Input
           id="mem-status"
           placeholder="e.g. Silver Tier (1200 points)"
           value={newMembership.status}
           onChange={(e) => setNewMembership({ ...newMembership, status: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="mem-fee">Annual Fee (£)</Label>
+        <Label htmlFor="mem-fee" className="text-xs font-mono text-muted-foreground">Annual Fee (£)</Label>
         <Input
           id="mem-fee"
           type="number"
           placeholder="e.g. 0"
           value={newMembership.annualFee}
           onChange={(e) => setNewMembership({ ...newMembership, annualFee: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="mem-use">Primary Use Case</Label>
+        <Label htmlFor="mem-use" className="text-xs font-mono text-muted-foreground">Primary Use Case</Label>
         <Input
           id="mem-use"
           placeholder="e.g. Grocery cash savings"
           value={newMembership.useCase}
           onChange={(e) => setNewMembership({ ...newMembership, useCase: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
       </div>
       <DialogFooter className="pt-4 gap-2 sm:gap-0">
-        <Button variant="outline" type="button" onClick={() => setIsAddMembershipOpen(false)} className="rounded-xl">Cancel</Button>
-        <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Program</Button>
+        <Button variant="outline" type="button" onClick={() => setIsAddMembershipOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
+        <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Program</Button>
       </DialogFooter>
     </form>
   </DialogContent>
 </Dialog>
 <Dialog open={isEditMembershipOpen} onOpenChange={setIsEditMembershipOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Reward Program</DialogTitle>
-      <DialogDescription className="text-xs">Update loyalty account details.</DialogDescription>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Update loyalty account details.</DialogDescription>
     </DialogHeader>
     {activeMembership && (
       <form onSubmit={handleEditMembership} className="space-y-4 py-2">
         <div className="space-y-1">
-          <Label htmlFor="edit-mem-name">Program Name</Label>
+          <Label htmlFor="edit-mem-name" className="text-xs font-mono text-muted-foreground">Program Name</Label>
           <Input
             id="edit-mem-name"
             value={activeMembership.name}
             onChange={(e) => setActiveMembership({ ...activeMembership, name: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             required
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-mem-status">Status / Tier</Label>
+          <Label htmlFor="edit-mem-status" className="text-xs font-mono text-muted-foreground">Status / Tier</Label>
           <Input
             id="edit-mem-status"
             value={activeMembership.status}
             onChange={(e) => setActiveMembership({ ...activeMembership, status: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             required
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-mem-fee">Annual Fee (£)</Label>
+          <Label htmlFor="edit-mem-fee" className="text-xs font-mono text-muted-foreground">Annual Fee (£)</Label>
           <Input
             id="edit-mem-fee"
             type="number"
             value={activeMembership.annualFee}
             onChange={(e) => setActiveMembership({ ...activeMembership, annualFee: parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-mem-use">Primary Use Case</Label>
+          <Label htmlFor="edit-mem-use" className="text-xs font-mono text-muted-foreground">Primary Use Case</Label>
           <Input
             id="edit-mem-use"
             value={activeMembership.useCase || ''}
             onChange={(e) => setActiveMembership({ ...activeMembership, useCase: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
         <DialogFooter className="pt-4 gap-2 sm:gap-0">
-          <Button variant="outline" type="button" onClick={() => setIsEditMembershipOpen(false)} className="rounded-xl">Cancel</Button>
-          <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
+          <Button variant="outline" type="button" onClick={() => setIsEditMembershipOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
+          <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Changes</Button>
         </DialogFooter>
       </form>
     )}
   </DialogContent>
 </Dialog>
 <Dialog open={isAddDebtOpen} onOpenChange={setIsAddDebtOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto font-mono shadow-none">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Debt</DialogTitle>
-      <DialogDescription className="text-xs">Track a mortgage, student loan or other borrowing.</DialogDescription>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Track a mortgage, student loan or other borrowing.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddDebt} className="space-y-4 py-2">
       <div className="space-y-1">
-        <Label htmlFor="debt-name">Debt Name</Label>
+        <Label htmlFor="debt-name" className="text-xs font-mono text-muted-foreground">Debt Name</Label>
         <Input
           id="debt-name"
           placeholder="e.g. Flat Mortgage"
           value={newDebt.name}
           onChange={(e) => setNewDebt({ ...newDebt, name: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="debt-type">Debt Type</Label>
+        <Label htmlFor="debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
         <Select
           value={newDebt.type}
           onValueChange={(val) => setNewDebt({ ...newDebt, type: val as Debt['type'] })}
         >
-          <SelectTrigger id="debt-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
+          <SelectTrigger id="debt-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-primary/10">
+          <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
             {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
             ))}
@@ -1646,7 +1571,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         </Select>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="debt-repayment">How It's Repaid</Label>
+        <Label htmlFor="debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
         <Select
           value={newDebt.repaymentType}
           onValueChange={(val) => setNewDebt({
@@ -1658,10 +1583,10 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               : undefined
           })}
         >
-          <SelectTrigger id="debt-repayment" className="bg-background/50 border-primary/20 rounded-xl h-10">
+          <SelectTrigger id="debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-primary/10">
+          <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
             <SelectItem value="amortising">Fixed monthly payment</SelectItem>
             <SelectItem value="income_contingent">% of income over threshold</SelectItem>
           </SelectContent>
@@ -1670,7 +1595,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
       {newDebt.repaymentType === 'income_contingent' && (
         <>
           <div className="space-y-1">
-            <Label htmlFor="debt-plan">Student Loan Plan</Label>
+            <Label htmlFor="debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
             <Select
               value={newDebt.studentLoanPlan || 'plan2'}
               onValueChange={(val) => setNewDebt({
@@ -1679,44 +1604,44 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                 writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey]
               })}
             >
-              <SelectTrigger id="debt-plan" className="bg-background/50 border-primary/20 rounded-xl h-10">
+              <SelectTrigger id="debt-plan" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-primary/10">
+              <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
                 {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] font-mono text-muted-foreground">
               Repays {taxConfig.studentLoanRates[newDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[newDebt.studentLoanPlan || 'plan2'] || 0)}.
             </p>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="debt-writeoff">Written Off After (years)</Label>
+            <Label htmlFor="debt-writeoff" className="text-xs font-mono text-muted-foreground">Written Off After (years)</Label>
             <Input
               id="debt-writeoff"
               type="number"
               value={newDebt.writeOffYears ?? ''}
               onChange={(e) => setNewDebt({ ...newDebt, writeOffYears: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             />
           </div>
         </>
       )}
       <div className="space-y-1">
-        <Label htmlFor="debt-lender">Lender</Label>
+        <Label htmlFor="debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
         <Input
           id="debt-lender"
           placeholder="e.g. Nationwide"
           value={newDebt.lender}
           onChange={(e) => setNewDebt({ ...newDebt, lender: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label htmlFor="debt-original">Original (£)</Label>
+          <Label htmlFor="debt-original" className="text-xs font-mono text-muted-foreground">Original (£)</Label>
           <Input
             id="debt-original"
             type="number"
@@ -1725,14 +1650,14 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             value={newDebt.draws.length > 0 ? sumDraws(newDebt.draws) : newDebt.originalAmount}
             onChange={(e) => setNewDebt({ ...newDebt, originalAmount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
             disabled={newDebt.draws.length > 0}
-            className="rounded-xl h-10 border-primary/20 bg-background/50 disabled:opacity-70"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono disabled:opacity-70"
           />
           {newDebt.draws.length > 0 && (
-            <p className="text-xs text-muted-foreground">Summed from borrowing history</p>
+            <p className="text-[11px] font-mono text-muted-foreground">Summed from borrowing history</p>
           )}
         </div>
         <div className="space-y-1">
-          <Label htmlFor="debt-balance">Owed Now (£)</Label>
+          <Label htmlFor="debt-balance" className="text-xs font-mono text-muted-foreground">Owed Now (£)</Label>
           <Input
             id="debt-balance"
             type="number"
@@ -1740,14 +1665,14 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             placeholder="198400"
             value={newDebt.balance}
             onChange={(e) => setNewDebt({ ...newDebt, balance: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             required
           />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label htmlFor="debt-rate">Interest Rate (%)</Label>
+          <Label htmlFor="debt-rate" className="text-xs font-mono text-muted-foreground">Interest Rate (%)</Label>
           <Input
             id="debt-rate"
             type="number"
@@ -1755,11 +1680,11 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             placeholder="4.75"
             value={newDebt.interestRate}
             onChange={(e) => setNewDebt({ ...newDebt, interestRate: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="debt-payment">Monthly (£)</Label>
+          <Label htmlFor="debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
           <Input
             id="debt-payment"
             type="number"
@@ -1767,29 +1692,29 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             placeholder="1150"
             value={newDebt.minPayment}
             onChange={(e) => setNewDebt({ ...newDebt, minPayment: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label htmlFor="debt-start">Taken On</Label>
+          <Label htmlFor="debt-start" className="text-xs font-mono text-muted-foreground">Taken On</Label>
           <Input
             id="debt-start"
             type="date"
             value={newDebt.startDate}
             onChange={(e) => setNewDebt({ ...newDebt, startDate: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="debt-payoff">Expected Payoff</Label>
+          <Label htmlFor="debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
           <Input
             id="debt-payoff"
             type="date"
             value={newDebt.payoffDate}
             onChange={(e) => setNewDebt({ ...newDebt, payoffDate: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
       </div>
@@ -1805,61 +1730,61 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label htmlFor="debt-emoji">Emoji</Label>
+          <Label htmlFor="debt-emoji" className="text-xs font-mono text-muted-foreground">Emoji</Label>
           <Input
             id="debt-emoji"
             placeholder="🏠"
             value={newDebt.emoji}
             onChange={(e) => setNewDebt({ ...newDebt, emoji: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-center text-sm font-mono"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="debt-color">Colour</Label>
+          <Label htmlFor="debt-color" className="text-xs font-mono text-muted-foreground">Colour</Label>
           <Input
             id="debt-color"
             type="color"
             value={newDebt.color}
             onChange={(e) => setNewDebt({ ...newDebt, color: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50 p-1"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 p-1 cursor-pointer"
           />
         </div>
       </div>
       <DialogFooter className="pt-4 gap-2 sm:gap-0">
-        <Button variant="outline" type="button" onClick={() => setIsAddDebtOpen(false)} className="rounded-xl">Cancel</Button>
-        <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Debt</Button>
+        <Button variant="outline" type="button" onClick={() => setIsAddDebtOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
+        <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Debt</Button>
       </DialogFooter>
     </form>
   </DialogContent>
 </Dialog>
 <Dialog open={isEditDebtOpen} onOpenChange={setIsEditDebtOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto font-mono shadow-none">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Debt</DialogTitle>
-      <DialogDescription className="text-xs">Update balance, rate or payoff schedule.</DialogDescription>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Update balance, rate or payoff schedule.</DialogDescription>
     </DialogHeader>
     {activeDebt && (
       <form onSubmit={handleEditDebt} className="space-y-4 py-2">
         <div className="space-y-1">
-          <Label htmlFor="edit-debt-name">Debt Name</Label>
+          <Label htmlFor="edit-debt-name" className="text-xs font-mono text-muted-foreground">Debt Name</Label>
           <Input
             id="edit-debt-name"
             value={activeDebt.name}
             onChange={(e) => setActiveDebt({ ...activeDebt, name: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             required
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-debt-type">Debt Type</Label>
+          <Label htmlFor="edit-debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
           <Select
             value={activeDebt.type}
             onValueChange={(val) => setActiveDebt({ ...activeDebt, type: val as Debt['type'] })}
           >
-            <SelectTrigger id="edit-debt-type" className="bg-background/50 border-primary/20 rounded-xl h-10">
+            <SelectTrigger id="edit-debt-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="rounded-xl border-primary/10">
+            <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
               {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
               ))}
@@ -1867,7 +1792,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           </Select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-debt-repayment">How It's Repaid</Label>
+          <Label htmlFor="edit-debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
           <Select
             value={activeDebt.repaymentType}
             onValueChange={(val) => setActiveDebt({
@@ -1879,10 +1804,10 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                 : undefined
             })}
           >
-            <SelectTrigger id="edit-debt-repayment" className="bg-background/50 border-primary/20 rounded-xl h-10">
+            <SelectTrigger id="edit-debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="rounded-xl border-primary/10">
+            <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
               <SelectItem value="amortising">Fixed monthly payment</SelectItem>
               <SelectItem value="income_contingent">% of income over threshold</SelectItem>
             </SelectContent>
@@ -1891,7 +1816,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         {activeDebt.repaymentType === 'income_contingent' && (
           <>
             <div className="space-y-1">
-              <Label htmlFor="edit-debt-plan">Student Loan Plan</Label>
+              <Label htmlFor="edit-debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
               <Select
                 value={activeDebt.studentLoanPlan || 'plan2'}
                 onValueChange={(val) => setActiveDebt({
@@ -1900,43 +1825,43 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                   writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey]
                 })}
               >
-                <SelectTrigger id="edit-debt-plan" className="bg-background/50 border-primary/20 rounded-xl h-10">
+                <SelectTrigger id="edit-debt-plan" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-primary/10">
+                <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
                   {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
                     <SelectItem key={value} value={value}>{label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11px] font-mono text-muted-foreground">
                 Repays {taxConfig.studentLoanRates[activeDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[activeDebt.studentLoanPlan || 'plan2'] || 0)}.
               </p>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="edit-debt-writeoff">Written Off After (years)</Label>
+              <Label htmlFor="edit-debt-writeoff" className="text-xs font-mono text-muted-foreground">Written Off After (years)</Label>
               <Input
                 id="edit-debt-writeoff"
                 type="number"
                 value={activeDebt.writeOffYears ?? ''}
                 onChange={(e) => setActiveDebt({ ...activeDebt, writeOffYears: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
-                className="rounded-xl h-10 border-primary/20 bg-background/50"
+                className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
               />
             </div>
           </>
         )}
         <div className="space-y-1">
-          <Label htmlFor="edit-debt-lender">Lender</Label>
+          <Label htmlFor="edit-debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
           <Input
             id="edit-debt-lender"
             value={activeDebt.lender}
             onChange={(e) => setActiveDebt({ ...activeDebt, lender: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-original">Original (£)</Label>
+            <Label htmlFor="edit-debt-original" className="text-xs font-mono text-muted-foreground">Original (£)</Label>
             <Input
               id="edit-debt-original"
               type="number"
@@ -1944,68 +1869,68 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               value={activeDebt.draws.length > 0 ? sumDraws(activeDebt.draws) : activeDebt.originalAmount}
               onChange={(e) => setActiveDebt({ ...activeDebt, originalAmount: parseFloat(e.target.value) || 0 })}
               disabled={activeDebt.draws.length > 0}
-              className="rounded-xl h-10 border-primary/20 bg-background/50 disabled:opacity-70"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono disabled:opacity-70"
             />
             {activeDebt.draws.length > 0 && (
-              <p className="text-xs text-muted-foreground">Summed from borrowing history</p>
+              <p className="text-[11px] font-mono text-muted-foreground">Summed from borrowing history</p>
             )}
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-balance">Owed Now (£)</Label>
+            <Label htmlFor="edit-debt-balance" className="text-xs font-mono text-muted-foreground">Owed Now (£)</Label>
             <Input
               id="edit-debt-balance"
               type="number"
               step="0.01"
               value={activeDebt.balance}
               onChange={(e) => setActiveDebt({ ...activeDebt, balance: parseFloat(e.target.value) || 0 })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
               required
             />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-rate">Interest Rate (%)</Label>
+            <Label htmlFor="edit-debt-rate" className="text-xs font-mono text-muted-foreground">Interest Rate (%)</Label>
             <Input
               id="edit-debt-rate"
               type="number"
               step="0.01"
               value={activeDebt.interestRate}
               onChange={(e) => setActiveDebt({ ...activeDebt, interestRate: parseFloat(e.target.value) || 0 })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-payment">Monthly (£)</Label>
+            <Label htmlFor="edit-debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
             <Input
               id="edit-debt-payment"
               type="number"
               step="0.01"
               value={activeDebt.minPayment}
               onChange={(e) => setActiveDebt({ ...activeDebt, minPayment: parseFloat(e.target.value) || 0 })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-start">Taken On</Label>
+            <Label htmlFor="edit-debt-start" className="text-xs font-mono text-muted-foreground">Taken On</Label>
             <Input
               id="edit-debt-start"
               type="date"
               value={activeDebt.startDate || ''}
               onChange={(e) => setActiveDebt({ ...activeDebt, startDate: e.target.value || undefined })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-payoff">Expected Payoff</Label>
+            <Label htmlFor="edit-debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
             <Input
               id="edit-debt-payoff"
               type="date"
               value={activeDebt.payoffDate || ''}
               onChange={(e) => setActiveDebt({ ...activeDebt, payoffDate: e.target.value || undefined })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
             />
           </div>
         </div>
@@ -2021,52 +1946,52 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-emoji">Emoji</Label>
+            <Label htmlFor="edit-debt-emoji" className="text-xs font-mono text-muted-foreground">Emoji</Label>
             <Input
               id="edit-debt-emoji"
               value={activeDebt.emoji || ''}
               onChange={(e) => setActiveDebt({ ...activeDebt, emoji: e.target.value })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 text-center text-sm font-mono"
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-debt-color">Colour</Label>
+            <Label htmlFor="edit-debt-color" className="text-xs font-mono text-muted-foreground">Colour</Label>
             <Input
               id="edit-debt-color"
               type="color"
               value={activeDebt.color || 'hsl(var(--destructive))'}
               onChange={(e) => setActiveDebt({ ...activeDebt, color: e.target.value })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50 p-1"
+              className="rounded-lg h-9 border border-border/40 bg-background/50 p-1 cursor-pointer"
             />
           </div>
         </div>
         <DialogFooter className="pt-4 gap-2 sm:gap-0">
-          <Button variant="outline" type="button" onClick={() => setIsEditDebtOpen(false)} className="rounded-xl">Cancel</Button>
-          <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
+          <Button variant="outline" type="button" onClick={() => setIsEditDebtOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
+          <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Changes</Button>
         </DialogFooter>
       </form>
     )}
   </DialogContent>
 </Dialog>
 <Dialog open={isAddCreditScoreOpen} onOpenChange={setIsAddCreditScoreOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Log Credit Score</DialogTitle>
-      <DialogDescription className="text-xs">Manually log your latest credit score from any bureau.</DialogDescription>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Manually log your latest credit score from any bureau.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddCreditScore} className="space-y-4 py-2">
       <div className="space-y-1">
-        <Label htmlFor="cs-bureau" className="text-xs">Credit Bureau</Label>
+        <Label htmlFor="cs-bureau" className="text-xs font-mono text-muted-foreground">Credit Bureau</Label>
         <Select
           value={newCreditScore.bureau}
           onValueChange={(val) => setNewCreditScore({ ...newCreditScore, bureau: val as 'experian' | 'transunion' | 'equifax' })}
         >
-          <SelectTrigger id="cs-bureau" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
+          <SelectTrigger id="cs-bureau" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
             <SelectValue placeholder="Select bureau..." />
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-primary/10">
+          <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
             {creditBureaus.map(b => (
-              <SelectItem key={b.key} value={b.key} className="text-xs">
+              <SelectItem key={b.key} value={b.key} className="text-xs font-mono">
                 {b.emoji} {b.label} (0–{b.maxScore})
               </SelectItem>
             ))}
@@ -2074,7 +1999,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         </Select>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cs-score" className="text-xs">Score</Label>
+        <Label htmlFor="cs-score" className="text-xs font-mono text-muted-foreground">Score</Label>
         <Input
           id="cs-score"
           type="number"
@@ -2082,24 +2007,24 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           placeholder="e.g. 720"
           value={newCreditScore.score}
           onChange={(e) => setNewCreditScore({ ...newCreditScore, score: e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0 })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm font-mono"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono tabular-nums"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cs-date" className="text-xs">Date Checked</Label>
+        <Label htmlFor="cs-date" className="text-xs font-mono text-muted-foreground">Date Checked</Label>
         <Input
           id="cs-date"
           type="date"
           value={newCreditScore.date}
           onChange={(e) => setNewCreditScore({ ...newCreditScore, date: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50 text-sm"
+          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
           required
         />
       </div>
       <DialogFooter className="pt-4 gap-2 sm:gap-0">
-        <Button variant="outline" type="button" onClick={() => setIsAddCreditScoreOpen(false)} className="rounded-xl">Cancel</Button>
-        <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Log Score</Button>
+        <Button variant="outline" type="button" onClick={() => setIsAddCreditScoreOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
+        <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Log Score</Button>
       </DialogFooter>
     </form>
   </DialogContent>
