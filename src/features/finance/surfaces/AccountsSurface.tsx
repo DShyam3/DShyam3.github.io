@@ -507,17 +507,17 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
       <div className="min-w-0">
-        <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-          <CreditCard className="h-5 w-5 text-primary shrink-0" /> Bank Accounts & Credit Cards
+        <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+          <CreditCard className="h-4 w-4 text-primary shrink-0" /> Bank Accounts & Credit Cards
         </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Monitor current balances, card products, and credit accounts</p>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">Monitor current balances, card products, and credit accounts</p>
       </div>
-      <Button onClick={() => setIsAddAccountOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-        <Plus className="h-4 w-4" /> Add Account
+      <Button onClick={() => setIsAddAccountOpen(true)} className="rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 px-3 shrink-0 self-start sm:self-auto font-mono">
+        <Plus className="h-3.5 w-3.5" /> Add Account
       </Button>
     </div>
 
-    <div className="overflow-auto max-h-[60vh] bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm -mx-0">
+    <div className="overflow-auto max-h-[60vh] bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors -mx-0">
       <table className="min-w-[720px] w-full text-xs text-left border-collapse">
         <thead>
           <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
@@ -584,11 +584,11 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   </div>
 
   {/* TrueLayer Integration Card */}
-  <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl space-y-6">
+  <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-5">
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div className="space-y-1">
-        <h4 className="font-serif text-base font-semibold text-foreground flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary shrink-0" /> TrueLayer Open Banking
+        <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+          <Activity className="h-4 w-4 text-primary shrink-0" /> TrueLayer Open Banking
         </h4>
         <p className="text-xs text-muted-foreground">
           Automatically sync card transactions and account balances in sandbox mode.
@@ -676,13 +676,13 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
       <div className="min-w-0">
-        <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-          <Landmark className="h-5 w-5 text-primary shrink-0" /> Debt
+        <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+          <Landmark className="h-4 w-4 text-primary shrink-0" /> Debt
         </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Track mortgages, student loans and other borrowing against payoff progress</p>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">Track mortgages, student loans and other borrowing against payoff progress</p>
       </div>
-      <Button onClick={() => setIsAddDebtOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-        <Plus className="h-4 w-4" /> Add Debt
+      <Button onClick={() => setIsAddDebtOpen(true)} className="rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 px-3 shrink-0 self-start sm:self-auto font-mono">
+        <Plus className="h-3.5 w-3.5" /> Add Debt
       </Button>
     </div>
 
@@ -694,15 +694,15 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           { label: 'Monthly Payments', value: formatGBP(totalMinPayments), tone: 'text-foreground' },
           { label: 'Avg Rate', value: `${weightedInterestRate.toFixed(2)}%`, tone: 'text-foreground' }
         ].map(stat => (
-          <div key={stat.label} className="bg-card/40 border border-primary/10 rounded-2xl p-3 sm:p-4">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">{stat.label}</span>
-            <span className={cn("text-base sm:text-lg font-bold font-mono block truncate mt-1", stat.tone)}>{stat.value}</span>
+          <div key={stat.label} className="bg-card/50 border border-border/40 rounded-xl p-3 sm:p-4 hover:border-border/80 transition-colors">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-mono font-semibold block">{stat.label}</span>
+            <span className={cn("text-base sm:text-lg font-bold font-mono tabular-nums block truncate mt-1", stat.tone)}>{stat.value}</span>
           </div>
         ))}
       </div>
     )}
 
-    <div className="overflow-auto max-h-[60vh] bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
+    <div className="overflow-auto max-h-[60vh] bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors">
       <table className="min-w-[820px] w-full text-xs text-left border-collapse">
         <thead>
           <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
@@ -799,10 +799,10 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
 
     {/* Payoff projection for the selected debt */}
     {selectedDebt && (
-      <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-xl space-y-5">
+      <div className="rounded-xl border border-border/40 bg-card/50 p-4 sm:p-5 hover:border-border/80 transition-colors space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h4 className="font-serif text-base font-semibold text-foreground flex items-center gap-2">
+            <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
               <TrendingDown className="h-4 w-4 text-primary shrink-0" /> {selectedDebt.name} — Payoff Projection
             </h4>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -927,17 +927,17 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
       <div className="min-w-0">
-        <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-          <Award className="h-5 w-5 text-primary shrink-0" /> Memberships & Reward Programs
+        <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+          <Award className="h-4 w-4 text-primary shrink-0" /> Memberships & Reward Programs
         </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Keep track of reward accounts, points programs, and loyalty systems</p>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">Keep track of reward accounts, points programs, and loyalty systems</p>
       </div>
-      <Button onClick={() => setIsAddMembershipOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-        <Plus className="h-4 w-4" /> Add Membership
+      <Button onClick={() => setIsAddMembershipOpen(true)} className="rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 px-3 shrink-0 self-start sm:self-auto font-mono">
+        <Plus className="h-3.5 w-3.5" /> Add Membership
       </Button>
     </div>
 
-    <div className="overflow-auto max-h-[60vh] bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
+    <div className="overflow-auto max-h-[60vh] bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors">
       <table className="min-w-[640px] w-full text-xs text-left border-collapse">
         <thead>
           <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
@@ -996,13 +996,13 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
       <div className="min-w-0">
-        <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-          <ShieldAlert className="h-5 w-5 text-primary shrink-0" /> Credit Reports
+        <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-primary shrink-0" /> Credit Reports
         </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Track your credit scores across all three bureaus over time</p>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">Track your credit scores across all three bureaus over time</p>
       </div>
-      <Button onClick={() => setIsAddCreditScoreOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-        <Plus className="h-4 w-4" /> Log Score
+      <Button onClick={() => setIsAddCreditScoreOpen(true)} className="rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 px-3 shrink-0 self-start sm:self-auto font-mono">
+        <Plus className="h-3.5 w-3.5" /> Log Score
       </Button>
     </div>
 
@@ -1051,10 +1051,10 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         const dotPos = polarToCartesian(72, 72, 54, scoreAngle);
 
         return (
-          <Card key={bureau.key} className={cn("bg-gradient-to-br border border-primary/10 rounded-[2rem] overflow-hidden flex flex-col justify-between shadow-sm", bureau.gradient)}>
-            <CardContent className="pt-6 pb-0 px-6 flex flex-col items-center">
+          <Card key={bureau.key} className={cn("rounded-xl border border-border/40 bg-card/50 overflow-hidden flex flex-col justify-between hover:border-border/80 transition-colors", bureau.gradient)}>
+            <CardContent className="pt-5 pb-0 px-5 flex flex-col items-center">
               {/* Bureau Label */}
-              <span className="text-xs uppercase tracking-widest font-bold text-muted-foreground mb-4">{bureau.label}</span>
+              <span className="text-xs uppercase tracking-wider font-mono font-semibold text-muted-foreground mb-4">{bureau.label}</span>
 
               {/* Circular/Arch Gauge */}
               <div className="relative w-36 h-36 flex items-center justify-center">
@@ -1279,9 +1279,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
 
 </div>
 <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
     <DialogHeader>
-      <DialogTitle className="font-serif">Add Bank Account</DialogTitle>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Bank Account</DialogTitle>
       <DialogDescription className="text-xs">Add a new personal bank account or credit card.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddAccount} className="space-y-4 py-2">
@@ -1396,9 +1396,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   </DialogContent>
 </Dialog>
 <Dialog open={isEditAccountOpen} onOpenChange={setIsEditAccountOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
     <DialogHeader>
-      <DialogTitle className="font-serif">Edit Account</DialogTitle>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Account</DialogTitle>
       <DialogDescription className="text-xs">Update account metrics.</DialogDescription>
     </DialogHeader>
     {activeAccount && (
@@ -1483,9 +1483,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   </DialogContent>
 </Dialog>
 <Dialog open={isAddMembershipOpen} onOpenChange={setIsAddMembershipOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
     <DialogHeader>
-      <DialogTitle className="font-serif">Add Reward Membership</DialogTitle>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Reward Membership</DialogTitle>
       <DialogDescription className="text-xs">Add a new point, loyalty or reward system.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddMembership} className="space-y-4 py-2">
@@ -1557,9 +1557,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   </DialogContent>
 </Dialog>
 <Dialog open={isEditMembershipOpen} onOpenChange={setIsEditMembershipOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
     <DialogHeader>
-      <DialogTitle className="font-serif">Edit Reward Program</DialogTitle>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Reward Program</DialogTitle>
       <DialogDescription className="text-xs">Update loyalty account details.</DialogDescription>
     </DialogHeader>
     {activeMembership && (
@@ -1612,9 +1612,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   </DialogContent>
 </Dialog>
 <Dialog open={isAddDebtOpen} onOpenChange={setIsAddDebtOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm max-h-[85vh] overflow-y-auto">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto">
     <DialogHeader>
-      <DialogTitle className="font-serif">Add Debt</DialogTitle>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Debt</DialogTitle>
       <DialogDescription className="text-xs">Track a mortgage, student loan or other borrowing.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddDebt} className="space-y-4 py-2">
@@ -1833,9 +1833,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   </DialogContent>
 </Dialog>
 <Dialog open={isEditDebtOpen} onOpenChange={setIsEditDebtOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm max-h-[85vh] overflow-y-auto">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto">
     <DialogHeader>
-      <DialogTitle className="font-serif">Edit Debt</DialogTitle>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Debt</DialogTitle>
       <DialogDescription className="text-xs">Update balance, rate or payoff schedule.</DialogDescription>
     </DialogHeader>
     {activeDebt && (
@@ -2049,9 +2049,9 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
   </DialogContent>
 </Dialog>
 <Dialog open={isAddCreditScoreOpen} onOpenChange={setIsAddCreditScoreOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm">
     <DialogHeader>
-      <DialogTitle className="font-serif">Log Credit Score</DialogTitle>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Log Credit Score</DialogTitle>
       <DialogDescription className="text-xs">Manually log your latest credit score from any bureau.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddCreditScore} className="space-y-4 py-2">
@@ -2059,7 +2059,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         <Label htmlFor="cs-bureau" className="text-xs">Credit Bureau</Label>
         <Select
           value={newCreditScore.bureau}
-          onValueChange={(val) => setNewCreditScore({ ...newCreditScore, bureau: val as any })}
+          onValueChange={(val) => setNewCreditScore({ ...newCreditScore, bureau: val as 'experian' | 'transunion' | 'equifax' })}
         >
           <SelectTrigger id="cs-bureau" className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs">
             <SelectValue placeholder="Select bureau..." />
