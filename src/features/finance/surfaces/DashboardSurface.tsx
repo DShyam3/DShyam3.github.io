@@ -847,7 +847,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             Recurrings <ArrowUpRight className="h-3 w-3" />
           </button>
         </CardHeader>
-        <CardContent className="p-0 pt-4 space-y-3">
+        {/* Matches the transactions card above: a long list scrolls inside its
+            own card rather than growing the surface (REHAUL_PLAN.md 7.C). */}
+        <CardContent className="p-0 pt-4 space-y-3 max-h-[300px] overflow-y-auto pr-1">
           {recurrings
             .filter(r => isDueThisMonth(r, currentMonth) && !r.isPaid)
             .sort((a, b) => a.dueDate - b.dueDate)

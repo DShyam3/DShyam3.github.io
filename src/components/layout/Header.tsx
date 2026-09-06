@@ -132,10 +132,12 @@ export function Header({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-4">
-            {/* Ahead of the page title, not after it: the menu is how you
-                leave this page, the title only says which page it is. */}
-            <NavMenu />
+          {/* `justify-between` is for the phone, where this cluster is its own
+              full-width row: the title takes the left edge and the two
+              controls the right, rather than all three bunching at the left
+              with the leftover width trailing off the end. From md the row is
+              only as wide as its contents and the property does nothing. */}
+          <div className="flex items-center justify-between gap-3 md:gap-4">
             <div
               className="text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity"
               onClick={handleTitleClick}
@@ -155,7 +157,17 @@ export function Header({
                 />
               </div>
             </div>
-            <ThemeToggle />
+            {/* After the title rather than before it. On its own between the
+                two identity blocks the button had nothing to line up with:
+                both neighbours are two stacked lines of Doto and it is one
+                line of it, centred in the gap. Kept with the theme toggle it
+                joins the only other control on this side, and the pair read
+                as a control cluster pinned to the right edge instead of one
+                label adrift in the whitespace. */}
+            <div className="flex flex-shrink-0 items-center gap-2 md:gap-4">
+              <NavMenu />
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </div>

@@ -845,13 +845,22 @@ The surface and section navs go in `AppShell`'s `toolbar` slot, which sits
 outside the scroll area, so navigation stays put while the surface scrolls
 underneath.
 
-Inside a surface, scrolling should stop at a card rather than run the length of
-the page: a transaction list scrolls within its own card, inside the shell's
+Inside a surface, scrolling stops at a card rather than running the length of
+the page: a transaction list scrolls within its own pane, inside the shell's
 scrolling middle. This keeps a surface roughly one screen tall whatever the row
 count, and makes the structure legible — a scroll bar tells you where one thing
-ends and the next begins. `holiday-months-container` already works this way and
-is the model. Which cards get their own scroll depends on which cards exist, so
-that lands with the rest of the visual work rather than with the shell.
+ends and the next begins. `holiday-months-container` already worked this way and
+was the model; Home's transactions card already capped at 300px.
+
+Now also capped: Home's upcoming bills, the three account tables on Wealth
+(`60vh`, so they shrink with the window rather than a fixed pixel count), and
+the transactions list, which is the one that mattered most — its detail panel
+sits beside the list, and before this it scrolled out of reach as soon as the
+list grew.
+
+Not every list wants this. A short one gains nothing and a nested scrollbar
+costs something, so the rule is: cap a list that can outgrow the viewport,
+leave the rest alone.
 
 **Where the collection system does and does not fit.** `EntityCard`
 (`CardVariant = 'media' | 'text'`) and `CollectionConfig` exist for walls of

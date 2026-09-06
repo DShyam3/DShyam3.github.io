@@ -684,7 +684,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </Button>
             </div>
           ) : (
-            <div className="space-y-6">
+            /* The list scrolls inside its own pane rather than growing the
+               surface, so the detail panel beside it stays in view whatever
+               the transaction count (REHAUL_PLAN.md 7.C). */
+            <div className="space-y-6 max-h-[calc(100vh-22rem)] overflow-y-auto pr-1">
               {/* Select All Bar */}
               <div className="flex items-center px-4 py-1.5 border-b border-border/20 text-xs text-muted-foreground font-semibold">
                 <div className="flex items-center gap-3">

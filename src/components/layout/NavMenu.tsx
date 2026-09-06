@@ -96,8 +96,26 @@ export function NavMenu({ className }: { className?: string }) {
         {/* Labelled at every width, phones included. Bare, the glyph is a
             3x3 of dots sitting next to the theme toggle's dot cluster, and
             the pair read as two pieces of decoration rather than a control.
-            It costs about 47px on a phone, which the row has. */}
-        <DotMatrixText text={open ? 'CLOSE' : 'MENU'} size="xs" />
+            It costs about 47px on a phone, which the row has.
+
+            Both words occupy the same grid cell, so the button is always as
+            wide as the longer of the two and only the text changes on open.
+            Swapping one label for the other reflowed the button, which
+            dragged the glyph left by the width of a character -- the one
+            part of the control that should never move, since it is the same
+            nine cells in both states. */}
+        <span className="grid">
+          <DotMatrixText
+            text="MENU"
+            size="xs"
+            className={cn('col-start-1 row-start-1', open && 'invisible')}
+          />
+          <DotMatrixText
+            text="CLOSE"
+            size="xs"
+            className={cn('col-start-1 row-start-1', !open && 'invisible')}
+          />
+        </span>
         <span className="sr-only">
           {open ? 'Close navigation menu' : 'Open navigation menu'}
         </span>

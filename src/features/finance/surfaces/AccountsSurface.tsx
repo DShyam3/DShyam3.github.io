@@ -517,7 +517,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
       </Button>
     </div>
 
-    <div className="overflow-x-auto bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm -mx-0">
+    <div className="overflow-auto max-h-[60vh] bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm -mx-0">
       <table className="min-w-[720px] w-full text-xs text-left border-collapse">
         <thead>
           <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
@@ -702,7 +702,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
       </div>
     )}
 
-    <div className="overflow-x-auto bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
+    <div className="overflow-auto max-h-[60vh] bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
       <table className="min-w-[820px] w-full text-xs text-left border-collapse">
         <thead>
           <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
@@ -937,7 +937,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
       </Button>
     </div>
 
-    <div className="overflow-x-auto bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
+    <div className="overflow-auto max-h-[60vh] bg-card/40 border border-primary/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm">
       <table className="min-w-[640px] w-full text-xs text-left border-collapse">
         <thead>
           <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
