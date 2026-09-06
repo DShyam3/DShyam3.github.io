@@ -1207,6 +1207,9 @@ export default function Finance() {
 
   // UI Status
   const [loadingDb, setLoadingDb] = useState(false);
+  // The profile every non-template row is written against (Phase 7.1). One
+  // operator, several subjects; a profile switcher replaces this in 7.2.
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [fetchingHolidays, setFetchingHolidays] = useState(false);
   const [savingDb, setSavingDb] = useState(false);
   const [bankHolidaysList, setBankHolidaysList] = useState<string[]>([]);
@@ -1664,7 +1667,8 @@ export default function Finance() {
           recurringTemplatesRes,
           creditBureausRes,
           holidayDefaultsRes,
-          budgetPresetsRes
+          budgetPresetsRes,
+          selfProfileRes
         ] = await Promise.all([
           supabase.from('finance_settings').select('*'),
           supabase.from('finance_user_holidays').select('*'),
@@ -1682,8 +1686,13 @@ export default function Finance() {
           supabase.from('finance_recurring_templates').select('*'),
           supabase.from('finance_credit_bureaus').select('*'),
           supabase.from('finance_holiday_defaults').select('*'),
-          supabase.from('finance_budget_presets').select('*')
+          supabase.from('finance_budget_presets').select('*'),
+          supabase.from('finance_profiles').select('id').eq('is_self', true).maybeSingle()
         ]);
+
+        // Written by the 7.1 migration, so this is present unless someone has
+        // deleted it. `saveDataToSupabase` refuses to write without it.
+        setProfileId(selfProfileRes.data?.id ?? null);
 
         // A single failing table used to `throw` here, aborting the whole load
         // and silently dropping the page back to localStorage — which is how a
@@ -2527,6 +2536,17 @@ export default function Finance() {
 
   const saveDataToSupabase = async (key: string, contentData: any) => {
     if (!isAdmin) return;
+    // Every non-template finance row carries a profile_id, and the database
+    // enforces it with a CHECK. Writing without one would fail per-statement
+    // and leave the delete-then-insert save half applied, so refuse up front.
+    if (!profileId) {
+      toast({
+        title: 'No profile loaded',
+        description: 'Finance data could not be saved because no profile was found.',
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       if (key === 'settings') {
         const settingsObj = contentData as FinanceSettings;
@@ -2538,6 +2558,7 @@ export default function Finance() {
 
         const settingsRow = {
           is_default: false,
+          profile_id: profileId,
           gross_salary: settingsObj.grossSalary,
           pension_type: settingsObj.pensionType,
           personal_pension_percent: settingsObj.personalPensionPercent,
@@ -2573,6 +2594,7 @@ export default function Finance() {
           await supabase.from('finance_user_holidays').insert(holidaysList.map(h => ({
             id: h.id,
             is_default: false,
+            profile_id: profileId,
             start_date: h.startDate,
             end_date: h.endDate,
             occasion: h.occasion || null,
@@ -2587,6 +2609,7 @@ export default function Finance() {
           await supabase.from('finance_goals').insert(goalsList.map(g => ({
             id: g.id,
             is_default: false,
+            profile_id: profileId,
             name: g.name,
             target_amount: g.targetAmount,
             current_amount: g.currentAmount,
@@ -2598,6 +2621,7 @@ export default function Finance() {
           const contribs = goalsList.flatMap(g => (g.contributions || []).map(c => ({
             id: c.id,
             is_default: false,
+            profile_id: profileId,
             goal_id: g.id,
             amount: c.amount,
             date: c.date,
@@ -2618,6 +2642,7 @@ export default function Finance() {
           await supabase.from('finance_bank_accounts').insert(accsObj.bankAccounts.map(a => ({
             id: a.id,
             is_default: false,
+            profile_id: profileId,
             name: a.name,
             type: a.type,
             issuer: a.issuer || null,
@@ -2633,6 +2658,7 @@ export default function Finance() {
           await supabase.from('finance_memberships').insert(accsObj.memberships.map(m => ({
             id: m.id,
             is_default: false,
+            profile_id: profileId,
             name: m.name,
             type: m.type,
             status: m.status || null,
@@ -2645,6 +2671,7 @@ export default function Finance() {
           await supabase.from('finance_debts').insert(debtsToSave.map(d => ({
             id: d.id,
             is_default: false,
+            profile_id: profileId,
             name: d.name,
             type: d.type,
             lender: d.lender || null,
@@ -2673,6 +2700,7 @@ export default function Finance() {
           await supabase.from('finance_credit_scores').insert(scores.map(s => ({
             id: s.id,
             is_default: false,
+            profile_id: profileId,
             bureau: s.bureau,
             date: s.date,
             score: s.score
@@ -2686,6 +2714,7 @@ export default function Finance() {
           await supabase.from('finance_budget_categories').insert(budgetCats.map(c => ({
             id: c.id,
             is_default: false,
+            profile_id: profileId,
             is_template: false,
             name: c.name,
             budgeted: c.budgeted,
@@ -2695,6 +2724,7 @@ export default function Finance() {
           const items = budgetCats.flatMap(c => (c.items || []).map(i => ({
             id: i.id,
             is_default: false,
+            profile_id: profileId,
             is_template: false,
             category_id: c.id,
             name: i.name,
@@ -2714,6 +2744,7 @@ export default function Finance() {
           await supabase.from('finance_recurring_bills').insert(recurringsList.map(r => ({
             id: r.id,
             is_default: false,
+            profile_id: profileId,
             name: r.name,
             amount: r.amount,
             due_date: r.dueDate,
@@ -2734,6 +2765,7 @@ export default function Finance() {
           await supabase.from('finance_transactions').insert(txList.map(t => ({
             id: t.id,
             is_default: false,
+            profile_id: profileId,
             name: t.name,
             category: t.category || null,
             amount: t.amount,
@@ -2820,6 +2852,7 @@ export default function Finance() {
           await supabase.from('finance_budget_categories').insert(defaultBudgetCats.map(c => ({
             id: c.id,
             is_default: false,
+            profile_id: profileId,
             is_template: true,
             name: c.name,
             budgeted: c.budgeted,
@@ -2829,6 +2862,7 @@ export default function Finance() {
           const items = defaultBudgetCats.flatMap(c => (c.items || []).map(i => ({
             id: i.id,
             is_default: false,
+            profile_id: profileId,
             is_template: true,
             category_id: c.id,
             name: i.name,

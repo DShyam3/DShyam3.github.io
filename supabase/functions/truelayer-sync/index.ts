@@ -62,6 +62,16 @@ serve(async (req) => {
     // Initialize Supabase Client with service key to read/write credentials
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Every non-template finance row carries a profile_id, and the database
+    // enforces it with a CHECK (Phase 7.1). This function writes accounts and
+    // transactions, so it needs the operator's own profile before it can.
+    const { data: selfProfile } = await supabaseAdmin
+      .from('finance_profiles')
+      .select('id')
+      .eq('is_self', true)
+      .maybeSingle()
+    const selfProfileId = selfProfile?.id ?? null
+
     // Parse request body
     const body = await req.json().catch(() => ({}))
     const { action } = body
@@ -128,6 +138,13 @@ serve(async (req) => {
 
     // ACTION: exchange_code
     if (action === 'exchange_code') {
+      if (!selfProfileId) {
+        return new Response(JSON.stringify({ error: 'No finance profile found; cannot store the connection.' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       const { code, redirect_uri } = body
       if (!code || !redirect_uri) {
         return new Response(JSON.stringify({ error: 'code and redirect_uri are required' }), {
@@ -169,6 +186,7 @@ serve(async (req) => {
           access_token,
           refresh_token,
           expires_at: expiresAt,
+          profile_id: selfProfileId,
         })
 
       if (insertError) {
@@ -185,6 +203,13 @@ serve(async (req) => {
 
     // ACTION: sync_transactions
     if (action === 'sync_transactions') {
+      if (!selfProfileId) {
+        return new Response(JSON.stringify({ error: 'No finance profile found; cannot write synced data.' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       // 1. Fetch connection details
       const { data: connection, error: connError } = await supabaseAdmin
         .from('finance_truelayer_connection')
@@ -347,6 +372,7 @@ serve(async (req) => {
         const accountRow = {
           id: accId,
           is_default: false,
+          profile_id: selfProfileId,
           name: account.display_name || `${account.provider?.display_name} Checking`,
           type: account.account_type === 'savings' ? 'savings' : 'checking',
           issuer: account.provider?.display_name || 'TrueLayer Sandbox',
@@ -366,6 +392,7 @@ serve(async (req) => {
             allNewTransactions.push({
               id: `tl_tx_${tx.transaction_id}`,
               is_default: false,
+              profile_id: selfProfileId,
               name: tx.merchant_name || tx.description || 'TrueLayer Transaction',
               category: mapCategory(tx.transaction_category, tx.transaction_classification),
               amount: -Number(tx.amount), // invert since debits are negative in TrueLayer, positive in app
@@ -397,6 +424,7 @@ serve(async (req) => {
         const accountRow = {
           id: accId,
           is_default: false,
+          profile_id: selfProfileId,
           name: card.display_name || `${card.provider?.display_name} Card`,
           type: 'credit',
           issuer: card.provider?.display_name || 'TrueLayer Sandbox',
@@ -416,6 +444,7 @@ serve(async (req) => {
             allNewTransactions.push({
               id: `tl_tx_${tx.transaction_id}`,
               is_default: false,
+              profile_id: selfProfileId,
               name: tx.merchant_name || tx.description || 'TrueLayer Card Transaction',
               category: mapCategory(tx.transaction_category, tx.transaction_classification),
               amount: -Number(tx.amount), // invert since debits are negative in TrueLayer, positive in app
@@ -455,6 +484,7 @@ serve(async (req) => {
         await supabaseAdmin.from('finance_bank_accounts').insert(accountsToWrite.map(a => ({
           id: a.id,
           is_default: false,
+          profile_id: selfProfileId,
           name: a.name,
           type: a.type,
           issuer: a.issuer,
@@ -518,6 +548,7 @@ serve(async (req) => {
         await supabaseAdmin.from('finance_transactions').insert(finalTxList.map(t => ({
           id: t.id,
           is_default: false,
+          profile_id: selfProfileId,
           name: t.name,
           category: t.category,
           amount: t.amount,

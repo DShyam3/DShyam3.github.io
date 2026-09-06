@@ -873,6 +873,7 @@ page feels cramped.
 |---|---|---|
 | 7.0 | Pure calc → `lib/finance/` with tests — **DONE** | none |
 | 7.1 | `finance_profiles`, `profile_id` on 13 tables, transfer links — **DONE** | none |
+| 7.1b | Thread `profile_id` through the existing write paths so the page keeps working before the decomposition — **DONE** | 7.1 |
 | 7.2 | Decompose `FinancePage.tsx` into the five surfaces (7.C), profile filter baked into every query | none |
 | 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |
 | 7.4 | Snapshots — balance, net worth, per profile | none |
