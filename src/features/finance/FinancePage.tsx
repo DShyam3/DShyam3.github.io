@@ -74,8 +74,6 @@ import {
   isTravelHolidaysCategory,
   mergeMissingDefaultCategories,
   presetsToDefaultCategories,
-  resolveStoredList,
-  safeParseJSON,
 } from './finance-defaults';
 import {
   BUREAU_BANDS,
@@ -560,43 +558,10 @@ function FinanceView() {
     setBankHolsInput(settings.bankHolidays.toString());
     setWorkHolsInput(settings.workHolidays.toString());
     setHoursInput(settings.workingHoursPerDay.toString());
-
-    localStorage.setItem('finance_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // Local storage backups for other states
-  useEffect(() => {
-    localStorage.setItem('finance_goals', JSON.stringify(goals));
-  }, [goals]);
-  useEffect(() => {
-    localStorage.setItem('finance_bank_accounts', JSON.stringify(bankAccounts));
-  }, [bankAccounts]);
-  useEffect(() => {
-    localStorage.setItem('finance_investment_holdings', JSON.stringify(investmentHoldings));
-  }, [investmentHoldings]);
-  useEffect(() => {
-    localStorage.setItem('finance_memberships', JSON.stringify(memberships));
-  }, [memberships]);
 
-  useEffect(() => {
-    localStorage.setItem('finance_debts', JSON.stringify(debts));
-  }, [debts]);
-  useEffect(() => {
-    localStorage.setItem('finance_recurrings', JSON.stringify(recurrings));
-  }, [recurrings]);
-  useEffect(() => {
-    localStorage.setItem('finance_credit_scores', JSON.stringify(creditScores));
-  }, [creditScores]);
-  useEffect(() => {
-    localStorage.setItem('finance_budget', JSON.stringify(budgetCategories));
-  }, [budgetCategories]);
-  useEffect(() => {
-    localStorage.setItem('finance_transactions', JSON.stringify(mockTransactions));
-  }, [mockTransactions]);
 
-  useEffect(() => {
-    localStorage.setItem('finance_time_spent_inputs', JSON.stringify(timeSpentInputs));
-  }, [timeSpentInputs]);
 
   // Scroll to current month in holiday tracker when tax-income tab is selected
   useEffect(() => {

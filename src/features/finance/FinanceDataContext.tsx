@@ -7,8 +7,9 @@
  * one. Only *data* lives here -- dialog flags, filters and hover state stay
  * with whichever surface owns them.
  *
- * The localStorage seeding below is deliberately preserved as-is for now; it
- * is retired in 7.3, when Postgres becomes the only source of truth.
+ * Postgres is the only source of truth. State starts at its defaults and is
+ * replaced by the first fetch; nothing is cached in localStorage, which with
+ * profiles would mean one profile's ledger surviving a switch to another.
  */
 
 import {
@@ -54,8 +55,6 @@ import {
   DEFAULT_RECURRING_TEMPLATES,
   mergeMissingDefaultCategories,
   presetsToDefaultCategories,
-  resolveStoredList,
-  safeParseJSON,
 } from './finance-defaults';
 import {
   calculateWeekends,
@@ -69,20 +68,7 @@ function useProvideFinanceData() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
 
-  const [presets, setPresets] = useState(() => {
-    const saved = localStorage.getItem('finance_budget_presets');
-    if (saved) {
-      try {
-        return {
-          ...ALL_PRESETS_FALLBACK,
-          ...JSON.parse(saved)
-        };
-      } catch (e) {
-        console.error('Failed to parse cached presets:', e);
-      }
-    }
-    return ALL_PRESETS_FALLBACK;
-  });
+  const [presets, setPresets] = useState(ALL_PRESETS_FALLBACK);
 
   const {
     DEFAULT_CATEGORY_PRESETS,
@@ -116,8 +102,7 @@ function useProvideFinanceData() {
 
   // Data States
   const [settings, setSettings] = useState<FinanceSettings>(() => {
-    const saved = localStorage.getItem('finance_settings');
-    return safeParseJSON<FinanceSettings>(saved, {
+    return {
       grossSalary: 0,
       pensionType: 'net_pay',
       personalPensionPercent: 0,
@@ -133,12 +118,11 @@ function useProvideFinanceData() {
       ukRegion: 'england-and-wales',
       holidaysByUser: {},
       activeSavingsTypes: ALL_SAVINGS_IDS
-    });
+    };
   });
 
   const [timeSpentInputs, setTimeSpentInputs] = useState(() => {
-    const saved = localStorage.getItem('finance_time_spent_inputs');
-    return safeParseJSON(saved, {
+    return {
       sleepHoursPerDay: 8.0,
       commuteDaysPerWeek: 5,
       commuteHoursPerDay: 2,
@@ -147,28 +131,18 @@ function useProvideFinanceData() {
       gymHoursPerSession: 0,
       learningHoursPerWeek: 0,
       friendsHoursPerWeek: 0,
-    });
+    };
   });
 
   const [goals, setGoals] = useState<Goal[]>(() => {
-    const saved = localStorage.getItem('finance_goals');
-    return safeParseJSON<Goal[]>(saved, []);
+    return [];
   });
 
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(() => {
-    const saved = localStorage.getItem('finance_bank_accounts');
-    return sanitizeBankAccounts(safeParseJSON<any[]>(saved, []));
+    return sanitizeBankAccounts([]);
   });
 
   const [investmentHoldings, setInvestmentHoldings] = useState<InvestmentHolding[]>(() => {
-    const saved = localStorage.getItem('finance_investment_holdings');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
     return [
       { id: 'h1', name: 'S&P 500 ETF', ticker: 'VOO', shares: 12.5, avgPrice: 420.50, currentPrice: 485.20, category: 'ETF' },
       { id: 'h2', name: 'Apple Inc.', ticker: 'AAPL', shares: 15, avgPrice: 150.00, currentPrice: 189.30, category: 'Stock' },
@@ -178,14 +152,12 @@ function useProvideFinanceData() {
   });
 
   const [memberships, setMemberships] = useState<Membership[]>(() => {
-    const saved = localStorage.getItem('finance_memberships');
-    return safeParseJSON<Membership[]>(saved, []);
+    return [];
   });
 
   const [debts, setDebts] = useState<Debt[]>(() => {
-    const saved = localStorage.getItem('finance_debts');
     // Normalize so cached rows written before draws/repaymentType existed still render
-    return safeParseJSON<Debt[]>(saved, []).map(d => ({
+    return [].map(d => ({
       ...d,
       draws: Array.isArray(d.draws) ? d.draws : [],
       repaymentType: d.repaymentType || 'amortising'
@@ -193,72 +165,48 @@ function useProvideFinanceData() {
   });
 
   const [recurrings, setRecurrings] = useState<RecurringBill[]>(() => {
-    const saved = localStorage.getItem('finance_recurrings');
-    return safeParseJSON<RecurringBill[]>(saved, []);
+    return [];
   });
 
   const [creditScores, setCreditScores] = useState<CreditScores>(() => {
-    const saved = localStorage.getItem('finance_credit_scores');
-    return safeParseJSON<CreditScores>(saved, { experian: [], transunion: [], equifax: [] });
+    return { experian: [], transunion: [], equifax: [] };
   });
 
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
-    const saved = localStorage.getItem('finance_budget');
-    const list = resolveStoredList(saved, DEFAULT_BUDGET_CATEGORIES);
+    const list = DEFAULT_BUDGET_CATEGORIES;
     return sanitizeBudgetCategories(mergeMissingDefaultCategories(list, DEFAULT_BUDGET_CATEGORIES));
   });
 
   const [mockTransactions, setMockTransactions] = useState<MockTransaction[]>(() => {
-    const saved = localStorage.getItem('finance_transactions');
-    return safeParseJSON<MockTransaction[]>(saved, []);
+    return [];
   });
 
   // Dynamic configurations fetched from Supabase
   const [taxConfig, setTaxConfig] = useState<TaxConfig>(() => {
-    const saved = localStorage.getItem('finance_tax_config');
-    return safeParseJSON<TaxConfig>(saved, {
+    return {
       studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
       nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 }
-    });
+    };
   });
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(() => {
-    const saved = localStorage.getItem('finance_recurring_templates');
-    return resolveStoredList(saved, DEFAULT_RECURRING_TEMPLATES);
+    return DEFAULT_RECURRING_TEMPLATES;
   });
   const [creditBureaus, setCreditBureaus] = useState<CreditBureauConfig[]>(() => {
-    const saved = localStorage.getItem('finance_credit_bureaus');
-    return safeParseJSON<CreditBureauConfig[]>(saved, [
+    return [
       { key: 'experian', label: 'Experian', emoji: '🟣', color: '#8b5cf6', maxScore: 1250, gradient: 'from-violet-500/10 to-violet-500/5' },
       { key: 'transunion', label: 'Credit Karma', emoji: '🔵', color: '#06b6d4', maxScore: 710, gradient: 'from-cyan-500/10 to-cyan-500/5' },
       { key: 'equifax', label: 'ClearScore', emoji: '🟡', color: '#f59e0b', maxScore: 1000, gradient: 'from-amber-500/10 to-amber-500/5' }
-    ]);
+    ];
   });
   const [holidayDefaults, setHolidayDefaults] = useState<Record<number, { count: number; dates: string; occasion: string }>>(() => {
-    const saved = localStorage.getItem('finance_holiday_defaults');
-    return safeParseJSON(saved, {} as Record<number, { count: number; dates: string; occasion: string }>);
+    return {} as Record<number, { count: number; dates: string; occasion: string }>;
   });
   const [defaultBudgetCategories, setDefaultBudgetCategories] = useState<BudgetCategory[]>(() => {
-    const saved = localStorage.getItem('finance_default_budget_categories');
-    return resolveStoredList(saved, DEFAULT_CATEGORY_TEMPLATES);
+    return DEFAULT_CATEGORY_TEMPLATES;
   });
 
-  useEffect(() => {
-    localStorage.setItem('finance_tax_config', JSON.stringify(taxConfig));
-  }, [taxConfig]);
-  useEffect(() => {
-    localStorage.setItem('finance_recurring_templates', JSON.stringify(recurringTemplates));
-  }, [recurringTemplates]);
-  useEffect(() => {
-    localStorage.setItem('finance_credit_bureaus', JSON.stringify(creditBureaus));
-  }, [creditBureaus]);
-  useEffect(() => {
-    localStorage.setItem('finance_holiday_defaults', JSON.stringify(holidayDefaults));
-  }, [holidayDefaults]);
-  useEffect(() => {
-    localStorage.setItem('finance_default_budget_categories', JSON.stringify(defaultBudgetCategories));
-  }, [defaultBudgetCategories]);
 
   // Mirrors of loaded settings that the settings form edits, and the goal the
   // goals view opens on. Initialised from data, so they live with the data.
@@ -766,7 +714,6 @@ function useProvideFinanceData() {
               ...prev,
               ...presetsObj
             };
-            localStorage.setItem('finance_budget_presets', JSON.stringify(merged));
             return merged;
           });
         } else {

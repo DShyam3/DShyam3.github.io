@@ -746,11 +746,12 @@ id, then `SET NOT NULL`.
 
 Two consequences worth planning for:
 
-- **`localStorage` stops working.** `finance_settings` means nothing once there
-  are three profiles; it would need `finance_settings:${profileId}`. Rather than
-  namespace a pattern we want dead, profiles are the forcing function that
-  retires all 18 seed/write pairs. Postgres becomes the only source of truth,
-  and `localStorage` keeps only view preference (active tab, active profile).
+- **`localStorage` stopped working, and is now gone.** `finance_settings` means
+  nothing once there are three profiles, and a cached blob outlives a switch, so
+  one profile's ledger would surface under another's name. All eighteen
+  seed/write pairs are retired: Postgres is the only source of truth, state
+  starts at its defaults, and the first fetch replaces it. The active tab went
+  with 7.2a, when a surface became a route.
 - **Cross-profile money is real.** "I sent Mum £300" is an expense in one ledger
   and income in another. This is the one piece of the household model worth
   keeping — the *linking* half, not the auth half. A
@@ -925,7 +926,7 @@ data lives. The prop lists collapse on their own after that.
 | 7.2d | Profile switcher and profile-filtered reads — **DONE** | 7.2c |
 | 7.2e | Per-surface queries: retire the 17-query mount so a surface loads only what it renders | 7.2d |
 | 7.3a | Targeted mutations: upsert-then-prune instead of delete-then-insert — **DONE** | 7.2d |
-| 7.3b | Retire the remaining `localStorage` seeds | 7.3a |
+| 7.3b | Retire the remaining `localStorage` seeds — **DONE** | 7.3a |
 | 7.4 | Snapshots — balance, net worth, per profile | none |
 | 7.5 | Scenario engine — "what happens if I do X?" | 7.0 |
 | 7.6 | AI tool layer: typed tools over 7.0 + 7.5 | Edge Function + API key |

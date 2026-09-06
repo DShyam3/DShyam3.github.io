@@ -326,29 +326,6 @@ export const mergeMissingDefaultCategories = (loaded: BudgetCategory[], defaults
   return merged;
 };
 
-// Guards against a corrupted/malformed localStorage value crashing this
-// page's mount -- these run inside useState initializers, so an uncaught
-// parse error here previously took down the entire Finance page.
-export const safeParseJSON = <T,>(saved: string | null, fallback: T): T => {
-  if (!saved) return fallback;
-  try {
-    return JSON.parse(saved) as T;
-  } catch (e) {
-    console.error('Failed to parse stored finance data, using fallback:', e);
-    return fallback;
-  }
-};
-
-export const resolveStoredList = <T,>(saved: string | null, fallback: T[]): T[] => {
-  if (!saved) return fallback;
-  try {
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
 // ==========================================
 // UTILITY FUNCTIONS
 // ==========================================
