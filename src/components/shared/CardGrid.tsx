@@ -2,8 +2,13 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { CARD_GRID } from '@/theme/layout';
 
-/** Below this the shell is an ordinary scrolling document -- see AppShell. */
-const PINNED_SHELL = '(min-width: 768px)';
+/**
+ * The shell is pinned at every width now, but fitting the cards to the slice
+ * it leaves is only worth it above this: a phone's slice is half a viewport
+ * and the cards it would have to draw to fill it are too small to read. Below
+ * it they keep their natural size and `<main>` scrolls past them.
+ */
+const FIT_TO_SLICE = '(min-width: 768px)';
 
 /**
  * Reads a length written on the grid as a CSS custom property. They are all
@@ -68,7 +73,7 @@ function useCardGridFit(ref: React.RefObject<HTMLDivElement>) {
     const scroller = grid.closest('main');
     if (!scroller) return;
 
-    const media = window.matchMedia(PINNED_SHELL);
+    const media = window.matchMedia(FIT_TO_SLICE);
 
     const clear = () => {
       if (published.current === null) return;

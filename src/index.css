@@ -142,6 +142,16 @@
     font-variant-numeric: lining-nums tabular-nums;
   }
 
+  /* The shell is exactly one viewport tall, so the document has nothing to
+     scroll -- but a touch browser will still rubber-band it, and dragging the
+     whole frame down off a bar of empty page is the thing that made the shell
+     look scrollable on an iPad. This refuses the bounce; it does not stop a
+     page that genuinely overflows, such as Finance, from scrolling. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
   h1,
   h2,
   h3,
@@ -380,6 +390,10 @@
 .app-scroll {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
+  /* Stop at its own ends. Without this, a flick that runs out of content
+     hands the rest of the gesture to the shell and then to the document,
+     which is the other half of how the frame moved on a tablet. */
+  overscroll-behavior: contain;
 }
 
 .app-scroll::-webkit-scrollbar {
@@ -418,6 +432,71 @@
    size chosen for a monitor whatever the window was. The clamps scale on vh
    instead: the same sizes at the extremes, and every height in between gets
    the size that height can afford. */
+
+/* ─── Chrome on a short viewport ────────────────────────────────────────
+   The shell is pinned at every width now, and below md the header and the
+   footer stack: identity over title, and four footer labels down the middle
+   of the screen. That is the right shape for a phone held upright and the
+   wrong one for the same phone turned sideways -- at 667x375 the two of them
+   came to 293px of a 375px viewport and `<main>` was left nothing at all, so
+   the page had content it was impossible to reach.
+
+   The stacking is a width decision, and on a short viewport it should be a
+   height one: there is room across and none to spare down, so both go back
+   to a single row. Height rather than orientation, because a short window on
+   a desktop has exactly the same problem and no orientation to report. */
+
+@media (max-height: 560px) and (max-width: 767px) {
+  header.app-header {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  footer.app-footer {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
+  /* The faces drop a step as well: the footer is spending height it does
+     not have. */
+  .app-header .dot-matrix-text-md {
+    font-size: 1.15rem;
+  }
+
+  .app-header .dot-matrix-text-sm,
+  .app-footer .dot-matrix-text-xs {
+    font-size: 0.875rem;
+  }
+}
+
+/* The single row itself needs width to be an improvement rather than a pile:
+   at 320px the identity, the menu and the page title overlap outright. A
+   phone on its side is 568px at the narrowest, so 480px clears every one of
+   them with room to spare while still refusing the row to anything genuinely
+   narrow. A viewport both narrow and short keeps the stack and lives on the
+   compaction above. */
+
+@media (max-height: 560px) and (min-width: 480px) and (max-width: 767px) {
+  /* The header's one row, and the identity cluster inside it: both are
+     `flex-col` until md. Addressed by structure because that is where the
+     Tailwind classes put them -- see Header.tsx. */
+  .app-header > div > div {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .app-header > div > div > div:first-child {
+    width: auto;
+    align-items: center;
+  }
+
+  /* The footer's row, and the "Based in London" + clock pair inside it. */
+  .app-footer > div,
+  .app-footer > div > div {
+    flex-direction: row;
+  }
+}
 
 @media (min-width: 768px) {
   header.app-header {
@@ -464,6 +543,23 @@
    Doto is set large because its dots read smaller than the nominal size, but
    the sizes chosen for a monitor are simply too wide for a 375px screen --
    the site name alone filled a line. Each face drops one step below md. */
+
+/* ─── The filter bar's share of a phone ─────────────────────────────────
+   A filter bar is the one piece of chrome that grows with the collection:
+   Inventory's is seven category chips, a search field and a count, and it
+   came to 309px of an 812px phone -- more than the card wall underneath it.
+   It could get away with that while the document scrolled and it scrolled
+   away with everything else. Under a pinned shell it is spending the grid's
+   height, so it is held to under a third of the viewport and scrolls inside
+   itself past that. Above md there is room and this never bites. */
+
+@media (max-width: 767px) {
+  .app-toolbar {
+    max-height: 30dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
 
 @media (max-width: 767px) {
   .dot-matrix-text-xs {

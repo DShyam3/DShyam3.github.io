@@ -111,7 +111,11 @@ export function NavMenu({ className }: { className?: string }) {
         // own edges, rounded, and floats on its shadow. Full-bleed with a
         // bottom rule read as the site growing a third row rather than as
         // something you had opened and could close.
-        className="absolute left-2 right-2 top-full z-40 mt-2 rounded-xl border border-border bg-background p-2 shadow-[0_2px_4px_-2px_hsl(30_10%_15%/0.12),0_18px_40px_-12px_hsl(30_10%_15%/0.28)] sm:p-3 md:left-0 md:right-0 dark:shadow-[0_2px_4px_-2px_hsl(0_0%_0%/0.5),0_18px_40px_-12px_hsl(0_0%_0%/0.7)]"
+        // The shell clips at one viewport now, so a panel taller than the
+        // room under the header would be cut off with no way to reach the
+        // rest. It fits today at every size; this is the guard for the day it
+        // does not.
+        className="app-scroll absolute left-2 right-2 top-full z-40 mt-2 max-h-[65dvh] overflow-y-auto rounded-xl border border-border bg-background p-2 shadow-[0_2px_4px_-2px_hsl(30_10%_15%/0.12),0_18px_40px_-12px_hsl(30_10%_15%/0.28)] sm:p-3 md:left-0 md:right-0 dark:shadow-[0_2px_4px_-2px_hsl(0_0%_0%/0.5),0_18px_40px_-12px_hsl(0_0%_0%/0.7)]"
       >
         <nav
           aria-label="Site"

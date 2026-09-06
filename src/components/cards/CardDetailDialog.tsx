@@ -56,7 +56,7 @@ export function CardDetailDialog({
 }: CardDetailDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl h-fit max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="sm:max-w-2xl h-fit max-h-[85svh] overflow-x-hidden overflow-y-auto p-0 gap-0">
         {/* Radix wires `aria-describedby` from this, and warns when a dialog
             has none: a screen reader was announcing the title and then going
             silent about what the dialog is. It is `sr-only` rather than
@@ -70,7 +70,7 @@ export function CardDetailDialog({
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (
-            <div className={cn('w-full overflow-hidden', imageIsContent ? 'max-h-[52vh]' : 'h-48')}>
+            <div className={cn('w-full overflow-hidden', imageIsContent ? 'max-h-[46svh]' : 'h-48')}>
               <img
                 src={imageUrl}
                 alt={title}
@@ -158,8 +158,11 @@ export function CardDetailDialog({
           {imageUrl && (
             <div
               className={cn(
-                'shrink-0 flex items-start bg-secondary/5',
-                imageIsContent ? 'p-4 w-auto' : 'p-6',
+                'flex items-start bg-secondary/5',
+                // A content image shares the row instead of owning it: it
+                // shrinks with the dialog rather than pushing the text
+                // column out and giving the whole thing a sideways scroll.
+                imageIsContent ? 'p-4 min-w-0 flex-1' : 'shrink-0 p-6',
               )}
             >
               <img
@@ -169,9 +172,9 @@ export function CardDetailDialog({
                   'h-auto rounded-lg shadow-lg object-contain',
                   // A recipe or a book cover is worth looking at, and at
                   // w-40 it was a thumbnail beside a column of text. The
-                  // dialog widened to 3xl to pay for it, so the text column
-                  // is wider than it was too.
-                  imageIsContent ? 'max-w-[46vw] max-h-[74vh]' : 'w-56 object-cover',
+                  // height cap is svh rather than vh so the dialog still
+                  // clears an iPad's browser chrome in either orientation.
+                  imageIsContent ? 'max-w-full max-h-[58svh]' : 'w-56 object-cover',
                 )}
               />
             </div>
