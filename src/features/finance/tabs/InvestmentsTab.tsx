@@ -151,6 +151,14 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       .filter(item => item.value > 0);
   }, [holdings, portfolioStats.investmentAccountsCash]);
 
+  const totalAllocated = useMemo(() => {
+    return allocationData.reduce((sum, item) => sum + item.value, 0);
+  }, [allocationData]);
+
+  const sortedAllocationData = useMemo(() => {
+    return [...allocationData].sort((a, b) => b.value - a.value);
+  }, [allocationData]);
+
   // 3. Compound Interest projection calculation
   const projectionData = useMemo(() => {
     const data = [];
@@ -228,75 +236,70 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* 1. KEY PERFORMANCE METRICS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              <Coins className="h-3 w-3 text-primary" /> Total Portfolio
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+          <div className="space-y-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
+              Total Portfolio
             </span>
-            <div className="text-2xl sm:text-3xl font-serif font-semibold text-foreground tracking-tight">
+            <div className="text-2xl sm:text-3xl font-mono font-bold tabular-nums text-foreground tracking-tight">
               {formatGBP(portfolioStats.totalPortfolioValue)}
             </div>
-            {portfolioStats.investmentAccountsCash > 0 && (
-              <span className="text-xs text-muted-foreground/85 block font-sans">
-                Includes {formatGBP(portfolioStats.investmentAccountsCash)} cash balance
+            {portfolioStats.investmentAccountsCash > 0 ? (
+              <span className="text-xs text-muted-foreground/80 block font-mono">
+                Incl. {formatGBP(portfolioStats.investmentAccountsCash)} cash
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground/80 block font-mono">
+                Across {holdings.length} holdings
               </span>
             )}
           </div>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              <DollarSign className="h-3 w-3 text-chart-3" /> Net Invested
+        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+          <div className="space-y-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
+              Net Invested
             </span>
-            <div className="text-2xl sm:text-3xl font-serif font-semibold text-foreground tracking-tight">
+            <div className="text-2xl sm:text-3xl font-mono font-bold tabular-nums text-foreground tracking-tight">
               {formatGBP(portfolioStats.totalCost)}
             </div>
-            <span className="text-xs text-muted-foreground/85 block font-sans">
-              Total principal holdings cost
+            <span className="text-xs text-muted-foreground/80 block font-mono">
+              Total principal cost basis
             </span>
           </div>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              {portfolioStats.profitLoss >= 0 ? (
-                <TrendingUp className="h-3 w-3 text-positive" />
-              ) : (
-                <TrendingDown className="h-3 w-3 text-destructive" />
-              )}
+        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+          <div className="space-y-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
               Total Gain / Loss
             </span>
             <div className={cn(
-              "text-2xl sm:text-3xl font-serif font-semibold tracking-tight",
+              "text-2xl sm:text-3xl font-mono font-bold tabular-nums tracking-tight",
               portfolioStats.profitLoss >= 0 ? "text-positive" : "text-destructive"
             )}>
               {portfolioStats.profitLoss >= 0 ? '+' : ''}{formatGBP(portfolioStats.profitLoss)}
             </div>
-            <span className="text-xs text-muted-foreground/85 block font-sans">
-              Total return on holdings
+            <span className="text-xs text-muted-foreground/80 block font-mono">
+              All-time unrealised return
             </span>
           </div>
         </Card>
 
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              <ArrowUpRight className="h-3 w-3 text-chart-4" /> Rate of Return
+        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+          <div className="space-y-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
+              Rate of Return
             </span>
             <div className={cn(
-              "text-2xl sm:text-3xl font-serif font-semibold tracking-tight",
+              "text-2xl sm:text-3xl font-mono font-bold tabular-nums tracking-tight",
               portfolioStats.totalReturnPercent >= 0 ? "text-positive" : "text-destructive"
             )}>
               {portfolioStats.totalReturnPercent >= 0 ? '+' : ''}{portfolioStats.totalReturnPercent.toFixed(2)}%
             </div>
-            <span className="text-xs text-muted-foreground/85 block font-sans">
+            <span className="text-xs text-muted-foreground/80 block font-mono">
               ROI on active holdings
             </span>
           </div>
@@ -306,34 +309,34 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       {/* 2. HOLDINGS LIST & PORTFOLIO ALLOCATION PIE CHART */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Holdings table */}
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl lg:col-span-2 flex flex-col justify-between">
-          <div className="space-y-6">
+        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 lg:col-span-2 flex flex-col justify-between hover:border-border/80 transition-colors">
+          <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
-                  <Coins className="h-4 w-4 text-primary" /> Portfolio Holdings
+              <div className="space-y-1">
+                <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
+                  Portfolio Holdings
                 </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Individual investment assets and return statistics
+                <CardDescription className="text-xs text-muted-foreground font-mono">
+                  {holdings.length} investment assets and return statistics
                 </CardDescription>
               </div>
               <Button
                 onClick={handleOpenAdd}
                 size="sm"
-                className="rounded-full bg-primary text-primary-foreground hover:bg-primary/95 text-xs h-8 px-4 flex items-center gap-1.5 self-start sm:self-center font-sans"
+                className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 px-3.5 flex items-center gap-1.5 self-start sm:self-center font-mono"
               >
-                <Plus className="h-3 w-3" /> Add Asset
+                <Plus className="h-3.5 w-3.5" /> Add Asset
               </Button>
             </div>
 
             {holdings.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-                <div className="bg-primary/5 p-4 rounded-full border border-primary/10">
-                  <Coins className="h-8 w-8 text-muted-foreground/50 animate-pulse" />
+                <div className="bg-muted/20 p-4 rounded-xl border border-border/40">
+                  <Coins className="h-8 w-8 text-muted-foreground/40 animate-pulse" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">No holdings added yet</p>
-                  <p className="text-xs text-muted-foreground max-w-xs">
+                  <p className="text-xs font-mono font-semibold text-foreground">No holdings added yet</p>
+                  <p className="text-xs text-muted-foreground font-mono max-w-xs">
                     Start tracking your investment assets by clicking the Add Asset button above.
                   </p>
                 </div>
@@ -360,17 +363,17 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                       const returnPct = cost > 0 ? (gainLoss / cost) * 100 : 0;
                       return (
                         <tr key={h.id} className="group hover:bg-muted/10 transition-colors">
-                          <td className="py-3.5 font-serif font-medium text-foreground">
+                          <td className="py-3 font-sans font-medium text-foreground">
                             <span className="block font-semibold">{h.name}</span>
                             {h.ticker && (
-                              <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider font-normal">
+                              <span className="text-[11px] text-muted-foreground uppercase font-mono tracking-wider font-normal">
                                 {h.ticker}
                               </span>
                             )}
                           </td>
-                          <td className="py-3.5">
+                          <td className="py-3">
                             <span
-                              className="px-2 py-0.5 rounded-full text-xs font-semibold border"
+                              className="px-2 py-0.5 rounded-md text-[11px] font-mono font-medium border"
                               style={{
                                 color: CATEGORY_COLORS[h.category],
                                 borderColor: `${CATEGORY_COLORS[h.category]}33`,
@@ -380,32 +383,32 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                               {h.category}
                             </span>
                           </td>
-                          <td className="py-3.5 text-right font-mono font-medium text-foreground/90">
+                          <td className="py-3 text-right font-mono tabular-nums text-foreground/90">
                             {h.shares}
                           </td>
-                          <td className="py-3.5 text-right font-mono">
+                          <td className="py-3 text-right font-mono tabular-nums">
                             <span className="block text-muted-foreground">{formatGBP(h.avgPrice)}</span>
                             <span className="block font-semibold text-foreground">{formatGBP(h.currentPrice)}</span>
                           </td>
-                          <td className="py-3.5 text-right font-mono font-semibold text-foreground">
+                          <td className="py-3 text-right font-mono tabular-nums font-semibold text-foreground">
                             {formatGBP(value)}
                           </td>
                           <td className={cn(
-                            "py-3.5 text-right font-mono",
+                            "py-3 text-right font-mono tabular-nums",
                             gainLoss >= 0 ? "text-positive font-semibold" : "text-destructive"
                           )}>
                             <span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span>
-                            <span className="text-xs block">
+                            <span className="text-[11px] block">
                               {gainLoss >= 0 ? '+' : ''}{returnPct.toFixed(1)}%
                             </span>
                           </td>
-                          <td className="py-3.5 text-center">
+                          <td className="py-3 text-center">
                             <div className="flex items-center justify-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                               <Button
                                 onClick={() => handleOpenEdit(h)}
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-full"
+                                className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
                               >
                                 <Edit2 className="h-3 w-3" />
                               </Button>
@@ -413,7 +416,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                                 onClick={() => onDeleteHolding(h.id)}
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-full"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -429,79 +432,86 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
 
-        {/* Right Column: Asset Allocation Pie */}
-        <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
-          <div className="space-y-6 flex-1 flex flex-col justify-between">
-            <div className="space-y-0.5">
-              <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
-                <PieIcon className="h-4 w-4 text-primary" /> Asset Allocation
+        {/* Right Column: Asset Allocation (Option B: Treasury Donut) */}
+        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 flex flex-col justify-between hover:border-border/80 transition-colors">
+          <div className="space-y-4 flex-1 flex flex-col justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
+                Asset Allocation
               </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Portfolio balance breakdown by asset class
+              <CardDescription className="text-xs text-muted-foreground font-mono">
+                {formatGBP(totalAllocated)} across {sortedAllocationData.length} classes
               </CardDescription>
             </div>
 
-            {allocationData.length === 0 ? (
+            {sortedAllocationData.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <PieIcon className="h-8 w-8 text-muted-foreground/30 mb-2 animate-pulse" />
-                <span className="text-xs">Add holding assets or cash to view allocation</span>
+                <span className="text-xs font-mono">Add holding assets or cash to view allocation</span>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col justify-center items-center gap-4 py-4 min-h-[220px]">
-                <div className="h-[180px] w-full relative">
+              <div className="flex-1 flex flex-col justify-center items-center gap-4 py-2">
+                <div className="h-[180px] w-full relative flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={allocationData}
+                        data={sortedAllocationData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={55}
-                        outerRadius={75}
-                        paddingAngle={3}
+                        innerRadius={54}
+                        outerRadius={74}
+                        paddingAngle={2}
                         dataKey="value"
+                        stroke="hsl(var(--background))"
+                        strokeWidth={2}
                       >
-                        {allocationData.map((entry, index) => (
+                        {sortedAllocationData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
                       <RechartsTooltip
                         formatter={(val: number) => [formatGBP(val), 'Value']}
                         contentStyle={{
-                          backgroundColor: 'rgba(30, 41, 59, 0.9)',
-                          borderColor: 'rgba(255, 255, 255, 0.1)',
-                          color: '#fff',
-                          borderRadius: '12px',
+                          backgroundColor: 'hsl(var(--popover))',
+                          borderColor: 'hsl(var(--border))',
+                          color: 'hsl(var(--foreground))',
+                          borderRadius: '8px',
                           fontSize: '11px',
                           fontFamily: 'monospace'
                         }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
-                  {/* Total indicator inside donut */}
+                  {/* Clean total indicator inside donut with ZERO overflow */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
-                      Total Portfolio
+                    <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase">
+                      Total
                     </span>
-                    <span className="text-sm font-serif font-bold text-foreground mt-0.5">
-                      {formatGBP(portfolioStats.totalPortfolioValue)}
+                    <span className="text-xs font-mono font-bold tabular-nums text-foreground mt-0.5">
+                      {formatGBP(totalAllocated)}
                     </span>
                   </div>
                 </div>
 
-                {/* Legend list */}
-                <div className="w-full grid grid-cols-2 gap-2 text-xs font-sans">
-                  {allocationData.map((item, idx) => {
-                    const pct = (item.value / portfolioStats.totalPortfolioValue) * 100;
+                {/* Legend list: clean, vertical monospace rows */}
+                <div className="w-full space-y-2 pt-1">
+                  {sortedAllocationData.map((item, idx) => {
+                    const pct = totalAllocated > 0 ? (item.value / totalAllocated) * 100 : 0;
                     return (
-                      <div key={idx} className="flex items-center gap-1.5 py-0.5">
-                        <span
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <span className="text-muted-foreground truncate">{item.name}</span>
-                        <span className="font-semibold text-foreground ml-auto font-mono">
-                          {pct.toFixed(0)}%
-                        </span>
+                      <div key={idx} className="flex items-center justify-between text-xs font-mono">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="text-foreground truncate">{item.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-muted-foreground tabular-nums">{formatGBP(item.value)}</span>
+                          <span className="font-semibold text-foreground tabular-nums w-12 text-right">
+                            {pct.toFixed(1)}%
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
@@ -513,13 +523,13 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       </div>
 
       {/* 3. FUTURE VALUE PROJECTION CALCULATOR */}
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
+      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <div className="space-y-6">
-          <div className="space-y-0.5">
-            <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
-              <LineIcon className="h-4 w-4 text-primary" /> Compound Wealth Projection
+          <div className="space-y-1">
+            <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
+              Compound Wealth Projection
             </CardTitle>
-            <CardDescription className="text-xs text-muted-foreground">
+            <CardDescription className="text-xs text-muted-foreground font-mono">
               Simulate investment growth trajectory based on compound interest
             </CardDescription>
           </div>
@@ -592,9 +602,9 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
               </div>
 
               {/* Calculator Summary Callout */}
-              <div className="bg-primary/5 rounded-2xl p-4 border border-primary/5 mt-4 space-y-3 font-sans text-xs">
-                <div className="flex items-center gap-1.5 font-serif font-semibold text-foreground text-sm">
-                  <Info className="h-4 w-4 text-primary shrink-0" />
+              <div className="bg-muted/20 rounded-xl p-4 border border-border/30 mt-4 space-y-2.5 text-xs font-mono">
+                <div className="flex items-center gap-1.5 uppercase font-semibold text-foreground text-xs tracking-wider">
+                  <Info className="h-3.5 w-3.5 text-primary shrink-0" />
                   Projection Summary
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
@@ -695,14 +705,13 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
 
       {/* 4. ADD & EDIT HOLDING MODAL DIALOG */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:rounded-3xl border border-primary/10 bg-card/95 backdrop-blur-md max-w-md w-full">
+        <DialogContent className="sm:rounded-xl border border-border/40 bg-card p-6 max-w-md w-full">
           <form onSubmit={handleSubmit} className="space-y-4">
             <DialogHeader>
-              <DialogTitle className="text-base font-serif font-semibold text-foreground flex items-center gap-1.5">
-                <Coins className="h-5 w-5 text-primary" />
+              <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">
                 {editingHolding ? 'Edit Holding Asset' : 'Add Holding Asset'}
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription className="text-xs text-muted-foreground font-mono">
                 Enter details for your investment asset to track it in your portfolio
               </DialogDescription>
             </DialogHeader>
