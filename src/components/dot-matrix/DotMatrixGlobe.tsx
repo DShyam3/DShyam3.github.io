@@ -1,6 +1,12 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Globe, Map as MapIcon } from 'lucide-react';
 import { ASSETS_URL } from '@/lib/constants';
+import {
+    EQUAL_EARTH_ASPECT,
+    EQUAL_EARTH_ROW_UNIT,
+    equalEarthRowScale,
+    projectEqualEarth,
+} from '@/lib/equalEarth';
 
 // Removed d3-geo and topojson
 import './DotMatrixGlobe.css';
@@ -152,10 +158,13 @@ export function DotMatrixGlobe({
         if (!dotData) return [];
         const { cols, rows, dots } = dotData;
         return dots.map(([col, row, code]) => {
-            const cxNorm = (col + 0.5) / cols;
-            const cyNorm = (row + 0.5) / rows;
-            const lon = cxNorm * 2 * Math.PI - Math.PI;
-            const lat = Math.PI / 2 - cyNorm * Math.PI;
+            const lon = ((col + 0.5) / cols) * 2 * Math.PI - Math.PI;
+            const lat = Math.PI / 2 - ((row + 0.5) / rows) * Math.PI;
+            // The flat map is Equal Earth, the projection the UN adopted in
+            // September 2026. Only the flat position changes -- the grid is
+            // still lon/lat, so the globe below reads the very same dots.
+            const flat = projectEqualEarth(lon, lat);
+            const { hScale, vScale } = equalEarthRowScale(lat);
             // Longitudes converge at the poles, so an evenly-spaced lat/lon
             // grid piles every column onto nearly the same screen position
             // there -- which is what made Antarctica render as a bright ring
@@ -179,8 +188,10 @@ export function DotMatrixGlobe({
                 col,
                 stride,
                 cosLat,
-                cxNorm,
-                cyNorm,
+                fx: flat.nx,
+                fy: flat.ny,
+                hScale,
+                vScale,
                 ux: Math.cos(lat) * Math.sin(lon),
                 uy: -Math.sin(lat),
                 uz: Math.cos(lat) * Math.cos(lon),
@@ -208,8 +219,12 @@ export function DotMatrixGlobe({
                 dragRef.current.targetRotation = lon;
                 dragRef.current.targetOffsetLat = -lat;
 
-                dragRef.current.targetPanXNorm = avgCol / dotData.cols;
-                dragRef.current.targetPanYNorm = avgRow / dotData.rows;
+                // The flat map is no longer a straight col/row scale, so
+                // the pan target has to go through the projection too or 2D
+                // focus lands beside the country instead of on it.
+                const flatCentre = projectEqualEarth(lon, lat);
+                dragRef.current.targetPanXNorm = flatCentre.nx;
+                dragRef.current.targetPanYNorm = flatCentre.ny;
 
                 dragRef.current.targetZoom = mode === '3d' ? 2.5 : 4.0;
                 dragRef.current.lastInteractionTime = performance.now();
@@ -233,11 +248,10 @@ export function DotMatrixGlobe({
         const segments = [];
 
         const getLonLat = (x: number, y: number) => {
-            const cxNorm = x / cols;
-            const cyNorm = y / rows;
-            const lon = cxNorm * 2 * Math.PI - Math.PI;
-            const lat = Math.PI / 2 - cyNorm * Math.PI;
-            return { lon, lat, cxNorm, cyNorm };
+            const lon = (x / cols) * 2 * Math.PI - Math.PI;
+            const lat = Math.PI / 2 - (y / rows) * Math.PI;
+            const flat = projectEqualEarth(lon, lat);
+            return { lon, lat, fx: flat.nx, fy: flat.ny };
         };
 
         const get3D = (lon: number, lat: number) => {
@@ -257,8 +271,8 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    cx1Norm: p1.cxNorm, cy1Norm: p1.cyNorm,
-                    cx2Norm: p2.cxNorm, cy2Norm: p2.cyNorm,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
             // Bottom edge
@@ -269,8 +283,8 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    cx1Norm: p1.cxNorm, cy1Norm: p1.cyNorm,
-                    cx2Norm: p2.cxNorm, cy2Norm: p2.cyNorm,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
             // Left edge
@@ -281,8 +295,8 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    cx1Norm: p1.cxNorm, cy1Norm: p1.cyNorm,
-                    cx2Norm: p2.cxNorm, cy2Norm: p2.cyNorm,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
             // Top edge
@@ -293,16 +307,13 @@ export function DotMatrixGlobe({
                 segments.push({
                     p1: get3D(p1.lon, p1.lat),
                     p2: get3D(p2.lon, p2.lat),
-                    cx1Norm: p1.cxNorm, cy1Norm: p1.cyNorm,
-                    cx2Norm: p2.cxNorm, cy2Norm: p2.cyNorm,
+                    fx1: p1.fx, fy1: p1.fy,
+                    fx2: p2.fx, fy2: p2.fy,
                 });
             }
         }
         return segments;
     }, [dotData]);
-
-    const cols = dotData?.cols ?? 168;
-    const rows = dotData?.rows ?? 84;
 
     // Draw the map
     const draw = useCallback((time: number) => {
@@ -487,6 +498,14 @@ export function DotMatrixGlobe({
         const radiusMultiplier = isMobile ? (progress === 0 ? 0.25 : 0.32) : 0.38;
         const baseRadius = Math.min(dotSpacingX, dotSpacingY) * radiusMultiplier * curZoom;
 
+        // Equal Earth is equal-area, so towards the poles the grid squeezes --
+        // a lot vertically, mildly horizontally -- and a dot sized for the
+        // equator would smear its row into a solid band. These are the two
+        // equatorial spacings each dot's own spacing is measured against.
+        const flatSpacingX = W / cols;
+        const flatSpacingY = (H * EQUAL_EARTH_ROW_UNIT) / rows;
+        const flatUnit = Math.min(dotSpacingX, dotSpacingY);
+
         const cosRot = Math.cos(rotation);
         const sinRot = Math.sin(rotation);
         const cosLatOffset = Math.cos(dragRef.current.offsetLat);
@@ -521,10 +540,10 @@ export function DotMatrixGlobe({
                 ctx.globalAlpha = dynamicAlpha;
                 ctx.beginPath();
                 for (const seg of borderSegments) {
-                    let x1 = seg.cx1Norm * W_zoom + W_offset;
-                    let y1 = seg.cy1Norm * H_zoom + H_offset;
-                    let x2 = seg.cx2Norm * W_zoom + W_offset;
-                    let y2 = seg.cy2Norm * H_zoom + H_offset;
+                    let x1 = seg.fx1 * W_zoom + W_offset;
+                    let y1 = seg.fy1 * H_zoom + H_offset;
+                    let x2 = seg.fx2 * W_zoom + W_offset;
+                    let y2 = seg.fy2 * H_zoom + H_offset;
                     let zNorm1 = 1, zNorm2 = 1;
 
                     if (progress > 0) {
@@ -601,8 +620,8 @@ export function DotMatrixGlobe({
                 continue;
             }
 
-            const cx2d = dot.cxNorm * W_zoom + W_offset;
-            const cy2d = dot.cyNorm * H_zoom + H_offset;
+            const cx2d = dot.fx * W_zoom + W_offset;
+            const cy2d = dot.fy * H_zoom + H_offset;
 
             // 2D Viewport culling optimization:
             // Use a generous safety margin to prevent dots from popping out at edges
@@ -646,9 +665,17 @@ export function DotMatrixGlobe({
             // Russia and northern Canada, whereas this stays continuous and
             // simply reads as finer detail towards the poles.
             const polarScale = Math.max(0.32, Math.min(1, dot.cosLat / 0.55));
+            // Whichever of the two spacings is tighter is the one that decides
+            // whether this dot touches its neighbour. The floor keeps the last
+            // couple of degrees from fading out entirely -- they overlap a
+            // little there, which reads as solid ice rather than as a gap.
+            const flatScale = Math.max(
+                0.3,
+                Math.min(dot.hScale * flatSpacingX, dot.vScale * flatSpacingY) / flatUnit,
+            );
             const activeRadius =
                 baseRadius *
-                (1 * (1 - progress) +
+                (flatScale * (1 - progress) +
                     Math.max(0.4, 0.6 + 0.4 * zNorm) * polarScale * progress);
             const activeOpacity = 1 * (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
 
@@ -1028,8 +1055,8 @@ export function DotMatrixGlobe({
 
 
     return (
-        // The canvas spaces its dots by width/cols and height/rows separately,
-        // so the box has to carry the grid's exact aspect ratio or the map
+        // The canvas draws into the unit square the projection fills, so the
+        // box has to carry that projection's exact aspect ratio or the map
         // stretches. Sizing by height alone (with max-width as the cap) let a
         // narrow, tall column -- an iPad, say -- clamp the width while the
         // height stayed at 100%, which smeared the continents vertically.
@@ -1038,17 +1065,18 @@ export function DotMatrixGlobe({
         <div className={`dot-matrix-map-slot ${className}`}>
             <div
                 className="dot-matrix-map-container"
-                // Flat, the dots are spaced by width/cols and height/rows, so
-                // the box has to hold the grid's ratio or the map smears. A
-                // globe is a circle of min(width, height), so that same ratio
-                // would waste half the height a tall column offers -- it gets
-                // the whole slot instead. The two sizes are eased into each
-                // other (see the CSS) so the box keeps step with the morph.
+                // Flat, the box has to hold Equal Earth's ratio (~2.05:1,
+                // slightly wider than the 2:1 plate carree it replaced) or the
+                // map smears. A globe is a circle of min(width, height), so
+                // that same ratio would waste half the height a tall column
+                // offers -- it gets the whole slot instead. The two sizes are
+                // eased into each other (see the CSS) so the box keeps step
+                // with the morph.
                 style={
                     mode === '2d'
                         ? {
-                              width: `min(100cqw, calc(100cqh * ${cols} / ${rows}))`,
-                              height: `min(100cqh, calc(100cqw * ${rows} / ${cols}))`,
+                              width: `min(100cqw, calc(100cqh * ${EQUAL_EARTH_ASPECT}))`,
+                              height: `min(100cqh, calc(100cqw / ${EQUAL_EARTH_ASPECT}))`,
                           }
                         : { width: '100cqw', height: '100cqh' }
                 }
