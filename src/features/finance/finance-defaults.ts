@@ -425,3 +425,42 @@ export const getPlanName = (plan: FinanceSettings['studentLoanPlan']) => {
  */
 export const asBudgetGroup = (group?: string): BudgetCategory['group'] =>
   group === 'needs' || group === 'wants' || group === 'savings' ? group : 'needs';
+
+/**
+ * The budget arithmetic several views share.
+ *
+ * These used to be closures inside FinancePage over `settings`, `bankAccounts`
+ * and `recurrings`, which is why Budget and the dashboard could not be pulled
+ * apart (REHAUL_PLAN.md 7.2c-i). A factory keeps the call sites reading exactly
+ * as they did while letting any surface build its own from the provider.
+ */
+export const makeBudgetMath = (
+  activeSavingsTypes: string[] | undefined,
+  bankAccounts: BankAccount[],
+  recurrings: RecurringBill[],
+) => {
+  /** A savings preset the user has switched off does not count toward a total. */
+  const isItemActive = (item: BudgetItem, cat: BudgetCategory) => {
+    if (cat.group !== 'savings') return true;
+    const key = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const isPreset = SAVINGS_PRESETS.some(p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') === key);
+    if (!isPreset) return true; // custom item
+    return (activeSavingsTypes || ALL_SAVINGS_IDS).includes(key);
+  };
+
+  const getCategoryBudget = (cat: BudgetCategory) => {
+    if (cat.group === 'savings') {
+      return cat.items.filter(item => isItemActive(item, cat)).reduce((s, i) => s + (i.budgeted || 0), 0);
+    }
+    return cat.budgeted !== undefined ? cat.budgeted : cat.items.reduce((s, i) => s + (i.budgeted || 0), 0);
+  };
+
+  const getCategorySpent = (cat: BudgetCategory) => {
+    const itemsToSum = cat.group === 'savings'
+      ? cat.items.filter(item => isItemActive(item, cat))
+      : cat.items;
+    return itemsToSum.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
+  };
+
+  return { isItemActive, getCategoryBudget, getCategorySpent };
+};
