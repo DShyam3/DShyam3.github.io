@@ -1,0 +1,63 @@
+# The same four gates the deploy runs, but before the code reaches main.
+#
+# deploy.yml only fires on a push to main, so until now lint, typecheck, test
+# and build first ran once the commit was already the default branch: a
+# failure meant main was broken *and* undeployed, with nothing having said so
+# earlier. This runs them on pull requests and on every other branch instead.
+# The deploy keeps its own copy as the last word -- this does not replace it.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: ["main"]
+
+# A new push to the same branch makes the run in flight irrelevant, so cancel
+# it. The opposite of the deploy's policy, which must never cancel a
+# production run halfway.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Every `uses:` is pinned to a commit SHA, not a tag, for the reason set out
+# in deploy.yml: a tag is mutable and the code behind it runs here. Keep these
+# in step with that file when bumping.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_TMDB_IMAGE_BASE_URL: ${{ secrets.VITE_TMDB_IMAGE_BASE_URL }}
+      VITE_ADMIN_EMAIL: ${{ secrets.VITE_ADMIN_EMAIL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # No env check here, unlike the deploy: a build with a secret missing is
+      # worth catching before it ships, not before it is reviewed, and this
+      # workflow has to stay useful on a branch where the secrets are not
+      # available at all.
+      - name: Build
+        run: npm run build

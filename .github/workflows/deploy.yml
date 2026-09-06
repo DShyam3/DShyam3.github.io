@@ -53,11 +53,26 @@ jobs:
         # silently pick up a different dependency tree than the one tested.
         run: npm ci
 
+      # These are read at build time with no fallback, so a missing one is
+      # baked into the bundle as `undefined` and ships a site where nothing
+      # loads. This used to print "MISSING" and carry on regardless; it fails
+      # the deploy now. VITE_ADMIN_EMAIL is deliberately absent -- it has a
+      # default in AuthContext and is the one that can go without.
       - name: Verify Env
         run: |
-          if [ -z "$VITE_SUPABASE_URL" ]; then echo "VITE_SUPABASE_URL is MISSING"; else echo "VITE_SUPABASE_URL is set"; fi
-          if [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then echo "VITE_SUPABASE_PUBLISHABLE_KEY is MISSING"; else echo "VITE_SUPABASE_PUBLISHABLE_KEY is set"; fi
-          if [ -z "$VITE_TMDB_IMAGE_BASE_URL" ]; then echo "VITE_TMDB_IMAGE_BASE_URL is MISSING"; else echo "VITE_TMDB_IMAGE_BASE_URL is set"; fi
+          missing=""
+          for name in VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY VITE_TMDB_IMAGE_BASE_URL; do
+            if [ -z "${!name}" ]; then
+              missing="$missing $name"
+              echo "::error::$name is MISSING"
+            else
+              echo "$name is set"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "Refusing to build without:$missing"
+            exit 1
+          fi
 
       - name: Lint
         run: npm run lint
