@@ -588,18 +588,18 @@ return (
 
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
       <div className="min-w-0">
-        <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary shrink-0" /> Budget vs Spent Manager
+        <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+          <Activity className="h-4 w-4 text-primary shrink-0" /> Budget vs Spent Manager
         </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Customize your monthly budget target limits and record current spending progress</p>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">Customize your monthly budget target limits and record current spending progress</p>
       </div>
-      <Button onClick={() => setIsAddCategoryOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-        <Plus className="h-4 w-4" /> Add Category
+      <Button onClick={() => setIsAddCategoryOpen(true)} size="sm" className="rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-mono shrink-0 self-start sm:self-auto">
+        <Plus className="h-3.5 w-3.5" /> Add Category
       </Button>
     </div>
 
     {/* Header Overview: Spent vs Total Budget gauge */}
-    <div className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col md:flex-row items-center justify-around gap-6">
+    <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col md:flex-row items-center justify-around gap-6 font-mono">
 
       {/* Left: Total Spent */}
       <div className="text-center md:text-left space-y-1">
@@ -657,16 +657,16 @@ return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Left Column: Savings Allocation */}
-          <Card className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col justify-between">
+          <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col justify-between font-mono">
             <div>
-              <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Savings Allocation</h4>
+              <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Savings Allocation</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Table */}
-                <div className="overflow-hidden rounded-2xl border border-border/20 self-start">
+                <div className="overflow-hidden rounded-lg border border-border/30 self-start">
                   <table className="w-full text-xs text-left">
                     <thead>
-                      <tr className="bg-muted/30 border-b border-border/20 font-serif font-bold text-foreground">
+                      <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
                         <th className="p-3">Category</th>
                         <th className="p-3 text-right">Value (%)</th>
                       </tr>
@@ -786,16 +786,16 @@ return (
           </Card>
 
           {/* Right Column: Money Allocation Summary & Pie Chart */}
-          <Card className="bg-card/30 backdrop-blur-sm rounded-[2rem] p-6 border border-primary/10 shadow-sm flex flex-col justify-between">
+          <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col justify-between font-mono">
             <div>
-              <h4 className="font-serif text-sm font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Money Allocation</h4>
+              <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Money Allocation</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Summary table */}
-                <div className="overflow-hidden rounded-2xl border border-border/20 self-start">
+                <div className="overflow-hidden rounded-lg border border-border/30 self-start">
                   <table className="w-full text-xs text-left">
                     <thead>
-                      <tr className="bg-muted/30 border-b border-border/20 font-serif font-bold text-foreground">
+                      <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
                         <th className="p-3">Category</th>
                         <th className="p-3 text-right">Value (%)</th>
                       </tr>
@@ -948,13 +948,13 @@ return (
     </div>
 
     {/* Copilot Money-style Key Metrics & Historical Monthly Trend */}
-    <Card className="bg-card/25 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl space-y-6">
+    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-6 font-mono">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-border/10 pb-6">
 
         {/* Left/Top: Title & Historical Bar Chart */}
         <div className="flex-1 space-y-3 min-w-0">
           <div className="flex items-center justify-between">
-            <h4 className="font-serif text-sm font-semibold text-foreground flex items-center gap-2">
+            <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
               {activeFilterCategory ? (
                 <span>{activeFilterCategory.emoji || '📂'} {activeFilterCategory.name} Historical Trend</span>
               ) : (
@@ -1008,8 +1008,8 @@ return (
         </div>
 
         {/* Right: Key Metrics Table */}
-        <div className="lg:w-80 shrink-0 bg-muted/20 border border-border/20 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between text-xs font-serif font-semibold text-foreground border-b border-border/20 pb-2">
+        <div className="lg:w-80 shrink-0 bg-muted/20 border border-border/30 rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between text-xs font-mono font-semibold text-foreground border-b border-border/20 pb-2">
             <span className="flex items-center gap-1.5">
               Key metrics
               <TooltipProvider>
@@ -1051,9 +1051,9 @@ return (
     </Card>
 
     {/* Copilot-style Budget list */}
-    <Card className="bg-card/25 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl">
+    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors font-mono">
       {/* Table Header */}
-      <div className="flex items-center justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider font-sans border-b border-border/20 pb-2 px-2">
+      <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-mono border-b border-border/20 pb-2 px-2">
         <span className="flex-1">Regular Categories</span>
         <div className="flex items-center gap-3 text-right">
           <span className="w-20 text-right">Spent</span>
@@ -1259,10 +1259,10 @@ return (
     <>
       {content}
 <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
-      <DialogTitle className="font-serif">Add Budget Category</DialogTitle>
-      <DialogDescription className="text-xs">Create a new container category with a monthly budget limit.</DialogDescription>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Budget Category</DialogTitle>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Create a new container category with a monthly budget limit.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleAddCategory} className="space-y-4 py-2">
       <div className="space-y-1">
@@ -1349,10 +1349,10 @@ return (
   </DialogContent>
 </Dialog>
 <Dialog open={isEditCategoryOpen} onOpenChange={setIsEditCategoryOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
-      <DialogTitle className="font-serif">Edit Budget Category</DialogTitle>
-      <DialogDescription className="text-xs">Modify the name or limit for this budget category.</DialogDescription>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Budget Category</DialogTitle>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Modify the name or limit for this budget category.</DialogDescription>
     </DialogHeader>
     <form onSubmit={handleEditCategory} className="space-y-4 py-2">
       <div className="space-y-1">
@@ -1408,10 +1408,10 @@ return (
   </DialogContent>
 </Dialog>
 <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
-      <DialogTitle className="font-serif">Add Budget Item</DialogTitle>
-      <DialogDescription className="text-xs">Add a new specific item inside the selected category.</DialogDescription>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Budget Item</DialogTitle>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Add a new specific item inside the selected category.</DialogDescription>
     </DialogHeader>
     {(() => {
       const targetCategory = budgetCategories.find(c => c.id === activeCategoryId);
@@ -2129,10 +2129,10 @@ return (
   </DialogContent>
 </Dialog>
 <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
-      <DialogTitle className="font-serif">Edit Budget Item</DialogTitle>
-      <DialogDescription className="text-xs">Modify values for this specific budget item.</DialogDescription>
+      <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Budget Item</DialogTitle>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">Modify values for this specific budget item.</DialogDescription>
     </DialogHeader>
     {activeBudgetItem && (
       <form onSubmit={handleEditItem} className="space-y-4 py-2">
