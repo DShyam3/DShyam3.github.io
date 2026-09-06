@@ -875,7 +875,7 @@ page feels cramped.
 | 7.1 | `finance_profiles`, `profile_id` on 13 tables, transfer links — **DONE** | none |
 | 7.1b | Thread `profile_id` through the existing write paths so the page keeps working before the decomposition — **DONE** | 7.1 |
 | 7.2a | Routes and surfaces: ten tabs become five routed surfaces with a section nav — **DONE** | 7.1b |
-| 7.2b | Lift the 135 `useState` and the load/save into a provider, so surfaces can be separate components | 7.2a |
+| 7.2b | Lift the data state and the load/save into a provider, so surfaces can be separate components — **DONE** | 7.2a |
 | 7.2c | Extract the six inline sections into `surfaces/*.tsx`; per-surface chunks | 7.2b |
 | 7.2d | Per-surface queries, profile switcher, profile-filtered reads | 7.2c |
 | 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |

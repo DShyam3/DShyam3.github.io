@@ -1,0 +1,1324 @@
+/**
+ * The finance data layer: everything loaded from Supabase, and the two
+ * functions that load and save it.
+ *
+ * Split out of FinancePage (REHAUL_PLAN.md 7.2b) so the five surfaces can
+ * become separate components without passing two dozen props through each
+ * one. Only *data* lives here -- dialog flags, filters and hover state stay
+ * with whichever surface owns them.
+ *
+ * The localStorage seeding below is deliberately preserved as-is for now; it
+ * is retired in 7.3, when Postgres becomes the only source of truth.
+ */
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import defaultPresets from '@/data/presets.json';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
+import type {
+  BankAccount,
+  BudgetCategory,
+  BudgetItem,
+  CreditBureauConfig,
+  CreditScoreEntry,
+  CategoryPreset,
+  CreditScores,
+  Debt,
+  DebtDraw,
+  FinanceSettings,
+  Goal,
+  InvestmentHolding,
+  Membership,
+  MockTransaction,
+  RecurringBill,
+  RecurringTemplate,
+  TaxConfig,
+  TimeSpentInputs,
+  UserHoliday,
+} from '@/features/finance/finance-types';
+import {
+  ALL_PRESETS_FALLBACK,
+  ALL_SAVINGS_IDS,
+  createDefaultBudgetCategories,
+  DEFAULT_BUDGET_CATEGORIES,
+  DEFAULT_CATEGORY_TEMPLATES,
+  DEFAULT_RECURRING_TEMPLATES,
+  mergeMissingDefaultCategories,
+  presetsToDefaultCategories,
+  resolveStoredList,
+  safeParseJSON,
+} from './finance-defaults';
+import {
+  sanitizeBankAccounts,
+  sanitizeBudgetCategories,
+} from './utils/calculations';
+
+/** All the state and the two Supabase functions. Kept as a hook so the context
+ *  value's type is inferred from it rather than hand-maintained. */
+function useProvideFinanceData() {
+  const { isAdmin } = useAuth();
+  const { toast } = useToast();
+
+  const [presets, setPresets] = useState(() => {
+    const saved = localStorage.getItem('finance_budget_presets');
+    if (saved) {
+      try {
+        return {
+          ...ALL_PRESETS_FALLBACK,
+          ...JSON.parse(saved)
+        };
+      } catch (e) {
+        console.error('Failed to parse cached presets:', e);
+      }
+    }
+    return ALL_PRESETS_FALLBACK;
+  });
+
+  const {
+    DEFAULT_CATEGORY_PRESETS,
+    SAVINGS_PRESETS,
+    FOOD_ENTERTAINMENT_PRESETS,
+    HOUSING_PRESETS,
+    INSURANCE_PRESETS,
+    TRANSPORT_PRESETS,
+    SUBSCRIPTION_PRESETS,
+    LOANS_PRESETS,
+    GIFTS_DONATIONS_PRESETS,
+    HEALTH_WELLNESS_PRESETS,
+    PETS_PRESETS,
+    SHOPPING_PRESETS,
+    TRAVEL_HOLIDAYS_PRESETS,
+    OTHER_PRESETS,
+    FAMILY_KIDS_PRESETS,
+    EDUCATION_CAREER_PRESETS
+  } = presets;
+
+  const ALL_SAVINGS_IDS = useMemo(() => {
+    return SAVINGS_PRESETS.map(p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'));
+  }, [SAVINGS_PRESETS]);
+
+  const DEFAULT_CATEGORY_TEMPLATES = useMemo(() => {
+    return presetsToDefaultCategories(DEFAULT_CATEGORY_PRESETS);
+  }, [DEFAULT_CATEGORY_PRESETS]);
+
+  // Store defaults from database
+  const [databaseDefaults, setDatabaseDefaults] = useState<Record<string, any>>({});
+
+  // Data States
+  const [settings, setSettings] = useState<FinanceSettings>(() => {
+    const saved = localStorage.getItem('finance_settings');
+    return safeParseJSON<FinanceSettings>(saved, {
+      grossSalary: 0,
+      pensionType: 'net_pay',
+      personalPensionPercent: 0,
+      employerPensionPercent: 0,
+      studentLoanPlan: 'none',
+      taxCode: '1257L',
+      personalAllowance: 12570,
+      weekends: 104,
+      bankHolidays: 8,
+      workHolidays: 25,
+      workingHoursPerDay: 7.5,
+      taxYear: 2026,
+      ukRegion: 'england-and-wales',
+      holidaysByUser: {},
+      activeSavingsTypes: ALL_SAVINGS_IDS
+    });
+  });
+
+  const [timeSpentInputs, setTimeSpentInputs] = useState(() => {
+    const saved = localStorage.getItem('finance_time_spent_inputs');
+    return safeParseJSON(saved, {
+      sleepHoursPerDay: 8.0,
+      commuteDaysPerWeek: 5,
+      commuteHoursPerDay: 2,
+      gettingReadyHoursPerDay: 1.0,
+      gymDaysPerWeek: 0,
+      gymHoursPerSession: 0,
+      learningHoursPerWeek: 0,
+      friendsHoursPerWeek: 0,
+    });
+  });
+
+  const [goals, setGoals] = useState<Goal[]>(() => {
+    const saved = localStorage.getItem('finance_goals');
+    return safeParseJSON<Goal[]>(saved, []);
+  });
+
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(() => {
+    const saved = localStorage.getItem('finance_bank_accounts');
+    return sanitizeBankAccounts(safeParseJSON<any[]>(saved, []));
+  });
+
+  const [investmentHoldings, setInvestmentHoldings] = useState<InvestmentHolding[]>(() => {
+    const saved = localStorage.getItem('finance_investment_holdings');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [
+      { id: 'h1', name: 'S&P 500 ETF', ticker: 'VOO', shares: 12.5, avgPrice: 420.50, currentPrice: 485.20, category: 'ETF' },
+      { id: 'h2', name: 'Apple Inc.', ticker: 'AAPL', shares: 15, avgPrice: 150.00, currentPrice: 189.30, category: 'Stock' },
+      { id: 'h3', name: 'Bitcoin', ticker: 'BTC', shares: 0.15, avgPrice: 35000.00, currentPrice: 62450.00, category: 'Crypto' },
+      { id: 'h4', name: 'Ethereum', ticker: 'ETH', shares: 1.2, avgPrice: 1800.00, currentPrice: 3120.00, category: 'Crypto' }
+    ];
+  });
+
+  const [memberships, setMemberships] = useState<Membership[]>(() => {
+    const saved = localStorage.getItem('finance_memberships');
+    return safeParseJSON<Membership[]>(saved, []);
+  });
+
+  const [debts, setDebts] = useState<Debt[]>(() => {
+    const saved = localStorage.getItem('finance_debts');
+    // Normalize so cached rows written before draws/repaymentType existed still render
+    return safeParseJSON<Debt[]>(saved, []).map(d => ({
+      ...d,
+      draws: Array.isArray(d.draws) ? d.draws : [],
+      repaymentType: d.repaymentType || 'amortising'
+    }));
+  });
+
+  const [recurrings, setRecurrings] = useState<RecurringBill[]>(() => {
+    const saved = localStorage.getItem('finance_recurrings');
+    return safeParseJSON<RecurringBill[]>(saved, []);
+  });
+
+  const [creditScores, setCreditScores] = useState<CreditScores>(() => {
+    const saved = localStorage.getItem('finance_credit_scores');
+    return safeParseJSON<CreditScores>(saved, { experian: [], transunion: [], equifax: [] });
+  });
+
+  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
+    const saved = localStorage.getItem('finance_budget');
+    const list = resolveStoredList(saved, DEFAULT_BUDGET_CATEGORIES);
+    return sanitizeBudgetCategories(mergeMissingDefaultCategories(list, DEFAULT_BUDGET_CATEGORIES));
+  });
+
+  const [mockTransactions, setMockTransactions] = useState<MockTransaction[]>(() => {
+    const saved = localStorage.getItem('finance_transactions');
+    return safeParseJSON<MockTransaction[]>(saved, []);
+  });
+
+  // Dynamic configurations fetched from Supabase
+  const [taxConfig, setTaxConfig] = useState<TaxConfig>(() => {
+    const saved = localStorage.getItem('finance_tax_config');
+    return safeParseJSON<TaxConfig>(saved, {
+      studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
+      studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
+      incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
+      nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 }
+    });
+  });
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(() => {
+    const saved = localStorage.getItem('finance_recurring_templates');
+    return resolveStoredList(saved, DEFAULT_RECURRING_TEMPLATES);
+  });
+  const [creditBureaus, setCreditBureaus] = useState<CreditBureauConfig[]>(() => {
+    const saved = localStorage.getItem('finance_credit_bureaus');
+    return safeParseJSON<CreditBureauConfig[]>(saved, [
+      { key: 'experian', label: 'Experian', emoji: '🟣', color: '#8b5cf6', maxScore: 1250, gradient: 'from-violet-500/10 to-violet-500/5' },
+      { key: 'transunion', label: 'Credit Karma', emoji: '🔵', color: '#06b6d4', maxScore: 710, gradient: 'from-cyan-500/10 to-cyan-500/5' },
+      { key: 'equifax', label: 'ClearScore', emoji: '🟡', color: '#f59e0b', maxScore: 1000, gradient: 'from-amber-500/10 to-amber-500/5' }
+    ]);
+  });
+  const [holidayDefaults, setHolidayDefaults] = useState<Record<number, { count: number; dates: string; occasion: string }>>(() => {
+    const saved = localStorage.getItem('finance_holiday_defaults');
+    return safeParseJSON(saved, {} as Record<number, { count: number; dates: string; occasion: string }>);
+  });
+  const [defaultBudgetCategories, setDefaultBudgetCategories] = useState<BudgetCategory[]>(() => {
+    const saved = localStorage.getItem('finance_default_budget_categories');
+    return resolveStoredList(saved, DEFAULT_CATEGORY_TEMPLATES);
+  });
+
+  useEffect(() => {
+    localStorage.setItem('finance_tax_config', JSON.stringify(taxConfig));
+  }, [taxConfig]);
+  useEffect(() => {
+    localStorage.setItem('finance_recurring_templates', JSON.stringify(recurringTemplates));
+  }, [recurringTemplates]);
+  useEffect(() => {
+    localStorage.setItem('finance_credit_bureaus', JSON.stringify(creditBureaus));
+  }, [creditBureaus]);
+  useEffect(() => {
+    localStorage.setItem('finance_holiday_defaults', JSON.stringify(holidayDefaults));
+  }, [holidayDefaults]);
+  useEffect(() => {
+    localStorage.setItem('finance_default_budget_categories', JSON.stringify(defaultBudgetCategories));
+  }, [defaultBudgetCategories]);
+
+  // Mirrors of loaded settings that the settings form edits, and the goal the
+  // goals view opens on. Initialised from data, so they live with the data.
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [payDayInput, setPayDayInput] = useState(settings.payDayOfMonth?.toString() || '25');
+  const [paydaySchedule, setPaydaySchedule] = useState<FinanceSettings['paydaySchedule']>(() => settings.paydaySchedule || 'monthly_date');
+  const [paydayWeekday, setPaydayWeekday] = useState<number>(() => settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
+  const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(() => settings.paydayBiweeklyAnchor || '2026-01-02');
+
+  const [loadingDb, setLoadingDb] = useState(false);
+  const [savingDb, setSavingDb] = useState(false);
+  // The profile every non-template row is written against (Phase 7.1). One
+  // operator, several subjects; a profile switcher arrives in 7.2d, once
+  // reads are filtered by profile too.
+  const [profileId, setProfileId] = useState<string | null>(null);
+
+  const fetchSupabaseData = async () => {
+    if (!isAdmin) return;
+      setLoadingDb(true);
+      try {
+        const [
+          settingsRes,
+          userHolidaysRes,
+          goalsRes,
+          contributionsRes,
+          bankAccountsRes,
+          membershipsRes,
+          debtsRes,
+          creditScoresRes,
+          budgetCategoriesRes,
+          budgetItemsRes,
+          recurringBillsRes,
+          transactionsRes,
+          taxConfigsRes,
+          recurringTemplatesRes,
+          creditBureausRes,
+          holidayDefaultsRes,
+          budgetPresetsRes,
+          selfProfileRes
+        ] = await Promise.all([
+          supabase.from('finance_settings').select('*'),
+          supabase.from('finance_user_holidays').select('*'),
+          supabase.from('finance_goals').select('*'),
+          supabase.from('finance_goal_contributions').select('*'),
+          supabase.from('finance_bank_accounts').select('*'),
+          supabase.from('finance_memberships').select('*'),
+          supabase.from('finance_debts').select('*'),
+          supabase.from('finance_credit_scores').select('*'),
+          supabase.from('finance_budget_categories').select('*'),
+          supabase.from('finance_budget_items').select('*'),
+          supabase.from('finance_recurring_bills').select('*'),
+          supabase.from('finance_transactions').select('*'),
+          supabase.from('finance_tax_configs').select('*'),
+          supabase.from('finance_recurring_templates').select('*'),
+          supabase.from('finance_credit_bureaus').select('*'),
+          supabase.from('finance_holiday_defaults').select('*'),
+          supabase.from('finance_budget_presets').select('*'),
+          supabase.from('finance_profiles').select('id').eq('is_self', true).maybeSingle()
+        ]);
+
+        // Written by the 7.1 migration, so this is present unless someone has
+        // deleted it. `saveDataToSupabase` refuses to write without it.
+        setProfileId(selfProfileRes.data?.id ?? null);
+
+        // A single failing table used to `throw` here, aborting the whole load
+        // and silently dropping the page back to localStorage — which is how a
+        // table whose migration hadn't been applied yet could take out every
+        // other tab. Instead, record what failed, skip only those state
+        // updates (leaving the cached values in place rather than wiping them
+        // to empty), and tell the user.
+        const failedTables = ([
+          ['settings', settingsRes],
+          ['user_holidays', userHolidaysRes],
+          ['goals', goalsRes],
+          ['goal_contributions', contributionsRes],
+          ['bank_accounts', bankAccountsRes],
+          ['memberships', membershipsRes],
+          ['debts', debtsRes],
+          ['credit_scores', creditScoresRes],
+          ['budget_categories', budgetCategoriesRes],
+          ['budget_items', budgetItemsRes],
+          ['recurring_bills', recurringBillsRes],
+          ['transactions', transactionsRes],
+          ['tax_configs', taxConfigsRes],
+          ['recurring_templates', recurringTemplatesRes],
+          ['credit_bureaus', creditBureausRes],
+          ['holiday_defaults', holidayDefaultsRes],
+          ['budget_presets', budgetPresetsRes]
+        ] as const).filter(([, res]) => res.error);
+
+        if (failedTables.length > 0) {
+          console.error(
+            'Failed to load finance tables from Supabase:',
+            failedTables.map(([name, res]) => `${name}: ${res.error?.message}`)
+          );
+          toast({
+            title: 'Some finance data failed to load',
+            description: `Showing cached values for: ${failedTables.map(([name]) => name).join(', ')}. Check that all migrations have been applied.`,
+            variant: 'destructive'
+          });
+        }
+
+        const userSettings = settingsRes.data?.find(d => !d.is_default);
+        const defaultSettings = settingsRes.data?.find(d => d.is_default);
+        const activeSettings = userSettings || defaultSettings;
+
+        const userHolidaysList = userHolidaysRes.data?.filter(d => !d.is_default) || [];
+        const defaultHolidaysList = userHolidaysRes.data?.filter(d => d.is_default) || [];
+        const holidays = userHolidaysList.length > 0 ? userHolidaysList : defaultHolidaysList;
+
+        const mappedHolidays: UserHoliday[] = holidays.map(h => ({
+          id: h.id,
+          startDate: h.start_date,
+          endDate: h.end_date,
+          occasion: h.occasion || '',
+          count: Number(h.count) || 0
+        }));
+
+        if (activeSettings) {
+          const loadedSettings: FinanceSettings = {
+            grossSalary: Number(activeSettings.gross_salary) || 0,
+            pensionType: (activeSettings.pension_type || 'net_pay') as any,
+            personalPensionPercent: Number(activeSettings.personal_pension_percent) || 0,
+            employerPensionPercent: Number(activeSettings.employer_pension_percent) || 0,
+            studentLoanPlan: (activeSettings.student_loan_plan || 'none') as any,
+            taxCode: activeSettings.tax_code || '1257L',
+            personalAllowance: Number(activeSettings.personal_allowance) || 12570,
+            weekends: Number(activeSettings.weekends) || 104,
+            bankHolidays: Number(activeSettings.bank_holidays) || 8,
+            workHolidays: Number(activeSettings.work_holidays) || 25,
+            workingHoursPerDay: Number(activeSettings.working_hours_per_day) || 7.5,
+            taxYear: Number(activeSettings.tax_year) || 2026,
+            ukRegion: (activeSettings.uk_region || 'england-and-wales') as any,
+            payDayOfMonth: activeSettings.pay_day_of_month || 25,
+            paydaySchedule: (activeSettings.payday_schedule || 'monthly_date') as any,
+            paydayWeekday: activeSettings.payday_weekday !== null ? activeSettings.payday_weekday : 5,
+            paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || '2026-01-02',
+            activeSavingsTypes: (activeSettings.active_savings_types || []) as any[],
+            holidaysByUser: mappedHolidays
+          };
+          setSettings(prev => ({
+            ...prev,
+            ...loadedSettings
+          }));
+          setPayDayInput((loadedSettings.payDayOfMonth || 25).toString());
+          setPaydaySchedule(loadedSettings.paydaySchedule || 'monthly_date');
+          setPaydayWeekday(loadedSettings.paydayWeekday !== undefined ? loadedSettings.paydayWeekday : 5);
+          setPaydayBiweeklyAnchor(loadedSettings.paydayBiweeklyAnchor || '2026-01-02');
+        }
+
+        const userGoals = goalsRes.data?.filter(d => !d.is_default) || [];
+        const defaultGoals = goalsRes.data?.filter(d => d.is_default) || [];
+        const activeGoals = userGoals.length > 0 ? userGoals : defaultGoals;
+        const activeContributions = contributionsRes.data || [];
+
+        const mappedGoals: Goal[] = activeGoals.map(g => {
+          const goalContribs = activeContributions
+            .filter(c => c.goal_id === g.id && c.is_default === g.is_default)
+            .map(c => ({
+              id: c.id,
+              amount: Number(c.amount) || 0,
+              date: c.date,
+              note: c.note || undefined,
+              bankAccountId: c.bank_account_id || undefined
+            }));
+          return {
+            id: g.id,
+            name: g.name,
+            targetAmount: Number(g.target_amount) || 0,
+            currentAmount: Number(g.current_amount) || 0,
+            targetDate: g.target_date || '',
+            startDate: g.start_date || undefined,
+            status: (g.status as 'active' | 'archived') || 'active',
+            emoji: g.emoji || undefined,
+            contributions: goalContribs
+          };
+        });
+        if (!goalsRes.error && !contributionsRes.error) {
+          setGoals(mappedGoals);
+          if (mappedGoals.length > 0) setSelectedGoalId(mappedGoals[0].id);
+        }
+
+        const userAccounts = bankAccountsRes.data?.filter(d => !d.is_default) || [];
+        const defaultAccounts = bankAccountsRes.data?.filter(d => d.is_default) || [];
+        const activeAccounts = userAccounts.length > 0 ? userAccounts : defaultAccounts;
+
+        const mappedBankAccounts: BankAccount[] = activeAccounts.map(a => ({
+          id: a.id,
+          name: a.name,
+          type: a.type as any,
+          issuer: a.issuer || '',
+          balance: Number(a.balance) || 0,
+          annualFee: Number(a.annual_fee) || 0,
+          useCase: a.use_case || undefined,
+          emoji: a.emoji || undefined,
+          color: a.color || undefined
+        }));
+        if (!bankAccountsRes.error) setBankAccounts(mappedBankAccounts);
+
+        const userMemberships = membershipsRes.data?.filter(d => !d.is_default) || [];
+        const defaultMemberships = membershipsRes.data?.filter(d => d.is_default) || [];
+        const activeMemberships = userMemberships.length > 0 ? userMemberships : defaultMemberships;
+
+        const mappedMemberships: Membership[] = activeMemberships.map(m => ({
+          id: m.id,
+          name: m.name,
+          type: m.type as any,
+          status: m.status || '',
+          annualFee: Number(m.annual_fee) || 0,
+          useCase: m.use_case || undefined
+        }));
+        if (!membershipsRes.error) setMemberships(mappedMemberships);
+
+        const userDebts = debtsRes.data?.filter(d => !d.is_default) || [];
+        const defaultDebts = debtsRes.data?.filter(d => d.is_default) || [];
+        const activeDebts = userDebts.length > 0 ? userDebts : defaultDebts;
+
+        const mappedDebts: Debt[] = activeDebts.map(d => ({
+          id: d.id,
+          name: d.name,
+          type: d.type as any,
+          lender: d.lender || '',
+          originalAmount: Number(d.original_amount) || 0,
+          balance: Number(d.balance) || 0,
+          interestRate: Number(d.interest_rate) || 0,
+          minPayment: Number(d.min_payment) || 0,
+          startDate: d.start_date || undefined,
+          payoffDate: d.payoff_date || undefined,
+          repaymentType: (d.repayment_type as Debt['repaymentType']) || 'amortising',
+          studentLoanPlan: (d.student_loan_plan as StudentLoanPlanKey) || undefined,
+          writeOffYears: d.write_off_years ?? undefined,
+          draws: Array.isArray(d.draws) ? (d.draws as unknown as DebtDraw[]) : [],
+          notes: d.notes || undefined,
+          emoji: d.emoji || undefined,
+          color: d.color || undefined
+        }));
+        if (!debtsRes.error) setDebts(mappedDebts);
+
+        const userCreditScores = creditScoresRes.data?.filter(d => !d.is_default) || [];
+        const defaultCreditScores = creditScoresRes.data?.filter(d => d.is_default) || [];
+        const activeCreditScores = userCreditScores.length > 0 ? userCreditScores : defaultCreditScores;
+
+        const scoresObj: CreditScores = {
+          experian: activeCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score })),
+          transunion: activeCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score })),
+          equifax: activeCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score }))
+        };
+        if (!creditScoresRes.error) setCreditScores(scoresObj);
+
+        const userBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && !d.is_template) || [];
+        const defaultBudgetCats = budgetCategoriesRes.data?.filter(d => d.is_default && !d.is_template) || [];
+        const activeBudgetCats = userBudgetCats.length > 0 ? userBudgetCats : defaultBudgetCats;
+        const budgetItems = budgetItemsRes.data || [];
+
+        const mappedBudgetCategories: BudgetCategory[] = activeBudgetCats.map(cat => {
+          const catItems = budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default === cat.is_default && item.is_template === cat.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }));
+          return {
+            id: cat.id,
+            name: cat.name,
+            budgeted: Number(cat.budgeted) || 0,
+            group: (cat.group_type || undefined) as any,
+            items: catItems,
+            emoji: cat.emoji || undefined
+          };
+        });
+
+        if (mappedBudgetCategories.length > 0) {
+          setBudgetCategories(sanitizeBudgetCategories(mergeMissingDefaultCategories(mappedBudgetCategories, DEFAULT_BUDGET_CATEGORIES)));
+        } else {
+          setBudgetCategories(prev => prev.length > 0 ? prev : sanitizeBudgetCategories(DEFAULT_BUDGET_CATEGORIES));
+        }
+
+        const userRecurrings = recurringBillsRes.data?.filter(d => !d.is_default) || [];
+        const defaultRecurrings = recurringBillsRes.data?.filter(d => d.is_default) || [];
+        const activeRecurrings = userRecurrings.length > 0 ? userRecurrings : defaultRecurrings;
+
+        const mappedRecurrings: RecurringBill[] = activeRecurrings.map(r => ({
+          id: r.id,
+          name: r.name,
+          amount: Number(r.amount) || 0,
+          dueDate: r.due_date,
+          isPaid: r.is_paid,
+          frequency: r.frequency as any,
+          dueMonth: r.due_month || undefined,
+          emoji: r.emoji || undefined,
+          category: r.category || undefined,
+          tag: r.tag || undefined,
+          linkedBudgetItemId: r.linked_budget_item_id || undefined,
+          linkedAccountId: r.linked_account_id || undefined
+        }));
+        if (!recurringBillsRes.error) setRecurrings(mappedRecurrings);
+
+        const userTransactions = transactionsRes.data?.filter(d => !d.is_default) || [];
+        const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
+        const activeTransactions = userTransactions.length > 0 ? userTransactions : defaultTransactions;
+
+        const mappedTransactions: MockTransaction[] = activeTransactions.map(t => ({
+          id: t.id,
+          name: t.name,
+          category: t.category || '',
+          amount: Number(t.amount) || 0,
+          date: t.date,
+          isReviewed: t.is_reviewed,
+          accountId: t.account_id || t.bank_account_id || undefined,
+          bankAccountId: t.bank_account_id || t.account_id || undefined,
+          goalId: t.goal_id || undefined,
+          notes: t.notes || undefined,
+          tags: t.tags || undefined,
+          isRecurring: t.is_recurring || undefined
+        }));
+        if (!transactionsRes.error) setMockTransactions(mappedTransactions);
+
+        const userTaxConfig = taxConfigsRes.data?.find(d => !d.is_default);
+        const defaultTaxConfig = taxConfigsRes.data?.find(d => d.is_default);
+        const activeTaxConfig = userTaxConfig || defaultTaxConfig;
+
+        if (activeTaxConfig) {
+          const mappedTaxConfig: TaxConfig = {
+            studentLoanThresholds: activeTaxConfig.student_loan_thresholds as any,
+            studentLoanRates: activeTaxConfig.student_loan_rates as any,
+            incomeTaxBands: activeTaxConfig.income_tax_bands as any,
+            nationalInsuranceBands: activeTaxConfig.national_insurance_bands as any
+          };
+          setTaxConfig(mappedTaxConfig);
+        }
+
+        const userTemplates = recurringTemplatesRes.data?.filter(d => !d.is_default) || [];
+        const defaultTemplates = recurringTemplatesRes.data?.filter(d => d.is_default) || [];
+        const activeTemplates = userTemplates.length > 0 ? userTemplates : defaultTemplates;
+
+        const mappedTemplates: RecurringTemplate[] = activeTemplates.map(t => ({
+          name: t.name,
+          category: t.category,
+          emoji: t.emoji || '',
+          tag: t.tag || '',
+          defaultAmount: Number(t.default_amount) || 0,
+          frequency: t.frequency as any,
+          linkedBudgetItemId: t.linked_budget_item_id || '',
+          budgetCategoryName: t.budget_category_name || undefined
+        }));
+        if (mappedTemplates.length > 0) {
+          setRecurringTemplates(mappedTemplates);
+        } else {
+          setRecurringTemplates(prev => prev.length > 0 ? prev : DEFAULT_RECURRING_TEMPLATES);
+        }
+
+        const userBureaus = creditBureausRes.data?.filter(d => !d.is_default) || [];
+        const defaultBureaus = creditBureausRes.data?.filter(d => d.is_default) || [];
+        const activeBureaus = userBureaus.length > 0 ? userBureaus : defaultBureaus;
+
+        const mappedBureaus: CreditBureauConfig[] = activeBureaus.map(b => ({
+          key: b.key as any,
+          label: b.label,
+          emoji: b.emoji || '',
+          color: b.color || '',
+          maxScore: b.max_score,
+          gradient: b.gradient || ''
+        }));
+        if (!creditBureausRes.error) setCreditBureaus(mappedBureaus);
+
+        const userHolidayDefaults = holidayDefaultsRes.data?.filter(d => !d.is_default) || [];
+        const defaultHolidayDefaults = holidayDefaultsRes.data?.filter(d => d.is_default) || [];
+        const activeHolidayDefaults = userHolidayDefaults.length > 0 ? userHolidayDefaults : defaultHolidayDefaults;
+
+        const mappedHolidayDefaults: Record<number, { count: number; dates: string; occasion: string }> = {};
+        activeHolidayDefaults.forEach(hd => {
+          mappedHolidayDefaults[hd.month_index] = {
+            count: Number(hd.count) || 0,
+            dates: hd.dates || '',
+            occasion: hd.occasion || ''
+          };
+        });
+        if (!holidayDefaultsRes.error) setHolidayDefaults(mappedHolidayDefaults);
+
+        const userDefaultBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && d.is_template) || [];
+        const defaultDefaultBudgetCats = budgetCategoriesRes.data?.filter(d => d.is_default && d.is_template) || [];
+        const activeDefaultBudgetCats = userDefaultBudgetCats.length > 0 ? userDefaultBudgetCats : defaultDefaultBudgetCats;
+
+        const mappedDefaultBudgetCategories: BudgetCategory[] = activeDefaultBudgetCats.map(cat => {
+          const catItems = budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default === cat.is_default && item.is_template === cat.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }));
+          return {
+            id: cat.id,
+            name: cat.name,
+            budgeted: Number(cat.budgeted) || 0,
+            group: (cat.group_type || undefined) as any,
+            items: catItems,
+            emoji: cat.emoji || undefined
+          };
+        });
+        if (mappedDefaultBudgetCategories.length > 0) {
+          setDefaultBudgetCategories(mappedDefaultBudgetCategories);
+        } else {
+          setDefaultBudgetCategories(prev => prev.length > 0 ? prev : DEFAULT_CATEGORY_TEMPLATES);
+        }
+
+        const userPresets = budgetPresetsRes.data?.filter(d => !d.is_default) || [];
+        const defaultPresets = budgetPresetsRes.data?.filter(d => d.is_default) || [];
+        const activePresets = userPresets.length > 0 ? userPresets : defaultPresets;
+
+        const presetsObj: Record<string, CategoryPreset[]> = {};
+        activePresets.forEach(p => {
+          if (!presetsObj[p.preset_type]) {
+            presetsObj[p.preset_type] = [];
+          }
+          presetsObj[p.preset_type].push({
+            name: p.name,
+            emoji: p.emoji || '',
+            group: (p.group_type || 'wants') as any
+          });
+        });
+
+        if (activePresets.length > 0) {
+          setPresets(prev => {
+            const merged = {
+              ...prev,
+              ...presetsObj
+            };
+            localStorage.setItem('finance_budget_presets', JSON.stringify(merged));
+            return merged;
+          });
+        } else {
+          saveDataToSupabase('budget_presets', ALL_PRESETS_FALLBACK);
+        }
+
+        // Reconstruct databaseDefaults map
+        const defaultsMap: Record<string, any> = {};
+        if (defaultSettings) {
+          defaultsMap['settings'] = {
+            grossSalary: Number(defaultSettings.gross_salary) || 0,
+            pensionType: defaultSettings.pension_type || 'net_pay',
+            personalPensionPercent: Number(defaultSettings.personal_pension_percent) || 0,
+            employer_pension_percent: Number(defaultSettings.employer_pension_percent) || 0,
+            studentLoanPlan: defaultSettings.student_loan_plan || 'none',
+            taxCode: defaultSettings.tax_code || '1257L',
+            personalAllowance: Number(defaultSettings.personal_allowance) || 12570,
+            weekends: Number(defaultSettings.weekends) || 104,
+            bankHolidays: Number(defaultSettings.bank_holidays) || 8,
+            workHolidays: Number(defaultSettings.work_holidays) || 25,
+            workingHoursPerDay: Number(defaultSettings.working_hours_per_day) || 7.5,
+            taxYear: Number(defaultSettings.tax_year) || 2026,
+            ukRegion: defaultSettings.uk_region || 'england-and-wales',
+            payDayOfMonth: defaultSettings.pay_day_of_month || 25,
+            paydaySchedule: defaultSettings.payday_schedule || 'monthly_date',
+            paydayWeekday: defaultSettings.payday_weekday !== null ? defaultSettings.payday_weekday : 5,
+            paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || '2026-01-02',
+            activeSavingsTypes: defaultSettings.active_savings_types || [],
+            holidaysByUser: defaultHolidaysList.map(h => ({
+              id: h.id,
+              startDate: h.start_date,
+              endDate: h.end_date,
+              occasion: h.occasion || '',
+              count: Number(h.count) || 0
+            }))
+          };
+        }
+        defaultsMap['goals'] = defaultGoals.map(g => ({
+          id: g.id,
+          name: g.name,
+          targetAmount: Number(g.target_amount) || 0,
+          currentAmount: Number(g.current_amount) || 0,
+          targetDate: g.target_date || '',
+          startDate: g.start_date || undefined,
+          status: (g.status as 'active' | 'archived') || 'active',
+          emoji: g.emoji || undefined,
+          contributions: activeContributions
+            .filter(c => c.goal_id === g.id && c.is_default)
+            .map(c => ({
+              id: c.id,
+              amount: Number(c.amount) || 0,
+              date: c.date,
+              note: c.note || undefined,
+              bankAccountId: c.bank_account_id || undefined
+            }))
+        }));
+        defaultsMap['accounts'] = {
+          bankAccounts: defaultAccounts.map(a => ({
+            id: a.id,
+            name: a.name,
+            type: a.type as any,
+            issuer: a.issuer || '',
+            balance: Number(a.balance) || 0,
+            annualFee: Number(a.annual_fee) || 0,
+            useCase: a.use_case || undefined,
+            emoji: a.emoji || undefined,
+            color: a.color || undefined
+          })),
+          memberships: defaultMemberships.map(m => ({
+            id: m.id,
+            name: m.name,
+            type: m.type as any,
+            status: m.status || '',
+            annualFee: Number(m.annual_fee) || 0,
+            useCase: m.use_case || undefined
+          })),
+          creditScores: {
+            experian: defaultCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score })),
+            transunion: defaultCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score })),
+            equifax: defaultCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score }))
+          }
+        };
+        defaultsMap['budget'] = defaultBudgetCats.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          budgeted: Number(cat.budgeted) || 0,
+          group: cat.group_type as any,
+          emoji: cat.emoji || undefined,
+          items: budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default && !item.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }))
+        }));
+        defaultsMap['recurrings'] = defaultRecurrings.map(r => ({
+          id: r.id,
+          name: r.name,
+          amount: Number(r.amount) || 0,
+          dueDate: r.due_date,
+          isPaid: r.is_paid,
+          frequency: r.frequency as any,
+          dueMonth: r.due_month || undefined,
+          emoji: r.emoji || undefined,
+          category: r.category || undefined,
+          tag: r.tag || undefined,
+          linkedBudgetItemId: r.linked_budget_item_id || undefined,
+          linkedAccountId: r.linked_account_id || undefined
+        }));
+        defaultsMap['transactions'] = defaultTransactions.map(t => ({
+          id: t.id,
+          name: t.name,
+          category: t.category || '',
+          amount: Number(t.amount) || 0,
+          date: t.date,
+          isReviewed: t.is_reviewed,
+          accountId: t.account_id || t.bank_account_id || undefined,
+          bankAccountId: t.bank_account_id || t.account_id || undefined,
+          goalId: t.goal_id || undefined,
+          notes: t.notes || undefined,
+          tags: t.tags || undefined,
+          isRecurring: t.is_recurring || undefined
+        }));
+        if (defaultTaxConfig) {
+          defaultsMap['tax_config'] = {
+            studentLoanThresholds: defaultTaxConfig.student_loan_thresholds,
+            studentLoanRates: defaultTaxConfig.student_loan_rates,
+            incomeTaxBands: defaultTaxConfig.income_tax_bands,
+            nationalInsuranceBands: defaultTaxConfig.national_insurance_bands
+          };
+        }
+        defaultsMap['recurring_templates'] = defaultTemplates.map(t => ({
+          name: t.name,
+          category: t.category,
+          emoji: t.emoji || '',
+          tag: t.tag || '',
+          defaultAmount: Number(t.default_amount) || 0,
+          frequency: t.frequency as any,
+          linkedBudgetItemId: t.linked_budget_item_id || '',
+          budgetCategoryName: t.budget_category_name || undefined
+        }));
+        defaultsMap['credit_bureaus'] = defaultBureaus.map(b => ({
+          key: b.key,
+          label: b.label,
+          emoji: b.emoji || '',
+          color: b.color || '',
+          maxScore: b.max_score,
+          gradient: b.gradient || ''
+        }));
+        defaultsMap['holiday_defaults'] = mappedHolidayDefaults;
+        defaultsMap['default_budget_categories'] = defaultDefaultBudgetCats.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          budgeted: Number(cat.budgeted) || 0,
+          group: cat.group_type as any,
+          emoji: cat.emoji || undefined,
+          items: budgetItems
+            .filter(item => item.category_id === cat.id && item.is_default && item.is_template)
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              budgeted: Number(item.budgeted) || 0,
+              spent: Number(item.spent) || 0,
+              linkedAccountId: item.linked_account_id || undefined,
+              emoji: item.emoji || undefined
+            }))
+        }));
+        defaultsMap['budget_presets'] = presetsObj;
+        setDatabaseDefaults(defaultsMap);
+
+      } catch (err) {
+        console.error('Error fetching settings from Supabase:', err);
+      } finally {
+        setLoadingDb(false);
+      }
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchSupabaseData();
+    }
+  }, [isAdmin]);
+
+  const saveDataToSupabase = async (key: string, contentData: any) => {
+    if (!isAdmin) return;
+    // Every non-template finance row carries a profile_id, and the database
+    // enforces it with a CHECK. Writing without one would fail per-statement
+    // and leave the delete-then-insert save half applied, so refuse up front.
+    if (!profileId) {
+      toast({
+        title: 'No profile loaded',
+        description: 'Finance data could not be saved because no profile was found.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      if (key === 'settings') {
+        const settingsObj = contentData as FinanceSettings;
+        const { data: existingSettings } = await supabase
+          .from('finance_settings')
+          .select('id')
+          .eq('is_default', false)
+          .maybeSingle();
+
+        const settingsRow = {
+          is_default: false,
+          profile_id: profileId,
+          gross_salary: settingsObj.grossSalary,
+          pension_type: settingsObj.pensionType,
+          personal_pension_percent: settingsObj.personalPensionPercent,
+          employer_pension_percent: settingsObj.employerPensionPercent,
+          student_loan_plan: settingsObj.studentLoanPlan,
+          tax_code: settingsObj.taxCode,
+          personal_allowance: settingsObj.personalAllowance,
+          weekends: settingsObj.weekends,
+          bank_holidays: settingsObj.bankHolidays,
+          work_holidays: settingsObj.workHolidays,
+          working_hours_per_day: settingsObj.workingHoursPerDay,
+          tax_year: settingsObj.taxYear,
+          uk_region: settingsObj.ukRegion,
+          pay_day_of_month: settingsObj.payDayOfMonth || null,
+          payday_schedule: settingsObj.paydaySchedule || null,
+          payday_weekday: settingsObj.paydayWeekday !== undefined ? settingsObj.paydayWeekday : null,
+          payday_biweekly_anchor: settingsObj.paydayBiweeklyAnchor || null,
+          active_savings_types: settingsObj.activeSavingsTypes || [],
+          updated_at: new Date().toISOString()
+        };
+
+        if (existingSettings?.id) {
+          await supabase.from('finance_settings').update(settingsRow).eq('id', existingSettings.id);
+        } else {
+          await supabase.from('finance_settings').insert(settingsRow);
+        }
+
+        await supabase.from('finance_user_holidays').delete().eq('is_default', false);
+        const holidaysList = Array.isArray(settingsObj.holidaysByUser)
+          ? settingsObj.holidaysByUser
+          : Object.values(settingsObj.holidaysByUser || {});
+        if (holidaysList.length > 0) {
+          await supabase.from('finance_user_holidays').insert(holidaysList.map(h => ({
+            id: h.id,
+            is_default: false,
+            profile_id: profileId,
+            start_date: h.startDate,
+            end_date: h.endDate,
+            occasion: h.occasion || null,
+            count: h.count
+          })));
+        }
+      } else if (key === 'goals') {
+        const goalsList = contentData as Goal[];
+        await supabase.from('finance_goal_contributions').delete().eq('is_default', false);
+        await supabase.from('finance_goals').delete().eq('is_default', false);
+        if (goalsList.length > 0) {
+          await supabase.from('finance_goals').insert(goalsList.map(g => ({
+            id: g.id,
+            is_default: false,
+            profile_id: profileId,
+            name: g.name,
+            target_amount: g.targetAmount,
+            current_amount: g.currentAmount,
+            target_date: g.targetDate || null,
+            start_date: g.startDate || null,
+            status: g.status || 'active',
+            emoji: g.emoji || null
+          })));
+          const contribs = goalsList.flatMap(g => (g.contributions || []).map(c => ({
+            id: c.id,
+            is_default: false,
+            profile_id: profileId,
+            goal_id: g.id,
+            amount: c.amount,
+            date: c.date,
+            note: c.note || null,
+            bank_account_id: c.bankAccountId || null
+          })));
+          if (contribs.length > 0) {
+            await supabase.from('finance_goal_contributions').insert(contribs);
+          }
+        }
+      } else if (key === 'accounts') {
+        // `debts` is optional so the existing account/membership/score callers
+        // don't all have to thread it through; fall back to current state.
+        const accsObj = contentData as { bankAccounts: BankAccount[]; memberships: Membership[]; creditScores: CreditScores; debts?: Debt[] };
+        const debtsToSave = accsObj.debts ?? debts;
+        await supabase.from('finance_bank_accounts').delete().eq('is_default', false);
+        if (accsObj.bankAccounts?.length > 0) {
+          await supabase.from('finance_bank_accounts').insert(accsObj.bankAccounts.map(a => ({
+            id: a.id,
+            is_default: false,
+            profile_id: profileId,
+            name: a.name,
+            type: a.type,
+            issuer: a.issuer || null,
+            balance: a.balance,
+            annual_fee: a.annualFee,
+            use_case: a.useCase || null,
+            emoji: a.emoji || null,
+            color: a.color || null
+          })));
+        }
+        await supabase.from('finance_memberships').delete().eq('is_default', false);
+        if (accsObj.memberships?.length > 0) {
+          await supabase.from('finance_memberships').insert(accsObj.memberships.map(m => ({
+            id: m.id,
+            is_default: false,
+            profile_id: profileId,
+            name: m.name,
+            type: m.type,
+            status: m.status || null,
+            annual_fee: m.annualFee,
+            use_case: m.useCase || null
+          })));
+        }
+        await supabase.from('finance_debts').delete().eq('is_default', false);
+        if (debtsToSave.length > 0) {
+          await supabase.from('finance_debts').insert(debtsToSave.map(d => ({
+            id: d.id,
+            is_default: false,
+            profile_id: profileId,
+            name: d.name,
+            type: d.type,
+            lender: d.lender || null,
+            original_amount: d.originalAmount,
+            balance: d.balance,
+            interest_rate: d.interestRate,
+            min_payment: d.minPayment,
+            start_date: d.startDate || null,
+            payoff_date: d.payoffDate || null,
+            repayment_type: d.repaymentType || 'amortising',
+            student_loan_plan: d.studentLoanPlan || null,
+            write_off_years: d.writeOffYears ?? null,
+            draws: (d.draws || []) as any,
+            notes: d.notes || null,
+            emoji: d.emoji || null,
+            color: d.color || null
+          })));
+        }
+        await supabase.from('finance_credit_scores').delete().eq('is_default', false);
+        const scores = [
+          ...(accsObj.creditScores?.experian || []).map(s => ({ ...s, bureau: 'experian' })),
+          ...(accsObj.creditScores?.transunion || []).map(s => ({ ...s, bureau: 'transunion' })),
+          ...(accsObj.creditScores?.equifax || []).map(s => ({ ...s, bureau: 'equifax' }))
+        ];
+        if (scores.length > 0) {
+          await supabase.from('finance_credit_scores').insert(scores.map(s => ({
+            id: s.id,
+            is_default: false,
+            profile_id: profileId,
+            bureau: s.bureau,
+            date: s.date,
+            score: s.score
+          })));
+        }
+      } else if (key === 'budget') {
+        const budgetCats = contentData as BudgetCategory[];
+        await supabase.from('finance_budget_items').delete().eq('is_default', false).eq('is_template', false);
+        await supabase.from('finance_budget_categories').delete().eq('is_default', false).eq('is_template', false);
+        if (budgetCats.length > 0) {
+          await supabase.from('finance_budget_categories').insert(budgetCats.map(c => ({
+            id: c.id,
+            is_default: false,
+            profile_id: profileId,
+            is_template: false,
+            name: c.name,
+            budgeted: c.budgeted,
+            group_type: c.group || null,
+            emoji: c.emoji || null
+          })));
+          const items = budgetCats.flatMap(c => (c.items || []).map(i => ({
+            id: i.id,
+            is_default: false,
+            profile_id: profileId,
+            is_template: false,
+            category_id: c.id,
+            name: i.name,
+            budgeted: i.budgeted,
+            spent: i.spent,
+            linked_account_id: i.linkedAccountId || null,
+            emoji: i.emoji || null
+          })));
+          if (items.length > 0) {
+            await supabase.from('finance_budget_items').insert(items);
+          }
+        }
+      } else if (key === 'recurrings') {
+        const recurringsList = contentData as RecurringBill[];
+        await supabase.from('finance_recurring_bills').delete().eq('is_default', false);
+        if (recurringsList.length > 0) {
+          await supabase.from('finance_recurring_bills').insert(recurringsList.map(r => ({
+            id: r.id,
+            is_default: false,
+            profile_id: profileId,
+            name: r.name,
+            amount: r.amount,
+            due_date: r.dueDate,
+            is_paid: r.isPaid,
+            frequency: r.frequency,
+            due_month: r.dueMonth || null,
+            emoji: r.emoji || null,
+            category: r.category || null,
+            tag: r.tag || null,
+            linked_budget_item_id: r.linkedBudgetItemId || null,
+            linked_account_id: r.linkedAccountId || null
+          })));
+        }
+      } else if (key === 'transactions') {
+        const txList = contentData as MockTransaction[];
+        await supabase.from('finance_transactions').delete().eq('is_default', false);
+        if (txList.length > 0) {
+          await supabase.from('finance_transactions').insert(txList.map(t => ({
+            id: t.id,
+            is_default: false,
+            profile_id: profileId,
+            name: t.name,
+            category: t.category || null,
+            amount: t.amount,
+            date: t.date,
+            is_reviewed: t.isReviewed,
+            account_id: t.accountId || t.bankAccountId || null,
+            bank_account_id: t.bankAccountId || t.accountId || null,
+            goal_id: t.goalId || null,
+            notes: t.notes || null,
+            tags: t.tags || null,
+            is_recurring: t.isRecurring || false
+          })));
+        }
+      } else if (key === 'tax_config') {
+        const tcObj = contentData as TaxConfig;
+        const { data: existingTc } = await supabase
+          .from('finance_tax_configs')
+          .select('id')
+          .eq('is_default', false)
+          .maybeSingle();
+
+        const tcRow = {
+          is_default: false,
+          student_loan_thresholds: tcObj.studentLoanThresholds as any,
+          student_loan_rates: tcObj.studentLoanRates as any,
+          income_tax_bands: tcObj.incomeTaxBands as any,
+          national_insurance_bands: tcObj.nationalInsuranceBands as any,
+          updated_at: new Date().toISOString()
+        };
+
+        if (existingTc?.id) {
+          await supabase.from('finance_tax_configs').update(tcRow).eq('id', existingTc.id);
+        } else {
+          await supabase.from('finance_tax_configs').insert(tcRow);
+        }
+      } else if (key === 'recurring_templates') {
+        const templatesList = contentData as RecurringTemplate[];
+        await supabase.from('finance_recurring_templates').delete().eq('is_default', false);
+        if (templatesList.length > 0) {
+          await supabase.from('finance_recurring_templates').insert(templatesList.map(t => ({
+            is_default: false,
+            name: t.name,
+            category: t.category,
+            emoji: t.emoji || null,
+            tag: t.tag || null,
+            default_amount: t.defaultAmount,
+            frequency: t.frequency,
+            linked_budget_item_id: t.linkedBudgetItemId || null,
+            budget_category_name: t.budgetCategoryName || null
+          })));
+        }
+      } else if (key === 'credit_bureaus') {
+        const bureausList = contentData as CreditBureauConfig[];
+        await supabase.from('finance_credit_bureaus').delete().eq('is_default', false);
+        if (bureausList.length > 0) {
+          await supabase.from('finance_credit_bureaus').insert(bureausList.map(b => ({
+            is_default: false,
+            key: b.key,
+            label: b.label,
+            emoji: b.emoji || null,
+            color: b.color || null,
+            max_score: b.maxScore,
+            gradient: b.gradient || null
+          })));
+        }
+      } else if (key === 'holiday_defaults') {
+        const hdObj = contentData as Record<number, { count: number; dates: string; occasion: string }>;
+        await supabase.from('finance_holiday_defaults').delete().eq('is_default', false);
+        const hdRows = Object.entries(hdObj).map(([month, details]) => ({
+          is_default: false,
+          month_index: parseInt(month, 10),
+          count: details.count,
+          dates: details.dates || null,
+          occasion: details.occasion || null
+        }));
+        if (hdRows.length > 0) {
+          await supabase.from('finance_holiday_defaults').insert(hdRows);
+        }
+      } else if (key === 'default_budget_categories') {
+        const defaultBudgetCats = contentData as BudgetCategory[];
+        await supabase.from('finance_budget_items').delete().eq('is_default', false).eq('is_template', true);
+        await supabase.from('finance_budget_categories').delete().eq('is_default', false).eq('is_template', true);
+        if (defaultBudgetCats.length > 0) {
+          await supabase.from('finance_budget_categories').insert(defaultBudgetCats.map(c => ({
+            id: c.id,
+            is_default: false,
+            profile_id: profileId,
+            is_template: true,
+            name: c.name,
+            budgeted: c.budgeted,
+            group_type: c.group || null,
+            emoji: c.emoji || null
+          })));
+          const items = defaultBudgetCats.flatMap(c => (c.items || []).map(i => ({
+            id: i.id,
+            is_default: false,
+            profile_id: profileId,
+            is_template: true,
+            category_id: c.id,
+            name: i.name,
+            budgeted: i.budgeted,
+            spent: i.spent,
+            linked_account_id: i.linkedAccountId || null,
+            emoji: i.emoji || null
+          })));
+          if (items.length > 0) {
+            await supabase.from('finance_budget_items').insert(items);
+          }
+        }
+      } else if (key === 'budget_presets') {
+        const presetsObj = contentData as Record<string, CategoryPreset[]>;
+        await supabase.from('finance_budget_presets').delete().eq('is_default', false);
+        const presetRows = Object.entries(presetsObj).flatMap(([type, list]) =>
+          (list || []).map(p => ({
+            is_default: false,
+            preset_type: type,
+            name: p.name,
+            emoji: p.emoji || null,
+            group_type: p.group || null
+          }))
+        );
+        if (presetRows.length > 0) {
+          await supabase.from('finance_budget_presets').insert(presetRows);
+        }
+      }
+    } catch (err) {
+      console.error(`Error saving ${key} to Supabase:`, err);
+    }
+  };
+
+  const value = {
+    bankAccounts,
+    budgetCategories,
+    creditBureaus,
+    creditScores,
+    databaseDefaults,
+    debts,
+    defaultBudgetCategories,
+    fetchSupabaseData,
+    goals,
+    holidayDefaults,
+    investmentHoldings,
+    loadingDb,
+    memberships,
+    mockTransactions,
+    payDayInput,
+    paydayBiweeklyAnchor,
+    paydaySchedule,
+    paydayWeekday,
+    presets,
+    profileId,
+    recurringTemplates,
+    recurrings,
+    saveDataToSupabase,
+    savingDb,
+    selectedGoalId,
+    setBankAccounts,
+    setBudgetCategories,
+    setCreditBureaus,
+    setCreditScores,
+    setDatabaseDefaults,
+    setDebts,
+    setDefaultBudgetCategories,
+    setGoals,
+    setHolidayDefaults,
+    setInvestmentHoldings,
+    setLoadingDb,
+    setMemberships,
+    setMockTransactions,
+    setPayDayInput,
+    setPaydayBiweeklyAnchor,
+    setPaydaySchedule,
+    setPaydayWeekday,
+    setPresets,
+    setProfileId,
+    setRecurringTemplates,
+    setRecurrings,
+    setSavingDb,
+    setSelectedGoalId,
+    setSettings,
+    setTaxConfig,
+    setTimeSpentInputs,
+    settings,
+    taxConfig,
+    timeSpentInputs,
+  };
+
+  return value;
+}
+
+type FinanceDataValue = ReturnType<typeof useProvideFinanceData>;
+
+const FinanceDataContext = createContext<FinanceDataValue | null>(null);
+
+export function FinanceDataProvider({ children }: { children: ReactNode }) {
+  return (
+    <FinanceDataContext.Provider value={useProvideFinanceData()}>
+      {children}
+    </FinanceDataContext.Provider>
+  );
+}
+
+/** Throws rather than returning undefined, so a surface rendered outside the
+ *  provider fails loudly at the point of the mistake. */
+export function useFinanceData() {
+  const ctx = useContext(FinanceDataContext);
+  if (!ctx) throw new Error('useFinanceData must be used inside FinanceDataProvider');
+  return ctx;
+}

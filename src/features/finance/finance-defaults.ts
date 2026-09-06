@@ -417,3 +417,11 @@ export const getPlanName = (plan: FinanceSettings['studentLoanPlan']) => {
     case 'postgrad': return 'Postgraduate';
   }
 };
+
+/**
+ * Narrows a preset's `group`, which presets.json types as a plain string, to
+ * the three groups a budget category can actually be in. Anything unexpected
+ * falls to 'needs' rather than being cast through and trusted.
+ */
+export const asBudgetGroup = (group?: string): BudgetCategory['group'] =>
+  group === 'needs' || group === 'wants' || group === 'savings' ? group : 'needs';
