@@ -888,6 +888,29 @@ The page ends up looking *more* like the rest of the site than it does today,
 not less. The density loss is real and intentional: 9px text is the reason the
 page feels cramped.
 
+**What extraction actually costs, measured.** Each of the six inline sections
+uses only 11–37 names from page scope, and the ledger data it needs comes free
+from the provider — Cash Flow, extracted first, needed three context names and
+two props. So the sections are far more separable than an 800-line block
+suggests.
+
+The remainder are not blocked by size but by two specific couplings:
+
+- **Every dialog lives in the page.** So a surface's prop list fills up with
+  openers — `setIsAddGoalOpen`, `setIsEditItemOpen`, `setIsAddCreditScoreOpen`.
+  Worse, handlers like `handleDeleteGoal` are one-line arrows delegating to
+  `askDelete`, the page's confirm-delete machinery, so they cannot move while
+  it does not.
+- **The totals are computed in the page.** `totalSpent`, `breakdownRates`,
+  `nextPayday`, `freeToSpend` and friends are derived in `FinanceView` and read
+  by several sections at once.
+
+Between them these account for most of the 5–19 props each remaining surface
+would need. Extracting first and fixing later would bake a wide prop interface
+into five files and then have to unpick it, so 7.2c-i comes first: move each
+dialog to the surface that opens it, and lift the derived totals to where the
+data lives. The prop lists collapse on their own after that.
+
 #### 7.D Build order
 
 | # | Step | Gate |
@@ -897,7 +920,8 @@ page feels cramped.
 | 7.1b | Thread `profile_id` through the existing write paths so the page keeps working before the decomposition — **DONE** | 7.1 |
 | 7.2a | Routes and surfaces: ten tabs become five routed surfaces with a section nav — **DONE** | 7.1b |
 | 7.2b | Lift the data state and the load/save into a provider, so surfaces can be separate components — **DONE** | 7.2a |
-| 7.2c | Extract the six inline sections into `surfaces/*.tsx`; per-surface chunks | 7.2b |
+| 7.2c | Extract the six inline sections into `surfaces/*.tsx`; per-surface chunks — **Cash Flow done; the rest blocked on 7.2c-i** | 7.2b |
+| 7.2c-i | Move each dialog to the surface that opens it, and lift the page-computed totals, so the surface prop lists collapse | 7.2c |
 | 7.2d | Per-surface queries, profile switcher, profile-filtered reads | 7.2c |
 | 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |
 | 7.4 | Snapshots — balance, net worth, per profile | none |
