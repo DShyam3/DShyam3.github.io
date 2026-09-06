@@ -136,7 +136,19 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      {/* disableTransitionOnChange: the palettes are inverses, so any
+          crossfade between them passes through a mid-grey where text and
+          card meet at the same value and the page reads as blank for a
+          frame. Synchronising the durations does not help -- the midpoint
+          is where the contrast goes, not the timing. next-themes drops
+          every transition for the one frame the class flips, so the swap
+          is atomic. ThemeToggle animates its own arc around this. */}
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem
+        disableTransitionOnChange
+      >
         <TimeBasedThemeManager />
         <TooltipProvider>
           <Toaster />
