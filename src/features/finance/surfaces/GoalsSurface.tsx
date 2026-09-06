@@ -308,16 +308,16 @@ export default function GoalsSurface() {
                 {goal.emoji && <span className="text-base font-normal shrink-0">{goal.emoji}</span>}
                 <span>{goal.name}</span>
               </span>
-              <span className="text-[10px] text-muted-foreground font-mono shrink-0">{formatReadableDate(goal.targetDate)}</span>
+              <span className="text-xs text-muted-foreground font-mono shrink-0">{formatReadableDate(goal.targetDate)}</span>
             </div>
-            <div className="space-y-1.5 text-[10px]">
+            <div className="space-y-1.5 text-xs">
               <div className="flex justify-between items-baseline">
                 <span className="text-muted-foreground">
                   <span className="font-bold text-foreground font-mono">{formatGBP(goal.currentAmount)}</span>
                   <span> of </span>
                   <span className="font-mono">{formatGBP(goal.targetAmount)}</span>
                 </span>
-                <span className="font-bold text-emerald-500 font-mono text-[11px]">{progress.toFixed(0)}%</span>
+                <span className="font-bold text-emerald-500 font-mono text-xs">{progress.toFixed(0)}%</span>
               </div>
               <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
@@ -341,13 +341,13 @@ export default function GoalsSurface() {
             >
               <ChevronDown className={cn("h-3 w-3 transition-transform duration-200 shrink-0", collapsedGoalGroups.active && "-rotate-90")} />
               <span>Active</span>
-              <span className="ml-auto font-mono text-[10px] text-muted-foreground font-normal">{activeGoals.length}</span>
+              <span className="ml-auto font-mono text-xs text-muted-foreground font-normal">{activeGoals.length}</span>
             </button>
             {!collapsedGoalGroups.active && (
               <div className="space-y-3 pl-1">
                 {activeGoals.map(renderGoalCard)}
                 {activeGoals.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground italic pl-4 py-2">No active savings goals.</p>
+                  <p className="text-xs text-muted-foreground italic pl-4 py-2">No active savings goals.</p>
                 )}
               </div>
             )}
@@ -361,13 +361,13 @@ export default function GoalsSurface() {
             >
               <ChevronDown className={cn("h-3 w-3 transition-transform duration-200 shrink-0", collapsedGoalGroups.readyToSpend && "-rotate-90")} />
               <span>Ready to spend</span>
-              <span className="ml-auto font-mono text-[10px] text-muted-foreground font-normal">{readyToSpendGoals.length}</span>
+              <span className="ml-auto font-mono text-xs text-muted-foreground font-normal">{readyToSpendGoals.length}</span>
             </button>
             {!collapsedGoalGroups.readyToSpend && (
               <div className="space-y-3 pl-1">
                 {readyToSpendGoals.map(renderGoalCard)}
                 {readyToSpendGoals.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground italic pl-4 py-2">No goals ready to spend.</p>
+                  <p className="text-xs text-muted-foreground italic pl-4 py-2">No goals ready to spend.</p>
                 )}
               </div>
             )}
@@ -381,13 +381,13 @@ export default function GoalsSurface() {
             >
               <ChevronDown className={cn("h-3 w-3 transition-transform duration-200 shrink-0", collapsedGoalGroups.archived && "-rotate-90")} />
               <span>Archived</span>
-              <span className="ml-auto font-mono text-[10px] text-muted-foreground font-normal">{archivedGoals.length}</span>
+              <span className="ml-auto font-mono text-xs text-muted-foreground font-normal">{archivedGoals.length}</span>
             </button>
             {!collapsedGoalGroups.archived && (
               <div className="space-y-3 pl-1">
                 {archivedGoals.map(renderGoalCard)}
                 {archivedGoals.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground italic pl-4 py-2">No archived goals.</p>
+                  <p className="text-xs text-muted-foreground italic pl-4 py-2">No archived goals.</p>
                 )}
               </div>
             )}
@@ -447,9 +447,9 @@ export default function GoalsSurface() {
               </div>
               <div className="flex items-start justify-between md:justify-end gap-4 shrink-0">
                 <div className="text-right">
-                  <span className="text-[10px] text-muted-foreground block uppercase tracking-wider">Saved</span>
+                  <span className="text-xs text-muted-foreground block uppercase tracking-wider">Saved</span>
                   <span className="text-xl font-bold text-emerald-500 font-mono block">{formatGBP(goal.currentAmount)}</span>
-                  <span className="text-[10px] text-emerald-500/80 font-medium block mt-0.5">
+                  <span className="text-xs text-emerald-500/80 font-medium block mt-0.5">
                     {progress >= 100 ? "Goal achieved!" : `${progress.toFixed(0)}% complete`}
                   </span>
                 </div>
@@ -611,13 +611,13 @@ export default function GoalsSurface() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold font-mono">{formatGBP(c.amount)}</span>
                           {acc && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono font-medium">
+                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono font-medium">
                               {acc.name}
                             </span>
                           )}
                         </div>
-                        {c.note && <span className="text-[10px] text-muted-foreground block">"{c.note}"</span>}
-                        <span className="text-[9px] text-muted-foreground/60 block font-mono">{c.date}</span>
+                        {c.note && <span className="text-xs text-muted-foreground block">"{c.note}"</span>}
+                        <span className="text-xs text-muted-foreground/60 block font-mono">{c.date}</span>
                       </div>
                       <Button
                         variant="ghost"
@@ -631,7 +631,7 @@ export default function GoalsSurface() {
                   );
                 })}
                 {goal.contributions.length === 0 && (
-                  <p className="text-[11px] text-muted-foreground italic text-center py-4">No contributions logged yet.</p>
+                  <p className="text-xs text-muted-foreground italic text-center py-4">No contributions logged yet.</p>
                 )}
               </div>
             </div>

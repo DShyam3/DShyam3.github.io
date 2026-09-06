@@ -546,7 +546,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         setCategoryFilter('all');
                         setAccountFilter('all');
                       }}
-                      className="text-[10px] h-7 text-muted-foreground hover:text-foreground"
+                      className="text-xs h-7 text-muted-foreground hover:text-foreground"
                     >
                       Clear Filters
                     </Button>
@@ -594,7 +594,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
           {/* Batch operations when checklist is selected */}
           {selectedTxIds.size > 0 && (
             <div className="flex flex-wrap items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl p-2.5 px-3 animate-in fade-in slide-in-from-top-2 duration-200">
-              <span className="text-[11px] text-muted-foreground font-semibold">
+              <span className="text-xs text-muted-foreground font-semibold">
                 {selectedTxIds.size} transaction{selectedTxIds.size > 1 ? 's' : ''} selected:
               </span>
               <div className="flex items-center gap-1.5 ml-auto">
@@ -602,7 +602,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   size="sm"
                   variant="outline"
                   onClick={() => handleBulkReview(true)}
-                  className="h-7 rounded-lg text-[10px] border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
+                  className="h-7 rounded-lg text-xs border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
                 >
                   <Check className="h-3 w-3 text-emerald-400" />
                   Mark Reviewed
@@ -611,7 +611,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   size="sm"
                   variant="outline"
                   onClick={() => handleBulkReview(false)}
-                  className="h-7 rounded-lg text-[10px] border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
+                  className="h-7 rounded-lg text-xs border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
                 >
                   <RefreshCw className="h-3 w-3 text-amber-400" />
                   Mark Pending
@@ -623,7 +623,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 rounded-lg text-[10px] border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
+                      className="h-7 rounded-lg text-xs border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
                     >
                       <span>Category</span>
                       <ChevronDown className="h-3 w-3 text-muted-foreground" />
@@ -646,7 +646,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   size="sm"
                   variant="outline"
                   onClick={handleBulkDelete}
-                  className="h-7 rounded-lg text-[10px] border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 flex items-center gap-1"
+                  className="h-7 rounded-lg text-xs border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 flex items-center gap-1"
                 >
                   <Trash2 className="h-3 w-3" />
                   Delete
@@ -686,7 +686,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
           ) : (
             <div className="space-y-6">
               {/* Select All Bar */}
-              <div className="flex items-center px-4 py-1.5 border-b border-border/20 text-[10px] text-muted-foreground font-semibold">
+              <div className="flex items-center px-4 py-1.5 border-b border-border/20 text-xs text-muted-foreground font-semibold">
                 <div className="flex items-center gap-3">
                   <Checkbox
                     checked={
@@ -707,7 +707,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               {groupedTransactions.map(({ date, list }) => (
                 <div key={date} className="space-y-2">
                   {/* Group Date Header */}
-                  <h4 className="text-[10px] font-sans font-bold tracking-wider text-muted-foreground px-4 py-1">
+                  <h4 className="text-xs font-sans font-bold tracking-wider text-muted-foreground px-4 py-1">
                     {date}
                   </h4>
 
@@ -762,7 +762,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                                   {tx.name}
                                 </span>
                                 {accInfo && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/40 border border-border/40 px-2 py-0.5 rounded-md shrink-0 font-medium">
+                                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/40 border border-border/40 px-2 py-0.5 rounded-md shrink-0 font-medium">
                                     <span>{accInfo.emoji || (accInfo.type === 'credit' ? '💳' : '🏦')}</span>
                                     <span className="truncate max-w-[110px]">{accInfo.name}</span>
                                   </span>
@@ -774,8 +774,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           {/* Right Elements */}
                           <div className="flex items-center gap-4 shrink-0">
                             {goalInfo && (
-                              <div className="hidden md:flex items-center gap-1 text-[9px] bg-primary/5 text-primary border border-primary/15 px-2 py-0.5 rounded-full font-medium">
-                                <span className="text-[10px]">{goalInfo.emoji || '🎯'}</span>
+                              <div className="hidden md:flex items-center gap-1 text-xs bg-primary/5 text-primary border border-primary/15 px-2 py-0.5 rounded-full font-medium">
+                                <span className="text-xs">{goalInfo.emoji || '🎯'}</span>
                                 <span className="truncate max-w-[80px]">{goalInfo.name}</span>
                               </div>
                             )}
@@ -784,7 +784,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                               <Badge
                                 variant="outline"
                                 className={cn(
-                                  "text-[9px] font-medium tracking-wide uppercase px-2 py-0.5 border rounded-full font-mono",
+                                  "text-xs font-medium tracking-wide uppercase px-2 py-0.5 border rounded-full font-mono",
                                   getCategoryColor(tx.category)
                                 )}
                               >
@@ -828,7 +828,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     variant={selectedTx.isReviewed ? "default" : "outline"}
                     onClick={() => handleToggleReviewSingle(selectedTx.id)}
                     className={cn(
-                      "h-7 rounded-lg text-[10px] flex items-center gap-1 border font-medium",
+                      "h-7 rounded-lg text-xs flex items-center gap-1 border font-medium",
                       selectedTx.isReviewed
                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
                         : "border-primary/15 text-muted-foreground hover:bg-primary/5"
@@ -876,7 +876,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     variant="outline"
                     onClick={() => updateSelectedField('amount', -selectedTx.amount)}
                     className={cn(
-                      "h-7 rounded-lg text-[10px] font-semibold flex items-center gap-1.5 border transition-colors",
+                      "h-7 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors",
                       selectedTx.amount < 0
                         ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
                         : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
@@ -904,7 +904,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       <SelectContent className="max-h-64 overflow-y-auto bg-card border-primary/15 z-50">
                         {allCategoryOptions.map(opt => (
                           <SelectItem key={opt.id} value={opt.name} className="text-xs">
-                            <span className="text-[10px] text-muted-foreground mr-1.5">[{opt.group}]</span>
+                            <span className="text-xs text-muted-foreground mr-1.5">[{opt.group}]</span>
                             {opt.name}
                           </SelectItem>
                         ))}
@@ -987,7 +987,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     {(selectedTx.tags || []).map(tag => (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-1 text-[9px] bg-primary/5 text-primary border border-primary/15 px-2 py-0.5 rounded-full font-medium"
+                        className="inline-flex items-center gap-1 text-xs bg-primary/5 text-primary border border-primary/15 px-2 py-0.5 rounded-full font-medium"
                       >
                         <Tag className="h-2 w-2 text-primary/75" />
                         <span>{tag}</span>
@@ -1007,7 +1007,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           e.currentTarget.value = '';
                         }
                       }}
-                      className="h-6 w-24 bg-background/30 border-primary/10 rounded-lg text-[9px] px-2 py-0"
+                      className="h-6 w-24 bg-background/30 border-primary/10 rounded-lg text-xs px-2 py-0"
                     />
                   </div>
                 </div>
@@ -1019,24 +1019,24 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                     Similar Transactions
                   </h4>
-                  <span className="text-[10px] text-muted-foreground font-mono font-semibold">
+                  <span className="text-xs text-muted-foreground font-mono font-semibold">
                     {similarTransactionsInfo.monthLabel}: {formatGBP(similarTransactionsInfo.monthlySum)} ({similarTransactionsInfo.overallCount})
                   </span>
                 </div>
 
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
                   {similarTransactionsInfo.list.length === 0 ? (
-                    <p className="text-[10px] text-muted-foreground italic py-1">
+                    <p className="text-xs text-muted-foreground italic py-1">
                       No previous transactions found for this merchant.
                     </p>
                   ) : (
                     similarTransactionsInfo.list.map(match => (
                       <div key={match.id} className="flex items-center justify-between p-2 rounded-xl bg-background/25 border border-transparent hover:border-primary/5">
                         <div className="space-y-0.5">
-                          <span className="text-[10px] font-semibold text-foreground block">
+                          <span className="text-xs font-semibold text-foreground block">
                             {new Date(match.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </span>
-                          <span className="text-[9px] text-muted-foreground flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
                             {getAccountInfo(match.bankAccountId)?.name || 'Credit Card'}
                             {match.category && (
                               <>
@@ -1047,7 +1047,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           </span>
                         </div>
                         <span className={cn(
-                          "text-[10px] font-mono font-semibold",
+                          "text-xs font-mono font-semibold",
                           match.amount < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
                         )}>
                           {match.amount < 0 ? '+' : '-'}{formatGBP(Math.abs(match.amount))}

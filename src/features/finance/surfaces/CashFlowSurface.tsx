@@ -394,7 +394,7 @@ const CashFlowCategoryTooltip = ({ active, payload }: any) => {
       {data.categoryBreakdown && data.categoryBreakdown.length > 0 ? (
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
           {data.categoryBreakdown.map((cat: any) => (
-            <div key={cat.name} className="flex items-center justify-between text-[11px] gap-2">
+            <div key={cat.name} className="flex items-center justify-between text-xs gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
                 <span className="text-xs shrink-0">{cat.emoji}</span>
@@ -405,7 +405,7 @@ const CashFlowCategoryTooltip = ({ active, payload }: any) => {
           ))}
         </div>
       ) : (
-        <div className="text-[11px] text-muted-foreground italic">No category spend recorded</div>
+        <div className="text-xs text-muted-foreground italic">No category spend recorded</div>
       )}
     </div>
   );
@@ -435,7 +435,7 @@ return (
         <div className="relative">
           <button
             onClick={() => setCfPeriodOpen(!cfPeriodOpen)}
-            className="text-[10px] font-semibold px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono flex items-center gap-1.5 hover:bg-primary/20 transition-colors"
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono flex items-center gap-1.5 hover:bg-primary/20 transition-colors"
           >
             {activePeriodLabel}
             <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", cfPeriodOpen && "rotate-180")} />
@@ -463,7 +463,7 @@ return (
             </div>
           )}
         </div>
-        <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">
+        <span className="text-xs text-muted-foreground font-mono hidden sm:inline">
           {periodStartLabel} – {periodEndLabel}
         </span>
       </div>
@@ -474,14 +474,14 @@ return (
       <div className="flex items-start justify-between mb-4">
         <div className="space-y-1">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
-          <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-          <p className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+          <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+          <p className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
             {formatGBP(ytdNet)}
           </p>
         </div>
         <button
           onClick={() => setCfDrawerOpen('net')}
-          className="text-[10px] font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
+          className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
         >
           <span>VIEW MORE</span>
           <ArrowUpRight className="h-3 w-3" />
@@ -540,12 +540,12 @@ return (
         <div className="flex items-start justify-between mb-4">
           <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
-            <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <p className="text-2xl font-extrabold font-mono text-rose-500">{formatGBP(ytdSpend)}</p>
+            <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+            <p className="text-2xl font-bold font-mono text-rose-500">{formatGBP(ytdSpend)}</p>
           </div>
           <button
             onClick={() => setCfDrawerOpen('spend')}
-            className="text-[10px] font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
+            className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
           >
             <span>VIEW MORE</span>
             <ArrowUpRight className="h-3 w-3" />
@@ -580,12 +580,12 @@ return (
         <div className="flex items-start justify-between mb-4">
           <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
-            <p className="text-[10px] text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <p className="text-2xl font-extrabold font-mono text-cyan-500">{formatGBP(ytdIncome)}</p>
+            <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
+            <p className="text-2xl font-bold font-mono text-cyan-500">{formatGBP(ytdIncome)}</p>
           </div>
           <button
             onClick={() => setCfDrawerOpen('income')}
-            className="text-[10px] font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
+            className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
           >
             <span>VIEW MORE</span>
             <ArrowUpRight className="h-3 w-3" />
@@ -637,27 +637,27 @@ return (
     {/* ─── METRIC SUMMARY ROW ─── */}
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
-        <span className={cn("text-xl font-extrabold font-mono block", avgMonthlyNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
+        <span className={cn("text-xl font-bold font-mono block", avgMonthlyNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
           {formatGBP(avgMonthlyNet)}
         </span>
-        <span className="text-[10px] text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
       </Card>
 
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
-        <span className={cn("text-xl font-extrabold font-mono block", savingsRate >= 20 ? "text-emerald-500" : savingsRate >= 0 ? "text-amber-500" : "text-rose-500")}>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
+        <span className={cn("text-xl font-bold font-mono block", savingsRate >= 20 ? "text-emerald-500" : savingsRate >= 0 ? "text-amber-500" : "text-rose-500")}>
           {savingsRate.toFixed(1)}%
         </span>
-        <span className="text-[10px] text-muted-foreground">of income retained YTD</span>
+        <span className="text-xs text-muted-foreground">of income retained YTD</span>
       </Card>
 
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
-        <span className={cn("text-xl font-extrabold font-mono block", recurringBurnRate <= 30 ? "text-emerald-500" : recurringBurnRate <= 50 ? "text-amber-500" : "text-rose-500")}>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
+        <span className={cn("text-xl font-bold font-mono block", recurringBurnRate <= 30 ? "text-emerald-500" : recurringBurnRate <= 50 ? "text-amber-500" : "text-rose-500")}>
           {recurringBurnRate.toFixed(1)}%
         </span>
-        <span className="text-[10px] text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
+        <span className="text-xs text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
       </Card>
     </div>
 
@@ -674,7 +674,7 @@ return (
                 Monthly income minus spend
               </SheetDescription>
               <div className="pt-2">
-                <span className={cn("text-3xl font-extrabold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                <span className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
                   {formatGBP(ytdNet)}
                 </span>
               </div>
@@ -720,11 +720,11 @@ return (
                       {formatGBP(m.net)}
                     </span>
                   </div>
-                  <div className="flex justify-between text-[11px] text-muted-foreground pl-2 font-mono">
+                  <div className="flex justify-between text-xs text-muted-foreground pl-2 font-mono">
                     <span>{m.name} Total income</span>
                     <span className="text-emerald-400">+{formatGBP(m.income)}</span>
                   </div>
-                  <div className="flex justify-between text-[11px] text-muted-foreground pl-2 font-mono">
+                  <div className="flex justify-between text-xs text-muted-foreground pl-2 font-mono">
                     <span>{m.name} Total expenses</span>
                     <span className="text-muted-foreground">-{formatGBP(m.spend)}</span>
                   </div>
@@ -743,7 +743,7 @@ return (
                 Monthly spend not including recurrings left to pay
               </SheetDescription>
               <div className="pt-2">
-                <span className="text-3xl font-extrabold font-mono text-rose-500">
+                <span className="text-3xl font-bold font-mono text-rose-500">
                   {formatGBP(ytdSpend)}
                 </span>
               </div>
@@ -807,7 +807,7 @@ return (
                 Income this month
               </SheetDescription>
               <div className="pt-2">
-                <span className="text-3xl font-extrabold font-mono text-emerald-500">
+                <span className="text-3xl font-bold font-mono text-emerald-500">
                   {formatGBP(ytdIncome)}
                 </span>
               </div>
@@ -855,9 +855,9 @@ return (
                     {m.incomeItems.map(item => (
                       <div key={item.id} className="flex items-center justify-between text-xs py-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] text-muted-foreground font-mono shrink-0">{item.date}</span>
+                          <span className="text-xs text-muted-foreground font-mono shrink-0">{item.date}</span>
                           <span className="font-semibold text-foreground truncate">{item.name}</span>
-                          <span className="text-[10px] text-muted-foreground truncate hidden sm:inline">{item.accountName}</span>
+                          <span className="text-xs text-muted-foreground truncate hidden sm:inline">{item.accountName}</span>
                         </div>
                         <span className="font-mono font-bold text-emerald-400 shrink-0">+{formatGBP(item.amount)}</span>
                       </div>

@@ -856,22 +856,22 @@ the *tokens and `ui/` primitives*, and adds a small `StatCard` built from
 
 | | Count |
 |---|---|
-| Arbitrary sub-12px sizes (`text-[10px]`, `[9px]`, `[8px]`, `[11px]`) | 468 |
+| Arbitrary sub-12px sizes (`text-[10px]`, `[9px]`, `[8px]`, `[11px]`) | 264 |
 | `text-xs` (12px) | 596 |
 | `text-base` (16px, the site's body size) | 24 |
 | Distinct hardcoded hex colours | 38 |
-| `font-extrabold` (not on the site's two-weight scale) | 36 |
+| `font-extrabold` (not on the site's two-weight scale) | 19 |
 | Design-token references (so it is genuinely mixed, not wholly off-system) | 817 |
 
-So 1,064 pieces of text sit at 12px or below against 24 at body size — body
-copy effectively does not exist on this page — and the charts run the full
-default Tailwind palette (`#10b981`, `#f59e0b`, `#ef4444`, `#3b82f6`, …) inside
-a warm near-monochrome design system built on one accent.
+So 860 pieces of text sit at 12px or below against 24 at body size — body copy
+effectively does not exist on this page — and the charts run the full default
+Tailwind palette (`#10b981`, `#f59e0b`, `#ef4444`, `#3b82f6`, …) inside a warm
+near-monochrome design system built on one accent.
 
 That is the whole diagnosis. Finance is the one page that ignores the design
 system, which is why it reads as a different product bolted to the side of the
-site. The measured figure is higher than the 263 recorded in
-`src/theme/README.md`; that note should be updated to 468 when this lands.
+site. These match what `src/theme/README.md` already records (263 and 19); an
+earlier count of 468 here was a double-counted glob, not a real figure.
 
 **What visibly changes, and what does not.** The visual *language* does not
 change at all — same tokens, same two faces, same card chrome, same header and
@@ -879,10 +879,10 @@ footer. What changes is proportion and layout:
 
 | Changes | Stays |
 |---|---|
-| Text gets substantially bigger; 1,064 instances rise to the scale | Every colour token in `src/index.css` |
+| Text gets substantially bigger; 264 sub-12px instances rise to the scale | Every colour token in `src/index.css` |
 | Charts drop 38 hex colours for the monochrome ramp + `--accent` | Space Mono body, Doto display |
 | One hero number per view; cards gain air | `ui/card.tsx`, `--radius`, `--shadow-card` |
-| 36 `font-extrabold` fall back to the two-weight scale | Header, Footer, shell, theme toggle |
+| 19 `font-extrabold` fall back to the two-weight scale | Header, Footer, shell, theme toggle |
 | Tab structure consolidates (see 7.2) | Light/dark behaviour |
 
 The page ends up looking *more* like the rest of the site than it does today,

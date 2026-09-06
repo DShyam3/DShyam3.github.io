@@ -352,7 +352,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
               <Activity className="h-4 w-4 text-primary" /> Spending Progress
             </CardTitle>
-            <CardDescription className="text-[10px] text-muted-foreground">
+            <CardDescription className="text-xs text-muted-foreground">
               {dashboardSpendRange === 'this_month'
                 ? "Cumulative monthly spent vs budget trajectory"
                 : `Monthly spent vs budget for the selected period (${dashboardSpendSpentLabel.toLowerCase()})`}
@@ -373,7 +373,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     key={opt.key}
                     onClick={() => setDashboardSpendRange(opt.key as any)}
                     className={cn(
-                      "px-2.5 py-1 text-[10px] font-semibold font-sans rounded-full transition-all whitespace-nowrap",
+                      "px-2.5 py-1 text-xs font-semibold font-sans rounded-full transition-all whitespace-nowrap",
                       isActive
                         ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
@@ -387,7 +387,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
             <div className="text-right hidden sm:block">
               <span className={cn(
-                "text-[10px] font-bold font-mono px-2 py-0.5 rounded-full inline-block",
+                "text-xs font-bold font-mono px-2 py-0.5 rounded-full inline-block",
                 isDashboardSpendOverBudget ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
               )}>
                 {dashboardSpendStatusText}
@@ -399,7 +399,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         {/* Mobile-only status display */}
         <div className="block sm:hidden pt-1">
           <span className={cn(
-            "text-[10px] font-bold font-mono px-2 py-0.5 rounded-full inline-block",
+            "text-xs font-bold font-mono px-2 py-0.5 rounded-full inline-block",
             isDashboardSpendOverBudget ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
           )}>
             {dashboardSpendStatusText}
@@ -408,11 +408,11 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
         <div className="flex gap-4 pt-3 text-xs">
           <div>
-            <span className="text-muted-foreground text-[10px] uppercase block">{dashboardSpendSpentLabel}</span>
+            <span className="text-muted-foreground text-xs uppercase block">{dashboardSpendSpentLabel}</span>
             <span className="text-lg font-bold font-mono text-foreground">{formatGBP(dashboardSpendTotal)}</span>
           </div>
           <div className="border-l border-border/50 pl-4">
-            <span className="text-muted-foreground text-[10px] uppercase block">{dashboardSpendBudgetLabel}</span>
+            <span className="text-muted-foreground text-xs uppercase block">{dashboardSpendBudgetLabel}</span>
             <span className="text-lg font-bold font-mono text-muted-foreground">{formatGBP(dashboardSpendBudget)}</span>
           </div>
         </div>
@@ -483,7 +483,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Net & Budget</span>
             <button
               onClick={() => setActiveTab('cash-flow')}
-              className="text-[9px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
+              className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
             >
               Cash Flow <ArrowUpRight className="h-3 w-3" />
             </button>
@@ -492,14 +492,14 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Left column: Actual Net Cash Flow */}
             <div className="space-y-1">
-              <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider block">Net this month</span>
-              <span className={cn("text-xl sm:text-2xl font-extrabold font-mono block tracking-tight whitespace-nowrap", netCashFlow >= 0 ? "text-emerald-500" : "text-rose-500")}>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Net this month</span>
+              <span className={cn("text-xl sm:text-2xl font-bold font-mono block tracking-tight whitespace-nowrap", netCashFlow >= 0 ? "text-emerald-500" : "text-rose-500")}>
                 {netCashFlow >= 0 ? '+' : ''}{formatGBP(netCashFlow)}
               </span>
               {/* Trend comparison */}
-              <div className="flex items-center gap-1 text-[8px] text-muted-foreground font-sans truncate">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground font-sans truncate">
                 <span className={cn(
-                  "flex items-center px-1 py-0.5 rounded-full font-bold font-mono text-[8px]",
+                  "flex items-center px-1 py-0.5 rounded-full font-bold font-mono text-xs",
                   comparison.isPositive ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
                 )}>
                   {comparison.isPositive ? '↗' : '↘'} {comparison.pct.toFixed(0)}%
@@ -511,20 +511,20 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             {/* Right column: Free to Spend */}
             <div className="space-y-1 border-l-0 sm:border-l border-border/20 pl-0 sm:pl-4 flex flex-col justify-between">
               <div>
-                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                   <span>Free to Spend</span>
                   <PiggyBank className="h-3 w-3 text-emerald-500" />
                 </span>
-                <span className={cn("text-xl sm:text-2xl font-extrabold font-mono block tracking-tight whitespace-nowrap", freeToSpend >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                <span className={cn("text-xl sm:text-2xl font-bold font-mono block tracking-tight whitespace-nowrap", freeToSpend >= 0 ? "text-emerald-500" : "text-rose-500")}>
                   {formatGBP(freeToSpend)}
                 </span>
               </div>
               {freeToSpend > 0 ? (
-                <p className="text-[9px] text-muted-foreground font-sans mt-0.5">
+                <p className="text-xs text-muted-foreground font-sans mt-0.5">
                   <span className="font-bold text-foreground font-mono">{formatGBP(dailyFreeToSpend)}</span>/day left
                 </p>
               ) : (
-                <p className="text-[9px] text-rose-500/80 font-sans font-medium mt-0.5">
+                <p className="text-xs text-rose-500/80 font-sans font-medium mt-0.5">
                   Over budget
                 </p>
               )}
@@ -536,14 +536,14 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <div className="space-y-3.5 border-t border-border/20 pt-3">
           {/* Cash Flow Progress Bar */}
           <div className="space-y-1">
-            <div className="flex justify-between text-[8px] text-muted-foreground uppercase tracking-wider font-mono">
+            <div className="flex justify-between text-xs text-muted-foreground uppercase tracking-wider font-mono">
               <span>Actual Cash Flow</span>
             </div>
             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
               <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${incomeFlowPercent}%` }} />
               <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${spendFlowPercent}%` }} />
             </div>
-            <div className="flex items-center justify-between text-[8px] text-muted-foreground font-mono">
+            <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
               <span>In: <span className="text-emerald-500 font-bold">{formatGBP(monthlyIncome)}</span></span>
               <span>Out: <span className="text-foreground font-bold">{formatGBP(totalSpent)}</span></span>
             </div>
@@ -551,7 +551,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
           {/* Budget Proportional Segmented Progress Bar */}
           <div className="space-y-1">
-            <div className="flex justify-between text-[8px] text-muted-foreground uppercase tracking-wider font-mono">
+            <div className="flex justify-between text-xs text-muted-foreground uppercase tracking-wider font-mono">
               <span>Budget Allocation</span>
             </div>
             {(() => {
@@ -566,7 +566,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 </div>
               );
             })()}
-            <div className="flex flex-wrap items-center justify-between text-[8px] font-mono text-muted-foreground gap-y-1">
+            <div className="flex flex-wrap items-center justify-between text-xs font-mono text-muted-foreground gap-y-1">
               <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Spent ({spentPercent.toFixed(0)}%)</span>
               <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Bills ({formatGBP(unpaidRecurrings)})</span>
               <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Free ({freePercent.toFixed(0)}%)</span>
@@ -577,9 +577,9 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
       {/* Net Assets, Debt & Net Cash Flow block */}
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-3 sm:p-4 rounded-3xl space-y-1.5 text-left">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase">Net Worth</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase">Net Worth</span>
         <span className="text-base font-bold font-mono text-emerald-500 block truncate">{formatGBP(netWorth)}</span>
-        <div className="flex justify-between text-[8px] text-muted-foreground border-t border-border/20 pt-1.5 font-mono">
+        <div className="flex justify-between text-xs text-muted-foreground border-t border-border/20 pt-1.5 font-mono">
           <span className="text-emerald-500/80">Assets: {formatGBP(totalAssets)}</span>
           <span className="text-rose-500/80">Debt: {formatGBP(totalDebt)}</span>
         </div>
@@ -588,25 +588,25 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       {/* Payday details card */}
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-4 text-left">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Next Payday</span>
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Next Payday</span>
           <button
             onClick={() => setActiveTab('tax-income')}
-            className="text-[9px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
+            className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
           >
             Tax & Income <ArrowUpRight className="h-3 w-3" />
           </button>
         </div>
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <span className="font-extrabold text-2xl text-foreground block">
+            <span className="font-bold text-2xl text-foreground block">
               {nextPayday.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
             </span>
-            <span className="text-[10px] text-emerald-500 font-mono font-semibold block">
+            <span className="text-xs text-emerald-500 font-mono font-semibold block">
               +{formatGBP(breakdownRates.postTax.monthly)} expected
             </span>
           </div>
           <span className={cn(
-            "font-mono px-2.5 py-0.5 rounded-full font-bold text-[10px] select-none",
+            "font-mono px-2.5 py-0.5 rounded-full font-bold text-xs select-none",
             nextPayday.daysRemaining === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-muted/60 text-muted-foreground"
           )}>
             {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
@@ -636,7 +636,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 Transactions <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             </CardTitle>
-            <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Review recent aggregate card activity</CardDescription>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">Review recent aggregate card activity</CardDescription>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -645,13 +645,13 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 value={selectedAccountFilter}
                 onValueChange={setSelectedAccountFilter}
               >
-                <SelectTrigger className="w-[140px] text-[10px] font-sans font-semibold h-8 rounded-xl border-primary/20 bg-background/50">
+                <SelectTrigger className="w-auto min-w-[140px] max-w-[220px] text-xs font-sans font-semibold h-8 rounded-xl border-primary/20 bg-background/50">
                   <SelectValue placeholder="All Accounts" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-primary/10">
-                  <SelectItem value="all" className="text-[10px]">All Accounts</SelectItem>
+                  <SelectItem value="all" className="text-xs">All Accounts</SelectItem>
                   {bankAccounts.map(acc => (
-                    <SelectItem key={acc.id} value={acc.id} className="text-[10px]">
+                    <SelectItem key={acc.id} value={acc.id} className="text-xs">
                       {acc.emoji} {acc.name}
                     </SelectItem>
                   ))}
@@ -664,7 +664,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 size="sm"
                 onClick={syncTrueLayer}
                 disabled={isSyncingTrueLayer}
-                className="text-[10px] rounded-xl hover:bg-muted font-sans font-semibold h-8 text-primary border-primary/20 gap-1"
+                className="text-xs rounded-xl hover:bg-muted font-sans font-semibold h-8 text-primary border-primary/20 gap-1"
               >
                 <RefreshCw className={cn("h-3 w-3", isSyncingTrueLayer && "animate-spin")} />
                 {isSyncingTrueLayer ? "Syncing..." : "Sync Bank"}
@@ -674,7 +674,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               variant="ghost"
               size="sm"
               onClick={() => setShowAllTransactions(!showAllTransactions)}
-              className="text-[10px] rounded-xl hover:bg-muted font-sans font-semibold h-8 text-muted-foreground hover:text-foreground"
+              className="text-xs rounded-xl hover:bg-muted font-sans font-semibold h-8 text-muted-foreground hover:text-foreground"
             >
               {showAllTransactions ? "Show Pending Only" : `View All (${accountTransactionsCount})`}
             </Button>
@@ -710,7 +710,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                           if (!linkedAccount) return null;
                           return (
                             <span 
-                              className="text-[9px] font-sans font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 select-none"
+                              className="text-xs font-sans font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 select-none"
                               style={{ 
                                 backgroundColor: `${linkedAccount.color || '#4f46e5'}15`, 
                                 color: linkedAccount.color || '#4f46e5',
@@ -723,10 +723,10 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                           );
                         })()}
                       </div>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground font-mono">
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground font-mono">
                         <span>{tx.date}</span>
                         <span>•</span>
-                        <span className="uppercase text-[9px] tracking-wider font-semibold text-primary/70">{tx.category}</span>
+                        <span className="uppercase text-xs tracking-wider font-semibold text-primary/70">{tx.category}</span>
                       </div>
                     </div>
                   </div>
@@ -742,7 +742,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                       size="sm"
                       variant={tx.isReviewed ? "ghost" : "default"}
                       className={cn(
-                        "h-8 rounded-xl text-[10px] gap-1 px-3 shrink-0 font-semibold",
+                        "h-8 rounded-xl text-xs gap-1 px-3 shrink-0 font-semibold",
                         tx.isReviewed
                           ? "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                           : "bg-emerald-500 hover:bg-emerald-600 text-white"
@@ -771,13 +771,13 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 </div>
                 <div className="space-y-1">
                   <h4 className="text-xs font-semibold text-foreground font-serif uppercase tracking-wider">All Caught Up!</h4>
-                  <p className="text-[10px] text-muted-foreground max-w-[220px] mx-auto">No pending transactions left to review. Your budget and metrics are in perfect sync.</p>
+                  <p className="text-xs text-muted-foreground max-w-[220px] mx-auto">No pending transactions left to review. Your budget and metrics are in perfect sync.</p>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowAllTransactions(true)}
-                  className="rounded-xl text-[10px] h-8 font-sans font-medium"
+                  className="rounded-xl text-xs h-8 font-sans font-medium"
                 >
                   View Reviewed Ledger
                 </Button>
@@ -793,7 +793,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-sm font-serif font-semibold text-foreground">Top Spending Categories (For the month)</CardTitle>
-            <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Highest spend across your active budget groups</CardDescription>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">Highest spend across your active budget groups</CardDescription>
           </div>
           <span className="text-lg">📊</span>
         </CardHeader>
@@ -813,7 +813,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     <span className="text-lg leading-none shrink-0">{cat.emoji}</span>
                     <span className="truncate">{cat.name}</span>
                   </span>
-                  <span className="font-mono text-muted-foreground shrink-0 whitespace-nowrap text-[10px]">
+                  <span className="font-mono text-muted-foreground shrink-0 whitespace-nowrap text-xs">
                     {formatGBP(cat.spent)} / {formatGBP(cat.budget)}
                   </span>
                 </div>
@@ -838,11 +838,11 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-sm font-serif font-semibold text-foreground">Upcoming Bills</CardTitle>
-            <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Bills due in the calendar cycle</CardDescription>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">Bills due in the calendar cycle</CardDescription>
           </div>
           <button
             onClick={() => setActiveTab('recurrings')}
-            className="text-[9px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
+            className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
           >
             Recurrings <ArrowUpRight className="h-3 w-3" />
           </button>
@@ -859,7 +859,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
                     <span className="truncate">{bill.name}</span>
                   </div>
-                  <span className="text-[9px] text-muted-foreground block font-mono uppercase tracking-wider">{getDueDateText(bill, currentMonth)}</span>
+                  <span className="text-xs text-muted-foreground block font-mono uppercase tracking-wider">{getDueDateText(bill, currentMonth)}</span>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="font-bold font-mono text-xs">{formatGBP(bill.amount)}</span>
@@ -874,7 +874,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               </div>
             ))}
           {recurrings.filter(r => isDueThisMonth(r, currentMonth) && !r.isPaid).length === 0 && (
-            <p className="text-[11px] text-muted-foreground italic text-center py-4">No upcoming bills left to pay!</p>
+            <p className="text-xs text-muted-foreground italic text-center py-4">No upcoming bills left to pay!</p>
           )}
         </CardContent>
       </Card>
@@ -883,11 +883,11 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-sm font-serif font-semibold text-foreground">Goals</CardTitle>
-            <CardDescription className="text-[11px] text-muted-foreground mt-0.5">Target goals and current saved values</CardDescription>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">Target goals and current saved values</CardDescription>
           </div>
           <button
             onClick={() => setActiveTab('goals')}
-            className="text-[9px] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
+            className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase font-sans"
           >
             Goals <ArrowUpRight className="h-3 w-3" />
           </button>
@@ -903,7 +903,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     {progress.toFixed(0)}%
                   </span>
                 </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                <div className="flex justify-between text-xs text-muted-foreground font-mono">
                   <span>{formatGBP(goal.currentAmount)}</span>
                   <span>Target: {formatGBP(goal.targetAmount)}</span>
                 </div>
@@ -914,7 +914,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             );
           })}
           {goals.length === 0 && (
-            <p className="text-[11px] text-muted-foreground italic text-center py-4">No active savings goals set up.</p>
+            <p className="text-xs text-muted-foreground italic text-center py-4">No active savings goals set up.</p>
           )}
         </CardContent>
       </Card>

@@ -1166,7 +1166,7 @@ function FinanceView() {
         </Select>
       )}
       {loadingDb && (
-        <span className="text-[10px] text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
+        <span className="text-xs text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
           <Loader2 className="h-3 w-3 animate-spin text-primary" /> syncing...
         </span>
       )}
@@ -1338,7 +1338,7 @@ function FinanceView() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Salary & Pension</h3>
-                    <p className="text-[11px] text-muted-foreground">Core income and contribution settings</p>
+                    <p className="text-xs text-muted-foreground">Core income and contribution settings</p>
                   </div>
                 </div>
 
@@ -1430,7 +1430,7 @@ function FinanceView() {
                         className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
                         required
                       />
-                      <p className="text-[10px] text-muted-foreground">Any past pay date to calculate every two weeks from.</p>
+                      <p className="text-xs text-muted-foreground">Any past pay date to calculate every two weeks from.</p>
                     </div>
                   )}
 
@@ -1510,7 +1510,7 @@ function FinanceView() {
                       <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                         <Gift className="w-4 h-4 text-primary" /> Benefits & Package Perks
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {settings.packageBenefits?.length ? `${settings.packageBenefits.length} active additions (${formatGBP(results.totalBenefitsValue)}/yr)` : 'No custom benefits added yet'}
                       </p>
                     </div>
@@ -1563,7 +1563,7 @@ function FinanceView() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Working days</h3>
-                    <p className="text-[11px] text-muted-foreground">Region, tax year, leave, and hours</p>
+                    <p className="text-xs text-muted-foreground">Region, tax year, leave, and hours</p>
                   </div>
                 </div>
 
@@ -1606,14 +1606,14 @@ function FinanceView() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Weekends</p>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground">Weekends</p>
                       <p className="mt-0.5 text-sm font-mono font-semibold text-foreground">
                         {settings.weekends}
                         <span className="ml-1 text-xs font-normal text-muted-foreground">days</span>
                       </p>
                     </div>
                     <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         Bank holidays
                         {fetchingHolidays && <Loader2 className="h-3 w-3 animate-spin" />}
                       </p>
@@ -1667,7 +1667,7 @@ function FinanceView() {
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Advanced Configurations</h3>
-                      <p className="text-[11px] text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
+                      <p className="text-xs text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
                     </div>
                   </div>
                 </div>
@@ -1686,10 +1686,10 @@ function FinanceView() {
                     {expandedSection === 'tax' && (
                       <div className="p-4 bg-background/30 border-t border-border/20 space-y-4 text-xs">
                         <div className="space-y-3">
-                          <h4 className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">Income Tax Bands (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">Income Tax Bands (£)</h4>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Basic Rate Limit</Label>
+                              <Label className="text-xs text-muted-foreground">Basic Rate Limit</Label>
                               <Input
                                 type="text"
                                 inputMode="decimal"
@@ -1705,7 +1705,7 @@ function FinanceView() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Higher Rate Limit</Label>
+                              <Label className="text-xs text-muted-foreground">Higher Rate Limit</Label>
                               <Input
                                 type="text"
                                 inputMode="decimal"
@@ -1723,7 +1723,7 @@ function FinanceView() {
                           </div>
                           <div className="grid grid-cols-3 gap-3">
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Basic Rate %</Label>
+                              <Label className="text-xs text-muted-foreground">Basic Rate %</Label>
                               <Input
                                 type="number"
                                 value={draftTaxConfig.incomeTaxBands.basicRatePercent}
@@ -1738,7 +1738,7 @@ function FinanceView() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Higher Rate %</Label>
+                              <Label className="text-xs text-muted-foreground">Higher Rate %</Label>
                               <Input
                                 type="number"
                                 value={draftTaxConfig.incomeTaxBands.higherRatePercent}
@@ -1753,7 +1753,7 @@ function FinanceView() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Additional Rate %</Label>
+                              <Label className="text-xs text-muted-foreground">Additional Rate %</Label>
                               <Input
                                 type="number"
                                 value={draftTaxConfig.incomeTaxBands.additionalRatePercent}
@@ -1771,10 +1771,10 @@ function FinanceView() {
                         </div>
 
                         <div className="space-y-3 pt-3 border-t border-border/20">
-                          <h4 className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">National Insurance Bands (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">National Insurance Bands (£)</h4>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Lower Threshold</Label>
+                              <Label className="text-xs text-muted-foreground">Lower Threshold</Label>
                               <Input
                                 type="text"
                                 inputMode="decimal"
@@ -1790,7 +1790,7 @@ function FinanceView() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Upper Threshold</Label>
+                              <Label className="text-xs text-muted-foreground">Upper Threshold</Label>
                               <Input
                                 type="text"
                                 inputMode="decimal"
@@ -1808,7 +1808,7 @@ function FinanceView() {
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Main Rate %</Label>
+                              <Label className="text-xs text-muted-foreground">Main Rate %</Label>
                               <Input
                                 type="number"
                                 value={draftTaxConfig.nationalInsuranceBands.mainRatePercent}
@@ -1823,7 +1823,7 @@ function FinanceView() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] text-muted-foreground">Upper Rate %</Label>
+                              <Label className="text-xs text-muted-foreground">Upper Rate %</Label>
                               <Input
                                 type="number"
                                 value={draftTaxConfig.nationalInsuranceBands.upperRatePercent}
@@ -1841,13 +1841,13 @@ function FinanceView() {
                         </div>
 
                         <div className="space-y-3 pt-3 border-t border-border/20">
-                          <h4 className="font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">Student Loan Thresholds (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">Student Loan Thresholds (£)</h4>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                             {(Object.keys(draftTaxConfig.studentLoanThresholds) as Array<keyof typeof draftTaxConfig.studentLoanThresholds>).map((plan) => {
                               if (plan === 'none') return null;
                               return (
                                 <div key={plan} className="space-y-1">
-                                  <Label className="text-[10px] text-muted-foreground uppercase">{plan}</Label>
+                                  <Label className="text-xs text-muted-foreground uppercase">{plan}</Label>
                                   <Input
                                     type="text"
                                     inputMode="decimal"
@@ -1894,7 +1894,7 @@ function FinanceView() {
                               </button>
                               <div className="grid grid-cols-12 gap-2 pr-6">
                                 <div className="col-span-2 space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Emoji</Label>
+                                  <Label className="text-xs text-muted-foreground">Emoji</Label>
                                   <Input
                                     value={template.emoji}
                                     onChange={(e) => {
@@ -1906,7 +1906,7 @@ function FinanceView() {
                                   />
                                 </div>
                                 <div className="col-span-5 space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Name</Label>
+                                  <Label className="text-xs text-muted-foreground">Name</Label>
                                   <Input
                                     value={template.name}
                                     onChange={(e) => {
@@ -1918,7 +1918,7 @@ function FinanceView() {
                                   />
                                 </div>
                                 <div className="col-span-5 space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Category</Label>
+                                  <Label className="text-xs text-muted-foreground">Category</Label>
                                   <Input
                                     value={template.category}
                                     onChange={(e) => {
@@ -1932,7 +1932,7 @@ function FinanceView() {
                               </div>
                               <div className="grid grid-cols-3 gap-2">
                                 <div className="space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Amount (£)</Label>
+                                  <Label className="text-xs text-muted-foreground">Amount (£)</Label>
                                   <Input
                                     type="text"
                                     inputMode="decimal"
@@ -1946,7 +1946,7 @@ function FinanceView() {
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Tag</Label>
+                                  <Label className="text-xs text-muted-foreground">Tag</Label>
                                   <Input
                                     value={template.tag}
                                     onChange={(e) => {
@@ -1958,7 +1958,7 @@ function FinanceView() {
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Frequency</Label>
+                                  <Label className="text-xs text-muted-foreground">Frequency</Label>
                                   <select
                                     value={template.frequency}
                                     onChange={(e) => {
@@ -1966,7 +1966,7 @@ function FinanceView() {
                                       updated[idx] = { ...template, frequency: e.target.value as any };
                                       setDraftRecurringTemplates(updated);
                                     }}
-                                    className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-8 px-2 text-[10px] text-foreground focus:outline-none"
+                                    className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-8 px-2 text-xs text-foreground focus:outline-none"
                                   >
                                     <option value="weekly">Weekly</option>
                                     <option value="monthly">Monthly</option>
@@ -1985,7 +1985,7 @@ function FinanceView() {
                             ...draftRecurringTemplates,
                             { name: 'New Bill', category: 'General', emoji: '💸', tag: 'NEW_BILL', defaultAmount: 10, frequency: 'monthly', linkedBudgetItemId: '' }
                           ])}
-                          className="w-full h-8 text-[11px] rounded-xl border-dashed border-primary/30"
+                          className="w-full h-8 text-xs rounded-xl border-dashed border-primary/30"
                         >
                           <Plus className="w-3.5 h-3.5 mr-1" /> Add Custom Template
                         </Button>
@@ -2013,7 +2013,7 @@ function FinanceView() {
                               </div>
                               <div className="grid grid-cols-3 gap-2">
                                 <div className="space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Label</Label>
+                                  <Label className="text-xs text-muted-foreground">Label</Label>
                                   <Input
                                     value={bureau.label}
                                     onChange={(e) => {
@@ -2025,7 +2025,7 @@ function FinanceView() {
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Max Score</Label>
+                                  <Label className="text-xs text-muted-foreground">Max Score</Label>
                                   <Input
                                     type="text"
                                     inputMode="numeric"
@@ -2039,7 +2039,7 @@ function FinanceView() {
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-[9px] text-muted-foreground">Emoji</Label>
+                                  <Label className="text-xs text-muted-foreground">Emoji</Label>
                                   <Input
                                     value={bureau.emoji}
                                     onChange={(e) => {
@@ -2070,7 +2070,7 @@ function FinanceView() {
                     </button>
                     {expandedSection === 'savings' && (
                       <div className="p-4 bg-background/30 border-t border-border/20 space-y-3 text-xs">
-                        <p className="text-[10px] text-muted-foreground mb-2">Enable or disable specific savings vehicles inside your budget and wealth trackers.</p>
+                        <p className="text-xs text-muted-foreground mb-2">Enable or disable specific savings vehicles inside your budget and wealth trackers.</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
                           {SAVINGS_PRESETS.map((preset) => {
                             const key = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -2279,7 +2279,7 @@ function MonthYearPicker({ value, onChange, isEnd }: MonthYearPickerProps) {
                 onChange(`${yrStr}-${moStr}-${dyStr}`);
               }}
               className={cn(
-                "py-2 text-[10px] font-medium transition-all text-center rounded-xl",
+                "py-2 text-xs font-medium transition-all text-center rounded-xl",
                 isSelected
                   ? "bg-[#1d70b8] text-white font-semibold shadow-sm"
                   : "text-foreground/80 hover:bg-muted/50 hover:text-foreground"

@@ -232,14 +232,14 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
         <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
           <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
           <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
+            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               <Coins className="h-3 w-3 text-primary" /> Total Portfolio
             </span>
             <div className="text-2xl sm:text-3xl font-serif font-semibold text-foreground tracking-tight">
               {formatGBP(portfolioStats.totalPortfolioValue)}
             </div>
             {portfolioStats.investmentAccountsCash > 0 && (
-              <span className="text-[10px] text-muted-foreground/85 block font-sans">
+              <span className="text-xs text-muted-foreground/85 block font-sans">
                 Includes {formatGBP(portfolioStats.investmentAccountsCash)} cash balance
               </span>
             )}
@@ -249,13 +249,13 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
         <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
           <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
           <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
+            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               <DollarSign className="h-3 w-3 text-cyan-500" /> Net Invested
             </span>
             <div className="text-2xl sm:text-3xl font-serif font-semibold text-foreground tracking-tight">
               {formatGBP(portfolioStats.totalCost)}
             </div>
-            <span className="text-[10px] text-muted-foreground/85 block font-sans">
+            <span className="text-xs text-muted-foreground/85 block font-sans">
               Total principal holdings cost
             </span>
           </div>
@@ -264,7 +264,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
         <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
           <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
           <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
+            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               {portfolioStats.profitLoss >= 0 ? (
                 <TrendingUp className="h-3 w-3 text-emerald-500" />
               ) : (
@@ -278,7 +278,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
             )}>
               {portfolioStats.profitLoss >= 0 ? '+' : ''}{formatGBP(portfolioStats.profitLoss)}
             </div>
-            <span className="text-[10px] text-muted-foreground/85 block font-sans">
+            <span className="text-xs text-muted-foreground/85 block font-sans">
               Total return on holdings
             </span>
           </div>
@@ -287,7 +287,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
         <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
           <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
           <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
+            <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               <ArrowUpRight className="h-3 w-3 text-amber-500" /> Rate of Return
             </span>
             <div className={cn(
@@ -296,7 +296,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
             )}>
               {portfolioStats.totalReturnPercent >= 0 ? '+' : ''}{portfolioStats.totalReturnPercent.toFixed(2)}%
             </div>
-            <span className="text-[10px] text-muted-foreground/85 block font-sans">
+            <span className="text-xs text-muted-foreground/85 block font-sans">
               ROI on active holdings
             </span>
           </div>
@@ -313,7 +313,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                 <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
                   <Coins className="h-4 w-4 text-primary" /> Portfolio Holdings
                 </CardTitle>
-                <CardDescription className="text-[10px] text-muted-foreground">
+                <CardDescription className="text-xs text-muted-foreground">
                   Individual investment assets and return statistics
                 </CardDescription>
               </div>
@@ -363,14 +363,14 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                           <td className="py-3.5 font-serif font-medium text-foreground">
                             <span className="block font-semibold">{h.name}</span>
                             {h.ticker && (
-                              <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wider font-normal">
+                              <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider font-normal">
                                 {h.ticker}
                               </span>
                             )}
                           </td>
                           <td className="py-3.5">
                             <span
-                              className="px-2 py-0.5 rounded-full text-[9px] font-semibold border"
+                              className="px-2 py-0.5 rounded-full text-xs font-semibold border"
                               style={{
                                 color: CATEGORY_COLORS[h.category],
                                 borderColor: `${CATEGORY_COLORS[h.category]}33`,
@@ -395,7 +395,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                             gainLoss >= 0 ? "text-emerald-500 font-semibold" : "text-rose-500"
                           )}>
                             <span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span>
-                            <span className="text-[10px] block">
+                            <span className="text-xs block">
                               {gainLoss >= 0 ? '+' : ''}{returnPct.toFixed(1)}%
                             </span>
                           </td>
@@ -436,7 +436,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
               <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
                 <PieIcon className="h-4 w-4 text-primary" /> Asset Allocation
               </CardTitle>
-              <CardDescription className="text-[10px] text-muted-foreground">
+              <CardDescription className="text-xs text-muted-foreground">
                 Portfolio balance breakdown by asset class
               </CardDescription>
             </div>
@@ -479,7 +479,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   </ResponsiveContainer>
                   {/* Total indicator inside donut */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-[9px] font-mono tracking-widest text-muted-foreground uppercase">
+                    <span className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
                       Total Portfolio
                     </span>
                     <span className="text-sm font-serif font-bold text-foreground mt-0.5">
@@ -489,7 +489,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                 </div>
 
                 {/* Legend list */}
-                <div className="w-full grid grid-cols-2 gap-2 text-[10px] font-sans">
+                <div className="w-full grid grid-cols-2 gap-2 text-xs font-sans">
                   {allocationData.map((item, idx) => {
                     const pct = (item.value / portfolioStats.totalPortfolioValue) * 100;
                     return (
@@ -519,7 +519,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
             <CardTitle className="text-sm font-serif font-semibold text-foreground flex items-center gap-1.5">
               <LineIcon className="h-4 w-4 text-primary" /> Compound Wealth Projection
             </CardTitle>
-            <CardDescription className="text-[10px] text-muted-foreground">
+            <CardDescription className="text-xs text-muted-foreground">
               Simulate investment growth trajectory based on compound interest
             </CardDescription>
           </div>

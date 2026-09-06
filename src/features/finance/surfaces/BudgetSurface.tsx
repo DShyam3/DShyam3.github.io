@@ -664,7 +664,7 @@ return (
                         <th className="p-3 text-right">Value (%)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/10 font-mono text-[11px]">
+                    <tbody className="divide-y divide-border/10 font-mono text-xs">
                       {savingsItems.map((item, idx) => {
                         const pct = totalSavings > 0 ? (item.value / totalSavings) * 100 : 0;
                         return (
@@ -674,7 +674,7 @@ return (
                               {item.name}
                             </td>
                             <td className="p-3 text-right whitespace-nowrap">
-                              {formatGBP(item.value)} <span className="text-[10px] text-muted-foreground">({pct.toFixed(1)}%)</span>
+                              {formatGBP(item.value)} <span className="text-xs text-muted-foreground">({pct.toFixed(1)}%)</span>
                             </td>
                           </tr>
                         );
@@ -746,7 +746,7 @@ return (
                       </ResponsiveContainer>
 
                       {/* Legend */}
-                      <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[9px] text-muted-foreground font-mono">
+                      <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-mono">
                         {savingsItems.map((item, idx) => {
                           const pct = totalSavings > 0 ? (item.value / totalSavings) * 100 : 0;
                           const color = [
@@ -793,7 +793,7 @@ return (
                         <th className="p-3 text-right">Value (%)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/10 font-mono text-[11px]">
+                    <tbody className="divide-y divide-border/10 font-mono text-xs">
                       <tr className="hover:bg-muted/10">
                         <td className="p-3 font-sans font-medium text-foreground">
                           <div className="flex items-center gap-1.5">
@@ -801,7 +801,7 @@ return (
                           </div>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
-                          {formatGBP(needsTotal)} <span className="text-[10px] text-muted-foreground">({needsPct.toFixed(1)}%)</span>
+                          {formatGBP(needsTotal)} <span className="text-xs text-muted-foreground">({needsPct.toFixed(1)}%)</span>
                         </td>
                       </tr>
                       <tr className="hover:bg-muted/10">
@@ -811,7 +811,7 @@ return (
                           </div>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
-                          {formatGBP(totalSavings)} <span className="text-[10px] text-muted-foreground">({savingsPct.toFixed(1)}%)</span>
+                          {formatGBP(totalSavings)} <span className="text-xs text-muted-foreground">({savingsPct.toFixed(1)}%)</span>
                         </td>
                       </tr>
                       <tr className="hover:bg-muted/10">
@@ -821,7 +821,7 @@ return (
                           </div>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
-                          {formatGBP(wantsTotal)} <span className="text-[10px] text-muted-foreground">({wantsPct.toFixed(1)}%)</span>
+                          {formatGBP(wantsTotal)} <span className="text-xs text-muted-foreground">({wantsPct.toFixed(1)}%)</span>
                         </td>
                       </tr>
                       <tr className="bg-muted/20 font-bold border-t border-border/20 text-foreground">
@@ -871,7 +871,7 @@ return (
                       </ResponsiveContainer>
 
                       {/* Legend / Percentages breakdown */}
-                      <div className="flex flex-wrap justify-center gap-3 text-[10px] text-muted-foreground font-mono">
+                      <div className="flex flex-wrap justify-center gap-3 text-xs text-muted-foreground font-mono">
                         {allocationData.map((entry, index) => {
                           const percent = (entry.value / (needsTotal + wantsTotal + totalSavings)) * 100;
                           return (
@@ -906,7 +906,7 @@ return (
         )}
       >
         <span>All Regular Categories</span>
-        <span className="text-[10px] opacity-80 bg-background/20 px-1.5 py-0.5 rounded-full font-mono">
+        <span className="text-xs opacity-80 bg-background/20 px-1.5 py-0.5 rounded-full font-mono">
           {budgetCategories.filter(isCategoryActive).length}
         </span>
       </button>
@@ -973,7 +973,7 @@ return (
                         <div className="bg-popover/90 backdrop-blur-md border border-border/50 text-popover-foreground text-xs p-2.5 rounded-xl shadow-lg font-mono">
                           <p className="font-sans font-semibold border-b border-border/30 pb-1 mb-1">{data.monthLabel}</p>
                           <p>Spent: <span className="font-bold text-primary">{formatGBP(data.spent)}</span></p>
-                          <p className="text-[10px] text-muted-foreground">Budget Limit: {formatGBP(data.budget)}</p>
+                          <p className="text-xs text-muted-foreground">Budget Limit: {formatGBP(data.budget)}</p>
                         </div>
                       );
                     }
@@ -1011,13 +1011,13 @@ return (
               </TooltipProvider>
             </span>
             {activeFilterCategory && (
-              <span className="text-[10px] font-sans text-primary underline cursor-pointer" onClick={() => setSelectedBudgetCategoryFilter('all')}>
+              <span className="text-xs font-sans text-primary underline cursor-pointer" onClick={() => setSelectedBudgetCategoryFilter('all')}>
                 Reset filter
               </span>
             )}
           </div>
 
-          <div className="grid grid-cols-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/10 pb-1">
+          <div className="grid grid-cols-3 text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border/10 pb-1">
             <span>Year</span>
             <span className="text-right">Spent / yr</span>
             <span className="text-right">Avg / mo</span>
@@ -1040,7 +1040,7 @@ return (
     {/* Copilot-style Budget list */}
     <Card className="bg-card/25 backdrop-blur-md border border-primary/10 rounded-[2rem] p-6 shadow-xl">
       {/* Table Header */}
-      <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-sans border-b border-border/20 pb-2 px-2">
+      <div className="flex items-center justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider font-sans border-b border-border/20 pb-2 px-2">
         <span className="flex-1">Regular Categories</span>
         <div className="flex items-center gap-3 text-right">
           <span className="w-20 text-right">Spent</span>
@@ -1095,7 +1095,7 @@ return (
 
                     {/* Coloured badge with item count */}
                     <div
-                      className="h-5 w-5 rounded flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-sm"
+                      className="h-5 w-5 rounded flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm"
                       style={{ backgroundColor: catColor }}
                     >
                       {category.items.filter(item => isItemActive(item, category)).length}
@@ -1204,7 +1204,7 @@ return (
                           </div>
 
                           {/* Right: Spent, Budget, Left, progress */}
-                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 font-mono text-[11px] pl-5 sm:pl-0">
+                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 font-mono text-xs pl-5 sm:pl-0">
                             <span className="font-semibold text-foreground/80 w-20 text-right">{formatGBP(spentVal)}</span>
                             <span className="text-muted-foreground/60 w-20 text-right">{formatGBP(item.budgeted)}</span>
                             <span className={cn(
@@ -1229,7 +1229,7 @@ return (
                       );
                     })}
                   {category.items.filter(item => isItemActive(item, category)).length === 0 && (
-                    <p className="text-[10px] text-muted-foreground italic pl-2.5 py-1">No items under this category. Click '+' to add.</p>
+                    <p className="text-xs text-muted-foreground italic pl-2.5 py-1">No items under this category. Click '+' to add.</p>
                   )}
                 </div>
               )}

@@ -75,10 +75,10 @@ const DebtDrawsEditor = ({
       <div className="flex items-center justify-between">
         <Label>Borrowing History</Label>
         {draws.length > 0 && (
-          <span className="text-[10px] font-mono text-muted-foreground">Total {formatGBP(total)}</span>
+          <span className="text-xs font-mono text-muted-foreground">Total {formatGBP(total)}</span>
         )}
       </div>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Add each amount as you borrowed it — one per academic year for a student loan. Leave empty for a single lump sum.
       </p>
 
@@ -88,7 +88,7 @@ const DebtDrawsEditor = ({
             <div key={draw.id} className="flex items-center justify-between gap-2 rounded-xl border border-primary/10 bg-background/40 px-3 py-1.5">
               <div className="min-w-0">
                 <span className="text-xs font-mono font-semibold text-foreground">{formatGBP(draw.amount)}</span>
-                <span className="block text-[10px] text-muted-foreground truncate">
+                <span className="block text-xs text-muted-foreground truncate">
                   {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
                   {draw.label ? ` · ${draw.label}` : ''}
                 </span>
@@ -596,12 +596,12 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
       </div>
       <div className="flex items-center gap-2 self-start sm:self-auto">
         {trueLayerStatus?.connected ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Connected
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border/40">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/40">
             <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
             Not Connected
           </span>
@@ -617,7 +617,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               Your bank is securely linked. Live synchronization is active and will pull account details and transaction history.
             </p>
             {trueLayerStatus.expires_at && (
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
                 <Clock className="h-3 w-3" />
                 <span>Consent expires on: {new Date(trueLayerStatus.expires_at).toLocaleString()}</span>
               </div>
@@ -695,7 +695,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           { label: 'Avg Rate', value: `${weightedInterestRate.toFixed(2)}%`, tone: 'text-foreground' }
         ].map(stat => (
           <div key={stat.label} className="bg-card/40 border border-primary/10 rounded-2xl p-3 sm:p-4">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">{stat.label}</span>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">{stat.label}</span>
             <span className={cn("text-base sm:text-lg font-bold font-mono block truncate mt-1", stat.tone)}>{stat.value}</span>
           </div>
         ))}
@@ -740,7 +740,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                 <td className="py-3 px-3">
                   <span>{DEBT_TYPE_LABELS[debt.type] || debt.type}</span>
                   {debt.studentLoanPlan && (
-                    <span className="block text-[10px] text-muted-foreground">{STUDENT_LOAN_PLAN_LABELS[debt.studentLoanPlan]}</span>
+                    <span className="block text-xs text-muted-foreground">{STUDENT_LOAN_PLAN_LABELS[debt.studentLoanPlan]}</span>
                   )}
                 </td>
                 <td className="py-3 px-3">{debt.lender || '—'}</td>
@@ -755,7 +755,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                         style={{ width: `${Math.min(Math.max(paidPercent, 0), 100)}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
                       <span>{paidPercent.toFixed(0)}% paid</span>
                       {debt.payoffDate && <span>{new Date(debt.payoffDate).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</span>}
                     </div>
@@ -828,21 +828,21 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         {selectedDebtFinal && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="space-y-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Cleared By</span>
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Cleared By</span>
               <span className="text-sm font-bold font-mono text-foreground">
                 {selectedDebtFinal.balance <= 0 ? Math.round(selectedDebtFinal.year) : 'Not on track'}
               </span>
             </div>
             <div className="space-y-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Total Repaid</span>
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Total Repaid</span>
               <span className="text-sm font-bold font-mono text-foreground">{formatGBP(selectedDebtFinal.paid)}</span>
             </div>
             <div className="space-y-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Interest Paid</span>
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Interest Paid</span>
               <span className="text-sm font-bold font-mono text-amber-500">{formatGBP(selectedDebtFinal.interest)}</span>
             </div>
             <div className="space-y-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">Written Off</span>
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Written Off</span>
               <span className="text-sm font-bold font-mono text-emerald-500">{formatGBP(selectedDebtFinal.writtenOff)}</span>
             </div>
           </div>
@@ -903,14 +903,14 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
         {/* Borrowing tranches */}
         {(selectedDebt.draws?.length ?? 0) > 0 && (
           <div className="border-t border-border/30 pt-4 space-y-2">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">
               Borrowing History — {formatGBP(sumDraws(selectedDebt.draws))} across {selectedDebt.draws.length} {selectedDebt.draws.length === 1 ? 'draw' : 'draws'}
             </span>
             <div className="flex flex-wrap gap-2">
               {[...selectedDebt.draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
                 <div key={draw.id} className="rounded-xl border border-primary/10 bg-background/40 px-3 py-2 text-xs">
                   <span className="font-mono font-bold text-foreground block">{formatGBP(draw.amount)}</span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
                     {draw.label ? ` · ${draw.label}` : ''}
                   </span>
@@ -1054,7 +1054,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           <Card key={bureau.key} className={cn("bg-gradient-to-br border border-primary/10 rounded-[2rem] overflow-hidden flex flex-col justify-between shadow-sm", bureau.gradient)}>
             <CardContent className="pt-6 pb-0 px-6 flex flex-col items-center">
               {/* Bureau Label */}
-              <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-4">{bureau.label}</span>
+              <span className="text-xs uppercase tracking-widest font-bold text-muted-foreground mb-4">{bureau.label}</span>
 
               {/* Circular/Arch Gauge */}
               <div className="relative w-36 h-36 flex items-center justify-center">
@@ -1144,7 +1144,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                         x="72"
                         y="64"
                         textAnchor="middle"
-                        className="font-extrabold text-[12px] uppercase tracking-wider"
+                        className="font-bold text-xs uppercase tracking-wider"
                         fill={bandColor(hoveredBands[bureau.key])}
                       >
                         {hoveredBands[bureau.key]?.name}
@@ -1153,7 +1153,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                         x="72"
                         y="82"
                         textAnchor="middle"
-                        className="font-mono font-bold text-[11px]"
+                        className="font-mono font-bold text-xs"
                         fill="currentColor"
                       >
                         {hoveredBands[bureau.key]?.min} - {hoveredBands[bureau.key]?.max}
@@ -1165,7 +1165,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                         x="72"
                         y="68"
                         textAnchor="middle"
-                        className="font-mono font-extrabold text-3xl"
+                        className="font-mono font-bold text-3xl"
                         fill={bureau.color}
                       >
                         {latest ? latest.score : '—'}
@@ -1174,7 +1174,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                         x="72"
                         y="84"
                         textAnchor="middle"
-                        className="text-[9px] font-medium"
+                        className="text-xs font-medium"
                         fill="currentColor"
                         opacity="0.6"
                       >
@@ -1185,7 +1185,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                           x="72"
                           y="98"
                           textAnchor="middle"
-                          className="font-extrabold text-[10px] uppercase tracking-wider"
+                          className="font-bold text-xs uppercase tracking-wider"
                           fill={rating.color}
                         >
                           {rating.text}
@@ -1205,7 +1205,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                   </span>
                 )}
                 {latest && (
-                  <span className="text-[10px] text-muted-foreground">Last checked: {latest.date}</span>
+                  <span className="text-xs text-muted-foreground">Last checked: {latest.date}</span>
                 )}
               </div>
             </CardContent>
@@ -1223,14 +1223,14 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                     className="absolute inset-x-6 bottom-5 top-2 flex flex-col justify-center bg-background/95 dark:bg-card/95 backdrop-blur-sm z-10"
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] font-extrabold uppercase tracking-widest" style={{ color: bandColor(hoveredBands[bureau.key]) }}>
+                      <span className="text-xs font-bold uppercase tracking-widest" style={{ color: bandColor(hoveredBands[bureau.key]) }}>
                         {hoveredBands[bureau.key]?.name}
                       </span>
-                      <span className="text-[9px] font-bold font-mono text-muted-foreground bg-primary/5 px-2 py-0.5 rounded-md border border-border/40">
+                      <span className="text-xs font-bold font-mono text-muted-foreground bg-primary/5 px-2 py-0.5 rounded-md border border-border/40">
                         {hoveredBands[bureau.key]?.min} - {hoveredBands[bureau.key]?.max}
                       </span>
                     </div>
-                    <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
                       {hoveredBands[bureau.key]?.description}
                     </p>
                   </motion.div>
@@ -1243,7 +1243,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                     transition={{ duration: 0.2 }}
                     className="h-full flex flex-col"
                   >
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">History</div>
+                    <div className="text-xs uppercase tracking-wider font-bold text-muted-foreground mb-2">History</div>
                     {entries.length > 0 ? (
                       <div className="space-y-1 max-h-[100px] overflow-y-auto pr-1">
                         {[...entries].reverse().map(entry => (
@@ -1688,7 +1688,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Repays {taxConfig.studentLoanRates[newDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[newDebt.studentLoanPlan || 'plan2'] || 0)}.
             </p>
           </div>
@@ -1728,7 +1728,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             className="rounded-xl h-10 border-primary/20 bg-background/50 disabled:opacity-70"
           />
           {newDebt.draws.length > 0 && (
-            <p className="text-[10px] text-muted-foreground">Summed from borrowing history</p>
+            <p className="text-xs text-muted-foreground">Summed from borrowing history</p>
           )}
         </div>
         <div className="space-y-1">
@@ -1909,7 +1909,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Repays {taxConfig.studentLoanRates[activeDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[activeDebt.studentLoanPlan || 'plan2'] || 0)}.
               </p>
             </div>
@@ -1947,7 +1947,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               className="rounded-xl h-10 border-primary/20 bg-background/50 disabled:opacity-70"
             />
             {activeDebt.draws.length > 0 && (
-              <p className="text-[10px] text-muted-foreground">Summed from borrowing history</p>
+              <p className="text-xs text-muted-foreground">Summed from borrowing history</p>
             )}
           </div>
           <div className="space-y-1">

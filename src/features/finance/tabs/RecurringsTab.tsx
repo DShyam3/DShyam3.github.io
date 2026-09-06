@@ -141,10 +141,10 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
         {/* Progress Card */}
         <div className="bg-card/20 backdrop-blur-sm border border-primary/10 rounded-[2rem] p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6">
           <div className="text-center sm:text-left space-y-1">
-            <span className="text-3xl md:text-4xl font-extrabold font-mono text-foreground block">
+            <span className="text-3xl md:text-4xl font-bold font-mono text-foreground block">
               {formatGBP(leftAmount)}
             </span>
-            <span className="text-[10px] text-muted-foreground block font-sans font-medium uppercase tracking-wider">
+            <span className="text-xs text-muted-foreground block font-sans font-medium uppercase tracking-wider">
               left to pay
             </span>
           </div>
@@ -172,10 +172,10 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
           </div>
 
           <div className="text-center sm:text-right space-y-1">
-            <span className="text-3xl md:text-4xl font-extrabold font-mono text-foreground block">
+            <span className="text-3xl md:text-4xl font-bold font-mono text-foreground block">
               {formatGBP(paidAmount)}
             </span>
-            <span className="text-[10px] text-muted-foreground block font-sans font-medium uppercase tracking-wider">
+            <span className="text-xs text-muted-foreground block font-sans font-medium uppercase tracking-wider">
               paid so far
             </span>
           </div>
@@ -203,7 +203,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                     className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0 py-2 border-b border-border/5 last:border-b-0"
                   >
                     <div className="flex items-center gap-6 min-w-0 flex-1">
-                      <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
+                      <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-xs">
                         {dueDateText}
                       </span>
                       <div className="flex items-center gap-2 min-w-0">
@@ -211,7 +211,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         <span className={cn("font-semibold text-xs truncate", bill.isPaid ? "line-through text-muted-foreground/50" : "text-foreground")}>
                           {bill.name}
                         </span>
-                        <span className="text-[10px] text-muted-foreground/50 lowercase font-normal shrink-0">
+                        <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
                           {bill.frequency}
                         </span>
                       </div>
@@ -235,7 +235,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                       </div>
 
-                      <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                      <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>
@@ -282,7 +282,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                     className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0 py-2 border-b border-border/5 last:border-b-0"
                   >
                     <div className="flex items-center gap-6 min-w-0 flex-1">
-                      <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-[11px]">
+                      <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-xs">
                         {dueDateText}
                       </span>
                       <div className="flex items-center gap-2 min-w-0">
@@ -290,7 +290,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         <span className="font-semibold text-xs text-foreground truncate">
                           {bill.name}
                         </span>
-                        <span className="text-[10px] text-muted-foreground/50 lowercase font-normal shrink-0">
+                        <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
                           {bill.frequency}
                         </span>
                       </div>
@@ -314,7 +314,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                       </div>
 
-                      <span className={cn("px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                      <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>

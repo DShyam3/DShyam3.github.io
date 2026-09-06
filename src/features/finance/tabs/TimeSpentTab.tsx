@@ -312,7 +312,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
             <p className="text-muted-foreground leading-normal">
               Work days and times are linked to your profile parameters:
             </p>
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-muted/20 rounded-xl p-2.5 border border-border/30">
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-muted/20 rounded-xl p-2.5 border border-border/30">
               <div>Working Hours: <span className="text-foreground font-bold">{hours_of_work_per_day}h/day</span></div>
               <div>Work Days: <span className="text-foreground font-bold">{days_of_work_actual} days/yr</span></div>
               <div className="col-span-2 pt-1 border-t border-border/30 mt-1">
@@ -322,7 +322,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                 Holidays & Public: <span className="text-foreground font-bold">{holidays_and_bank_holidays} days/yr</span>
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground leading-normal">
+            <p className="text-xs text-muted-foreground leading-normal">
               You can adjust these parameters by editing the <strong>Tax & Income</strong> settings using the top-right button.
             </p>
           </Card>
@@ -357,7 +357,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                 {/* Inner Label */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
                   <span className="font-mono text-2xl font-bold text-foreground">8,760</span>
-                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">total hours</span>
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">total hours</span>
                 </div>
               </div>
 
@@ -365,26 +365,26 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
               <div className="flex-1 space-y-4 w-full">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Free Time</span>
+                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Free Time</span>
                     <span className="font-mono text-lg font-bold text-[#f59e0b] block">{hours_relaxing_year.toFixed(0)} hrs</span>
-                    <span className="text-[10px] text-muted-foreground/80 font-semibold">{pct_relaxing.toFixed(1)}% of year</span>
+                    <span className="text-xs text-muted-foreground/80 font-semibold">{pct_relaxing.toFixed(1)}% of year</span>
                   </div>
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Sleep</span>
+                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Sleep</span>
                     <span className="font-mono text-lg font-bold text-[#6366f1] block">{hours_sleep_year.toFixed(0)} hrs</span>
-                    <span className="text-[10px] text-muted-foreground/80 font-semibold">{pct_sleep.toFixed(1)}% of year</span>
+                    <span className="text-xs text-muted-foreground/80 font-semibold">{pct_sleep.toFixed(1)}% of year</span>
                   </div>
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Work</span>
+                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Work</span>
                     <span className="font-mono text-lg font-bold text-[#10b981] block">{hours_work_actual_year.toFixed(0)} hrs</span>
-                    <span className="text-[10px] text-muted-foreground/80 font-semibold">{pct_hours_work.toFixed(1)}% of year</span>
+                    <span className="text-xs text-muted-foreground/80 font-semibold">{pct_hours_work.toFixed(1)}% of year</span>
                   </div>
                   <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Other Activities</span>
+                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Other Activities</span>
                     <span className="font-mono text-lg font-bold text-primary block">
                       {(TOTAL_HOURS_YEAR - hours_relaxing_year - hours_sleep_year - hours_work_actual_year).toFixed(0)} hrs
                     </span>
-                    <span className="text-[10px] text-muted-foreground/80 font-semibold">
+                    <span className="text-xs text-muted-foreground/80 font-semibold">
                       {(100 - pct_relaxing - pct_sleep - pct_hours_work).toFixed(1)}% of year
                     </span>
                   </div>
@@ -408,7 +408,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                           <TooltipTrigger asChild>
                             <div
                               style={{ width: `${pct}%`, backgroundColor: item.color }}
-                              className="h-full hover:brightness-105 transition-all cursor-pointer flex items-center justify-center text-[10px] text-white font-bold select-none overflow-hidden"
+                              className="h-full hover:brightness-105 transition-all cursor-pointer flex items-center justify-center text-xs text-white font-bold select-none overflow-hidden"
                             >
                               {pct > 5 && <span>{item.emoji}</span>}
                             </div>
@@ -418,7 +418,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                               <span>{item.emoji}</span>
                               <span>{item.name}</span>
                             </div>
-                            <div className="space-y-1 font-mono text-[11px] text-muted-foreground">
+                            <div className="space-y-1 font-mono text-xs text-muted-foreground">
                               <p>Daily Avg: <span className="text-foreground font-semibold">{item.hours.toFixed(1)} hrs</span></p>
                               <p>Weekly Avg: <span className="text-foreground font-semibold">{(item.hours * 7).toFixed(1)} hrs</span></p>
                               <p>Yearly Total: <span className="text-foreground font-semibold">{(item.hours * 365).toFixed(0)} hrs</span></p>
@@ -432,7 +432,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                 {/* Timeline Legend */}
                 <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 pt-1">
                   {dailyBreakdown.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-1 text-[11px] text-muted-foreground font-sans">
+                    <div key={idx} className="flex items-center gap-1 text-xs text-muted-foreground font-sans">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                       <span>
                         {item.emoji} <span className="font-medium text-foreground/80">{item.name}</span> ({item.hours.toFixed(1)}h)
