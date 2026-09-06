@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import defaultPresets from '@/data/presets.json';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -21,12 +21,12 @@ import {
   type TabKey,
 } from './surfaces';
 import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
-import CashFlowSurface from './surfaces/CashFlowSurface';
-import GoalsSurface from './surfaces/GoalsSurface';
-import BudgetSurface from './surfaces/BudgetSurface';
-import AccountsSurface from './surfaces/AccountsSurface';
-import TaxIncomeSurface from './surfaces/TaxIncomeSurface';
-import DashboardSurface from './surfaces/DashboardSurface';
+const CashFlowSurface = lazy(() => import('./surfaces/CashFlowSurface'));
+const GoalsSurface = lazy(() => import('./surfaces/GoalsSurface'));
+const BudgetSurface = lazy(() => import('./surfaces/BudgetSurface'));
+const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
+const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
+const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
 import { useFinanceTotals } from './useFinanceTotals';
 import {
@@ -187,10 +187,10 @@ import {
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { RecurringsTab } from '@/features/finance/tabs/RecurringsTab';
-import { TimeSpentTab } from '@/features/finance/tabs/TimeSpentTab';
-import { TransactionsTab } from '@/features/finance/tabs/TransactionsTab';
-import { InvestmentsTab } from '@/features/finance/tabs/InvestmentsTab';
+const RecurringsTab = lazy(() => import('@/features/finance/tabs/RecurringsTab').then(m => ({ default: m.RecurringsTab })));
+const TimeSpentTab = lazy(() => import('@/features/finance/tabs/TimeSpentTab').then(m => ({ default: m.TimeSpentTab })));
+const TransactionsTab = lazy(() => import('@/features/finance/tabs/TransactionsTab').then(m => ({ default: m.TransactionsTab })));
+const InvestmentsTab = lazy(() => import('@/features/finance/tabs/InvestmentsTab').then(m => ({ default: m.InvestmentsTab })));
 import { AddRecurringDialog } from '@/features/finance/dialogs/AddRecurringDialog';
 import { EditRecurringDialog } from '@/features/finance/dialogs/EditRecurringDialog';
 import {
@@ -1224,7 +1224,12 @@ function FinanceView() {
       >
         {/* The shell owns the scroll container and the fluid padding; this
             just stacks the sections it hands us. */}
+        {/* Each section is its own chunk, so opening Home no longer downloads
+            the charting and dialog code every other section needs. The
+            fallback is deliberately bare: the shell, nav and footer are
+            already painted, so only the middle is waiting. */}
         <div className="flex flex-col py-6 sm:py-8 w-full min-w-0">
+          <Suspense fallback={<div className="py-16 text-center text-sm text-muted-foreground font-sans">Loading…</div>}>
           {/* ==========================================
               TAB 1: DASHBOARD
               ========================================== */}
@@ -1325,6 +1330,7 @@ function FinanceView() {
             />
           )}
 
+          </Suspense>
         </div>
       </AppShell>
 
