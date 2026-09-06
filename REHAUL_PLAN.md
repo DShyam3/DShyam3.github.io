@@ -31,7 +31,7 @@ makes something easier to locate.
 | 4 | Convert remaining collection pages | one file per collection | **done** |
 | 5 | Watchlist decomposition | one folder, named modules | **done** |
 | 6 | Finance boundary move (not rewrite) | containment | **done** |
-| 7 | Finance rehaul | separate project | next |
+| 7 | Finance rehaul | multi-profile decision engine, one plan below | **planned, next** |
 | — | `features/` reorg | **reinstated** — measured against findability rather than line count, co-location is the point | **done** |
 
 The last row is worth keeping visible as a record of a reversal. It was
@@ -661,7 +661,379 @@ only; no internal changes. Phase 7 remains untouched.
 
 ### Phase 7 — Finance rehaul
 
-Separate project, planned separately. First step when it starts: extract the pure logic — tax bands, student-loan plans, `projectDebtBalance`, payday and bank-holiday arithmetic, holiday allowance, credit-score bands, `polarToCartesian` / `describeArc` — into `lib/finance/` with tests. None of it needs React, and it is the highest-value extraction in the repo.
+Finance stops being a page and becomes the site's one non-collection feature:
+a multi-profile financial decision engine. This section is the whole plan.
+
+Source material: the `finance-platform-codex-starter` doc bundle (8,452 lines
+of spec, no code). It was written against this repository — its §77 names the
+17-parallel-query mount and its §78 names the delete-and-reinsert persistence,
+both of which are real. Where that bundle and this plan disagree, this plan
+wins, and the disagreements are recorded under "Deviations from the spec".
+
+#### 7.A What this changes
+
+The feature list barely moves. Ten tabs already exist — Dashboard,
+Transactions, Goals, Cash Flow, Budget, Recurrings, Accounts, Investments,
+Tax & Income, Time Spent — and they cover most of the spec's own "private MVP"
+list. What changes is the shape underneath:
+
+| | Today | After Phase 7 |
+|---|---|---|
+| Source of truth | 18 `localStorage` keys seeded into React state | Postgres, one query layer |
+| Persistence | delete-all-then-reinsert, 37 call sites | targeted mutations |
+| Load | 17 parallel `select('*')` on mount | per-view domain queries |
+| Subject | implicitly one person | explicit profiles |
+| History | none — current state only | snapshots |
+| Calculation | inline in a 12,335-line component | pure, tested `lib/finance/` |
+| Question it answers | "what did I spend?" | "what happens if I do X?" |
+
+#### 7.B Profiles, not households
+
+The spec's household model — multiple auth users, roles, permissions, privacy
+walls, consent — is an auth and privacy problem, and it is not the one we have.
+What we want is one operator (the admin) configuring finances for several
+subjects: himself, family, friends.
+
+That is a scoping column, not a tenancy model.
+
+```sql
+CREATE TABLE finance_profiles (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name          text NOT NULL,
+  is_self       boolean NOT NULL DEFAULT false,
+  owner_user_id uuid REFERENCES auth.users(id),   -- NULL until someone else logs in
+  currency      text NOT NULL DEFAULT 'GBP',
+  region        text NOT NULL DEFAULT 'england',  -- Scottish bands differ
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+```
+
+Every one of the 20 `finance_*` tables gains
+`profile_id uuid NOT NULL REFERENCES finance_profiles(id) ON DELETE CASCADE`,
+with `(profile_id, ...)` indexes. RLS is untouched — it stays `is_admin()`,
+because there is still exactly one reader.
+
+`owner_user_id` is the entire upgrade path. It is null today. The day another
+person should log in and see only their own profile, that is a policy edit, not
+a migration and not a rewrite.
+
+Backfill is one migration: insert one profile, `UPDATE` all 20 tables with its
+id, then `SET NOT NULL`.
+
+Two consequences worth planning for:
+
+- **`localStorage` stops working.** `finance_settings` means nothing once there
+  are three profiles; it would need `finance_settings:${profileId}`. Rather than
+  namespace a pattern we want dead, profiles are the forcing function that
+  retires all 18 seed/write pairs. Postgres becomes the only source of truth,
+  and `localStorage` keeps only view preference (active tab, active profile).
+- **Cross-profile money is real.** "I sent Mum £300" is an expense in one ledger
+  and income in another. This is the one piece of the household model worth
+  keeping — the *linking* half, not the auth half. A
+  `finance_transfers(from_profile_id, to_profile_id, transaction_id)` link is
+  designed in at 7.1 or net worth double-counts across profiles forever.
+
+#### 7.C Design language — nothing new
+
+Finance takes its structural cues from Copilot and Treasury and its visual
+language entirely from what this site already has. No new fonts, no new
+colours, no new dependencies. `recharts@2.15.4` is already installed.
+
+**What is borrowed — structure, not style:**
+
+| Pattern | Where it lands |
+|---|---|
+| One hero number per view, everything else is evidence for it | Dashboard, Net Worth, each tab header |
+| Review inbox as a first-class surface with a count badge | Transactions — the review queue |
+| Summary card opens a detail dialog | `CardDetailDialog`, already built |
+| Trajectory inline, not in a separate report | vs-last-period delta on every headline figure |
+| Fact / estimate / forecast / recommendation are visually distinct | badge + `muted-foreground`, no new tokens |
+| Density in tables, air in summaries | dense rows for transactions, roomy cards above |
+
+**What is fixed — tokens only, from `src/theme/`:**
+
+- **Type.** Space Mono throughout, which is already the body face and is
+  monospace, so figures column-align for free. Doto via `DotMatrixText` for
+  section headings only, exactly as the rest of the site. The scale in
+  `src/theme/typography.ts` is the ladder, and 12px is the floor.
+- **Colour.** Only the tokens in `src/index.css`. No palette is added.
+- **Charts.** This is the one place a naive port would introduce colour. It
+  does not: series are a monochrome ramp of `--foreground` at stepped opacity,
+  with `--accent` reserved for the single highlighted series, and
+  `--destructive` for negative values only. That is both faithful to "nothing
+  new" and a close match for how Treasury actually looks.
+- **Surfaces.** `ui/card.tsx`, `--shadow-card`, `--radius`. Nothing bespoke.
+
+**Navigation — ten tabs become five surfaces.** Ten top-level tabs is the other
+half of why the page feels like a different product; neither Copilot nor
+Treasury runs anything like that many. Nothing is deleted — Budget stops being
+a destination and becomes the frame around Spending, Time Spent becomes a lens
+on Income.
+
+| Surface | Absorbs | Hero number |
+|---|---|---|
+| **Home** | dashboard | safe-to-spend, with trajectory, alerts and the review count |
+| **Spending** | transactions + review inbox + budget + recurrings | spent this period vs budget |
+| **Plan** | cash flow + goals + scenarios (7.5) | projected balance at next payday |
+| **Wealth** | accounts + investments + debts + credit + memberships | net worth |
+| **Income** | tax & income + payroll + time spent | take-home this tax year |
+
+Budget and Spending merge because they answer one question — *what am I
+spending against what I meant to spend* — and splitting them forces the reader
+to hold half the answer while navigating to the other half. Credit sits under
+Wealth: a score is a statement about borrowing standing, not about income.
+
+Each surface becomes a real route (`/finance`, `/finance/spending`, …) rather
+than tab state in `localStorage`. Three consequences, all good:
+
+- Surfaces are linkable and bookmarkable, which tab state never was.
+- Each route lazy-loads separately. `recharts` is deliberately excluded from
+  `manualChunks` today so it stays in the finance chunk; with five routes it
+  loads only on the surfaces that actually chart, instead of on all ten tabs.
+- The 7.1 profile switcher lives in the finance shell above the surfaces, so it
+  is global to the feature and survives navigation between them.
+
+Progressive disclosure inside each surface uses `CardDetailDialog`, which
+already exists and already behaves correctly.
+
+**Where the collection system does and does not fit.** `EntityCard`
+(`CardVariant = 'media' | 'text'`) and `CollectionConfig` exist for walls of
+entities. That fits Goals, Accounts, Memberships and Recurring bills, which are
+genuinely lists of things and should be converted. It does **not** fit
+dashboards, dense transaction tables or charts — forcing those through
+`EntityCard` would bend the primitive out of shape. Finance therefore reuses
+the *tokens and `ui/` primitives*, and adds a small `StatCard` built from
+`ui/card.tsx` for metric tiles. That is the boundary.
+
+**Why the current page does not look like this site.** Measured across
+`features/finance/`:
+
+| | Count |
+|---|---|
+| Arbitrary sub-12px sizes (`text-[10px]`, `[9px]`, `[8px]`, `[11px]`) | 468 |
+| `text-xs` (12px) | 596 |
+| `text-base` (16px, the site's body size) | 24 |
+| Distinct hardcoded hex colours | 38 |
+| `font-extrabold` (not on the site's two-weight scale) | 36 |
+| Design-token references (so it is genuinely mixed, not wholly off-system) | 817 |
+
+So 1,064 pieces of text sit at 12px or below against 24 at body size — body
+copy effectively does not exist on this page — and the charts run the full
+default Tailwind palette (`#10b981`, `#f59e0b`, `#ef4444`, `#3b82f6`, …) inside
+a warm near-monochrome design system built on one accent.
+
+That is the whole diagnosis. Finance is the one page that ignores the design
+system, which is why it reads as a different product bolted to the side of the
+site. The measured figure is higher than the 263 recorded in
+`src/theme/README.md`; that note should be updated to 468 when this lands.
+
+**What visibly changes, and what does not.** The visual *language* does not
+change at all — same tokens, same two faces, same card chrome, same header and
+footer. What changes is proportion and layout:
+
+| Changes | Stays |
+|---|---|
+| Text gets substantially bigger; 1,064 instances rise to the scale | Every colour token in `src/index.css` |
+| Charts drop 38 hex colours for the monochrome ramp + `--accent` | Space Mono body, Doto display |
+| One hero number per view; cards gain air | `ui/card.tsx`, `--radius`, `--shadow-card` |
+| 36 `font-extrabold` fall back to the two-weight scale | Header, Footer, shell, theme toggle |
+| Tab structure consolidates (see 7.2) | Light/dark behaviour |
+
+The page ends up looking *more* like the rest of the site than it does today,
+not less. The density loss is real and intentional: 9px text is the reason the
+page feels cramped.
+
+#### 7.D Build order
+
+| # | Step | Gate |
+|---|---|---|
+| 7.0 | Pure calc → `lib/finance/` with tests | none |
+| 7.1 | `finance_profiles`, `profile_id` on 20 tables, transfer links | none |
+| 7.2 | Decompose `FinancePage.tsx` into the five surfaces (7.C), profile filter baked into every query | none |
+| 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |
+| 7.4 | Snapshots — balance, net worth, per profile | none |
+| 7.5 | Scenario engine — "what happens if I do X?" | 7.0 |
+| 7.6 | AI tool layer: typed tools over 7.0 + 7.5 | Edge Function + API key |
+| 7.7 | **Private bucket** + document pipeline (payslips, statements, receipts, credit PDFs) | bucket fix first |
+| 7.8 | Reconciliation engine — evidence, provenance, match scoring | 7.7 |
+| 7.9 | pgvector + hybrid retrieval | corpus from 7.7 |
+| 7.10 | Credit: full model + PDF ingestion now; API adapter when contracted | see below |
+| 7.11 | Monthly review / "what changed" / anomalies | 7.4 |
+| 7.12 | Alerts and notifications | none |
+| 7.13 | Cross-profile: contacts, shared expenses, settlements | 7.1 |
+| 7.14 | Investments deepening, property, retirement projection | none |
+
+Two notes on the ordering. **7.4 gates more than it looks** — without snapshots
+there is no history, and "what changed this month", anomaly detection and
+trajectory are not merely unbuilt but unbuildable. **7.7 is the cliff**:
+everything above it is a bounded refactor of code that already exists, while
+document extraction and reconciliation is where scope becomes genuinely
+open-ended.
+
+7.0 first is not arbitrary. Pure functions know nothing about profiles, so the
+extraction is unaffected by everything below it — and doing 7.1 before 7.2
+means the queries get rewritten once rather than twice.
+
+#### 7.E Security — the `documents` bucket is public
+
+Blocking prerequisite for 7.7. The existing bucket is world-readable:
+
+```sql
+('documents', 'documents', true, 52428800, ARRAY['application/pdf'])
+```
+
+`public = true`, plus a `Public Access` SELECT policy carrying no `is_admin()`
+check. That is fine for the site documents in it today. Payslips, bank
+statements and credit reports must not go near it. 7.7 opens with a new private
+bucket:
+
+```sql
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('finance-documents', 'finance-documents', false, 52428800,
+        ARRAY['application/pdf','image/jpeg','image/png']);
+
+CREATE POLICY "Admin reads finance documents" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (bucket_id = 'finance-documents' AND public.is_admin());
+```
+
+Private bucket, signed URLs only, `is_admin()` on **select** as well as write.
+
+Also carried into this phase from Part 1: **S-10**, the `anon` write grants
+still held on all 19 finance tables. `REVOKE ALL ON <finance tables> FROM anon`
+lands with the 7.1 migration.
+
+Once other people's payslips are in the system, that is third-party personal
+data. Profile deletion must cascade cleanly from day one — the `ON DELETE
+CASCADE` above is load-bearing, not decoration.
+
+#### 7.F Semantic layer
+
+No external blocker. `00_extensions.sql` currently has pg_cron, pg_net,
+pgsodium, pgcrypto, pgjwt, vault and uuid-ossp — pgvector is one line.
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "extensions";
+
+CREATE TABLE finance_embeddings (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id  uuid NOT NULL REFERENCES finance_profiles(id) ON DELETE CASCADE,
+  entity_type text NOT NULL,   -- transaction | document_chunk | goal | note
+  entity_id   uuid NOT NULL,
+  chunk_text  text NOT NULL,
+  embedding   extensions.vector(1536)
+);
+CREATE INDEX ON finance_embeddings USING hnsw (embedding extensions.vector_cosine_ops);
+```
+
+Embedding generation is an Edge Function following the established pattern —
+`Deno.env.get('EMBEDDING_API_KEY')` alongside `TMDB_API_KEY` and
+`TRUELAYER_CLIENT_SECRET`. Server-side only, no `VITE_` prefix. Backfill runs on
+pg_cron, the same shape as `watchlist-cron-sync`.
+
+Retrieval is hybrid and the rule is absolute: **structured SQL produces the
+number, vector search finds which records are relevant.** Similarity never
+answers "what is my balance". Cost at this scale is negligible.
+
+#### 7.G Credit — the gate is a contract, not code
+
+Experian, Equifax and TransUnion do not sell consumer credit-file API access to
+individuals. Consumer access runs through resellers — ClearScore, Credit Karma,
+TotallyMoney — and none expose a public API. Open Banking carries account data,
+not bureau files, so TrueLayer does not reach it either. Automated bureau sync
+requires a contracted or licensed entity, which is a Phase 8 concern.
+
+What is available now covers most of the value:
+
+- **The normalised model already exists.** `finance_credit_bureaus`,
+  `finance_credit_scores`, `BUREAU_BANDS` and `getUniversalStanding` are the
+  cross-bureau layer the spec asks for, already written.
+- **Ingestion by statutory report.** All three bureaus issue a full credit
+  report as PDF. That routes through the same extraction pipeline as payslips,
+  so credit is a *document* problem rather than an API problem, and costs
+  almost nothing extra once 7.7 exists.
+- **Adapter behind the interface.** Build the model and UI against manual and
+  PDF ingestion. A bureau contract later drops in behind the same interface —
+  ADR-002 applied exactly as intended.
+
+#### 7.H Deviations from the spec bundle
+
+Recorded so the disagreements are deliberate rather than forgotten.
+
+- **Households become profiles.** 7.B. Roughly 80% of the value at ~5% of the
+  cost, with the upgrade path preserved.
+- **"Thin client, calculations on the backend" is not adopted literally — but
+  it is not architected against either.** There is no application server today
+  (see 7.J). Determinism is achieved by isolating pure functions in
+  `lib/finance/`, which is deliberately a *location-independent* boundary
+  rather than a browser one: the same modules run in the browser now and in a
+  Node or Deno process later, unchanged. Postgres functions and Edge Functions
+  carry the work that must be server-side regardless.
+- **Marketplace (§95), monetisation architecture (§97), pricing tiers
+  (§31–32) and 10k-MAU cost modelling are out of scope.** They are business
+  planning, not application features, and belong in Phase 8 if ever.
+- **The bundle's own document defects are not inherited.** Its `ROADMAP.md` has
+  two conflicting Phase 6 sections and its `PRODUCT_SPEC.md` restarts its
+  numbering twice; the ordering in 7.D supersedes both.
+
+#### 7.I Hosting portability
+
+The site is on GitHub Pages today and may be self-hosted later. Phase 7 must
+not deepen the coupling, because the coupling is currently narrow and
+self-hosting is mostly an *upgrade*.
+
+**What is Pages-specific today:**
+
+| Thing | Where | On a self-hosted server |
+|---|---|---|
+| CSP delivered as `<meta>` | `inject-csp-meta` plugin, `vite.config.ts` | becomes a real response header; `frame-ancestors` starts working |
+| `frame-guard.ts` standing in for `X-Frame-Options` | `src/main.tsx` | header does the job; keep the guard as defence in depth |
+| `X-Content-Type-Options`, `Permissions-Policy` unset | `SECURITY.md` "cannot be set" list | both become settable |
+| HSTS inherited from `github.io` | `SECURITY.md` | ours to set, with `includeSubDomains` |
+| SPA fallback via `cp dist/index.html dist/404.html` | `postbuild` script | a `try_files` / rewrite rule |
+| Chunking tuned for cold CDN round trips | `manualChunks`, `vite.config.ts` | still correct, reasoning just stops being Pages-specific |
+
+`base: "/"` is already host-neutral. Nothing else needs to move.
+
+Three of the four unmet items in the vibe-check Security Headers list are
+unmet *only* because there is no server. Self-hosting closes them, which makes
+this a security improvement rather than a lateral move.
+
+**Rules this phase follows to keep the door open:**
+
+- `lib/finance/` imports no React, no Supabase, no `import.meta.env` and no DOM
+  API. It is portable by construction — browser today, server process later,
+  same code. This is the single most important portability decision in the
+  phase, and it is already step 7.0.
+- 7.6 (AI tools) and 7.7 (document pipeline) are written against a typed HTTP
+  boundary, not against the Edge Function SDK. Transport swaps from a Supabase
+  Edge Function to a self-hosted route without callers changing.
+- Storage access goes through one module rather than scattered
+  `supabase.storage.from(...)` calls, so the same is true if Supabase is ever
+  self-hosted too.
+- No *new* `<meta>`-based header workarounds. They would be dead weight on a
+  real server, and the existing three are enough.
+
+**Two separate decisions.** Self-hosting the site does not move Supabase, and
+self-hosting Supabase does not require moving the site. Phase 7 keeps them
+independent; neither is assumed.
+
+`SECURITY.md` is not edited now — it documents what is true today, and today is
+still Pages. It gets revised at migration, and this table is the checklist.
+
+#### 7.J Done means
+
+- `npm run lint` — 0 errors, 0 warnings; `npm run typecheck`; `npm run build`
+- `lib/finance/` is pure, imports no React and no Supabase, and is covered by tests
+- `FinancePage.tsx` no longer exists as a single file
+- Finance is five routed surfaces, not ten tabs of `localStorage` state
+- No hardcoded hex colour remains in `features/finance/`
+- No `localStorage` key holds financial truth
+- Every `finance_*` row carries a `profile_id`
+- Zero sub-12px font sizes and zero off-scale weights in `features/finance/`
+- No `select('*')` on the finance mount path
+- `anon` holds no write grant on any finance table
+- No financial document is readable without `is_admin()`
 
 ---
 
