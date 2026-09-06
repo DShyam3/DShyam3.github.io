@@ -165,6 +165,44 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_account_balance_snapshots: {
+        Row: {
+          account_id: string
+          account_name: string
+          balance: number
+          captured_on: string
+          created_at: string
+          id: string
+          profile_id: string
+        }
+        Insert: {
+          account_id: string
+          account_name: string
+          balance?: number
+          captured_on: string
+          created_at?: string
+          id?: string
+          profile_id: string
+        }
+        Update: {
+          account_id?: string
+          account_name?: string
+          balance?: number
+          captured_on?: string
+          created_at?: string
+          id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_account_balance_snapshots_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_bank_accounts: {
         Row: {
           annual_fee: number
@@ -737,6 +775,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "finance_memberships_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_net_worth_snapshots: {
+        Row: {
+          assets: number
+          captured_on: string
+          created_at: string
+          id: string
+          liabilities: number
+          net_worth: number
+          profile_id: string
+        }
+        Insert: {
+          assets?: number
+          captured_on: string
+          created_at?: string
+          id?: string
+          liabilities?: number
+          net_worth?: number
+          profile_id: string
+        }
+        Update: {
+          assets?: number
+          captured_on?: string
+          created_at?: string
+          id?: string
+          liabilities?: number
+          net_worth?: number
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_net_worth_snapshots_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "finance_profiles"
@@ -1759,6 +1835,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      capture_finance_snapshots: { Args: never; Returns: undefined }
       check_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: boolean
