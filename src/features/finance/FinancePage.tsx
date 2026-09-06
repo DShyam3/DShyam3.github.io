@@ -13,6 +13,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
+  BUREAU_BANDS,
+  calculateActualPayday,
+  calculateWorkingDaysInRange,
+  DEBT_TYPE_LABELS,
+  describeArc,
+  formatDaysList,
+  formatHolidayDates,
+  getBookedDaysForMonth,
+  getDaysInMonth,
+  getStartDayOfWeek,
+  normalizeHolidays,
+  parseDays,
+  parseEntryDays,
+  polarToCartesian,
+  projectDebtBalance,
+  STUDENT_LOAN_PLAN_LABELS,
+  STUDENT_LOAN_WRITE_OFF_YEARS,
+  type BureauBand,
+  type CreditTier,
+} from '@/lib/finance';
+import {
   Settings,
   TrendingUp,
   DollarSign,
@@ -124,6 +145,41 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 // ==========================================
 // TYPES & INTERFACES
 // ==========================================
+
+/**
+ * Credit bands carry a `tier` rather than a colour -- presentation does not
+ * belong in `lib/finance`. These are the existing hexes, unchanged, so this is
+ * a lift not a restyle; Phase 7.C replaces them with design tokens.
+ */
+const CREDIT_TIER_COLORS: Record<CreditTier, string> = {
+  1: '#ef4444',
+  2: '#f59e0b',
+  3: '#84cc16',
+  4: '#10b981',
+  5: '#047857',
+};
+
+const CREDIT_TIER_CLASSES: Record<CreditTier, string> = {
+  1: 'text-rose-500',
+  2: 'text-amber-500',
+  3: 'text-lime-500 dark:text-lime-400',
+  4: 'text-emerald-500 dark:text-emerald-400',
+  5: 'text-emerald-600 dark:text-emerald-400',
+};
+
+const bandColor = (band?: BureauBand | null): string | undefined =>
+  band ? CREDIT_TIER_COLORS[band.tier] : undefined;
+
+/** Adapts component state to `normalizeHolidays`, which takes the stored value
+ *  and the tax year rather than the whole settings object. */
+const getNormalizedHolidays = (
+  settings: FinanceSettings,
+  holidayDefaults: Parameters<typeof normalizeHolidays>[0],
+): UserHoliday[] =>
+  normalizeHolidays(
+    settings.holidaysByUser || holidayDefaults,
+    settings.taxYear || new Date().getFullYear(),
+  );
 
 export interface FinanceSettings {
   grossSalary: number;
@@ -342,152 +398,6 @@ export interface TrueLayerStatus {
   expires_at: string | null;
 }
 
-export interface BureauBand {
-  name: string;
-  min: number;
-  max: number;
-  color: string;
-  hoverColor: string;
-  description: string;
-}
-
-export const BUREAU_BANDS: Record<'experian' | 'transunion' | 'equifax', BureauBand[]> = {
-  experian: [
-    { name: 'Low', min: 0, max: 640, color: '#ef4444', hoverColor: '#dc2626', description: 'Borrowing may be difficult and interest rates could be high. But our tools can help get your score moving in the right direction. Every small increase helps, and things should improve as you get closer to a Fair score.' },
-    { name: 'Fair', min: 641, max: 860, color: '#f59e0b', hoverColor: '#d97706', description: 'You might get limited credit options, higher interest rates, and lower borrowing limits. But our tools can help improve your score. And as it grows, so will your choices.' },
-    { name: 'Good', min: 861, max: 1000, color: '#84cc16', hoverColor: '#65a30d', description: 'You should see a wide range of credit cards, loans and mortgages (but you might have to pay a bit more interest).' },
-    { name: 'Very Good', min: 1001, max: 1120, color: '#10b981', hoverColor: '#059669', description: 'You should get most credit cards, loans and mortgages (but you might not get the very best deals).' },
-    { name: 'Excellent', min: 1121, max: 1250, color: '#047857', hoverColor: '#065f46', description: 'You should get the best credit cards, loans and mortgages (but there are no guarantees).' }
-  ],
-  transunion: [
-    { name: 'Needs Work', min: 0, max: 565, color: '#ef4444', hoverColor: '#dc2626', description: 'Your credit history needs work. You may struggle to get credit, and if you do, interest rates will likely be high.' },
-    { name: 'Fair', min: 566, max: 603, color: '#f59e0b', hoverColor: '#d97706', description: 'You have a fair credit history. You may find it harder to get credit or might have to pay higher interest rates.' },
-    { name: 'Good', min: 604, max: 627, color: '#10b981', hoverColor: '#059669', description: 'You have a good credit history and should be approved for most credit offers, though you may not get the lowest rates.' },
-    { name: 'Excellent', min: 628, max: 710, color: '#047857', hoverColor: '#065f46', description: 'You have a great credit history and are highly likely to be approved for credit and get the best interest rates.' }
-  ],
-  equifax: [
-    { name: 'Start Climbing', min: 0, max: 409, color: '#ef4444', hoverColor: '#dc2626', description: 'Your score is low. You might find it difficult to get credit, or have to pay very high interest rates.' },
-    { name: 'Moving On Up', min: 410, max: 519, color: '#f59e0b', hoverColor: '#d97706', description: 'You\'re starting to build your score. Credit options may be limited and rates could be higher.' },
-    { name: 'On Good Ground', min: 520, max: 604, color: '#84cc16', hoverColor: '#65a30d', description: 'Your score is okay. You might get accepted for credit, but interest rates might be higher.' },
-    { name: 'Looking Bright', min: 605, max: 724, color: '#10b981', hoverColor: '#059669', description: 'You\'re in a good position. You should be accepted for most credit, with decent interest rates.' },
-    { name: 'Soaring High', min: 725, max: 1000, color: '#047857', hoverColor: '#065f46', description: 'Lenders will see you as a very low risk. You\'re likely to get the best deals on loans, credit cards, and mortgages.' }
-  ]
-};
-
-export function polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number) {
-  const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
-  return {
-    x: centerX + radius * Math.cos(angleInRadians),
-    y: centerY + radius * Math.sin(angleInRadians),
-  };
-}
-
-export function describeArc(x: number, y: number, radius: number, startAngle: number, endAngle: number) {
-  const start = polarToCartesian(x, y, radius, startAngle);
-  const end = polarToCartesian(x, y, radius, endAngle);
-  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-  return [
-    'M', start.x, start.y,
-    'A', radius, radius, 0, largeArcFlag, 1, end.x, end.y
-  ].join(' ');
-}
-
-export interface UniversalStanding {
-  label: string;
-  rating: number;
-  color: string;
-  cls: string;
-  desc: string;
-}
-
-export function getUniversalStanding(creditScores: {
-  experian: { score: number }[];
-  transunion: { score: number }[];
-  equifax: { score: number }[];
-}): UniversalStanding | null {
-  const ratings: number[] = [];
-
-  // Experian
-  const expEntries = creditScores.experian || [];
-  if (expEntries.length > 0) {
-    const score = expEntries[expEntries.length - 1].score;
-    if (score >= 1121) ratings.push(5);
-    else if (score >= 1001) ratings.push(4.2);
-    else if (score >= 861) ratings.push(3.5);
-    else if (score >= 641) ratings.push(2.5);
-    else ratings.push(1);
-  }
-
-  // Transunion
-  const tuEntries = creditScores.transunion || [];
-  if (tuEntries.length > 0) {
-    const score = tuEntries[tuEntries.length - 1].score;
-    if (score >= 628) ratings.push(5);
-    else if (score >= 604) ratings.push(3.8);
-    else if (score >= 566) ratings.push(2.5);
-    else ratings.push(1);
-  }
-
-  // Equifax
-  const eqEntries = creditScores.equifax || [];
-  if (eqEntries.length > 0) {
-    const score = eqEntries[eqEntries.length - 1].score;
-    if (score >= 725) ratings.push(5);
-    else if (score >= 605) ratings.push(4.2);
-    else if (score >= 520) ratings.push(3.2);
-    else if (score >= 410) ratings.push(2.2);
-    else ratings.push(1);
-  }
-
-  if (ratings.length === 0) return null;
-
-  const average = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-
-  if (average >= 4.5) {
-    return {
-      label: 'Excellent',
-      rating: average,
-      color: '#047857',
-      cls: 'text-emerald-600 dark:text-emerald-400',
-      desc: 'Lenders will view you as an extremely reliable borrower. You qualify for the best financial deals.',
-    };
-  }
-  if (average >= 3.5) {
-    return {
-      label: 'Very Good',
-      rating: average,
-      color: '#10b981',
-      cls: 'text-emerald-500 dark:text-emerald-400',
-      desc: 'Your credit standing is strong. You are likely to qualify for premium rates and high limits.',
-    };
-  }
-  if (average >= 2.8) {
-    return {
-      label: 'Good',
-      rating: average,
-      color: '#84cc16',
-      cls: 'text-lime-500 dark:text-lime-400',
-      desc: 'You have a healthy credit history. You will see a wide choice of loans and credit cards.',
-    };
-  }
-  if (average >= 1.8) {
-    return {
-      label: 'Fair',
-      rating: average,
-      color: '#f59e0b',
-      cls: 'text-amber-500',
-      desc: 'Your credit score is acceptable, but you may face higher interest rates or lower borrowing limits.',
-    };
-  }
-  return {
-    label: 'Needs Work',
-    rating: average,
-    color: '#ef4444',
-    cls: 'text-rose-500',
-    desc: 'Borrowing options are limited. Focus on rebuilding your payment history to improve your rating.',
-  };
-}
-
 // ==========================================
 // CONSTANTS & DEFAULTS
 // ==========================================
@@ -504,105 +414,6 @@ const TABS = [
   { key: 'tax-income', label: 'Tax & Income' },
   { key: 'time-spent', label: 'Time Spent' },
 ] as const;
-
-const DEBT_TYPE_LABELS: Record<Debt['type'], string> = {
-  mortgage: 'Mortgage',
-  student: 'Student Loan',
-  auto: 'Auto Loan',
-  personal: 'Personal Loan',
-  credit: 'Credit Card Debt',
-  other: 'Other'
-};
-
-const STUDENT_LOAN_PLAN_LABELS: Record<StudentLoanPlanKey, string> = {
-  plan1: 'Plan 1',
-  plan2: 'Plan 2',
-  plan4: 'Plan 4 (Scotland)',
-  plan5: 'Plan 5',
-  postgrad: 'Postgraduate Loan'
-};
-
-// Years until an unpaid balance is written off, by plan.
-const STUDENT_LOAN_WRITE_OFF_YEARS: Record<StudentLoanPlanKey, number> = {
-  plan1: 25,
-  plan2: 30,
-  plan4: 30,
-  plan5: 40,
-  postgrad: 30
-};
-
-/**
- * Projects a debt's balance forward month by month.
- *
- * - amortising: interest accrues monthly, then the fixed payment is applied.
- * - income_contingent: interest accrues monthly, repayments are a percentage
- *   of gross income above the plan threshold, and any remaining balance is
- *   written off once the plan's term elapses.
- *
- * Returns one point per year so the chart stays readable over 40-year terms.
- */
-const projectDebtBalance = (
-  debt: Debt,
-  opts: { grossSalary: number; repaymentRate: number; threshold: number }
-): { year: number; balance: number; paid: number; interest: number; writtenOff: number }[] => {
-  const MAX_MONTHS = 12 * 45;
-  const monthlyRate = debt.interestRate / 100 / 12;
-
-  const startYear = debt.startDate
-    ? new Date(debt.startDate).getFullYear()
-    : new Date().getFullYear();
-  const currentYear = new Date().getFullYear();
-
-  const isIncomeContingent = debt.repaymentType === 'income_contingent';
-  const writeOffYears = debt.writeOffYears
-    ?? (debt.studentLoanPlan ? STUDENT_LOAN_WRITE_OFF_YEARS[debt.studentLoanPlan] : undefined);
-  const writeOffMonth = writeOffYears !== undefined
-    ? Math.max(Math.round((startYear + writeOffYears - currentYear) * 12), 0)
-    : undefined;
-
-  const annualRepayment = isIncomeContingent
-    ? Math.max(opts.grossSalary - opts.threshold, 0) * (opts.repaymentRate / 100)
-    : 0;
-  const monthlyPayment = isIncomeContingent ? annualRepayment / 12 : debt.minPayment;
-
-  const points: { year: number; balance: number; paid: number; interest: number; writtenOff: number }[] = [];
-  let balance = debt.balance;
-  let paid = 0;
-  let interest = 0;
-  let writtenOff = 0;
-
-  points.push({ year: currentYear, balance, paid, interest, writtenOff });
-
-  for (let month = 1; month <= MAX_MONTHS && balance > 0; month++) {
-    if (writeOffMonth !== undefined && month > writeOffMonth) {
-      writtenOff = balance;
-      balance = 0;
-      points.push({ year: currentYear + Math.ceil(month / 12), balance, paid, interest, writtenOff });
-      break;
-    }
-
-    const monthInterest = balance * monthlyRate;
-    balance += monthInterest;
-    interest += monthInterest;
-
-    const payment = Math.min(monthlyPayment, balance);
-    balance -= payment;
-    paid += payment;
-
-    // A payment that never covers the interest means the balance grows forever;
-    // stop projecting rather than looping to the cap with a runaway line.
-    if (monthlyPayment <= monthInterest && writeOffMonth === undefined && month >= 120) {
-      points.push({ year: currentYear + month / 12, balance, paid, interest, writtenOff });
-      break;
-    }
-
-    if (month % 12 === 0 || balance <= 0) {
-      points.push({ year: currentYear + month / 12, balance: Math.max(balance, 0), paid, interest, writtenOff });
-    }
-  }
-
-  return points;
-};
 
 /**
  * Editor for a debt's borrowing tranches — e.g. one row per academic year of
@@ -1096,235 +907,6 @@ const getPlanName = (plan: FinanceSettings['studentLoanPlan']) => {
     case 'plan5': return 'Plan 5';
     case 'postgrad': return 'Postgraduate';
   }
-};
-
-const parseDays = (datesStr: string): number[] => {
-  const days: number[] = [];
-  if (!datesStr) return days;
-
-  const parts = datesStr.split(/[+,;]/);
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-
-    if (trimmed.includes('-')) {
-      const rangeParts = trimmed.split('-');
-      if (rangeParts.length === 2) {
-        const start = parseInt(rangeParts[0].trim(), 10);
-        const end = parseInt(rangeParts[1].trim(), 10);
-        if (!isNaN(start) && !isNaN(end) && start <= end) {
-          for (let i = start; i <= end; i++) {
-            days.push(i);
-          }
-        }
-      }
-    } else {
-      const day = parseInt(trimmed, 10);
-      if (!isNaN(day)) {
-        days.push(day);
-      }
-    }
-  }
-  return days;
-};
-
-const formatDaysList = (days: number[]): string => {
-  if (days.length === 0) return '';
-  const sorted = [...days].sort((a, b) => a - b);
-  const ranges: string[] = [];
-  let start = sorted[0];
-  let prev = sorted[0];
-
-  for (let i = 1; i <= sorted.length; i++) {
-    const current = sorted[i];
-    if (current === prev + 1) {
-      prev = current;
-    } else {
-      if (start === prev) {
-        ranges.push(start.toString());
-      } else {
-        ranges.push(`${start}-${prev}`);
-      }
-      start = current;
-      prev = current;
-    }
-  }
-  return ranges.join(' + ');
-};
-
-const getDaysInMonth = (year: number, monthIndex: number) => {
-  return new Date(year, monthIndex + 1, 0).getDate();
-};
-
-const getStartDayOfWeek = (year: number, monthIndex: number) => {
-  const day = new Date(year, monthIndex, 1).getDay();
-  return day === 0 ? 6 : day - 1; // 0 for Mon, 6 for Sun
-};
-
-const parseEntryDays = (entry: string): number => {
-  const clean = entry.trim();
-  const rangeMatch = clean.match(/^(\d+)-(\d+)$/);
-  if (rangeMatch) {
-    const start = parseInt(rangeMatch[1], 10);
-    const end = parseInt(rangeMatch[2], 10);
-    if (!isNaN(start) && !isNaN(end) && end >= start) {
-      return end - start + 1;
-    }
-  }
-  const single = parseInt(clean, 10);
-  if (!isNaN(single)) {
-    return 1;
-  }
-  return 0;
-};
-
-const getNormalizedHolidays = (settings: FinanceSettings, holidayDefaults: any): UserHoliday[] => {
-  const hols = settings.holidaysByUser || holidayDefaults || {};
-  if (Array.isArray(hols)) {
-    return hols;
-  }
-
-  const list: UserHoliday[] = [];
-  Object.entries(hols).forEach(([monthKey, val]: [string, any]) => {
-    const monthIdx = parseInt(monthKey, 10);
-    if (isNaN(monthIdx)) return;
-    if (val && val.dates && val.count > 0) {
-      const segments = val.dates.split(/[,+]/).map((s: string) => s.trim()).filter(Boolean);
-      segments.forEach((seg: string, segIdx: number) => {
-        const pad = (n: number) => n.toString().padStart(2, '0');
-        const rangeMatch = seg.match(/^(\d+)-(\d+)$/);
-        let startDay = 1;
-        let endDay = 1;
-        if (rangeMatch) {
-          startDay = parseInt(rangeMatch[1], 10);
-          endDay = parseInt(rangeMatch[2], 10);
-        } else {
-          const single = parseInt(seg, 10);
-          if (!isNaN(single)) {
-            startDay = single;
-            endDay = single;
-          }
-        }
-
-        const year = settings.taxYear || new Date().getFullYear();
-        const startStr = `${year}-${pad(monthIdx + 1)}-${pad(startDay)}`;
-        const endStr = `${year}-${pad(monthIdx + 1)}-${pad(endDay)}`;
-
-        list.push({
-          id: `legacy-${monthIdx}-${segIdx}-${Date.now()}`,
-          startDate: startStr,
-          endDate: endStr,
-          occasion: val.occasion || 'Leave',
-          count: parseEntryDays(seg)
-        });
-      });
-    }
-  });
-  return list;
-};
-
-const getBookedDaysForMonth = (holidays: UserHoliday[], year: number, monthIdx: number, bankHolidays: string[]): { day: number; occasion: string }[] => {
-  const booked: { day: number; occasion: string }[] = [];
-  holidays.forEach(hol => {
-    const start = new Date(hol.startDate);
-    const end = new Date(hol.endDate);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
-
-    const current = new Date(start);
-    while (current <= end) {
-      if (current.getFullYear() === year && current.getMonth() === monthIdx) {
-        const dayOfWeek = current.getDay();
-        const mm = String(current.getMonth() + 1).padStart(2, '0');
-        const dd = String(current.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${mm}-${dd}`;
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const isBankHoliday = bankHolidays.includes(dateStr);
-
-        if (!isWeekend && !isBankHoliday) {
-          booked.push({
-            day: current.getDate(),
-            occasion: hol.occasion
-          });
-        }
-      }
-      current.setDate(current.getDate() + 1);
-    }
-  });
-  return booked;
-};
-
-const calculateWorkingDaysInRange = (startStr: string, endStr: string, bankHolidays: string[]): number => {
-  if (!startStr || !endStr) return 0;
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
-
-  let count = 0;
-  const current = new Date(start);
-  while (current <= end) {
-    const dayOfWeek = current.getDay();
-    const yyyy = current.getFullYear();
-    const mm = String(current.getMonth() + 1).padStart(2, '0');
-    const dd = String(current.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
-
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const isBankHoliday = bankHolidays.includes(dateStr);
-
-    if (!isWeekend && !isBankHoliday) {
-      count++;
-    }
-    current.setDate(current.getDate() + 1);
-  }
-  return count;
-};
-
-const formatHolidayDates = (startStr: string, endStr: string): string => {
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
-
-  const optWithoutYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-  const optWithYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: '2-digit' };
-
-  if (startStr === endStr) {
-    return start.toLocaleDateString('en-GB', optWithYear);
-  }
-  if (start.getFullYear() === end.getFullYear()) {
-    return `${start.toLocaleDateString('en-GB', optWithoutYear)} - ${end.toLocaleDateString('en-GB', optWithYear)}`;
-  }
-  return `${start.toLocaleDateString('en-GB', optWithYear)} - ${end.toLocaleDateString('en-GB', optWithYear)}`;
-};
-
-const calculateActualPayday = (year: number, monthIndex: number, scheduledDay: number, bankHolidays: string[]) => {
-  const maxDay = getDaysInMonth(year, monthIndex);
-  const targetDay = Math.min(scheduledDay, maxDay);
-  const date = new Date(year, monthIndex, targetDay);
-
-  let adjusted = false;
-  let adjustReason: 'weekend' | 'bank_holiday' | null = null;
-
-  while (true) {
-    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
-
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      adjusted = true;
-      adjustReason = 'weekend';
-      date.setDate(date.getDate() - 1);
-    } else if (bankHolidays.includes(dateStr)) {
-      adjusted = true;
-      adjustReason = 'bank_holiday';
-      date.setDate(date.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  return { date, adjusted, adjustReason };
 };
 
 const Sparkline = ({ data }: { data: number[] }) => {
@@ -8957,14 +8539,12 @@ export default function Finance() {
                       const bands = BUREAU_BANDS[bureauKey];
                       const found = bands.find(b => score >= b.min && score <= b.max);
                       if (found) {
-                        let cls = 'text-muted-foreground';
-                        if (found.color === '#047857') cls = 'text-emerald-600 dark:text-emerald-400';
-                        else if (found.color === '#10b981') cls = 'text-emerald-500 dark:text-emerald-400';
-                        else if (found.color === '#84cc16') cls = 'text-lime-500 dark:text-lime-400';
-                        else if (found.color === '#f59e0b') cls = 'text-amber-500';
-                        else if (found.color === '#ef4444') cls = 'text-rose-500';
-
-                        return { text: found.name, cls, color: found.color, band: found };
+                        return {
+                          text: found.name,
+                          cls: CREDIT_TIER_CLASSES[found.tier],
+                          color: CREDIT_TIER_COLORS[found.tier],
+                          band: found,
+                        };
                       }
                       return { text: 'Unknown', cls: 'text-muted-foreground', color: '#6b7280', band: null };
                     };
@@ -9048,7 +8628,7 @@ export default function Finance() {
                                     key={band.name}
                                     d={describeArc(72, 72, 54, startAngle, endAngle)}
                                     fill="transparent"
-                                    stroke={band.color}
+                                    stroke={CREDIT_TIER_COLORS[band.tier]}
                                     strokeWidth={strokeWidth}
                                     strokeLinecap="round"
                                     style={{
@@ -9086,7 +8666,7 @@ export default function Finance() {
                                     y="64"
                                     textAnchor="middle"
                                     className="font-extrabold text-[12px] uppercase tracking-wider"
-                                    fill={hoveredBands[bureau.key]?.color}
+                                    fill={bandColor(hoveredBands[bureau.key])}
                                   >
                                     {hoveredBands[bureau.key]?.name}
                                   </text>
@@ -9164,7 +8744,7 @@ export default function Finance() {
                                 className="absolute inset-x-6 bottom-5 top-2 flex flex-col justify-center bg-background/95 dark:bg-card/95 backdrop-blur-sm z-10"
                               >
                                 <div className="flex items-center justify-between mb-1.5">
-                                  <span className="text-[11px] font-extrabold uppercase tracking-widest" style={{ color: hoveredBands[bureau.key]?.color }}>
+                                  <span className="text-[11px] font-extrabold uppercase tracking-widest" style={{ color: bandColor(hoveredBands[bureau.key]) }}>
                                     {hoveredBands[bureau.key]?.name}
                                   </span>
                                   <span className="text-[9px] font-bold font-mono text-muted-foreground bg-primary/5 px-2 py-0.5 rounded-md border border-border/40">
