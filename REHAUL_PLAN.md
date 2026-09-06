@@ -809,10 +809,16 @@ on Income.
 | Surface | Absorbs | Hero number |
 |---|---|---|
 | **Home** | dashboard | safe-to-spend, with trajectory, alerts and the review count |
-| **Spending** | transactions + review inbox + budget + recurrings | spent this period vs budget |
-| **Plan** | cash flow + goals + scenarios (7.5) | projected balance at next payday |
+| **Spending** | transactions + review inbox + budget + recurrings | spent this month, against budget |
+| **Plan** | cash flow + goals + scenarios (7.5) | free to spend before payday |
 | **Wealth** | accounts + investments + debts + credit + memberships | net worth |
 | **Income** | tax & income + payroll + time spent | take-home this tax year |
+
+Home is the exception: it is already a cockpit of several figures, and crowning
+it with one more would only repeat whichever it picked. Plan's hero is named
+"free to spend", not "projected balance" — the figure is budget minus spent
+minus unpaid bills, which is what is left to commit rather than what will be in
+the account, and naming it the second thing would be a lie by label.
 
 Budget and Spending merge because they answer one question — *what am I
 spending against what I meant to spend* — and splitting them forces the reader

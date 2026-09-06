@@ -29,6 +29,7 @@ const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
 const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
 import { useFinanceTotals } from './useFinanceTotals';
+import { SurfaceHero } from './components/SurfaceHero';
 import {
   ALL_PRESETS_FALLBACK,
   makeBudgetMath,
@@ -1124,6 +1125,101 @@ function FinanceView() {
 
 
 
+  /**
+   * The number each surface leads with. Home is absent on purpose: it is
+   * already a cockpit of several figures, and crowning it with one more would
+   * just repeat whichever it picked.
+   */
+  const surfaceHero = (() => {
+    if (activeSurface === 'spending') {
+      return (
+        <SurfaceHero
+          label="Spent this month"
+          value={formatGBP(totalSpent)}
+          detail={
+            totalBudget > 0
+              ? `of ${formatGBP(totalBudget)} budgeted · ${formatGBP(Math.max(0, totalBudget - totalSpent))} left`
+              : 'No budget set'
+          }
+          tone={totalBudget > 0 && totalSpent > totalBudget ? 'negative' : 'neutral'}
+          aside={
+            unpaidRecurrings > 0 ? (
+              <>
+                <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Bills unpaid</p>
+                <p className="font-sans text-lg font-bold tabular-nums">{formatGBP(unpaidRecurrings)}</p>
+              </>
+            ) : null
+          }
+        />
+      );
+    }
+    if (activeSurface === 'plan') {
+      return (
+        <SurfaceHero
+          // Not "projected balance": freeToSpend is budget minus spent minus
+          // unpaid bills, which is what is left to commit, not what will be in
+          // the account. Naming it the second thing would be a lie by label.
+          label="Free to spend before payday"
+          value={formatGBP(freeToSpend)}
+          tone={freeToSpend < 0 ? 'negative' : 'positive'}
+          // dailyFreeToSpend floors at zero, so once you are over it would read
+          // "£0.00 a day", which says nothing. Past that point the useful
+          // number is the overspend itself.
+          detail={
+            freeToSpend >= 0
+              ? `${formatGBP(dailyFreeToSpend)} a day across the ${daysRemainingInMonth} days left in the month`
+              : `Over by ${formatGBP(Math.abs(freeToSpend))} with ${daysRemainingInMonth} days left in the month`
+          }
+          aside={
+            <>
+              <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Next payday</p>
+              <p className="font-sans text-lg font-bold tabular-nums">{nextPayday?.daysRemaining ?? 0} days</p>
+            </>
+          }
+        />
+      );
+    }
+    if (activeSurface === 'wealth') {
+      return (
+        <SurfaceHero
+          label="Net worth"
+          value={formatGBP(netWorth)}
+          tone={netWorth < 0 ? 'negative' : 'positive'}
+          detail={`Assets ${formatGBP(totalAssets)} · Debt ${formatGBP(totalDebt)}`}
+          // Only when there are actual debt rows. A liability recorded as an
+          // overdrawn account is already inside totalDebt above, so an empty
+          // "Loans outstanding £0.00" beside a visible student loan reads as
+          // wrong even though it is faithful to the table it comes from.
+          aside={
+            totalLoanBalance > 0 ? (
+              <>
+                <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Loans outstanding</p>
+                <p className="font-sans text-lg font-bold tabular-nums">{formatGBP(totalLoanBalance)}</p>
+              </>
+            ) : null
+          }
+        />
+      );
+    }
+    if (activeSurface === 'income') {
+      return (
+        <SurfaceHero
+          label="Take-home this tax year"
+          value={formatGBP(results.netTakeHome)}
+          tone="positive"
+          detail={`${formatGBP(monthlyIncome)} a month after tax, pension and student loan`}
+          aside={
+            <>
+              <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Gross package</p>
+              <p className="font-sans text-lg font-bold tabular-nums">{formatGBP(results.totalPackage)}</p>
+            </>
+          }
+        />
+      );
+    }
+    return null;
+  })();
+
   /* Handed to AppShell's toolbar slot, so the surface and section navs stay
      pinned while the surface underneath scrolls. */
   const toolbar = (
@@ -1209,6 +1305,8 @@ function FinanceView() {
             fallback is deliberately bare: the shell, nav and footer are
             already painted, so only the middle is waiting. */}
         <div className="flex flex-col py-6 sm:py-8 w-full min-w-0">
+          {surfaceHero}
+
           <Suspense fallback={<div className="py-16 text-center text-sm text-muted-foreground font-sans">Loading…</div>}>
           {/* ==========================================
               TAB 1: DASHBOARD
