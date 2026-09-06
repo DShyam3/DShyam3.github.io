@@ -84,25 +84,25 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
   const pct_relaxing = (hours_relaxing_year / TOTAL_HOURS_YEAR) * 100;
 
   const timeData = [
-    { name: 'Sleep', value: hours_sleep_year, pct: pct_sleep, color: 'hsl(var(--chart-5))', emoji: '😴' },
-    { name: 'Work', value: hours_work_actual_year, pct: pct_hours_work, color: 'hsl(var(--positive))', emoji: '💼' },
-    { name: 'Relaxing / Free', value: hours_relaxing_year, pct: pct_relaxing, color: 'hsl(var(--chart-4))', emoji: '🌴' },
+    { name: 'Sleep', value: hours_sleep_year, pct: pct_sleep, color: 'hsl(var(--chart-3))', emoji: '😴' },
+    { name: 'Work', value: hours_work_actual_year, pct: pct_hours_work, color: 'hsl(var(--chart-2))', emoji: '💼' },
+    { name: 'Relaxing / Free', value: hours_relaxing_year, pct: pct_relaxing, color: 'hsl(var(--chart-1))', emoji: '🌴' },
     { name: 'Socializing', value: hours_friends_year, pct: pct_friends, color: 'hsl(var(--chart-5))', emoji: '🥳' },
-    { name: 'Getting Ready', value: hours_ready_year, pct: pct_ready, color: 'hsl(var(--chart-5))', emoji: '🧼' },
-    { name: 'Wellness / Gym', value: hours_gym_year, pct: pct_gym, color: 'hsl(var(--chart-2))', emoji: '🏋️' },
-    { name: 'Commute', value: hours_commute_year, pct: pct_commute, color: 'hsl(var(--muted-foreground))', emoji: '🚗' },
-    { name: 'Learning', value: hours_learning_year, pct: pct_learning, color: 'hsl(var(--chart-3))', emoji: '📚' },
+    { name: 'Getting Ready', value: hours_ready_year, pct: pct_ready, color: 'hsl(var(--muted-foreground))', emoji: '🧼' },
+    { name: 'Wellness / Gym', value: hours_gym_year, pct: pct_gym, color: 'hsl(var(--positive))', emoji: '🏋️' },
+    { name: 'Commute', value: hours_commute_year, pct: pct_commute, color: 'hsl(var(--secondary-foreground))', emoji: '🚗' },
+    { name: 'Learning', value: hours_learning_year, pct: pct_learning, color: 'hsl(var(--chart-4))', emoji: '📚' },
   ].filter(d => d.value > 0);
 
   const dailyBreakdown = [
-    { name: 'Sleep', hours: sleepHoursPerDay, color: 'hsl(var(--chart-5))', emoji: '😴' },
-    { name: 'Work', hours: hours_work_actual_year / 365, color: 'hsl(var(--positive))', emoji: '💼' },
-    { name: 'Commute', hours: hours_commute_year / 365, color: 'hsl(var(--muted-foreground))', emoji: '🚗' },
-    { name: 'Getting Ready', hours: gettingReadyHoursPerDay, color: 'hsl(var(--chart-5))', emoji: '🧼' },
-    { name: 'Wellness / Gym', hours: hours_gym_year / 365, color: 'hsl(var(--chart-2))', emoji: '🏋️' },
-    { name: 'Learning', hours: hours_learning_year / 365, color: 'hsl(var(--chart-3))', emoji: '📚' },
+    { name: 'Sleep', hours: sleepHoursPerDay, color: 'hsl(var(--chart-3))', emoji: '😴' },
+    { name: 'Work', hours: hours_work_actual_year / 365, color: 'hsl(var(--chart-2))', emoji: '💼' },
+    { name: 'Commute', hours: hours_commute_year / 365, color: 'hsl(var(--secondary-foreground))', emoji: '🚗' },
+    { name: 'Getting Ready', hours: gettingReadyHoursPerDay, color: 'hsl(var(--muted-foreground))', emoji: '🧼' },
+    { name: 'Wellness / Gym', hours: hours_gym_year / 365, color: 'hsl(var(--positive))', emoji: '🏋️' },
+    { name: 'Learning', hours: hours_learning_year / 365, color: 'hsl(var(--chart-4))', emoji: '📚' },
     { name: 'Socializing', hours: hours_friends_year / 365, color: 'hsl(var(--chart-5))', emoji: '🥳' },
-    { name: 'Relaxing', hours: hours_relaxing_year / 365, color: 'hsl(var(--chart-4))', emoji: '🌴' },
+    { name: 'Relaxing', hours: hours_relaxing_year / 365, color: 'hsl(var(--chart-1))', emoji: '🌴' },
   ].filter(d => d.hours > 0);
 
   const totalDailyHours = dailyBreakdown.reduce((sum, d) => sum + d.hours, 0);
@@ -122,7 +122,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
         <Button
           variant="outline"
           onClick={onOpenSettings}
-          className="rounded-lg h-8 px-3 gap-1.5 shrink-0 self-start sm:self-auto text-xs font-mono"
+          className="rounded-lg h-8 px-3 gap-1.5 shrink-0 self-start sm:self-auto text-xs font-mono border-border/40"
         >
           <Settings className="h-3.5 w-3.5" /> Work Settings
         </Button>
@@ -147,18 +147,18 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           <Card className="bg-card/50 border border-border/40 rounded-xl hover:border-border/80 transition-colors shadow-none">
             <CardHeader className="pb-4">
               <CardTitle className="text-xs font-mono uppercase tracking-wider font-semibold">Lifestyle Parameters</CardTitle>
-              <CardDescription className="text-xs font-mono">
+              <CardDescription className="text-xs font-mono text-muted-foreground">
                 Drag sliders to customize your typical daily/weekly time spending patterns.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-5">
               {/* Sleep Slider */}
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-medium text-foreground flex items-center gap-1.5">
-                    <span>😴</span> Sleep
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span>😴</span> <span className="text-foreground font-medium">Sleep</span>
                   </span>
-                  <span className="font-mono text-primary font-bold">{sleepHoursPerDay} hrs / day</span>
+                  <span className="text-foreground font-semibold tabular-nums">{sleepHoursPerDay} hrs / day</span>
                 </div>
                 <Slider
                   value={[sleepHoursPerDay]}
@@ -170,12 +170,12 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
               </div>
 
               {/* Getting Ready / Routine */}
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-medium text-foreground flex items-center gap-1.5">
-                    <span>🧼</span> Getting Ready / Routine
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span>🧼</span> <span className="text-foreground font-medium">Getting Ready / Routine</span>
                   </span>
-                  <span className="font-mono text-primary font-bold">{gettingReadyHoursPerDay} hrs / day</span>
+                  <span className="text-foreground font-semibold tabular-nums">{gettingReadyHoursPerDay} hrs / day</span>
                 </div>
                 <Slider
                   value={[gettingReadyHoursPerDay]}
@@ -189,12 +189,12 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
               <div className="h-px bg-border/40" />
 
               {/* Commute Days */}
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-medium text-foreground flex items-center gap-1.5">
-                    <span>🚗</span> Commute Frequency
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span>🚗</span> <span className="text-foreground font-medium">Commute Frequency</span>
                   </span>
-                  <span className="font-mono text-primary font-bold">{commuteDaysPerWeek} days / week</span>
+                  <span className="text-foreground font-semibold tabular-nums">{commuteDaysPerWeek} days / week</span>
                 </div>
                 <Slider
                   value={[commuteDaysPerWeek]}
@@ -207,34 +207,30 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
 
               {/* Commute Hours */}
               {commuteDaysPerWeek > 0 && (
-                <div className="space-y-2.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-medium text-foreground flex items-center gap-1.5 pl-4 border-l border-border">
-                      Round Trip Commute
-                    </span>
-                    <span className="font-mono text-primary font-bold">{commuteHoursPerDay} hrs / active day</span>
+                <div className="space-y-2 pl-3 border-l-2 border-border/40">
+                  <div className="flex justify-between items-center text-xs font-mono">
+                    <span className="text-muted-foreground">Round Trip Commute</span>
+                    <span className="text-foreground font-semibold tabular-nums">{commuteHoursPerDay} hrs / active day</span>
                   </div>
-                  <div className="pl-4">
-                    <Slider
-                      value={[commuteHoursPerDay]}
-                      onValueChange={(val) => setTimeSpentInputs(prev => ({ ...prev, commuteHoursPerDay: val[0] }))}
-                      min={0.5}
-                      max={12}
-                      step={0.5}
-                    />
-                  </div>
+                  <Slider
+                    value={[commuteHoursPerDay]}
+                    onValueChange={(val) => setTimeSpentInputs(prev => ({ ...prev, commuteHoursPerDay: val[0] }))}
+                    min={0.5}
+                    max={12}
+                    step={0.5}
+                  />
                 </div>
               )}
 
               <div className="h-px bg-border/40" />
 
               {/* Gym Days */}
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-medium text-foreground flex items-center gap-1.5">
-                    <span>🏋️</span> Wellness / Gym Frequency
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span>🏋️</span> <span className="text-foreground font-medium">Wellness / Gym Frequency</span>
                   </span>
-                  <span className="font-mono text-primary font-bold">{gymDaysPerWeek} days / week</span>
+                  <span className="text-foreground font-semibold tabular-nums">{gymDaysPerWeek} days / week</span>
                 </div>
                 <Slider
                   value={[gymDaysPerWeek]}
@@ -247,34 +243,30 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
 
               {/* Gym Hours */}
               {gymDaysPerWeek > 0 && (
-                <div className="space-y-2.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-medium text-foreground flex items-center gap-1.5 pl-4 border-l border-border">
-                      Session Duration
-                    </span>
-                    <span className="font-mono text-primary font-bold">{gymHoursPerSession} hrs / session</span>
+                <div className="space-y-2 pl-3 border-l-2 border-border/40">
+                  <div className="flex justify-between items-center text-xs font-mono">
+                    <span className="text-muted-foreground">Session Duration</span>
+                    <span className="text-foreground font-semibold tabular-nums">{gymHoursPerSession} hrs / session</span>
                   </div>
-                  <div className="pl-4">
-                    <Slider
-                      value={[gymHoursPerSession]}
-                      onValueChange={(val) => setTimeSpentInputs(prev => ({ ...prev, gymHoursPerSession: val[0] }))}
-                      min={0.5}
-                      max={6}
-                      step={0.5}
-                    />
-                  </div>
+                  <Slider
+                    value={[gymHoursPerSession]}
+                    onValueChange={(val) => setTimeSpentInputs(prev => ({ ...prev, gymHoursPerSession: val[0] }))}
+                    min={0.5}
+                    max={6}
+                    step={0.5}
+                  />
                 </div>
               )}
 
               <div className="h-px bg-border/40" />
 
               {/* Learning Hours */}
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-medium text-foreground flex items-center gap-1.5">
-                    <span>📚</span> Learning / Upskilling
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span>📚</span> <span className="text-foreground font-medium">Learning / Upskilling</span>
                   </span>
-                  <span className="font-mono text-primary font-bold">{learningHoursPerWeek} hrs / week</span>
+                  <span className="text-foreground font-semibold tabular-nums">{learningHoursPerWeek} hrs / week</span>
                 </div>
                 <Slider
                   value={[learningHoursPerWeek]}
@@ -286,12 +278,12 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
               </div>
 
               {/* Friends Hours */}
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-medium text-foreground flex items-center gap-1.5">
-                    <span>🥳</span> Friends & Socializing
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span>🥳</span> <span className="text-foreground font-medium">Friends & Socializing</span>
                   </span>
-                  <span className="font-mono text-primary font-bold">{friendsHoursPerWeek} hrs / week</span>
+                  <span className="text-foreground font-semibold tabular-nums">{friendsHoursPerWeek} hrs / week</span>
                 </div>
                 <Slider
                   value={[friendsHoursPerWeek]}
@@ -305,25 +297,25 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           </Card>
 
           {/* Linked settings card */}
-          <Card className="bg-card/20 backdrop-blur-sm border-dashed border-primary/10 rounded-2xl p-4 text-xs font-sans space-y-2">
+          <Card className="bg-card/40 border border-border/40 rounded-xl p-4 text-xs font-mono space-y-2.5 shadow-none">
             <div className="font-semibold text-foreground flex items-center gap-1.5">
               <span>💼</span> Inherited Work Profile
             </div>
-            <p className="text-muted-foreground leading-normal">
-              Work days and times are linked to your profile parameters:
+            <p className="text-muted-foreground leading-relaxed text-[11px]">
+              Work days and hours are synced from your Tax & Income configuration:
             </p>
-            <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-muted/20 rounded-xl p-2.5 border border-border/30">
-              <div>Working Hours: <span className="text-foreground font-bold">{hours_of_work_per_day}h/day</span></div>
-              <div>Work Days: <span className="text-foreground font-bold">{days_of_work_actual} days/yr</span></div>
-              <div className="col-span-2 pt-1 border-t border-border/30 mt-1">
-                Nominal Work Days: <span className="text-foreground font-bold">{days_of_work_nominal} days/yr</span>
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-muted/15 rounded-lg p-2.5 border border-border/30">
+              <div>Working Hours: <span className="text-foreground font-bold tabular-nums">{hours_of_work_per_day}h/day</span></div>
+              <div>Work Days: <span className="text-foreground font-bold tabular-nums">{days_of_work_actual} days/yr</span></div>
+              <div className="col-span-2 pt-1.5 border-t border-border/30 mt-0.5">
+                Nominal Work Days: <span className="text-foreground font-bold tabular-nums">{days_of_work_nominal} days/yr</span>
               </div>
               <div className="col-span-2">
-                Holidays & Public: <span className="text-foreground font-bold">{holidays_and_bank_holidays} days/yr</span>
+                Holidays & Public: <span className="text-foreground font-bold tabular-nums">{holidays_and_bank_holidays} days/yr</span>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground leading-normal">
-              You can adjust these parameters by editing the <strong>Tax & Income</strong> settings using the top-right button.
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Adjust these parameters in <strong>Work Settings</strong> (top right).
             </p>
           </Card>
         </div>
@@ -334,57 +326,90 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           <Card className="bg-card/50 border border-border/40 rounded-xl p-4 sm:p-6 space-y-6 hover:border-border/80 transition-colors shadow-none">
             <div className="flex flex-col md:flex-row items-center justify-around gap-6">
               {/* Donut Chart */}
-              <div className="w-48 h-48 flex items-center justify-center relative shrink-0">
+              <div className="w-44 h-44 flex items-center justify-center relative shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={timeData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={48}
+                      innerRadius={50}
                       outerRadius={68}
-                      paddingAngle={2}
+                      paddingAngle={3}
                       dataKey="value"
-                      stroke="none"
+                      stroke="hsl(var(--card))"
+                      strokeWidth={1.5}
                     >
                       {timeData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <RechartsTooltip formatter={(v: number) => [`${v.toFixed(0)} hrs`, 'Yearly Time']} />
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-popover text-popover-foreground border border-border/40 rounded-lg p-2.5 shadow-md font-mono text-xs space-y-1">
+                              <div className="font-bold flex items-center gap-1.5">
+                                <span>{data.emoji}</span>
+                                <span>{data.name}</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                <span className="text-foreground font-semibold tabular-nums">{Number(data.value).toFixed(0)} hrs</span> ({Number(data.pct).toFixed(1)}%)
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
                 {/* Inner Label */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                  <span className="font-mono text-2xl font-bold text-foreground">8,760</span>
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">total hours</span>
+                  <span className="font-mono text-2xl font-bold tracking-tight text-foreground tabular-nums">8,760</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono font-semibold">total hours</span>
                 </div>
               </div>
 
               {/* Top Highlights */}
               <div className="flex-1 space-y-4 w-full">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Free Time</span>
-                    <span className="font-mono text-lg font-bold text-[hsl(var(--chart-4))] block">{hours_relaxing_year.toFixed(0)} hrs</span>
-                    <span className="text-xs text-muted-foreground/80 font-semibold">{pct_relaxing.toFixed(1)}% of year</span>
+                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-1))]" /> Free Time
+                    </span>
+                    <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
+                      {hours_relaxing_year.toFixed(0)} hrs
+                    </span>
+                    <span className="text-xs font-mono text-muted-foreground tabular-nums">{pct_relaxing.toFixed(1)}% of year</span>
                   </div>
-                  <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Sleep</span>
-                    <span className="font-mono text-lg font-bold text-[hsl(var(--chart-5))] block">{hours_sleep_year.toFixed(0)} hrs</span>
-                    <span className="text-xs text-muted-foreground/80 font-semibold">{pct_sleep.toFixed(1)}% of year</span>
+                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-3))]" /> Sleep
+                    </span>
+                    <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
+                      {hours_sleep_year.toFixed(0)} hrs
+                    </span>
+                    <span className="text-xs font-mono text-muted-foreground tabular-nums">{pct_sleep.toFixed(1)}% of year</span>
                   </div>
-                  <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Work</span>
-                    <span className="font-mono text-lg font-bold text-[hsl(var(--positive))] block">{hours_work_actual_year.toFixed(0)} hrs</span>
-                    <span className="text-xs text-muted-foreground/80 font-semibold">{pct_hours_work.toFixed(1)}% of year</span>
+                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-2))]" /> Work
+                    </span>
+                    <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
+                      {hours_work_actual_year.toFixed(0)} hrs
+                    </span>
+                    <span className="text-xs font-mono text-muted-foreground tabular-nums">{pct_hours_work.toFixed(1)}% of year</span>
                   </div>
-                  <div className="bg-muted/15 border border-border/30 rounded-xl p-3 text-center">
-                    <span className="text-xs uppercase font-bold text-muted-foreground block mb-0.5">Other Activities</span>
-                    <span className="font-mono text-lg font-bold text-primary block">
+                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" /> Other Activities
+                    </span>
+                    <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
                       {(TOTAL_HOURS_YEAR - hours_relaxing_year - hours_sleep_year - hours_work_actual_year).toFixed(0)} hrs
                     </span>
-                    <span className="text-xs text-muted-foreground/80 font-semibold">
+                    <span className="text-xs font-mono text-muted-foreground tabular-nums">
                       {(100 - pct_relaxing - pct_sleep - pct_hours_work).toFixed(1)}% of year
                     </span>
                   </div>
@@ -393,66 +418,66 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
             </div>
 
             {/* 24h Day Timeline Bar */}
-            <div className="border-t border-border/40 pt-6">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground">
-                  <span className="flex items-center gap-1">⏰ Typical Day Allocation (24h Average)</span>
-                  <span className="font-mono">{totalDailyHours.toFixed(1)} hrs accounted for</span>
-                </div>
-                <div className="w-full h-7 rounded-full overflow-hidden flex border border-primary/10 shadow-inner bg-muted/10">
-                  {dailyBreakdown.map((item, idx) => {
-                    const pct = (item.hours / totalDailyHours) * 100;
-                    return (
-                      <TooltipProvider key={idx}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div
-                              style={{ width: `${pct}%`, backgroundColor: item.color }}
-                              className="h-full hover:brightness-105 transition-all cursor-pointer flex items-center justify-center text-xs text-white font-bold select-none overflow-hidden"
-                            >
-                              {pct > 5 && <span>{item.emoji}</span>}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent className="bg-popover text-popover-foreground border border-border rounded-xl p-3 shadow-md font-sans text-xs">
-                            <div className="font-bold flex items-center gap-1.5 mb-1 text-sm">
-                              <span>{item.emoji}</span>
-                              <span>{item.name}</span>
-                            </div>
-                            <div className="space-y-1 font-mono text-xs text-muted-foreground">
-                              <p>Daily Avg: <span className="text-foreground font-semibold">{item.hours.toFixed(1)} hrs</span></p>
-                              <p>Weekly Avg: <span className="text-foreground font-semibold">{(item.hours * 7).toFixed(1)} hrs</span></p>
-                              <p>Yearly Total: <span className="text-foreground font-semibold">{(item.hours * 365).toFixed(0)} hrs</span></p>
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    );
-                  })}
-                </div>
-                {/* Timeline Legend */}
-                <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 pt-1">
-                  {dailyBreakdown.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-1 text-xs text-muted-foreground font-sans">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                      <span>
-                        {item.emoji} <span className="font-medium text-foreground/80">{item.name}</span> ({item.hours.toFixed(1)}h)
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            <div className="border-t border-border/40 pt-5 space-y-3">
+              <div className="flex justify-between items-center text-xs font-mono font-semibold text-muted-foreground">
+                <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                  <Clock className="h-3.5 w-3.5 text-primary" /> Typical Day Allocation (24h Average)
+                </span>
+                <span className="tabular-nums">{totalDailyHours.toFixed(1)} hrs accounted for</span>
+              </div>
+              
+              {/* Modern Sleek Progress Strip */}
+              <div className="w-full h-3 rounded-full overflow-hidden flex bg-muted/20 border border-border/30 gap-0.5 p-0.5">
+                {dailyBreakdown.map((item, idx) => {
+                  const pct = (item.hours / totalDailyHours) * 100;
+                  return (
+                    <TooltipProvider key={idx}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            style={{ width: `${pct}%`, backgroundColor: item.color }}
+                            className="h-full rounded-full transition-all hover:opacity-80 cursor-pointer"
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent className="bg-popover text-popover-foreground border border-border/40 rounded-lg p-2.5 shadow-md font-mono text-xs">
+                          <div className="font-bold flex items-center gap-1.5 mb-1">
+                            <span>{item.emoji}</span>
+                            <span>{item.name}</span>
+                          </div>
+                          <div className="space-y-0.5 text-muted-foreground text-[11px]">
+                            <p>Daily: <span className="text-foreground font-semibold tabular-nums">{item.hours.toFixed(1)} hrs</span></p>
+                            <p>Weekly: <span className="text-foreground font-semibold tabular-nums">{(item.hours * 7).toFixed(1)} hrs</span></p>
+                            <p>Yearly: <span className="text-foreground font-semibold tabular-nums">{(item.hours * 365).toFixed(0)} hrs</span></p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })}
+              </div>
+
+              {/* Timeline Legend */}
+              <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+                {dailyBreakdown.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    <span className="text-foreground font-medium">{item.name}</span>
+                    <span className="text-muted-foreground/70 tabular-nums">({item.hours.toFixed(1)}h)</span>
+                  </div>
+                ))}
               </div>
             </div>
           </Card>
 
           {/* Detailed Statistics Table */}
-          <Card className="bg-card/50 border border-border/40 rounded-xl p-4 sm:p-6 hover:border-border/80 transition-colors shadow-none">
-            <h4 className="text-xs font-mono uppercase tracking-wider font-semibold text-foreground mb-4 flex items-center gap-1.5">
-              📊 Complete Time Metrics Breakdown
+          <Card className="bg-card/50 border border-border/40 rounded-xl p-4 sm:p-6 hover:border-border/80 transition-colors shadow-none font-mono">
+            <h4 className="text-xs uppercase tracking-wider font-semibold text-foreground mb-4 flex items-center gap-1.5">
+              Complete Time Metrics Breakdown
             </h4>
             <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <table className="w-full text-xs text-left border-collapse font-sans">
+              <table className="w-full text-xs text-left border-collapse font-mono">
                 <thead>
-                  <tr className="border-b border-border/40 text-muted-foreground font-semibold">
+                  <tr className="border-b border-border/40 text-muted-foreground font-semibold text-[11px] uppercase tracking-wider">
                     <th className="py-2.5 px-3">Category</th>
                     <th className="py-2.5 px-3 text-right">Daily Avg</th>
                     <th className="py-2.5 px-3 text-right">Weekly Avg</th>
@@ -462,108 +487,108 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                 </thead>
                 <tbody className="divide-y divide-border/20 text-foreground font-medium">
                   {/* Sleep Row */}
-                  <tr className="hover:bg-muted/5 transition-colors">
-                    <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-5))' }} />
+                  <tr className="hover:bg-muted/10 transition-colors">
+                    <td className="py-2.5 px-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-3))' }} />
                       <span>😴 Sleep</span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono">{sleepHoursPerDay.toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{(sleepHoursPerDay * 7).toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{hours_sleep_year.toFixed(0)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_sleep.toFixed(1)}%</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{sleepHoursPerDay.toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{(sleepHoursPerDay * 7).toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{hours_sleep_year.toFixed(0)} hrs</td>
+                    <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_sleep.toFixed(1)}%</td>
                   </tr>
                   {/* Work Row */}
-                  <tr className="hover:bg-muted/5 transition-colors">
-                    <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--positive))' }} />
+                  <tr className="hover:bg-muted/10 transition-colors">
+                    <td className="py-2.5 px-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-2))' }} />
                       <span>💼 Actual Work</span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono">{(hours_work_actual_year / 365).toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{(hours_work_actual_year / weeks_per_year).toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{hours_work_actual_year.toFixed(0)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_hours_work.toFixed(1)}%</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{(hours_work_actual_year / 365).toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{(hours_work_actual_year / weeks_per_year).toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{hours_work_actual_year.toFixed(0)} hrs</td>
+                    <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_hours_work.toFixed(1)}%</td>
                   </tr>
                   {/* Commute Row */}
                   {hours_commute_year > 0 && (
-                    <tr className="hover:bg-muted/5 transition-colors">
-                      <td className="py-2.5 px-3 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--muted-foreground))' }} />
+                    <tr className="hover:bg-muted/10 transition-colors">
+                      <td className="py-2.5 px-3 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--secondary-foreground))' }} />
                         <span>🚗 Commute</span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono">{(hours_commute_year / 365).toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{(commuteDaysPerWeek * commuteHoursPerDay).toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{hours_commute_year.toFixed(0)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_commute.toFixed(1)}%</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{(hours_commute_year / 365).toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{(commuteDaysPerWeek * commuteHoursPerDay).toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{hours_commute_year.toFixed(0)} hrs</td>
+                      <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_commute.toFixed(1)}%</td>
                     </tr>
                   )}
                   {/* Getting Ready Row */}
-                  <tr className="hover:bg-muted/5 transition-colors">
-                    <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-5))' }} />
+                  <tr className="hover:bg-muted/10 transition-colors">
+                    <td className="py-2.5 px-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--muted-foreground))' }} />
                       <span>🧼 Getting Ready</span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono">{gettingReadyHoursPerDay.toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{(gettingReadyHoursPerDay * 7).toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{hours_ready_year.toFixed(0)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_ready.toFixed(1)}%</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{gettingReadyHoursPerDay.toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{(gettingReadyHoursPerDay * 7).toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{hours_ready_year.toFixed(0)} hrs</td>
+                    <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_ready.toFixed(1)}%</td>
                   </tr>
                   {/* Gym Row */}
                   {hours_gym_year > 0 && (
-                    <tr className="hover:bg-muted/5 transition-colors">
-                      <td className="py-2.5 px-3 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-2))' }} />
+                    <tr className="hover:bg-muted/10 transition-colors">
+                      <td className="py-2.5 px-3 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--positive))' }} />
                         <span>🏋️ Wellness / Gym</span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono">{(hours_gym_year / 365).toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{(gymDaysPerWeek * gymHoursPerSession).toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{hours_gym_year.toFixed(0)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_gym.toFixed(1)}%</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{(hours_gym_year / 365).toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{(gymDaysPerWeek * gymHoursPerSession).toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{hours_gym_year.toFixed(0)} hrs</td>
+                      <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_gym.toFixed(1)}%</td>
                     </tr>
                   )}
                   {/* Learning Row */}
                   {hours_learning_year > 0 && (
-                    <tr className="hover:bg-muted/5 transition-colors">
-                      <td className="py-2.5 px-3 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-3))' }} />
+                    <tr className="hover:bg-muted/10 transition-colors">
+                      <td className="py-2.5 px-3 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-4))' }} />
                         <span>📚 Learning</span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono">{(hours_learning_year / 365).toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{learningHoursPerWeek.toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{hours_learning_year.toFixed(0)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_learning.toFixed(1)}%</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{(hours_learning_year / 365).toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{learningHoursPerWeek.toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{hours_learning_year.toFixed(0)} hrs</td>
+                      <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_learning.toFixed(1)}%</td>
                     </tr>
                   )}
                   {/* Friends Row */}
                   {hours_friends_year > 0 && (
-                    <tr className="hover:bg-muted/5 transition-colors">
-                      <td className="py-2.5 px-3 flex items-center gap-1.5">
+                    <tr className="hover:bg-muted/10 transition-colors">
+                      <td className="py-2.5 px-3 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-5))' }} />
                         <span>🥳 Socializing</span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono">{(hours_friends_year / 365).toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{friendsHoursPerWeek.toFixed(1)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{hours_friends_year.toFixed(0)} hrs</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_friends.toFixed(1)}%</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{(hours_friends_year / 365).toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{friendsHoursPerWeek.toFixed(1)} hrs</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{hours_friends_year.toFixed(0)} hrs</td>
+                      <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_friends.toFixed(1)}%</td>
                     </tr>
                   )}
                   {/* Relaxing Row */}
-                  <tr className="hover:bg-muted/5 transition-colors">
-                    <td className="py-2.5 px-3 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-4))' }} />
+                  <tr className="hover:bg-muted/10 transition-colors">
+                    <td className="py-2.5 px-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--chart-1))' }} />
                       <span>🌴 Relaxing / Free Time</span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono">{(hours_relaxing_year / 365).toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{(hours_relaxing_year / weeks_per_year).toFixed(1)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{hours_relaxing_year.toFixed(0)} hrs</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{pct_relaxing.toFixed(1)}%</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{(hours_relaxing_year / 365).toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{(hours_relaxing_year / weeks_per_year).toFixed(1)} hrs</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums">{hours_relaxing_year.toFixed(0)} hrs</td>
+                    <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{pct_relaxing.toFixed(1)}%</td>
                   </tr>
                   {/* Total Row */}
-                  <tr className="font-bold border-t border-border/60 bg-muted/10 font-mono">
-                    <td className="py-3 px-3 font-sans">Total Year Accounted</td>
-                    <td className="py-3 px-3 text-right">{totalDailyHours.toFixed(1)} hrs/d</td>
-                    <td className="py-3 px-3 text-right">{(totalDailyHours * 7).toFixed(1)} hrs/w</td>
-                    <td className="py-3 px-3 text-right">{Math.min(TOTAL_HOURS_YEAR, tracked_hours).toFixed(0)} hrs</td>
-                    <td className="py-3 px-3 text-right">
+                  <tr className="font-bold border-t border-border/60 bg-muted/15 font-mono">
+                    <td className="py-3 px-3">Total Year Accounted</td>
+                    <td className="py-3 px-3 text-right tabular-nums">{totalDailyHours.toFixed(1)} hrs/d</td>
+                    <td className="py-3 px-3 text-right tabular-nums">{(totalDailyHours * 7).toFixed(1)} hrs/w</td>
+                    <td className="py-3 px-3 text-right tabular-nums">{Math.min(TOTAL_HOURS_YEAR, tracked_hours).toFixed(0)} hrs</td>
+                    <td className="py-3 px-3 text-right tabular-nums">
                       {Math.min(100.0, (tracked_hours / TOTAL_HOURS_YEAR) * 100).toFixed(1)}%
                     </td>
                   </tr>
