@@ -309,7 +309,7 @@ const Index = () => {
                               {item.degree}
                             </p>
                             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground/80">
-                              {item.school} | {item.start_date} - {item.end_date}
+                              {[item.school, item.location].filter(Boolean).join(', ')} | {item.start_date} - {item.end_date}
                             </p>
                           </div>
                           {isAdmin && (

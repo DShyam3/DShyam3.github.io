@@ -111,6 +111,7 @@ export function EducationDialog({ open, onOpenChange, onSave, initialData }: Edu
   const [formData, setFormData] = useState<Omit<Education, 'id'>>({
     degree: '',
     school: '',
+    location: '',
     start_date: '',
     end_date: '',
     logo_url: '',
@@ -125,6 +126,7 @@ export function EducationDialog({ open, onOpenChange, onSave, initialData }: Edu
       setFormData({
         degree: '',
         school: '',
+        location: '',
         start_date: '',
         end_date: '',
         logo_url: '',
@@ -153,6 +155,10 @@ export function EducationDialog({ open, onOpenChange, onSave, initialData }: Edu
           <div className="space-y-2">
             <label className="text-sm font-medium">School / University</label>
             <Input value={formData.school} onChange={e => setFormData({ ...formData, school: e.target.value })} required />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Location</label>
+            <Input value={formData.location ?? ''} onChange={e => setFormData({ ...formData, location: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

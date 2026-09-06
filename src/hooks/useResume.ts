@@ -16,6 +16,8 @@ export interface Education {
   id: string;
   degree: string;
   school: string;
+  /** Optional, unlike experience: the school name usually carries the city. */
+  location?: string;
   start_date: string;
   end_date: string;
   logo_url: string;
