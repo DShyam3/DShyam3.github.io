@@ -12,3 +12,4 @@ export * from './debt';
 export * from './geometry';
 export * from './holidays';
 export * from './payday';
+export * from './scenario';
