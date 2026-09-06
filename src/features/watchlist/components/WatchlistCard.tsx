@@ -275,7 +275,11 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                     year: 'numeric',
                   })}`}
                 >
-                  <Calendar className="h-2.5 w-2.5 opacity-70" />
+                  {/* The icon stays muted while the countdown takes the
+                      foreground: two weights inside one pill, so the glyph
+                      marks it as a date and the eye still lands on the
+                      number rather than on the decoration. */}
+                  <Calendar className="h-3 w-3 shrink-0 text-muted-foreground" />
                   {compactUpcomingStatus(status)}
                 </span>
               ) : (

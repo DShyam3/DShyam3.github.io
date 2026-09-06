@@ -3,6 +3,7 @@ import {
   compactUpcomingStatus,
   displayTitle,
   formatRuntime,
+  getStatusColor,
   isUpcomingStatus,
 } from './watchlist-utils';
 
@@ -70,11 +71,40 @@ describe('compactUpcomingStatus', () => {
     expect(compactUpcomingStatus('S1 releases in 46 days')).toBe('S1 in 46d');
   });
 
-  it('handles the single-day form', () => {
-    expect(compactUpcomingStatus('releases in 1 day')).toBe('in 1d');
+  // A film has no season prefix, so the compacted form has to supply its own
+  // subject -- "in 1d" alone says nothing outside the Upcoming tab.
+  it('names the subject when there is no season prefix', () => {
+    expect(compactUpcomingStatus('releases in 1 day')).toBe('Out in 1d');
+    expect(compactUpcomingStatus('releases in 33 days')).toBe('Out in 33d');
   });
 
   it('leaves Coming Soon untouched', () => {
     expect(compactUpcomingStatus('Coming Soon')).toBe('Coming Soon');
+  });
+});
+
+describe('getStatusColor', () => {
+  // A dated countdown reads at full strength outside the Upcoming tab, where
+  // it sits alone among filled label pills; an undated "Coming Soon" has
+  // nothing to read, so it stays in the faint tier.
+  it('gives a dated countdown the foreground, not the muted tier', () => {
+    expect(getStatusColor('S2 releases in 136 days')).toContain(
+      'text-foreground',
+    );
+    expect(getStatusColor('Coming Soon')).toContain('text-muted-foreground');
+  });
+
+  it('keeps every tier free of hue', () => {
+    for (const status of [
+      'Watching',
+      'To Watch',
+      'Watched',
+      'Coming Soon',
+      'releases in 3 days',
+    ]) {
+      expect(getStatusColor(status)).not.toMatch(
+        /(red|orange|amber|green|blue|purple|pink)-/,
+      );
+    }
   });
 });

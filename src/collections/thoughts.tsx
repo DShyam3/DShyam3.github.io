@@ -28,7 +28,7 @@ export const thoughtsCollection: CollectionConfig<ThoughtRow> = {
   table: 'thoughts',
   path: '/thoughts',
   title: 'Thoughts',
-  subtitle: 'Things I have been thinking about',
+  subtitle: 'Things on my mind',
   noun: { singular: 'Thought', plural: 'Thoughts' },
 
   searchFields: ['title', 'excerpt'],
