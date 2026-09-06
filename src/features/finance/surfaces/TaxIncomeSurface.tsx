@@ -282,15 +282,18 @@ export default function TaxIncomeSurface({
           </div>
           <div className="bg-muted/20 rounded-lg p-3 border border-border/30">
             <span className="block text-[11px] font-mono text-muted-foreground uppercase">Employer Pension ({settings.employerPensionPercent}%)</span>
-            <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-foreground">+{formatGBP(results.employerPensionRate)}</span>
+            <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-positive">+{formatGBP(results.employerPensionRate)}</span>
           </div>
           <div className="bg-muted/20 rounded-lg p-3 border border-border/30">
             <span className="block text-[11px] font-mono text-muted-foreground uppercase">Benefits & Perks</span>
-            <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-foreground">+{formatGBP(results.totalBenefitsValue)}</span>
+            <span className={cn(
+              "mt-1 block font-mono text-sm font-bold tabular-nums",
+              results.totalBenefitsValue > 0 ? "text-positive" : "text-muted-foreground"
+            )}>+{formatGBP(results.totalBenefitsValue)}</span>
           </div>
           <div className="bg-muted/20 rounded-lg p-3 border border-border/30">
             <span className="block text-[11px] font-mono text-muted-foreground uppercase">Net Take-Home</span>
-            <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-foreground">{formatGBP(results.netTakeHome)}</span>
+            <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-positive">{formatGBP(results.netTakeHome)}</span>
           </div>
         </div>
       </div>
@@ -329,12 +332,12 @@ export default function TaxIncomeSurface({
           <table className="min-w-[640px] w-full text-sm text-left border-collapse">
             <thead>
               <tr className="border-b border-border/40 text-muted-foreground text-xs uppercase tracking-wider font-mono font-semibold">
-                <th className="py-3 pr-4 w-full whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Category</th>
-                <th className="py-3 px-3 text-right w-px whitespace-nowrap">Annual</th>
-                <th className="py-3 px-3 text-right w-px whitespace-nowrap">Monthly</th>
-                <th className="py-3 px-3 text-right w-px whitespace-nowrap">Weekly</th>
-                <th className="py-3 px-3 text-right w-px whitespace-nowrap">Daily</th>
-                <th className="py-3 px-3 text-right w-px whitespace-nowrap">Hourly</th>
+                <th className="py-2.5 pr-4 w-full sticky left-0 z-10 bg-background border-r border-border/40">Category</th>
+                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Annual</th>
+                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Monthly</th>
+                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Weekly</th>
+                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Daily</th>
+                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Hourly</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20 font-mono text-xs text-foreground">
@@ -374,11 +377,11 @@ export default function TaxIncomeSurface({
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-right w-px font-mono text-foreground tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono text-foreground tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono text-foreground tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono text-foreground tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono text-foreground tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.hourly)}</td>
                 </tr>
               )}
 
@@ -395,11 +398,11 @@ export default function TaxIncomeSurface({
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.hourly)}</td>
                 </tr>
               )}
 
@@ -416,11 +419,11 @@ export default function TaxIncomeSurface({
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-muted-foreground whitespace-nowrap">-{formatGBP(breakdownRates.pension.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-muted-foreground whitespace-nowrap">-{formatGBP(breakdownRates.pension.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-muted-foreground whitespace-nowrap">-{formatGBP(breakdownRates.pension.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-muted-foreground whitespace-nowrap">-{formatGBP(breakdownRates.pension.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-muted-foreground whitespace-nowrap">-{formatGBP(breakdownRates.pension.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.hourly)}</td>
                 </tr>
               )}
 
@@ -428,11 +431,11 @@ export default function TaxIncomeSurface({
               {results.incomeTax > 0 && (
                 <tr className="hover:bg-muted/10 transition-colors text-foreground">
                   <td className="py-3 pr-4 w-full font-sans font-bold text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Income Tax</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.tax.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.tax.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.tax.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.tax.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.tax.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.hourly)}</td>
                 </tr>
               )}
 
@@ -447,11 +450,11 @@ export default function TaxIncomeSurface({
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.ni.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.ni.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.ni.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.ni.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.ni.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.hourly)}</td>
                 </tr>
               )}
 
@@ -459,16 +462,16 @@ export default function TaxIncomeSurface({
               {results.studentLoan > 0 && (
                 <tr className="hover:bg-muted/10 transition-colors text-foreground">
                   <td className="py-3 pr-4 w-full font-sans font-bold text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Student Loan ({getPlanName(settings.studentLoanPlan)})</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.studentLoan.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-muted-foreground">-{formatGBP(breakdownRates.studentLoan.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.hourly)}</td>
                 </tr>
               )}
 
               {/* Total Deductions */}
-              <tr className="hover:bg-muted/10 transition-colors font-mono text-muted-foreground">
+              <tr className="hover:bg-destructive/10 transition-colors font-mono text-destructive bg-destructive/5">
                 <td className="py-3 pr-4 w-full font-bold whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Total Deductions</td>
                 <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold tabular-nums">-{formatGBP(breakdownRates.deductions.annual)}</td>
                 <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold tabular-nums">-{formatGBP(breakdownRates.deductions.monthly)}</td>
@@ -478,13 +481,13 @@ export default function TaxIncomeSurface({
               </tr>
 
               {/* Take Home Pay */}
-              <tr className="hover:bg-muted/20 transition-colors border-t border-border/40 font-mono font-bold text-foreground">
+              <tr className="hover:bg-positive/10 transition-colors border-t border-border/40 font-mono font-bold text-positive bg-positive/5">
                 <td className="py-3 pr-4 w-full font-bold text-sm whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Take-Home Pay</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums text-foreground">{formatGBP(breakdownRates.postTax.annual)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums text-foreground">{formatGBP(breakdownRates.postTax.monthly)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums text-foreground">{formatGBP(breakdownRates.postTax.weekly)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums text-foreground">{formatGBP(breakdownRates.postTax.daily)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums text-foreground">{formatGBP(breakdownRates.postTax.hourly)}</td>
+                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.annual)}</td>
+                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.monthly)}</td>
+                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.weekly)}</td>
+                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.daily)}</td>
+                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.hourly)}</td>
               </tr>
 
             </tbody>
@@ -534,16 +537,32 @@ export default function TaxIncomeSurface({
           </div>
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
             <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Left</span>
-            <span className="mt-1 block text-sm font-bold text-foreground tabular-nums">
+            <span className="mt-1 block text-sm font-bold text-positive tabular-nums">
               {settings.workHolidays - getHolidaysUsedCount()}
               <span className="ml-1 text-[11px] font-normal text-muted-foreground">d</span>
             </span>
           </div>
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
             <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Bank</span>
-            <span className="mt-1 block text-sm font-bold text-foreground tabular-nums">
+            <span className="mt-1 block text-sm font-bold text-chart-5 tabular-nums">
               {bankHolidaysLeft}/{settings.bankHolidays}
             </span>
+          </div>
+        </div>
+
+        {/* Holiday Calendar Legend */}
+        <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-muted-foreground px-0.5 border-b border-border/30 pb-3">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-chart-5/25 border border-chart-5/50" />
+            <span className="text-chart-5 font-semibold">Bank Holiday</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-positive/25 border border-positive/50" />
+            <span className="text-positive font-semibold">Booked Leave</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-muted/40 border border-border/30" />
+            <span>Working Day</span>
           </div>
         </div>
 
@@ -588,7 +607,7 @@ export default function TaxIncomeSurface({
                     <span className="text-xs font-mono font-semibold text-foreground">{month}</span>
                     <div className="flex items-center gap-1.5 text-xs">
                       {monthWorkingDaysBooked > 0 && (
-                        <span className="bg-muted/40 text-foreground font-mono text-[11px] px-1.5 py-0.5 rounded border border-border/30">
+                        <span className="bg-positive/20 text-positive font-mono text-[11px] px-1.5 py-0.5 rounded border border-positive/40 font-semibold">
                           {monthWorkingDaysBooked}d booked
                         </span>
                       )}
@@ -621,16 +640,16 @@ export default function TaxIncomeSurface({
                       const dayOfWeek = dateObj.getDay();
                       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-                      let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-xs font-mono flex items-center justify-center rounded font-medium ";
+                      let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-xs font-mono flex items-center justify-center rounded font-medium transition-colors ";
 
                       if (isBookedHoliday) {
-                        cellClass += "text-foreground font-bold bg-primary/25 border border-primary/40";
+                        cellClass += "text-positive font-bold bg-positive/20 border border-positive/50";
                       } else if (isBankHoliday) {
-                        cellClass += "text-foreground font-semibold bg-muted/60";
+                        cellClass += "text-chart-5 font-bold bg-chart-5/20 border border-chart-5/50";
                       } else if (isWeekend) {
                         cellClass += "text-muted-foreground/30";
                       } else {
-                        cellClass += "text-foreground";
+                        cellClass += "text-foreground hover:bg-muted/40";
                       }
 
                       const getTooltipDetails = () => {
@@ -662,8 +681,10 @@ export default function TaxIncomeSurface({
                             <div className="space-y-1 text-muted-foreground font-mono text-[11px]">
                               {getTooltipDetails().map((detail, idx) => {
                                 let colorClass = "text-foreground/80";
-                                if (detail.startsWith('Bank Holiday') || detail.startsWith('Booked Leave')) {
-                                  colorClass = "text-foreground font-semibold";
+                                if (detail.startsWith('Bank Holiday')) {
+                                  colorClass = "text-chart-5 font-semibold";
+                                } else if (detail.startsWith('Booked Leave')) {
+                                  colorClass = "text-positive font-semibold";
                                 } else if (detail === 'Weekend') {
                                   colorClass = "text-muted-foreground/50";
                                 }
@@ -875,8 +896,8 @@ export default function TaxIncomeSurface({
           <div className="flex justify-between items-center text-xs">
             <span className="text-muted-foreground font-medium">Status</span>
             <span className={cn(
-              "font-mono px-2 py-0.5 rounded-lg font-bold text-xs",
-              nextPayday.daysRemaining === 0 ? "bg-positive/10 text-positive" : "bg-muted/60 text-muted-foreground"
+              "font-mono px-2 py-0.5 rounded-lg font-bold text-xs tabular-nums",
+              nextPayday.daysRemaining === 0 ? "bg-positive/20 text-positive border border-positive/40" : "bg-primary/10 text-primary border border-primary/20"
             )}>
               {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
             </span>
