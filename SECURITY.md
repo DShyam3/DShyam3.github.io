@@ -107,9 +107,24 @@ re-deriving the reasoning.
 
 Not accepted, still open, and only fixable from the dashboard:
 
-- **Leaked-password protection is disabled** (Authentication → Policies). With a
-  single admin account that owns everything, HaveIBeenPwned checking is cheap.
-- **No MFA options enabled.** Add TOTP for the same reason.
-- **Public email signup is enabled.** See the note above.
-- **Postgres has outstanding security patches** (`supabase-postgres-15.8.1.030`).
-  Schedule an upgrade window under Settings → Infrastructure.
+Project ref is `yvtiybyuifkiwyrnjebe`, so each link below is
+`https://supabase.com/dashboard/project/yvtiybyuifkiwyrnjebe` + the path given.
+
+- **Public email signup is enabled** — `/auth/providers`, the Email provider
+  panel, "Allow new users to sign up". This is the structural fix behind S-1:
+  every policy checks one admin address, so a self-registered account gets
+  nothing, but it should not be possible to create one on a single-account
+  site.
+- **Leaked-password protection is disabled** — same Email provider panel.
+  Supabase Auth checks candidate passwords against HaveIBeenPwned. **Pro plan
+  and above only**; on Free the option is not offered, which is worth knowing
+  before hunting for the toggle. Raising the minimum length and requiring mixed
+  character classes is available on any plan and lives in the same place.
+- **No MFA options enabled.** Enrollment and verification are dashboard-gated
+  under Authentication; enabling the TOTP (app authenticator) factor is the
+  cheap win on the one account that owns everything.
+- **Postgres has outstanding security patches** (`supabase-postgres-15.8.1.030`)
+  — the "Upgrade project" button is on `/settings/general`, not under
+  Infrastructure. The project goes offline for the upgrade and the window
+  scales with database size, so pick a quiet moment. Read replicas would block
+  it; this project has none.
