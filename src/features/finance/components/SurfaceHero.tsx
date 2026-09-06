@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ReactNode } from 'react';
 
 /**
@@ -21,6 +22,12 @@ export interface SurfaceHeroProps {
   detail?: ReactNode;
   /** Right-hand slot for a secondary figure that earns equal billing. */
   aside?: ReactNode;
+  /**
+   * True until the first fetch returns. Without it the figure renders £0.00
+   * and then snaps to the real value, which reads as the page being wrong
+   * before it is slow.
+   */
+  loading?: boolean;
 }
 
 const TONE: Record<NonNullable<SurfaceHeroProps['tone']>, string> = {
@@ -29,7 +36,7 @@ const TONE: Record<NonNullable<SurfaceHeroProps['tone']>, string> = {
   negative: 'text-destructive',
 };
 
-export function SurfaceHero({ label, value, tone = 'neutral', detail, aside }: SurfaceHeroProps) {
+export function SurfaceHero({ label, value, tone = 'neutral', detail, aside, loading }: SurfaceHeroProps) {
   return (
     <section
       aria-label={label}
@@ -37,14 +44,29 @@ export function SurfaceHero({ label, value, tone = 'neutral', detail, aside }: S
     >
       <div className="min-w-0 space-y-1">
         <DotMatrixText text={label.toUpperCase()} size="xs" />
-        <p className={cn('font-sans text-3xl font-bold tabular-nums sm:text-4xl', TONE[tone])}>
-          {value}
-        </p>
-        {detail ? (
-          <p className="font-sans text-xs text-muted-foreground">{detail}</p>
-        ) : null}
+        {loading ? (
+          <>
+            {/* Sized to the figure it replaces, so nothing shifts when the
+                real number arrives. */}
+            <Skeleton className="h-9 w-56 rounded-lg sm:h-10" />
+            <Skeleton className="mt-2 h-3 w-72 max-w-full rounded" />
+          </>
+        ) : (
+          <>
+            <p className={cn('font-sans text-3xl font-bold tabular-nums sm:text-4xl', TONE[tone])}>
+              {value}
+            </p>
+            {detail ? (
+              <p className="font-sans text-xs text-muted-foreground">{detail}</p>
+            ) : null}
+          </>
+        )}
       </div>
-      {aside ? <div className="shrink-0 text-left sm:text-right">{aside}</div> : null}
+      {loading ? (
+        <Skeleton className="h-10 w-28 shrink-0 rounded-lg" />
+      ) : aside ? (
+        <div className="shrink-0 text-left sm:text-right">{aside}</div>
+      ) : null}
     </section>
   );
 }

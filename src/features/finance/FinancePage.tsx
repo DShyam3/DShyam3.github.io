@@ -298,6 +298,7 @@ function FinanceView() {
     holidayDefaults,
     investmentHoldings,
     loadingDb,
+    hasLoaded,
     memberships,
     mockTransactions,
     payDayInput,
@@ -1135,6 +1136,7 @@ function FinanceView() {
     if (activeSurface === 'spending') {
       return (
         <SurfaceHero
+          loading={!hasLoaded}
           label="Spent this month"
           value={formatGBP(totalSpent)}
           detail={
@@ -1157,6 +1159,7 @@ function FinanceView() {
     if (activeSurface === 'plan') {
       return (
         <SurfaceHero
+          loading={!hasLoaded}
           // Not "projected balance": freeToSpend is budget minus spent minus
           // unpaid bills, which is what is left to commit, not what will be in
           // the account. Naming it the second thing would be a lie by label.
@@ -1183,6 +1186,7 @@ function FinanceView() {
     if (activeSurface === 'wealth') {
       return (
         <SurfaceHero
+          loading={!hasLoaded}
           label="Net worth"
           value={formatGBP(netWorth)}
           // Deliberately not red when negative. The minus sign already carries
@@ -1209,6 +1213,7 @@ function FinanceView() {
     if (activeSurface === 'income') {
       return (
         <SurfaceHero
+          loading={!hasLoaded}
           label="Take-home this tax year"
           value={formatGBP(results.netTakeHome)}
           tone="positive"

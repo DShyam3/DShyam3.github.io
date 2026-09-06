@@ -272,6 +272,15 @@ function useProvideFinanceData() {
   }, [settings.taxYear, settings.ukRegion]);
 
   const [loadingDb, setLoadingDb] = useState(false);
+  /**
+   * False until the first fetch has come back.
+   *
+   * `loadingDb` cannot answer "is there data yet": it is false before the fetch
+   * starts as well as after it finishes. Since 7.3b removed the localStorage
+   * cache, state begins at its defaults, so without this every figure renders
+   * £0.00 for the ~260 ms of the mount and then snaps to the real value.
+   */
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [savingDb, setSavingDb] = useState(false);
   // The profile every non-template row is written against (Phase 7.1). One
   // operator, several subjects; a profile switcher arrives in 7.2d, once
@@ -892,6 +901,7 @@ function useProvideFinanceData() {
         console.error('Error fetching settings from Supabase:', err);
       } finally {
         setLoadingDb(false);
+        setHasLoaded(true);
       }
   };
 
@@ -1332,6 +1342,7 @@ function useProvideFinanceData() {
     holidayDefaults,
     investmentHoldings,
     loadingDb,
+    hasLoaded,
     memberships,
     mockTransactions,
     payDayInput,

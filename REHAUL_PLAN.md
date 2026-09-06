@@ -1015,6 +1015,28 @@ regenerate, not money that happened.
 
 Worth doing if these ever stop being regenerable from code.
 
+#### 7.E-pre0 Perceived speed is not the same as speed
+
+Measured on a clean mount, the eighteen queries all start within 16 ms of each
+other and the whole batch is done in 261 ms. (A dev measurement of 1,321 ms was
+two StrictMode mounts and the gap between them.) The floor is one round trip to
+eu-west-2, median 133 ms, so the theoretical best is around 150 ms: collapsing
+eighteen queries into one RPC would save roughly 110 ms.
+
+That is not what the page felt like, and 110 ms is not why. Removing the
+localStorage cache in 7.3b meant state starts at its defaults, and nothing gated
+rendering on the fetch — so every figure painted **£0.00** for the length of the
+mount and then snapped to the real value. A hero reading £0.00 and jumping to
+£38,502.05 reads as the page being *wrong* before it is slow, which costs far
+more than the 110 ms an RPC would buy back.
+
+So the fix is a first-load flag rather than a faster query. `loadingDb` cannot
+serve: it is false before the fetch starts as well as after it ends. `hasLoaded`
+is false until the first fetch returns, and the heroes render skeletons sized to
+the figures they replace, so nothing shifts when the numbers arrive.
+
+The RPC is still available if the round trip ever matters. It does not yet.
+
 #### 7.E-pre Per-surface queries: measured, not built
 
 The plan called for splitting the mount so a surface loads only what it
