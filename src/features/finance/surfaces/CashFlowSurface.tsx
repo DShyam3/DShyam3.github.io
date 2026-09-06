@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
+import { Figure } from '../components/Figure';
 import { MONTH_NAMES, isDueThisMonth } from '../finance-defaults';
 import { Card } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -33,7 +34,7 @@ interface CashFlowSurfaceProps {
 }
 
 export default function CashFlowSurface({ breakdownRates, todayDateObj }: CashFlowSurfaceProps) {
-  const { bankAccounts, mockTransactions, recurrings } = useFinanceData();
+  const { bankAccounts, mockTransactions, recurrings, hasLoaded } = useFinanceData();
 
   const [cfPeriod, setCfPeriod] = useState<'ytd' | 'last_3m' | 'all_time' | 'custom'>('ytd');
   const [cfPeriodOpen, setCfPeriodOpen] = useState(false);
@@ -475,9 +476,9 @@ return (
         <div className="space-y-1">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
           <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-          <p className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
+          <Figure loading={!hasLoaded} skeletonClassName="h-9 w-44" className={cn("block text-3xl font-bold font-mono", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
             {formatGBP(ytdNet)}
-          </p>
+          </Figure>
         </div>
         <button
           onClick={() => setCfDrawerOpen('net')}
@@ -541,7 +542,7 @@ return (
           <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
             <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <p className="text-2xl font-bold font-mono text-destructive">{formatGBP(ytdSpend)}</p>
+            <Figure loading={!hasLoaded} skeletonClassName="h-8 w-36" className="block text-2xl font-bold font-mono text-destructive">{formatGBP(ytdSpend)}</Figure>
           </div>
           <button
             onClick={() => setCfDrawerOpen('spend')}
@@ -581,7 +582,7 @@ return (
           <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
             <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <p className="text-2xl font-bold font-mono text-chart-3">{formatGBP(ytdIncome)}</p>
+            <Figure loading={!hasLoaded} skeletonClassName="h-8 w-36" className="block text-2xl font-bold font-mono text-chart-3">{formatGBP(ytdIncome)}</Figure>
           </div>
           <button
             onClick={() => setCfDrawerOpen('income')}

@@ -21,6 +21,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Activity, ArrowUpRight, Check, CheckCircle2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useFinanceTotals } from '../useFinanceTotals';
+import { Figure } from '../components/Figure';
 import { useTrueLayer } from '../useTrueLayer';
 import { pathForTab, type TabKey } from '../surfaces';
 
@@ -36,6 +37,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     saveDataToSupabase,
     setMockTransactions,
     fetchSupabaseData,
+    hasLoaded,
   } = useFinanceData();
 
   const navigate = useNavigate();
@@ -410,7 +412,13 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <div className="block sm:hidden pt-1">
           <span className={cn(
             "text-xs font-bold font-mono px-2 py-0.5 rounded-full inline-block",
-            isDashboardSpendOverBudget ? "bg-destructive/10 text-destructive" : "bg-positive/10 text-positive"
+            // Same three states as the desktop badge above: "No budget set" is
+            // neither good nor bad and must not borrow the reassuring colour.
+            totalBudget <= 0
+              ? "bg-muted/40 text-muted-foreground"
+              : isDashboardSpendOverBudget
+                ? "bg-destructive/10 text-destructive"
+                : "bg-positive/10 text-positive"
           )}>
             {dashboardSpendStatusText}
           </span>
@@ -419,7 +427,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <div className="flex gap-4 pt-3 text-xs">
           <div>
             <span className="text-muted-foreground text-xs uppercase block">{dashboardSpendSpentLabel}</span>
-            <span className="text-lg font-bold font-mono text-foreground">{formatGBP(dashboardSpendTotal)}</span>
+            <Figure loading={!hasLoaded} skeletonClassName="h-6 w-24" className="text-lg font-bold font-mono text-foreground">{formatGBP(dashboardSpendTotal)}</Figure>
           </div>
           <div className="border-l border-border/50 pl-4">
             <span className="text-muted-foreground text-xs uppercase block">{dashboardSpendBudgetLabel}</span>
@@ -503,9 +511,13 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             {/* Left column: Actual Net Cash Flow */}
             <div className="space-y-1">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Net this month</span>
-              <span className={cn("text-xl sm:text-2xl font-bold font-mono block tracking-tight whitespace-nowrap", netCashFlow >= 0 ? "text-positive" : "text-destructive")}>
+              <Figure
+                  loading={!hasLoaded}
+                  skeletonClassName="h-8 w-36"
+                  className={cn("text-xl sm:text-2xl font-bold font-mono block tracking-tight whitespace-nowrap", netCashFlow >= 0 ? "text-positive" : "text-destructive")}
+                >
                 {netCashFlow >= 0 ? '+' : ''}{formatGBP(netCashFlow)}
-              </span>
+              </Figure>
               {/* Trend comparison */}
               <div className="flex items-center gap-1 text-xs text-muted-foreground font-sans truncate">
                 <span className={cn(
@@ -525,9 +537,13 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                   <span>Free to Spend</span>
                   <PiggyBank className="h-3 w-3 text-positive" />
                 </span>
-                <span className={cn("text-xl sm:text-2xl font-bold font-mono block tracking-tight whitespace-nowrap", freeToSpend >= 0 ? "text-positive" : "text-destructive")}>
+                <Figure
+                  loading={!hasLoaded}
+                  skeletonClassName="h-8 w-36"
+                  className={cn("text-xl sm:text-2xl font-bold font-mono block tracking-tight whitespace-nowrap", freeToSpend >= 0 ? "text-positive" : "text-destructive")}
+                >
                   {formatGBP(freeToSpend)}
-                </span>
+                </Figure>
               </div>
               {freeToSpend > 0 ? (
                 <p className="text-xs text-muted-foreground font-sans mt-0.5">
@@ -588,7 +604,15 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       {/* Net Assets, Debt & Net Cash Flow block */}
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-3 sm:p-4 rounded-3xl space-y-1.5 text-left">
         <span className="text-xs font-semibold text-muted-foreground uppercase">Net Worth</span>
-        <span className="text-base font-bold font-mono text-positive block truncate">{formatGBP(netWorth)}</span>
+        <Figure
+          loading={!hasLoaded}
+          skeletonClassName="h-5 w-32"
+          /* Was unconditionally positive-green, so a negative net worth read
+             as good news. Neutral when negative, matching the Wealth hero. */
+          className={cn("text-base font-bold font-mono block truncate", netWorth >= 0 ? "text-positive" : "text-foreground")}
+        >
+          {formatGBP(netWorth)}
+        </Figure>
         <div className="flex justify-between text-xs text-muted-foreground border-t border-border/20 pt-1.5 font-mono">
           <span className="text-positive/80">Assets: {formatGBP(totalAssets)}</span>
           <span className="text-destructive/80">Debt: {formatGBP(totalDebt)}</span>
