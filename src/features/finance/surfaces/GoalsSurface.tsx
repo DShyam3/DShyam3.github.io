@@ -274,13 +274,13 @@ export default function GoalsSurface() {
 
   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
     <div className="min-w-0">
-      <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-        <PiggyBank className="h-5 w-5 text-primary shrink-0" /> Savings Goals & Contributions
+      <h3 className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+        <PiggyBank className="h-4 w-4 text-primary shrink-0" /> Savings Goals & Contributions
       </h3>
-      <p className="text-xs text-muted-foreground mt-0.5">Manage financial milestones and track contribution deposits manually</p>
+      <p className="text-xs text-muted-foreground font-mono mt-0.5">Manage financial milestones and track contribution deposits manually</p>
     </div>
-    <Button onClick={() => setIsAddGoalOpen(true)} className="rounded-xl gap-1.5 bg-primary text-primary-foreground shrink-0 self-start sm:self-auto">
-      <Plus className="h-4 w-4" /> Add Goal
+    <Button onClick={() => setIsAddGoalOpen(true)} className="rounded-lg h-8 px-3 gap-1.5 bg-primary text-primary-foreground text-xs font-mono shrink-0 self-start sm:self-auto">
+      <Plus className="h-3.5 w-3.5" /> Add Goal
     </Button>
   </div>
 
@@ -297,14 +297,14 @@ export default function GoalsSurface() {
             key={goal.id}
             onClick={() => setSelectedGoalId(isActiveGoal ? null : goal.id)}
             className={cn(
-              "p-4 rounded-3xl border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3",
+              "p-3.5 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 font-mono",
               isActiveGoal
-                ? "bg-primary/5 border-primary shadow-sm"
-                : "bg-card/40 border-border/30 hover:bg-muted/30"
+                ? "bg-card/90 border-border/80 shadow-sm"
+                : "bg-card/40 border-border/30 hover:border-border/60 hover:bg-card/60"
             )}
           >
             <div className="flex justify-between items-start gap-2 min-w-0">
-              <span className="text-xs font-bold font-serif text-foreground truncate flex items-center gap-1.5">
+              <span className="text-xs font-bold text-foreground truncate flex items-center gap-1.5">
                 {goal.emoji && <span className="text-base font-normal shrink-0">{goal.emoji}</span>}
                 <span>{goal.name}</span>
               </span>
@@ -434,13 +434,13 @@ export default function GoalsSurface() {
         }
 
         return (
-          <Card className="bg-card/40 border border-primary/10 rounded-3xl p-6 space-y-6">
+          <Card className="bg-card/50 border border-border/40 rounded-xl p-5 space-y-6 hover:border-border/80 transition-colors">
 
             {/* Title Block */}
             <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start border-b border-border/30 pb-4">
               <div className="space-y-1 min-w-0">
-                <span className="text-xl md:text-2xl font-bold font-serif text-foreground block break-words flex items-center gap-2">
-                  {goal.emoji && <span className="text-2xl font-normal shrink-0">{goal.emoji}</span>}
+                <span className="text-lg md:text-xl font-bold font-mono text-foreground block break-words flex items-center gap-2">
+                  {goal.emoji && <span className="text-xl font-normal shrink-0">{goal.emoji}</span>}
                   <span>{goal.name}</span>
                 </span>
                 <span className="text-xs text-muted-foreground block">Timeline: {formatReadableDate(startD)} – {formatReadableDate(goal.targetDate)}</span>
@@ -461,7 +461,7 @@ export default function GoalsSurface() {
                       setEditingGoal(goal);
                       setIsEditGoalOpen(true);
                     }}
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/10 rounded-xl"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-lg"
                     title="Edit Goal"
                   >
                     <Pencil className="h-4 w-4" />
@@ -471,10 +471,10 @@ export default function GoalsSurface() {
                     size="icon"
                     onClick={() => handleToggleArchiveGoal(goal.id)}
                     className={cn(
-                      "h-8 w-8 rounded-xl",
+                      "h-8 w-8 rounded-lg",
                       goal.status === 'archived'
                         ? "text-positive hover:text-positive hover:bg-positive/10"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/10"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
                     )}
                     title={goal.status === 'archived' ? "Restore / Unarchive Goal" : "Archive Goal"}
                   >
@@ -484,7 +484,7 @@ export default function GoalsSurface() {
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDeleteGoal(goal.id)}
-                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl"
+                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -493,7 +493,7 @@ export default function GoalsSurface() {
             </div>
 
             {/* Chart: Progress Over Time */}
-            <div className="h-44 w-full bg-muted/5 rounded-2xl border border-border/10 p-2 min-w-0">
+            <div className="h-44 w-full bg-muted/10 rounded-lg border border-border/30 p-2 min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
                   <defs>
@@ -563,15 +563,15 @@ export default function GoalsSurface() {
             </div>
 
             {/* Contribution Logging Form */}
-            <form onSubmit={(e) => handleAddContribution(e, goal.id)} className="space-y-3 pt-2">
-              <span className="text-xs font-bold text-foreground">Log New Contribution</span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            <form onSubmit={(e) => handleAddContribution(e, goal.id)} className="space-y-3 pt-2 font-mono">
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Log New Contribution</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
                 <Input
                   type="number"
                   placeholder="Amount (£)"
                   value={newContribution.amount}
                   onChange={(e) => setNewContribution({ ...newContribution, amount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                  className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs"
+                  className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
                   required
                 />
                 <Input
@@ -579,12 +579,12 @@ export default function GoalsSurface() {
                   placeholder="Note / Source"
                   value={newContribution.note}
                   onChange={(e) => setNewContribution({ ...newContribution, note: e.target.value })}
-                  className="rounded-xl h-10 border-primary/20 bg-background/50 text-xs"
+                  className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
                 />
                 <select
                   value={newContribution.bankAccountId || ''}
                   onChange={(e) => setNewContribution({ ...newContribution, bankAccountId: e.target.value })}
-                  className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+                  className="flex w-full rounded-lg border border-border/40 bg-background/50 h-9 px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors font-mono"
                 >
                   <option value="">No linked account (Manual)</option>
                   {bankAccounts.map(acc => (
@@ -593,7 +593,7 @@ export default function GoalsSurface() {
                     </option>
                   ))}
                 </select>
-                <Button type="submit" className="rounded-xl h-10 bg-primary text-primary-foreground font-medium text-xs">
+                <Button type="submit" className="rounded-lg h-9 bg-primary text-primary-foreground font-mono text-xs">
                   Add Contribution
                 </Button>
               </div>
@@ -606,7 +606,7 @@ export default function GoalsSurface() {
                 {goal.contributions.map(c => {
                   const acc = c.bankAccountId ? bankAccounts.find(a => a.id === c.bankAccountId) : null;
                   return (
-                    <div key={c.id} className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center p-3 rounded-2xl bg-muted/10 border border-border/20 text-xs">
+                    <div key={c.id} className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center p-3 rounded-lg bg-muted/20 border border-border/30 text-xs font-mono">
                       <div className="space-y-0.5 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold font-mono">{formatGBP(c.amount)}</span>
@@ -645,155 +645,155 @@ export default function GoalsSurface() {
 
 </div>
 <Dialog open={isAddGoalOpen} onOpenChange={setIsAddGoalOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
-    <DialogHeader>
-      <DialogTitle className="font-serif">Add Savings Goal</DialogTitle>
-      <DialogDescription className="text-xs">Create a new milestone target and timeline.</DialogDescription>
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono">
+    <DialogHeader className="text-left">
+      <DialogTitle className="font-mono text-base font-bold">Add Savings Goal</DialogTitle>
+      <DialogDescription className="text-xs font-mono text-muted-foreground">Create a new milestone target and timeline.</DialogDescription>
     </DialogHeader>
-    <form onSubmit={handleAddGoal} className="space-y-4 py-2">
+    <form onSubmit={handleAddGoal} className="space-y-3.5 py-2 font-mono">
       <div className="space-y-1">
-        <Label htmlFor="goal-name">Goal Name</Label>
+        <Label htmlFor="goal-name" className="text-xs font-mono text-muted-foreground">Goal Name</Label>
         <Input
           id="goal-name"
           placeholder="e.g. New Macbook Pro"
           value={newGoal.name}
           onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
           required
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="goal-target">Target Amount (£)</Label>
+        <Label htmlFor="goal-target" className="text-xs font-mono text-muted-foreground">Target Amount (£)</Label>
         <Input
           id="goal-target"
           type="number"
           placeholder="e.g. 2500"
           value={newGoal.targetAmount}
           onChange={(e) => setNewGoal({ ...newGoal, targetAmount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
           required
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label htmlFor="goal-start-date">Start Date</Label>
+          <Label htmlFor="goal-start-date" className="text-xs font-mono text-muted-foreground">Start Date</Label>
           <Input
             id="goal-start-date"
             type="date"
             value={newGoal.startDate}
             onChange={(e) => setNewGoal({ ...newGoal, startDate: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="goal-emoji">Emoji Icon</Label>
+          <Label htmlFor="goal-emoji" className="text-xs font-mono text-muted-foreground">Emoji Icon</Label>
           <Input
             id="goal-emoji"
             placeholder="e.g. 🎯"
             value={newGoal.emoji || ''}
             onChange={(e) => setNewGoal({ ...newGoal, emoji: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
+            className="rounded-lg h-9 border-border/40 bg-background/50 text-center text-sm font-mono"
           />
         </div>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="goal-date">Target Date</Label>
+        <Label htmlFor="goal-date" className="text-xs font-mono text-muted-foreground">Target Date</Label>
         <Input
           id="goal-date"
           type="date"
           value={newGoal.targetDate}
           onChange={(e) => setNewGoal({ ...newGoal, targetDate: e.target.value })}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
         />
       </div>
-      <DialogFooter className="pt-4 gap-2 sm:gap-0">
-        <Button variant="outline" type="button" onClick={() => setIsAddGoalOpen(false)} className="rounded-xl">Cancel</Button>
-        <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Goal</Button>
+      <DialogFooter className="pt-3 gap-2 sm:gap-0">
+        <Button variant="outline" type="button" onClick={() => setIsAddGoalOpen(false)} className="rounded-lg h-8 px-3 text-xs font-mono">Cancel</Button>
+        <Button type="submit" className="rounded-lg h-8 px-3 bg-primary text-primary-foreground text-xs font-mono">Save Goal</Button>
       </DialogFooter>
     </form>
   </DialogContent>
 </Dialog>
 <Dialog open={isEditGoalOpen} onOpenChange={setIsEditGoalOpen}>
-  <DialogContent className="rounded-3xl border-primary/10 max-w-sm">
-    <DialogHeader>
-      <DialogTitle className="font-serif">Edit Savings Goal</DialogTitle>
-      <DialogDescription className="text-xs">Modify the details of your savings milestone.</DialogDescription>
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono">
+    <DialogHeader className="text-left">
+      <DialogTitle className="font-mono text-base font-bold">Edit Savings Goal</DialogTitle>
+      <DialogDescription className="text-xs font-mono text-muted-foreground">Modify the details of your savings milestone.</DialogDescription>
     </DialogHeader>
     {editingGoal && (
-      <form onSubmit={handleEditGoal} className="space-y-4 py-2">
+      <form onSubmit={handleEditGoal} className="space-y-3.5 py-2 font-mono">
         <div className="space-y-1">
-          <Label htmlFor="edit-goal-name">Goal Name</Label>
+          <Label htmlFor="edit-goal-name" className="text-xs font-mono text-muted-foreground">Goal Name</Label>
           <Input
             id="edit-goal-name"
             placeholder="e.g. New Macbook Pro"
             value={editingGoal.name}
             onChange={(e) => setEditingGoal({ ...editingGoal, name: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
             required
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-goal-target">Target Amount (£)</Label>
+          <Label htmlFor="edit-goal-target" className="text-xs font-mono text-muted-foreground">Target Amount (£)</Label>
           <Input
             id="edit-goal-target"
             type="number"
             placeholder="e.g. 2500"
             value={editingGoal.targetAmount}
             onChange={(e) => setEditingGoal({ ...editingGoal, targetAmount: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
             required
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="edit-goal-start-date">Start Date</Label>
+            <Label htmlFor="edit-goal-start-date" className="text-xs font-mono text-muted-foreground">Start Date</Label>
             <Input
               id="edit-goal-start-date"
               type="date"
               value={editingGoal.startDate || ''}
               onChange={(e) => setEditingGoal({ ...editingGoal, startDate: e.target.value })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-goal-emoji">Emoji Icon</Label>
+            <Label htmlFor="edit-goal-emoji" className="text-xs font-mono text-muted-foreground">Emoji Icon</Label>
             <Input
               id="edit-goal-emoji"
               placeholder="e.g. 🎯"
               value={editingGoal.emoji || ''}
               onChange={(e) => setEditingGoal({ ...editingGoal, emoji: e.target.value })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
+              className="rounded-lg h-9 border-border/40 bg-background/50 text-center text-sm font-mono"
             />
           </div>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-goal-date">Target Date</Label>
+          <Label htmlFor="edit-goal-date" className="text-xs font-mono text-muted-foreground">Target Date</Label>
           <Input
             id="edit-goal-date"
             type="date"
             value={editingGoal.targetDate}
             onChange={(e) => setEditingGoal({ ...editingGoal, targetDate: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="edit-goal-status">Status</Label>
+          <Label htmlFor="edit-goal-status" className="text-xs font-mono text-muted-foreground">Status</Label>
           <Select
             value={editingGoal.status || 'active'}
             onValueChange={(val) => setEditingGoal({ ...editingGoal, status: val as 'active' | 'archived' })}
           >
-            <SelectTrigger id="edit-goal-status" className="bg-background/50 border-primary/20 rounded-xl h-10">
+            <SelectTrigger id="edit-goal-status" className="bg-background/50 border-border/40 rounded-lg h-9 font-mono text-xs">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="rounded-xl border-primary/10">
+            <SelectContent className="rounded-lg border-border/40 font-mono">
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <DialogFooter className="pt-4 gap-2 sm:gap-0">
-          <Button variant="outline" type="button" onClick={() => setIsEditGoalOpen(false)} className="rounded-xl">Cancel</Button>
-          <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
+        <DialogFooter className="pt-3 gap-2 sm:gap-0">
+          <Button variant="outline" type="button" onClick={() => setIsEditGoalOpen(false)} className="rounded-lg h-8 px-3 text-xs font-mono">Cancel</Button>
+          <Button type="submit" className="rounded-lg h-8 px-3 bg-primary text-primary-foreground text-xs font-mono">Save Changes</Button>
         </DialogFooter>
       </form>
     )}

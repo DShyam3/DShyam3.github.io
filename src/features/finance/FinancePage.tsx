@@ -1258,7 +1258,7 @@ function FinanceView() {
       </nav>
       {profiles.length > 1 && (
         <Select value={profileId ?? undefined} onValueChange={setProfileId}>
-          <SelectTrigger className="h-7 w-auto gap-1.5 rounded-lg border-primary/20 bg-background/60 px-2.5 text-xs font-sans shrink-0">
+          <SelectTrigger className="h-7 w-auto gap-1.5 rounded-lg border border-border/40 bg-background/60 px-2.5 text-xs font-mono shrink-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1429,23 +1429,23 @@ function FinanceView() {
 
       {/* DIALOG: Tax & Income Settings */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="!flex !flex-col rounded-3xl border-primary/10 w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden">
+        <DialogContent className="!flex !flex-col sm:rounded-xl border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none">
           <DialogHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
-            <DialogTitle className="font-serif text-xl">Tax & Income Settings</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogTitle className="font-mono text-base font-bold tracking-tight text-foreground">Tax & Income Settings</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground font-mono">
               Salary, pension, tax code, and working day parameters.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveSettings} className="flex flex-col min-h-0 flex-1">
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-8">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6">
               <section className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-                    <DollarSign className="h-4 w-4 text-primary" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/20 border border-border/30">
+                    <DollarSign className="h-3.5 w-3.5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">Salary & Pension</h3>
-                    <p className="text-xs text-muted-foreground">Core income and contribution settings</p>
+                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Salary & Pension</h3>
+                    <p className="text-[11px] text-muted-foreground">Core income and contribution settings</p>
                   </div>
                 </div>
 
@@ -1460,7 +1460,7 @@ function FinanceView() {
                         inputMode="decimal"
                         value={grossInput}
                         onChange={(e) => setGrossInput(formatNumberInput(e.target.value))}
-                        className="rounded-xl h-11 pl-7 border-primary/20 bg-background/50 font-mono"
+                        className="rounded-lg h-9 pl-7 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
                     </div>
@@ -1472,10 +1472,10 @@ function FinanceView() {
                       value={paydaySchedule}
                       onValueChange={(val) => setPaydaySchedule(val as FinanceSettings['paydaySchedule'])}
                     >
-                      <SelectTrigger id="paydaySchedule" className="rounded-xl h-11 border-primary/20 bg-background/50">
+                      <SelectTrigger id="paydaySchedule" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select schedule..." />
                       </SelectTrigger>
-                      <SelectContent className="rounded-xl border-primary/10">
+                      <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
                         <SelectItem value="monthly_date">Monthly on specific date</SelectItem>
                         <SelectItem value="last_working_day">Last working day of month</SelectItem>
                         <SelectItem value="last_friday">Last Friday of month</SelectItem>
@@ -1497,7 +1497,7 @@ function FinanceView() {
                         max="31"
                         value={payDayInput}
                         onChange={(e) => setPayDayInput(e.target.value)}
-                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
                     </div>
@@ -1510,10 +1510,10 @@ function FinanceView() {
                         value={paydayWeekday.toString()}
                         onValueChange={(val) => setPaydayWeekday(parseInt(val, 10))}
                       >
-                        <SelectTrigger id="paydayWeekday" className="rounded-xl h-11 border-primary/20 bg-background/50">
+                        <SelectTrigger id="paydayWeekday" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                           <SelectValue placeholder="Select day..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
                           <SelectItem value="1">Monday</SelectItem>
                           <SelectItem value="2">Tuesday</SelectItem>
                           <SelectItem value="3">Wednesday</SelectItem>
@@ -1534,10 +1534,10 @@ function FinanceView() {
                         type="date"
                         value={paydayBiweeklyAnchor}
                         onChange={(e) => setPaydayBiweeklyAnchor(e.target.value)}
-                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
-                      <p className="text-xs text-muted-foreground">Any past pay date to calculate every two weeks from.</p>
+                      <p className="text-[11px] text-muted-foreground">Any past pay date to calculate every two weeks from.</p>
                     </div>
                   )}
 
@@ -1548,10 +1548,10 @@ function FinanceView() {
                         value={settings.pensionType}
                         onValueChange={(val) => setSettings({ ...settings, pensionType: val as FinanceSettings['pensionType'] })}
                       >
-                        <SelectTrigger id="pensionType" className="rounded-xl h-11 border-primary/20 bg-background/50">
+                        <SelectTrigger id="pensionType" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                           <SelectValue placeholder="Select arrangement..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
                           <SelectItem value="net_pay">Net Pay (Pre-Tax)</SelectItem>
                           <SelectItem value="salary_sacrifice">Salary Sacrifice</SelectItem>
                           <SelectItem value="relief_at_source">Relief at Source</SelectItem>
@@ -1564,10 +1564,10 @@ function FinanceView() {
                         value={settings.studentLoanPlan}
                         onValueChange={(val) => setSettings({ ...settings, studentLoanPlan: val as FinanceSettings['studentLoanPlan'] })}
                       >
-                        <SelectTrigger id="studentLoan" className="rounded-xl h-11 border-primary/20 bg-background/50">
+                        <SelectTrigger id="studentLoan" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                           <SelectValue placeholder="Select plan..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
                           <SelectItem value="none">No student loan</SelectItem>
                           <SelectItem value="plan1">Plan 1</SelectItem>
                           <SelectItem value="plan2">Plan 2</SelectItem>
@@ -1591,7 +1591,7 @@ function FinanceView() {
                         step="0.1"
                         value={personalPensionInput}
                         onChange={(e) => setPersonalPensionInput(e.target.value)}
-                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
                     </div>
@@ -1606,18 +1606,18 @@ function FinanceView() {
                         step="0.1"
                         value={employerPensionInput}
                         onChange={(e) => setEmployerPensionInput(e.target.value)}
-                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-primary/10 bg-primary/5 p-3.5 flex items-center justify-between gap-3">
+                  <div className="rounded-lg border border-border/30 bg-muted/20 p-3 flex items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <Gift className="w-4 h-4 text-primary" /> Benefits & Package Perks
+                        <Gift className="w-3.5 h-3.5 text-primary" /> Benefits & Package Perks
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground">
                         {settings.packageBenefits?.length ? `${settings.packageBenefits.length} active additions (${formatGBP(results.totalBenefitsValue)}/yr)` : 'No custom benefits added yet'}
                       </p>
                     </div>
@@ -1625,9 +1625,9 @@ function FinanceView() {
                       type="button"
                       variant="outline"
                       onClick={() => setIsBenefitsDialogOpen(true)}
-                      className="h-8 rounded-xl text-xs gap-1.5 border-primary/20 bg-background/60 hover:bg-primary/10"
+                      className="h-7 rounded-lg text-xs gap-1.5 border border-border/40 bg-background/60 hover:bg-muted/30 font-mono"
                     >
-                      <Gift className="w-3.5 h-3.5 text-primary" /> Manage Perks
+                      <Gift className="w-3 h-3 text-primary" /> Manage Perks
                     </Button>
                   </div>
 
@@ -1639,7 +1639,7 @@ function FinanceView() {
                         type="text"
                         value={taxCodeInput}
                         onChange={(e) => handleTaxCodeChange(e.target.value)}
-                        className="rounded-xl h-11 border-primary/20 bg-background/50 uppercase font-mono"
+                        className="rounded-lg h-9 border border-border/40 bg-background/50 uppercase font-mono text-xs"
                         placeholder="1257L"
                         required
                       />
@@ -1654,7 +1654,7 @@ function FinanceView() {
                           inputMode="numeric"
                           value={allowanceInput}
                           onChange={(e) => setAllowanceInput(formatNumberInput(e.target.value))}
-                          className="rounded-xl h-11 pl-7 border-primary/20 bg-background/50 font-mono"
+                          className="rounded-lg h-9 pl-7 border border-border/40 bg-background/50 font-mono text-xs"
                           required
                         />
                       </div>
@@ -1665,12 +1665,12 @@ function FinanceView() {
 
               <section className="space-y-4 pt-2 border-t border-border/40">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-                    <Calendar className="h-4 w-4 text-primary" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/20 border border-border/30">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">Working days</h3>
-                    <p className="text-xs text-muted-foreground">Region, tax year, leave, and hours</p>
+                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Working days</h3>
+                    <p className="text-[11px] text-muted-foreground">Region, tax year, leave, and hours</p>
                   </div>
                 </div>
 
@@ -1682,10 +1682,10 @@ function FinanceView() {
                         value={settings.ukRegion}
                         onValueChange={(val) => setSettings({ ...settings, ukRegion: val as FinanceSettings['ukRegion'] })}
                       >
-                        <SelectTrigger className="rounded-xl h-11 border-primary/20 bg-background/50">
+                        <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                           <SelectValue placeholder="Select region..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
                           <SelectItem value="england-and-wales">England & Wales</SelectItem>
                           <SelectItem value="scotland">Scotland</SelectItem>
                           <SelectItem value="northern-ireland">Northern Ireland</SelectItem>
@@ -1698,10 +1698,10 @@ function FinanceView() {
                         value={settings.taxYear.toString()}
                         onValueChange={(val) => setSettings({ ...settings, taxYear: parseInt(val, 10) })}
                       >
-                        <SelectTrigger className="rounded-xl h-11 border-primary/20 bg-background/50">
+                        <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                           <SelectValue placeholder="Select year..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-primary/10">
+                        <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
                           <SelectItem value="2025">2025</SelectItem>
                           <SelectItem value="2026">2026</SelectItem>
                           <SelectItem value="2027">2027</SelectItem>
@@ -1712,21 +1712,21 @@ function FinanceView() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground">Weekends</p>
-                      <p className="mt-0.5 text-sm font-mono font-semibold text-foreground">
+                    <div className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Weekends</p>
+                      <p className="mt-0.5 text-xs font-mono font-semibold text-foreground">
                         {settings.weekends}
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">days</span>
+                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">days</span>
                       </p>
                     </div>
-                    <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <div className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         Bank holidays
                         {fetchingHolidays && <Loader2 className="h-3 w-3 animate-spin" />}
                       </p>
-                      <p className="mt-0.5 text-sm font-mono font-semibold text-foreground">
+                      <p className="mt-0.5 text-xs font-mono font-semibold text-foreground">
                         {settings.bankHolidays}
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">days</span>
+                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">days</span>
                       </p>
                     </div>
                   </div>
@@ -1742,7 +1742,7 @@ function FinanceView() {
                         max="365"
                         value={workHolsInput}
                         onChange={(e) => setWorkHolsInput(e.target.value)}
-                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
                     </div>
@@ -1757,7 +1757,7 @@ function FinanceView() {
                         step="0.1"
                         value={hoursInput}
                         onChange={(e) => setHoursInput(e.target.value)}
-                        className="rounded-xl h-11 border-primary/20 bg-background/50 font-mono"
+                        className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
                     </div>
@@ -1769,23 +1769,23 @@ function FinanceView() {
               <section className="space-y-4 pt-4 border-t border-border/40">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-                      <Sliders className="h-4 w-4 text-primary" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/20 border border-border/30">
+                      <Sliders className="h-3.5 w-3.5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-foreground">Advanced Configurations</h3>
-                      <p className="text-xs text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
+                      <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Advanced Configurations</h3>
+                      <p className="text-[11px] text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   {/* Item 1: Tax Bands */}
-                  <div className="rounded-xl border border-border/40 overflow-hidden">
+                  <div className="rounded-lg border border-border/30 overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setExpandedSection(expandedSection === 'tax' ? 'none' : 'tax')}
-                      className="w-full flex items-center justify-between p-3.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left"
+                      className="w-full flex items-center justify-between p-2.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left font-mono"
                     >
                       <span className="flex items-center gap-2"><DollarSign className="w-3.5 h-3.5 text-primary" /> Income Tax & NI Bands</span>
                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedSection === 'tax' ? 'rotate-180' : ''}`} />
@@ -1793,7 +1793,7 @@ function FinanceView() {
                     {expandedSection === 'tax' && (
                       <div className="p-4 bg-background/30 border-t border-border/20 space-y-4 text-xs">
                         <div className="space-y-3">
-                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">Income Tax Bands (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Income Tax Bands (£)</h4>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <Label className="text-xs text-muted-foreground">Basic Rate Limit</Label>
@@ -1808,7 +1808,7 @@ function FinanceView() {
                                     basicRateLimit: parseFormattedFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                             <div className="space-y-1">
@@ -1824,7 +1824,7 @@ function FinanceView() {
                                     higherRateLimit: parseFormattedFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                           </div>
@@ -1841,7 +1841,7 @@ function FinanceView() {
                                     basicRatePercent: parseFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                             <div className="space-y-1">
@@ -1856,7 +1856,7 @@ function FinanceView() {
                                     higherRatePercent: parseFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                             <div className="space-y-1">
@@ -1871,14 +1871,14 @@ function FinanceView() {
                                     additionalRatePercent: parseFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                           </div>
                         </div>
 
                         <div className="space-y-3 pt-3 border-t border-border/20">
-                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">National Insurance Bands (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider font-mono">National Insurance Bands (£)</h4>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <Label className="text-xs text-muted-foreground">Lower Threshold</Label>
@@ -1893,7 +1893,7 @@ function FinanceView() {
                                     lowerThreshold: parseFormattedFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                             <div className="space-y-1">
@@ -1909,7 +1909,7 @@ function FinanceView() {
                                     upperThreshold: parseFormattedFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                           </div>
@@ -1926,7 +1926,7 @@ function FinanceView() {
                                     mainRatePercent: parseFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                             <div className="space-y-1">
@@ -1941,14 +1941,14 @@ function FinanceView() {
                                     upperRatePercent: parseFloat(e.target.value) || 0
                                   }
                                 })}
-                                className="h-9 rounded-lg font-mono text-xs"
+                                className="h-9 rounded-lg font-mono text-xs border-border/40"
                               />
                             </div>
                           </div>
                         </div>
 
                         <div className="space-y-3 pt-3 border-t border-border/20">
-                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">Student Loan Thresholds (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Student Loan Thresholds (£)</h4>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                             {(Object.keys(draftTaxConfig.studentLoanThresholds) as Array<keyof typeof draftTaxConfig.studentLoanThresholds>).map((plan) => {
                               if (plan === 'none') return null;
@@ -1966,7 +1966,7 @@ function FinanceView() {
                                         [plan]: parseFormattedFloat(e.target.value) || 0
                                       }
                                     })}
-                                    className="h-9 rounded-lg font-mono text-xs"
+                                    className="h-9 rounded-lg font-mono text-xs border-border/40"
                                   />
                                 </div>
                               );
@@ -1978,11 +1978,11 @@ function FinanceView() {
                   </div>
 
                   {/* Item 2: Recurring Bill Templates */}
-                  <div className="rounded-xl border border-border/40 overflow-hidden">
+                  <div className="rounded-lg border border-border/30 overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setExpandedSection(expandedSection === 'recurring' ? 'none' : 'recurring')}
-                      className="w-full flex items-center justify-between p-3.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left"
+                      className="w-full flex items-center justify-between p-2.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left font-mono"
                     >
                       <span className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-primary" /> Recurring Bill Templates</span>
                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedSection === 'recurring' ? 'rotate-180' : ''}`} />
@@ -1991,7 +1991,7 @@ function FinanceView() {
                       <div className="p-4 bg-background/30 border-t border-border/20 space-y-4 text-xs">
                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                           {draftRecurringTemplates.map((template, idx) => (
-                            <div key={idx} className="flex flex-col gap-2 p-2.5 rounded-xl border border-border bg-card/50 relative group">
+                            <div key={idx} className="flex flex-col gap-2 p-2.5 rounded-lg border border-border/30 bg-card/50 relative group">
                               <button
                                 type="button"
                                 onClick={() => setDraftRecurringTemplates(draftRecurringTemplates.filter((_, i) => i !== idx))}
@@ -2009,7 +2009,7 @@ function FinanceView() {
                                       updated[idx] = { ...template, emoji: e.target.value };
                                       setDraftRecurringTemplates(updated);
                                     }}
-                                    className="h-8 text-center rounded-lg text-xs p-1"
+                                    className="h-8 text-center rounded-lg text-xs p-1 border-border/40"
                                   />
                                 </div>
                                 <div className="col-span-5 space-y-1">
@@ -2021,7 +2021,7 @@ function FinanceView() {
                                       updated[idx] = { ...template, name: e.target.value };
                                       setDraftRecurringTemplates(updated);
                                     }}
-                                    className="h-8 rounded-lg text-xs"
+                                    className="h-8 rounded-lg text-xs border-border/40"
                                   />
                                 </div>
                                 <div className="col-span-5 space-y-1">
@@ -2033,7 +2033,7 @@ function FinanceView() {
                                       updated[idx] = { ...template, category: e.target.value };
                                       setDraftRecurringTemplates(updated);
                                     }}
-                                    className="h-8 rounded-lg text-xs"
+                                    className="h-8 rounded-lg text-xs border-border/40"
                                   />
                                 </div>
                               </div>
@@ -2049,7 +2049,7 @@ function FinanceView() {
                                       updated[idx] = { ...template, defaultAmount: parseFormattedFloat(e.target.value) || 0 };
                                       setDraftRecurringTemplates(updated);
                                     }}
-                                    className="h-8 rounded-lg text-xs font-mono"
+                                    className="h-8 rounded-lg text-xs font-mono border-border/40"
                                   />
                                 </div>
                                 <div className="space-y-1">
@@ -2061,7 +2061,7 @@ function FinanceView() {
                                       updated[idx] = { ...template, tag: e.target.value.toUpperCase() };
                                       setDraftRecurringTemplates(updated);
                                     }}
-                                    className="h-8 rounded-lg text-xs font-mono uppercase"
+                                    className="h-8 rounded-lg text-xs font-mono uppercase border-border/40"
                                   />
                                 </div>
                                 <div className="space-y-1">
@@ -2073,7 +2073,7 @@ function FinanceView() {
                                       updated[idx] = { ...template, frequency: e.target.value as RecurringTemplate['frequency'] };
                                       setDraftRecurringTemplates(updated);
                                     }}
-                                    className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-8 px-2 text-xs text-foreground focus:outline-none"
+                                    className="flex w-full rounded-lg border border-border/40 bg-background/50 h-8 px-2 text-xs text-foreground focus:outline-none font-mono"
                                   >
                                     <option value="weekly">Weekly</option>
                                     <option value="monthly">Monthly</option>
@@ -2092,7 +2092,7 @@ function FinanceView() {
                             ...draftRecurringTemplates,
                             { name: 'New Bill', category: 'General', emoji: '💸', tag: 'NEW_BILL', defaultAmount: 10, frequency: 'monthly', linkedBudgetItemId: '' }
                           ])}
-                          className="w-full h-8 text-xs rounded-xl border-dashed border-primary/30"
+                          className="w-full h-8 text-xs rounded-lg border-dashed border-border/40 font-mono"
                         >
                           <Plus className="w-3.5 h-3.5 mr-1" /> Add Custom Template
                         </Button>
@@ -2101,11 +2101,11 @@ function FinanceView() {
                   </div>
 
                   {/* Item 3: Credit Bureaus */}
-                  <div className="rounded-xl border border-border/40 overflow-hidden">
+                  <div className="rounded-lg border border-border/30 overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setExpandedSection(expandedSection === 'bureaus' ? 'none' : 'bureaus')}
-                      className="w-full flex items-center justify-between p-3.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left"
+                      className="w-full flex items-center justify-between p-2.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left font-mono"
                     >
                       <span className="flex items-center gap-2"><ShieldAlert className="w-3.5 h-3.5 text-primary" /> Credit Bureau Gauges</span>
                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedSection === 'bureaus' ? 'rotate-180' : ''}`} />
@@ -2114,7 +2114,7 @@ function FinanceView() {
                       <div className="p-4 bg-background/30 border-t border-border/20 space-y-4 text-xs">
                         <div className="space-y-3">
                           {draftCreditBureaus.map((bureau, idx) => (
-                            <div key={bureau.key} className="flex flex-col gap-2 p-2.5 rounded-xl border border-border bg-card/50">
+                            <div key={bureau.key} className="flex flex-col gap-2 p-2.5 rounded-lg border border-border/30 bg-card/50">
                               <div className="flex items-center gap-1.5 font-semibold text-foreground mb-1">
                                 {bureau.emoji} {bureau.label} Config
                               </div>
@@ -2128,7 +2128,7 @@ function FinanceView() {
                                       updated[idx] = { ...bureau, label: e.target.value };
                                       setDraftCreditBureaus(updated);
                                     }}
-                                    className="h-8 rounded-lg text-xs"
+                                    className="h-8 rounded-lg text-xs border-border/40"
                                   />
                                 </div>
                                 <div className="space-y-1">
@@ -2142,7 +2142,7 @@ function FinanceView() {
                                       updated[idx] = { ...bureau, maxScore: parseFormattedInt(e.target.value) || 1000 };
                                       setDraftCreditBureaus(updated);
                                     }}
-                                    className="h-8 rounded-lg text-xs font-mono"
+                                    className="h-8 rounded-lg text-xs font-mono border-border/40"
                                   />
                                 </div>
                                 <div className="space-y-1">
@@ -2154,7 +2154,7 @@ function FinanceView() {
                                       updated[idx] = { ...bureau, emoji: e.target.value };
                                       setDraftCreditBureaus(updated);
                                     }}
-                                    className="h-8 rounded-lg text-xs text-center"
+                                    className="h-8 rounded-lg text-xs text-center border-border/40"
                                   />
                                 </div>
                               </div>
@@ -2166,11 +2166,11 @@ function FinanceView() {
                   </div>
 
                   {/* Item 4: Active Savings Types */}
-                  <div className="rounded-xl border border-border/40 overflow-hidden">
+                  <div className="rounded-lg border border-border/30 overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setExpandedSection(expandedSection === 'savings' ? 'none' : 'savings')}
-                      className="w-full flex items-center justify-between p-3.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left"
+                      className="w-full flex items-center justify-between p-2.5 bg-muted/10 text-xs font-semibold hover:bg-muted/20 transition-colors text-left font-mono"
                     >
                       <span className="flex items-center gap-2"><Briefcase className="w-3.5 h-3.5 text-primary" /> Active Savings Types</span>
                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedSection === 'savings' ? 'rotate-180' : ''}`} />
@@ -2183,7 +2183,7 @@ function FinanceView() {
                             const key = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
                             const isChecked = draftActiveSavingsTypes.includes(key);
                             return (
-                              <label key={key} className="flex items-center gap-2 p-2.5 rounded-xl border border-border/40 bg-card/45 hover:bg-muted/10 cursor-pointer select-none">
+                              <label key={key} className="flex items-center gap-2 p-2 rounded-lg border border-border/30 bg-card/45 hover:bg-muted/10 cursor-pointer select-none text-xs font-mono">
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
@@ -2194,7 +2194,7 @@ function FinanceView() {
                                       setDraftActiveSavingsTypes(draftActiveSavingsTypes.filter(t => t !== key));
                                     }
                                   }}
-                                  className="h-4 w-4 rounded border-primary/20 text-primary focus:ring-primary/30 cursor-pointer"
+                                  className="h-3.5 w-3.5 rounded border-border/40 text-primary focus:ring-primary/30 cursor-pointer"
                                 />
                                 <span className="text-base leading-none shrink-0">{preset.emoji}</span>
                                 <span className="font-medium text-foreground">{preset.name}</span>
@@ -2209,27 +2209,27 @@ function FinanceView() {
               </section>
             </div>
 
-            <DialogFooter className="shrink-0 gap-2 sm:gap-3 px-4 sm:px-6 py-4 border-t border-border/40 bg-background/95 backdrop-blur-sm">
+            <DialogFooter className="shrink-0 gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-border/40 bg-background/95">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleResetDefaults}
-                className="w-full sm:w-auto rounded-xl h-11 gap-2 border-primary/20"
+                className="w-full sm:w-auto rounded-lg h-9 gap-1.5 border-border/40 text-xs font-mono"
                 disabled={savingDb}
               >
-                <Undo2 className="h-4 w-4" />
+                <Undo2 className="h-3.5 w-3.5" />
                 <span className="sm:hidden">Reset</span>
                 <span className="hidden sm:inline">Reset to defaults</span>
               </Button>
               <Button
                 type="submit"
-                className="w-full sm:w-auto rounded-xl h-11 gap-2 px-6 bg-primary text-primary-foreground"
+                className="w-full sm:w-auto rounded-lg h-9 gap-1.5 px-5 bg-primary text-primary-foreground text-xs font-mono"
                 disabled={savingDb}
               >
                 {savingDb ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Check className="h-4 w-4" />
+                  <Check className="h-3.5 w-3.5" />
                 )}
                 Save settings
               </Button>

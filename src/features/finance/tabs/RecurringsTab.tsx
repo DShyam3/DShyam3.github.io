@@ -41,26 +41,8 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   onEditRecurring,
   onDeleteRecurring,
 }) => {
-  const getTagColor = (category: string | undefined) => {
-    switch (category?.toLowerCase()) {
-      case 'rent':
-      case 'housing':
-        return 'bg-chart-3/10 text-chart-3 border border-chart-3/20';
-      case 'subscriptions':
-      case 'video entertainment':
-        return 'bg-positive/10 text-positive border border-positive/20';
-      case 'gym':
-        return 'bg-chart-4/10 text-chart-4 border border-chart-4/20';
-      case 'donations':
-        return 'bg-chart-4/10 text-chart-4 border border-chart-4/20';
-      case 'insurance':
-        return 'bg-chart-5/10 text-chart-5 border border-chart-5/20';
-      case 'groceries':
-      case 'needs':
-        return 'bg-chart-2/10 text-chart-2 border border-chart-2/20';
-      default:
-        return 'bg-muted/30 text-muted-foreground border border-border/30';
-    }
+  const getTagColor = (_category: string | undefined) => {
+    return 'bg-muted/30 text-muted-foreground border border-border/30';
   };
 
   const thisMonthBills = recurrings.filter(r => isDueThisMonth(r, currentMonth));
@@ -125,12 +107,12 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
     <div className="space-y-6">
       {/* Recurrings Header */}
       <div className="flex items-center gap-3 border-b border-border/50 pb-4">
-        <h3 className="font-serif text-lg font-semibold text-foreground">
+        <h3 className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">
           Recurrings
         </h3>
         <button
           onClick={onOpenAddModal}
-          className="h-7 w-7 rounded-lg border border-border bg-card hover:bg-muted flex items-center justify-center text-foreground transition-colors"
+          className="h-7 w-7 rounded-lg border border-border/40 bg-muted/20 hover:bg-muted/50 flex items-center justify-center text-foreground transition-colors"
           title="Add Recurring Bill"
         >
           <Plus className="h-4 w-4" />
@@ -139,7 +121,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
 
       <div className="space-y-8">
         {/* Progress Card */}
-        <div className="bg-card/20 backdrop-blur-sm border border-primary/10 rounded-[2rem] p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6">
+        <div className="bg-card/50 border border-border/40 rounded-xl p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6 hover:border-border/80 transition-colors">
           <div className="text-center sm:text-left space-y-1">
             <span className="text-3xl md:text-4xl font-bold font-mono text-foreground block">
               {formatGBP(leftAmount)}
@@ -194,7 +176,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
               </span>
             </div>
 
-            <div className="bg-card/40 backdrop-blur-sm rounded-2xl border border-primary/10 p-4 space-y-1">
+            <div className="bg-card/50 rounded-xl border border-border/40 p-4 space-y-1 hover:border-border/80 transition-colors">
               {thisMonthBills.map(bill => {
                 const dueDateText = getDueDateText(bill, currentMonth);
                 return (
@@ -235,7 +217,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                       </div>
 
-                      <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                      <span className={cn("px-2 py-0.5 rounded text-[11px] font-mono uppercase border border-border/30 bg-muted/20 text-muted-foreground flex items-center gap-1")}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>
@@ -273,7 +255,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
               Future / Scheduled ({futureBills.length})
             </h4>
 
-            <div className="bg-card/40 backdrop-blur-sm rounded-2xl border border-primary/10 p-4 space-y-1">
+            <div className="bg-card/50 rounded-xl border border-border/40 p-4 space-y-1 hover:border-border/80 transition-colors">
               {futureBills.map(bill => {
                 const dueDateText = getDueDateText(bill, currentMonth, bill.displayMonth);
                 return (
@@ -314,7 +296,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                       </div>
 
-                      <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase font-mono shadow-sm flex items-center gap-1", getTagColor(bill.category))}>
+                      <span className={cn("px-2 py-0.5 rounded text-[11px] font-mono uppercase border border-border/30 bg-muted/20 text-muted-foreground flex items-center gap-1")}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>

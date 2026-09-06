@@ -112,24 +112,24 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
       {/* Header Section */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
         <div className="min-w-0">
-          <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary shrink-0" /> Time Management & Life Calendar
+          <h3 className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary shrink-0" /> Time Management & Life Calendar
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">
             Analyze how your 8,760 yearly hours are allocated across routine, work, and free time
           </p>
         </div>
         <Button
           variant="outline"
           onClick={onOpenSettings}
-          className="rounded-xl gap-1.5 shrink-0 self-start sm:self-auto text-xs"
+          className="rounded-lg h-8 px-3 gap-1.5 shrink-0 self-start sm:self-auto text-xs font-mono"
         >
           <Settings className="h-3.5 w-3.5" /> Work Settings
         </Button>
       </div>
 
       {trackedExceedsTotal && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl p-4 text-xs font-sans flex items-start gap-2.5">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-xs font-mono flex items-start gap-2.5">
           <span className="text-base leading-none">⚠️</span>
           <div>
             <p className="font-semibold mb-0.5">Over-allocated Schedule</p>
@@ -144,10 +144,10 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Sliders */}
         <div className="lg:col-span-5 flex flex-col gap-4">
-          <Card className="bg-card/40 backdrop-blur-sm border-primary/10 shadow-sm rounded-2xl sm:rounded-[2rem]">
+          <Card className="bg-card/50 border border-border/40 rounded-xl hover:border-border/80 transition-colors shadow-none">
             <CardHeader className="pb-4">
-              <CardTitle className="font-serif text-base font-semibold">Lifestyle Parameters</CardTitle>
-              <CardDescription className="text-xs">
+              <CardTitle className="text-xs font-mono uppercase tracking-wider font-semibold">Lifestyle Parameters</CardTitle>
+              <CardDescription className="text-xs font-mono">
                 Drag sliders to customize your typical daily/weekly time spending patterns.
               </CardDescription>
             </CardHeader>
@@ -331,7 +331,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
         {/* Right Column: Visualization & Table */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           {/* Visual Charts Card */}
-          <Card className="bg-card/40 backdrop-blur-sm border-primary/10 shadow-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 space-y-6">
+          <Card className="bg-card/50 border border-border/40 rounded-xl p-4 sm:p-6 space-y-6 hover:border-border/80 transition-colors shadow-none">
             <div className="flex flex-col md:flex-row items-center justify-around gap-6">
               {/* Donut Chart */}
               <div className="w-48 h-48 flex items-center justify-center relative shrink-0">
@@ -445,8 +445,8 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           </Card>
 
           {/* Detailed Statistics Table */}
-          <Card className="bg-card/40 backdrop-blur-sm border-primary/10 shadow-sm rounded-2xl sm:rounded-[2rem] p-4 sm:p-6">
-            <h4 className="font-serif text-sm font-semibold text-foreground mb-4 flex items-center gap-1.5">
+          <Card className="bg-card/50 border border-border/40 rounded-xl p-4 sm:p-6 hover:border-border/80 transition-colors shadow-none">
+            <h4 className="text-xs font-mono uppercase tracking-wider font-semibold text-foreground mb-4 flex items-center gap-1.5">
               📊 Complete Time Metrics Breakdown
             </h4>
             <div className="overflow-x-auto -mx-4 sm:mx-0">

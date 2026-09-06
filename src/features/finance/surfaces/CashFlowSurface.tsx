@@ -446,23 +446,23 @@ return (
     {/* Period Header Row */}
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
       <div className="min-w-0">
-        <h3 className="font-serif text-lg font-semibold text-foreground flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary shrink-0" /> Cash Flow
+        <h3 className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary shrink-0" /> Cash Flow
         </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Overview of income, spending, and net position</p>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">Overview of income, spending, and net position</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         {/* Period Selector Dropdown */}
         <div className="relative">
           <button
             onClick={() => setCfPeriodOpen(!cfPeriodOpen)}
-            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono flex items-center gap-1.5 hover:bg-primary/20 transition-colors"
+            className="text-xs font-mono px-3 py-1.5 rounded-lg bg-muted/20 text-foreground border border-border/40 flex items-center gap-1.5 hover:bg-muted/40 hover:border-border/80 transition-colors"
           >
             {activePeriodLabel}
             <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", cfPeriodOpen && "rotate-180")} />
           </button>
           {cfPeriodOpen && (
-            <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[240px] bg-popover border border-border rounded-2xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[240px] bg-popover border border-border/60 rounded-xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150 font-mono">
               {CF_PERIOD_OPTIONS.map(opt => {
                 const isActive = cfPeriod === opt.key;
                 return (
@@ -470,13 +470,13 @@ return (
                     key={opt.key}
                     onClick={() => { setCfPeriod(opt.key); setCfPeriodOpen(false); }}
                     className={cn(
-                      "w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-3 transition-colors",
-                      isActive ? "bg-primary/10 text-primary" : "hover:bg-muted/50 text-foreground"
+                      "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between gap-3 transition-colors font-mono",
+                      isActive ? "bg-muted/40 text-foreground font-bold" : "hover:bg-muted/30 text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <span className="flex items-center gap-2">
                       {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
-                      <span className={cn("font-semibold", !isActive && "ml-5")}>{opt.label}</span>
+                      <span className={cn(!isActive && "ml-5")}>{opt.label}</span>
                     </span>
                   </button>
                 );

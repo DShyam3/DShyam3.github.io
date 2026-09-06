@@ -310,7 +310,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   };
 
   // Handlers for selected transaction details updates
-  const updateSelectedField = (field: keyof MockTransaction, value: any) => {
+  const updateSelectedField = <K extends keyof MockTransaction>(field: K, value: MockTransaction[K]) => {
     if (!selectedTxId) return;
     const updated = transactions.map(tx => {
       if (tx.id === selectedTxId) {
@@ -456,7 +456,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       {/* LEFT SECTION: TRANSACTIONS LIST */}
       <div className="lg:col-span-2 flex flex-col space-y-4">
         {/* TOOLBAR: Search, Filter, Sort, Batch Actions */}
-        <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-2xl p-4 space-y-3 shadow-lg">
+        <div className="bg-card/50 border border-border/40 rounded-xl p-4 space-y-3 hover:border-border/80 transition-colors">
           <div className="flex flex-col sm:flex-row items-center gap-3">
             {/* Search */}
             <div className="relative w-full sm:flex-1">
@@ -465,7 +465,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 placeholder="Search description, category, tags..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 bg-background/50 border-primary/15 rounded-xl text-xs focus-visible:ring-primary/45"
+                className="pl-9 h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono focus-visible:ring-primary/45"
               />
               {searchQuery && (
                 <button
@@ -482,7 +482,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               {/* Filter Popover */}
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 border-primary/15 rounded-xl text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80">
+                  <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80 font-mono">
                     <Filter className="h-3.5 w-3.5" />
                     <span>Filter</span>
                     {(statusFilter !== 'all' || categoryFilter !== 'all' || accountFilter !== 'all') && (
@@ -490,46 +490,46 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-64 bg-card/95 backdrop-blur-md border border-primary/15 rounded-2xl p-4 shadow-xl space-y-4 z-50">
+                <PopoverContent className="w-64 bg-card border border-border/60 rounded-xl p-4 shadow-xl space-y-4 z-50 font-mono">
                   <div className="space-y-1.5">
-                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">Status</h4>
-                    <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
-                      <SelectTrigger className="h-8 bg-background/50 border-primary/15 rounded-lg text-xs">
+                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">Status</h4>
+                    <Select value={statusFilter} onValueChange={(val: 'all' | 'pending' | 'reviewed') => setStatusFilter(val)}>
+                      <SelectTrigger className="h-8 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
                         <SelectValue placeholder="All status" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-primary/15 z-[60]">
-                        <SelectItem value="all" className="text-xs">All Review Status</SelectItem>
-                        <SelectItem value="pending" className="text-xs">To Review (Pending)</SelectItem>
-                        <SelectItem value="reviewed" className="text-xs">Reviewed</SelectItem>
+                      <SelectContent className="bg-card border-border/40 z-[60] font-mono">
+                        <SelectItem value="all" className="text-xs font-mono">All Review Status</SelectItem>
+                        <SelectItem value="pending" className="text-xs font-mono">To Review (Pending)</SelectItem>
+                        <SelectItem value="reviewed" className="text-xs font-mono">Reviewed</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-1.5">
-                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">Category</h4>
+                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">Category</h4>
                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger className="h-8 bg-background/50 border-primary/15 rounded-lg text-xs">
+                      <SelectTrigger className="h-8 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
                         <SelectValue placeholder="All categories" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-primary/15 z-[60]">
-                        <SelectItem value="all" className="text-xs">All Categories</SelectItem>
+                      <SelectContent className="bg-card border-border/40 z-[60] font-mono">
+                        <SelectItem value="all" className="text-xs font-mono">All Categories</SelectItem>
                         {Array.from(new Set(transactions.map(t => t.category))).filter(Boolean).map(cat => (
-                          <SelectItem key={cat} value={cat} className="text-xs">{cat}</SelectItem>
+                          <SelectItem key={cat} value={cat} className="text-xs font-mono">{cat}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-1.5">
-                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">Account</h4>
+                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">Account</h4>
                     <Select value={accountFilter} onValueChange={setAccountFilter}>
-                      <SelectTrigger className="h-8 bg-background/50 border-primary/15 rounded-lg text-xs">
+                      <SelectTrigger className="h-8 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
                         <SelectValue placeholder="All accounts" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-primary/15 z-[60]">
-                        <SelectItem value="all" className="text-xs">All Accounts</SelectItem>
+                      <SelectContent className="bg-card border-border/40 z-[60] font-mono">
+                        <SelectItem value="all" className="text-xs font-mono">All Accounts</SelectItem>
                         {bankAccounts.map(acc => (
-                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                          <SelectItem key={acc.id} value={acc.id} className="text-xs font-mono">
                             {acc.name}
                           </SelectItem>
                         ))}
@@ -557,43 +557,47 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               {/* Sort Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 border-primary/15 rounded-xl text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80">
+                  <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80 font-mono">
                     <SlidersHorizontal className="h-3.5 w-3.5" />
                     <span>Sort</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card/95 border-primary/15 rounded-xl z-50">
-                  <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSortOrder('date-desc')}>
+                <DropdownMenuContent align="end" className="bg-card border-border/60 rounded-xl z-50 font-mono">
+                  <DropdownMenuItem className="text-xs cursor-pointer font-mono" onClick={() => setSortOrder('date-desc')}>
                     Newest Date
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSortOrder('date-asc')}>
+                  <DropdownMenuItem className="text-xs cursor-pointer font-mono" onClick={() => setSortOrder('date-asc')}>
                     Oldest Date
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSortOrder('amount-desc')}>
+                  <DropdownMenuItem className="text-xs cursor-pointer font-mono" onClick={() => setSortOrder('amount-desc')}>
                     Highest Amount
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSortOrder('amount-asc')}>
+                  <DropdownMenuItem className="text-xs cursor-pointer font-mono" onClick={() => setSortOrder('amount-asc')}>
                     Lowest Amount
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Add Transaction Button */}
-              <Button size="sm" className="h-9 rounded-xl text-xs bg-primary hover:bg-primary/95 text-primary-foreground gap-1" onClick={() => setIsAddOpen(true)}>
+              {/* Add Single Transaction */}
+              <Button
+                size="sm"
+                onClick={() => setIsAddOpen(true)}
+                className="h-9 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs flex items-center gap-1.5 px-3 font-mono"
+              >
                 <Plus className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Transaction</span>
+                <span className="hidden sm:inline">Add</span>
               </Button>
 
-              {/* Export Button */}
-              <Button variant="outline" size="sm" className="h-9 border-primary/15 rounded-xl text-xs bg-background/30 hover:bg-background/80 p-2.5" onClick={handleExportCSV}>
-                <Download className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              {/* Export CSV */}
+              <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs bg-background/30 hover:bg-background/80 p-2.5 font-mono" onClick={handleExportCSV}>
+                <Download className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
 
-          {/* Batch operations when checklist is selected */}
+          {/* Batch Actions Bar (Rendered when 1+ checkboxes selected) */}
           {selectedTxIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl p-2.5 px-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex flex-wrap items-center gap-3 bg-muted/20 border border-border/40 rounded-lg p-2.5 px-3 animate-in fade-in slide-in-from-top-2 duration-200 font-mono">
               <span className="text-xs text-muted-foreground font-semibold">
                 {selectedTxIds.size} transaction{selectedTxIds.size > 1 ? 's' : ''} selected:
               </span>
@@ -657,11 +661,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         </div>
 
         {/* LIST RENDER: Grouped by date */}
-        <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-4 shadow-xl min-h-[400px] flex flex-col justify-start">
+        <div className="bg-card/50 border border-border/40 rounded-xl p-4 min-h-[400px] flex flex-col justify-start hover:border-border/80 transition-colors">
           {groupedTransactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 my-auto">
-              <div className="p-4 bg-primary/5 rounded-full border border-primary/10">
-                <AlertCircle className="h-8 w-8 text-muted-foreground/60" />
+              <div className="p-3 bg-muted/20 rounded-xl border border-border/30">
+                <AlertCircle className="h-7 w-7 text-muted-foreground/60" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold text-foreground">No transactions found</h3>
@@ -727,10 +731,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         <div
                           key={tx.id}
                           className={cn(
-                            "flex items-center p-3 rounded-2xl border border-transparent transition-all cursor-pointer select-none",
+                            "flex items-center p-2.5 rounded-lg border border-transparent transition-all cursor-pointer select-none font-mono",
                             isSelected
-                              ? "bg-primary/10 border-primary/20 shadow-md"
-                              : "bg-background/20 hover:bg-background/40 hover:border-primary/10"
+                              ? "bg-card/90 border-border/70 shadow-sm"
+                              : "bg-card/30 hover:bg-card/60 hover:border-border/40"
                           )}
                           onClick={() => setSelectedTxId(tx.id)}
                         >
@@ -815,7 +819,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       {/* RIGHT SECTION: TRANSACTION DETAILS PANEL */}
       <div className="flex flex-col space-y-4">
-        <div className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-5 shadow-xl min-h-[500px]">
+        <div className="bg-card/50 border border-border/40 rounded-xl p-5 min-h-[500px] hover:border-border/80 transition-colors">
           {selectedTx ? (
             <div className="space-y-6">
               {/* Detail Panel Header */}
@@ -858,7 +862,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 <Input
                   value={selectedTx.name}
                   onChange={e => updateSelectedField('name', e.target.value)}
-                  className="text-lg font-bold bg-transparent border-transparent hover:border-primary/15 focus:border-primary/30 p-0 h-auto focus-visible:ring-0 text-foreground cursor-text"
+                  className="text-lg font-bold bg-transparent border-transparent hover:border-border/40 focus:border-border/60 p-0 h-auto focus-visible:ring-0 text-foreground cursor-text"
                 />
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -871,7 +875,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       const multiplier = selectedTx.amount < 0 ? -1 : 1;
                       updateSelectedField('amount', val * multiplier);
                     }}
-                    className="text-2xl font-mono font-semibold bg-transparent border-transparent hover:border-primary/15 focus:border-primary/30 p-0 h-auto w-32 focus-visible:ring-0 text-foreground cursor-text"
+                    className="text-2xl font-mono font-semibold bg-transparent border-transparent hover:border-border/40 focus:border-border/60 p-0 h-auto w-32 focus-visible:ring-0 text-foreground cursor-text"
                   />
                   <Button
                     type="button"
@@ -879,7 +883,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     variant="outline"
                     onClick={() => updateSelectedField('amount', -selectedTx.amount)}
                     className={cn(
-                      "h-7 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors",
+                      "h-7 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors font-mono",
                       selectedTx.amount < 0
                         ? "bg-positive/10 text-positive border-positive/30 hover:bg-positive/20"
                         : "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20"
@@ -892,26 +896,26 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </div>
 
               {/* Details Form Grid */}
-              <div className="space-y-4 pt-2">
+              <div className="space-y-4 pt-2 font-mono">
                 {/* Category */}
                 <div className="grid grid-cols-3 items-center gap-4">
-                  <Label className="text-xs text-muted-foreground">Category</Label>
+                  <Label className="text-xs text-muted-foreground font-mono">Category</Label>
                   <div className="col-span-2">
                     <Select
                       value={selectedTx.category}
                       onValueChange={(val) => updateSelectedField('category', val)}
                     >
-                      <SelectTrigger className="h-9 bg-background/50 border-primary/15 rounded-xl text-xs">
+                      <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent className="max-h-64 overflow-y-auto bg-card border-primary/15 z-50">
+                      <SelectContent className="max-h-64 overflow-y-auto bg-card border-border/40 z-50 font-mono">
                         {allCategoryOptions.map(opt => (
-                          <SelectItem key={opt.id} value={opt.name} className="text-xs">
+                          <SelectItem key={opt.id} value={opt.name} className="text-xs font-mono">
                             <span className="text-xs text-muted-foreground mr-1.5">[{opt.group}]</span>
                             {opt.name}
                           </SelectItem>
                         ))}
-                        <SelectItem value="Other" className="text-xs">Other</SelectItem>
+                        <SelectItem value="Other" className="text-xs font-mono">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -919,7 +923,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                 {/* Account */}
                 <div className="grid grid-cols-3 items-center gap-4">
-                  <Label className="text-xs text-muted-foreground">Account</Label>
+                  <Label className="text-xs text-muted-foreground font-mono">Account</Label>
                   <div className="col-span-2">
                     <Select
                       value={selectedTx.bankAccountId || selectedTx.accountId || 'none'}
@@ -933,13 +937,13 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         }));
                       }}
                     >
-                      <SelectTrigger className="h-9 bg-background/50 border-primary/15 rounded-xl text-xs">
+                      <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
                         <SelectValue placeholder="No account linked" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-primary/15 z-50">
-                        <SelectItem value="none" className="text-xs">No account linked</SelectItem>
+                      <SelectContent className="bg-card border-border/40 z-50 font-mono">
+                        <SelectItem value="none" className="text-xs font-mono">No account linked</SelectItem>
                         {bankAccounts.map(acc => (
-                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                          <SelectItem key={acc.id} value={acc.id} className="text-xs font-mono">
                             <span className="mr-1">{acc.emoji || (acc.type === 'credit' ? '💳' : '🏦')}</span>
                             {acc.name}
                           </SelectItem>
@@ -951,19 +955,19 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                 {/* Goal */}
                 <div className="grid grid-cols-3 items-center gap-4">
-                  <Label className="text-xs text-muted-foreground">Savings Goal</Label>
+                  <Label className="text-xs text-muted-foreground font-mono">Savings Goal</Label>
                   <div className="col-span-2">
                     <Select
                       value={selectedTx.goalId || 'none'}
                       onValueChange={(val) => updateSelectedField('goalId', val === 'none' ? undefined : val)}
                     >
-                      <SelectTrigger className="h-9 bg-background/50 border-primary/15 rounded-xl text-xs">
+                      <SelectTrigger className="h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
                         <SelectValue placeholder="Link to savings goal" />
                       </SelectTrigger>
-                      <SelectContent className="bg-card border-primary/15 z-50">
-                        <SelectItem value="none" className="text-xs">No goal linked</SelectItem>
+                      <SelectContent className="bg-card border-border/40 z-50 font-mono">
+                        <SelectItem value="none" className="text-xs font-mono">No goal linked</SelectItem>
                         {goals.map(g => (
-                          <SelectItem key={g.id} value={g.id} className="text-xs">
+                          <SelectItem key={g.id} value={g.id} className="text-xs font-mono">
                             🎯 {g.name}
                           </SelectItem>
                         ))}
@@ -974,25 +978,25 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                 {/* Notes */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Notes</Label>
+                  <Label className="text-xs text-muted-foreground font-mono">Notes</Label>
                   <Textarea
                     placeholder="Add notes about this transaction..."
                     value={selectedTx.notes || ''}
                     onChange={e => updateSelectedField('notes', e.target.value || undefined)}
-                    className="min-h-[80px] bg-background/50 border-primary/15 rounded-xl text-xs placeholder:text-muted-foreground/50 focus-visible:ring-primary/45"
+                    className="min-h-[80px] bg-background/50 border-border/40 rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus-visible:ring-primary/45"
                   />
                 </div>
 
                 {/* Tags */}
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Tags</Label>
+                  <Label className="text-xs text-muted-foreground font-mono">Tags</Label>
                   <div className="flex flex-wrap gap-1.5">
                     {(selectedTx.tags || []).map(tag => (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-1 text-xs bg-primary/5 text-primary border border-primary/15 px-2 py-0.5 rounded-full font-medium"
+                        className="inline-flex items-center gap-1 text-xs bg-muted/30 text-foreground border border-border/30 px-2 py-0.5 rounded font-mono"
                       >
-                        <Tag className="h-2 w-2 text-primary/75" />
+                        <Tag className="h-2 w-2 text-muted-foreground" />
                         <span>{tag}</span>
                         <button
                           onClick={() => handleRemoveTag(tag)}
@@ -1010,16 +1014,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           e.currentTarget.value = '';
                         }
                       }}
-                      className="h-6 w-24 bg-background/30 border-primary/10 rounded-lg text-xs px-2 py-0"
+                      className="h-6 w-24 bg-background/30 border-border/40 rounded-lg text-xs font-mono px-2 py-0"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Similar Transactions */}
-              <div className="pt-4 border-t border-border/20 space-y-3">
+              <div className="pt-4 border-t border-border/20 space-y-3 font-mono">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                  <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">
                     Similar Transactions
                   </h4>
                   <span className="text-xs text-muted-foreground font-mono font-semibold">
@@ -1029,12 +1033,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
                   {similarTransactionsInfo.list.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic py-1">
+                    <p className="text-xs text-muted-foreground italic py-1 font-mono">
                       No previous transactions found for this merchant.
                     </p>
                   ) : (
                     similarTransactionsInfo.list.map(match => (
-                      <div key={match.id} className="flex items-center justify-between p-2 rounded-xl bg-background/25 border border-transparent hover:border-primary/5">
+                      <div key={match.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border/20">
                         <div className="space-y-0.5">
                           <span className="text-xs font-semibold text-foreground block">
                             {new Date(match.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -1062,13 +1066,13 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-24 text-center space-y-3">
-              <div className="p-4 bg-primary/5 rounded-full border border-primary/10">
-                <SlidersHorizontal className="h-8 w-8 text-muted-foreground/60" />
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="p-3 bg-muted/20 rounded-xl border border-border/30">
+                <FileText className="h-7 w-7 text-muted-foreground/50" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-foreground">No transaction selected</h3>
-                <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                <h3 className="text-sm font-semibold text-foreground font-mono">No transaction selected</h3>
+                <p className="text-xs text-muted-foreground max-w-xs mx-auto font-mono">
                   Select any transaction from the list on the left to review details, change tags, link goals or view transaction history.
                 </p>
               </div>
@@ -1079,10 +1083,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       {/* DIALOG: ADD TRANSACTION MANUALLY */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="bg-card border border-primary/15 rounded-3xl p-6 shadow-2xl z-50 max-w-md w-full">
+        <DialogContent className="sm:rounded-xl border border-border/40 bg-card font-mono max-w-md w-full">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-foreground">Add New Transaction</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogTitle className="text-base font-bold text-foreground font-mono">Add New Transaction</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground font-mono">
               Manually create a transaction for your ledger.
             </DialogDescription>
           </DialogHeader>
@@ -1122,83 +1126,83 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Merchant / Description</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-mono text-muted-foreground">Merchant / Description</Label>
               <Input
                 placeholder="e.g. Juice Press, Shell, Whole Foods"
                 value={newTxName}
                 onChange={e => setNewTxName(e.target.value)}
-                className="bg-background/50 border-primary/15 rounded-xl text-xs h-9"
+                className="bg-background/50 border-border/40 rounded-lg text-xs h-9 font-mono"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Amount (£)</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-mono text-muted-foreground">Amount (£)</Label>
                 <Input
                   type="number"
                   placeholder="10.00"
                   value={newTxAmount}
                   onChange={e => setNewTxAmount(e.target.value)}
-                  className="bg-background/50 border-primary/15 rounded-xl text-xs h-9 font-mono"
+                  className="bg-background/50 border-border/40 rounded-lg text-xs h-9 font-mono"
                 />
               </div>
 
-              <div className="space-y-1.5 flex flex-col justify-start">
-                <Label className="text-xs text-muted-foreground mb-1">Date</Label>
+              <div className="space-y-1 flex flex-col justify-start">
+                <Label className="text-xs font-mono text-muted-foreground mb-1">Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        "h-9 justify-start text-left font-normal border-primary/15 rounded-xl text-xs bg-background/50 hover:bg-background/80 w-full",
+                        "h-9 justify-start text-left font-normal border-border/40 rounded-lg text-xs bg-background/50 hover:bg-background/80 w-full font-mono",
                         !newTxDate && "text-muted-foreground"
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <CalendarIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                       {newTxDate ? newTxDate.toLocaleDateString('en-GB') : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-card border-primary/15 rounded-2xl z-[60]" align="start">
+                  <PopoverContent className="w-auto p-0 bg-card border-border/60 rounded-xl z-[60] font-mono" align="start">
                     <Calendar
                       mode="single"
                       selected={newTxDate}
                       onSelect={(day) => day && setNewTxDate(day)}
                       initialFocus
-                      className="bg-card border-none text-xs"
+                      className="bg-card border-none text-xs font-mono"
                     />
                   </PopoverContent>
                 </Popover>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Category</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-mono text-muted-foreground">Category</Label>
                 <Select value={newTxCategory} onValueChange={setNewTxCategory}>
-                  <SelectTrigger className="bg-background/50 border-primary/15 rounded-xl text-xs h-9">
+                  <SelectTrigger className="bg-background/50 border-border/40 rounded-lg text-xs h-9 font-mono">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
-                  <SelectContent className="bg-card border-primary/15 z-[60] max-h-48 overflow-y-auto">
+                  <SelectContent className="bg-card border-border/40 z-[60] max-h-48 overflow-y-auto font-mono">
                     {allCategoryOptions.map(opt => (
-                      <SelectItem key={opt.id} value={opt.name} className="text-xs">
+                      <SelectItem key={opt.id} value={opt.name} className="text-xs font-mono">
                         {opt.name}
                       </SelectItem>
                     ))}
-                    <SelectItem value="Other" className="text-xs">Other</SelectItem>
+                    <SelectItem value="Other" className="text-xs font-mono">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Account</Label>
+              <div className="space-y-1">
+                <Label className="text-xs font-mono text-muted-foreground">Account</Label>
                 <Select value={newTxAccount} onValueChange={setNewTxAccount}>
-                  <SelectTrigger className="bg-background/50 border-primary/15 rounded-xl text-xs h-9">
+                  <SelectTrigger className="bg-background/50 border-border/40 rounded-lg text-xs h-9 font-mono">
                     <SelectValue placeholder="No account" />
                   </SelectTrigger>
-                  <SelectContent className="bg-card border-primary/15 z-[60]">
+                  <SelectContent className="bg-card border-border/40 z-[60] font-mono">
                     {bankAccounts.map(acc => (
-                      <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                      <SelectItem key={acc.id} value={acc.id} className="text-xs font-mono">
                         {acc.name}
                       </SelectItem>
                     ))}
@@ -1207,15 +1211,15 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Savings Goal Link (Optional)</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-mono text-muted-foreground">Savings Goal Link (Optional)</Label>
               <Select value={newTxGoal} onValueChange={setNewTxGoal}>
-                <SelectTrigger className="bg-background/50 border-primary/15 rounded-xl text-xs h-9">
+                <SelectTrigger className="bg-background/50 border-border/40 rounded-lg text-xs h-9 font-mono">
                   <SelectValue placeholder="Not linked to goal" />
                 </SelectTrigger>
-                <SelectContent className="bg-card border-primary/15 z-[60]">
+                <SelectContent className="bg-card border-border/40 z-[60] font-mono">
                   {goals.map(g => (
-                    <SelectItem key={g.id} value={g.id} className="text-xs">
+                    <SelectItem key={g.id} value={g.id} className="text-xs font-mono">
                       🎯 {g.name}
                     </SelectItem>
                   ))}
@@ -1223,40 +1227,40 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Notes</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-mono text-muted-foreground">Notes</Label>
               <Textarea
                 placeholder="Write notes here..."
                 value={newTxNotes}
                 onChange={e => setNewTxNotes(e.target.value)}
-                className="bg-background/50 border-primary/15 rounded-xl text-xs min-h-[60px]"
+                className="bg-background/50 border-border/40 rounded-lg text-xs min-h-[60px] font-mono"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Tags (comma separated)</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-mono text-muted-foreground">Tags (comma separated)</Label>
               <Input
                 placeholder="e.g. food, holiday, subaru"
                 value={newTxTags}
                 onChange={e => setNewTxTags(e.target.value)}
-                className="bg-background/50 border-primary/15 rounded-xl text-xs h-9"
+                className="bg-background/50 border-border/40 rounded-lg text-xs h-9 font-mono"
               />
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setIsAddOpen(false)}
-              className="text-xs h-9 rounded-xl"
+              className="text-xs h-8 px-3 rounded-lg font-mono"
             >
               Cancel
             </Button>
             <Button
               size="sm"
               onClick={handleAddTransaction}
-              className="bg-primary hover:bg-primary/95 text-primary-foreground text-xs h-9 rounded-xl px-4"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-8 rounded-lg px-4 font-mono"
               disabled={!newTxName.trim() || !newTxAmount}
             >
               Add Transaction
