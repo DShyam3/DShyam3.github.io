@@ -317,10 +317,10 @@ export default function GoalsSurface() {
                   <span> of </span>
                   <span className="font-mono">{formatGBP(goal.targetAmount)}</span>
                 </span>
-                <span className="font-bold text-emerald-500 font-mono text-xs">{progress.toFixed(0)}%</span>
+                <span className="font-bold text-positive font-mono text-xs">{progress.toFixed(0)}%</span>
               </div>
               <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
+                <div className="h-full bg-positive rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
               </div>
             </div>
           </div>
@@ -448,8 +448,8 @@ export default function GoalsSurface() {
               <div className="flex items-start justify-between md:justify-end gap-4 shrink-0">
                 <div className="text-right">
                   <span className="text-xs text-muted-foreground block uppercase tracking-wider">Saved</span>
-                  <span className="text-xl font-bold text-emerald-500 font-mono block">{formatGBP(goal.currentAmount)}</span>
-                  <span className="text-xs text-emerald-500/80 font-medium block mt-0.5">
+                  <span className="text-xl font-bold text-positive font-mono block">{formatGBP(goal.currentAmount)}</span>
+                  <span className="text-xs text-positive/80 font-medium block mt-0.5">
                     {progress >= 100 ? "Goal achieved!" : `${progress.toFixed(0)}% complete`}
                   </span>
                 </div>
@@ -473,7 +473,7 @@ export default function GoalsSurface() {
                     className={cn(
                       "h-8 w-8 rounded-xl",
                       goal.status === 'archived'
-                        ? "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10"
+                        ? "text-positive hover:text-positive hover:bg-positive/10"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/10"
                     )}
                     title={goal.status === 'archived' ? "Restore / Unarchive Goal" : "Archive Goal"}
@@ -484,7 +484,7 @@ export default function GoalsSurface() {
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDeleteGoal(goal.id)}
-                    className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl"
+                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -623,7 +623,7 @@ export default function GoalsSurface() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDeleteContribution(goal.id, c.id)}
-                        className="h-7 w-7 text-rose-500 hover:text-rose-600 shrink-0 self-end sm:self-center"
+                        className="h-7 w-7 text-destructive hover:text-destructive shrink-0 self-end sm:self-center"
                       >
                         <X className="h-3.5 w-3.5" />
                       </Button>

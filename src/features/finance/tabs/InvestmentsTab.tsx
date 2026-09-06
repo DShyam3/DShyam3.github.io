@@ -250,7 +250,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
           <div className="space-y-1.5 relative z-10">
             <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              <DollarSign className="h-3 w-3 text-cyan-500" /> Net Invested
+              <DollarSign className="h-3 w-3 text-chart-3" /> Net Invested
             </span>
             <div className="text-2xl sm:text-3xl font-serif font-semibold text-foreground tracking-tight">
               {formatGBP(portfolioStats.totalCost)}
@@ -266,15 +266,15 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           <div className="space-y-1.5 relative z-10">
             <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
               {portfolioStats.profitLoss >= 0 ? (
-                <TrendingUp className="h-3 w-3 text-emerald-500" />
+                <TrendingUp className="h-3 w-3 text-positive" />
               ) : (
-                <TrendingDown className="h-3 w-3 text-rose-500" />
+                <TrendingDown className="h-3 w-3 text-destructive" />
               )}
               Total Gain / Loss
             </span>
             <div className={cn(
               "text-2xl sm:text-3xl font-serif font-semibold tracking-tight",
-              portfolioStats.profitLoss >= 0 ? "text-emerald-500" : "text-rose-500"
+              portfolioStats.profitLoss >= 0 ? "text-positive" : "text-destructive"
             )}>
               {portfolioStats.profitLoss >= 0 ? '+' : ''}{formatGBP(portfolioStats.profitLoss)}
             </div>
@@ -288,11 +288,11 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           <div className="absolute right-0 top-0 h-24 w-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
           <div className="space-y-1.5 relative z-10">
             <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-              <ArrowUpRight className="h-3 w-3 text-amber-500" /> Rate of Return
+              <ArrowUpRight className="h-3 w-3 text-chart-4" /> Rate of Return
             </span>
             <div className={cn(
               "text-2xl sm:text-3xl font-serif font-semibold tracking-tight",
-              portfolioStats.totalReturnPercent >= 0 ? "text-emerald-500" : "text-rose-500"
+              portfolioStats.totalReturnPercent >= 0 ? "text-positive" : "text-destructive"
             )}>
               {portfolioStats.totalReturnPercent >= 0 ? '+' : ''}{portfolioStats.totalReturnPercent.toFixed(2)}%
             </div>
@@ -392,7 +392,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                           </td>
                           <td className={cn(
                             "py-3.5 text-right font-mono",
-                            gainLoss >= 0 ? "text-emerald-500 font-semibold" : "text-rose-500"
+                            gainLoss >= 0 ? "text-positive font-semibold" : "text-destructive"
                           )}>
                             <span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span>
                             <span className="text-xs block">
@@ -413,7 +413,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                                 onClick={() => onDeleteHolding(h.id)}
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-rose-500 rounded-full"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-full"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -562,7 +562,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="text-muted-foreground">Annual Return Rate</span>
-                  <span className="text-foreground font-semibold text-emerald-500 font-bold">
+                  <span className="text-foreground font-semibold text-positive font-bold">
                     {calcRate}%
                   </span>
                 </div>
@@ -606,7 +606,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
                   With a compound return of <span className="font-semibold text-foreground">{calcRate}%</span>, your portfolio value is projected to reach{' '}
-                  <span className="font-semibold text-emerald-500 font-bold">
+                  <span className="font-semibold text-positive font-bold">
                     {formatGBP(projectionData[projectionData.length - 1]['Future Value'])}
                   </span>
                   . That corresponds to{' '}

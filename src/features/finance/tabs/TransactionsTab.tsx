@@ -124,27 +124,27 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const getCategoryColor = (category: string) => {
     const catLower = category.toLowerCase();
     if (catLower.includes('restaurants') || catLower.includes('food') || catLower.includes('drink')) {
-      return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+      return 'bg-chart-4/15 text-chart-4 border-chart-4/30';
     }
     if (catLower.includes('shopping') || catLower.includes('wardrobe') || catLower.includes('clothes')) {
-      return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+      return 'bg-chart-5/15 text-chart-5 border-chart-5/30';
     }
     if (catLower.includes('gas') || catLower.includes('transport') || catLower.includes('car') || catLower.includes('travel')) {
-      return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30';
+      return 'bg-chart-4/15 text-chart-4 border-chart-4/30';
     }
     if (catLower.includes('internet') || catLower.includes('utilities') || catLower.includes('bills')) {
-      return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+      return 'bg-chart-3/15 text-chart-3 border-chart-3/30';
     }
     if (catLower.includes('rent') || catLower.includes('housing') || catLower.includes('home')) {
-      return 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30';
+      return 'bg-chart-5/15 text-chart-5 border-chart-5/30';
     }
     if (catLower.includes('savings') || catLower.includes('investment') || catLower.includes('interest')) {
-      return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+      return 'bg-positive/15 text-positive border-positive/30';
     }
     if (catLower.includes('groceries')) {
-      return 'bg-teal-500/15 text-teal-400 border-teal-500/30';
+      return 'bg-chart-2/15 text-chart-2 border-chart-2/30';
     }
-    return 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30';
+    return 'bg-muted/15 text-muted-foreground border-border/30';
   };
 
   // Filtered & Sorted Transactions
@@ -604,7 +604,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   onClick={() => handleBulkReview(true)}
                   className="h-7 rounded-lg text-xs border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
                 >
-                  <Check className="h-3 w-3 text-emerald-400" />
+                  <Check className="h-3 w-3 text-positive" />
                   Mark Reviewed
                 </Button>
                 <Button
@@ -613,7 +613,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   onClick={() => handleBulkReview(false)}
                   className="h-7 rounded-lg text-xs border-primary/10 bg-background/30 text-foreground flex items-center gap-1"
                 >
-                  <RefreshCw className="h-3 w-3 text-amber-400" />
+                  <RefreshCw className="h-3 w-3 text-chart-4" />
                   Mark Pending
                 </Button>
 
@@ -646,7 +646,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   size="sm"
                   variant="outline"
                   onClick={handleBulkDelete}
-                  className="h-7 rounded-lg text-xs border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 flex items-center gap-1"
+                  className="h-7 rounded-lg text-xs border-destructive/20 bg-destructive/5 hover:bg-destructive/10 text-destructive flex items-center gap-1"
                 >
                   <Trash2 className="h-3 w-3" />
                   Delete
@@ -753,8 +753,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                             <div className={cn(
                               "h-8 w-8 rounded-xl shrink-0 flex items-center justify-center font-bold text-xs uppercase shadow-sm border",
                               isIncome
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/20"
+                                ? "bg-positive/10 text-positive border-positive/20"
+                                : "bg-destructive/10 text-destructive border-destructive/20"
                             )}>
                               {tx.category ? tx.category.charAt(0) : 'T'}
                             </div>
@@ -797,7 +797,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                             <div className={cn(
                               "text-xs font-mono font-semibold text-right min-w-[70px]",
-                              isIncome ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                              isIncome ? "text-positive" : "text-destructive"
                             )}>
                               {isIncome ? '+' : '-'}{formatGBP(Math.abs(tx.amount))}
                             </div>
@@ -833,7 +833,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     className={cn(
                       "h-7 rounded-lg text-xs flex items-center gap-1 border font-medium",
                       selectedTx.isReviewed
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                        ? "bg-positive/10 text-positive border-positive/20 hover:bg-positive/20"
                         : "border-primary/15 text-muted-foreground hover:bg-primary/5"
                     )}
                   >
@@ -846,7 +846,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     size="sm"
                     variant="ghost"
                     onClick={() => handleDeleteSingle(selectedTx.id)}
-                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10"
+                    className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -881,8 +881,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     className={cn(
                       "h-7 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors",
                       selectedTx.amount < 0
-                        ? "bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
-                        : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
+                        ? "bg-positive/10 text-positive border-positive/30 hover:bg-positive/20"
+                        : "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20"
                     )}
                   >
                     {selectedTx.amount < 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -996,7 +996,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         <span>{tag}</span>
                         <button
                           onClick={() => handleRemoveTag(tag)}
-                          className="hover:text-rose-500 font-bold ml-0.5"
+                          className="hover:text-destructive font-bold ml-0.5"
                         >
                           ×
                         </button>
@@ -1051,7 +1051,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         </div>
                         <span className={cn(
                           "text-xs font-mono font-semibold",
-                          match.amount < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                          match.amount < 0 ? "text-positive" : "text-destructive"
                         )}>
                           {match.amount < 0 ? '+' : '-'}{formatGBP(Math.abs(match.amount))}
                         </span>
@@ -1098,7 +1098,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   className={cn(
                     "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
                     newTxType === 'expense'
-                      ? "bg-rose-500 hover:bg-rose-600 text-white"
+                      ? "bg-destructive hover:bg-destructive text-white"
                       : "border-primary/15 text-muted-foreground hover:bg-primary/5"
                   )}
                 >
@@ -1112,7 +1112,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   className={cn(
                     "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
                     newTxType === 'income'
-                      ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                      ? "bg-positive hover:bg-positive text-white"
                       : "border-primary/15 text-muted-foreground hover:bg-primary/5"
                   )}
                 >

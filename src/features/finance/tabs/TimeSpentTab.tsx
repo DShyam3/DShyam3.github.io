@@ -129,7 +129,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
       </div>
 
       {trackedExceedsTotal && (
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl p-4 text-xs font-sans flex items-start gap-2.5">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl p-4 text-xs font-sans flex items-start gap-2.5">
           <span className="text-base leading-none">⚠️</span>
           <div>
             <p className="font-semibold mb-0.5">Over-allocated Schedule</p>

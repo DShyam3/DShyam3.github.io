@@ -1996,7 +1996,7 @@ function FinanceView() {
                               <button
                                 type="button"
                                 onClick={() => setDraftRecurringTemplates(draftRecurringTemplates.filter((_, i) => i !== idx))}
-                                className="absolute top-2 right-2 text-rose-500 hover:text-rose-700 opacity-60 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-2 right-2 text-destructive hover:text-destructive opacity-60 group-hover:opacity-100 transition-opacity"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>

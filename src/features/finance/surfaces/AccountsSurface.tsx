@@ -40,11 +40,11 @@ const CREDIT_TIER_COLORS: Record<CreditTier, string> = {
 };
 
 const CREDIT_TIER_CLASSES: Record<CreditTier, string> = {
-  1: 'text-rose-500',
-  2: 'text-amber-500',
-  3: 'text-lime-500 dark:text-lime-400',
-  4: 'text-emerald-500 dark:text-emerald-400',
-  5: 'text-emerald-600 dark:text-emerald-400',
+  1: 'text-destructive',
+  2: 'text-chart-4',
+  3: 'text-positive',
+  4: 'text-positive',
+  5: 'text-positive',
 };
 
 const bandColor = (band?: BureauBand | null): string | undefined =>
@@ -98,7 +98,7 @@ const DebtDrawsEditor = ({
                 size="icon"
                 type="button"
                 onClick={() => onRemove(draw.id)}
-                className="h-7 w-7 text-rose-500 hover:text-rose-600 shrink-0"
+                className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -543,7 +543,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               </td>
               <td className="py-3 px-3 capitalize">{account.type}</td>
               <td className="py-3 px-3">{account.issuer}</td>
-              <td className={cn("py-3 px-3 text-right font-mono font-bold", account.balance >= 0 ? "text-emerald-500" : "text-rose-500")}>
+              <td className={cn("py-3 px-3 text-right font-mono font-bold", account.balance >= 0 ? "text-positive" : "text-destructive")}>
                 {formatGBP(account.balance)}
               </td>
               <td className="py-3 px-3 text-right font-mono">{formatGBP(account.annualFee)}</td>
@@ -565,7 +565,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDeleteAccount(account.id)}
-                    className="h-8 w-8 text-rose-500 hover:text-rose-600"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -596,8 +596,8 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
       </div>
       <div className="flex items-center gap-2 self-start sm:self-auto">
         {trueLayerStatus?.connected ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-positive/10 text-positive border border-positive/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-positive animate-pulse" />
             Connected
           </span>
         ) : (
@@ -689,8 +689,8 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
     {debts.length > 0 && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Total Owed', value: formatGBP(totalLoanBalance), tone: 'text-rose-500' },
-          { label: 'Paid Off', value: `${loanPayoffPercent.toFixed(1)}%`, tone: 'text-emerald-500' },
+          { label: 'Total Owed', value: formatGBP(totalLoanBalance), tone: 'text-destructive' },
+          { label: 'Paid Off', value: `${loanPayoffPercent.toFixed(1)}%`, tone: 'text-positive' },
           { label: 'Monthly Payments', value: formatGBP(totalMinPayments), tone: 'text-foreground' },
           { label: 'Avg Rate', value: `${weightedInterestRate.toFixed(2)}%`, tone: 'text-foreground' }
         ].map(stat => (
@@ -744,14 +744,14 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                   )}
                 </td>
                 <td className="py-3 px-3">{debt.lender || '—'}</td>
-                <td className="py-3 px-3 text-right font-mono font-bold text-rose-500">{formatGBP(debt.balance)}</td>
+                <td className="py-3 px-3 text-right font-mono font-bold text-destructive">{formatGBP(debt.balance)}</td>
                 <td className="py-3 px-3 text-right font-mono">{debt.interestRate.toFixed(2)}%</td>
                 <td className="py-3 px-3 text-right font-mono">{formatGBP(debt.minPayment)}</td>
                 <td className="py-3 px-3">
                   <div className="space-y-1 min-w-[120px]">
                     <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-emerald-500 transition-all"
+                        className="h-full rounded-full bg-positive transition-all"
                         style={{ width: `${Math.min(Math.max(paidPercent, 0), 100)}%` }}
                       />
                     </div>
@@ -779,7 +779,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                       variant="ghost"
                       size="icon"
                       onClick={(e) => { e.stopPropagation(); handleDeleteDebt(debt.id); }}
-                      className="h-8 w-8 text-rose-500 hover:text-rose-600"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -839,11 +839,11 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
             </div>
             <div className="space-y-0.5">
               <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Interest Paid</span>
-              <span className="text-sm font-bold font-mono text-amber-500">{formatGBP(selectedDebtFinal.interest)}</span>
+              <span className="text-sm font-bold font-mono text-chart-4">{formatGBP(selectedDebtFinal.interest)}</span>
             </div>
             <div className="space-y-0.5">
               <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Written Off</span>
-              <span className="text-sm font-bold font-mono text-emerald-500">{formatGBP(selectedDebtFinal.writtenOff)}</span>
+              <span className="text-sm font-bold font-mono text-positive">{formatGBP(selectedDebtFinal.writtenOff)}</span>
             </div>
           </div>
         )}
@@ -974,7 +974,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDeleteMembership(membership.id)}
-                    className="h-8 w-8 text-rose-500 hover:text-rose-600"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -1199,7 +1199,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               {/* Delta + Date */}
               <div className="flex items-center gap-3 mt-3 mb-4">
                 {delta !== 0 && (
-                  <span className={cn("text-xs font-bold font-mono flex items-center gap-0.5", delta > 0 ? "text-emerald-500" : "text-rose-500")}>
+                  <span className={cn("text-xs font-bold font-mono flex items-center gap-0.5", delta > 0 ? "text-positive" : "text-destructive")}>
                     {delta > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                     {delta > 0 ? '+' : ''}{delta}
                   </span>
@@ -1254,7 +1254,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                             </div>
                             <button
                               onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
-                              className="text-rose-500 hover:text-rose-600 p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                              className="text-destructive hover:text-destructive p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                               title="Delete"
                             >
                               <Trash2 className="h-3 w-3" />

@@ -45,19 +45,19 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
     switch (category?.toLowerCase()) {
       case 'rent':
       case 'housing':
-        return 'bg-blue-500/10 text-blue-500 border border-blue-500/20';
+        return 'bg-chart-3/10 text-chart-3 border border-chart-3/20';
       case 'subscriptions':
       case 'video entertainment':
-        return 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20';
+        return 'bg-positive/10 text-positive border border-positive/20';
       case 'gym':
-        return 'bg-amber-500/10 text-amber-500 border border-amber-500/20';
+        return 'bg-chart-4/10 text-chart-4 border border-chart-4/20';
       case 'donations':
-        return 'bg-orange-500/10 text-orange-500 border border-orange-500/20';
+        return 'bg-chart-4/10 text-chart-4 border border-chart-4/20';
       case 'insurance':
-        return 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20';
+        return 'bg-chart-5/10 text-chart-5 border border-chart-5/20';
       case 'groceries':
       case 'needs':
-        return 'bg-teal-500/10 text-teal-500 border border-teal-500/20';
+        return 'bg-chart-2/10 text-chart-2 border border-chart-2/20';
       default:
         return 'bg-muted/30 text-muted-foreground border border-border/30';
     }
@@ -228,7 +228,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                         <button
                           onClick={() => onDeleteRecurring(bill.id)}
-                          className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
+                          className="text-destructive hover:text-destructive p-1 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -249,7 +249,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         className={cn(
                           "w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0",
                           bill.isPaid
-                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            ? "bg-positive border-positive text-white"
                             : "border-border/40 hover:border-primary/50 bg-background/50"
                         )}
                         title={bill.isPaid ? "Mark as unpaid" : "Mark as paid"}
@@ -307,7 +307,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                         <button
                           onClick={() => onDeleteRecurring(bill.id)}
-                          className="text-rose-500 hover:text-rose-600 p-1 transition-colors"
+                          className="text-destructive hover:text-destructive p-1 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-3 w-3" />

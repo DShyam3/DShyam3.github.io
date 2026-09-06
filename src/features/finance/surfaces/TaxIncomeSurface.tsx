@@ -281,11 +281,11 @@ export default function TaxIncomeSurface({
           </div>
           <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
             <span className="block text-xs font-medium text-muted-foreground uppercase">Employer Pension ({settings.employerPensionPercent}%)</span>
-            <span className="mt-1 block font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">+{formatGBP(results.employerPensionRate)}</span>
+            <span className="mt-1 block font-mono text-sm font-bold text-positive">+{formatGBP(results.employerPensionRate)}</span>
           </div>
           <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
             <span className="block text-xs font-medium text-muted-foreground uppercase">Benefits & Perks</span>
-            <span className="mt-1 block font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">+{formatGBP(results.totalBenefitsValue)}</span>
+            <span className="mt-1 block font-mono text-sm font-bold text-positive">+{formatGBP(results.totalBenefitsValue)}</span>
           </div>
           <div className="bg-card/60 backdrop-blur-sm rounded-xl p-3 border border-border/40">
             <span className="block text-xs font-medium text-muted-foreground uppercase">Net Take-Home</span>
@@ -362,11 +362,11 @@ export default function TaxIncomeSurface({
 
               {/* Employer Pension Addition */}
               {results.employerPensionRate > 0 && (
-                <tr className="hover:bg-emerald-500/10 transition-colors bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                <tr className="hover:bg-positive/10 transition-colors bg-positive/5 text-positive">
                   <td className="py-3 pr-4 w-full font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
                     <div className="flex flex-col justify-center min-w-[120px]">
                       <span className="font-bold flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Employer Pension ({settings.employerPensionPercent}%)
+                        <Sparkles className="w-3.5 h-3.5 shrink-0 text-positive" /> Employer Pension ({settings.employerPensionPercent}%)
                       </span>
                       <span className="text-xs opacity-80 font-medium leading-normal mt-0.5">
                         Employer contribution to pension
@@ -383,11 +383,11 @@ export default function TaxIncomeSurface({
 
               {/* Employer Benefits & Perks Addition */}
               {results.totalBenefitsValue > 0 && (
-                <tr className="hover:bg-emerald-500/10 transition-colors bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                <tr className="hover:bg-positive/10 transition-colors bg-positive/5 text-positive">
                   <td className="py-3 pr-4 w-full font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
                     <div className="flex flex-col justify-center min-w-[120px]">
                       <span className="font-bold flex items-center gap-1.5">
-                        <Gift className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Benefits & Perks ({settings.packageBenefits?.length || 0})
+                        <Gift className="w-3.5 h-3.5 shrink-0 text-positive" /> Benefits & Perks ({settings.packageBenefits?.length || 0})
                       </span>
                       <span className="text-xs opacity-80 font-medium leading-normal mt-0.5">
                         {(settings.packageBenefits || []).map(b => `${b.emoji || '🎁'} ${b.name}`).join(', ')}
@@ -415,11 +415,11 @@ export default function TaxIncomeSurface({
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-right w-px text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px text-rose-600 dark:text-rose-400 font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.hourly)}</td>
                 </tr>
               )}
 
@@ -427,11 +427,11 @@ export default function TaxIncomeSurface({
               {results.incomeTax > 0 && (
                 <tr className="hover:bg-muted/10 transition-colors text-foreground">
                   <td className="py-3 pr-4 w-full font-sans font-bold text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Income Tax</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.tax.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.tax.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.tax.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.tax.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.tax.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.tax.hourly)}</td>
                 </tr>
               )}
 
@@ -446,11 +446,11 @@ export default function TaxIncomeSurface({
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.ni.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.ni.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.ni.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.ni.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.ni.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.ni.hourly)}</td>
                 </tr>
               )}
 
@@ -458,16 +458,16 @@ export default function TaxIncomeSurface({
               {results.studentLoan > 0 && (
                 <tr className="hover:bg-muted/10 transition-colors text-foreground">
                   <td className="py-3 pr-4 w-full font-sans font-bold text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Student Loan ({getPlanName(settings.studentLoanPlan)})</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-rose-600 dark:text-rose-400 font-semibold">-{formatGBP(breakdownRates.studentLoan.hourly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.daily)}</td>
+                  <td className="py-3 px-3 text-right w-px whitespace-nowrap text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.hourly)}</td>
                 </tr>
               )}
 
               {/* Total Deductions */}
-              <tr className="hover:bg-rose-500/10 transition-colors text-rose-700 dark:text-rose-300 bg-rose-500/5 dark:bg-rose-500/10 font-sans">
+              <tr className="hover:bg-destructive/10 transition-colors text-destructive bg-destructive/5 font-sans">
                 <td className="py-3 pr-4 w-full font-bold whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Total Deductions</td>
                 <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold">-{formatGBP(breakdownRates.deductions.annual)}</td>
                 <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold">-{formatGBP(breakdownRates.deductions.monthly)}</td>
@@ -477,7 +477,7 @@ export default function TaxIncomeSurface({
               </tr>
 
               {/* Take Home Pay */}
-              <tr className="hover:bg-emerald-500/10 transition-colors text-emerald-700 dark:text-emerald-300 bg-emerald-500/5 dark:bg-emerald-500/10 font-sans">
+              <tr className="hover:bg-positive/10 transition-colors text-positive bg-positive/5 font-sans">
                 <td className="py-3 pr-4 w-full font-bold text-sm whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Take-Home Pay</td>
                 <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm">{formatGBP(breakdownRates.postTax.annual)}</td>
                 <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm">{formatGBP(breakdownRates.postTax.monthly)}</td>
@@ -588,7 +588,7 @@ export default function TaxIncomeSurface({
                     <span className="text-xs font-semibold text-foreground">{month}</span>
                     <div className="flex items-center gap-1.5 text-xs">
                       {monthWorkingDaysBooked > 0 && (
-                        <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold px-1.5 py-0.5 rounded font-sans">
+                        <span className="bg-positive/10 text-positive font-semibold px-1.5 py-0.5 rounded font-sans">
                           🏝️ {monthWorkingDaysBooked} {monthWorkingDaysBooked === 1 ? 'day' : 'days'}
                         </span>
                       )}
@@ -720,7 +720,7 @@ export default function TaxIncomeSurface({
                                       e.stopPropagation();
                                       handleDeleteHoliday(hol.id);
                                     }}
-                                    className="h-7 w-7 rounded-lg hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500"
+                                    className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                                     title="Delete holiday"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -878,7 +878,7 @@ export default function TaxIncomeSurface({
             <span className="text-muted-foreground font-medium">Status</span>
             <span className={cn(
               "font-mono px-2 py-0.5 rounded-lg font-bold text-xs",
-              nextPayday.daysRemaining === 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-muted/60 text-muted-foreground"
+              nextPayday.daysRemaining === 0 ? "bg-positive/10 text-positive" : "bg-muted/60 text-muted-foreground"
             )}>
               {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
             </span>
@@ -1039,14 +1039,14 @@ export default function TaxIncomeSurface({
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
-                    <span className="block font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">+{formatGBP(annualVal)}</span>
+                    <span className="block font-mono text-xs font-bold text-positive">+{formatGBP(annualVal)}</span>
                     <span className="block font-mono text-xs text-muted-foreground">+{formatGBP(annualVal / 12)}/mo</span>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDeleteBenefit(benefit.id)}
-                    className="h-8 w-8 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                    className="h-8 w-8 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

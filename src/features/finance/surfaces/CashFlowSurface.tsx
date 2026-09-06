@@ -475,7 +475,7 @@ return (
         <div className="space-y-1">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
           <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-          <p className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+          <p className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
             {formatGBP(ytdNet)}
           </p>
         </div>
@@ -541,7 +541,7 @@ return (
           <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
             <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <p className="text-2xl font-bold font-mono text-rose-500">{formatGBP(ytdSpend)}</p>
+            <p className="text-2xl font-bold font-mono text-destructive">{formatGBP(ytdSpend)}</p>
           </div>
           <button
             onClick={() => setCfDrawerOpen('spend')}
@@ -581,7 +581,7 @@ return (
           <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
             <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <p className="text-2xl font-bold font-mono text-cyan-500">{formatGBP(ytdIncome)}</p>
+            <p className="text-2xl font-bold font-mono text-chart-3">{formatGBP(ytdIncome)}</p>
           </div>
           <button
             onClick={() => setCfDrawerOpen('income')}
@@ -638,7 +638,7 @@ return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
-        <span className={cn("text-xl font-bold font-mono block", avgMonthlyNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+        <span className={cn("text-xl font-bold font-mono block", avgMonthlyNet >= 0 ? "text-positive" : "text-destructive")}>
           {formatGBP(avgMonthlyNet)}
         </span>
         <span className="text-xs text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
@@ -646,7 +646,7 @@ return (
 
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
-        <span className={cn("text-xl font-bold font-mono block", savingsRate >= 20 ? "text-emerald-500" : savingsRate >= 0 ? "text-amber-500" : "text-rose-500")}>
+        <span className={cn("text-xl font-bold font-mono block", savingsRate >= 20 ? "text-positive" : savingsRate >= 0 ? "text-chart-4" : "text-destructive")}>
           {savingsRate.toFixed(1)}%
         </span>
         <span className="text-xs text-muted-foreground">of income retained YTD</span>
@@ -654,7 +654,7 @@ return (
 
       <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
-        <span className={cn("text-xl font-bold font-mono block", recurringBurnRate <= 30 ? "text-emerald-500" : recurringBurnRate <= 50 ? "text-amber-500" : "text-rose-500")}>
+        <span className={cn("text-xl font-bold font-mono block", recurringBurnRate <= 30 ? "text-positive" : recurringBurnRate <= 50 ? "text-chart-4" : "text-destructive")}>
           {recurringBurnRate.toFixed(1)}%
         </span>
         <span className="text-xs text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
@@ -674,7 +674,7 @@ return (
                 Monthly income minus spend
               </SheetDescription>
               <div className="pt-2">
-                <span className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                <span className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
                   {formatGBP(ytdNet)}
                 </span>
               </div>
@@ -696,15 +696,15 @@ return (
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">2026</span>
                   <div className="flex gap-12">
-                    <span className="text-emerald-400 font-bold">{formatGBP(net2026)}</span>
-                    <span className="text-emerald-400 font-bold">{formatGBP(avgMonthlyNet)}</span>
+                    <span className="text-positive font-bold">{formatGBP(net2026)}</span>
+                    <span className="text-positive font-bold">{formatGBP(avgMonthlyNet)}</span>
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">2025</span>
                   <div className="flex gap-12">
-                    <span className="text-emerald-400 font-bold">{formatGBP(net2025 || 8754.61)}</span>
-                    <span className="text-emerald-400 font-bold">{formatGBP(729.55)}</span>
+                    <span className="text-positive font-bold">{formatGBP(net2025 || 8754.61)}</span>
+                    <span className="text-positive font-bold">{formatGBP(729.55)}</span>
                   </div>
                 </div>
               </div>
@@ -716,13 +716,13 @@ return (
                 <div key={m.fullName + m.year} className="space-y-1.5 border-b border-border/20 pb-3">
                   <div className="flex items-center justify-between text-xs font-bold">
                     <span>{m.fullName} {m.year}</span>
-                    <span className={cn("font-mono", m.net >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                    <span className={cn("font-mono", m.net >= 0 ? "text-positive" : "text-destructive")}>
                       {formatGBP(m.net)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground pl-2 font-mono">
                     <span>{m.name} Total income</span>
-                    <span className="text-emerald-400">+{formatGBP(m.income)}</span>
+                    <span className="text-positive">+{formatGBP(m.income)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground pl-2 font-mono">
                     <span>{m.name} Total expenses</span>
@@ -743,7 +743,7 @@ return (
                 Monthly spend not including recurrings left to pay
               </SheetDescription>
               <div className="pt-2">
-                <span className="text-3xl font-bold font-mono text-rose-500">
+                <span className="text-3xl font-bold font-mono text-destructive">
                   {formatGBP(ytdSpend)}
                 </span>
               </div>
@@ -807,7 +807,7 @@ return (
                 Income this month
               </SheetDescription>
               <div className="pt-2">
-                <span className="text-3xl font-bold font-mono text-emerald-500">
+                <span className="text-3xl font-bold font-mono text-positive">
                   {formatGBP(ytdIncome)}
                 </span>
               </div>
@@ -829,15 +829,15 @@ return (
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">2026</span>
                   <div className="flex gap-12">
-                    <span className="text-emerald-400 font-bold">{formatGBP(income2026)}</span>
-                    <span className="text-emerald-400 font-bold">{formatGBP(avgMonthlyIncome)}</span>
+                    <span className="text-positive font-bold">{formatGBP(income2026)}</span>
+                    <span className="text-positive font-bold">{formatGBP(avgMonthlyIncome)}</span>
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">2025</span>
                   <div className="flex gap-12">
-                    <span className="text-emerald-400 font-bold">{formatGBP(income2025 || 33210.00)}</span>
-                    <span className="text-emerald-400 font-bold">{formatGBP(2767.50)}</span>
+                    <span className="text-positive font-bold">{formatGBP(income2025 || 33210.00)}</span>
+                    <span className="text-positive font-bold">{formatGBP(2767.50)}</span>
                   </div>
                 </div>
               </div>
@@ -849,7 +849,7 @@ return (
                 <div key={m.fullName + m.year} className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold border-b border-border/20 pb-1">
                     <span>{m.fullName} {m.year}</span>
-                    <span className="font-mono text-emerald-500">{formatGBP(m.income)}</span>
+                    <span className="font-mono text-positive">{formatGBP(m.income)}</span>
                   </div>
                   <div className="space-y-1.5 pl-1">
                     {m.incomeItems.map(item => (
@@ -859,7 +859,7 @@ return (
                           <span className="font-semibold text-foreground truncate">{item.name}</span>
                           <span className="text-xs text-muted-foreground truncate hidden sm:inline">{item.accountName}</span>
                         </div>
-                        <span className="font-mono font-bold text-emerald-400 shrink-0">+{formatGBP(item.amount)}</span>
+                        <span className="font-mono font-bold text-positive shrink-0">+{formatGBP(item.amount)}</span>
                       </div>
                     ))}
                   </div>

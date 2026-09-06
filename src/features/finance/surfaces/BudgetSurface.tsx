@@ -1041,7 +1041,7 @@ return (
               <div key={m.year} className="grid grid-cols-3 items-center hover:bg-muted/10 p-1 rounded-lg transition-colors">
                 <span className="font-sans font-bold text-foreground">{m.year}</span>
                 <span className="text-right font-medium text-foreground">{formatGBP(m.spentPerYear)}</span>
-                <span className="text-right font-bold text-emerald-400">{formatGBP(m.avgMonthlySpend)}</span>
+                <span className="text-right font-bold text-positive">{formatGBP(m.avgMonthlySpend)}</span>
               </div>
             ))}
           </div>
@@ -1144,7 +1144,7 @@ return (
                       </button>
                       <button
                         onClick={() => handleDeleteCategory(category.id)}
-                        className="text-rose-500 hover:text-rose-600 p-0.5"
+                        className="text-destructive hover:text-destructive p-0.5"
                         title="Delete Category"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1158,7 +1158,7 @@ return (
                     <span className="font-medium text-muted-foreground/80 w-20 text-right">{formatGBP(catBudget)}</span>
                     <span className={cn(
                       "font-bold w-20 text-right",
-                      catLeft >= 0 ? "text-emerald-400" : "text-rose-400"
+                      catLeft >= 0 ? "text-positive" : "text-destructive"
                     )}>
                       {catLeft >= 0 ? formatGBP(catLeft) : `-${formatGBP(Math.abs(catLeft))}`}
                     </span>
@@ -1208,7 +1208,7 @@ return (
                               </button>
                               <button
                                 onClick={() => handleDeleteItem(category.id, item.id)}
-                                className="text-rose-500 hover:text-rose-600 p-0.5"
+                                className="text-destructive hover:text-destructive p-0.5"
                                 title="Delete item"
                               >
                                 <X className="h-3 w-3" />
@@ -1222,7 +1222,7 @@ return (
                             <span className="text-muted-foreground/60 w-20 text-right">{formatGBP(item.budgeted)}</span>
                             <span className={cn(
                               "w-20 text-right font-medium",
-                              itemLeft >= 0 ? "text-emerald-400/90" : "text-rose-400/90"
+                              itemLeft >= 0 ? "text-positive/90" : "text-destructive/90"
                             )}>
                               {itemLeft >= 0 ? formatGBP(itemLeft) : `-${formatGBP(Math.abs(itemLeft))}`}
                             </span>
