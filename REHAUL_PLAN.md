@@ -708,10 +708,34 @@ CREATE TABLE finance_profiles (
 );
 ```
 
-Every one of the 20 `finance_*` tables gains
-`profile_id uuid NOT NULL REFERENCES finance_profiles(id) ON DELETE CASCADE`,
-with `(profile_id, ...)` indexes. RLS is untouched — it stays `is_admin()`,
-because there is still exactly one reader.
+RLS is untouched — it stays `is_admin()`, because there is still exactly one
+reader.
+
+Not all 20 `finance_*` tables want the column, which only became clear on
+reading the schema. Every table already carries `is_default`, and the page
+reads it as a user-row/template-row pair (`data?.find(d => !d.is_default)`
+against `data?.find(d => d.is_default)`). So the tables fall into three groups:
+
+| Group | Tables | Gets `profile_id` |
+|---|---|---|
+| Per-profile | bank_accounts, budget_categories, budget_items, credit_scores, debts, goal_contributions, goals, memberships, recurring_bills, settings, transactions, user_holidays, truelayer_connection | **13** |
+| Shared reference | budget_presets, credit_bureaus, holiday_defaults, recurring_templates, tax_configs | no — bureau definitions and tax bands are the same for everyone |
+| Legacy, being dropped (H-2) | finance_data, finance_defaults | no |
+
+`finance_tax_configs` staying shared corrects an earlier assumption that tax
+config would go per-profile for Scotland. It does not need to:
+`finance_settings.uk_region` already exists, and that column is per-profile.
+
+The column is **nullable**, not `NOT NULL`, because a template row belongs to
+nobody. The invariant is a CHECK rather than a convention:
+
+```sql
+CHECK ((is_default AND profile_id IS NULL) OR (NOT is_default AND profile_id IS NOT NULL))
+```
+
+`finance_truelayer_connection` is the exception: it has no `is_default` column,
+because a bank connection is never a template, so there the column is plainly
+`NOT NULL`. Each scoped table also gets a `(profile_id)` index.
 
 `owner_user_id` is the entire upgrade path. It is null today. The day another
 person should log in and see only their own profile, that is a policy edit, not
@@ -848,7 +872,7 @@ page feels cramped.
 | # | Step | Gate |
 |---|---|---|
 | 7.0 | Pure calc → `lib/finance/` with tests — **DONE** | none |
-| 7.1 | `finance_profiles`, `profile_id` on 20 tables, transfer links | none |
+| 7.1 | `finance_profiles`, `profile_id` on 13 tables, transfer links — **written, not applied** | none |
 | 7.2 | Decompose `FinancePage.tsx` into the five surfaces (7.C), profile filter baked into every query | none |
 | 7.3 | Targeted mutations; retire 18 `localStorage` seeds | 7.1 |
 | 7.4 | Snapshots — balance, net worth, per profile | none |
@@ -1029,7 +1053,7 @@ still Pages. It gets revised at migration, and this table is the checklist.
 - Finance is five routed surfaces, not ten tabs of `localStorage` state
 - No hardcoded hex colour remains in `features/finance/`
 - No `localStorage` key holds financial truth
-- Every `finance_*` row carries a `profile_id`
+- Every non-template `finance_*` row carries a `profile_id`, enforced by CHECK
 - Zero sub-12px font sizes and zero off-scale weights in `features/finance/`
 - No `select('*')` on the finance mount path
 - `anon` holds no write grant on any finance table

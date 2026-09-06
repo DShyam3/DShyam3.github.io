@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS "public"."finance_bank_accounts" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "name" "text" NOT NULL,
     "type" "text" NOT NULL,
     "issuer" "text",
@@ -18,6 +19,7 @@ ALTER TABLE "public"."finance_bank_accounts" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_budget_categories" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "is_template" boolean DEFAULT false NOT NULL,
     "name" "text" NOT NULL,
     "budgeted" numeric DEFAULT 0 NOT NULL,
@@ -32,6 +34,7 @@ ALTER TABLE "public"."finance_budget_categories" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_budget_items" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "is_template" boolean DEFAULT false NOT NULL,
     "category_id" "text" NOT NULL,
     "name" "text" NOT NULL,
@@ -76,6 +79,7 @@ ALTER TABLE "public"."finance_credit_bureaus" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_credit_scores" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "bureau" "text" NOT NULL,
     "date" "date" NOT NULL,
     "score" integer NOT NULL,
@@ -96,6 +100,7 @@ ALTER TABLE "public"."finance_data" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_debts" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "name" "text" NOT NULL,
     "type" "text" NOT NULL,
     "lender" "text",
@@ -129,6 +134,7 @@ ALTER TABLE "public"."finance_defaults" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_goal_contributions" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "goal_id" "text" NOT NULL,
     "amount" numeric DEFAULT 0 NOT NULL,
     "date" "date" NOT NULL,
@@ -143,6 +149,7 @@ ALTER TABLE "public"."finance_goal_contributions" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_goals" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "name" "text" NOT NULL,
     "target_amount" numeric DEFAULT 0 NOT NULL,
     "current_amount" numeric DEFAULT 0 NOT NULL,
@@ -172,6 +179,7 @@ ALTER TABLE "public"."finance_holiday_defaults" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_memberships" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "name" "text" NOT NULL,
     "type" "text" NOT NULL,
     "status" "text",
@@ -186,6 +194,7 @@ ALTER TABLE "public"."finance_memberships" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_recurring_bills" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "name" "text" NOT NULL,
     "amount" numeric DEFAULT 0 NOT NULL,
     "due_date" integer NOT NULL,
@@ -223,6 +232,7 @@ ALTER TABLE "public"."finance_recurring_templates" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_settings" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "gross_salary" numeric DEFAULT 0 NOT NULL,
     "pension_type" "text" DEFAULT 'net_pay'::"text" NOT NULL,
     "personal_pension_percent" numeric DEFAULT 0 NOT NULL,
@@ -262,6 +272,7 @@ ALTER TABLE "public"."finance_tax_configs" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_transactions" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "name" "text" NOT NULL,
     "category" "text",
     "amount" numeric DEFAULT 0 NOT NULL,
@@ -281,6 +292,7 @@ ALTER TABLE "public"."finance_transactions" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_connection" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" "uuid" NOT NULL,
     "access_token" "text",
     "refresh_token" "text",
     "expires_at" timestamp with time zone,
@@ -293,6 +305,7 @@ ALTER TABLE "public"."finance_truelayer_connection" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_user_holidays" (
     "id" "text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
+    "profile_id" "uuid",
     "start_date" "date" NOT NULL,
     "end_date" "date" NOT NULL,
     "occasion" "text",
@@ -302,6 +315,36 @@ CREATE TABLE IF NOT EXISTS "public"."finance_user_holidays" (
 );
 
 ALTER TABLE "public"."finance_user_holidays" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."finance_profiles" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "name" "text" NOT NULL,
+    "is_self" boolean DEFAULT false NOT NULL,
+    "owner_user_id" "uuid",
+    "currency" "text" DEFAULT 'GBP'::"text" NOT NULL,
+    "region" "text" DEFAULT 'england-and-wales'::"text" NOT NULL,
+    "emoji" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_profiles" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."finance_profile_transfers" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "from_profile_id" "uuid" NOT NULL,
+    "to_profile_id" "uuid" NOT NULL,
+    "from_transaction_id" "text",
+    "to_transaction_id" "text",
+    "amount" numeric DEFAULT 0 NOT NULL,
+    "date" "date" NOT NULL,
+    "note" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "finance_profile_transfers_distinct_check" CHECK ("from_profile_id" <> "to_profile_id")
+);
+
+ALTER TABLE "public"."finance_profile_transfers" OWNER TO "postgres";
 
 ALTER TABLE ONLY "public"."finance_bank_accounts"
     ADD CONSTRAINT "finance_bank_accounts_pkey" PRIMARY KEY ("id");
@@ -610,3 +653,121 @@ REVOKE SELECT ON TABLE
 FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_debts" FROM "anon";
+
+-- Phase 7.1 -- profiles. See REHAUL_PLAN.md 7.B.
+
+ALTER TABLE ONLY "public"."finance_profiles"
+    ADD CONSTRAINT "finance_profiles_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_profiles"
+    ADD CONSTRAINT "finance_profiles_owner_user_id_fkey" FOREIGN KEY ("owner_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+-- Exactly one profile may be the operator's own.
+CREATE UNIQUE INDEX "idx_finance_profiles_self" ON "public"."finance_profiles" ("is_self") WHERE "is_self";
+
+ALTER TABLE ONLY "public"."finance_profile_transfers"
+    ADD CONSTRAINT "finance_profile_transfers_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_profile_transfers"
+    ADD CONSTRAINT "finance_profile_transfers_from_profile_id_fkey" FOREIGN KEY ("from_profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_profile_transfers"
+    ADD CONSTRAINT "finance_profile_transfers_to_profile_id_fkey" FOREIGN KEY ("to_profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_profile_transfers"
+    ADD CONSTRAINT "finance_profile_transfers_from_transaction_id_fkey" FOREIGN KEY ("from_transaction_id") REFERENCES "public"."finance_transactions"("id") ON DELETE SET NULL;
+
+ALTER TABLE ONLY "public"."finance_profile_transfers"
+    ADD CONSTRAINT "finance_profile_transfers_to_transaction_id_fkey" FOREIGN KEY ("to_transaction_id") REFERENCES "public"."finance_transactions"("id") ON DELETE SET NULL;
+
+CREATE INDEX "idx_finance_profile_transfers_from_profile_id" ON "public"."finance_profile_transfers" ("from_profile_id");
+CREATE INDEX "idx_finance_profile_transfers_to_profile_id" ON "public"."finance_profile_transfers" ("to_profile_id");
+
+-- profile_id is NULL exactly when the row is a shared template (is_default).
+
+ALTER TABLE ONLY "public"."finance_bank_accounts"
+    ADD CONSTRAINT "finance_bank_accounts_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_bank_accounts"
+    ADD CONSTRAINT "finance_bank_accounts_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_bank_accounts_profile_id" ON "public"."finance_bank_accounts" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_budget_categories"
+    ADD CONSTRAINT "finance_budget_categories_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_budget_categories"
+    ADD CONSTRAINT "finance_budget_categories_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_budget_categories_profile_id" ON "public"."finance_budget_categories" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_budget_items"
+    ADD CONSTRAINT "finance_budget_items_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_budget_items"
+    ADD CONSTRAINT "finance_budget_items_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_budget_items_profile_id" ON "public"."finance_budget_items" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_credit_scores"
+    ADD CONSTRAINT "finance_credit_scores_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_credit_scores"
+    ADD CONSTRAINT "finance_credit_scores_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_credit_scores_profile_id" ON "public"."finance_credit_scores" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_debts"
+    ADD CONSTRAINT "finance_debts_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_debts"
+    ADD CONSTRAINT "finance_debts_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_debts_profile_id" ON "public"."finance_debts" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_goal_contributions"
+    ADD CONSTRAINT "finance_goal_contributions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_goal_contributions"
+    ADD CONSTRAINT "finance_goal_contributions_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_goal_contributions_profile_id" ON "public"."finance_goal_contributions" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_goals"
+    ADD CONSTRAINT "finance_goals_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_goals"
+    ADD CONSTRAINT "finance_goals_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_goals_profile_id" ON "public"."finance_goals" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_memberships"
+    ADD CONSTRAINT "finance_memberships_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_memberships"
+    ADD CONSTRAINT "finance_memberships_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_memberships_profile_id" ON "public"."finance_memberships" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_recurring_bills"
+    ADD CONSTRAINT "finance_recurring_bills_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_recurring_bills"
+    ADD CONSTRAINT "finance_recurring_bills_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_recurring_bills_profile_id" ON "public"."finance_recurring_bills" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_settings_profile_id" ON "public"."finance_settings" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_transactions"
+    ADD CONSTRAINT "finance_transactions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_transactions"
+    ADD CONSTRAINT "finance_transactions_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_transactions_profile_id" ON "public"."finance_transactions" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_user_holidays"
+    ADD CONSTRAINT "finance_user_holidays_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."finance_user_holidays"
+    ADD CONSTRAINT "finance_user_holidays_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+CREATE INDEX "idx_finance_user_holidays_profile_id" ON "public"."finance_user_holidays" ("profile_id");
+
+ALTER TABLE ONLY "public"."finance_truelayer_connection"
+    ADD CONSTRAINT "finance_truelayer_connection_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+CREATE INDEX "idx_finance_truelayer_connection_profile_id" ON "public"."finance_truelayer_connection" ("profile_id");
+
+ALTER TABLE "public"."finance_profiles" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."finance_profile_transfers" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+
+-- S-10: anon needs nothing on any finance table. Re-asserted here because
+-- Supabase's ALTER DEFAULT PRIVILEGES re-grants on every newly created table.
+REVOKE ALL ON "public"."finance_profiles" FROM "anon";
+REVOKE ALL ON "public"."finance_profile_transfers" FROM "anon";
