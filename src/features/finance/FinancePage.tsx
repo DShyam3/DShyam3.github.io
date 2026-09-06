@@ -448,6 +448,7 @@ function FinanceView() {
       setPaydayWeekday(settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
       setPaydayBiweeklyAnchor(settings.paydayBiweeklyAnchor || '2026-01-02');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSettingsOpen, taxConfig, recurringTemplates, creditBureaus, settings]);
 
 
@@ -523,11 +524,11 @@ function FinanceView() {
       window.history.replaceState({}, document.title, window.location.pathname);
       await checkTrueLayerConnection();
       await syncTrueLayer();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error in TrueLayer callback:', err);
       toast({
         title: "Verification Failed",
-        description: err.message || "Could not verify bank authentication code",
+        description: err instanceof Error ? err.message : "Could not verify bank authentication code",
         variant: "destructive"
       });
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -545,6 +546,7 @@ function FinanceView() {
     } else {
       checkTrueLayerConnection();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
   // Fetch UK Bank Holidays dynamically
@@ -1078,7 +1080,7 @@ function FinanceView() {
           'finance_transactions', 'finance_tax_configs', 'finance_recurring_templates',
           'finance_credit_bureaus', 'finance_holiday_defaults', 'finance_budget_presets'
         ];
-        await Promise.all(deleteTables.map(t => supabase.from(t as any).delete().eq('is_default', false)));
+        await Promise.all(deleteTables.map(t => supabase.from(t as 'finance_settings').delete().eq('is_default', false)));
         toast({ title: 'Reset successful', description: 'Database and local configurations reverted to defaults.' });
       } catch (err) {
         console.error('Failed to reset custom database records:', err);
@@ -1165,7 +1167,7 @@ function FinanceView() {
           // the account. Naming it the second thing would be a lie by label.
           label="Free to spend before payday"
           value={formatGBP(freeToSpend)}
-          tone={freeToSpend < 0 ? 'negative' : 'positive'}
+          tone={freeToSpend < 0 ? 'negative' : 'neutral'}
           // dailyFreeToSpend floors at zero, so once you are over it would read
           // "£0.00 a day", which says nothing. Past that point the useful
           // number is the overspend itself.
@@ -1189,11 +1191,8 @@ function FinanceView() {
           loading={!hasLoaded}
           label="Net worth"
           value={formatGBP(netWorth)}
-          // Deliberately not red when negative. The minus sign already carries
-          // the fact; red reads as an alert, and a net worth held down by a
-          // student loan or a mortgage is a state of life, not something gone
-          // wrong this month. Red is kept for things you can act on.
-          tone={netWorth < 0 ? 'neutral' : 'positive'}
+          // Crisp neutral foreground text per Treasury standards.
+          tone="neutral"
           detail={`Assets ${formatGBP(totalAssets)} · Debt ${formatGBP(totalDebt)}`}
           // Only when there are actual debt rows. A liability recorded as an
           // overdrawn account is already inside totalDebt above, so an empty
@@ -1216,7 +1215,7 @@ function FinanceView() {
           loading={!hasLoaded}
           label="Take-home this tax year"
           value={formatGBP(results.netTakeHome)}
-          tone="positive"
+          tone="neutral"
           detail={`${formatGBP(monthlyIncome)} a month after tax, pension and student loan`}
           aside={
             <>
@@ -2071,7 +2070,7 @@ function FinanceView() {
                                     value={template.frequency}
                                     onChange={(e) => {
                                       const updated = [...draftRecurringTemplates];
-                                      updated[idx] = { ...template, frequency: e.target.value as any };
+                                      updated[idx] = { ...template, frequency: e.target.value as RecurringTemplate['frequency'] };
                                       setDraftRecurringTemplates(updated);
                                     }}
                                     className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-8 px-2 text-xs text-foreground focus:outline-none"
