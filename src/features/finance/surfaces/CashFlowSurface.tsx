@@ -301,8 +301,16 @@ const RoundedBar = (props: { x?: number; y?: number; width?: number; height?: nu
 };
 
 // Stacked category bar renderer for spend chart
-const StackedCategoryBar = (props: any) => {
-  const { x = 0, y = 0, width = 0, height = 0, index } = props;
+interface StackedCategoryBarProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  index?: number;
+}
+
+const StackedCategoryBar = (props: StackedCategoryBarProps) => {
+  const { x = 0, y = 0, width = 0, height = 0, index = 0 } = props;
   const bucket = cfMonthlyData[index];
   if (!bucket || height <= 0 || bucket.spend <= 0) return null;
 
@@ -325,7 +333,7 @@ const StackedCategoryBar = (props: any) => {
 
   return (
     <g>
-      {breakdown.map((cat: any, i: number) => {
+      {breakdown.map((cat: { name: string; amount: number; color: string; emoji?: string }, i: number) => {
         const segH = Math.max(1, (cat.amount / bucket.spend) * height);
         const segY = currY - segH;
         currY = segY;
@@ -381,20 +389,32 @@ const CashFlowXTick = (props: { x?: number; y?: number; payload?: { value: strin
 };
 
 // Rich Tooltip with Category Rundown
-const CashFlowCategoryTooltip = ({ active, payload }: any) => {
+interface CashFlowCategoryTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    payload: {
+      fullName: string;
+      year: number;
+      spend: number;
+      categoryBreakdown?: Array<{ name: string; amount: number; color: string; emoji?: string }>;
+    };
+  }>;
+}
+
+const CashFlowCategoryTooltip = ({ active, payload }: CashFlowCategoryTooltipProps) => {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0].payload;
   if (!data) return null;
 
   return (
-    <div className="bg-popover/95 backdrop-blur-md border border-border/80 rounded-2xl p-3.5 shadow-2xl min-w-[220px] max-w-[280px] z-50 text-foreground animate-in fade-in zoom-in-95 duration-150">
+    <div className="bg-popover border border-border/60 rounded-lg p-3.5 shadow-xl min-w-[220px] max-w-[280px] z-50 text-foreground font-mono">
       <div className="flex items-center justify-between gap-4 border-b border-border/40 pb-2 mb-2.5">
-        <span className="text-xs font-bold text-foreground font-serif">{data.fullName} {data.year}</span>
-        <span className="text-xs font-bold font-mono text-foreground">{formatGBP(data.spend)}</span>
+        <span className="text-xs font-bold text-foreground font-mono">{data.fullName} {data.year}</span>
+        <span className="text-xs font-bold font-mono text-foreground tabular-nums">{formatGBP(data.spend)}</span>
       </div>
       {data.categoryBreakdown && data.categoryBreakdown.length > 0 ? (
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-          {data.categoryBreakdown.map((cat: any) => (
+          {data.categoryBreakdown.map((cat: { name: string; amount: number; color: string; emoji?: string }) => (
             <div key={cat.name} className="flex items-center justify-between text-xs gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
@@ -471,20 +491,20 @@ return (
     </div>
 
     {/* ─── NET INCOME HERO CARD ─── */}
-    <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
-      <div className="flex items-start justify-between mb-4">
-        <div className="space-y-1">
+    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
+        <div className="space-y-1 font-mono">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
           <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-          <Figure loading={!hasLoaded} skeletonClassName="h-9 w-44" className={cn("block text-3xl font-bold font-mono", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
+          <Figure loading={!hasLoaded} skeletonClassName="h-9 w-44" className={cn("block text-2xl sm:text-3xl font-bold font-mono tabular-nums", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
             {formatGBP(ytdNet)}
           </Figure>
         </div>
         <button
           onClick={() => setCfDrawerOpen('net')}
-          className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
+          className="text-xs font-mono font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase"
         >
-          <span>VIEW MORE</span>
+          <span>View More</span>
           <ArrowUpRight className="h-3 w-3" />
         </button>
       </div>
@@ -537,18 +557,18 @@ return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
       {/* Spend Card */}
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
-        <div className="flex items-start justify-between mb-4">
-          <div className="space-y-1">
+      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+        <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
+          <div className="space-y-1 font-mono">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
             <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <Figure loading={!hasLoaded} skeletonClassName="h-8 w-36" className="block text-2xl font-bold font-mono text-destructive">{formatGBP(ytdSpend)}</Figure>
+            <Figure loading={!hasLoaded} skeletonClassName="h-8 w-36" className="block text-xl sm:text-2xl font-bold font-mono text-destructive tabular-nums">{formatGBP(ytdSpend)}</Figure>
           </div>
           <button
             onClick={() => setCfDrawerOpen('spend')}
-            className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
+            className="text-xs font-mono font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase"
           >
-            <span>VIEW MORE</span>
+            <span>View More</span>
             <ArrowUpRight className="h-3 w-3" />
           </button>
         </div>
@@ -577,18 +597,18 @@ return (
       </Card>
 
       {/* Income Card */}
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 rounded-3xl p-6 shadow-xl">
-        <div className="flex items-start justify-between mb-4">
-          <div className="space-y-1">
+      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+        <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
+          <div className="space-y-1 font-mono">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
             <p className="text-xs text-muted-foreground">{periodStartLabel} – {periodEndLabel}</p>
-            <Figure loading={!hasLoaded} skeletonClassName="h-8 w-36" className="block text-2xl font-bold font-mono text-chart-3">{formatGBP(ytdIncome)}</Figure>
+            <Figure loading={!hasLoaded} skeletonClassName="h-8 w-36" className="block text-xl sm:text-2xl font-bold font-mono text-chart-3 tabular-nums">{formatGBP(ytdIncome)}</Figure>
           </div>
           <button
             onClick={() => setCfDrawerOpen('income')}
-            className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-mono tracking-wider uppercase bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-full border border-primary/15"
+            className="text-xs font-mono font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors uppercase"
           >
-            <span>VIEW MORE</span>
+            <span>View More</span>
             <ArrowUpRight className="h-3 w-3" />
           </button>
         </div>
@@ -637,25 +657,25 @@ return (
 
     {/* ─── METRIC SUMMARY ROW ─── */}
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
-        <span className={cn("text-xl font-bold font-mono block", avgMonthlyNet >= 0 ? "text-positive" : "text-destructive")}>
+        <span className={cn("text-xl font-bold font-mono block tabular-nums", avgMonthlyNet >= 0 ? "text-positive" : "text-destructive")}>
           {formatGBP(avgMonthlyNet)}
         </span>
         <span className="text-xs text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
       </Card>
 
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
-        <span className={cn("text-xl font-bold font-mono block", savingsRate >= 20 ? "text-positive" : savingsRate >= 0 ? "text-chart-4" : "text-destructive")}>
+        <span className={cn("text-xl font-bold font-mono block tabular-nums", savingsRate >= 20 ? "text-positive" : savingsRate >= 0 ? "text-chart-4" : "text-destructive")}>
           {savingsRate.toFixed(1)}%
         </span>
         <span className="text-xs text-muted-foreground">of income retained YTD</span>
       </Card>
 
-      <Card className="bg-card/45 backdrop-blur-md border border-primary/10 shadow-lg p-4 sm:p-5 rounded-3xl space-y-1.5">
+      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
-        <span className={cn("text-xl font-bold font-mono block", recurringBurnRate <= 30 ? "text-positive" : recurringBurnRate <= 50 ? "text-chart-4" : "text-destructive")}>
+        <span className={cn("text-xl font-bold font-mono block tabular-nums", recurringBurnRate <= 30 ? "text-positive" : recurringBurnRate <= 50 ? "text-chart-4" : "text-destructive")}>
           {recurringBurnRate.toFixed(1)}%
         </span>
         <span className="text-xs text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
@@ -664,18 +684,18 @@ return (
 
     {/* ─── SLIDE-OVER SHEET / DRAWERS FOR VIEW MORE ─── */}
     <Sheet open={!!cfDrawerOpen} onOpenChange={(open) => !open && setCfDrawerOpen(null)}>
-      <SheetContent side="right" className="bg-card/95 backdrop-blur-2xl border-l border-primary/15 sm:max-w-md w-full p-6 text-foreground overflow-y-auto z-[70]">
+      <SheetContent side="right" className="bg-card border-l border-border/40 sm:max-w-md w-full p-6 text-foreground overflow-y-auto z-[70] font-mono">
         
         {/* NET INCOME DRAWER */}
         {cfDrawerOpen === 'net' && (
-          <div className="space-y-6 pt-2">
-            <SheetHeader className="text-left space-y-1">
-              <SheetTitle className="text-xl font-bold font-serif text-foreground">Net income</SheetTitle>
-              <SheetDescription className="text-xs text-muted-foreground">
+          <div className="space-y-6 pt-2 font-mono">
+            <SheetHeader className="text-left space-y-1 border-b border-border/30 pb-3">
+              <SheetTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Net income</SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground font-mono">
                 Monthly income minus spend
               </SheetDescription>
-              <div className="pt-2">
-                <span className={cn("text-3xl font-bold font-mono", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
+              <div className="pt-1">
+                <span className={cn("text-2xl font-bold font-mono tabular-nums", ytdNet >= 0 ? "text-positive" : "text-destructive")}>
                   {formatGBP(ytdNet)}
                 </span>
               </div>
@@ -737,14 +757,14 @@ return (
 
         {/* SPEND DRAWER */}
         {cfDrawerOpen === 'spend' && (
-          <div className="space-y-6 pt-2">
-            <SheetHeader className="text-left space-y-1">
-              <SheetTitle className="text-xl font-bold font-serif text-foreground">Spend</SheetTitle>
-              <SheetDescription className="text-xs text-muted-foreground">
+          <div className="space-y-6 pt-2 font-mono">
+            <SheetHeader className="text-left space-y-1 border-b border-border/30 pb-3">
+              <SheetTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Spend</SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground font-mono">
                 Monthly spend not including recurrings left to pay
               </SheetDescription>
-              <div className="pt-2">
-                <span className="text-3xl font-bold font-mono text-destructive">
+              <div className="pt-1">
+                <span className="text-2xl font-bold font-mono text-destructive tabular-nums">
                   {formatGBP(ytdSpend)}
                 </span>
               </div>
@@ -801,14 +821,14 @@ return (
 
         {/* INCOME DRAWER */}
         {cfDrawerOpen === 'income' && (
-          <div className="space-y-6 pt-2">
-            <SheetHeader className="text-left space-y-1">
-              <SheetTitle className="text-xl font-bold font-serif text-foreground">Income</SheetTitle>
-              <SheetDescription className="text-xs text-muted-foreground">
+          <div className="space-y-6 pt-2 font-mono">
+            <SheetHeader className="text-left space-y-1 border-b border-border/30 pb-3">
+              <SheetTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Income</SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground font-mono">
                 Income this month
               </SheetDescription>
-              <div className="pt-2">
-                <span className="text-3xl font-bold font-mono text-positive">
+              <div className="pt-1">
+                <span className="text-2xl font-bold font-mono text-positive tabular-nums">
                   {formatGBP(ytdIncome)}
                 </span>
               </div>
