@@ -126,6 +126,9 @@ export interface CreditScores {
 export interface MockTransaction {
   id: string;
   name: string;
+  /** Who the bank said was paid. Sync-written, never edited; see the
+   *  `merchant` column comment in 20260907170000_transaction_merchant.sql. */
+  merchant?: string;
   category: string;
   amount: number;
   date: string;
