@@ -23,6 +23,7 @@ import {
 import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
 const CashFlowSurface = lazy(() => import('./surfaces/CashFlowSurface'));
 const GoalsSurface = lazy(() => import('./surfaces/GoalsSurface'));
+const ScenariosSurface = lazy(() => import('./surfaces/ScenariosSurface'));
 const BudgetSurface = lazy(() => import('./surfaces/BudgetSurface'));
 const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
 const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
@@ -30,6 +31,7 @@ const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
 import { useFinanceTotals } from './useFinanceTotals';
 import { SurfaceHero } from './components/SurfaceHero';
+import { ProfileAvatar } from './components/ProfileAvatar';
 import {
   ALL_PRESETS_FALLBACK,
   makeBudgetMath,
@@ -1264,7 +1266,10 @@ function FinanceView() {
           <SelectContent>
             {profiles.map(p => (
               <SelectItem key={p.id} value={p.id} className="text-xs font-sans">
-                {p.emoji ? `${p.emoji} ` : ''}{p.name}
+                <span className="flex items-center gap-2">
+                  <ProfileAvatar profile={p} />
+                  {p.name}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
@@ -1347,6 +1352,8 @@ function FinanceView() {
               TAB 5: GOALS
               ========================================== */}
           {activeTab === 'goals' && <GoalsSurface />}
+
+          {activeTab === 'scenarios' && <ScenariosSurface />}
 
           {/* ==========================================
               TAB 6: ACCOUNTS

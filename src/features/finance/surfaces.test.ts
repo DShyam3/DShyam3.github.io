@@ -13,9 +13,9 @@ import {
 const allTabs = SURFACES.flatMap(s => s.tabs) as TabKey[];
 
 describe('SURFACES', () => {
-  it('covers all ten original tabs exactly once', () => {
-    expect(allTabs).toHaveLength(10);
-    expect(new Set(allTabs).size).toBe(10);
+  it('covers every section exactly once', () => {
+    expect(allTabs).toHaveLength(11);
+    expect(new Set(allTabs).size).toBe(11);
   });
 
   it('labels every section', () => {
