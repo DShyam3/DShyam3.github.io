@@ -430,7 +430,7 @@ function useProvideFinanceData() {
     setPayslips((data ?? []).map(r => ({
       id: r.id,
       payDate: r.pay_date,
-      employer: r.employer ?? undefined,
+      employer: r.employer || undefined,
       gross: Number(r.gross),
       incomeTax: Number(r.income_tax),
       nationalInsurance: Number(r.national_insurance),
@@ -457,7 +457,7 @@ function useProvideFinanceData() {
       id: slip.id,
       profile_id: profileId,
       pay_date: slip.payDate,
-      employer: slip.employer ?? null,
+      employer: slip.employer ?? '',
       gross: slip.gross,
       income_tax: slip.incomeTax,
       national_insurance: slip.nationalInsurance,
