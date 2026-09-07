@@ -127,6 +127,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   );
   const allTime = useMemo(() => sumPayslips(payslips), [payslips]);
 
+
   // Tax year first: it is the question every other figure on this surface is
   // bounded by, so grouping any other way by default invites comparing two
   // things measured over different periods.
@@ -167,6 +168,19 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
       // Newest first either way, so the current job and the current year lead.
       .sort((a, b) => b.sortKey.localeCompare(a.sortKey));
   }, [payslips, groupBy]);
+
+  /* The headline figures answer whichever question the grouping is asking.
+     Grouped by tax year, a lifetime total sits above per-year groups and
+     invites reading one as the other; grouped by employer, the span is every
+     job, so all time is the honest scope. The label says which, because two
+     figures differing by four years of pay must not look interchangeable. */
+  const summary = useMemo(
+    () => (groupBy === 'year' ? sumPayslips(thisYear) : allTime),
+    [groupBy, thisYear, allTime],
+  );
+  const summaryScope = groupBy === 'year'
+    ? `${currentTaxYear}/${String(currentTaxYear + 1).slice(2)}`
+    : 'all time';
 
   const loanComparison = useMemo(() => {
     const actual = studentLoanPaidInTaxYear(payslips, currentTaxYear);
@@ -301,17 +315,17 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         </p>
       ) : (
         <>
-          {/* Lifetime, not this year: the point of holding four years of
-              payslips is being able to see across them. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              ['Earned', formatGBP(allTime.gross)],
-              ['Take-home', formatGBP(allTime.net)],
-              ['Tax + NI', formatGBP(allTime.incomeTax + allTime.nationalInsurance)],
-              ['Into pension', formatGBP(allTime.pensionEmployee + allTime.pensionEmployer)],
+              ['Earned', formatGBP(summary.gross)],
+              ['Take-home', formatGBP(summary.net)],
+              ['Tax + NI', formatGBP(summary.incomeTax + summary.nationalInsurance)],
+              ['Into pension', formatGBP(summary.pensionEmployee + summary.pensionEmployer)],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-border/40 bg-card/40 px-3 py-2">
-                <div className="text-xs text-muted-foreground font-mono">{label}</div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  {label} <span className="text-muted-foreground/60">· {summaryScope}</span>
+                </div>
                 <div className="text-sm font-semibold text-foreground font-mono tabular-nums">{value}</div>
               </div>
             ))}
