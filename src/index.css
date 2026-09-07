@@ -52,6 +52,12 @@
     --chart-4: 43 70% 50%;
     --chart-5: 340 45% 55%;
 
+    /* Merchant monograms pick their own hue per merchant (see
+       src/lib/finance/merchant.ts); only the lightness has to follow the
+       theme, so that is the one part kept as a token. Dark ink on a light
+       ground here, light ink on a dark one below -- same hue either way. */
+    --monogram-lightness: 32%;
+
     /* shadcn ships --destructive but deliberately no success token. A finance
        view has to tell a gain from a loss, so this is the one addition beyond
        the standard contract, shaped the same way. */
@@ -116,6 +122,8 @@
 
     --positive: 152 50% 50%;
     --positive-foreground: 222 20% 6%;
+
+    --monogram-lightness: 72%;
 
     --border: 220 14% 18%;
     --input: 220 14% 18%;

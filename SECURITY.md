@@ -73,10 +73,26 @@ attack surface of this site is Supabase, and it was audited separately
 - **RLS**: enabled on all 39 public tables. Every `finance_*` table, including
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
   Content tables are anonymous-read, `is_admin()`-write.
-- **Edge functions**: `truelayer-sync` verifies the JWT and the admin email;
-  `tmdb-proxy` is deliberately public but restricted to an endpoint allowlist so
-  it cannot be used as a generic TMDB proxy; `watchlist-cron-sync` requires the
-  service role key. All three use an origin allowlist for CORS.
+- **Edge functions**: `truelayer-sync` and `merchant-logo-cache` verify the JWT
+  and the admin email; `tmdb-proxy` is deliberately public but restricted to an
+  endpoint allowlist so it cannot be used as a generic TMDB proxy;
+  `watchlist-cron-sync` requires the service role key. All four use an origin
+  allowlist for CORS.
+- **Outbound fetches (SSRF)**: `merchant-logo-cache` is the only function that
+  requests anything from a host we do not run. It holds the host list as a
+  constant; no URL, host or path is ever read from the request body, so it
+  cannot be steered. Redirects are followed by hand, at most three hops, and
+  only to another host on the same list — an automatic follow is how an
+  allowlist is normally escaped. What it stores is decided by magic bytes, not
+  by the remote host's `Content-Type`, and capped at 256 KB.
+- **Merchant logos, and why they are not hotlinked**: rendering a logo straight
+  from a third-party CDN would send that CDN one request per transaction row,
+  with the user's IP and referrer, describing where they shop. The logo is
+  fetched once server-side instead and served from the `merchant-logos` bucket.
+  That bucket is public — a supermarket's logo is public — and holds nothing
+  user-specific: object keys are brand slugs, never a profile or transaction
+  id. Writes to it are `is_admin()`; the same is true of its index table
+  `finance_merchant_logos`, which is public-read by design.
 - **Secrets**: the TMDB API key lives only in edge function env, never in the
   bundle. Only `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
   `VITE_TMDB_IMAGE_BASE_URL` and `VITE_ADMIN_EMAIL` reach the client.

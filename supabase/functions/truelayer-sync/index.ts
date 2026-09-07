@@ -323,6 +323,7 @@ serve(async (req) => {
         is_default: boolean
         profile_id: string | null
         name: string
+        merchant: string | null
         category: string
         amount: number
         date: string
@@ -506,6 +507,13 @@ serve(async (req) => {
               is_default: false,
               profile_id: selfProfileId,
               name: tx.merchant_name || tx.description || 'TrueLayer Transaction',
+              // The display name is the person's to edit; this is the bank's
+              // word for who was paid, and it is what the logo and every
+              // other merchant-keyed lookup reads. Only set when TrueLayer
+              // actually identified a merchant -- a raw description is a
+              // reference string, not a name, and keying off one would give
+              // the same shop a new identity per till.
+              merchant: tx.merchant_name || null,
               category: mapCategory(tx.transaction_category, tx.transaction_classification),
               // Debits are positive at TrueLayer and negative here.
               amount: -Number(tx.amount),

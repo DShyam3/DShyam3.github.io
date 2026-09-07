@@ -221,7 +221,14 @@ npx supabase functions deploy <name>
 |---|---|---|
 | `tmdb-proxy` | Keeps the TMDB key server-side | Public, restricted to an endpoint allowlist |
 | `truelayer-sync` | Open-banking pull for Finance | Verifies JWT + admin email |
+| `merchant-logo-cache` | Caches merchant logos into the `merchant-logos` bucket | Verifies JWT + admin email |
 | `watchlist-cron-sync` | Scheduled port of the browser sync | Service role key |
+
+`merchant-logo-cache` is the only function that fetches from hosts outside our
+own infrastructure. The hosts it may touch are a constant inside it and are not
+reachable from a request body — see the SSRF note in `SECURITY.md`. It is
+called automatically after a TrueLayer sync; `{"refresh": true}` re-tries the
+merchants previously recorded as having no findable logo.
 
 The cron job `watchlist-daily-sync` calls `watchlist-cron-sync` at 06:00 daily.
 It reads a vault secret named `service_role_key`, which must exist on any fresh

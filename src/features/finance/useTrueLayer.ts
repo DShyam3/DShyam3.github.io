@@ -105,6 +105,33 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     }
   };
 
+  /**
+   * Top the merchant-logo cache up after a sync.
+   *
+   * A sync is the only thing that introduces merchants, so it is the only
+   * moment the cache can be out of date. Fire-and-forget and silent on
+   * failure: a logo is decoration, every row already draws a monogram without
+   * it, and a toast about a missing supermarket icon would be noise on top of
+   * a sync the person actually asked for.
+   */
+  const refreshMerchantLogos = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/merchant-logo-cache`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({}),
+      });
+    } catch (err) {
+      console.error('Error refreshing merchant logos:', err);
+    }
+  };
+
   const syncTrueLayer = async () => {
     setIsSyncingTrueLayer(true);
     try {
@@ -115,6 +142,7 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
         description: `Successfully synced ${data.synced_accounts} accounts and ${data.synced_transactions} transactions.`,
       });
       await onSynced();
+      void refreshMerchantLogos();
     } catch (err) {
       console.error('Error syncing TrueLayer:', err);
       toast({
