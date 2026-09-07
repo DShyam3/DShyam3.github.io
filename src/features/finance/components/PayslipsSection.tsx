@@ -20,7 +20,7 @@ import {
   studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Check, FileText, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Download, FileText, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
 import { PayslipImportDialog } from './PayslipImportDialog';
@@ -123,6 +123,22 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
     [payslips, currentTaxYear],
   );
   const totals = useMemo(() => sumPayslips(thisYear), [thisYear]);
+
+  /* Grouped the way the documents are actually filed: one folder per tax
+     year, newest first, with the year's take-home on the header so the group
+     says something before it is opened. */
+  const byTaxYear = useMemo(() => {
+    const groups = new Map<number, Payslip[]>();
+    for (const p of payslips) {
+      const year = taxYearOf(p.payDate);
+      const bucket = groups.get(year);
+      if (bucket) bucket.push(p);
+      else groups.set(year, [p]);
+    }
+    return [...groups.entries()].sort((a, b) => b[0] - a[0]);
+  }, [payslips]);
+
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
 
   const loanComparison = useMemo(() => {
     const actual = studentLoanPaidInTaxYear(payslips, currentTaxYear);
@@ -284,8 +300,20 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
       )}
 
       {payslips.length > 0 && (
-        <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
-          {payslips.map(p => {
+        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+          {byTaxYear.map(([year, slips]) => (
+          <div key={year} className="space-y-1.5">
+            <button
+              type="button"
+              onClick={() => setCollapsed(c => ({ ...c, [year]: !c[year] }))}
+              className="flex w-full items-center gap-2 px-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {collapsed[year] ? <ChevronRight className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+              <span className="font-semibold text-foreground">{year}/{String(year + 1).slice(2)}</span>
+              <span>{slips.length} payslip{slips.length === 1 ? '' : 's'}</span>
+              <span className="ml-auto tabular-nums">{formatGBP(sumPayslips(slips).net)}</span>
+            </button>
+            {!collapsed[year] && slips.map(p => {
             const check = checkPayslip(p);
             return (
               <div key={p.id} className="flex items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 transition-colors">
@@ -300,15 +328,18 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                     {!check.reconciles && ` · off by ${formatGBP(check.difference)}`}
                   </div>
                 </div>
-                {p.storagePath && (
+                {p.storagePath ? (
                   <button
                     type="button"
                     onClick={() => void openDocument(p.storagePath!)}
-                    className="text-muted-foreground hover:text-foreground shrink-0"
-                    aria-label={`Open the archived document for ${p.payDate}`}
+                    className="flex items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors shrink-0"
+                    title="Open the archived PDF in a new tab"
                   >
-                    <FileText className="h-3.5 w-3.5" />
+                    <Download className="h-3 w-3" />
+                    PDF
                   </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground/50 shrink-0" title="No PDF archived">—</span>
                 )}
                 <div className="text-xs font-semibold text-foreground font-mono tabular-nums shrink-0">{formatGBP(p.net)}</div>
                 <button type="button" onClick={() => openEdit(p)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label={`Edit payslip for ${p.payDate}`}>
@@ -324,7 +355,9 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                 </button>
               </div>
             );
-          })}
+            })}
+          </div>
+          ))}
         </div>
       )}
 
