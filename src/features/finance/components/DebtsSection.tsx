@@ -285,7 +285,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
       ? calculateStudentMonthly(studentPlan || 'plan2')
       : 0;
     const minPayment = isStudent
-      ? (activeDebt.minPayment > 0 ? activeDebt.minPayment : computedStudentMonthly)
+      ? computedStudentMonthly
       : (activeDebt.minPayment || 0);
     const writeOffYears = isStudent
       ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[studentPlan || 'plan2'])
@@ -329,7 +329,12 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
   const totalLoanOriginal = debts.reduce((sum, d) => sum + Math.max(d.originalAmount, d.balance), 0);
   const totalLoanPaid = Math.max(totalLoanOriginal - totalLoanBalance, 0);
   const loanPayoffPercent = totalLoanOriginal > 0 ? (totalLoanPaid / totalLoanOriginal) * 100 : 0;
-  const totalMinPayments = debts.reduce((sum, d) => sum + d.minPayment, 0);
+  const totalMinPayments = debts.reduce((sum, d) => {
+    const monthly = (d.type === 'student' || d.repaymentType === 'income_contingent')
+      ? calculateStudentMonthly(d.studentLoanPlan || 'plan2')
+      : d.minPayment;
+    return sum + monthly;
+  }, 0);
   const selectedDebt = debts.find(d => d.id === selectedDebtId) || debts[0] || null;
   const selectedPlan = selectedDebt?.studentLoanPlan || (selectedDebt?.type === 'student' ? 'plan2' : undefined);
   const selectedDebtEffective: Debt | null = selectedDebt
@@ -434,7 +439,11 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                       )}
                     </td>
                     <td className="py-3 px-3 text-right font-mono">{debt.interestRate.toFixed(2)}%</td>
-                    <td className="py-3 px-3 text-right font-mono">{formatGBP(debt.minPayment)}</td>
+                    <td className="py-3 px-3 text-right font-mono">
+                      {formatGBP((debt.type === 'student' || debt.repaymentType === 'income_contingent')
+                        ? calculateStudentMonthly(debt.studentLoanPlan || 'plan2')
+                        : debt.minPayment)}
+                    </td>
                     <td className="py-3 px-3">
                       <div className="space-y-1 min-w-[120px]">
                         <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
