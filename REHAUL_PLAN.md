@@ -1412,6 +1412,96 @@ pending-to-settled transition, so deduping on `tl_tx_<id>` will double-count
 anything ingested while pending. Ingest settled rows only at first; treat
 pending as a display concern later, if at all.
 
+#### 7.N Loan balances — project from an anchor, reconcile against the source
+
+There is no API for a student loan balance, and none for most mortgages or car
+finance either. The answer is not to find one. It is to hold a number that was
+true on a known date, project forward from it, and correct the projection when
+a real figure is next observed.
+
+Most of the machinery exists. `projectDebtBalance` already runs both repayment
+shapes — amortising, and income-contingent with a write-off term — and
+`finance_debts` already carries `original_amount`, `interest_rate`,
+`min_payment`, `student_loan_plan`, `write_off_years` and a `draws` jsonb. What
+is missing is the part that makes a projection trustworthy over years rather
+than months.
+
+**The balance has no as-of date.** `finance_debts.balance` is one mutable
+number. `startDate` is when the loan began, not when the balance was last
+known, so projecting from a figure typed in eight months ago silently treats it
+as today's. That is a live accuracy bug, not a future feature.
+
+**Overwriting loses the evidence.** Checking gov.uk and correcting the number
+throws away the only data that could tell you how wrong the model was. Without
+a history of observations there is no drift to measure and nothing to tune.
+
+So: `finance_debt_observations` — `debt_id`, `profile_id`, `observed_on`,
+`balance`, `source` (`manual` / `statement` / `provider`), `note`. Each row is
+an anchor. Projection runs from the most recent anchor rather than from a
+floating `balance`, and `finance_debts.balance` becomes a cached view of the
+latest observation rather than the source of truth.
+
+Reconciliation then has something to say. Given two consecutive anchors, the
+gap between what the model predicted for the later date and what was actually
+observed is the drift, and it is attributable: an implied interest rate, or a
+payment total that did not match. Surfacing "your projection was £340 light
+over eleven months, which implies 7.1% rather than the 6.4% recorded" turns a
+chore into a correction. That is the whole feature.
+
+**One fact must be written down before anyone reconciles a student loan
+against gov.uk, because getting it wrong makes the model worse rather than
+better.** HMRC collects the deduction through PAYE every month, but passes it
+to the Student Loans Company only once a year, after the tax year closes. The
+balance shown on the SLC portal is therefore stale by design — by up to about
+eighteen months at the worst point in the cycle, and it does not include this
+year's deductions at all. A naive reconciliation would read that as the model
+under-paying and "correct" a correct model into a wrong one.
+
+The rule that follows: an SLC observation anchors the balance *as at the date
+SLC's data was last updated*, not as at the date you looked. The observation
+row needs `statement_date` distinct from `observed_on`, and the projection runs
+forward from `statement_date` applying the deductions since. Done properly,
+the local figure is more accurate than the official one between updates — which
+is the reason to build it at all.
+
+**A second gap for student loans specifically.** `calculateFinance` already
+computes the monthly deduction from salary and the plan threshold, and
+`projectDebtBalance` independently re-derives repayments from `grossSalary`.
+Two models of the same quantity, neither aware of the other, and neither
+reading what was actually deducted. Where payslip data exists it should drive
+the projection, with the modelled figure as the fallback — same precedence the
+rest of the app uses for observed over estimated.
+
+**Rate periods, for the amortising loans.** A single `interest_rate` cannot
+express a two-year fix reverting to SVR, a tracker following base rate, or Plan
+2's income-linked RPI-to-RPI-plus-3% sliding scale. Add `rate_periods` as jsonb
+on the debt, following the precedent `draws` already sets: a list of
+`{ effective_from, rate }`, with the projection taking the rate in force at
+each month it steps through. A single-entry list is the current behaviour, so
+this is additive.
+
+Car finance is worth naming as its own shape. Hire purchase amortises to zero
+and is covered. PCP does not — it runs to a balloon payment, so the projection
+must stop at an agreed final value rather than at zero, and the interesting
+number is the optional final payment against the car's likely worth. That is a
+`repayment_type` of its own, not a variation of amortising.
+
+| Step | Work | Gated on |
+|---|---|---|
+| A | `finance_debt_observations`, projection anchored on the latest one, `balance` demoted to a cache | migration |
+| B | Drift on reconcile: predicted vs observed, with the implied rate | A |
+| C | `statement_date` on observations, and the SLC lag handled explicitly | A |
+| D | Projection steps the rate in force, reading an optional list of periods | — |
+| D2 | `rate_periods` jsonb column feeding D | migration |
+| E | PCP as its own repayment type, terminating at a balloon | — |
+| F | Payslip deductions drive the student loan projection where present | 7.7 |
+
+D and E are pure changes to `lib/finance/debt.ts`: the projection takes an
+optional list of rate periods and an optional balloon, and falls back to
+today's behaviour when neither is given. Both are testable and shippable with
+no migration and no key, so they go first whenever the schema work is blocked.
+D2 is the column that eventually feeds D, and only that part waits.
+
 #### 7.J Done means
 
 - `npm run lint` — 0 errors, 0 warnings; `npm run typecheck`; `npm run build`
