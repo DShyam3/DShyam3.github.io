@@ -76,7 +76,7 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   // also states an annual figure it read twelve times the month's pay, and a
   // wrong gross that large still charts as a plausible line. A payslip with no
   // row called gross is better left for a person to fill in.
-  { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b/i },
+  { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b|\bearnings\b/i },
 ];
 
 const AMOUNTS = /-?£?\s?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|-?£?\s?\d+(?:\.\d{1,2})?/g;

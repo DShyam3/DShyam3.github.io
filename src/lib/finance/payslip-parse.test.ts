@@ -256,3 +256,26 @@ describe('parsePayslipText — competing date labels', () => {
     expect(parsePayslipText('Mr A N Other Pay Day 28/06/2023').payDate).toBe('2023-06-28');
   });
 });
+
+describe('parsePayslipText — a bare Earnings total', () => {
+  it('takes the period earnings over the running-total gross', () => {
+    // A leaving payslip states its period total as "Earnings" on a line that
+    // begins with something else, so "Total Earnings" never matches and the
+    // reader fell through to Gross Pay -- which here is the year to date.
+    const leaver = `
+      Earnings Units Rate Amount Deductions Amount
+      Base Pay 1,370.00 Tax (Code 1257L) 66.40
+      Total Hours 1.25 Earnings 1,380.54 Total Deductions 106.30
+      Running Totals Amount Paid
+      Gross Pay 7,412.92 Deductions 106.30
+      Taxable Pay 7,412.92 Net Pay 1,274.24
+    `;
+    const parsed = parsePayslipText(leaver);
+    expect(parsed.gross).toBe(1380.54);
+    expect(parsed.net).toBe(1274.24);
+  });
+
+  it('ignores the column heading, which has no figure after it', () => {
+    expect(parsePayslipText('Earnings Units Rate Amount').gross).toBeUndefined();
+  });
+});
