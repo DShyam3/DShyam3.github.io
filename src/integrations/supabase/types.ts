@@ -896,6 +896,7 @@ export type Database = {
       }
       finance_profiles: {
         Row: {
+          birth_year: number | null
           created_at: string
           currency: string
           emoji: string | null
@@ -904,10 +905,13 @@ export type Database = {
           is_self: boolean
           name: string
           owner_user_id: string | null
+          pension_growth_percent: number
           region: string
+          retirement_age: number
           updated_at: string
         }
         Insert: {
+          birth_year?: number | null
           created_at?: string
           currency?: string
           emoji?: string | null
@@ -916,10 +920,13 @@ export type Database = {
           is_self?: boolean
           name: string
           owner_user_id?: string | null
+          pension_growth_percent?: number
           region?: string
+          retirement_age?: number
           updated_at?: string
         }
         Update: {
+          birth_year?: number | null
           created_at?: string
           currency?: string
           emoji?: string | null
@@ -928,7 +935,9 @@ export type Database = {
           is_self?: boolean
           name?: string
           owner_user_id?: string | null
+          pension_growth_percent?: number
           region?: string
+          retirement_age?: number
           updated_at?: string
         }
         Relationships: []
