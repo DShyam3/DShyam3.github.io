@@ -1089,7 +1089,8 @@ almost no top-level structure — everything is one function by construction. It
 is also why a `const totalSpent` can coexist with a `totalSpent` prop without
 TypeScript objecting.
 
-`AccountsSurface` is next: 2,071 lines, 17 `useState`, 1 `useMemo`.
+`AccountsSurface` was next: its 2,071 lines, 17 `useState`, and 7 dialogs
+were decomposed into 4 dedicated section components and reduced to 21 lines.
 
 ##### `supabase/functions/` is not type-checked by anything
 
@@ -1132,6 +1133,12 @@ extraction are all in the tree:
 - `payslip-parse.ts` / `payslip-pdf.ts`: pdf.js extraction in the browser, no
   model, tested against real layouts
 
+**AccountsSurface decomposition — done.** Reduced from 2,071 lines down to 21
+lines, decomposed into 4 self-contained components in `src/features/finance/components/`
+(`BankAccountsSection.tsx`, `DebtsSection.tsx`, `MembershipsSection.tsx`, and
+`CreditReportsSection.tsx`), eliminating cascading rerenders across the 17 `useState`
+hooks and 7 dialogs.
+
 What 7.7 does **not** close by itself — and is still open below — is **7.8**
 (reconcile net pay against transactions) and **7.N** (debt observations, drift,
 SLC dates; payslip deductions driving the loan projection rather than only
@@ -1162,10 +1169,9 @@ is worth more right now than any item below.**
 | 3 | 7.N A–C: `finance_debt_observations`, drift on reconcile, SLC statement dates | Migration only. Payslip figures now exist to feed this; the as-of-date bug is live today |
 | 4 | 7.8: reconcile captured payslip net pay against transactions | 7.7 is done; this is the next step that makes the figures useful beyond display |
 | 5 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
-| 6 | `AccountsSurface` decomposition | 2,071 lines, 17 `useState`, 1 `useMemo` — the shape `BudgetSurface` had |
-| 7 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
-| 8 | Pagination inside a fetch window | A dense 90-day window still truncates |
-| 9 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
+| 6 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
+| 7 | Pagination inside a fetch window | A dense 90-day window still truncates |
+| 8 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
 
 ##### Needs a decision, not a keyboard
 
@@ -1228,7 +1234,7 @@ a contract, not code).
    older than the API serves).
 3. **7.N A–C**, then **7.8** — payslip figures exist; wire them into debt
    reconciliation and match net pay to transactions.
-4. **`AccountsSurface`**, whenever a structural pass is wanted.
+4. ~~**`AccountsSurface`**~~ — done; decomposed into 4 dedicated section components.
 5. **The key**, and then 7.6 through 7.10 in order.
 
 The ordering principle: data before features, and anything that silently
