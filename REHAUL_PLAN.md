@@ -1040,13 +1040,13 @@ number is the optional final payment against the car's likely worth. That is a
 
 | Step | Work | Gated on |
 |---|---|---|
-| A | `finance_debt_observations`, projection anchored on the latest one, `balance` demoted to a cache | migration |
-| B | Drift on reconcile: predicted vs observed, with the implied rate | A |
-| C | `statement_date` on observations, and the SLC lag handled explicitly | A |
+| A | `finance_debt_observations`, projection anchored on the latest one, `balance` demoted to a cache | **DONE** |
+| B | Drift on reconcile: predicted vs observed, with the implied rate | **DONE** |
+| C | `statement_date` on observations, and the SLC lag handled explicitly | **DONE** |
 | D | Projection steps the rate in force, reading an optional list of periods | **DONE** |
-| D2 | `rate_periods` jsonb column feeding D | migration |
+| D2 | `rate_periods` jsonb column feeding D | **DONE** |
 | E | PCP as its own repayment type, terminating at a balloon | **DONE** |
-| F | Payslip deductions drive the student loan projection where present | 7.7 |
+| F | Payslip deductions drive the student loan projection where present | **DONE** |
 
 D and E are pure changes to `lib/finance/debt.ts`: the projection takes an
 optional list of rate periods and an optional balloon, and falls back to
@@ -1139,10 +1139,16 @@ lines, decomposed into 4 self-contained components in `src/features/finance/comp
 `CreditReportsSection.tsx`), eliminating cascading rerenders across the 17 `useState`
 hooks and 7 dialogs.
 
+**7.N loan balances & drift reconcile — done.** Anchored balance projections
+stepping forward from verified anchors rather than a floating mutable balance:
+- `finance_debt_observations` table (migration `20260907230000_finance_debt_observations.sql`)
+- Drift calculation & numerical solver for implied annual interest rate (`calculateDebtDrift`)
+- SLC reporting lag handled by bridging statement dates with captured payslip deductions (`reconcileStudentLoanWithPayslips`)
+- `rate_periods` and `final_payment` (PCP balloon) stored and wired into projection
+- `DebtReconcileDialog` with live drift preview, implied rate, and observation history
+
 What 7.7 does **not** close by itself — and is still open below — is **7.8**
-(reconcile net pay against transactions) and **7.N** (debt observations, drift,
-SLC dates; payslip deductions driving the loan projection rather than only
-being compared to the model in the UI).
+(reconcile net pay against transactions).
 
 ##### The honest caveat
 
@@ -1166,12 +1172,11 @@ is worth more right now than any item below.**
 |---|---|---|
 | 1 | CSV / OFX statement import | The only route to bank history older than the API serves, and parsing is deterministic — no key, pure `lib/finance`, testable |
 | 2 | Extend `deriveAlerts` into the deterministic "what changed" summary | 7.Q: the standing summary must be reproducible, so it is rules over rows rather than generated prose |
-| 3 | 7.N A–C: `finance_debt_observations`, drift on reconcile, SLC statement dates | Migration only. Payslip figures now exist to feed this; the as-of-date bug is live today |
-| 4 | 7.8: reconcile captured payslip net pay against transactions | 7.7 is done; this is the next step that makes the figures useful beyond display |
-| 5 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
-| 6 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
-| 7 | Pagination inside a fetch window | A dense 90-day window still truncates |
-| 8 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
+| 3 | 7.8: reconcile captured payslip net pay against transactions | 7.7 is done; this is the next step that makes the figures useful beyond display |
+| 4 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
+| 5 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
+| 6 | Pagination inside a fetch window | A dense 90-day window still truncates |
+| 7 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
 
 ##### Needs a decision, not a keyboard
 
@@ -1232,8 +1237,7 @@ a contract, not code).
    student-loan comparison against the model.
 2. **CSV/OFX import** — the main data gap payslips do not cover (bank history
    older than the API serves).
-3. **7.N A–C**, then **7.8** — payslip figures exist; wire them into debt
-   reconciliation and match net pay to transactions.
+3. ~~**7.N A–C**~~ — done; debt observations, drift reconcile, and SLC statement lag handling implemented. Next: **7.8** (reconcile net pay to transactions).
 4. ~~**`AccountsSurface`**~~ — done; decomposed into 4 dedicated section components.
 5. **The key**, and then 7.6 through 7.10 in order.
 
@@ -1249,7 +1253,7 @@ of done.
 
 | Condition | State |
 |---|---|
-| `npm run lint` 0/0, `typecheck`, `build` | met — and 366 tests |
+| `npm run lint` 0/0, `typecheck`, `build` | met — and 372 tests |
 | `lib/finance/` pure, no React or Supabase, tested | met |
 | Finance is five routed surfaces, not ten `localStorage` tabs | met |
 | No `localStorage` key holds financial truth | met |
