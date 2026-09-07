@@ -2,7 +2,7 @@
 
 Audit and restructuring plan for DShyam3.github.io. Covers the frontend architecture, the Supabase backend, and a phased sequence for getting from here to there.
 
-Audit date: 2026-09-04. Branch at time of audit: `feature/finance-page`. Supabase project: `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2, Postgres 15.8.1.030).
+Audit date: 2026-09-04, last revised 2026-09-07. Branch at time of audit: `feature/finance-page`. Supabase project: `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2, Postgres 15.8.1.030).
 
 ---
 
@@ -10,7 +10,7 @@ Audit date: 2026-09-04. Branch at time of audit: `feature/finance-page`. Supabas
 
 The site works and the design system is genuinely good. The problems are structural, not functional:
 
-- **Frontend**: three competing implementations of the same "list of cards" idea. ~1,200 lines of near-duplicate component code, 7 near-identical hooks, 450 lines of dead code, and a 12,237-line Finance page.
+- **Frontend**: three competing implementations of the same "list of cards" idea. ~1,200 lines of near-duplicate component code, 7 near-identical hooks, 450 lines of dead code, and a 12,237-line Finance page. *(That page is 2,442 lines as of 2026-09-07 — see 7.J for what remains.)*
 - **Backend**: RLS is correctly conceived but has one live gap (storage), a hardcoded admin email, no query discipline (`select('*')` everywhere, no pagination), and a migration history that has drifted from the files in the repo.
 
 Nothing here is on fire except item S-1 below. Everything else is accumulated drift.
@@ -31,7 +31,7 @@ makes something easier to locate.
 | 4 | Convert remaining collection pages | one file per collection | **done** |
 | 5 | Watchlist decomposition | one folder, named modules | **done** |
 | 6 | Finance boundary move (not rewrite) | containment | **done** |
-| 7 | Finance rehaul | multi-profile decision engine, one plan below | **planned, next** |
+| 7 | Finance rehaul | multi-profile decision engine, one plan below | **substantially done** — see 7.O for what is left and 7.J for the three unmet conditions |
 | — | `features/` reorg | **reinstated** — measured against findability rather than line count, co-location is the point | **done** |
 
 The last row is worth keeping visible as a record of a reversal. It was
@@ -39,6 +39,47 @@ originally Phase 6, then dropped on the grounds that it "relocates files
 without reducing them" — true, but that judged it by line count. Judged by
 "can I find things", co-location is the whole point, so it was reinstated and
 done as part of Phase 5.
+
+---
+
+## Part 0.5 — How AI is used here
+
+Three rules, settled during Phase 7 and stated up front because they are
+architectural rather than a phase detail. The reasoning is in 7.P, 7.Q and
+7.F; this is the shape of it.
+
+**1. The app is complete without a model.** No feature may hard-depend on one.
+With no key set everything works except the chat box, and that is the product
+rather than a degraded mode. As of 2026-09-07 there is not a single model call
+in `src/` or `supabase/functions/`, all sixteen `lib/finance` modules are pure,
+and all 274 tests run without a network. Every figure the app shows — take-home,
+free-to-spend, net worth, the pension projection, the debt curve, the scenario
+verdicts, the alerts — is computed here from rows.
+
+**2. A model may choose, phrase and explain. It may never compute, and it may
+never be the only thing that knows something.** A summary of your own finances
+has to be reproducible: the same data must give the same answer tomorrow, and
+every figure has to trace to the arithmetic that made it. A generated summary
+gives up both, invisibly, because a wrong number reads exactly like a right one.
+So the standing summary is rules over rows — `deriveAlerts` already is — and the
+model is for the question nobody built a screen for.
+
+**3. Documents are stored, never sent. What reaches a model is a projection.**
+A payslip PDF is archived so it can be downloaded years later; its figures are
+captured into columns and the app renders its own view of them. Nothing uploads
+the document. Every path to a model goes through a projection built by listing
+what to include, never by taking a row and removing fields — a denylist leaks
+whatever is added to the table next, an allowlist cannot. Never sent: National
+Insurance number, account and sort numbers, card numbers, addresses, employer
+references, payroll numbers, dates of birth, any third party's name.
+
+The practical shape that follows: extraction runs in the browser (`pdf.js` for
+the text layer a digital PDF already has, a template for a layout that recurs,
+Tesseract WASM only for photographed receipts), so the document is parsed before
+it is uploaded anywhere and rule 3 holds by construction. And because there are
+two wire protocols rather than N vendors, the provider is a registry row —
+`lib/finance/llm.ts` translates both, and the registry stays server-side so a
+client names an id and never a URL.
 
 ---
 

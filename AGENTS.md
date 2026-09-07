@@ -25,6 +25,34 @@ This project has a graphify knowledge graph at `graphify-out/`.
 - `npm run ship-check` -- should-i-ship launch-readiness scan, writes to `.should-i-ship/` (gitignored)
 - `security/AI-CHECKLIST.md` -- the vibe-check audit, run on request: "Run the security audit defined in security/AI-CHECKLIST.md against this project"
 
+# How AI is used in this project
+
+Architectural rules, not preferences. Full reasoning in `REHAUL_PLAN.md`
+Part 0.5 and sections 7.P, 7.Q and 7.F.
+
+- **No feature may hard-depend on a model.** With no API key set, everything
+  works except the chat box. Every figure the app shows is computed locally
+  from rows, deterministically, and covered by tests.
+- **A model may choose, phrase and explain. It may not compute.** Anything
+  that must be reproducible -- a balance, a projection, the standing summary --
+  is rules over rows, never generated prose. A wrong number reads exactly like
+  a right one, so the arithmetic never leaves the codebase.
+- **Documents are stored, never sent.** PDFs are archived for download; their
+  figures are captured into columns and rendered natively. Extraction runs in
+  the browser (`pdf.js` for a digital PDF's text layer, templates for layouts
+  that recur, Tesseract WASM only for photographed images), so a document is
+  parsed before it is uploaded anywhere.
+- **What reaches a model is a projection, built as an allowlist.** List what to
+  include; never take a row and strip fields, because a denylist leaks whatever
+  is added to the table next. Never sent: National Insurance number, account
+  and sort numbers, card numbers, addresses, employer references, payroll
+  numbers, dates of birth, any third party's name.
+- **Providers are registry rows, not integrations.** There are two wire
+  protocols -- OpenAI-compatible and Anthropic -- and `src/lib/finance/llm.ts`
+  translates both. Adding a vendor is a row: id, protocol, base URL, model,
+  which secret holds the key. The registry stays server-side; a client that
+  could name a URL rather than an id would be an SSRF hole.
+
 # Security rules
 
 Copied verbatim from benavlabs/vibe-check so this stays diffable against
