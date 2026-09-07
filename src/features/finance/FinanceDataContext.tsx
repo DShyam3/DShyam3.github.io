@@ -24,7 +24,7 @@ import {
 import defaultPresets from '@/data/presets.json';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import type { ProfileTransfer } from '@/lib/finance';
+import type { Payslip, ProfileTransfer } from '@/lib/finance';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
@@ -316,6 +316,7 @@ function useProvideFinanceData() {
   // Movements between tracked profiles. Fetched for either side, because a
   // transfer belongs to both ledgers and the switcher may be on either.
   const [transfers, setTransfers] = useState<ProfileTransfer[]>([]);
+  const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
 
   /**
@@ -406,6 +407,84 @@ function useProvideFinanceData() {
       return;
     }
     await fetchTransfers(profileId);
+  };
+
+  /* ---- Payslips (7.7) ---------------------------------------------------
+     Their own table rather than part of the big fetch: they are captured a
+     handful of times a year, and a surface that does not show them has no
+     reason to load them. */
+  const fetchPayslips = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) {
+      setPayslips([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('finance_payslips')
+      .select('id, pay_date, employer, gross, income_tax, national_insurance, pension_employee, pension_employer, student_loan, other_deductions, net, storage_path, notes')
+      .eq('profile_id', forProfile)
+      .order('pay_date', { ascending: false });
+    if (error) {
+      console.warn('payslips unavailable', error.message);
+      return;
+    }
+    setPayslips((data ?? []).map(r => ({
+      id: r.id,
+      payDate: r.pay_date,
+      employer: r.employer ?? undefined,
+      gross: Number(r.gross),
+      incomeTax: Number(r.income_tax),
+      nationalInsurance: Number(r.national_insurance),
+      pensionEmployee: Number(r.pension_employee),
+      pensionEmployer: Number(r.pension_employer),
+      studentLoan: Number(r.student_loan),
+      otherDeductions: Number(r.other_deductions),
+      net: Number(r.net),
+      storagePath: r.storage_path ?? undefined,
+      notes: r.notes ?? undefined,
+    })));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchPayslips(profileId);
+  }, [fetchPayslips, profileId]);
+
+  const savePayslip = async (slip: Payslip) => {
+    if (!isAdmin || !profileId) return;
+    // Upsert on the natural key: capturing the same pay date twice corrects
+    // the row rather than adding a second one, which the unique index would
+    // reject anyway.
+    const { error } = await supabase.from('finance_payslips').upsert({
+      id: slip.id,
+      profile_id: profileId,
+      pay_date: slip.payDate,
+      employer: slip.employer ?? null,
+      gross: slip.gross,
+      income_tax: slip.incomeTax,
+      national_insurance: slip.nationalInsurance,
+      pension_employee: slip.pensionEmployee,
+      pension_employer: slip.pensionEmployer,
+      student_loan: slip.studentLoan,
+      other_deductions: slip.otherDeductions,
+      net: slip.net,
+      storage_path: slip.storagePath ?? null,
+      notes: slip.notes ?? null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'profile_id,pay_date' });
+    if (error) {
+      toast({ title: 'Could not save payslip', description: error.message, variant: 'destructive' });
+      return;
+    }
+    await fetchPayslips(profileId);
+  };
+
+  const deletePayslip = async (id: string) => {
+    if (!isAdmin) return;
+    const { error } = await supabase.from('finance_payslips').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Could not delete payslip', description: error.message, variant: 'destructive' });
+      return;
+    }
+    await fetchPayslips(profileId);
   };
 
   const deleteTransfer = async (id: string) => {
@@ -1509,6 +1588,9 @@ function useProvideFinanceData() {
     transfers,
     saveTransfer,
     deleteTransfer,
+    payslips,
+    savePayslip,
+    deletePayslip,
     updateProfile,
     netWorthHistory,
     profiles,

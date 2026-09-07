@@ -25,6 +25,9 @@ export interface Payslip {
   studentLoan: number;
   otherDeductions: number;
   net: number;
+  /** Where the archived PDF lives, if one was kept. The figures stand alone. */
+  storagePath?: string;
+  notes?: string;
 }
 
 /**

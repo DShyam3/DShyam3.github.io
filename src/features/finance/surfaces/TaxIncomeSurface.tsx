@@ -23,6 +23,7 @@ import { calculateWorkingDaysInRange, formatHolidayDates, getBookedDaysForMonth,
 import { cn } from '@/lib/utils';
 import { Calendar, ChevronRight, DollarSign, Gift, Info, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
 import { useFinanceTotals } from '../useFinanceTotals';
+import { PayslipsSection } from '../components/PayslipsSection';
 import { getNormalizedHolidays } from '../finance-calcs';
 
 interface TaxIncomeSurfaceProps {
@@ -511,6 +512,10 @@ export default function TaxIncomeSurface({
           </Button>
         </div>
       </div>
+
+      {/* Captured payslips: the figures the deductions above are modelled
+          from, as they actually landed (7.7). */}
+      <PayslipsSection modelledStudentLoanMonthly={breakdownRates.studentLoan.monthly} />
 
     </div>
 
