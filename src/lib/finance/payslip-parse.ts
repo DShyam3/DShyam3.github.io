@@ -39,7 +39,10 @@ type Field = Exclude<keyof ParsedPayslip, 'payDate' | 'employer'>;
  */
 const RULES: { field: Field; pattern: RegExp }[] = [
   { field: 'pensionEmployer', pattern: /\b(?:employer|company)('?s)?\s+pension|pension\s*\(?\s*(?:er|employer)\s*\)?/i },
-  { field: 'pensionEmployee', pattern: /\b(?:employee'?s?\s+)?pension\b|\bpension\s*\(?\s*(?:ee|employee)\s*\)?/i },
+  // "Pension Salary Sacrifice" is the employee's contribution under another
+  // name, and it is tested before the gross rule so the word "salary" in it
+  // cannot be mistaken for pay.
+  { field: 'pensionEmployee', pattern: /\bsalary\s+sacr|\b(?:employee'?s?\s+)?pension\b|\bpension\s*\(?\s*(?:ee|employee)\s*\)?/i },
   { field: 'studentLoan', pattern: /\bstudent\s+loan|\bpost\s*grad(?:uate)?\s+loan/i },
   // `NI(category M)` is how at least one payroll system writes it, so the
   // bracketed form has to match mid-line rather than only at a word gap.
@@ -49,6 +52,10 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   { field: 'net', pattern: /\bnet\s+pay\b|\btake[-\s]?home\b|\bnet\s+total\b|\bamount\s+payable\b/i },
   // "Total Earnings" is the period figure on layouts that reserve "Gross pay"
   // for the running total. It is listed first so it wins when both appear.
+  // Tried and reverted: matching a bare "Salary" as gross. On a payslip that
+  // also states an annual figure it read twelve times the month's pay, and a
+  // wrong gross that large still charts as a plausible line. A payslip with no
+  // row called gross is better left for a person to fill in.
   { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b/i },
 ];
 
@@ -203,4 +210,95 @@ export function parsePayslipFilename(name: string): Pick<ParsedPayslip, 'payDate
   if (words.length > 0) out.employer = words.join(' ');
 
   return out;
+}
+
+/* -------------------------------------------------------------------------
+ * Column-grid layouts
+ *
+ * Some payroll systems lay a payslip out as a table with the labels in one
+ * row and the figures in the row beneath, aligned by column:
+ *
+ *     Taxable Pay   Tax    National Insurance   Ers Pension
+ *     758.46        254.58 590.57               475.53
+ *
+ * Joining runs into lines loses that, because a label and its figure never
+ * share a line. Pairing them needs the x each was drawn at, which is why this
+ * takes positioned runs rather than text.
+ * ---------------------------------------------------------------------- */
+
+export interface PositionedRun {
+  x: number;
+  text: string;
+}
+
+export interface PositionedLine {
+  /** Baseline. Larger is higher up the page, as PDF coordinates run upward. */
+  y: number;
+  runs: PositionedRun[];
+}
+
+const AMOUNT_ONLY = /^-?£?\s?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?$|^-?£?\s?\d+\.\d{1,2}$/;
+
+const toAmount = (text: string): number | null => {
+  if (!AMOUNT_ONLY.test(text.trim())) return null;
+  const value = parseFloat(text.replace(/[£,\s]/g, ''));
+  return Number.isFinite(value) ? value : null;
+};
+
+/**
+ * How far below a label its figure may sit.
+ *
+ * One row, not any row: a column heading governs the line under it, and
+ * reaching further would pair a label with an unrelated total further down.
+ */
+const MAX_ROWS_BELOW = 1;
+
+/** How far sideways a figure may be and still belong to the label. */
+const MAX_X_DRIFT = 60;
+
+/**
+ * Fills in fields by pairing a label with the figure beneath it.
+ *
+ * Runs after the line-based pass and only fills what that left empty, so a
+ * layout stating a figure beside its label keeps the more reliable reading.
+ */
+export function parsePositionedPayslip(lines: PositionedLine[]): ParsedPayslip {
+  // Top-down first, and it matters for both passes. The line-based reading
+  // depends on reaching the period figures before the running totals, so a
+  // page fed in the order the runs happened to be drawn reads the year's
+  // gross as the month's — which is the bug this file exists to avoid.
+  const ordered = lines.slice().sort((a, b) => b.y - a.y);
+
+  const asText = ordered
+    .map(l => l.runs.slice().sort((a, b) => a.x - b.x).map(r => r.text).join(' ').replace(/\s+/g, ' ').trim())
+    .join('\n');
+  const result = parsePayslipText(asText);
+
+  for (let i = 0; i < ordered.length; i++) {
+    const labelLine = ordered[i];
+    // A row carrying its own figures is a label-and-value row, already handled.
+    if (labelLine.runs.some(r => toAmount(r.text) !== null)) continue;
+
+    for (const run of labelLine.runs) {
+      const rule = RULES.find(r => r.pattern.test(run.text));
+      if (!rule || result[rule.field] !== undefined) continue;
+
+      for (let j = i + 1; j <= i + MAX_ROWS_BELOW && j < ordered.length; j++) {
+        let best: { drift: number; value: number } | null = null;
+        for (const candidate of ordered[j].runs) {
+          const value = toAmount(candidate.text);
+          if (value === null) continue;
+          const drift = Math.abs(candidate.x - run.x);
+          if (drift > MAX_X_DRIFT) continue;
+          if (!best || drift < best.drift) best = { drift, value };
+        }
+        if (best) {
+          result[rule.field] = best.value;
+          break;
+        }
+      }
+    }
+  }
+
+  return result;
 }
