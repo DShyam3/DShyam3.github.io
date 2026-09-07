@@ -320,6 +320,9 @@ CREATE TABLE IF NOT EXISTS "public"."finance_profiles" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "name" "text" NOT NULL,
     "is_self" boolean DEFAULT false NOT NULL,
+    -- Marks a profile as safe to show publicly. Carries no privilege on its
+    -- own: no policy reads it, and anon holds no SELECT on any finance table.
+    "is_public" boolean DEFAULT false NOT NULL,
     "owner_user_id" "uuid",
     "currency" "text" DEFAULT 'GBP'::"text" NOT NULL,
     "region" "text" DEFAULT 'england-and-wales'::"text" NOT NULL,
