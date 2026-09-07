@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { checkPayslip, parsePayslipFilename, parsedFieldCount, type Payslip } from '@/lib/finance';
 import { cn } from '@/lib/utils';
+import { formatDate } from '@/lib/format-date';
 import { AlertTriangle, Ban, Check, Upload } from 'lucide-react';
 
 interface Row {
@@ -172,7 +173,10 @@ export function PayslipImportDialog({ open, onOpenChange }: {
                 // Zero minus zero reconciles arithmetically and means nothing,
                 // and a tick against £0.00 is a pass claimed from no data.
                 const readAnything = row.found > 0;
-                const usable = !row.error && !!row.slip.payDate && readAnything;
+                // A scan with no text layer still deserves storing. Its
+                // figures get typed in later; losing the document because a
+                // parser could not read it would be the worse outcome.
+                const usable = !row.error && !!row.slip.payDate;
                 return (
                   <div
                     key={row.file.name}
@@ -190,14 +194,14 @@ export function PayslipImportDialog({ open, onOpenChange }: {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-semibold text-foreground truncate">
-                        {row.slip.payDate || 'No date found'}
+                        {formatDate(row.slip.payDate) || 'No date found'}
                         {row.slip.employer ? ` · ${row.slip.employer}` : ''}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {row.error
                           ? row.error
                           : !readAnything
-                            ? 'Nothing readable — this PDF has no text layer'
+                            ? 'No text layer — archive it and type the figures in'
                             : `${row.found}/7 read${row.dateFromName ? ', date from filename' : ''}${
                                 check.reconciles ? '' : ` · off by ${formatGBP(check.difference)}`}`}
                       </div>
@@ -219,9 +223,11 @@ export function PayslipImportDialog({ open, onOpenChange }: {
           {rows.length > 0 && (
             <p className="text-xs text-muted-foreground">
               {chosen.length} of {rows.length} selected
-              {unreadable > 0 && `, ${unreadable} unreadable`}
+              {unreadable > 0 && `, ${unreadable} with no figures`}
               {mismatched > 0 && `, ${mismatched} not balancing`}
-              . A payslip already held for the same date is replaced, so importing twice is safe.
+              . Unreadable files are unticked but can be imported as an archive — the
+              PDF is stored and the figures typed in afterwards. A payslip already held
+              for the same date is replaced, so importing twice is safe.
             </p>
           )}
         </div>

@@ -20,6 +20,7 @@ import {
   studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
+import { formatDate } from '@/lib/format-date';
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Download, FileText, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
@@ -236,7 +237,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
 
   const removePayslip = (p: Payslip) =>
     askDelete({
-      name: `payslip for ${p.payDate}`,
+      name: `payslip for ${formatDate(p.payDate)}`,
       onConfirm: async () => {
         await deletePayslip(p.id);
         // After the row, so a storage failure cannot strand the record.
@@ -316,11 +317,17 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
             </button>
             {!collapsed[year] && slips.map(p => {
             const check = checkPayslip(p);
+            // Zero gross and zero net is not a payslip that balances, it is a
+            // payslip nobody has filled in yet. Ticking it would be a pass
+            // claimed from absent data.
+            const captured = p.gross > 0 || p.net > 0;
             return (
               <div key={p.id} className="flex items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 transition-colors">
-                {check.reconciles
-                  ? <Check className="h-3.5 w-3.5 shrink-0 text-positive" aria-label="Reconciles" />
-                  : <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Does not reconcile" />}
+                {!captured
+                  ? <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Archived, figures not captured" />
+                  : check.reconciles
+                    ? <Check className="h-3.5 w-3.5 shrink-0 text-positive" aria-label="Reconciles" />
+                    : <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Does not reconcile" />}
                 {/* The employer's mark, from the logos the About page already
                     ships. Falls back to nothing rather than a placeholder:
                     an empty slot reads better than a wrong badge. */}
@@ -332,11 +339,13 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                   />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-foreground font-mono">{p.payDate}</div>
+                  <div className="text-xs font-semibold text-foreground font-mono">{formatDate(p.payDate)}</div>
                   <div className="text-xs text-muted-foreground font-mono truncate">
                     {p.employer ? `${p.employer} · ` : ''}
-                    {formatGBP(totalDeductions(p))} deducted
-                    {!check.reconciles && ` · off by ${formatGBP(check.difference)}`}
+                    {!captured
+                      ? 'figures not captured yet'
+                      : `${formatGBP(totalDeductions(p))} deducted`}
+                    {captured && !check.reconciles && ` · off by ${formatGBP(check.difference)}`}
                   </div>
                 </div>
                 {p.storagePath ? (
@@ -352,15 +361,17 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                 ) : (
                   <span className="text-xs text-muted-foreground/50 shrink-0" title="No PDF archived">—</span>
                 )}
-                <div className="text-xs font-semibold text-foreground font-mono tabular-nums shrink-0">{formatGBP(p.net)}</div>
-                <button type="button" onClick={() => openEdit(p)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label={`Edit payslip for ${p.payDate}`}>
+                <div className="text-xs font-semibold text-foreground font-mono tabular-nums shrink-0">
+                  {captured ? formatGBP(p.net) : '—'}
+                </div>
+                <button type="button" onClick={() => openEdit(p)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label={`Edit payslip for ${formatDate(p.payDate)}`}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => removePayslip(p)}
                   className="text-muted-foreground hover:text-destructive shrink-0"
-                  aria-label={`Delete payslip for ${p.payDate}`}
+                  aria-label={`Delete payslip for ${formatDate(p.payDate)}`}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

@@ -339,6 +339,16 @@ const MAX_ROWS_BELOW = 1;
 const MAX_X_DRIFT = 110;
 
 /**
+ * A column heading naming the pay date.
+ *
+ * Anchored to the whole run, because a lone "Date" is only unambiguous when it
+ * is the entire heading. Loose enough to catch it in running text and it would
+ * claim a birth date or a period start; here the run is a heading and the
+ * figure below it is the answer.
+ */
+const DATE_HEADING = /^\(?\s*£?\s*\)?\s*(?:pay\s*(?:ment)?\s*)?(?:date|day)\s*:?$/i;
+
+/**
  * Fills in fields by pairing a label with the figure beneath it.
  *
  * Runs after the line-based pass and only fills what that left empty, so a
@@ -362,6 +372,19 @@ export function parsePositionedPayslip(lines: PositionedLine[]): ParsedPayslip {
     if (labelLine.runs.some(r => toAmount(r.text) !== null)) continue;
 
     for (const run of labelLine.runs) {
+      // The pay date can be a column heading too, with the date itself in the
+      // row beneath. Without this it falls back to the filename, which carries
+      // a month but no day.
+      if (result.payDate === undefined && DATE_HEADING.test(run.text)) {
+        for (let j = i + 1; j <= i + MAX_ROWS_BELOW && j < ordered.length; j++) {
+          const candidates = ordered[j].runs
+            .filter(c => Math.abs(c.x - run.x) <= MAX_X_DRIFT)
+            .sort((a, b) => Math.abs(a.x - run.x) - Math.abs(b.x - run.x));
+          const found = candidates.map(c => parseDate(c.text)).find(Boolean);
+          if (found) { result.payDate = found; break; }
+        }
+      }
+
       const rule = RULES.find(r => r.pattern.test(run.text));
       if (!rule || result[rule.field] !== undefined) continue;
 

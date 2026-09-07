@@ -60,6 +60,7 @@ import {
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { formatDate } from '@/lib/format-date';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { Filter } from 'lucide-react';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
@@ -125,7 +126,7 @@ function relativeTime(iso: string) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(diffMs / 86400000);
   if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 const Watchlist = () => {

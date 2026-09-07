@@ -54,6 +54,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useReviewShortcuts } from '@/features/finance/useReviewShortcuts';
+import { useMerchantLogos } from '@/features/finance/useMerchantLogos';
+import { MerchantAvatar } from '@/features/finance/components/MerchantAvatar';
+import { resolveMerchant } from '@/lib/finance';
 
 interface TransactionsTabProps {
   transactions: MockTransaction[];
@@ -75,6 +78,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   // Navigation & UI States
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const { askDelete, deleteDialog } = useDeleteConfirm();
+  // One shared read for the whole list; rows look their merchant up in it.
+  const merchantLogos = useMerchantLogos();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -218,8 +223,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         groupKey = 'YESTERDAY';
       } else {
         // Format as: "THU, JULY 16" or "SAT, JULY 18, 2026"
-        const weekday = txDateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-        const month = txDateObj.toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
+        const weekday = txDateObj.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
+        const month = txDateObj.toLocaleDateString('en-GB', { month: 'long' }).toUpperCase();
         const day = txDateObj.getDate();
         const year = txDateObj.getFullYear();
         const currentYear = new Date().getFullYear();
@@ -279,7 +284,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     const overallCount = matches.length + 1;
 
     // Format current month and year label
-    const monthLabel = selectedDateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const monthLabel = selectedDateObj.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
     return {
       list: matches.slice(0, 5), // show top 5 matches
@@ -875,14 +880,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                               )}
                             </div>
 
-                            <div className={cn(
-                              "h-8 w-8 rounded-xl shrink-0 flex items-center justify-center font-bold text-xs uppercase shadow-sm border",
-                              isIncome
-                                ? "bg-positive/10 text-positive border-positive/20"
-                                : "bg-destructive/10 text-destructive border-destructive/20"
-                            )}>
-                              {tx.category ? tx.category.charAt(0) : 'T'}
-                            </div>
+                            <MerchantAvatar
+                              merchant={tx.merchant}
+                              category={tx.category}
+                              isIncome={isIncome}
+                              cachedLogo={
+                                tx.merchant
+                                  ? merchantLogos.get(resolveMerchant(tx.merchant).slug)
+                                  : undefined
+                              }
+                            />
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-baseline gap-2">
