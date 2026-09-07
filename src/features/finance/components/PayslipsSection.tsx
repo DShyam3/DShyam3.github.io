@@ -127,7 +127,10 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   );
   const allTime = useMemo(() => sumPayslips(payslips), [payslips]);
 
-  const [groupBy, setGroupBy] = useState<'employer' | 'year'>('employer');
+  // Tax year first: it is the question every other figure on this surface is
+  // bounded by, so grouping any other way by default invites comparing two
+  // things measured over different periods.
+  const [groupBy, setGroupBy] = useState<'employer' | 'year'>('year');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [detail, setDetail] = useState<Payslip | null>(null);
 
@@ -329,7 +332,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
 
           <div className="flex items-center gap-2 text-xs font-mono">
             <span className="text-muted-foreground">Group by</span>
-            {(['employer', 'year'] as const).map(mode => (
+            {(['year', 'employer'] as const).map(mode => (
               <button
                 key={mode}
                 type="button"
