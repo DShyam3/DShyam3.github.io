@@ -32,14 +32,22 @@ export default function RetirementSurface() {
   const [retireAge, setRetireAge] = useState('');
   const [growth, setGrowth] = useState('');
 
-  // Re-seed the fields whenever the profile changes, including on first load
-  // and on a switch, without clobbering what is being typed.
+  // Pulled out as primitives so the effect depends on the values rather than on
+  // the object's identity, which changes on every fetch and would re-seed the
+  // fields under the cursor.
+  const savedId = profile?.id;
+  const savedBirthYear = profile?.birthYear ?? null;
+  const savedRetireAge = profile?.retirementAge;
+  const savedGrowth = profile?.pensionGrowthPercent;
+
+  // Re-seed whenever the stored values change, including on first load and on a
+  // profile switch.
   useEffect(() => {
-    if (!profile) return;
-    setBirthYear(profile.birthYear ? String(profile.birthYear) : '');
-    setRetireAge(String(profile.retirementAge));
-    setGrowth(String(profile.pensionGrowthPercent));
-  }, [profile?.id, profile?.birthYear, profile?.retirementAge, profile?.pensionGrowthPercent]);
+    if (!savedId) return;
+    setBirthYear(savedBirthYear ? String(savedBirthYear) : '');
+    setRetireAge(savedRetireAge === undefined ? '' : String(savedRetireAge));
+    setGrowth(savedGrowth === undefined ? '' : String(savedGrowth));
+  }, [savedId, savedBirthYear, savedRetireAge, savedGrowth]);
 
   const commit = (patch: Parameters<typeof updateProfile>[1]) => {
     if (profile) void updateProfile(profile.id, patch);

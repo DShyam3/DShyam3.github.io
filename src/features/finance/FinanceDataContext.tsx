@@ -23,11 +23,26 @@ import {
 } from 'react';
 import defaultPresets from '@/data/presets.json';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
+import {
+  asAccountType,
+  asBudgetGroup,
+  asBureauKey,
+  asDebtType,
+  asFrequency,
+  asPensionType,
+  asStudentLoanPlan,
+  asMembershipType,
+  asPaydaySchedule,
+  asUkRegion,
+  fromJsonb,
+} from './finance-narrow';
 import type {
   BankAccount,
+  DatabaseDefaults,
   FinanceProfile,
   BudgetCategory,
   BudgetItem,
@@ -100,7 +115,7 @@ function useProvideFinanceData() {
   }, [DEFAULT_CATEGORY_PRESETS]);
 
   // Store defaults from database
-  const [databaseDefaults, setDatabaseDefaults] = useState<Record<string, any>>({});
+  const [databaseDefaults, setDatabaseDefaults] = useState<DatabaseDefaults>({});
 
   // Data States
   const [settings, setSettings] = useState<FinanceSettings>(() => {
@@ -233,7 +248,7 @@ function useProvideFinanceData() {
         const data = await res.json();
 
         const region = settings.ukRegion || 'england-and-wales';
-        const events = (data[region]?.events || []) as any[];
+        const events = (data[region]?.events ?? []) as { date: string; title: string }[];
 
         const yearStr = settings.taxYear.toString();
         const holsInYear = events
@@ -489,10 +504,10 @@ function useProvideFinanceData() {
         if (activeSettings) {
           const loadedSettings: FinanceSettings = {
             grossSalary: Number(activeSettings.gross_salary) || 0,
-            pensionType: (activeSettings.pension_type || 'net_pay') as any,
+            pensionType: asPensionType(activeSettings.pension_type),
             personalPensionPercent: Number(activeSettings.personal_pension_percent) || 0,
             employerPensionPercent: Number(activeSettings.employer_pension_percent) || 0,
-            studentLoanPlan: (activeSettings.student_loan_plan || 'none') as any,
+            studentLoanPlan: asStudentLoanPlan(activeSettings.student_loan_plan),
             taxCode: activeSettings.tax_code || '1257L',
             personalAllowance: Number(activeSettings.personal_allowance) || 12570,
             weekends: Number(activeSettings.weekends) || 104,
@@ -500,12 +515,12 @@ function useProvideFinanceData() {
             workHolidays: Number(activeSettings.work_holidays) || 25,
             workingHoursPerDay: Number(activeSettings.working_hours_per_day) || 7.5,
             taxYear: Number(activeSettings.tax_year) || 2026,
-            ukRegion: (activeSettings.uk_region || 'england-and-wales') as any,
+            ukRegion: asUkRegion(activeSettings.uk_region),
             payDayOfMonth: activeSettings.pay_day_of_month || 25,
-            paydaySchedule: (activeSettings.payday_schedule || 'monthly_date') as any,
+            paydaySchedule: asPaydaySchedule(activeSettings.payday_schedule),
             paydayWeekday: activeSettings.payday_weekday !== null ? activeSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || '2026-01-02',
-            activeSavingsTypes: (activeSettings.active_savings_types || []) as any[],
+            activeSavingsTypes: activeSettings.active_savings_types ?? [],
             holidaysByUser: mappedHolidays
           };
           setSettings(prev => ({
@@ -559,7 +574,7 @@ function useProvideFinanceData() {
         const mappedBankAccounts: BankAccount[] = activeAccounts.map(a => ({
           id: a.id,
           name: a.name,
-          type: a.type as any,
+          type: asAccountType(a.type),
           issuer: a.issuer || '',
           balance: Number(a.balance) || 0,
           annualFee: Number(a.annual_fee) || 0,
@@ -576,7 +591,7 @@ function useProvideFinanceData() {
         const mappedMemberships: Membership[] = activeMemberships.map(m => ({
           id: m.id,
           name: m.name,
-          type: m.type as any,
+          type: asMembershipType(m.type),
           status: m.status || '',
           annualFee: Number(m.annual_fee) || 0,
           useCase: m.use_case || undefined
@@ -590,7 +605,7 @@ function useProvideFinanceData() {
         const mappedDebts: Debt[] = activeDebts.map(d => ({
           id: d.id,
           name: d.name,
-          type: d.type as any,
+          type: asDebtType(d.type),
           lender: d.lender || '',
           originalAmount: Number(d.original_amount) || 0,
           balance: Number(d.balance) || 0,
@@ -639,7 +654,7 @@ function useProvideFinanceData() {
             id: cat.id,
             name: cat.name,
             budgeted: Number(cat.budgeted) || 0,
-            group: (cat.group_type || undefined) as any,
+            group: asBudgetGroup(cat.group_type),
             items: catItems,
             emoji: cat.emoji || undefined
           };
@@ -661,7 +676,7 @@ function useProvideFinanceData() {
           amount: Number(r.amount) || 0,
           dueDate: r.due_date,
           isPaid: r.is_paid,
-          frequency: r.frequency as any,
+          frequency: asFrequency(r.frequency),
           dueMonth: r.due_month || undefined,
           emoji: r.emoji || undefined,
           category: r.category || undefined,
@@ -697,10 +712,13 @@ function useProvideFinanceData() {
 
         if (activeTaxConfig) {
           const mappedTaxConfig: TaxConfig = {
-            studentLoanThresholds: activeTaxConfig.student_loan_thresholds as any,
-            studentLoanRates: activeTaxConfig.student_loan_rates as any,
-            incomeTaxBands: activeTaxConfig.income_tax_bands as any,
-            nationalInsuranceBands: activeTaxConfig.national_insurance_bands as any
+            studentLoanThresholds: fromJsonb(activeTaxConfig.student_loan_thresholds, {} as never),
+            studentLoanRates: fromJsonb(activeTaxConfig.student_loan_rates, {} as never),
+            incomeTaxBands: fromJsonb(activeTaxConfig.income_tax_bands, {} as never),
+            nationalInsuranceBands: fromJsonb(
+              activeTaxConfig.national_insurance_bands,
+              {} as TaxConfig['nationalInsuranceBands'],
+            )
           };
           setTaxConfig(mappedTaxConfig);
         }
@@ -715,7 +733,7 @@ function useProvideFinanceData() {
           emoji: t.emoji || '',
           tag: t.tag || '',
           defaultAmount: Number(t.default_amount) || 0,
-          frequency: t.frequency as any,
+          frequency: asFrequency(t.frequency),
           linkedBudgetItemId: t.linked_budget_item_id || '',
           budgetCategoryName: t.budget_category_name || undefined
         }));
@@ -730,7 +748,7 @@ function useProvideFinanceData() {
         const activeBureaus = userBureaus.length > 0 ? userBureaus : defaultBureaus;
 
         const mappedBureaus: CreditBureauConfig[] = activeBureaus.map(b => ({
-          key: b.key as any,
+          key: asBureauKey(b.key),
           label: b.label,
           emoji: b.emoji || '',
           color: b.color || '',
@@ -772,7 +790,7 @@ function useProvideFinanceData() {
             id: cat.id,
             name: cat.name,
             budgeted: Number(cat.budgeted) || 0,
-            group: (cat.group_type || undefined) as any,
+            group: asBudgetGroup(cat.group_type),
             items: catItems,
             emoji: cat.emoji || undefined
           };
@@ -795,7 +813,7 @@ function useProvideFinanceData() {
           presetsObj[p.preset_type].push({
             name: p.name,
             emoji: p.emoji || '',
-            group: (p.group_type || 'wants') as any
+            group: asBudgetGroup(p.group_type)
           });
         });
 
@@ -812,14 +830,14 @@ function useProvideFinanceData() {
         }
 
         // Reconstruct databaseDefaults map
-        const defaultsMap: Record<string, any> = {};
+        const defaultsMap: DatabaseDefaults = {};
         if (defaultSettings) {
           defaultsMap['settings'] = {
             grossSalary: Number(defaultSettings.gross_salary) || 0,
-            pensionType: defaultSettings.pension_type || 'net_pay',
+            pensionType: asPensionType(defaultSettings.pension_type),
             personalPensionPercent: Number(defaultSettings.personal_pension_percent) || 0,
-            employer_pension_percent: Number(defaultSettings.employer_pension_percent) || 0,
-            studentLoanPlan: defaultSettings.student_loan_plan || 'none',
+            employerPensionPercent: Number(defaultSettings.employer_pension_percent) || 0,
+            studentLoanPlan: asStudentLoanPlan(defaultSettings.student_loan_plan),
             taxCode: defaultSettings.tax_code || '1257L',
             personalAllowance: Number(defaultSettings.personal_allowance) || 12570,
             weekends: Number(defaultSettings.weekends) || 104,
@@ -827,9 +845,9 @@ function useProvideFinanceData() {
             workHolidays: Number(defaultSettings.work_holidays) || 25,
             workingHoursPerDay: Number(defaultSettings.working_hours_per_day) || 7.5,
             taxYear: Number(defaultSettings.tax_year) || 2026,
-            ukRegion: defaultSettings.uk_region || 'england-and-wales',
+            ukRegion: asUkRegion(defaultSettings.uk_region),
             payDayOfMonth: defaultSettings.pay_day_of_month || 25,
-            paydaySchedule: defaultSettings.payday_schedule || 'monthly_date',
+            paydaySchedule: asPaydaySchedule(defaultSettings.payday_schedule),
             paydayWeekday: defaultSettings.payday_weekday !== null ? defaultSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || '2026-01-02',
             activeSavingsTypes: defaultSettings.active_savings_types || [],
@@ -867,7 +885,7 @@ function useProvideFinanceData() {
           bankAccounts: defaultAccounts.map(a => ({
             id: a.id,
             name: a.name,
-            type: a.type as any,
+            type: asAccountType(a.type),
             issuer: a.issuer || '',
             balance: Number(a.balance) || 0,
             annualFee: Number(a.annual_fee) || 0,
@@ -878,7 +896,7 @@ function useProvideFinanceData() {
           memberships: defaultMemberships.map(m => ({
             id: m.id,
             name: m.name,
-            type: m.type as any,
+            type: asMembershipType(m.type),
             status: m.status || '',
             annualFee: Number(m.annual_fee) || 0,
             useCase: m.use_case || undefined
@@ -893,7 +911,7 @@ function useProvideFinanceData() {
           id: cat.id,
           name: cat.name,
           budgeted: Number(cat.budgeted) || 0,
-          group: cat.group_type as any,
+          group: asBudgetGroup(cat.group_type),
           emoji: cat.emoji || undefined,
           items: budgetItems
             .filter(item => item.category_id === cat.id && item.is_default && !item.is_template)
@@ -912,7 +930,7 @@ function useProvideFinanceData() {
           amount: Number(r.amount) || 0,
           dueDate: r.due_date,
           isPaid: r.is_paid,
-          frequency: r.frequency as any,
+          frequency: asFrequency(r.frequency),
           dueMonth: r.due_month || undefined,
           emoji: r.emoji || undefined,
           category: r.category || undefined,
@@ -936,10 +954,22 @@ function useProvideFinanceData() {
         }));
         if (defaultTaxConfig) {
           defaultsMap['tax_config'] = {
-            studentLoanThresholds: defaultTaxConfig.student_loan_thresholds,
-            studentLoanRates: defaultTaxConfig.student_loan_rates,
-            incomeTaxBands: defaultTaxConfig.income_tax_bands,
-            nationalInsuranceBands: defaultTaxConfig.national_insurance_bands
+            studentLoanThresholds: fromJsonb(
+              defaultTaxConfig.student_loan_thresholds,
+              {} as TaxConfig['studentLoanThresholds'],
+            ),
+            studentLoanRates: fromJsonb(
+              defaultTaxConfig.student_loan_rates,
+              {} as TaxConfig['studentLoanRates'],
+            ),
+            incomeTaxBands: fromJsonb(
+              defaultTaxConfig.income_tax_bands,
+              {} as TaxConfig['incomeTaxBands'],
+            ),
+            nationalInsuranceBands: fromJsonb(
+              defaultTaxConfig.national_insurance_bands,
+              {} as TaxConfig['nationalInsuranceBands'],
+            ),
           };
         }
         defaultsMap['recurring_templates'] = defaultTemplates.map(t => ({
@@ -948,12 +978,12 @@ function useProvideFinanceData() {
           emoji: t.emoji || '',
           tag: t.tag || '',
           defaultAmount: Number(t.default_amount) || 0,
-          frequency: t.frequency as any,
+          frequency: asFrequency(t.frequency),
           linkedBudgetItemId: t.linked_budget_item_id || '',
           budgetCategoryName: t.budget_category_name || undefined
         }));
         defaultsMap['credit_bureaus'] = defaultBureaus.map(b => ({
-          key: b.key,
+          key: asBureauKey(b.key),
           label: b.label,
           emoji: b.emoji || '',
           color: b.color || '',
@@ -965,7 +995,7 @@ function useProvideFinanceData() {
           id: cat.id,
           name: cat.name,
           budgeted: Number(cat.budgeted) || 0,
-          group: cat.group_type as any,
+          group: asBudgetGroup(cat.group_type),
           emoji: cat.emoji || undefined,
           items: budgetItems
             .filter(item => item.category_id === cat.id && item.is_default && item.is_template)
@@ -1041,7 +1071,9 @@ function useProvideFinanceData() {
     if (error) throw error;
   };
 
-  const saveDataToSupabase = async (key: string, contentData: any) => {
+  // Each branch narrows `contentData` to the shape its key implies; the caller
+  // passes whichever collection it just changed.
+  const saveDataToSupabase = async (key: string, contentData: unknown) => {
     if (!isAdmin) return;
     // Every non-template finance row carries a profile_id, and the database
     // enforces it with a CHECK. Writing without one would fail per-statement
@@ -1193,7 +1225,7 @@ function useProvideFinanceData() {
             repayment_type: d.repaymentType || 'amortising',
             student_loan_plan: d.studentLoanPlan || null,
             write_off_years: d.writeOffYears ?? null,
-            draws: (d.draws || []) as any,
+            draws: d.draws as unknown as Json,
             notes: d.notes || null,
             emoji: d.emoji || null,
             color: d.color || null
@@ -1298,10 +1330,10 @@ function useProvideFinanceData() {
 
         const tcRow = {
           is_default: false,
-          student_loan_thresholds: tcObj.studentLoanThresholds as any,
-          student_loan_rates: tcObj.studentLoanRates as any,
-          income_tax_bands: tcObj.incomeTaxBands as any,
-          national_insurance_bands: tcObj.nationalInsuranceBands as any,
+          student_loan_thresholds: tcObj.studentLoanThresholds as never,
+          student_loan_rates: tcObj.studentLoanRates as never,
+          income_tax_bands: tcObj.incomeTaxBands as never,
+          national_insurance_bands: tcObj.nationalInsuranceBands as never,
           updated_at: new Date().toISOString()
         };
 

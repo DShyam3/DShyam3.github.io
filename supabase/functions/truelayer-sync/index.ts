@@ -353,7 +353,15 @@ serve(async (req) => {
       // A. Process Bank Accounts (balance + transactions fetched in
       // parallel per account, and accounts processed in parallel with each
       // other -- previously this was 2 sequential round-trips per account).
-      await Promise.all(accountsList.map(async (account: any) => {
+      // Shapes TrueLayer returns. Narrow to what is read rather than `any`, so a
+      // change at their end surfaces here instead of downstream.
+      type TlAccount = {
+        account_id: string
+        display_name?: string
+        account_type?: string
+        provider?: { display_name?: string }
+      }
+      await Promise.all(accountsList.map(async (account: TlAccount) => {
         const accId = `tl_acc_${account.account_id}`
 
         const [balanceRes, txRes] = await Promise.all([
@@ -405,7 +413,12 @@ serve(async (req) => {
       }))
 
       // B. Process Card Accounts (same parallelization as accounts above)
-      await Promise.all(cardsList.map(async (card: any) => {
+      type TlCard = {
+        account_id: string
+        display_name?: string
+        provider?: { display_name?: string }
+      }
+      await Promise.all(cardsList.map(async (card: TlCard) => {
         const accId = `tl_card_${card.account_id}`
 
         const [balanceRes, txRes] = await Promise.all([

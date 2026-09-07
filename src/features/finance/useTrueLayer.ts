@@ -24,7 +24,7 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
 
   const [isConnectingTrueLayer, setIsConnectingTrueLayer] = useState(false);
 
-  const callTrueLayerEdgeFunction = async (action: string, payload: any = {}) => {
+  const callTrueLayerEdgeFunction = async (action: string, payload: Record<string, unknown> = {}) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       throw new Error("User session not found. Please log in again.");
@@ -54,7 +54,7 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     try {
       const data = await callTrueLayerEdgeFunction('check_connection');
       setTrueLayerStatus(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error checking TrueLayer connection:', err);
     }
   };
@@ -75,11 +75,11 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
       } else {
         throw new Error('Failed to get auth URL');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error connecting to TrueLayer:', err);
       toast({
         title: "Connection Failed",
-        description: err.message || "Failed to initiate TrueLayer connection",
+        description: (err instanceof Error ? err.message : '') || "Failed to initiate TrueLayer connection",
         variant: "destructive"
       });
     } finally {
@@ -95,11 +95,11 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
         description: "Bank connection removed successfully.",
       });
       checkTrueLayerConnection();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error disconnecting TrueLayer:', err);
       toast({
         title: "Disconnection Failed",
-        description: err.message || "Failed to disconnect",
+        description: (err instanceof Error ? err.message : '') || "Failed to disconnect",
         variant: "destructive"
       });
     }
@@ -115,11 +115,11 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
         description: `Successfully synced ${data.synced_accounts} accounts and ${data.synced_transactions} transactions.`,
       });
       await onSynced();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error syncing TrueLayer:', err);
       toast({
         title: "Sync Failed",
-        description: err.message || "Failed to synchronize transactions",
+        description: (err instanceof Error ? err.message : '') || "Failed to synchronize transactions",
         variant: "destructive"
       });
     } finally {

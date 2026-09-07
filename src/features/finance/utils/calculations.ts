@@ -135,7 +135,17 @@ export const getAccountDefaultColor = (name: string): string => {
   return '#475569'; // slate
 };
 
-export const sanitizeBankAccounts = (accounts: any[]): BankAccount[] => {
+/**
+ * Fills in an emoji and colour where a stored row has none.
+ *
+ * The input is precisely "an account row that may predate those two columns" --
+ * everything else is required, which is what makes returning a complete
+ * BankAccount honest rather than an assertion.
+ */
+type StoredAccount = Omit<BankAccount, 'emoji' | 'color'> &
+  Partial<Pick<BankAccount, 'emoji' | 'color'>>;
+
+export const sanitizeBankAccounts = (accounts: StoredAccount[]): BankAccount[] => {
   if (!Array.isArray(accounts)) return [];
   return accounts.map(acc => ({
     ...acc,
@@ -144,7 +154,11 @@ export const sanitizeBankAccounts = (accounts: any[]): BankAccount[] => {
   }));
 };
 
-export const sanitizeBudgetCategories = (categories: any[]): BudgetCategory[] => {
+/** Same, for categories: supplies the group and emoji rows may lack. */
+type StoredCategory = Omit<BudgetCategory, 'group' | 'emoji'> &
+  Partial<Pick<BudgetCategory, 'group' | 'emoji'>>;
+
+export const sanitizeBudgetCategories = (categories: StoredCategory[]): BudgetCategory[] => {
   if (!Array.isArray(categories)) return [];
   return categories.map(cat => {
     let group = cat.group;

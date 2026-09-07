@@ -252,3 +252,25 @@ export interface FinanceProfile {
   /** Assumed annual growth after inflation. */
   pensionGrowthPercent: number;
 }
+
+/**
+ * The seeded template rows, keyed by the collection they belong to.
+ *
+ * These are the `is_default` rows: what a fresh profile starts from. Typed
+ * explicitly rather than as a bag of `any`, so a caller reaching for a key that
+ * is never populated is a compile error rather than an undefined at runtime.
+ */
+export interface DatabaseDefaults {
+  settings?: FinanceSettings;
+  tax_config?: TaxConfig;
+  recurring_templates?: RecurringTemplate[];
+  credit_bureaus?: CreditBureauConfig[];
+  default_budget_categories?: BudgetCategory[];
+  budget_presets?: Record<string, CategoryPreset[]>;
+  holiday_defaults?: Record<number, { count: number; dates: string; occasion: string }>;
+  goals?: Goal[];
+  accounts?: { bankAccounts?: BankAccount[]; memberships?: Membership[]; creditScores?: CreditScores };
+  budget?: BudgetCategory[];
+  recurrings?: RecurringBill[];
+  transactions?: MockTransaction[];
+}

@@ -1025,7 +1025,7 @@ function FinanceView() {
   };
 
   const handleResetDefaults = async () => {
-    const defaultSettings = databaseDefaults.settings || {
+    const defaultSettings: FinanceSettings = databaseDefaults.settings || {
       grossSalary: 0,
       pensionType: 'net_pay',
       personalPensionPercent: 0,
@@ -1042,7 +1042,7 @@ function FinanceView() {
       holidaysByUser: {},
       activeSavingsTypes: ALL_SAVINGS_IDS
     };
-    const defaultTaxConfig = databaseDefaults.tax_config || {
+    const defaultTaxConfig: TaxConfig = databaseDefaults.tax_config || {
       studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },

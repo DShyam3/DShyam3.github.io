@@ -693,6 +693,39 @@
   }
 }
 
+/* The count and the Add Item button are a row of their own, spending about
+   34px of a laptop's height on two short labels with the width of the window
+   empty beside them. On a screen wide enough to seat them next to the filter
+   bar they move up onto its line: the toolbar becomes a two-column grid, the
+   category row spans both, the filters take the first column and the count
+   the second. Nothing is dropped and nothing shrinks -- the row simply stops
+   being a row -- and 34px is the difference between one row of cards and two
+   on a 1440x760 window with the bookmarks bar showing.
+
+   Only from 1100px: below it the filter bar already wants the whole line, and
+   a count pushed onto the end of it would wrap and cost the height back. */
+
+@media (min-width: 1100px) and (max-height: 52rem) {
+  .watchlist-toolbar.watchlist-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 1rem;
+  }
+
+  /* The category row keeps the full width above them both. */
+  .watchlist-toolbar.watchlist-toolbar > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* The rhythm between rows is set by the space-y margins WatchlistPage
+     writes; in the grid the count is beside the filters, not under them. */
+  .watchlist-toolbar.watchlist-toolbar > .watchlist-count {
+    margin-top: 0;
+    gap: 1rem;
+  }
+}
+
 /* ─── Phones ────────────────────────────────────────────────────────────
    Doto is set large because its dots read smaller than the nominal size, but
    the sizes chosen for a monitor are simply too wide for a 375px screen --
