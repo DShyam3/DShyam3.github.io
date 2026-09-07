@@ -18,7 +18,7 @@ import {
   projectDebtBalance,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Edit2, GraduationCap, Landmark, Plus, Scale, Trash2, TrendingDown } from 'lucide-react';
+import { CheckCircle2, Edit2, Landmark, Plus, Scale, Trash2, TrendingDown } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import DebtReconcileDialog from '../dialogs/DebtReconcileDialog';
 
@@ -43,76 +43,81 @@ const DebtDrawsEditor = ({
 }) => {
   const total = draws.reduce((sum, d) => sum + d.amount, 0);
   return (
-    <div className="space-y-2 border-t border-border/30 pt-4">
-      <div className="flex items-center justify-between">
-        <Label>Borrowing History</Label>
+    <details className="group border-t border-border/30 pt-2 text-xs font-mono" open={draws.length > 0}>
+      <summary className="cursor-pointer select-none flex items-center justify-between text-muted-foreground hover:text-foreground py-1">
+        <span className="font-semibold text-xs flex items-center gap-2">
+          <span>Borrowing History & Tranches (Optional)</span>
+          {draws.length > 0 && (
+            <span className="text-primary font-bold">({draws.length} tranches · {formatGBP(total)})</span>
+          )}
+        </span>
+        <span className="text-xs group-open:rotate-180 transition-transform">▾</span>
+      </summary>
+      <div className="space-y-2 pt-2">
+        <p className="text-[11px] text-muted-foreground">
+          Record separate borrowing tranches (e.g. per academic year). Leave empty if you only track the lump sum.
+        </p>
+
         {draws.length > 0 && (
-          <span className="text-xs font-mono text-muted-foreground">Total {formatGBP(total)}</span>
-        )}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Add each amount as you borrowed it — one per academic year for a student loan. Leave empty for a single lump sum.
-      </p>
-
-      {draws.length > 0 && (
-        <div className="space-y-1.5">
-          {[...draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
-            <div key={draw.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/30 bg-muted/20 px-3 py-1.5 font-mono">
-              <div className="min-w-0">
-                <span className="text-xs font-mono font-semibold text-foreground">{formatGBP(draw.amount)}</span>
-                <span className="block text-xs text-muted-foreground truncate">
-                  {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
-                  {draw.label ? ` · ${draw.label}` : ''}
-                </span>
+          <div className="space-y-1.5 max-h-36 overflow-y-auto">
+            {[...draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
+              <div key={draw.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/30 bg-muted/20 px-3 py-1.5 font-mono">
+                <div className="min-w-0">
+                  <span className="text-xs font-mono font-semibold text-foreground">{formatGBP(draw.amount)}</span>
+                  <span className="block text-xs text-muted-foreground truncate">
+                    {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                    {draw.label ? ` · ${draw.label}` : ''}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  type="button"
+                  onClick={() => onRemove(draw.id)}
+                  className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                type="button"
-                onClick={() => onRemove(draw.id)}
-                className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <Input
-          id={`${idPrefix}-draw-date`}
-          type="date"
-          aria-label="Borrowing date"
-          value={newDraw.date}
-          onChange={(e) => setNewDraw({ ...newDraw, date: e.target.value })}
-          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-        />
-        <Input
-          id={`${idPrefix}-draw-amount`}
-          type="number"
-          step="0.01"
-          aria-label="Borrowing amount"
-          placeholder="Amount (£)"
-          value={newDraw.amount}
-          onChange={(e) => setNewDraw({ ...newDraw, amount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-        />
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            id={`${idPrefix}-draw-date`}
+            type="date"
+            aria-label="Borrowing date"
+            value={newDraw.date}
+            onChange={(e) => setNewDraw({ ...newDraw, date: e.target.value })}
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+          />
+          <Input
+            id={`${idPrefix}-draw-amount`}
+            type="number"
+            step="0.01"
+            aria-label="Borrowing amount"
+            placeholder="Amount (£)"
+            value={newDraw.amount}
+            onChange={(e) => setNewDraw({ ...newDraw, amount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Input
+            id={`${idPrefix}-draw-label`}
+            aria-label="Borrowing label"
+            placeholder="Label, e.g. Year 1 tuition"
+            value={newDraw.label}
+            onChange={(e) => setNewDraw({ ...newDraw, label: e.target.value })}
+            className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+          />
+          <Button type="button" onClick={onAdd} variant="outline" className="rounded-lg h-9 px-3 shrink-0 gap-1 text-xs font-mono">
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        </div>
       </div>
-      <div className="flex gap-2">
-        <Input
-          id={`${idPrefix}-draw-label`}
-          aria-label="Borrowing label"
-          placeholder="Label, e.g. Year 1 tuition"
-          value={newDraw.label}
-          onChange={(e) => setNewDraw({ ...newDraw, label: e.target.value })}
-          className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-        />
-        <Button type="button" onClick={onAdd} variant="outline" className="rounded-lg h-9 px-3 shrink-0 gap-1 text-xs font-mono">
-          <Plus className="h-3.5 w-3.5" /> Add
-        </Button>
-      </div>
-    </div>
+    </details>
   );
 };
 
@@ -598,77 +603,124 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
 
       {/* Add Debt Dialog */}
       <Dialog open={isAddDebtOpen} onOpenChange={setIsAddDebtOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto font-mono shadow-none">
-          <DialogHeader>
-            <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Debt</DialogTitle>
+        <DialogContent className="sm:rounded-xl border border-border/40 bg-card sm:max-w-xl font-mono shadow-none p-5 sm:p-6 gap-2">
+          <DialogHeader className="space-y-0.5">
+            <DialogTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">Add Debt</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-mono">Track a mortgage, student loan or other borrowing.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAddDebt} className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label htmlFor="debt-name" className="text-xs font-mono text-muted-foreground">Debt Name</Label>
-              <Input
-                id="debt-name"
-                placeholder="e.g. Flat Mortgage"
-                value={newDebt.name}
-                onChange={(e) => setNewDebt({ ...newDebt, name: e.target.value })}
-className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
-              <Select
-                value={newDebt.type}
-                onValueChange={(val) => {
-                  const isStudent = val === 'student';
-                  const defaultPlan = (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2');
-                  setNewDebt({
-                    ...newDebt,
-                    type: val as Debt['type'],
-                    repaymentType: isStudent ? 'income_contingent' : (newDebt.repaymentType === 'income_contingent' ? 'amortising' : newDebt.repaymentType),
-                    name: isStudent ? (newDebt.name || 'Student Loan (Plan 2)') : newDebt.name,
-                    lender: isStudent ? (newDebt.lender || 'Student Loans Company') : newDebt.lender,
-                    emoji: isStudent ? (newDebt.emoji || '🎓') : newDebt.emoji,
-                    studentLoanPlan: isStudent ? (newDebt.studentLoanPlan || defaultPlan) : newDebt.studentLoanPlan,
-                    writeOffYears: isStudent ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || defaultPlan]) : newDebt.writeOffYears,
-                    interestRate: isStudent && (newDebt.interestRate === '' || newDebt.interestRate === 0) ? 7.1 : newDebt.interestRate,
-                  });
-                }}
-              >
-                <SelectTrigger id="debt-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                  {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {newDebt.type !== 'student' && (
+          <form onSubmit={handleAddDebt} className="space-y-2 pt-0.5">
+            <div className="grid grid-cols-2 gap-2.5">
               <div className="space-y-1">
-                <Label htmlFor="debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
+                <Label htmlFor="debt-name" className="text-xs font-mono text-muted-foreground">Debt Name</Label>
+                <Input
+                  id="debt-name"
+                  placeholder={newDebt.type === 'student' ? 'Student Loan' : 'e.g. Flat Mortgage'}
+                  value={newDebt.name}
+                  onChange={(e) => setNewDebt({ ...newDebt, name: e.target.value })}
+                  className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
                 <Select
-                  value={newDebt.repaymentType}
-                  onValueChange={(val) => setNewDebt({
-                    ...newDebt,
-                    repaymentType: val as Debt['repaymentType'],
-                    studentLoanPlan: val === 'income_contingent' ? (newDebt.studentLoanPlan || 'plan2') : undefined,
-                    writeOffYears: val === 'income_contingent'
-                      ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || 'plan2'])
-                      : undefined,
-                  })}
+                  value={newDebt.type}
+                  onValueChange={(val) => {
+                    const isStudent = val === 'student';
+                    const defaultPlan = (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2');
+                    setNewDebt({
+                      ...newDebt,
+                      type: val as Debt['type'],
+                      repaymentType: isStudent ? 'income_contingent' : (newDebt.repaymentType === 'income_contingent' ? 'amortising' : newDebt.repaymentType),
+                      name: isStudent ? (newDebt.name || 'Student Loan') : newDebt.name,
+                      lender: isStudent ? (newDebt.lender || 'Student Loans Company') : newDebt.lender,
+                      emoji: isStudent ? (newDebt.emoji || '🎓') : newDebt.emoji,
+                      studentLoanPlan: isStudent ? (newDebt.studentLoanPlan || defaultPlan) : newDebt.studentLoanPlan,
+                      writeOffYears: isStudent ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || defaultPlan]) : newDebt.writeOffYears,
+                      interestRate: isStudent && (newDebt.interestRate === '' || newDebt.interestRate === 0) ? 7.1 : newDebt.interestRate,
+                    });
+                  }}
                 >
-                  <SelectTrigger id="debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
+                  <SelectTrigger id="debt-type" className="bg-background/50 border border-border/40 rounded-lg h-8 text-xs font-mono">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                    <SelectItem value="amortising">Fixed monthly payment</SelectItem>
-                    <SelectItem value="income_contingent">% of income over threshold</SelectItem>
-                    <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
+                    {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {newDebt.type === 'student' ? (
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <Label htmlFor="debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
+                  <Select
+                    value={newDebt.studentLoanPlan || 'plan2'}
+                    onValueChange={(val) => setNewDebt({
+                      ...newDebt,
+                      studentLoanPlan: val as StudentLoanPlanKey,
+                      writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey],
+                    })}
+                  >
+                    <SelectTrigger id="debt-plan" className="bg-background/50 border border-border/40 rounded-lg h-8 text-xs font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
+                      {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
+                  <Input
+                    id="debt-lender"
+                    placeholder="Student Loans Company"
+                    value={newDebt.lender}
+                    onChange={(e) => setNewDebt({ ...newDebt, lender: e.target.value })}
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <Label htmlFor="debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
+                  <Select
+                    value={newDebt.repaymentType}
+                    onValueChange={(val) => setNewDebt({
+                      ...newDebt,
+                      repaymentType: val as Debt['repaymentType'],
+                      studentLoanPlan: val === 'income_contingent' ? (newDebt.studentLoanPlan || 'plan2') : undefined,
+                      writeOffYears: val === 'income_contingent'
+                        ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || 'plan2'])
+                        : undefined,
+                    })}
+                  >
+                    <SelectTrigger id="debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-8 text-xs font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
+                      <SelectItem value="amortising">Fixed monthly payment</SelectItem>
+                      <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                      <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
+                  <Input
+                    id="debt-lender"
+                    placeholder="e.g. Nationwide"
+                    value={newDebt.lender}
+                    onChange={(e) => setNewDebt({ ...newDebt, lender: e.target.value })}
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
               </div>
             )}
 
@@ -682,68 +734,20 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                   placeholder="e.g. 8000"
                   value={newDebt.finalPayment}
                   onChange={(e) => setNewDebt({ ...newDebt, finalPayment: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                  className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                 />
               </div>
             )}
 
-            {(newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent') && (
-              <>
-                <div className="space-y-1">
-                  <Label htmlFor="debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
-                  <Select
-                    value={newDebt.studentLoanPlan || 'plan2'}
-                    onValueChange={(val) => setNewDebt({
-                      ...newDebt,
-                      studentLoanPlan: val as StudentLoanPlanKey,
-                      writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey],
-                    })}
-                  >
-                    <SelectTrigger id="debt-plan" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                      {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-1.5 text-xs font-mono">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Repayment mode:</span>
-                    <span className="font-semibold text-foreground">PAYE deduction (salary)</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Threshold:</span>
-                    <span className="text-foreground">{formatGBP(taxConfig.studentLoanThresholds[newDebt.studentLoanPlan || 'plan2'] || 0)}/yr</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-border/20 pt-1.5">
-                    <span className="text-muted-foreground">Monthly deduction:</span>
-                    <span className="font-bold text-primary">
-                      {formatGBP(calculateStudentMonthly(newDebt.studentLoanPlan || 'plan2'))}/mo
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-muted-foreground text-[11px]">
-                    <span>Statutory write-off:</span>
-                    <span>{newDebt.writeOffYears ?? 30} years</span>
-                  </div>
-                </div>
-              </>
+            {newDebt.type === 'student' && (
+              <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-xs font-mono flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
+                <span>Threshold: <span className="font-semibold text-foreground">{formatGBP(taxConfig.studentLoanThresholds[newDebt.studentLoanPlan || 'plan2'] || 0)}/yr</span> (9% above)</span>
+                <span>Deduction: <span className="font-bold text-primary">{formatGBP(calculateStudentMonthly(newDebt.studentLoanPlan || 'plan2'))}/mo</span></span>
+                <span className="text-[11px]">Write-off: <span className="text-foreground">{newDebt.writeOffYears ?? 30} yrs</span></span>
+              </div>
             )}
 
-            <div className="space-y-1">
-              <Label htmlFor="debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
-              <Input
-                id="debt-lender"
-                placeholder={newDebt.type === 'student' ? 'Student Loans Company' : 'e.g. Nationwide'}
-                value={newDebt.lender}
-                onChange={(e) => setNewDebt({ ...newDebt, lender: e.target.value })}
-                className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <div className="space-y-1">
                 <Label htmlFor="debt-original" className="text-xs font-mono text-muted-foreground">
                   {newDebt.type === 'student' ? 'Original Borrowed (£)' : 'Original (£)'}
@@ -752,14 +756,14 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                   id="debt-original"
                   type="number"
                   step="0.01"
-                  placeholder={newDebt.type === 'student' ? '40758' : '250000'}
+                  placeholder={newDebt.type === 'student' ? 'e.g. 40000' : '250000'}
                   value={newDebt.draws.length > 0 ? sumDraws(newDebt.draws) : newDebt.originalAmount}
                   onChange={(e) => setNewDebt({ ...newDebt, originalAmount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                   disabled={newDebt.draws.length > 0}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono disabled:opacity-70"
+                  className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono disabled:opacity-70"
                 />
                 {newDebt.draws.length > 0 && (
-                  <p className="text-xs font-mono text-muted-foreground">Summed from borrowing history</p>
+                  <p className="text-[11px] font-mono text-muted-foreground">Summed from tranches</p>
                 )}
               </div>
               <div className="space-y-1">
@@ -770,15 +774,16 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                   id="debt-balance"
                   type="number"
                   step="0.01"
-                  placeholder={newDebt.type === 'student' ? '51052.24' : '198400'}
+                  placeholder={newDebt.type === 'student' ? 'e.g. 51000' : '198400'}
                   value={newDebt.balance}
                   onChange={(e) => setNewDebt({ ...newDebt, balance: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                  className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                   required
                 />
               </div>
             </div>
-            <div className={cn("grid gap-3", (newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
+
+            <div className="grid grid-cols-2 gap-2.5">
               <div className="space-y-1">
                 <Label htmlFor="debt-rate" className="text-xs font-mono text-muted-foreground">Interest Rate (%)</Label>
                 <Input
@@ -788,10 +793,21 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                   placeholder="7.10"
                   value={newDebt.interestRate}
                   onChange={(e) => setNewDebt({ ...newDebt, interestRate: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                  className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                 />
               </div>
-              {newDebt.type !== 'student' && newDebt.repaymentType !== 'income_contingent' && (
+              {newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent' ? (
+                <div className="space-y-1">
+                  <Label htmlFor="debt-start" className="text-xs font-mono text-muted-foreground">Course Start Date (Optional)</Label>
+                  <Input
+                    id="debt-start"
+                    type="date"
+                    value={newDebt.startDate}
+                    onChange={(e) => setNewDebt({ ...newDebt, startDate: e.target.value })}
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
+              ) : (
                 <div className="space-y-1">
                   <Label htmlFor="debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
                   <Input
@@ -801,25 +817,24 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                     placeholder="1150"
                     value={newDebt.minPayment}
                     onChange={(e) => setNewDebt({ ...newDebt, minPayment: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                   />
                 </div>
               )}
             </div>
-            <div className={cn("grid gap-3", (newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
-              <div className="space-y-1">
-                <Label htmlFor="debt-start" className="text-xs font-mono text-muted-foreground">
-                  {newDebt.type === 'student' ? 'Course Start (Optional)' : 'Taken On'}
-                </Label>
-                <Input
-                  id="debt-start"
-                  type="date"
-                  value={newDebt.startDate}
-                  onChange={(e) => setNewDebt({ ...newDebt, startDate: e.target.value })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                />
-              </div>
-              {newDebt.type !== 'student' && newDebt.repaymentType !== 'income_contingent' && (
+
+            {newDebt.type !== 'student' && newDebt.repaymentType !== 'income_contingent' && (
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <Label htmlFor="debt-start" className="text-xs font-mono text-muted-foreground">Taken On</Label>
+                  <Input
+                    id="debt-start"
+                    type="date"
+                    value={newDebt.startDate}
+                    onChange={(e) => setNewDebt({ ...newDebt, startDate: e.target.value })}
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
                 <div className="space-y-1">
                   <Label htmlFor="debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
                   <Input
@@ -827,37 +842,34 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                     type="date"
                     value={newDebt.payoffDate}
                     onChange={(e) => setNewDebt({ ...newDebt, payoffDate: e.target.value })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                   />
                 </div>
-              )}
-            </div>
-
-            {newDebt.type === 'student' && newDebt.draws.length === 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setNewDebt({
-                    ...newDebt,
-                    originalAmount: 40758,
-                    balance: newDebt.balance === '' ? 51052.24 : newDebt.balance,
-                    startDate: '2020-09-01',
-                    interestRate: newDebt.interestRate === '' ? 7.1 : newDebt.interestRate,
-                    draws: [
-                      { id: 'dw_1', date: '2020-09-01', amount: 13539, label: 'Year 1: Tuition £9,250 + Maintenance £4,289' },
-                      { id: 'dw_2', date: '2021-09-01', amount: 13672, label: 'Year 2: Tuition £9,250 + Maintenance £4,422' },
-                      { id: 'dw_3', date: '2022-09-01', amount: 900, label: 'Year 3 Placement: Tuition £900' },
-                      { id: 'dw_4', date: '2023-09-01', amount: 12647, label: 'Year 4: Tuition £9,250 + Maintenance £3,397' },
-                    ]
-                  });
-                }}
-                className="w-full text-xs font-mono h-8 border-dashed border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
-              >
-                <GraduationCap className="h-3.5 w-3.5" />
-                Populate Plymouth Robotics BEng (£40,758 across 2020–2024)
-              </Button>
+              </div>
             )}
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-1">
+                <Label htmlFor="debt-emoji" className="text-xs font-mono text-muted-foreground">Emoji</Label>
+                <Input
+                  id="debt-emoji"
+                  placeholder={newDebt.type === 'student' ? '🎓' : '🏠'}
+                  value={newDebt.emoji}
+                  onChange={(e) => setNewDebt({ ...newDebt, emoji: e.target.value })}
+                  className="rounded-lg h-8 border border-border/40 bg-background/50 text-center text-sm font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="debt-color" className="text-xs font-mono text-muted-foreground">Colour</Label>
+                <Input
+                  id="debt-color"
+                  type="color"
+                  value={newDebt.color}
+                  onChange={(e) => setNewDebt({ ...newDebt, color: e.target.value })}
+                  className="rounded-lg h-8 border border-border/40 bg-background/50 p-1 cursor-pointer"
+                />
+              </div>
+            </div>
 
             <DebtDrawsEditor
               draws={newDebt.draws}
@@ -868,31 +880,9 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
               idPrefix="add"
             />
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="debt-emoji" className="text-xs font-mono text-muted-foreground">Emoji</Label>
-                <Input
-                  id="debt-emoji"
-                  placeholder="🏠"
-                  value={newDebt.emoji}
-                  onChange={(e) => setNewDebt({ ...newDebt, emoji: e.target.value })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-center text-sm font-mono"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="debt-color" className="text-xs font-mono text-muted-foreground">Colour</Label>
-                <Input
-                  id="debt-color"
-                  type="color"
-                  value={newDebt.color}
-                  onChange={(e) => setNewDebt({ ...newDebt, color: e.target.value })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 p-1 cursor-pointer"
-                />
-              </div>
-            </div>
-            <DialogFooter className="pt-4 gap-2 sm:gap-0">
-              <Button variant="outline" type="button" onClick={() => setIsAddDebtOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
-              <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Debt</Button>
+            <DialogFooter className="pt-2 gap-2 sm:gap-0">
+              <Button variant="outline" type="button" onClick={() => setIsAddDebtOpen(false)} className="rounded-lg h-8 px-4 text-xs font-mono border-border/40">Cancel</Button>
+              <Button type="submit" className="rounded-lg h-8 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Debt</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -900,77 +890,124 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
 
       {/* Edit Debt Dialog */}
       <Dialog open={isEditDebtOpen} onOpenChange={setIsEditDebtOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm max-h-[85vh] overflow-y-auto font-mono shadow-none">
-          <DialogHeader>
-            <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Debt</DialogTitle>
+        <DialogContent className="sm:rounded-xl border border-border/40 bg-card sm:max-w-xl font-mono shadow-none p-5 sm:p-6 gap-2">
+          <DialogHeader className="space-y-0.5">
+            <DialogTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">Edit Debt</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-mono">Update balance, rate or payoff schedule.</DialogDescription>
           </DialogHeader>
           {activeDebt && (
-            <form onSubmit={handleEditDebt} className="space-y-4 py-2">
-              <div className="space-y-1">
-                <Label htmlFor="edit-debt-name" className="text-xs font-mono text-muted-foreground">Debt Name</Label>
-                <Input
-                  id="edit-debt-name"
-                  value={activeDebt.name}
-                  onChange={(e) => setActiveDebt({ ...activeDebt, name: e.target.value })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="edit-debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
-                <Select
-                  value={activeDebt.type}
-                  onValueChange={(val) => {
-                    const isStudent = val === 'student';
-                    const defaultPlan = (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2');
-                    setActiveDebt({
-                      ...activeDebt,
-                      type: val as Debt['type'],
-                      repaymentType: isStudent ? 'income_contingent' : (activeDebt.repaymentType === 'income_contingent' ? 'amortising' : activeDebt.repaymentType),
-                      name: isStudent ? (activeDebt.name || 'Student Loan (Plan 2)') : activeDebt.name,
-                      lender: isStudent ? (activeDebt.lender || 'Student Loans Company') : activeDebt.lender,
-                      emoji: isStudent ? (activeDebt.emoji || '🎓') : activeDebt.emoji,
-                      studentLoanPlan: isStudent ? (activeDebt.studentLoanPlan || defaultPlan) : activeDebt.studentLoanPlan,
-                      writeOffYears: isStudent ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || defaultPlan]) : activeDebt.writeOffYears,
-                      interestRate: isStudent && (!activeDebt.interestRate || activeDebt.interestRate === 0) ? 7.1 : activeDebt.interestRate,
-                    });
-                  }}
-                >
-                  <SelectTrigger id="edit-debt-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                    {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {activeDebt.type !== 'student' && (
+            <form onSubmit={handleEditDebt} className="space-y-2 pt-0.5">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <Label htmlFor="edit-debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
+                  <Label htmlFor="edit-debt-name" className="text-xs font-mono text-muted-foreground">Debt Name</Label>
+                  <Input
+                    id="edit-debt-name"
+                    value={activeDebt.name}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, name: e.target.value })}
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
                   <Select
-                    value={activeDebt.repaymentType}
-                    onValueChange={(val) => setActiveDebt({
-                      ...activeDebt,
-                      repaymentType: val as Debt['repaymentType'],
-                      studentLoanPlan: val === 'income_contingent' ? (activeDebt.studentLoanPlan || 'plan2') : undefined,
-                      writeOffYears: val === 'income_contingent'
-                        ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || 'plan2'])
-                        : undefined,
-                    })}
+                    value={activeDebt.type}
+                    onValueChange={(val) => {
+                      const isStudent = val === 'student';
+                      const defaultPlan = (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2');
+                      setActiveDebt({
+                        ...activeDebt,
+                        type: val as Debt['type'],
+                        repaymentType: isStudent ? 'income_contingent' : (activeDebt.repaymentType === 'income_contingent' ? 'amortising' : activeDebt.repaymentType),
+                        name: isStudent ? (activeDebt.name || 'Student Loan') : activeDebt.name,
+                        lender: isStudent ? (activeDebt.lender || 'Student Loans Company') : activeDebt.lender,
+                        emoji: isStudent ? (activeDebt.emoji || '🎓') : activeDebt.emoji,
+                        studentLoanPlan: isStudent ? (activeDebt.studentLoanPlan || defaultPlan) : activeDebt.studentLoanPlan,
+                        writeOffYears: isStudent ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || defaultPlan]) : activeDebt.writeOffYears,
+                        interestRate: isStudent && (!activeDebt.interestRate || activeDebt.interestRate === 0) ? 7.1 : activeDebt.interestRate,
+                      });
+                    }}
                   >
-                    <SelectTrigger id="edit-debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
+                    <SelectTrigger id="edit-debt-type" className="bg-background/50 border border-border/40 rounded-lg h-8 text-xs font-mono">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                      <SelectItem value="amortising">Fixed monthly payment</SelectItem>
-                      <SelectItem value="income_contingent">% of income over threshold</SelectItem>
-                      <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
+                      {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              {activeDebt.type === 'student' ? (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
+                    <Select
+                      value={activeDebt.studentLoanPlan || 'plan2'}
+                      onValueChange={(val) => setActiveDebt({
+                        ...activeDebt,
+                        studentLoanPlan: val as StudentLoanPlanKey,
+                        writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey],
+                      })}
+                    >
+                      <SelectTrigger id="edit-debt-plan" className="bg-background/50 border border-border/40 rounded-lg h-8 text-xs font-mono">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
+                        {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
+                    <Input
+                      id="edit-debt-lender"
+                      placeholder="Student Loans Company"
+                      value={activeDebt.lender}
+                      onChange={(e) => setActiveDebt({ ...activeDebt, lender: e.target.value })}
+                      className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
+                    <Select
+                      value={activeDebt.repaymentType}
+                      onValueChange={(val) => setActiveDebt({
+                        ...activeDebt,
+                        repaymentType: val as Debt['repaymentType'],
+                        studentLoanPlan: val === 'income_contingent' ? (activeDebt.studentLoanPlan || 'plan2') : undefined,
+                        writeOffYears: val === 'income_contingent'
+                          ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || 'plan2'])
+                          : undefined,
+                      })}
+                    >
+                      <SelectTrigger id="edit-debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-8 text-xs font-mono">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
+                        <SelectItem value="amortising">Fixed monthly payment</SelectItem>
+                        <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                        <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
+                    <Input
+                      id="edit-debt-lender"
+                      placeholder="e.g. Nationwide"
+                      value={activeDebt.lender}
+                      onChange={(e) => setActiveDebt({ ...activeDebt, lender: e.target.value })}
+                      className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -984,68 +1021,20 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                     placeholder="e.g. 8000"
                     value={activeDebt.finalPayment ?? ''}
                     onChange={(e) => setActiveDebt({ ...activeDebt, finalPayment: parseFloat(e.target.value) || 0 })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                   />
                 </div>
               )}
 
-              {(activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent') && (
-                <>
-                  <div className="space-y-1">
-                    <Label htmlFor="edit-debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
-                    <Select
-                      value={activeDebt.studentLoanPlan || 'plan2'}
-                      onValueChange={(val) => setActiveDebt({
-                        ...activeDebt,
-                        studentLoanPlan: val as StudentLoanPlanKey,
-                        writeOffYears: STUDENT_LOAN_WRITE_OFF_YEARS[val as StudentLoanPlanKey],
-                      })}
-                    >
-                      <SelectTrigger id="edit-debt-plan" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                        {Object.entries(STUDENT_LOAN_PLAN_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>{label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-1.5 text-xs font-mono">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Repayment mode:</span>
-                      <span className="font-semibold text-foreground">PAYE deduction (salary)</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Threshold:</span>
-                      <span className="text-foreground">{formatGBP(taxConfig.studentLoanThresholds[activeDebt.studentLoanPlan || 'plan2'] || 0)}/yr</span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-border/20 pt-1.5">
-                      <span className="text-muted-foreground">Monthly deduction:</span>
-                      <span className="font-bold text-primary">
-                        {formatGBP(calculateStudentMonthly(activeDebt.studentLoanPlan || 'plan2'))}/mo
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-muted-foreground text-[11px]">
-                      <span>Statutory write-off:</span>
-                      <span>{activeDebt.writeOffYears ?? 30} years</span>
-                    </div>
-                  </div>
-                </>
+              {activeDebt.type === 'student' && (
+                <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-xs font-mono flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
+                  <span>Threshold: <span className="font-semibold text-foreground">{formatGBP(taxConfig.studentLoanThresholds[activeDebt.studentLoanPlan || 'plan2'] || 0)}/yr</span> (9% above)</span>
+                  <span>Deduction: <span className="font-bold text-primary">{formatGBP(calculateStudentMonthly(activeDebt.studentLoanPlan || 'plan2'))}/mo</span></span>
+                  <span className="text-[11px]">Write-off: <span className="text-foreground">{activeDebt.writeOffYears ?? 30} yrs</span></span>
+                </div>
               )}
 
-              <div className="space-y-1">
-                <Label htmlFor="edit-debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
-                <Input
-                  id="edit-debt-lender"
-                  placeholder={activeDebt.type === 'student' ? 'Student Loans Company' : 'e.g. Nationwide'}
-                  value={activeDebt.lender}
-                  onChange={(e) => setActiveDebt({ ...activeDebt, lender: e.target.value })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
                   <Label htmlFor="edit-debt-original" className="text-xs font-mono text-muted-foreground">
                     {activeDebt.type === 'student' ? 'Original Borrowed (£)' : 'Original (£)'}
@@ -1057,10 +1046,10 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                     value={activeDebt.draws.length > 0 ? sumDraws(activeDebt.draws) : activeDebt.originalAmount}
                     onChange={(e) => setActiveDebt({ ...activeDebt, originalAmount: parseFloat(e.target.value) || 0 })}
                     disabled={activeDebt.draws.length > 0}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono disabled:opacity-70"
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono disabled:opacity-70"
                   />
                   {activeDebt.draws.length > 0 && (
-                    <p className="text-xs font-mono text-muted-foreground">Summed from borrowing history</p>
+                    <p className="text-[11px] font-mono text-muted-foreground">Summed from tranches</p>
                   )}
                 </div>
                 <div className="space-y-1">
@@ -1073,12 +1062,13 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                     step="0.01"
                     value={activeDebt.balance}
                     onChange={(e) => setActiveDebt({ ...activeDebt, balance: parseFloat(e.target.value) || 0 })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                     required
                   />
                 </div>
               </div>
-              <div className={cn("grid gap-3", (activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
+
+              <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
                   <Label htmlFor="edit-debt-rate" className="text-xs font-mono text-muted-foreground">Interest Rate (%)</Label>
                   <Input
@@ -1087,10 +1077,21 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                     step="0.01"
                     value={activeDebt.interestRate}
                     onChange={(e) => setActiveDebt({ ...activeDebt, interestRate: parseFloat(e.target.value) || 0 })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                   />
                 </div>
-                {activeDebt.type !== 'student' && activeDebt.repaymentType !== 'income_contingent' && (
+                {activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent' ? (
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-start" className="text-xs font-mono text-muted-foreground">Course Start Date (Optional)</Label>
+                    <Input
+                      id="edit-debt-start"
+                      type="date"
+                      value={activeDebt.startDate || ''}
+                      onChange={(e) => setActiveDebt({ ...activeDebt, startDate: e.target.value || undefined })}
+                      className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                    />
+                  </div>
+                ) : (
                   <div className="space-y-1">
                     <Label htmlFor="edit-debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
                     <Input
@@ -1099,25 +1100,24 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                       step="0.01"
                       value={activeDebt.minPayment}
                       onChange={(e) => setActiveDebt({ ...activeDebt, minPayment: parseFloat(e.target.value) || 0 })}
-                      className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                      className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                     />
                   </div>
                 )}
               </div>
-              <div className={cn("grid gap-3", (activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
-                <div className="space-y-1">
-                  <Label htmlFor="edit-debt-start" className="text-xs font-mono text-muted-foreground">
-                    {activeDebt.type === 'student' ? 'Course Start (Optional)' : 'Taken On'}
-                  </Label>
-                  <Input
-                    id="edit-debt-start"
-                    type="date"
-                    value={activeDebt.startDate || ''}
-                    onChange={(e) => setActiveDebt({ ...activeDebt, startDate: e.target.value || undefined })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                  />
-                </div>
-                {activeDebt.type !== 'student' && activeDebt.repaymentType !== 'income_contingent' && (
+
+              {activeDebt.type !== 'student' && activeDebt.repaymentType !== 'income_contingent' && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-start" className="text-xs font-mono text-muted-foreground">Taken On</Label>
+                    <Input
+                      id="edit-debt-start"
+                      type="date"
+                      value={activeDebt.startDate || ''}
+                      onChange={(e) => setActiveDebt({ ...activeDebt, startDate: e.target.value || undefined })}
+                      className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
+                    />
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor="edit-debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
                     <Input
@@ -1125,10 +1125,33 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                       type="date"
                       value={activeDebt.payoffDate || ''}
                       onChange={(e) => setActiveDebt({ ...activeDebt, payoffDate: e.target.value || undefined })}
-                      className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                      className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono"
                     />
                   </div>
-                )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-emoji" className="text-xs font-mono text-muted-foreground">Emoji</Label>
+                  <Input
+                    id="edit-debt-emoji"
+                    placeholder={activeDebt.type === 'student' ? '🎓' : '🏠'}
+                    value={activeDebt.emoji || ''}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, emoji: e.target.value })}
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 text-center text-sm font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-color" className="text-xs font-mono text-muted-foreground">Colour</Label>
+                  <Input
+                    id="edit-debt-color"
+                    type="color"
+                    value={activeDebt.color || 'hsl(var(--destructive))'}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, color: e.target.value })}
+                    className="rounded-lg h-8 border border-border/40 bg-background/50 p-1 cursor-pointer"
+                  />
+                </div>
               </div>
 
               <DebtDrawsEditor
@@ -1140,30 +1163,9 @@ className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-
                 idPrefix="edit"
               />
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="edit-debt-emoji" className="text-xs font-mono text-muted-foreground">Emoji</Label>
-                  <Input
-                    id="edit-debt-emoji"
-                    value={activeDebt.emoji || ''}
-                    onChange={(e) => setActiveDebt({ ...activeDebt, emoji: e.target.value })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-center text-sm font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="edit-debt-color" className="text-xs font-mono text-muted-foreground">Colour</Label>
-                  <Input
-                    id="edit-debt-color"
-                    type="color"
-                    value={activeDebt.color || 'hsl(var(--destructive))'}
-                    onChange={(e) => setActiveDebt({ ...activeDebt, color: e.target.value })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 p-1 cursor-pointer"
-                  />
-                </div>
-              </div>
-              <DialogFooter className="pt-4 gap-2 sm:gap-0">
-                <Button variant="outline" type="button" onClick={() => setIsEditDebtOpen(false)} className="rounded-lg h-9 px-4 text-xs font-mono border-border/40">Cancel</Button>
-                <Button type="submit" className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Changes</Button>
+              <DialogFooter className="pt-2 gap-2 sm:gap-0">
+                <Button variant="outline" type="button" onClick={() => setIsEditDebtOpen(false)} className="rounded-lg h-8 px-4 text-xs font-mono border-border/40">Cancel</Button>
+                <Button type="submit" className="rounded-lg h-8 px-4 text-xs font-mono bg-primary text-primary-foreground">Save Changes</Button>
               </DialogFooter>
             </form>
           )}
