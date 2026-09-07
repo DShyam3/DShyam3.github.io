@@ -146,3 +146,37 @@ export const parsedFieldCount = (parsed: ParsedPayslip): number =>
   (['gross', 'incomeTax', 'nationalInsurance', 'pensionEmployee',
     'pensionEmployer', 'studentLoan', 'net'] as const)
     .filter(k => parsed[k] !== undefined).length;
+
+/**
+ * What a filename gives away.
+ *
+ * A folder of payslips is almost always named to be sortable —
+ * `2026-06_Capgemini_Payslip.pdf` — and that convention carries two of the
+ * fields the PDF text sometimes does not: which month it is, and who paid.
+ *
+ * Used only as a fallback. The document is the better authority when it
+ * yields anything, and a filename is a label someone typed.
+ */
+export function parsePayslipFilename(name: string): Pick<ParsedPayslip, 'payDate' | 'employer'> {
+  const out: Pick<ParsedPayslip, 'payDate' | 'employer'> = {};
+  const stem = name.replace(/\.[a-z0-9]+$/i, '');
+
+  // A full date wins over a bare month.
+  const full = stem.match(/(20\d{2})[-_.](\d{1,2})[-_.](\d{1,2})/);
+  const month = stem.match(/(20\d{2})[-_.](\d{1,2})(?![\d])/);
+  if (full) {
+    out.payDate = `${full[1]}-${full[2].padStart(2, '0')}-${full[3].padStart(2, '0')}`;
+  } else if (month && Number(month[2]) >= 1 && Number(month[2]) <= 12) {
+    // No day in the name, so the month is all that is known. The first is a
+    // placeholder to be corrected, not a claim about when it was paid.
+    out.payDate = `${month[1]}-${month[2].padStart(2, '0')}-01`;
+  }
+
+  // Words that are neither the date nor the kind of document.
+  const words = stem
+    .split(/[-_\s.]+/)
+    .filter(w => w && !/^\d+$/.test(w) && !/^(payslip|payslips|earnings|statement|final|copy|\d+)$/i.test(w));
+  if (words.length > 0) out.employer = words.join(' ');
+
+  return out;
+}

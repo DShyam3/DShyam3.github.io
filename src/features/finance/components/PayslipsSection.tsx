@@ -20,9 +20,10 @@ import {
   studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Check, FileText, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, FileText, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
+import { PayslipImportDialog } from './PayslipImportDialog';
 import { parsedFieldCount, type ParsedPayslip } from '@/lib/finance';
 import { useToast } from '@/hooks/use-toast';
 
@@ -101,6 +102,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isReading, setIsReading] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [readCount, setReadCount] = useState<number | null>(null);
 
   // Shown live in the dialog rather than after saving: a payslip that does not
@@ -238,10 +240,16 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
               : `${thisYear.length} in ${currentTaxYear}/${String(currentTaxYear + 1).slice(2)}`}
           </p>
         </div>
-        <Button size="sm" onClick={openNew} className="h-8 rounded-lg bg-primary text-primary-foreground text-xs font-mono gap-1.5 shrink-0">
-          <Plus className="h-3.5 w-3.5" />
-          Add
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button size="sm" variant="outline" onClick={() => setIsImportOpen(true)} className="h-8 rounded-lg text-xs font-mono gap-1.5 border-border/40 bg-background/30">
+            <Upload className="h-3.5 w-3.5" />
+            Import
+          </Button>
+          <Button size="sm" onClick={openNew} className="h-8 rounded-lg bg-primary text-primary-foreground text-xs font-mono gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </Button>
+        </div>
       </div>
 
       {thisYear.length > 0 && (
@@ -447,6 +455,8 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PayslipImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
 
       {deleteDialog}
     </div>

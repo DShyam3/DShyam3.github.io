@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePayslipText, parsedFieldCount } from './payslip-parse';
+import { parsePayslipFilename, parsePayslipText, parsedFieldCount } from './payslip-parse';
 
 /**
  * Layouts, not real payslips. The figures are invented; what is being tested
@@ -116,5 +116,32 @@ describe('parsedFieldCount', () => {
     expect(parsedFieldCount(parsePayslipText(TWO_COLUMN))).toBe(6);
     expect(parsedFieldCount(parsePayslipText(RATE_UNITS_AMOUNT))).toBe(7);
     expect(parsedFieldCount({})).toBe(0);
+  });
+});
+
+describe('parsePayslipFilename', () => {
+  it('reads a year-month name, dating it to the first as a placeholder', () => {
+    expect(parsePayslipFilename('2026-06_Capgemini_Payslip.pdf')).toEqual({
+      payDate: '2026-06-01',
+      employer: 'Capgemini',
+    });
+  });
+
+  it('prefers a full date when the name carries one', () => {
+    expect(parsePayslipFilename('2026-06-28_Capgemini_Payslip.pdf').payDate).toBe('2026-06-28');
+  });
+
+  it('keeps a multi-word employer together', () => {
+    expect(parsePayslipFilename('2025-12_UCL_Payslip.pdf').employer).toBe('UCL');
+    expect(parsePayslipFilename('2022-07_Keysight_Payslip.pdf').employer).toBe('Keysight');
+  });
+
+  it('drops the document-kind word rather than treating it as an employer', () => {
+    expect(parsePayslipFilename('2024-25_MyTutor_Earnings.xlsx').employer).toBe('MyTutor');
+  });
+
+  it('returns nothing useful for a name that says nothing', () => {
+    expect(parsePayslipFilename('scan001.pdf')).toEqual({ employer: 'scan001' });
+    expect(parsePayslipFilename('2026-13_Thing.pdf').payDate).toBeUndefined();
   });
 });
