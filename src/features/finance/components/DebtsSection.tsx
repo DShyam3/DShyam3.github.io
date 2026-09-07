@@ -232,8 +232,17 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
       ? (newDebt.minPayment !== '' && newDebt.minPayment > 0 ? newDebt.minPayment : computedStudentMonthly)
       : (newDebt.minPayment === '' ? 0 : newDebt.minPayment);
 
+    const studentPlan = isStudent
+      ? (newDebt.studentLoanPlan || (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2'))
+      : undefined;
+    const writeOffYears = isStudent
+      ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[studentPlan || 'plan2'])
+      : undefined;
+
     const created: Debt = {
       ...newDebt,
+      repaymentType: isStudent ? 'income_contingent' : newDebt.repaymentType,
+      studentLoanPlan: studentPlan,
       originalAmount: drawTotal > 0
         ? drawTotal
         : (newDebt.originalAmount === '' ? balance : Math.abs(newDebt.originalAmount)),
@@ -243,9 +252,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
       finalPayment: newDebt.finalPayment === '' ? 0 : Math.abs(newDebt.finalPayment),
       startDate: newDebt.startDate || newDebt.draws[0]?.date || undefined,
       payoffDate: newDebt.payoffDate || undefined,
-      writeOffYears: newDebt.repaymentType === 'income_contingent'
-        ? (newDebt.writeOffYears ?? (newDebt.studentLoanPlan ? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan] : undefined))
-        : undefined,
+      writeOffYears,
       ratePeriods: newDebt.ratePeriods || [],
       notes: newDebt.notes || undefined,
       id: 'd_' + Date.now(),
@@ -265,15 +272,24 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
     if (!activeDebt) return;
     const drawTotal = sumDraws(activeDebt.draws);
     const isStudent = activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent';
+    const studentPlan = isStudent
+      ? (activeDebt.studentLoanPlan || (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2'))
+      : undefined;
     const computedStudentMonthly = isStudent
-      ? calculateStudentMonthly(activeDebt.studentLoanPlan || 'plan2')
+      ? calculateStudentMonthly(studentPlan || 'plan2')
       : 0;
     const minPayment = isStudent
       ? (activeDebt.minPayment > 0 ? activeDebt.minPayment : computedStudentMonthly)
       : (activeDebt.minPayment || 0);
+    const writeOffYears = isStudent
+      ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[studentPlan || 'plan2'])
+      : undefined;
 
     const normalized: Debt = {
       ...activeDebt,
+      repaymentType: isStudent ? 'income_contingent' : activeDebt.repaymentType,
+      studentLoanPlan: studentPlan,
+      writeOffYears,
       balance: Math.abs(activeDebt.balance),
       originalAmount: drawTotal > 0 ? drawTotal : Math.abs(activeDebt.originalAmount),
       minPayment,
@@ -309,11 +325,20 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
   const loanPayoffPercent = totalLoanOriginal > 0 ? (totalLoanPaid / totalLoanOriginal) * 100 : 0;
   const totalMinPayments = debts.reduce((sum, d) => sum + d.minPayment, 0);
   const selectedDebt = debts.find(d => d.id === selectedDebtId) || debts[0] || null;
-  const selectedDebtProjection = selectedDebt
-    ? projectDebtBalance(selectedDebt, {
+  const selectedPlan = selectedDebt?.studentLoanPlan || (selectedDebt?.type === 'student' ? 'plan2' : undefined);
+  const selectedDebtEffective: Debt | null = selectedDebt
+    ? {
+        ...selectedDebt,
+        studentLoanPlan: selectedPlan,
+        repaymentType: selectedPlan ? 'income_contingent' : selectedDebt.repaymentType,
+        writeOffYears: selectedDebt.writeOffYears ?? (selectedPlan ? STUDENT_LOAN_WRITE_OFF_YEARS[selectedPlan] : undefined),
+      }
+    : null;
+  const selectedDebtProjection = selectedDebtEffective
+    ? projectDebtBalance(selectedDebtEffective, {
         grossSalary: settings.grossSalary,
-        repaymentRate: selectedDebt.studentLoanPlan ? (taxConfig.studentLoanRates[selectedDebt.studentLoanPlan] || 0) : 0,
-        threshold: selectedDebt.studentLoanPlan ? (taxConfig.studentLoanThresholds[selectedDebt.studentLoanPlan] || 0) : 0,
+        repaymentRate: selectedPlan ? (taxConfig.studentLoanRates[selectedPlan] || 9) : 0,
+        threshold: selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 0,
       })
     : [];
   const selectedDebtFinal = selectedDebtProjection[selectedDebtProjection.length - 1];
@@ -389,8 +414,8 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                     </td>
                     <td className="py-3 px-3">
                       <span>{DEBT_TYPE_LABELS[debt.type] || debt.type}</span>
-                      {debt.studentLoanPlan && (
-                        <span className="block text-xs text-muted-foreground">{STUDENT_LOAN_PLAN_LABELS[debt.studentLoanPlan]}</span>
+                      {(debt.studentLoanPlan || debt.type === 'student') && (
+                        <span className="block text-xs text-muted-foreground">{STUDENT_LOAN_PLAN_LABELS[debt.studentLoanPlan || 'plan2']}</span>
                       )}
                     </td>
                     <td className="py-3 px-3">{debt.lender || '—'}</td>
@@ -476,8 +501,8 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                   <TrendingDown className="h-4 w-4 text-primary shrink-0" /> {selectedDebt.name} — Payoff Projection
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {selectedDebt.repaymentType === 'income_contingent'
-                    ? `${selectedDebt.studentLoanPlan ? STUDENT_LOAN_PLAN_LABELS[selectedDebt.studentLoanPlan] : 'Income-contingent'}: ${selectedDebt.studentLoanPlan ? (taxConfig.studentLoanRates[selectedDebt.studentLoanPlan] || 0) : 0}% of income above ${formatGBP(selectedDebt.studentLoanPlan ? (taxConfig.studentLoanThresholds[selectedDebt.studentLoanPlan] || 0) : 0)}, written off after ${selectedDebt.writeOffYears ?? '—'} years`
+                  {(selectedDebt.repaymentType === 'income_contingent' || selectedDebt.type === 'student')
+                    ? `${STUDENT_LOAN_PLAN_LABELS[selectedPlan || 'plan2']}: ${selectedPlan ? (taxConfig.studentLoanRates[selectedPlan] || 9) : 9}% of income above ${formatGBP(selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 27295)}, written off after ${selectedDebtEffective?.writeOffYears ?? 30} years`
                     : selectedDebt.repaymentType === 'pcp'
                       ? `PCP: ${formatGBP(selectedDebt.minPayment)}/month amortising to ${formatGBP(selectedDebt.finalPayment || 0)} balloon`
                       : `Fixed repayment of ${formatGBP(selectedDebt.minPayment)}/month at ${selectedDebt.interestRate.toFixed(2)}%`}
