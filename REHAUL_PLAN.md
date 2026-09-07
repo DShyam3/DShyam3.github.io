@@ -1666,6 +1666,54 @@ exactly the ones worth the effort, and neither needs a key or a vendor.
 - **7.10** credit reports follow the same shape: archive the PDF, capture the
   scores and accounts, never ship the report.
 
+#### 7.Q The app is complete without a model
+
+Stated as a constraint rather than an aspiration, because it is currently true
+by accident and should be true on purpose.
+
+Today there is not a single model call anywhere in `src/` or
+`supabase/functions/`. All sixteen `lib/finance` modules are pure and all 274
+tests run without a network. Every number the app shows — take-home,
+free-to-spend, net worth, the pension projection, the debt curve, the scenario
+verdicts, the alerts — is computed here, deterministically, from rows.
+
+The constraint: **no feature may hard-depend on a model.** With no key set,
+everything works except the chat box. That is not a degraded mode to apologise
+for; it is the product, and the assistant is an addition to it.
+
+##### The sharper half: what a model must never do
+
+"Take all the information and show it in one place" is the right ambition and
+the wrong job for a model, because a summary of your finances has to be
+reproducible. The same data must produce the same summary today and tomorrow,
+and every figure in it has to be traceable to the arithmetic that made it. A
+model that writes the summary gives up both, and does it invisibly — a wrong
+number reads exactly like a right one.
+
+So the standing summary stays deterministic. `deriveAlerts` already is: rules
+over rows, seven typed codes, tested. Extending that is how "one place" gets
+built, and the result is better than a generated paragraph — instant, free,
+identical every time, and correct by construction rather than by luck.
+
+7.F already says this for retrieval: structured SQL produces the number, vector
+search only finds which records are relevant. The same division applies
+everywhere. A model may choose, phrase and explain. It may not compute, and it
+may not be the only thing that knows something.
+
+##### What the model is genuinely for
+
+- **The question nobody built a screen for.** "How much did I spend on trains
+  to Manchester last winter, and was that more than the year before?" is a real
+  question that does not deserve a permanent UI. This is the actual case for
+  7.6, and the tool layer already answers it with arithmetic — the model picks
+  which tools to call and writes the sentence around their output.
+- **Phrasing, not figures.** Turning `{verdict: 'breaks_emergency_fund',
+  shortfall: 340}` into a sentence that lands.
+- **The messy, one-off, varied input** — a receipt in an unfamiliar layout —
+  where a rule would need writing per case and never gets written.
+
+Anything that recurs monthly and matters is worth a rule instead.
+
 #### 7.J Done means
 
 - `npm run lint` — 0 errors, 0 warnings; `npm run typecheck`; `npm run build`
