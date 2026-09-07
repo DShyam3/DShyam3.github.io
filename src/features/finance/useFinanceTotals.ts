@@ -25,7 +25,7 @@ export function useFinanceTotals() {
     recurrings,
     debts,
     bankHolidaysList,
-    includeWorkLeaveInActual,
+    breakdownRateMode,
   } = useFinanceData();
 
   const { isItemActive, getCategoryBudget, getCategorySpent } = makeBudgetMath(
@@ -35,8 +35,18 @@ export function useFinanceTotals() {
   );
 
   const results = calculateFinance(settings, taxConfig);
-  const breakdownRates = includeWorkLeaveInActual ? results.breakdown.includingLeave : results.breakdown.excludingLeave;
-  const breakdownWorkingDays = includeWorkLeaveInActual ? results.workingDaysIncludingLeave : results.workingDaysExcludingLeave;
+  const breakdownRates =
+    breakdownRateMode === 'normal'
+      ? results.breakdown.standard
+      : breakdownRateMode === 'including_leave'
+      ? results.breakdown.includingLeave
+      : results.breakdown.excludingLeave;
+  const breakdownWorkingDays =
+    breakdownRateMode === 'normal'
+      ? results.workingDaysStandard
+      : breakdownRateMode === 'including_leave'
+      ? results.workingDaysIncludingLeave
+      : results.workingDaysExcludingLeave;
   const nextPayday = getNextPaydayDetails(settings, bankHolidaysList);
   const totalBudget = budgetCategories.reduce((sum, cat) => sum + getCategoryBudget(cat), 0);
   const totalSpent = budgetCategories.reduce((sum, cat) => sum + getCategorySpent(cat), 0);

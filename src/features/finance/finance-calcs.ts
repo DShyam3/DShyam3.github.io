@@ -94,28 +94,30 @@ export const calculateFinance = (settings: FinanceSettings, taxConfig: TaxConfig
 
   const totalDeductions = incomeTax + nationalInsurance + studentLoan + personalPensionRate;
   const netTakeHome = grossSalary - totalDeductions;
+  const WEEKS_IN_YEAR_ACTUAL = 365 / 7; // 52.142857... (~52.1429) weeks
+  const workingDaysStandard = WEEKS_IN_YEAR_ACTUAL * 5; // ~260.714 days
   const workingDaysIncludingLeave = Math.max(0, 365 - weekends - 1);
   const workingDaysExcludingLeave = Math.max(0, 365 - weekends - 1 - bankHolidays - workHolidays);
 
-  const getBreakdown = (annualAmount: number, daysInYear: number) => {
+  const getBreakdown = (annualAmount: number, daysInYear: number, weeksInYear = 52) => {
     const monthly = annualAmount / 12;
-    const weekly = annualAmount / 52;
+    const weekly = annualAmount / weeksInYear;
     const daily = annualAmount / (daysInYear || 1);
     const hourly = daily / workingHoursPerDay;
     return { annual: annualAmount, monthly, weekly, daily, hourly };
   };
 
-  const buildBreakdown = (daysInYear: number) => ({
-    totalPackage: getBreakdown(totalPackage, daysInYear),
-    preTax: getBreakdown(grossSalary, daysInYear),
-    employerPension: getBreakdown(employerPensionRate, daysInYear),
-    benefits: getBreakdown(totalBenefitsValue, daysInYear),
-    tax: getBreakdown(incomeTax, daysInYear),
-    ni: getBreakdown(nationalInsurance, daysInYear),
-    pension: getBreakdown(personalPensionRate, daysInYear),
-    studentLoan: getBreakdown(studentLoan, daysInYear),
-    postTax: getBreakdown(netTakeHome, daysInYear),
-    deductions: getBreakdown(totalDeductions, daysInYear),
+  const buildBreakdown = (daysInYear: number, weeksInYear = 52) => ({
+    totalPackage: getBreakdown(totalPackage, daysInYear, weeksInYear),
+    preTax: getBreakdown(grossSalary, daysInYear, weeksInYear),
+    employerPension: getBreakdown(employerPensionRate, daysInYear, weeksInYear),
+    benefits: getBreakdown(totalBenefitsValue, daysInYear, weeksInYear),
+    tax: getBreakdown(incomeTax, daysInYear, weeksInYear),
+    ni: getBreakdown(nationalInsurance, daysInYear, weeksInYear),
+    pension: getBreakdown(personalPensionRate, daysInYear, weeksInYear),
+    studentLoan: getBreakdown(studentLoan, daysInYear, weeksInYear),
+    postTax: getBreakdown(netTakeHome, daysInYear, weeksInYear),
+    deductions: getBreakdown(totalDeductions, daysInYear, weeksInYear),
   });
 
   return {
@@ -129,11 +131,13 @@ export const calculateFinance = (settings: FinanceSettings, taxConfig: TaxConfig
     studentLoan,
     totalDeductions,
     netTakeHome,
+    workingDaysStandard,
     workingDaysExcludingLeave,
     workingDaysIncludingLeave,
     breakdown: {
-      excludingLeave: buildBreakdown(workingDaysExcludingLeave),
-      includingLeave: buildBreakdown(workingDaysIncludingLeave),
+      standard: buildBreakdown(workingDaysStandard, WEEKS_IN_YEAR_ACTUAL),
+      excludingLeave: buildBreakdown(workingDaysExcludingLeave, 52),
+      includingLeave: buildBreakdown(workingDaysIncludingLeave, 52),
     }
   };
 };

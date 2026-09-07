@@ -8,14 +8,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
-import { useFinanceData } from '../FinanceDataContext';
+import { useFinanceData, type BreakdownRateMode } from '../FinanceDataContext';
 import { MONTH_NAMES, getPlanName } from '../finance-defaults';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PackageBenefit, UserHoliday } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
@@ -50,8 +49,8 @@ export default function TaxIncomeSurface({
     settings,
     bankHolidaysList,
     bankHolidaysMap,
-    includeWorkLeaveInActual,
-    setIncludeWorkLeaveInActual,
+    breakdownRateMode,
+    setBreakdownRateMode,
   } = useFinanceData();
 
   const {
@@ -311,20 +310,37 @@ export default function TaxIncomeSurface({
                 Rules applied ({settings.ukRegion === 'england-and-wales' ? 'England' : settings.ukRegion}, weekends excluded)
               </p>
               <p className="text-xs text-muted-foreground font-mono pt-1">
-                {includeWorkLeaveInActual
-                  ? `${breakdownWorkingDays} paid days per year — bank holidays and ${settings.workHolidays} days paid leave included.`
-                  : `${breakdownWorkingDays} working days per year — bank holidays and ${settings.workHolidays} days paid leave excluded.`}
+                {breakdownRateMode === 'normal' &&
+                  `${typeof breakdownWorkingDays === 'number' ? breakdownWorkingDays.toFixed(1) : breakdownWorkingDays} days per year — standard 52.14 weeks (5 days/week, ${settings.workingHoursPerDay} hrs/day).`}
+                {breakdownRateMode === 'including_leave' &&
+                  `${breakdownWorkingDays} paid days per year — bank holidays and ${settings.workHolidays} days paid leave included.`}
+                {breakdownRateMode === 'excluding_leave' &&
+                  `${breakdownWorkingDays} working days per year — bank holidays and ${settings.workHolidays} days paid leave excluded.`}
               </p>
             </div>
-            <div className="flex items-center gap-2.5 shrink-0 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 self-start">
-              <Label htmlFor="include-work-leave" className="text-xs font-mono text-muted-foreground cursor-pointer">
-                {includeWorkLeaveInActual ? 'Including paid leave' : 'Excluding paid leave'}
-              </Label>
-              <Switch
-                id="include-work-leave"
-                checked={includeWorkLeaveInActual}
-                onCheckedChange={setIncludeWorkLeaveInActual}
-              />
+            <div className="flex bg-muted/20 border border-border/30 rounded-lg p-0.5 gap-0.5 font-mono shrink-0 self-start">
+              {[
+                { key: 'normal', label: 'Normal' },
+                { key: 'including_leave', label: 'Incl. Paid Leave' },
+                { key: 'excluding_leave', label: 'Excl. Paid Leave' },
+              ].map((opt) => {
+                const isActive = breakdownRateMode === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setBreakdownRateMode(opt.key as BreakdownRateMode)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-mono rounded-md transition-all whitespace-nowrap",
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

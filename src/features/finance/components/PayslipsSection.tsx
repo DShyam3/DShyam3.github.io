@@ -158,10 +158,10 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
           totals,
           logo: groupBy === 'employer' ? employerLogo(key) : null,
           title: groupBy === 'employer' ? key : `${key}/${String(Number(key) + 1).slice(2)}`,
-          subtitle: groupBy === 'employer'
-            // A date range says how long the job lasted, which the count does not.
-            ? `${slips.length} payslip${slips.length === 1 ? '' : 's'} · ${formatDate(oldest)} – ${formatDate(newest)}`
-            : `${slips.length} payslip${slips.length === 1 ? '' : 's'} · ${formatGBP(totals.gross)} earned`,
+          subtitle:
+            oldest === newest
+              ? `${slips.length} payslip · ${formatDate(newest)}`
+              : `${slips.length} payslip${slips.length === 1 ? '' : 's'} · ${formatDate(oldest)} – ${formatDate(newest)}`,
           sortKey: newest,
         };
       })
@@ -383,11 +383,19 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                     <div className="text-xs font-semibold text-foreground font-mono truncate">{group.title}</div>
                     <div className="text-xs text-muted-foreground font-mono truncate">{group.subtitle}</div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs font-semibold text-foreground font-mono tabular-nums">
-                      {formatGBP(group.totals.net)}
+                  <div className="flex items-center gap-3 sm:gap-5 text-right shrink-0 font-mono">
+                    <div className="text-right">
+                      <div className="text-xs font-semibold text-foreground tabular-nums">
+                        {formatGBP(group.totals.gross)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">gross</div>
                     </div>
-                    <div className="text-xs text-muted-foreground font-mono">take-home</div>
+                    <div className="text-right">
+                      <div className="text-xs font-semibold text-foreground tabular-nums">
+                        {formatGBP(group.totals.net)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">take-home</div>
+                    </div>
                   </div>
                 </button>
 
@@ -408,15 +416,22 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                             <div className="text-xs text-muted-foreground font-mono truncate">
                               {groupBy === 'employer'
                                 ? (captured ? `${formatGBP(p.gross)} gross` : 'figures not captured yet')
-                                : (p.employer || (captured ? `${formatGBP(p.gross)} gross` : 'no employer'))}
+                                : (
+                                    p.employer
+                                      ? (captured ? `${p.employer} · ${formatGBP(p.gross)} gross` : `${p.employer} · figures not captured yet`)
+                                      : (captured ? `${formatGBP(p.gross)} gross` : 'no employer')
+                                  )}
                             </div>
                           </div>
                           {captured && !check.reconciles && (
                             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Does not reconcile" />
                           )}
                           {p.storagePath && <FileText className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="PDF archived" />}
-                          <div className="text-xs font-semibold text-foreground font-mono tabular-nums shrink-0">
-                            {captured ? formatGBP(p.net) : '—'}
+                          <div className="text-right shrink-0">
+                            <div className="text-xs font-semibold text-foreground font-mono tabular-nums">
+                              {captured ? formatGBP(p.net) : '—'}
+                            </div>
+                            {captured && <div className="text-xs text-muted-foreground font-mono">take-home</div>}
                           </div>
                         </button>
                       );

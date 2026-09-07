@@ -74,6 +74,8 @@ import {
   mergeMissingDefaultCategories,
   presetsToDefaultCategories,
 } from './finance-defaults';
+
+export type BreakdownRateMode = 'normal' | 'including_leave' | 'excluding_leave';
 import {
   calculateWeekends,
   sanitizeBankAccounts,
@@ -239,7 +241,12 @@ function useProvideFinanceData() {
   const [fetchingHolidays, setFetchingHolidays] = useState(false);
   const [bankHolidaysList, setBankHolidaysList] = useState<string[]>([]);
   const [bankHolidaysMap, setBankHolidaysMap] = useState<Record<string, string>>({});
-  const [includeWorkLeaveInActual, setIncludeWorkLeaveInActual] = useState(true);
+  const [breakdownRateMode, setBreakdownRateMode] = useState<BreakdownRateMode>('normal');
+  const includeWorkLeaveInActual = breakdownRateMode !== 'excluding_leave';
+  const setIncludeWorkLeaveInActual = (val: boolean | ((prev: boolean) => boolean)) => {
+    const nextVal = typeof val === 'function' ? val(includeWorkLeaveInActual) : val;
+    setBreakdownRateMode(nextVal ? 'including_leave' : 'excluding_leave');
+  };
   useEffect(() => {
     const fetchHolidays = async () => {
       setFetchingHolidays(true);
@@ -1611,6 +1618,8 @@ function useProvideFinanceData() {
     setBankHolidaysList,
     bankHolidaysMap,
     setBankHolidaysMap,
+    breakdownRateMode,
+    setBreakdownRateMode,
     includeWorkLeaveInActual,
     setIncludeWorkLeaveInActual,
     bankAccounts,
