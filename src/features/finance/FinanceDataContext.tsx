@@ -341,6 +341,15 @@ function useProvideFinanceData() {
   };
 
   /**
+   * Scopes queries for profile-specific tables that don't have an `is_default`
+   * template column (e.g. debt observations).
+   */
+  const scopedByProfile = <T,>(q: T): T => {
+    if (!profileId) return q;
+    return (q as { eq: (col: string, val: string) => T }).eq('profile_id', profileId);
+  };
+
+  /**
    * Writes one profile's own fields. Separate from saveDataToSupabase, which
    * replaces whole collections of ledger rows; a profile is a single row and
    * its edits are patches, not replacements.
@@ -657,7 +666,7 @@ function useProvideFinanceData() {
           scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, use_case, emoji, color')),
           scoped(supabase.from('finance_memberships').select('id, is_default, name, type, status, annual_fee, use_case')),
           scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color')),
-          scoped(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
+          scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji')),
