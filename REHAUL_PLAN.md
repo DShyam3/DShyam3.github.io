@@ -1491,9 +1491,9 @@ number is the optional final payment against the car's likely worth. That is a
 | A | `finance_debt_observations`, projection anchored on the latest one, `balance` demoted to a cache | migration |
 | B | Drift on reconcile: predicted vs observed, with the implied rate | A |
 | C | `statement_date` on observations, and the SLC lag handled explicitly | A |
-| D | Projection steps the rate in force, reading an optional list of periods | — |
+| D | Projection steps the rate in force, reading an optional list of periods | **DONE** |
 | D2 | `rate_periods` jsonb column feeding D | migration |
-| E | PCP as its own repayment type, terminating at a balloon | — |
+| E | PCP as its own repayment type, terminating at a balloon | **DONE** |
 | F | Payslip deductions drive the student loan projection where present | 7.7 |
 
 D and E are pure changes to `lib/finance/debt.ts`: the projection takes an

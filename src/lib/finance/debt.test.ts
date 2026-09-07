@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectDebtBalance, STUDENT_LOAN_WRITE_OFF_YEARS } from './debt';
+import { projectDebtBalance, rateInForce, STUDENT_LOAN_WRITE_OFF_YEARS } from './debt';
 
 const opts = { grossSalary: 0, repaymentRate: 9, threshold: 27295, currentYear: 2025 };
 
@@ -93,5 +93,139 @@ describe('projectDebtBalance', () => {
 
   it('returns only the opening point for a cleared debt', () => {
     expect(projectDebtBalance({ balance: 0, interestRate: 5, minPayment: 100 }, opts)).toHaveLength(1);
+  });
+});
+
+describe('rateInForce', () => {
+  const periods = [
+    { effectiveFrom: '2027-01-01', rate: 8 },
+    { effectiveFrom: '2025-01-01', rate: 4 },
+  ];
+
+  it('falls back when there is no schedule at all', () => {
+    expect(rateInForce(undefined, 6, new Date(2025, 5, 1))).toBe(6);
+    expect(rateInForce([], 6, new Date(2025, 5, 1))).toBe(6);
+  });
+
+  it('picks the latest period that has already begun, unsorted input included', () => {
+    expect(rateInForce(periods, 6, new Date(2026, 0, 1))).toBe(4);
+    expect(rateInForce(periods, 6, new Date(2028, 0, 1))).toBe(8);
+  });
+
+  it('takes effect on the day itself, not the day after', () => {
+    expect(rateInForce(periods, 6, new Date('2027-01-01'))).toBe(8);
+  });
+
+  it('falls back while every period is still in the future', () => {
+    expect(rateInForce(periods, 6, new Date(2024, 0, 1))).toBe(6);
+  });
+
+  it('ignores a period with an unparseable date rather than throwing', () => {
+    expect(rateInForce([{ effectiveFrom: 'nonsense', rate: 99 }], 6, new Date(2026, 0, 1))).toBe(6);
+  });
+});
+
+describe('projectDebtBalance with a rate schedule', () => {
+  const scheduleOpts = { ...opts, today: new Date(2025, 0, 1) };
+
+  it('leaves a debt without periods exactly as it was', () => {
+    const debt = { balance: 10000, interestRate: 5, minPayment: 200 };
+    expect(projectDebtBalance({ ...debt, ratePeriods: [] }, scheduleOpts))
+      .toEqual(projectDebtBalance(debt, scheduleOpts));
+  });
+
+  it('charges more interest once a fix reverts to a higher rate', () => {
+    const fixThenRevert = projectDebtBalance(
+      {
+        balance: 200000,
+        interestRate: 3,
+        minPayment: 1200,
+        ratePeriods: [
+          { effectiveFrom: '2025-01-01', rate: 3 },
+          { effectiveFrom: '2027-01-01', rate: 8 },
+        ],
+      },
+      scheduleOpts,
+    );
+    const fixedThroughout = projectDebtBalance(
+      { balance: 200000, interestRate: 3, minPayment: 1200 },
+      scheduleOpts,
+    );
+    const after = (points: typeof fixThenRevert) =>
+      points.find(p => p.year === 2030)!;
+    expect(after(fixThenRevert).interest).toBeGreaterThan(after(fixedThroughout).interest);
+    expect(after(fixThenRevert).balance).toBeGreaterThan(after(fixedThroughout).balance);
+  });
+
+  it('uses the debt rate for months before any period starts', () => {
+    // The schedule opens two years in, so the first two years run at 10%.
+    const scheduled = projectDebtBalance(
+      {
+        balance: 10000,
+        interestRate: 10,
+        minPayment: 300,
+        ratePeriods: [{ effectiveFrom: '2027-01-01', rate: 0 }],
+      },
+      scheduleOpts,
+    );
+    const flat = projectDebtBalance(
+      { balance: 10000, interestRate: 10, minPayment: 300 },
+      scheduleOpts,
+    );
+    expect(scheduled.find(p => p.year === 2026)!.interest)
+      .toBeCloseTo(flat.find(p => p.year === 2026)!.interest, 6);
+  });
+});
+
+describe('projectDebtBalance for PCP', () => {
+  it('settles at the balloon instead of clearing', () => {
+    const points = projectDebtBalance(
+      { balance: 20000, interestRate: 0, minPayment: 500, repaymentType: 'pcp', finalPayment: 8000 },
+      opts,
+    );
+    const last = points[points.length - 1];
+    expect(last.balance).toBe(8000);
+    // 12000 of depreciation at 500 a month, and the balloon is not paid.
+    expect(last.paid).toBe(12000);
+  });
+
+  it('does not count the balloon as paid', () => {
+    const withBalloon = projectDebtBalance(
+      { balance: 20000, interestRate: 0, minPayment: 500, repaymentType: 'pcp', finalPayment: 8000 },
+      opts,
+    );
+    const asHirePurchase = projectDebtBalance(
+      { balance: 20000, interestRate: 0, minPayment: 500 },
+      opts,
+    );
+    expect(withBalloon[withBalloon.length - 1].paid).toBeLessThan(
+      asHirePurchase[asHirePurchase.length - 1].paid,
+    );
+  });
+
+  it('reaches the balloon sooner than it would reach zero', () => {
+    const pcp = projectDebtBalance(
+      { balance: 20000, interestRate: 0, minPayment: 500, repaymentType: 'pcp', finalPayment: 8000 },
+      opts,
+    );
+    const hp = projectDebtBalance({ balance: 20000, interestRate: 0, minPayment: 500 }, opts);
+    expect(pcp[pcp.length - 1].year).toBeLessThan(hp[hp.length - 1].year);
+  });
+
+  it('does nothing when the balloon already covers the balance', () => {
+    const points = projectDebtBalance(
+      { balance: 5000, interestRate: 5, minPayment: 300, repaymentType: 'pcp', finalPayment: 8000 },
+      opts,
+    );
+    expect(points).toHaveLength(1);
+    expect(points[0].balance).toBe(5000);
+  });
+
+  it('treats a pcp without a final payment as ordinary amortisation', () => {
+    const noBalloon = projectDebtBalance(
+      { balance: 6000, interestRate: 0, minPayment: 500, repaymentType: 'pcp' },
+      opts,
+    );
+    expect(noBalloon[noBalloon.length - 1].balance).toBe(0);
   });
 });
