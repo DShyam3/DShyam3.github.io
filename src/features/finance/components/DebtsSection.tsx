@@ -174,11 +174,17 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
 
   const sumDraws = (draws: DebtDraw[]) => draws.reduce((sum, d) => sum + d.amount, 0);
 
+  const getPlanPercent = (plan: StudentLoanPlanKey = 'plan2') => {
+    const raw = taxConfig.studentLoanRates[plan];
+    if (raw === undefined || raw === null || raw === 0) return 9;
+    return raw <= 1 ? Math.round(raw * 100) : raw;
+  };
+
   const calculateStudentMonthly = (plan: StudentLoanPlanKey = 'plan2') => {
-    const threshold = taxConfig.studentLoanThresholds[plan] || 0;
-    const rate = taxConfig.studentLoanRates[plan] || 0;
+    const threshold = taxConfig.studentLoanThresholds[plan] || 27295;
+    const ratePercent = getPlanPercent(plan);
     if (!settings.grossSalary || settings.grossSalary <= threshold) return 0;
-    return Math.round(((settings.grossSalary - threshold) * (rate / 100)) / 12 * 100) / 100;
+    return Math.round(((settings.grossSalary - threshold) * (ratePercent / 100)) / 12 * 100) / 100;
   };
 
   const handleAddDraw = () => {
@@ -337,7 +343,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
   const selectedDebtProjection = selectedDebtEffective
     ? projectDebtBalance(selectedDebtEffective, {
         grossSalary: settings.grossSalary,
-        repaymentRate: selectedPlan ? (taxConfig.studentLoanRates[selectedPlan] || 9) : 0,
+        repaymentRate: selectedPlan ? getPlanPercent(selectedPlan) : 0,
         threshold: selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 0,
       })
     : [];
@@ -502,7 +508,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {(selectedDebt.repaymentType === 'income_contingent' || selectedDebt.type === 'student')
-                    ? `${STUDENT_LOAN_PLAN_LABELS[selectedPlan || 'plan2']}: ${selectedPlan ? (taxConfig.studentLoanRates[selectedPlan] || 9) : 9}% of income above ${formatGBP(selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 27295)}, written off after ${selectedDebtEffective?.writeOffYears ?? 30} years`
+                    ? `${STUDENT_LOAN_PLAN_LABELS[selectedPlan || 'plan2']}: ${getPlanPercent(selectedPlan || 'plan2')}% of income above ${formatGBP(selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 27295)}, written off after ${selectedDebtEffective?.writeOffYears ?? 30} years`
                     : selectedDebt.repaymentType === 'pcp'
                       ? `PCP: ${formatGBP(selectedDebt.minPayment)}/month amortising to ${formatGBP(selectedDebt.finalPayment || 0)} balloon`
                       : `Fixed repayment of ${formatGBP(selectedDebt.minPayment)}/month at ${selectedDebt.interestRate.toFixed(2)}%`}
