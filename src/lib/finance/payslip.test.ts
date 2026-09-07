@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  checkPayslip, compareToModel, deductionRate, effectiveTaxRate, inTaxYear,
+  checkPayslip, compareToModel, deductionRate, effectiveTaxRate, formatPayslipLineLabel, inTaxYear,
   studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from './payslip';
 
@@ -134,3 +134,22 @@ describe('compareToModel', () => {
     });
   });
 });
+
+describe('formatPayslipLineLabel', () => {
+  it('translates arrears to backdated for clarity', () => {
+    expect(formatPayslipLineLabel('Gym arrears')).toBe('Gym (backdated)');
+    expect(formatPayslipLineLabel('Gym Arrears')).toBe('Gym (backdated)');
+    expect(formatPayslipLineLabel('Gym - arrears')).toBe('Gym (backdated)');
+    expect(formatPayslipLineLabel('Gym (arrears)')).toBe('Gym (backdated)');
+    expect(formatPayslipLineLabel('arrears')).toBe('Backdated');
+    expect(formatPayslipLineLabel('Arrears')).toBe('Backdated');
+    expect(formatPayslipLineLabel('Pension arrears')).toBe('Pension (backdated)');
+  });
+
+  it('leaves standard payroll labels unchanged', () => {
+    expect(formatPayslipLineLabel('Basic Salary')).toBe('Basic Salary');
+    expect(formatPayslipLineLabel('Gym')).toBe('Gym');
+    expect(formatPayslipLineLabel('Pension')).toBe('Pension');
+  });
+});
+

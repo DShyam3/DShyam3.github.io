@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { formatDate } from '@/lib/format-date';
-import { checkPayslip, groupPayslipLines, totalDeductions, type Payslip } from '@/lib/finance';
+import { checkPayslip, formatPayslipLineLabel, groupPayslipLines, totalDeductions, type Payslip } from '@/lib/finance';
 import { employerLogo } from '../employer-logo';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Download, Pencil } from 'lucide-react';
@@ -69,7 +69,7 @@ export function PayslipDetailDialog({ payslip, onOpenChange, onEdit, onOpenPdf }
                 <section>
                   <h4 className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Payments</h4>
                   <div className="divide-y divide-border/30">
-                    {payments.map(l => <Row key={l.label} label={l.label} value={formatGBP(l.amount)} />)}
+                    {payments.map(l => <Row key={l.label} label={formatPayslipLineLabel(l.label)} value={formatGBP(l.amount)} />)}
                   </div>
                 </section>
               )}
@@ -84,7 +84,7 @@ export function PayslipDetailDialog({ payslip, onOpenChange, onEdit, onOpenPdf }
                       which is why the tax on this payslip is lower than the
                       headline salary would suggest. */}
                   <div className="divide-y divide-border/30">
-                    {benefits.map(l => <Row key={l.label} label={l.label} value={`−${formatGBP(l.amount)}`} tone="negative" />)}
+                    {benefits.map(l => <Row key={l.label} label={formatPayslipLineLabel(l.label)} value={`−${formatGBP(l.amount)}`} tone="negative" />)}
                   </div>
                 </section>
               )}
@@ -93,7 +93,7 @@ export function PayslipDetailDialog({ payslip, onOpenChange, onEdit, onOpenPdf }
                 <section>
                   <h4 className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Deductions</h4>
                   <div className="divide-y divide-border/30">
-                    {deductions.map(l => <Row key={l.label} label={l.label} value={`−${formatGBP(l.amount)}`} tone="negative" />)}
+                    {deductions.map(l => <Row key={l.label} label={formatPayslipLineLabel(l.label)} value={`−${formatGBP(l.amount)}`} tone="negative" />)}
                   </div>
                 </section>
               )}

@@ -58,6 +58,27 @@ export const groupPayslipLines = (lines: readonly PayslipLine[] | undefined) => 
 });
 
 /**
+ * Makes line item labels easier to read by replacing archaic payroll jargon.
+ *
+ * Payroll slips commonly print "Gym arrears" or "Pension arrears" when a prior
+ * period deduction was collected late or backdated. "Arrears" sounds penal and
+ * obscure; "(backdated)" is immediately clear in context.
+ */
+export const formatPayslipLineLabel = (label: string): string => {
+  const trimmed = label.trim();
+  if (/^\(?arrears\)?$/i.test(trimmed)) {
+    return 'Backdated';
+  }
+  if (/\barrears\b/i.test(trimmed)) {
+    return trimmed
+      .replace(/[\s\-_–—]*\(?\s*arrears\s*\)?/i, ' (backdated)')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  return label;
+};
+
+/**
  * Everything taken off gross.
  *
  * Deliberately excludes the employer's pension contribution. Including it is
