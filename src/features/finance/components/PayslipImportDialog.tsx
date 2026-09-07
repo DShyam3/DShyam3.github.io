@@ -13,7 +13,7 @@
 import { useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
 import { extractPayslipFromPdf } from '../payslip-pdf';
-import { uploadFinanceDocument } from '../finance-storage';
+import { deleteFinanceDocument, uploadFinanceDocument } from '../finance-storage';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -81,7 +81,7 @@ export function PayslipImportDialog({ open, onOpenChange }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { savePayslip, profileId } = useFinanceData();
+  const { payslips, savePayslip, profileId } = useFinanceData();
   const [rows, setRows] = useState<Row[]>([]);
   const [isReading, setIsReading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -115,13 +115,23 @@ export function PayslipImportDialog({ open, onOpenChange }: {
     setProgress({ done: 0, total: chosen.length });
     let done = 0;
     for (const row of chosen) {
+      // Re-importing a payslip replaces its row, because the natural key is
+      // (profile, pay date). The file needs the same treatment: every upload
+      // gets a fresh name, so without this a second import would leave the
+      // first PDF orphaned in the bucket with nothing pointing at it.
+      const existing = payslips.find(p => p.payDate === row.slip.payDate);
       try {
         const uploaded = await uploadFinanceDocument(row.file, profileId);
         await savePayslip({ ...row.slip, storagePath: uploaded.path });
+        // Only after the row points at the new file, so a failure between the
+        // two leaves the old document reachable rather than deleted.
+        if (existing?.storagePath && existing.storagePath !== uploaded.path) {
+          await deleteFinanceDocument(existing.storagePath);
+        }
       } catch {
         // The figures matter more than the archive. If the upload fails the
-        // row still goes in, without a file attached.
-        await savePayslip(row.slip);
+        // row still goes in -- keeping whatever document it already had.
+        await savePayslip({ ...row.slip, storagePath: existing?.storagePath });
       }
       done += 1;
       setProgress({ done, total: chosen.length });
@@ -163,6 +173,30 @@ export function PayslipImportDialog({ open, onOpenChange }: {
             <p className="text-xs text-muted-foreground">
               {isImporting ? 'Importing' : 'Reading'} {progress.done} of {progress.total}…
             </p>
+          )}
+
+          {rows.length > 0 && (
+            /* Unreadable files start unticked, which is the right default and
+               a poor discovery: nothing on the row says it can be turned on.
+               These say it out loud, because archiving a scan you cannot parse
+               is a thing people want and would not otherwise find. */
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Select</span>
+              {([
+                ['All', () => setRows(rs => rs.map(r => ({ ...r, include: !r.error && !!r.slip.payDate })))],
+                ['Only with figures', () => setRows(rs => rs.map(r => ({ ...r, include: r.found > 0 && !!r.slip.payDate })))],
+                ['None', () => setRows(rs => rs.map(r => ({ ...r, include: false })))],
+              ] as const).map(([label, apply]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={apply}
+                  className="rounded-md border border-border/40 px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           )}
 
           {rows.length > 0 && (
