@@ -1552,9 +1552,25 @@ is worth more right now than any item below.**
 | Public demo profile | Decided in principle, never scoped. Changes what the anon role may read |
 | FCA framing for 7.L | Only matters if this stops being private, but it shapes the feature |
 
-##### Blocked on `ANTHROPIC_API_KEY`
+##### Blocked on a model key — any provider
 
-`supabase secrets set ANTHROPIC_API_KEY=...`. Nothing else gates these.
+The assistant is provider-agnostic by construction. There are not N vendor
+integrations to write, there are two wire protocols and a list: almost every
+vendor speaks OpenAI's `/chat/completions` shape (Moonshot/Kimi, DeepSeek,
+Mistral, Groq, xAI, Together, OpenRouter, and anything local behind Ollama or
+vLLM), and Anthropic speaks its own. `lib/finance/llm.ts` translates both;
+adding a provider is a registry row — id, protocol, base URL, model, which
+secret holds the key — and never an edit to that file.
+
+The registry stays server-side. A client that could name a URL rather than an
+id would be an SSRF hole with a friendly name; it names an id, and the Edge
+Function resolves it.
+
+So the gate is *a* key, not a particular vendor's:
+`supabase secrets set <PROVIDER>_API_KEY=...`. One caveat for 7.7 — document
+extraction is the one capability that genuinely differs between vendors, so
+that step wants checking against whichever model is chosen rather than assumed
+to port.
 
 - **7.6** — tools and context are written; the assistant needs the key
 - **7.7 extraction** — storage half is done, reading figures off a PDF is not
