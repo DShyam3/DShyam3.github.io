@@ -62,7 +62,8 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   { field: 'studentLoan', pattern: /\bstudent\s+loan|\bpost\s*grad(?:uate)?\s+loan/i },
   // `NI(category M)` is how at least one payroll system writes it, so the
   // bracketed form has to match mid-line rather than only at a word gap.
-  { field: 'nationalInsurance', pattern: /\bnational\s+insurance\b|\bni\s*\(|\bni\s+contribution|\bemployee'?s?\s+ni\b|\bnic\b/i },
+  // "N.I" with stops is common, and was being missed entirely.
+  { field: 'nationalInsurance', pattern: /\bnational\s+insurance\b|\bn\.\s?i\.?(?=\W|$)|\bni\s*\(|\bni\s+contribution|\bemployee'?s?\s+ni\b|\bnic\b/i },
   // Likewise `Tax(code 1257L)`.
   // A bare "Tax" counts, since two-column layouts put it mid-line. It cannot
   // catch "Taxable", where the word boundary fails, and "Tax Code" is
@@ -77,6 +78,10 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   // also states an annual figure it read twelve times the month's pay, and a
   // wrong gross that large still charts as a plausible line. A payslip with no
   // row called gross is better left for a person to fill in.
+  // Tried and reverted: a bare "TOTAL", for layouts that foot each column
+  // with that word. It read "Total Hours 1.25" on a leaving payslip as a
+  // gross of £1.25, and no lookahead that excluded hours, units and days
+  // would have been anything but a list of the layouts already seen.
   { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b|\bearnings\b/i },
 ];
 
@@ -148,7 +153,7 @@ const CUMULATIVE = /year\s*to\s*date|\bytd\b|\bcumulative\b|\bto\s*date\b|\btaxa
  */
 const DATE_LABELS: RegExp[] = [
   // The day you were paid.
-  /\bpay\s*day\b|\bdate\s+paid\b/i,
+  /\bpay\s*day\b|\bdate\s+paid\b|\bpayslip\s+date\b/i,
   // A date labelled as the payment's, which on one layout is the day HMRC
   // will show it rather than the day it arrived -- two days later.
   /\bpay(?:ment)?\s*date\b|\bwill\s+show\s+as\b/i,

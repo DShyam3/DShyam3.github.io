@@ -119,10 +119,16 @@ export function PayslipImportDialog({ open, onOpenChange }: {
       // (profile, pay date). The file needs the same treatment: every upload
       // gets a fresh name, so without this a second import would leave the
       // first PDF orphaned in the bucket with nothing pointing at it.
-      const existing = payslips.find(p => p.payDate === row.slip.payDate);
+      const existing = payslips.find(p => p.payDate === row.slip.payDate && (p.employer ?? '') === (row.slip.employer ?? ''));
+      // An archive-only row carries zeroes. If a payslip is already held for
+      // that date with real figures, importing the PDF must attach it, not
+      // wipe them -- otherwise storing the document costs you the numbers,
+      // which is the opposite of the point.
+      const readAnything = row.found > 0;
+      const figures = !readAnything && existing ? existing : row.slip;
       try {
         const uploaded = await uploadFinanceDocument(row.file, profileId);
-        await savePayslip({ ...row.slip, storagePath: uploaded.path });
+        await savePayslip({ ...figures, id: existing?.id ?? row.slip.id, payDate: row.slip.payDate, employer: row.slip.employer, storagePath: uploaded.path });
         // Only after the row points at the new file, so a failure between the
         // two leaves the old document reachable rather than deleted.
         if (existing?.storagePath && existing.storagePath !== uploaded.path) {
@@ -131,7 +137,7 @@ export function PayslipImportDialog({ open, onOpenChange }: {
       } catch {
         // The figures matter more than the archive. If the upload fails the
         // row still goes in -- keeping whatever document it already had.
-        await savePayslip({ ...row.slip, storagePath: existing?.storagePath });
+        await savePayslip({ ...figures, id: existing?.id ?? row.slip.id, payDate: row.slip.payDate, employer: row.slip.employer, storagePath: existing?.storagePath });
       }
       done += 1;
       setProgress({ done, total: chosen.length });

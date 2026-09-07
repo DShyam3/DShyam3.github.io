@@ -469,7 +469,9 @@ function useProvideFinanceData() {
       storage_path: slip.storagePath ?? null,
       notes: slip.notes ?? null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'profile_id,pay_date' });
+    // Employer is part of the key: overlapping jobs can pay on the same day,
+    // and without it the second payslip replaces the first (7.7).
+    }, { onConflict: 'profile_id,employer,pay_date' });
     if (error) {
       toast({ title: 'Could not save payslip', description: error.message, variant: 'destructive' });
       return;
@@ -840,6 +842,7 @@ function useProvideFinanceData() {
         const mappedTransactions: MockTransaction[] = activeTransactions.map(t => ({
           id: t.id,
           name: t.name,
+          merchant: t.merchant || undefined,
           category: t.category || '',
           amount: Number(t.amount) || 0,
           date: t.date,
@@ -1088,6 +1091,7 @@ function useProvideFinanceData() {
         defaultsMap['transactions'] = defaultTransactions.map(t => ({
           id: t.id,
           name: t.name,
+          merchant: t.merchant || undefined,
           category: t.category || '',
           amount: Number(t.amount) || 0,
           date: t.date,
@@ -1455,6 +1459,10 @@ function useProvideFinanceData() {
             is_default: false,
             profile_id: profileId,
             name: t.name,
+            // Round-tripped rather than left to the upsert's defaults: an
+            // omitted column would be fine on conflict but NULLs the row on
+            // an insert, which is how a synced merchant would quietly vanish.
+            merchant: t.merchant || null,
             category: t.category || null,
             amount: t.amount,
             date: t.date,
