@@ -1,3 +1,15 @@
+# Rehaul Plan
+
+What is left to do, and the decisions that still bind. The audit this came from
+and the record of phases 0-6 are in `REHAUL_HISTORY.md`.
+
+**Start at Part 0.5 for how AI is used here, and 7.O for what happens next.**
+
+Audit date: 2026-09-04, last revised 2026-09-07. Supabase project:
+`yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2, Postgres 15.8.1.030).
+
+---
+
 ## Part 0 — Executive summary
 
 The site works and the design system is genuinely good. The problems are structural, not functional:
