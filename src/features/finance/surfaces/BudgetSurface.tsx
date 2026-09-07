@@ -17,6 +17,7 @@ import { makeBudgetMath } from '../finance-defaults';
 import { useFinanceData } from '../FinanceDataContext';
 import { initialPresetSelection, presetGroupFor, resolveItemName } from '../budget-preset-groups';
 import { BudgetPresetField } from '../components/BudgetPresetField';
+import { monthlySpend, spendYears, yearlySpend } from '@/lib/finance';
 import { DEFAULT_CATEGORY_PRESETS, DEFAULT_CATEGORY_TEMPLATES, MONTH_NAMES, asBudgetGroup, getBudgetItemSpent, isDueThisMonth } from '../finance-defaults';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -315,79 +316,30 @@ const allocationData = [
 
 const currentMonthName = new Date().toLocaleDateString('en-GB', { month: 'short' });
 
-// Key Metrics Calculation per year
-const currentYr = new Date().getFullYear();
-const currentMoIdx = new Date().getMonth();
-const allYears = Array.from(new Set([
-  currentYr,
-  currentYr - 1,
-  ...mockTransactions.map(tx => parseInt(tx.date.split('-')[0], 10)).filter(y => !isNaN(y))
-])).sort((a, b) => b - a);
+// Both series come from `spend-history`, which owns the date walking and the
+// arithmetic. What stays here is the part that is genuinely this page's: which
+// transactions and bills the current category filter admits.
+const today = new Date();
+const categoryTransactions = mockTransactions.filter(tx => isTxInCategory(tx, activeFilterCategory));
+const recurringTotalForMonth = (month: number) =>
+  recurrings
+    .filter(r => isBillInCategory(r, activeFilterCategory) && isDueThisMonth(r, month))
+    .reduce((sum, r) => sum + r.amount, 0);
 
-const keyMetricsData = allYears.map(yr => {
-  const isCurrentYear = yr === currentYr;
-  const monthsElapsed = isCurrentYear ? (currentMoIdx + 1) : 12;
+const allYears = spendYears(categoryTransactions, today);
+const keyMetricsData = yearlySpend(allYears, categoryTransactions, recurringTotalForMonth, today);
 
-  const yearTxSpent = mockTransactions
-    .filter(tx => tx.date.startsWith(`${yr}-`) && isTxInCategory(tx, activeFilterCategory))
-    .reduce((sum, tx) => sum + (tx.amount || 0), 0);
-
-  let yearRecurringSpent = 0;
-  for (let m = 1; m <= monthsElapsed; m++) {
-    yearRecurringSpent += recurrings
-      .filter(r => isBillInCategory(r, activeFilterCategory) && isDueThisMonth(r, m))
-      .reduce((sum, r) => sum + r.amount, 0);
-  }
-
-  const totalSpentInYear = yearTxSpent + yearRecurringSpent;
-  const avgMonthlySpend = monthsElapsed > 0 ? (totalSpentInYear / monthsElapsed) : 0;
-
-  return {
-    year: yr,
-    spentPerYear: totalSpentInYear,
-    avgMonthlySpend: avgMonthlySpend,
-    monthsElapsed
-  };
-});
-
-// Multi-Month Historical Trend Chart Data (24 months)
 const targetCategoryBudget = activeFilterCategory
   ? getCategoryBudget(activeFilterCategory)
   : totalBudgetLimit;
 
-const multiMonthChartData: { monthLabel: string; tickLabel: string; spent: number; budget: number }[] = [];
-const startDate = new Date(currentYr, currentMoIdx, 1);
-startDate.setMonth(startDate.getMonth() - 23);
-
-const iterDate = new Date(startDate);
-const endDate = new Date(currentYr, currentMoIdx, 1);
-
-while (iterDate <= endDate) {
-  const yr = iterDate.getFullYear();
-  const mo = iterDate.getMonth();
-  const monthPrefix = `${yr}-${String(mo + 1).padStart(2, '0')}-`;
-  const monthNameShort = MONTH_NAMES[mo].slice(0, 3);
-  const singleLetter = MONTH_NAMES[mo].slice(0, 1);
-
-  const monthTxSpent = mockTransactions
-    .filter(tx => tx.date.startsWith(monthPrefix) && isTxInCategory(tx, activeFilterCategory))
-    .reduce((sum, tx) => sum + (tx.amount || 0), 0);
-
-  const monthRecSpent = recurrings
-    .filter(r => isBillInCategory(r, activeFilterCategory) && isDueThisMonth(r, mo + 1))
-    .reduce((sum, r) => sum + r.amount, 0);
-
-  const totalMonthSpent = monthTxSpent + monthRecSpent;
-
-  multiMonthChartData.push({
-    monthLabel: `${monthNameShort} ${yr}`,
-    tickLabel: singleLetter,
-    spent: parseFloat(totalMonthSpent.toFixed(2)),
-    budget: targetCategoryBudget
-  });
-
-  iterDate.setMonth(iterDate.getMonth() + 1);
-}
+const multiMonthChartData = monthlySpend(
+  categoryTransactions,
+  recurringTotalForMonth,
+  targetCategoryBudget,
+  MONTH_NAMES,
+  today,
+);
 
 const categoryData = budgetCategories
   .map((cat, idx) => {

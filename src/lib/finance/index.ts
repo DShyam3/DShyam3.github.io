@@ -17,5 +17,6 @@ export * from './payday';
 export * from './retirement';
 export * from './review';
 export * from './scenario';
+export * from './spend-history';
 export * from './tools';
 export * from './transfers';
