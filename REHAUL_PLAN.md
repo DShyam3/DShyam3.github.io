@@ -1261,6 +1261,157 @@ independent; neither is assumed.
 `SECURITY.md` is not edited now — it documents what is true today, and today is
 still Pages. It gets revised at migration, and this table is the checklist.
 
+#### 7.K Tax bands have no year, and that is the real problem
+
+The question "how does the site keep up when the Budget changes?" turns out to
+be two questions wearing one coat, and only one of them is hard.
+
+`finance_tax_configs` holds a single row: income tax bands, NI bands, student
+loan thresholds and rates. There is no tax year on it. Updating it for a new
+Budget therefore does not *add* the new bands, it *replaces* the old ones — so
+last year's take-home is recomputed with this year's numbers the moment you
+save. The figure on the Income surface is not wrong today; it becomes wrong
+retroactively, silently, the first time the rates move.
+
+That is a schema gap, not a news problem.
+
+| Option | Verdict |
+|---|---|
+| Edit the bands by hand each April (today) | Correct going forward, wrong for every past figure |
+| Store bands per effective date, pick by the date being computed | **Do this** |
+| Scrape gov.uk / HMRC for band changes | No. There is no stable API for this; the rates live in Budget documents and HTML tables that are restructured yearly. A scraper here fails silently and produces wrong money |
+
+The fix is an `effective_from date` column rather than a `tax_year` string.
+Bands mostly change at the April boundary, but not always — the NI rate moved
+twice inside 2022/23 — so a year label cannot express the real history.
+Selection becomes: take the most recent band set whose `effective_from` is on
+or before the date of the figure being computed. `calculateFinance` gains that
+date as a parameter, which it should have had anyway, since it is already the
+kind of pure function that must not read the clock.
+
+Seeding is a migration: the current bands become the row effective from the
+start of the current tax year, and earlier years get added as and when a
+historical figure actually needs them. No point inventing history nobody reads.
+
+**Tax news is a separate feature and should stay separate.** A change in the
+additional-rate threshold is *data* and belongs above. "The Chancellor has
+announced X and it affects you because Y" is *content*, needs a source and a
+model to summarise it, and therefore lands with 7.7–7.10 behind the same API
+key. Conflating them produces a scraper that pretends to be a ledger.
+
+#### 7.L Credit card recommendations — guidance is buildable, a catalogue is not
+
+Also two features under one name.
+
+**Guidance from data already held** needs no third party. The debt model,
+`lib/finance/credit.ts` and `lib/finance/debt.ts` already know balances, APRs,
+limits and utilisation. Statements like "you are carrying £2,400 at 24.9% while
+£3,000 sits in a current account paying nothing" or "utilisation is 68%, and
+under 30% is where the scoring bands step" are arithmetic over existing rows.
+This is the same shape as the alerts engine and should reuse it.
+
+**Product recommendations need a catalogue**, and there is no free source for
+UK card terms. The comparison sites are affiliate networks under commercial
+agreement, not open APIs; the issuers publish terms as marketing pages. So the
+catalogue is either hand-curated or it is a Phase 8 commercial arrangement.
+
+Structure it the way 7.G structures bureau data: a `finance_card_products`
+table that can be seeded by hand today and fed by a provider later, with the
+recommendation logic written against the table rather than against whatever
+fills it. The adapter goes behind the interface, per ADR-002.
+
+**One constraint to record before any of this becomes public.** Recommending
+specific financial products to consumers in the UK is a regulated activity.
+A private dashboard computing "this card would cost you less" for its own
+owner is fine. The same feature on a public-facing product is either FCA
+authorised, or carefully framed as information rather than advice, with no
+steer toward a particular product. Given the intent to possibly build a company
+from this, that distinction wants deciding before the feature is designed
+around it, not after.
+
+#### 7.M TrueLayer — the bank is a source, the local store is the record
+
+The integration predates Phase 7 and was never revisited. Reading it back
+turned up one bug that loses data, one that crosses profiles, and a set of
+structural limits.
+
+**It deletes history on every sync.** `sync_transactions` builds its write list
+from the API response plus manually-added rows; existing `tl_tx_` rows outside
+the fetch window are consulted for their review status and then dropped. It
+then deletes every non-default transaction and reinserts only that list. The
+window also narrows from 90 days on the first run to 30 on every run after, so
+the store converges on a rolling month. Once a transaction is past the
+provider's own window it cannot be re-fetched, so this is unrecoverable loss.
+
+**It ignores profiles.** Both deletes are scoped by `is_default` alone, across
+every profile, and the reinserts stamp `profile_id = selfProfileId` on every
+row — including the manually-added ones it went to the trouble of preserving.
+One sync collapses every profile's accounts and transactions onto the self
+profile. The connection table gained `profile_id NOT NULL` in the profiles
+migration; the function never reads it.
+
+**It holds one connection.** The table has no provider identity — no provider
+id, no name, no consent expiry — and `exchange_code` deletes all rows before
+inserting. One bank is structural, not incidental.
+
+**It does not paginate.** No cursor handling anywhere, so even the 90-day
+window is silently truncated on a busy account.
+
+The principle that follows: Open Banking gives a limited window and consent
+lapses, so the local database has to be authoritative. Bank-sourced rows are
+upserted and never pruned.
+
+| Step | Work | Gated on |
+|---|---|---|
+| A | Scope deletes by profile, carry each row's own `profile_id`, upsert transactions instead of delete-then-insert | deploy only |
+| B | Provider identity, `consent_expires_at`, `last_synced_at`, `UNIQUE(profile_id, provider_id)`; connect inserts rather than replaces; sync loops connections | migration + deploy |
+| C | Paginate, and backfill history per connection in date windows, resumable via `backfilled_through` because an edge function will time out before a multi-year walk finishes | B |
+| D | Daily `pg_cron` sync, as `watchlist-daily-sync` already does; surface consent expiry before it lapses | B |
+
+A is worth doing on its own and immediately: it is small, and it is the
+difference between syncing being safe and being destructive.
+
+**How much history is actually available, and how to get all of it.** The 90
+days in the current code is a number this codebase invented, not a limit the
+banks impose. Two different constraints get confused here and neither is a
+90-day history cap:
+
+- *Consent* must be reconfirmed roughly every 90 days. That governs how long
+  access keeps working, not how far back the data goes.
+- *Depth* is set per provider. Under the Open Banking spec the CMA9 generally
+  expose up to about 24 months of current-account transactions; some give less,
+  and it varies by product. There is no published figure that is reliable
+  across providers.
+
+The practically important part is the distinction between *attended* and
+*unattended* access. Several providers return a short window for background
+polling but their full retained history when the customer has just
+authenticated. So the deep fetch has to happen at the moment of connection —
+in the callback, while the session is still customer-present — and again after
+each consent reconfirmation, not on a nightly cron.
+
+The strategy that follows is: do not guess the limit, discover it.
+
+1. On connect, immediately walk backwards in windows (90 days per request is a
+   safe chunk) from today toward an optimistic floor — six years — issuing
+   requests until the provider returns empty ranges consistently.
+2. Record per connection how far back it actually yielded. That number is the
+   provider's real limit, learned rather than assumed, and it tells you what a
+   later re-consent can hope to add.
+3. Persist `backfilled_through` after every window so the walk resumes on the
+   next invocation. An edge function will time out long before a multi-year
+   backfill finishes, so this has to be a resumable loop, not one long run.
+4. Once backfilled, scheduled syncs only need a short incremental window. The
+   deep walk is a connect-time and re-consent-time operation.
+
+Everything fetched is kept permanently. The bank's window moves; the local
+store does not.
+
+One wrinkle for C: TrueLayer transaction ids are not stable across the
+pending-to-settled transition, so deduping on `tl_tx_<id>` will double-count
+anything ingested while pending. Ingest settled rows only at first; treat
+pending as a display concern later, if at all.
+
 #### 7.J Done means
 
 - `npm run lint` — 0 errors, 0 warnings; `npm run typecheck`; `npm run build`
