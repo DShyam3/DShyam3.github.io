@@ -192,3 +192,47 @@ describe('parsePayslipFilename', () => {
     expect(parsePayslipFilename('2026-13_Thing.pdf').payDate).toBeUndefined();
   });
 });
+
+/**
+ * Salary sacrifice, with invented figures. The layout states the sacrifice and
+ * the taxable pay left after it, and has no row called gross at all.
+ */
+const SACRIFICE = `
+Payments Units Rate (£) Amount Deductions (£) Amount
+Salary 4,000.00 Tax 700.00
+Pension Salary Sacrifice -200.00 National Insurance 250.00
+Student Loan Plan 2 150.00
+Taxable Pay 3,800.00 Taxable Pay 11,400.00
+Net Pay 2,700.00
+`;
+
+describe('parsePayslipText — salary sacrifice', () => {
+  const parsed = parsePayslipText(SACRIFICE);
+
+  it('works gross back out of taxable pay and the sacrifice', () => {
+    expect(parsed.taxablePay).toBe(3800);
+    expect(parsed.gross).toBe(4000);
+  });
+
+  it('records the sacrifice as a positive pension contribution', () => {
+    // The payslip prints it negative, because that column subtracts it. As a
+    // contribution it is an amount, and a minus would have every total add it
+    // back.
+    expect(parsed.pensionEmployee).toBe(200);
+  });
+
+  it('reconciles once gross is derived', () => {
+    const deductions = parsed.incomeTax! + parsed.nationalInsurance!
+      + parsed.pensionEmployee! + parsed.studentLoan!;
+    expect(parsed.gross! - deductions).toBe(parsed.net);
+  });
+
+  it('does not derive a gross when the payslip states one', () => {
+    const stated = parsePayslipText('Total Earnings 5,000.00\nTaxable Pay 3,800.00\nPension Salary Sacrifice -200.00');
+    expect(stated.gross).toBe(5000);
+  });
+
+  it('leaves gross alone when there is no taxable pay to work from', () => {
+    expect(parsePayslipText('Net Pay 2,700.00').gross).toBeUndefined();
+  });
+});

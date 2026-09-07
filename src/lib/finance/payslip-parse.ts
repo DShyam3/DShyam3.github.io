@@ -17,6 +17,12 @@
 
 export interface ParsedPayslip {
   gross?: number;
+  /**
+   * Pay after any salary sacrifice, which is what tax is charged on. Not a
+   * stored column — it is here because on a sacrifice payslip it is the only
+   * stated total, and gross has to be worked back from it.
+   */
+  taxablePay?: number;
   incomeTax?: number;
   nationalInsurance?: number;
   pensionEmployee?: number;
@@ -28,6 +34,16 @@ export interface ParsedPayslip {
 }
 
 type Field = Exclude<keyof ParsedPayslip, 'payDate' | 'employer'>;
+
+/**
+ * Fields that are magnitudes, whatever sign the payslip prints.
+ *
+ * A salary sacrifice appears in the payments column as a negative, because
+ * that is where it is subtracted. As a pension contribution it is a positive
+ * amount, and keeping the minus would have it added back by every total.
+ * Tax is deliberately not in this list: a negative there is a refund.
+ */
+const MAGNITUDE_FIELDS = new Set<Field>(['pensionEmployee', 'pensionEmployer']);
 
 /**
  * Label patterns per field, and order is load-bearing.
@@ -48,8 +64,12 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   // bracketed form has to match mid-line rather than only at a word gap.
   { field: 'nationalInsurance', pattern: /\bnational\s+insurance\b|\bni\s*\(|\bni\s+contribution|\bemployee'?s?\s+ni\b|\bnic\b/i },
   // Likewise `Tax(code 1257L)`.
-  { field: 'incomeTax', pattern: /\bpaye\b|\bincome\s+tax\b|\btax\s*\(|\btax\s+(?:deducted|paid|this\s+period)\b|^\s*tax\b/i },
+  // A bare "Tax" counts, since two-column layouts put it mid-line. It cannot
+  // catch "Taxable", where the word boundary fails, and "Tax Code" is
+  // harmless because the code that follows is not a money-shaped figure.
+  { field: 'incomeTax', pattern: /\bpaye\b|\bincome\s+tax\b|\btax\s*\(|\btax\b/i },
   { field: 'net', pattern: /\bnet\s+pay\b|\btake[-\s]?home\b|\bnet\s+total\b|\bamount\s+payable\b/i },
+  { field: 'taxablePay', pattern: /\btaxable\s+pay\b|\btaxable\s+gross\b/i },
   // "Total Earnings" is the period figure on layouts that reserve "Gross pay"
   // for the running total. It is listed first so it wins when both appear.
   // Tried and reverted: matching a bare "Salary" as gross. On a payslip that
@@ -151,23 +171,55 @@ export function parsePayslipText(text: string): ParsedPayslip {
 
     if (CUMULATIVE.test(line)) continue;
 
-    for (const { field, pattern } of RULES) {
-      // First writer wins: a payslip states each figure once in its deductions
-      // block, and later mentions are summaries or footnotes.
-      if (result[field] !== undefined) continue;
-      const match = pattern.exec(line);
-      pattern.lastIndex = 0;
-      if (!match) continue;
-      const amount = amountAfter(line, match.index + match[0].length);
-      if (amount !== null) result[field] = amount;
-      // One rule per line. Without this, "Pension" inside "Employer Pension"
-      // would also fill the employee field from the same number.
-      break;
+    /* A line can carry more than one label. Two-column payslips run payments
+       down the left and deductions down the right, so "Salary 4,000.00 Tax
+       700.00" is two pairs on one line and stopping at the first would lose
+       the tax every time.
+
+       So the line is walked left to right, taking the earliest-matching label
+       each pass and the first figure after it. Earliest rather than
+       rule-order, or a later label could claim a figure belonging to one
+       further left. First writer still wins across the document: a payslip
+       states each figure once, and later mentions are totals or footnotes. */
+    let cursor = 0;
+    while (cursor < line.length) {
+      let chosen: { field: Field; end: number; at: number } | null = null;
+      for (const { field, pattern } of RULES) {
+        if (result[field] !== undefined) continue;
+        const match = pattern.exec(line.slice(cursor));
+        pattern.lastIndex = 0;
+        if (!match) continue;
+        if (!chosen || match.index < chosen.at) {
+          chosen = { field, at: match.index, end: match.index + match[0].length };
+        }
+      }
+      if (!chosen) break;
+      const amount = amountAfter(line.slice(cursor), chosen.end);
+      if (amount !== null) {
+        result[chosen.field] = MAGNITUDE_FIELDS.has(chosen.field) ? Math.abs(amount) : amount;
+      }
+      cursor += chosen.end;
     }
   }
 
-  return result;
+  return withDerivedGross(result);
 }
+
+/**
+ * Works gross back out of a salary-sacrifice payslip.
+ *
+ * Those state the sacrifice and the taxable pay that remains, but often have
+ * no row called gross at all. Reading a bare "Salary" line instead was tried
+ * and read an annual figure — twelve times the month's pay, and plausible
+ * enough to chart. Adding the sacrifice back to taxable pay is arithmetic
+ * rather than a guess, and it only runs when the payslip stated no gross.
+ */
+const withDerivedGross = (parsed: ParsedPayslip): ParsedPayslip => {
+  if (parsed.gross !== undefined) return parsed;
+  if (parsed.taxablePay === undefined) return parsed;
+  const sacrifice = parsed.pensionEmployee ?? 0;
+  return { ...parsed, gross: Math.round((parsed.taxablePay + sacrifice) * 100) / 100 };
+};
 
 /**
  * How much of a payslip was recognised, for telling someone whether to check
@@ -253,8 +305,15 @@ const toAmount = (text: string): number | null => {
  */
 const MAX_ROWS_BELOW = 1;
 
-/** How far sideways a figure may be and still belong to the label. */
-const MAX_X_DRIFT = 60;
+/**
+ * How far sideways a figure may be and still belong to the label.
+ *
+ * Tuned against a real archive of 26 payslips: 60 pairs too little (a
+ * right-aligned figure sits left of the label heading it), and 140 pairs
+ * almost anything with anything -- that reads 3 of 26 correctly against 16 at
+ * this value. The number is a measurement, not a preference.
+ */
+const MAX_X_DRIFT = 110;
 
 /**
  * Fills in fields by pairing a label with the figure beneath it.
