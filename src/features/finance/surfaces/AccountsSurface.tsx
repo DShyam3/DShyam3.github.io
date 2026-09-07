@@ -32,11 +32,11 @@ import { useTrueLayer } from '../useTrueLayer';
  * a lift not a restyle; Phase 7.C replaces them with design tokens.
  */
 const CREDIT_TIER_COLORS: Record<CreditTier, string> = {
-  1: '#ef4444',
-  2: '#f59e0b',
-  3: '#84cc16',
-  4: '#10b981',
-  5: '#059669',
+  1: 'hsl(var(--destructive))',
+  2: 'hsl(38 92% 50%)',
+  3: 'hsl(84 81% 44%)',
+  4: 'hsl(160 84% 39%)',
+  5: 'hsl(var(--positive))',
 };
 
 const CREDIT_TIER_CLASSES: Record<CreditTier, string> = {

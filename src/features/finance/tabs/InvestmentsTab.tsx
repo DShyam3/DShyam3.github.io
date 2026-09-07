@@ -663,10 +663,10 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   <RechartsTooltip
                     formatter={(val: number) => [formatGBP(val)]}
                     contentStyle={{
-                      backgroundColor: 'rgba(30, 41, 59, 0.95)',
-                      borderColor: 'rgba(255, 255, 255, 0.1)',
-                      color: '#fff',
-                      borderRadius: '16px',
+                      backgroundColor: 'hsl(var(--popover))',
+                      borderColor: 'hsl(var(--border))',
+                      color: 'hsl(var(--popover-foreground))',
+                      borderRadius: 'var(--radius)',
                       fontSize: '11px',
                       fontFamily: 'monospace'
                     }}

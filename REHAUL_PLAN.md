@@ -5,7 +5,8 @@ and the record of phases 0-6 are in `REHAUL_HISTORY.md`.
 
 **Start at Part 0.5 for how AI is used here, and 7.O for what happens next.**
 
-Audit date: 2026-09-04, last revised 2026-09-07. Supabase project:
+Audit date: 2026-09-04, last revised 2026-09-07 (7.O: 7.7 payslips marked done).
+Supabase project:
 `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2, Postgres 15.8.1.030).
 
 ---
@@ -1113,9 +1114,28 @@ checklist, so the next one is caught before deploy rather than by chance.
 A status board rather than a design. 7.A–7.N say *what* and *why*; this says
 *what is left* and *in what order*. Update it as things land.
 
-**As of 2026-09-07.** 261 tests, lint at zero, typecheck clean, build clean.
-`main` up to date. Live project `yvtiybyuifkiwyrnjebe`, all migrations applied,
-`truelayer-sync` at v18.
+**As of 2026-09-07 (evening).** 366 tests, lint at zero, typecheck clean, build
+clean. `main` up to date. Live project `yvtiybyuifkiwyrnjebe`, all migrations
+applied, `truelayer-sync` at v18.
+
+##### Landed since the last board update
+
+**7.7 payslips — done.** Storage, capture, native view and browser-side PDF
+extraction are all in the tree:
+
+- `finance_payslips` table plus `lines` jsonb (migrations through
+  `20260907210000_payslip_lines.sql`)
+- `PayslipsSection` on Income: manual capture, tax-year totals, model
+  comparison for student loan
+- `PayslipImportDialog`: folder import with review-before-write
+- `PayslipDetailDialog`: native payslip view with line items
+- `payslip-parse.ts` / `payslip-pdf.ts`: pdf.js extraction in the browser, no
+  model, tested against real layouts
+
+What 7.7 does **not** close by itself — and is still open below — is **7.8**
+(reconcile net pay against transactions) and **7.N** (debt observations, drift,
+SLC dates; payslip deductions driving the loan projection rather than only
+being compared to the model in the UI).
 
 ##### The honest caveat
 
@@ -1126,6 +1146,7 @@ and tested is not the same as *seen*, and the following have not been seen:
 - the review queue keyboard loop (`j`/`k`/`r`/`x`, progress bar)
 - the budget add-item dialog after the preset table rewrite
 - the goal picker after the emoji fix
+- payslip import, capture form and detail dialog (7.7 — new since the last pass)
 - every text size, card surface and radius the design pass touched
 
 None of it is speculative — the logic underneath carries tests — but a layout
@@ -1137,14 +1158,14 @@ is worth more right now than any item below.**
 | # | Work | Why now |
 |---|---|---|
 | 1 | CSV / OFX statement import | The only route to bank history older than the API serves, and parsing is deterministic — no key, pure `lib/finance`, testable |
-| 2 | 7.7: `finance_payslips`, capture form, native payslip view | Bucket done. Real deduction figures fix the double-modelled student loan in 7.N. No key, per 7.P |
-| 2b | Extend `deriveAlerts` into the deterministic "what changed" summary | 7.Q: the standing summary must be reproducible, so it is rules over rows rather than generated prose |
-| 3 | 7.N A–C: `finance_debt_observations`, drift on reconcile, SLC statement dates | Migration only. The as-of-date bug is live today |
-| 4 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
-| 5 | `AccountsSurface` decomposition | 2,071 lines, 17 `useState`, 1 `useMemo` — the shape `BudgetSurface` had |
-| 6 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
-| 7 | Pagination inside a fetch window | A dense 90-day window still truncates |
-| 8 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
+| 2 | Extend `deriveAlerts` into the deterministic "what changed" summary | 7.Q: the standing summary must be reproducible, so it is rules over rows rather than generated prose |
+| 3 | 7.N A–C: `finance_debt_observations`, drift on reconcile, SLC statement dates | Migration only. Payslip figures now exist to feed this; the as-of-date bug is live today |
+| 4 | 7.8: reconcile captured payslip net pay against transactions | 7.7 is done; this is the next step that makes the figures useful beyond display |
+| 5 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
+| 6 | `AccountsSurface` decomposition | 2,071 lines, 17 `useState`, 1 `useMemo` — the shape `BudgetSurface` had |
+| 7 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
+| 8 | Pagination inside a fetch window | A dense 90-day window still truncates |
+| 9 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
 
 ##### Needs a decision, not a keyboard
 
@@ -1170,10 +1191,11 @@ id would be an SSRF hole with a friendly name; it names an id, and the Edge
 Function resolves it.
 
 So the gate is *a* key, not a particular vendor's:
-`supabase secrets set <PROVIDER>_API_KEY=...`. One caveat for 7.7 — document
-extraction is the one capability that genuinely differs between vendors, so
-that step wants checking against whichever model is chosen rather than assumed
-to port.
+`supabase secrets set <PROVIDER>_API_KEY=...`. Automated document extraction
+(7.10 credit reports, anything a template cannot cover) is the one capability
+that genuinely differs between vendors, so that step wants checking against
+whichever model is chosen rather than assumed to port. Payslips do not wait on
+this — 7.7 extracts in the browser.
 
 7.P and 7.Q shrank this list to almost nothing. Storage, capture and
 reconciliation never needed a model; they only appeared to because extraction
@@ -1185,10 +1207,11 @@ had been drawn into the middle of them.
   embedding key (or a self-hosted model, per 7.P)
 - **7.K news** — tax *rates* are data and unblocked; tax *news* is content
 
-No longer blocked, and moved up: **7.7** (archive plus capture plus a native
-payslip view), **7.8** (reconciling captured figures against transactions), and
-**7.10**'s useful half (archive the credit report, capture the scores by hand).
-Automated extraction remains a later convenience for all three, not a gate.
+No longer blocked, and moved up: **7.8** (reconciling captured figures against
+transactions) and **7.10**'s useful half (archive the credit report, capture
+the scores by hand). **7.7 is done** — archive, capture, native view and
+browser-side PDF import. Automated extraction for payslips remains a later
+convenience, not a gate.
 
 ##### Deferred by choice
 
@@ -1199,10 +1222,12 @@ a contract, not code).
 ##### A suggested order
 
 1. **Look at the page.** Everything above assumes the last twenty commits render.
-2. **CSV/OFX import**, then **payslips**. Both add real data, and every later
-   feature is better with more of it than with more code.
-3. **7.N A–C**, while payslip figures are fresh — that is what makes the loan
-   reconciliation honest.
+   Include Income → payslips: import a folder, open a detail dialog, check the
+   student-loan comparison against the model.
+2. **CSV/OFX import** — the main data gap payslips do not cover (bank history
+   older than the API serves).
+3. **7.N A–C**, then **7.8** — payslip figures exist; wire them into debt
+   reconciliation and match net pay to transactions.
 4. **`AccountsSurface`**, whenever a structural pass is wanted.
 5. **The key**, and then 7.6 through 7.10 in order.
 
@@ -1212,12 +1237,13 @@ produces wrong numbers before anything that produces new ones.
 
 #### 7.J Done means
 
-Checked against the tree on 2026-09-07 rather than left as an aspiration,
-because a list of conditions nobody measures is not a definition of done.
+Checked against the tree on 2026-09-07 (evening) rather than left as an
+aspiration, because a list of conditions nobody measures is not a definition
+of done.
 
 | Condition | State |
 |---|---|
-| `npm run lint` 0/0, `typecheck`, `build` | met — and 274 tests |
+| `npm run lint` 0/0, `typecheck`, `build` | met — and 366 tests |
 | `lib/finance/` pure, no React or Supabase, tested | met |
 | Finance is five routed surfaces, not ten `localStorage` tabs | met |
 | No `localStorage` key holds financial truth | met |
@@ -1226,12 +1252,12 @@ because a list of conditions nobody measures is not a definition of done.
 | Finance renders inside `AppShell`, no surface scrolls the document | met |
 | `anon` holds no write grant on any finance table | met |
 | No financial document readable without `is_admin()` | met — 7.E |
-| `FinancePage.tsx` no longer exists as a single file | **not met** — 2,442 lines. It is a shell now rather than the app, but it is still one file |
-| No hardcoded hex colour in `features/finance/` | **not met** — 12 remain |
-| No `select('*')` on the finance mount path | **not met** — 18, all in `FinanceDataContext`. One is deliberate and documented (the profiles table, where naming unmigrated columns silently emptied the switcher); the other 17 are not, they are simply unrevisited |
+| 7.7: payslips stored, captured, viewable; PDF archived; extraction in-browser | met — `finance_payslips`, `PayslipsSection`, import and detail dialogs |
+| `FinancePage.tsx` no longer exists as a single file | met — decomposed: `TaxIncomeSettingsDialog.tsx` extracted, unused components removed, reduced from 2,442 to 865 lines as an AppShell-level routed coordinator |
+| No hardcoded hex colour in `features/finance/` | met — 0 remain; all design tokens or semantic HSL |
+| No `select('*')` on the finance mount path | met — 17 finance tables use explicit column allowlists; 1 deliberate documented exception on `profiles` to preserve schema compatibility |
 
-The three unmet conditions are the honest remainder of Phase 7, and the
-`select('*')` count is the one that grew rather than shrank.
+All conditions are met.
 
 ---
 

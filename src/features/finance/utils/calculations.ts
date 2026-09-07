@@ -127,12 +127,12 @@ export const getAccountDefaultEmoji = (type: string, name: string): string => {
  */
 export const getAccountDefaultColor = (name: string): string => {
   const lower = name.toLowerCase();
-  if (lower.includes('chase')) return '#115e59'; // teal
-  if (lower.includes('monzo')) return '#ff4f00'; // monzo hot coral
-  if (lower.includes('revolut')) return '#3b82f6'; // blue
-  if (lower.includes('amex') || lower.includes('american express')) return '#1e3a8a'; // deep blue
-  if (lower.includes('vanguard')) return '#991b1b'; // dark red
-  return '#475569'; // slate
+  if (lower.includes('chase')) return 'hsl(175 69% 22%)'; // teal
+  if (lower.includes('monzo')) return 'hsl(19 100% 50%)'; // monzo hot coral
+  if (lower.includes('revolut')) return 'hsl(217 91% 60%)'; // blue
+  if (lower.includes('amex') || lower.includes('american express')) return 'hsl(224 64% 33%)'; // deep blue
+  if (lower.includes('vanguard')) return 'hsl(0 83% 35%)'; // dark red
+  return 'hsl(215 16% 35%)'; // slate
 };
 
 /**
