@@ -1506,6 +1506,82 @@ today's behaviour when neither is given. Both are testable and shippable with
 no migration and no key, so they go first whenever the schema work is blocked.
 D2 is the column that eventually feeds D, and only that part waits.
 
+#### 7.O Where things stand, and what happens next
+
+A status board rather than a design. 7.A–7.N say *what* and *why*; this says
+*what is left* and *in what order*. Update it as things land.
+
+**As of 2026-09-07.** 261 tests, lint at zero, typecheck clean, build clean.
+`main` up to date. Live project `yvtiybyuifkiwyrnjebe`, all migrations applied,
+`truelayer-sync` at v18.
+
+##### The honest caveat
+
+A large amount of the finance work has never been looked at in a browser. The
+section is admin-gated, so an agent cannot sign in to check it. Built, typed
+and tested is not the same as *seen*, and the following have not been seen:
+
+- the review queue keyboard loop (`j`/`k`/`r`/`x`, progress bar)
+- the budget add-item dialog after the preset table rewrite
+- the goal picker after the emoji fix
+- every text size, card surface and radius the design pass touched
+
+None of it is speculative — the logic underneath carries tests — but a layout
+that broke would not have announced itself. **Half an hour with the page open
+is worth more right now than any item below.**
+
+##### Ready to build, nothing blocking
+
+| # | Work | Why now |
+|---|---|---|
+| 1 | CSV / OFX statement import | The only route to bank history older than the API serves, and parsing is deterministic — no key, pure `lib/finance`, testable |
+| 2 | Payslip upload + manual entry | Bucket exists (7.E done). Real deduction figures fix the double-modelled student loan in 7.N |
+| 3 | 7.N A–C: `finance_debt_observations`, drift on reconcile, SLC statement dates | Migration only. The as-of-date bug is live today |
+| 4 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
+| 5 | `AccountsSurface` decomposition | 2,071 lines, 17 `useState`, 1 `useMemo` — the shape `BudgetSurface` had |
+| 6 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
+| 7 | Pagination inside a fetch window | A dense 90-day window still truncates |
+| 8 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
+
+##### Needs a decision, not a keyboard
+
+| Question | Why it is stuck |
+|---|---|
+| `rounded-xl` (126) vs `rounded-lg` (314) | Changes every card corner in the section. A look, not a cleanup |
+| 157 uppercase labels | Which deserve the emphasis is judgement, and 157 unverified sites is the same risk as the corners |
+| Public demo profile | Decided in principle, never scoped. Changes what the anon role may read |
+| FCA framing for 7.L | Only matters if this stops being private, but it shapes the feature |
+
+##### Blocked on `ANTHROPIC_API_KEY`
+
+`supabase secrets set ANTHROPIC_API_KEY=...`. Nothing else gates these.
+
+- **7.6** — tools and context are written; the assistant needs the key
+- **7.7 extraction** — storage half is done, reading figures off a PDF is not
+- **7.8** — reconciliation, needs a corpus from 7.7
+- **7.9** — pgvector and hybrid retrieval, same
+- **7.10** — credit PDF ingestion, same
+- **7.K news** — tax *rates* are data and unblocked; tax *news* is content
+
+##### Deferred by choice
+
+7.2e (measured, not worth building), 7.12 delivery (in-app alerts done),
+7.13 contacts and settlements, 7.14 property, bureau API adapters (7.G — needs
+a contract, not code).
+
+##### A suggested order
+
+1. **Look at the page.** Everything above assumes the last twenty commits render.
+2. **CSV/OFX import**, then **payslips**. Both add real data, and every later
+   feature is better with more of it than with more code.
+3. **7.N A–C**, while payslip figures are fresh — that is what makes the loan
+   reconciliation honest.
+4. **`AccountsSurface`**, whenever a structural pass is wanted.
+5. **The key**, and then 7.6 through 7.10 in order.
+
+The ordering principle: data before features, and anything that silently
+produces wrong numbers before anything that produces new ones.
+
 #### 7.J Done means
 
 - `npm run lint` — 0 errors, 0 warnings; `npm run typecheck`; `npm run build`
