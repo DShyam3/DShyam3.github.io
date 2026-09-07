@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { checkPayslip, parsePayslipFilename, parsedFieldCount, type Payslip } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Check, Upload } from 'lucide-react';
+import { AlertTriangle, Ban, Check, Upload } from 'lucide-react';
 
 interface Row {
   file: File;
@@ -105,6 +105,8 @@ export function PayslipImportDialog({ open, onOpenChange }: {
   };
 
   const chosen = rows.filter(r => r.include);
+  const unreadable = rows.filter(r => r.found === 0).length;
+  const mismatched = rows.filter(r => r.found > 0 && !checkPayslip(r.slip).reconciles).length;
 
   const handleImport = async () => {
     if (!profileId || chosen.length === 0) return;
@@ -166,7 +168,11 @@ export function PayslipImportDialog({ open, onOpenChange }: {
             <div className="space-y-1 max-h-[45vh] overflow-y-auto pr-1">
               {rows.map((row, i) => {
                 const check = checkPayslip(row.slip);
-                const usable = !row.error && !!row.slip.payDate;
+                // A file that yielded nothing is not a file that balances.
+                // Zero minus zero reconciles arithmetically and means nothing,
+                // and a tick against £0.00 is a pass claimed from no data.
+                const readAnything = row.found > 0;
+                const usable = !row.error && !!row.slip.payDate && readAnything;
                 return (
                   <div
                     key={row.file.name}
@@ -190,14 +196,20 @@ export function PayslipImportDialog({ open, onOpenChange }: {
                       <div className="text-xs text-muted-foreground truncate">
                         {row.error
                           ? row.error
-                          : `${row.found}/7 read${row.dateFromName ? ', date from filename' : ''}${
-                              check.reconciles ? '' : ` · off by ${formatGBP(check.difference)}`}`}
+                          : !readAnything
+                            ? 'Nothing readable — this PDF has no text layer'
+                            : `${row.found}/7 read${row.dateFromName ? ', date from filename' : ''}${
+                                check.reconciles ? '' : ` · off by ${formatGBP(check.difference)}`}`}
                       </div>
                     </div>
-                    <div className="text-xs text-foreground tabular-nums shrink-0">{formatGBP(row.slip.net)}</div>
-                    {usable && (check.reconciles
-                      ? <Check className="h-3.5 w-3.5 shrink-0 text-positive" aria-label="Reconciles" />
-                      : <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-chart-4" aria-label="Does not reconcile" />)}
+                    <div className="text-xs text-foreground tabular-nums shrink-0">
+                      {readAnything ? formatGBP(row.slip.net) : '—'}
+                    </div>
+                    {readAnything
+                      ? (check.reconciles
+                          ? <Check className="h-3.5 w-3.5 shrink-0 text-positive" aria-label="Reconciles" />
+                          : <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-chart-4" aria-label="Does not reconcile" />)
+                      : <Ban className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Nothing read" />}
                   </div>
                 );
               })}
@@ -206,8 +218,10 @@ export function PayslipImportDialog({ open, onOpenChange }: {
 
           {rows.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              {chosen.length} of {rows.length} selected. A payslip already held for the same
-              date is replaced, so importing twice is safe.
+              {chosen.length} of {rows.length} selected
+              {unreadable > 0 && `, ${unreadable} unreadable`}
+              {mismatched > 0 && `, ${mismatched} not balancing`}
+              . A payslip already held for the same date is replaced, so importing twice is safe.
             </p>
           )}
         </div>

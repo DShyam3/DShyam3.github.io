@@ -236,3 +236,23 @@ describe('parsePayslipText — salary sacrifice', () => {
     expect(parsePayslipText('Net Pay 2,700.00').gross).toBeUndefined();
   });
 });
+
+describe('parsePayslipText — competing date labels', () => {
+  it('prefers the day paid over the day it appears at HMRC', () => {
+    // One layout states both, two days apart. The pay day is the record.
+    const both = `
+      Payment date on HMRC Personal Tax Account will show as 28/05/2023
+      1024009 Pay Day 26/05/2023
+      Net Pay 1,200.00
+    `;
+    expect(parsePayslipText(both).payDate).toBe('2023-05-26');
+  });
+
+  it('takes a payment date when there is no pay day', () => {
+    expect(parsePayslipText('Payment date 28/05/2023').payDate).toBe('2023-05-28');
+  });
+
+  it('reads a Pay Day label, which an earlier version missed entirely', () => {
+    expect(parsePayslipText('Mr A N Other Pay Day 28/06/2023').payDate).toBe('2023-06-28');
+  });
+});

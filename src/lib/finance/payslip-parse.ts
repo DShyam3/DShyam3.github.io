@@ -137,7 +137,22 @@ const CUMULATIVE = /year\s*to\s*date|\bytd\b|\bcumulative\b|\bto\s*date\b|\btaxa
  * on those layouts the latter *is* the running total.
  */
 
-const DATE_LABEL = /\bpay(?:ment)?\s*date\b|\bdate\s+paid\b|\bpay\s+period\s+end/i;
+/**
+ * Date labels, most authoritative first.
+ *
+ * A payslip can carry more than one date and they need not agree: one states
+ * "Pay Day 26/05/2023" and, elsewhere, that HMRC will show it as 28/05/2023.
+ * The day you were paid is the one this records, so an explicit pay-day label
+ * outranks a sentence about when it appears somewhere else.
+ */
+const DATE_LABELS: RegExp[] = [
+  // The day you were paid.
+  /\bpay\s*day\b|\bdate\s+paid\b/i,
+  // A date labelled as the payment's, which on one layout is the day HMRC
+  // will show it rather than the day it arrived -- two days later.
+  /\bpay(?:ment)?\s*date\b|\bwill\s+show\s+as\b/i,
+  /\bpay\s+period\s+end|\bperiod\s+end(?:ing)?\b/i,
+];
 
 /** Handles 28/08/2026, 28-08-2026 and 28 August 2026; returns ISO. */
 const parseDate = (line: string): string | undefined => {
@@ -163,10 +178,18 @@ export function parsePayslipText(text: string): ParsedPayslip {
   const result: ParsedPayslip = {};
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
+  // Lower is better; nothing found yet is worse than any match.
+  let dateRank = Number.POSITIVE_INFINITY;
+
   for (const line of lines) {
-    if (!result.payDate && DATE_LABEL.test(line)) {
+    for (let rank = 0; rank < DATE_LABELS.length && rank < dateRank; rank++) {
+      if (!DATE_LABELS[rank].test(line)) continue;
       const date = parseDate(line);
-      if (date) result.payDate = date;
+      if (date) {
+        result.payDate = date;
+        dateRank = rank;
+      }
+      break;
     }
 
     if (CUMULATIVE.test(line)) continue;
