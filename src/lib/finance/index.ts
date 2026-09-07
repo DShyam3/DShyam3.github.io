@@ -14,5 +14,6 @@ export * from './geometry';
 export * from './history';
 export * from './holidays';
 export * from './payday';
+export * from './retirement';
 export * from './scenario';
 export * from './tools';

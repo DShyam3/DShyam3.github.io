@@ -979,7 +979,7 @@ data lives. The prop lists collapse on their own after that.
 | 7.11 | Monthly review / "what changed" / anomalies | 7.4 |
 | 7.12 | Alerts and notifications — **in-app alerts done; delivery deferred, see below** | none |
 | 7.13 | Cross-profile: contacts, shared expenses, settlements | 7.1 |
-| 7.14 | Investments deepening, property, retirement projection | none |
+| 7.14 | Investments deepening, property, retirement projection — **retirement done** | none |
 
 Two notes on the ordering. **7.4 gates more than it looks** — without snapshots
 there is no history, and "what changed this month", anomaly detection and
