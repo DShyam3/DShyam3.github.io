@@ -9,7 +9,6 @@
 
 import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { runSpendScenario, type Verdict } from '@/lib/finance';
@@ -58,22 +57,28 @@ export default function ScenariosSurface() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="max-w-md space-y-2">
-        <Label htmlFor="scenario-amount" className="font-sans text-xs text-muted-foreground">
+      {/* The whole block is the label, so clicking the caption or the £ focuses
+          the field rather than only the thin strip of input beside them. The
+          rule lives on the wrapper: putting `border-0 border-b` on the Input
+          fought the component's own `border`, and which won depended on
+          stylesheet order -- an underline when idle, a full box when focused. */}
+      <label htmlFor="scenario-amount" className="block max-w-md cursor-text space-y-2">
+        <span className="block font-sans text-xs text-muted-foreground">
           What happens if I spend
-        </Label>
-        <div className="flex items-baseline gap-2">
-          <span className="font-sans text-2xl text-muted-foreground">£</span>
+        </span>
+        <span className="flex items-baseline gap-2 border-b border-border/60 transition-colors focus-within:border-foreground">
+          <span aria-hidden className="font-sans text-2xl text-muted-foreground">£</span>
           <Input
             id="scenario-amount"
             inputMode="decimal"
             placeholder="800"
             value={raw}
             onChange={e => setRaw(e.target.value)}
-            className="h-12 border-0 border-b border-border/60 bg-transparent px-0 font-sans text-3xl font-bold tabular-nums focus-visible:ring-0"
+            aria-label="Amount to spend in pounds"
+            className="h-12 flex-1 rounded-none border-0 bg-transparent px-0 font-sans text-3xl font-bold tabular-nums shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
-        </div>
-      </div>
+        </span>
+      </label>
 
       {!result ? (
         <p className="font-sans text-sm text-muted-foreground">
