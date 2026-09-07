@@ -22,6 +22,7 @@ import {
   type TabKey,
 } from './surfaces';
 import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
+import { useCoalescedSave } from './useCoalescedSave';
 const CashFlowSurface = lazy(() => import('./surfaces/CashFlowSurface'));
 const GoalsSurface = lazy(() => import('./surfaces/GoalsSurface'));
 const ScenariosSurface = lazy(() => import('./surfaces/ScenariosSurface'));
@@ -398,6 +399,10 @@ function FinanceView() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const { askDelete, deleteDialog } = useDeleteConfirm();
+
+  const saveTransactionsSoon = useCoalescedSave<MockTransaction[]>(
+    (updated) => saveDataToSupabase('transactions', updated),
+  );
 
   // Connect/sync lives in a hook because both Home and Wealth offer it (7.2c-i).
   const {
@@ -1405,7 +1410,9 @@ function FinanceView() {
               transactions={mockTransactions}
               onUpdateTransactions={(updated) => {
                 setMockTransactions(updated);
-                saveDataToSupabase('transactions', updated);
+                // Coalesced: the review queue runs on held keys, and each
+                // press rewrites the whole array.
+                saveTransactionsSoon(updated);
               }}
               bankAccounts={bankAccounts}
               goals={goals}

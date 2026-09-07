@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { MockTransaction, BankAccount, Goal, BudgetCategory } from '@/features/finance/finance-types';
 import {
   Search,
@@ -53,6 +53,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import { useReviewShortcuts } from '@/features/finance/useReviewShortcuts';
 
 interface TransactionsTabProps {
   transactions: MockTransaction[];
@@ -337,12 +338,76 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   };
 
   // Single Action Handlers
-  const handleToggleReviewSingle = (id: string) => {
+  const handleToggleReviewSingle = useCallback((id: string) => {
     const updated = transactions.map(tx =>
       tx.id === id ? { ...tx, isReviewed: !tx.isReviewed } : tx
     );
     onUpdateTransactions(updated);
-  };
+  }, [transactions, onUpdateTransactions]);
+
+  /* ---- Review loop ------------------------------------------------------
+     Reviewing is the daily job and there are hundreds of rows, so it runs on
+     the keyboard: j/k to move, r to mark and advance, x to tick, a to take the
+     whole filtered set, Escape to drop back out (REHAUL_PLAN.md 7.C).
+
+     The cursor IS the detail selection -- one highlighted row, not two
+     competing ones -- so moving with the keyboard also loads the pane. */
+  const orderedIds = useMemo(() => filteredTransactions.map(tx => tx.id), [filteredTransactions]);
+
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  const selectAllFiltered = useCallback(() => {
+    setSelectedTxIds(new Set(filteredTransactions.map(tx => tx.id)));
+  }, [filteredTransactions]);
+
+  const clearReviewSelection = useCallback(() => {
+    // Escape unwinds one level at a time: first the tick boxes, then the
+    // cursor. Clearing both at once loses your place in the queue.
+    if (selectedTxIds.size > 0) {
+      setSelectedTxIds(new Set());
+    } else {
+      setSelectedTxId(null);
+    }
+  }, [selectedTxIds]);
+
+  const toggleSelectedById = useCallback((id: string) => {
+    setSelectedTxIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  useReviewShortcuts({
+    orderedIds,
+    focusedId: selectedTxId,
+    setFocusedId: setSelectedTxId,
+    toggleReviewed: handleToggleReviewSingle,
+    toggleSelected: toggleSelectedById,
+    selectAll: selectAllFiltered,
+    clearSelection: clearReviewSelection,
+  });
+
+  // Keyboard movement can walk the cursor past either edge of the scroll pane,
+  // where the highlight is real but invisible. 'nearest' is a no-op when the
+  // row is already on screen, so mouse clicks are unaffected.
+  useEffect(() => {
+    if (!selectedTxId || !listRef.current) return;
+    const row = listRef.current.querySelector(`[data-tx-row="${selectedTxId}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+  }, [selectedTxId]);
+
+  const reviewProgress = useMemo(() => {
+    const total = transactions.length;
+    const reviewed = transactions.filter(tx => tx.isReviewed).length;
+    return {
+      total,
+      reviewed,
+      remaining: total - reviewed,
+      percent: total === 0 ? 0 : (reviewed / total) * 100,
+    };
+  }, [transactions]);
 
   const performDeleteSingle = (id: string) => {
     const updated = transactions.filter(tx => tx.id !== id);
@@ -595,6 +660,35 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             </div>
           </div>
 
+          {/* Review progress. The alerts engine nags about unreviewed
+              transactions on Home; this is where you can see the number move.
+              Hidden once the queue is empty -- a full bar every day is noise. */}
+          {reviewProgress.remaining > 0 && (
+            <div className="flex items-center gap-3 font-mono">
+              <div className="h-2 flex-1 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-positive rounded-full transition-[width] duration-300"
+                  style={{ width: `${reviewProgress.percent}%` }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                {reviewProgress.reviewed} of {reviewProgress.total} reviewed
+              </span>
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}
+                className={cn(
+                  "text-xs shrink-0 rounded-md border px-2 py-0.5 transition-colors",
+                  statusFilter === 'pending'
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border/40 text-muted-foreground hover:text-foreground hover:border-border/80"
+                )}
+              >
+                {reviewProgress.remaining} left
+              </button>
+            </div>
+          )}
+
           {/* Batch Actions Bar (Rendered when 1+ checkboxes selected) */}
           {selectedTxIds.size > 0 && (
             <div className="flex flex-wrap items-center gap-3 bg-muted/20 border border-border/40 rounded-lg p-2.5 px-3 animate-in fade-in slide-in-from-top-2 duration-200 font-mono">
@@ -691,7 +785,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             /* The list scrolls inside its own pane rather than growing the
                surface, so the detail panel beside it stays in view whatever
                the transaction count (REHAUL_PLAN.md 7.C). */
-            <div className="space-y-6 max-h-[calc(100vh-22rem)] overflow-y-auto pr-1">
+            <div ref={listRef} className="space-y-6 max-h-[calc(100vh-22rem)] overflow-y-auto pr-1">
               {/* Select All Bar */}
               <div className="flex items-center px-4 py-1.5 border-b border-border/20 text-xs text-muted-foreground font-semibold">
                 <div className="flex items-center gap-3">
@@ -704,6 +798,28 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     className="h-3.5 w-3.5 rounded border-primary/30"
                   />
                   <span>SELECT ALL ON PAGE</span>
+                  {/* The shortcuts are worthless if nobody knows they exist,
+                      and a help dialog nobody opens is the same as no help. */}
+                  <span className="hidden lg:flex items-center gap-1 font-normal normal-case tracking-normal">
+                    {[
+                      ['J', 'K'],
+                      ['R'],
+                      ['X'],
+                    ].map((keys, i) => (
+                      <span key={keys.join('')} className="flex items-center gap-1">
+                        {i > 0 && <span className="text-border">·</span>}
+                        {keys.map(k => (
+                          <kbd
+                            key={k}
+                            className="rounded border border-border/50 bg-muted/40 px-1 text-xs leading-4 text-muted-foreground"
+                          >
+                            {k}
+                          </kbd>
+                        ))}
+                        <span>{['move', 'review', 'select'][i]}</span>
+                      </span>
+                    ))}
+                  </span>
                 </div>
                 <div className="ml-auto flex gap-4 pr-1">
                   <span>CATEGORY</span>
@@ -730,10 +846,15 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       return (
                         <div
                           key={tx.id}
+                          data-tx-row={tx.id}
                           className={cn(
                             "flex items-center p-2.5 rounded-lg border border-transparent transition-all cursor-pointer select-none font-mono",
                             isSelected
-                              ? "bg-card/90 border-border/70 shadow-sm"
+                              // The cursor doubles as the keyboard position, so
+                              // it needs to be findable at a glance from
+                              // anywhere in a long list -- hence the ring, not
+                              // just a background shift.
+                              ? "bg-card/90 border-border/70 shadow-sm ring-1 ring-primary/40"
                               : "bg-card/30 hover:bg-card/60 hover:border-border/40"
                           )}
                           onClick={() => setSelectedTxId(tx.id)}
