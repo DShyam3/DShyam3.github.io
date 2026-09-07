@@ -227,6 +227,11 @@ const Index = () => {
                             <p className="text-sm font-medium leading-snug text-foreground">
                               {item.title}
                             </p>
+                            {item.employment_type && (
+                              <p className="text-sm font-medium leading-snug text-foreground">
+                                {item.employment_type}
+                              </p>
+                            )}
                             <p className="text-sm font-medium leading-snug text-foreground">
                               {item.company}
                             </p>

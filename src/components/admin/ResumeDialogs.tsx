@@ -3,7 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Experience, Education } from '@/hooks/useResume';
+
+/** The fixed vocabulary, so two roles never read as 'Intern' and 'Internship'. */
+const EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'] as const;
 
 interface ExperienceDialogProps {
   open: boolean;
@@ -21,6 +25,7 @@ export function ExperienceDialog({ open, onOpenChange, onSave, initialData }: Ex
     end_date: '',
     logo_url: '',
     description: '',
+    employment_type: '',
     order: 0,
   });
 
@@ -37,6 +42,7 @@ export function ExperienceDialog({ open, onOpenChange, onSave, initialData }: Ex
         end_date: '',
         logo_url: '',
         description: '',
+        employment_type: '',
         order: 0,
       });
     }
@@ -65,9 +71,27 @@ export function ExperienceDialog({ open, onOpenChange, onSave, initialData }: Ex
               <Input value={formData.company} onChange={e => setFormData({ ...formData, company: e.target.value })} required />
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Location</label>
-            <Input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Location</label>
+              <Input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Employment Type</label>
+              <Select
+                value={formData.employment_type || ''}
+                onValueChange={value => setFormData({ ...formData, employment_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="e.g. Full-time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EMPLOYMENT_TYPES.map(type => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

@@ -9,6 +9,8 @@ export interface Experience {
   end_date: string;
   logo_url: string;
   description?: string;
+  /** How the role was held -- 'Full-time', 'Contract', 'Internship', ... */
+  employment_type?: string;
   order: number;
 }
 
