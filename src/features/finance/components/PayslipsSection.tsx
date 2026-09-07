@@ -20,7 +20,9 @@ import {
   studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Check, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, FileText, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
+import { useToast } from '@/hooks/use-toast';
 
 /** Every money field, as strings, because a half-typed number is not a number. */
 type Draft = Record<
@@ -64,26 +66,34 @@ const MONEY_FIELDS: { key: keyof Draft; label: string }[] = [
   { key: 'net', label: 'Net' },
 ];
 
+/** Pure, so the live reconciliation can memoise on the draft alone. */
+const asPayslip = (d: Draft, id: string, storagePath?: string): Payslip => ({
+  id,
+  payDate: d.payDate,
+  employer: d.employer.trim() || undefined,
+  gross: num(d.gross),
+  incomeTax: num(d.incomeTax),
+  nationalInsurance: num(d.nationalInsurance),
+  pensionEmployee: num(d.pensionEmployee),
+  pensionEmployer: num(d.pensionEmployer),
+  studentLoan: num(d.studentLoan),
+  otherDeductions: num(d.otherDeductions),
+  net: num(d.net),
+  storagePath,
+});
+
 export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStudentLoanMonthly?: number }) {
-  const { payslips, savePayslip, deletePayslip } = useFinanceData();
+  const { payslips, savePayslip, deletePayslip, profileId } = useFinanceData();
   const { askDelete, deleteDialog } = useDeleteConfirm();
+  const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-
-  const asPayslip = (d: Draft, id: string): Payslip => ({
-    id,
-    payDate: d.payDate,
-    employer: d.employer.trim() || undefined,
-    gross: num(d.gross),
-    incomeTax: num(d.incomeTax),
-    nationalInsurance: num(d.nationalInsurance),
-    pensionEmployee: num(d.pensionEmployee),
-    pensionEmployer: num(d.pensionEmployer),
-    studentLoan: num(d.studentLoan),
-    otherDeductions: num(d.otherDeductions),
-    net: num(d.net),
-  });
+  // The path already stored, and a file chosen but not yet uploaded. Upload
+  // happens on save, so cancelling the dialog leaves no orphan in the bucket.
+  const [storagePath, setStoragePath] = useState<string | undefined>();
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Shown live in the dialog rather than after saving: a payslip that does not
   // reconcile is almost always a typo, and the moment to catch it is while the
@@ -113,20 +123,58 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   const openNew = () => {
     setEditingId(null);
     setDraft(EMPTY_DRAFT);
+    setStoragePath(undefined);
+    setPendingFile(null);
     setIsOpen(true);
   };
 
   const openEdit = (p: Payslip) => {
     setEditingId(p.id);
     setDraft(draftFrom(p));
+    setStoragePath(p.storagePath);
+    setPendingFile(null);
     setIsOpen(true);
   };
 
   const handleSave = async () => {
-    if (!draft.payDate) return;
-    await savePayslip(asPayslip(draft, editingId ?? `payslip_${Date.now()}`));
-    setIsOpen(false);
+    if (!draft.payDate || isSaving) return;
+    setIsSaving(true);
+    try {
+      let path = storagePath;
+      if (pendingFile && profileId) {
+        // Uploaded here rather than on selection, so a cancelled dialog leaves
+        // nothing behind in the bucket.
+        const uploaded = await uploadFinanceDocument(pendingFile, profileId);
+        path = uploaded.path;
+      }
+      await savePayslip(asPayslip(draft, editingId ?? `payslip_${Date.now()}`, path));
+      setIsOpen(false);
+    } catch (err) {
+      toast({
+        title: 'Could not attach the file',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const openDocument = async (path: string) => {
+    const url = await signedDocumentUrl(path);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    else toast({ title: 'Could not open the document', variant: 'destructive' });
+  };
+
+  const removePayslip = (p: Payslip) =>
+    askDelete({
+      name: `payslip for ${p.payDate}`,
+      onConfirm: async () => {
+        await deletePayslip(p.id);
+        // After the row, so a storage failure cannot strand the record.
+        if (p.storagePath) await deleteFinanceDocument(p.storagePath);
+      },
+    });
 
   const set = (key: keyof Draft) => (value: string) => setDraft(d => ({ ...d, [key]: value }));
 
@@ -195,14 +243,23 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                     {!check.reconciles && ` · off by ${formatGBP(check.difference)}`}
                   </div>
                 </div>
-                {p.storagePath && <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="PDF archived" />}
+                {p.storagePath && (
+                  <button
+                    type="button"
+                    onClick={() => void openDocument(p.storagePath!)}
+                    className="text-muted-foreground hover:text-foreground shrink-0"
+                    aria-label={`Open the archived document for ${p.payDate}`}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <div className="text-xs font-semibold text-foreground font-mono tabular-nums shrink-0">{formatGBP(p.net)}</div>
                 <button type="button" onClick={() => openEdit(p)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label={`Edit payslip for ${p.payDate}`}>
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => askDelete({ name: `payslip for ${p.payDate}`, onConfirm: () => void deletePayslip(p.id) })}
+                  onClick={() => removePayslip(p)}
                   className="text-muted-foreground hover:text-destructive shrink-0"
                   aria-label={`Delete payslip for ${p.payDate}`}
                 >
@@ -254,6 +311,61 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
               ))}
             </div>
 
+            {/* The archive. Optional by design: the figures above are the
+                record, and this is only the paper they came from (7.P). */}
+            <div className="space-y-1">
+              <Label htmlFor="payslip-file" className="text-xs">Archive the PDF (optional)</Label>
+              {storagePath && !pendingFile ? (
+                <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-card/40 px-3 py-2 text-xs">
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <button
+                    type="button"
+                    onClick={() => void openDocument(storagePath)}
+                    className="min-w-0 flex-1 truncate text-left text-foreground hover:underline"
+                  >
+                    Document attached
+                  </button>
+                  {/* Detaches the row from the file; the object itself is only
+                      removed when the payslip is deleted, so a mis-click here
+                      cannot destroy an archive. */}
+                  <button
+                    type="button"
+                    onClick={() => setStoragePath(undefined)}
+                    className="text-muted-foreground hover:text-destructive shrink-0"
+                    aria-label="Detach the document"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="payslip-file"
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg"
+                    onChange={e => setPendingFile(e.target.files?.[0] ?? null)}
+                    className="rounded-lg h-9 border-primary/20 bg-background/50 text-xs file:text-xs file:mr-2"
+                  />
+                  {pendingFile && (
+                    <button
+                      type="button"
+                      onClick={() => setPendingFile(null)}
+                      className="text-muted-foreground hover:text-destructive shrink-0"
+                      aria-label="Clear the selected file"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+              {pendingFile && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Paperclip className="h-3 w-3 shrink-0" />
+                  {pendingFile.name} — uploaded when you save
+                </p>
+              )}
+            </div>
+
             <div className={cn(
               'rounded-lg border px-3 py-2 text-xs',
               draftCheck.reconciles
@@ -271,7 +383,9 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
             {/* Saveable even when it does not reconcile: it is your payslip, and
                 a real one that disagrees with the arithmetic is exactly the
                 thing worth recording. */}
-            <Button type="button" onClick={() => void handleSave()} className="rounded-lg bg-primary text-primary-foreground text-xs h-8">Save</Button>
+            <Button type="button" disabled={isSaving} onClick={() => void handleSave()} className="rounded-lg bg-primary text-primary-foreground text-xs h-8">
+              {isSaving ? 'Saving…' : 'Save'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
