@@ -695,7 +695,7 @@ return (
           "px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all flex items-center gap-1.5 border",
           selectedBudgetCategoryFilter === 'all'
             ? "bg-primary text-primary-foreground border-primary shadow-sm"
-            : "bg-card/40 hover:bg-card/70 text-muted-foreground border-border/40"
+            : "bg-card/40 hover:bg-card/60 text-muted-foreground border-border/40"
         )}
       >
         <span>All Regular Categories</span>
@@ -717,7 +717,7 @@ return (
               "px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all flex items-center gap-1.5 border",
               isSelected
                 ? "bg-primary text-primary-foreground border-primary shadow-sm font-semibold"
-                : "bg-card/40 hover:bg-card/70 text-muted-foreground border-border/40"
+                : "bg-card/40 hover:bg-card/60 text-muted-foreground border-border/40"
             )}
           >
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
@@ -888,7 +888,7 @@ return (
 
                     {/* Coloured badge with item count */}
                     <div
-                      className="h-5 w-5 rounded flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm"
+                      className="h-5 w-5 rounded-sm flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm"
                       style={{ backgroundColor: catColor }}
                     >
                       {category.items.filter(item => isItemActive(item, category)).length}

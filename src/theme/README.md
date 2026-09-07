@@ -59,6 +59,38 @@ throughout. They are `whitespace-nowrap` and absolutely positioned, so
 they were the one real overflow risk; measured at 375px they compute to 12px
 with no overflow and 82px of clearance between the two.
 
+## Card surfaces
+
+Finance layers translucent panels over the page, and the opacity carries
+meaning. It had drifted to eight values across the codebase, several of them
+one-offs a step away from a neighbour. Four, each with a job:
+
+| Class | Role |
+|---|---|
+| `bg-card/50` | A panel. The default surface for a card or section |
+| `bg-card/40` | A row at rest inside one |
+| `bg-card/60` | That row hovered |
+| `bg-card/90` | That row selected |
+
+`bg-card/30` and `/45` were rest states and folded into `/40`; `/70` and `/80`
+were hover targets and folded into `/60`. Nothing lost a state it had.
+
+Note the base `Card` component is solid `bg-card` -- the translucency is a
+finance idiom layered on top, not the site default.
+
+## Radii
+
+`--radius` is 0.5rem, and Tailwind's `lg` / `md` / `sm` derive from it (8px,
+6px, 4px). `rounded-xl` does not: it is Tailwind's own 0.75rem and is the
+finance card corner, used 126 times against `rounded-lg`'s 314. That
+inconsistency is real and still open -- collapsing it is a visible design
+decision rather than a cleanup, so it wants an eye on the page first.
+
+What has been settled: bare `rounded` computes to 4px, exactly the same as the
+token-derived `rounded-sm`, so the 15 uses of it are now `rounded-sm` and the
+off-token spelling is gone. `rounded-full` and a single deliberate
+`rounded-none` are unaffected.
+
 ## Colours
 
 Colour tokens live in `src/index.css` as HSL triples, with a `:root` block for

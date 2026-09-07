@@ -2213,7 +2213,7 @@ function FinanceView() {
                             const key = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
                             const isChecked = draftActiveSavingsTypes.includes(key);
                             return (
-                              <label key={key} className="flex items-center gap-2 p-2 rounded-lg border border-border/30 bg-card/45 hover:bg-muted/10 cursor-pointer select-none text-xs font-mono">
+                              <label key={key} className="flex items-center gap-2 p-2 rounded-lg border border-border/30 bg-card/40 hover:bg-muted/10 cursor-pointer select-none text-xs font-mono">
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
@@ -2224,7 +2224,7 @@ function FinanceView() {
                                       setDraftActiveSavingsTypes(draftActiveSavingsTypes.filter(t => t !== key));
                                     }
                                   }}
-                                  className="h-3.5 w-3.5 rounded border-border/40 text-primary focus:ring-primary/30 cursor-pointer"
+                                  className="h-3.5 w-3.5 rounded-sm border-border/40 text-primary focus:ring-primary/30 cursor-pointer"
                                 />
                                 <span className="text-base leading-none shrink-0">{preset.emoji}</span>
                                 <span className="font-medium text-foreground">{preset.name}</span>

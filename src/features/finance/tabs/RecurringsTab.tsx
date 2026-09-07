@@ -217,7 +217,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                       </div>
 
-                      <span className={cn("px-2 py-0.5 rounded text-xs font-mono uppercase border border-border/30 bg-muted/20 text-muted-foreground flex items-center gap-1")}>
+                      <span className={cn("px-2 py-0.5 rounded-sm text-xs font-mono uppercase border border-border/30 bg-muted/20 text-muted-foreground flex items-center gap-1")}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>
@@ -296,7 +296,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         </button>
                       </div>
 
-                      <span className={cn("px-2 py-0.5 rounded text-xs font-mono uppercase border border-border/30 bg-muted/20 text-muted-foreground flex items-center gap-1")}>
+                      <span className={cn("px-2 py-0.5 rounded-sm text-xs font-mono uppercase border border-border/30 bg-muted/20 text-muted-foreground flex items-center gap-1")}>
                         {bill.emoji && <span>{bill.emoji}</span>}
                         {bill.tag || bill.category || 'BILL'}
                       </span>

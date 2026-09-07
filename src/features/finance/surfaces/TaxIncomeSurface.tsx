@@ -607,7 +607,7 @@ export default function TaxIncomeSurface({
                     <span className="text-xs font-mono font-semibold text-foreground">{month}</span>
                     <div className="flex items-center gap-1.5 text-xs">
                       {monthWorkingDaysBooked > 0 && (
-                        <span className="bg-positive/20 text-positive font-mono text-xs px-1.5 py-0.5 rounded border border-positive/40 font-semibold">
+                        <span className="bg-positive/20 text-positive font-mono text-xs px-1.5 py-0.5 rounded-sm border border-positive/40 font-semibold">
                           {monthWorkingDaysBooked}d booked
                         </span>
                       )}
@@ -640,7 +640,7 @@ export default function TaxIncomeSurface({
                       const dayOfWeek = dateObj.getDay();
                       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-                      let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-xs font-mono flex items-center justify-center rounded font-medium transition-colors ";
+                      let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-xs font-mono flex items-center justify-center rounded-sm font-medium transition-colors ";
 
                       if (isBookedHoliday) {
                         cellClass += "text-positive font-bold bg-positive/20 border border-positive/50";
@@ -1046,7 +1046,7 @@ export default function TaxIncomeSurface({
               ? (settings.grossSalary * ((benefit.amount || 0) / 100))
               : (benefit.amount || 0);
             return (
-              <div key={benefit.id} className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-card/40 hover:bg-card/80 transition-colors">
+              <div key={benefit.id} className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-card/40 hover:bg-card/60 transition-colors">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="text-lg shrink-0">{benefit.emoji || '🎁'}</span>
                   <div className="min-w-0">

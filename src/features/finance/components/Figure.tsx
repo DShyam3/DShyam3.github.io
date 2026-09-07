@@ -23,7 +23,7 @@ export function Figure({
   children: ReactNode;
 }) {
   if (loading) {
-    return <Skeleton className={cn('inline-block h-6 w-28 rounded align-middle', skeletonClassName)} />;
+    return <Skeleton className={cn('inline-block h-6 w-28 rounded-sm align-middle', skeletonClassName)} />;
   }
   return <span className={className}>{children}</span>;
 }

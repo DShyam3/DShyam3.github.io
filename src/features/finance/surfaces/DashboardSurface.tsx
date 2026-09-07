@@ -747,7 +747,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                           if (!linkedAccount) return null;
                           return (
                             <span 
-                              className="text-xs font-mono font-semibold px-2 py-0.5 rounded border flex items-center gap-1 shrink-0 select-none"
+                              className="text-xs font-mono font-semibold px-2 py-0.5 rounded-sm border flex items-center gap-1 shrink-0 select-none"
                               style={{ 
                                 backgroundColor: `${linkedAccount.color || 'hsl(var(--chart-5))'}15`, 
                                 color: linkedAccount.color || 'hsl(var(--chart-5))',

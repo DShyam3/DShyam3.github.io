@@ -1047,7 +1047,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               </div>
               {rating && (
                 <span
-                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-semibold border"
+                  className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-mono font-semibold border"
                   style={{
                     color: rating.color,
                     borderColor: `${rating.color}40`,
@@ -1198,7 +1198,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                     return (
                       <div
                         key={entry.id}
-                        className="group flex items-center justify-between py-1 px-2 rounded hover:bg-muted/20 transition-colors text-xs font-mono"
+                        className="group flex items-center justify-between py-1 px-2 rounded-sm hover:bg-muted/20 transition-colors text-xs font-mono"
                       >
                         <span className="text-muted-foreground text-xs">{entry.date}</span>
                         <div className="flex items-center gap-2">

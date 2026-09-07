@@ -795,7 +795,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       filteredTransactions.every(tx => selectedTxIds.has(tx.id))
                     }
                     onCheckedChange={(checked) => handleSelectAll(!!checked)}
-                    className="h-3.5 w-3.5 rounded border-primary/30"
+                    className="h-3.5 w-3.5 rounded-sm border-primary/30"
                   />
                   <span>SELECT ALL ON PAGE</span>
                   {/* The shortcuts are worthless if nobody knows they exist,
@@ -811,7 +811,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         {keys.map(k => (
                           <kbd
                             key={k}
-                            className="rounded border border-border/50 bg-muted/40 px-1 text-xs leading-4 text-muted-foreground"
+                            className="rounded-sm border border-border/50 bg-muted/40 px-1 text-xs leading-4 text-muted-foreground"
                           >
                             {k}
                           </kbd>
@@ -855,7 +855,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                               // anywhere in a long list -- hence the ring, not
                               // just a background shift.
                               ? "bg-card/90 border-border/70 shadow-sm ring-1 ring-primary/40"
-                              : "bg-card/30 hover:bg-card/60 hover:border-border/40"
+                              : "bg-card/40 hover:bg-card/60 hover:border-border/40"
                           )}
                           onClick={() => setSelectedTxId(tx.id)}
                         >
@@ -865,7 +865,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                               <Checkbox
                                 checked={isChecked}
                                 onCheckedChange={(checked) => handleSelectRow(tx.id, !!checked)}
-                                className="h-3.5 w-3.5 rounded border-primary/30"
+                                className="h-3.5 w-3.5 rounded-sm border-primary/30"
                               />
                             </div>
 
@@ -1118,7 +1118,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     {(selectedTx.tags || []).map(tag => (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-1 text-xs bg-muted/30 text-foreground border border-border/30 px-2 py-0.5 rounded font-mono"
+                        className="inline-flex items-center gap-1 text-xs bg-muted/30 text-foreground border border-border/30 px-2 py-0.5 rounded-sm font-mono"
                       >
                         <Tag className="h-2 w-2 text-muted-foreground" />
                         <span>{tag}</span>

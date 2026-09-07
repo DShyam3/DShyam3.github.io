@@ -49,7 +49,7 @@ export function SurfaceHero({ label, value, tone = 'neutral', detail, aside, loa
             {/* Sized to the figure it replaces, so nothing shifts when the
                 real number arrives. */}
             <Skeleton className="h-9 w-56 rounded-lg sm:h-10" />
-            <Skeleton className="mt-2 h-3 w-72 max-w-full rounded" />
+            <Skeleton className="mt-2 h-3 w-72 max-w-full rounded-sm" />
           </>
         ) : (
           <>
