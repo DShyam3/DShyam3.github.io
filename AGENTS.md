@@ -18,7 +18,9 @@ This project has a graphify knowledge graph at `graphify-out/`.
 ## Checks before shipping
 
 - `npm run lint` -- 0 errors, 0 warnings
-- `npm run typecheck`
+- `npm run typecheck` -- covers `src` only
+- `npm run typecheck:functions` -- `deno check` over `supabase/functions`, which no
+  npm script reaches; Deno is the runtime they actually run on
 - `npm run build`
 - `npm run ship-check` -- should-i-ship launch-readiness scan, writes to `.should-i-ship/` (gitignored)
 - `security/AI-CHECKLIST.md` -- the vibe-check audit, run on request: "Run the security audit defined in security/AI-CHECKLIST.md against this project"

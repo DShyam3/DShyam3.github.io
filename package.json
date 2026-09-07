@@ -13,7 +13,8 @@
     "ship-check": "npx should-i-ship@latest scan",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck:functions": "deno check supabase/functions/**/*.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",

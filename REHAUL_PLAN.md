@@ -954,6 +954,23 @@ into five files and then have to unpick it, so 7.2c-i comes first: move each
 dialog to the surface that opens it, and lift the derived totals to where the
 data lives. The prop lists collapse on their own after that.
 
+##### Emoji identify things you named; icons do everything else
+
+Settled while doing the design pass, and recorded because it is a rule rather
+than a preference. Emoji and lucide icons were both in use with nothing
+separating them -- a grey 14px glyph beside a full-colour emoji on the same
+row, which is what read as unpolished rather than the emoji themselves.
+
+- **Emoji** mark a thing the user named: a category, a goal, an account, a
+  budget item. They are open-vocabulary, cost nothing, and colour genuinely
+  helps when scanning a long list. They stay, including in the database.
+- **Icons** do everything structural: actions, status, navigation, type
+  indicators, and decoration inside labels.
+
+The one caveat is that emoji render differently per platform, so a screenshot
+from a Mac will not match Android. Irrelevant for a private dashboard, worth
+remembering if the demo profile ever becomes public.
+
 #### 7.D Build order
 
 | # | Step | Gate |
@@ -1658,12 +1675,35 @@ is a reason to self-host the embedding model, not a reason to relax the rule.
    deterministic, testable, free, offline, and it fails loudly instead of
    confidently inventing a number. This is the right tool for the job, not the
    cheap version of it.
-3. **OCR when self-hosted, for the varied stuff.** Receipts are where layouts
-   genuinely differ and a template stops paying. That is the case for OCR, and
-   running it locally keeps the rule intact — the document still never leaves.
+3. **OCR in the browser, for the varied stuff.** Receipts are where layouts
+   genuinely differ and a template stops paying. Tesseract compiles to WASM and
+   runs client-side, so this needs no server either.
 
 The ordering matters because 1 and 2 cover the documents that recur, which are
 exactly the ones worth the effort, and neither needs a key or a vendor.
+
+##### None of this needs a server, and OCR is mostly the wrong tool
+
+A payslip from a payroll system is a digital PDF with a text layer already in
+it. Pulling that text out is `pdf.js` — a library, in the browser,
+deterministic, exact. **OCR is for images**: a photographed receipt, or a
+scanned document. Reaching for it on a digital PDF trades exact text for
+recognised text and gains nothing.
+
+So the ladder runs in the browser end to end, and static hosting is not a
+constraint on any of it:
+
+| Step | Where it runs | Needs |
+|---|---|---|
+| Read the text layer (`pdf.js`) | browser | nothing |
+| Match a template against that text | browser | nothing |
+| OCR an image (Tesseract WASM) | browser | a few MB, lazily loaded |
+
+This is better than the self-hosted framing it replaces, and not just for
+convenience: extracting in the browser means the document is parsed before it
+is uploaded anywhere. It reaches Supabase as an archive and a set of figures,
+having never been sent to anything in order to be read. 7.P's rule holds by
+construction rather than by policy.
 
 ##### What this changes elsewhere
 
@@ -1723,20 +1763,81 @@ may not be the only thing that knows something.
 
 Anything that recurs monthly and matters is worth a rule instead.
 
+#### 7.R Decomposition, and one gap in the toolchain
+
+##### The shape a surface collapses into
+
+`BudgetSurface` went 2,172 → 1,290 lines and 30 → 15 `useState`, and the method
+generalises to the files still outstanding.
+
+What was actually wrong was not length. It was that fifteen category kinds each
+had a hand-written copy of the same three things: a `useState` pair, an arm of a
+fifteen-branch `if/else`, and a ~45-line arm of a fifteen-deep JSX ternary. The
+differences between them amounted to a preset list, an emoji, a label and a
+placeholder. So:
+
+1. **The differences become a table** — `budget-preset-groups.ts`, one row per
+   kind, with the matcher, options and copy as data.
+2. **The repetition becomes one component** — `BudgetPresetField`, 103 lines
+   replacing 677 of ternary.
+3. **The arithmetic leaves the render body** — `lib/finance/spend-history.ts`,
+   pure and tested, taking `today` as a parameter like everything else there.
+
+The table also pinned behaviour that had been accidental: first-match-wins
+ordering means a category named "Travel" routes to *transport*, because
+`isTransportCategory` matches "travel" and sat earlier in the chain. Preserved
+deliberately and covered by a test, so changing it later has to be a decision.
+
+##### The thing to look for in the remaining files
+
+`BudgetSurface` and `FinancePage` both wrap their entire render in
+`const content = (() => { ... })()`. That single expression is why ~25 derived
+values sit in the render path with no `useMemo` and why a 2,000-line file has
+almost no top-level structure — everything is one function by construction. It
+is also why a `const totalSpent` can coexist with a `totalSpent` prop without
+TypeScript objecting.
+
+`AccountsSurface` is next: 2,071 lines, 17 `useState`, 1 `useMemo`.
+
+##### `supabase/functions/` is not type-checked by anything
+
+`tsconfig.app.json` is `"include": ["src"]`, so no npm script covers the Edge
+Functions. `deno check` on `truelayer-sync` found six errors that had been
+sitting there, including `error.message` on an `unknown` in a catch — which was
+also returning stack detail to callers, against the error-handling rule in
+CLAUDE.md.
+
+Deno is the runtime these actually run on, so it is the right checker:
+
+```bash
+deno check supabase/functions/**/*.ts
+```
+
+Worth a `typecheck:functions` script and a line in CLAUDE.md's shipping
+checklist, so the next one is caught before deploy rather than by chance.
+
 #### 7.J Done means
 
-- `npm run lint` — 0 errors, 0 warnings; `npm run typecheck`; `npm run build`
-- `lib/finance/` is pure, imports no React and no Supabase, and is covered by tests
-- `FinancePage.tsx` no longer exists as a single file
-- Finance is five routed surfaces, not ten tabs of `localStorage` state
-- No hardcoded hex colour remains in `features/finance/`
-- No `localStorage` key holds financial truth
-- Every non-template `finance_*` row carries a `profile_id`, enforced by CHECK
-- Zero sub-12px font sizes and zero off-scale weights in `features/finance/`
-- No `select('*')` on the finance mount path
-- Finance renders inside `AppShell`, and no surface scrolls the document
-- `anon` holds no write grant on any finance table
-- No financial document is readable without `is_admin()`
+Checked against the tree on 2026-09-07 rather than left as an aspiration,
+because a list of conditions nobody measures is not a definition of done.
+
+| Condition | State |
+|---|---|
+| `npm run lint` 0/0, `typecheck`, `build` | met — and 274 tests |
+| `lib/finance/` pure, no React or Supabase, tested | met |
+| Finance is five routed surfaces, not ten `localStorage` tabs | met |
+| No `localStorage` key holds financial truth | met |
+| Every non-template `finance_*` row carries a `profile_id`, CHECK-enforced | met |
+| Zero sub-12px sizes and zero off-scale weights in `features/finance/` | met |
+| Finance renders inside `AppShell`, no surface scrolls the document | met |
+| `anon` holds no write grant on any finance table | met |
+| No financial document readable without `is_admin()` | met — 7.E |
+| `FinancePage.tsx` no longer exists as a single file | **not met** — 2,442 lines. It is a shell now rather than the app, but it is still one file |
+| No hardcoded hex colour in `features/finance/` | **not met** — 12 remain |
+| No `select('*')` on the finance mount path | **not met** — 18, all in `FinanceDataContext`. One is deliberate and documented (the profiles table, where naming unmigrated columns silently emptied the switcher); the other 17 are not, they are simply unrevisited |
+
+The three unmet conditions are the honest remainder of Phase 7, and the
+`select('*')` count is the one that grew rather than shrank.
 
 ---
 
