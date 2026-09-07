@@ -22,6 +22,8 @@ import { Activity, ArrowUpRight, Check, CheckCircle2, PiggyBank, RefreshCw } fro
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useFinanceTotals } from '../useFinanceTotals';
 import { Figure } from '../components/Figure';
+import { AlertList } from '../components/AlertList';
+import { useFinanceAlerts } from '../useFinanceAlerts';
 import { useTrueLayer } from '../useTrueLayer';
 import { pathForTab, type TabKey } from '../surfaces';
 
@@ -41,6 +43,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   } = useFinanceData();
 
   const navigate = useNavigate();
+  const alerts = useFinanceAlerts(new Date().toISOString().slice(0, 10));
   const { trueLayerStatus, isSyncingTrueLayer, syncTrueLayer } = useTrueLayer(fetchSupabaseData);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const {
@@ -866,6 +869,19 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
     {/* Right Side: Recurrings List & Active savings goals (lg:col-span-4) */}
     <div className="lg:col-span-4 space-y-6">
+
+      {/* Derived from the current position on every render, so an alert is
+          gone the moment its condition is. Nothing to dismiss or mark read. */}
+      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+        <CardHeader className="p-0 pb-4 border-b border-border/30">
+          <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
+            Needs Attention
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 pt-4">
+          {hasLoaded ? <AlertList alerts={alerts} /> : null}
+        </CardContent>
+      </Card>
 
       {/* Next two weeks recurrings card */}
       <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">

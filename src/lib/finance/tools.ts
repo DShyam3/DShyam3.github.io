@@ -13,6 +13,7 @@
  * proxies the model; the tools run against the one implementation.
  */
 
+import type { FinanceAlert } from './alerts';
 import { runSpendScenario, type ScenarioResult, type ScenarioState } from './scenario';
 
 export interface FinancialPosition {
@@ -44,14 +45,16 @@ export interface FinanceToolContext {
   position: FinancialPosition;
   scenario: ScenarioState;
   goals: GoalSummary[];
+  alerts: FinanceAlert[];
 }
 
-export type ToolName = 'get_position' | 'run_spend_scenario' | 'get_goals';
+export type ToolName = 'get_position' | 'run_spend_scenario' | 'get_goals' | 'get_alerts';
 
 export type ToolResult =
   | { tool: 'get_position'; data: FinancialPosition }
   | { tool: 'run_spend_scenario'; data: ScenarioResult }
   | { tool: 'get_goals'; data: GoalSummary[] }
+  | { tool: 'get_alerts'; data: FinanceAlert[] }
   | { tool: ToolName; error: string };
 
 /**
@@ -82,6 +85,15 @@ export const TOOL_SCHEMAS = [
     },
   },
   {
+    name: 'get_alerts',
+    description:
+      'Everything currently needing attention: overdue or imminent bills, an emergency fund '
+      + 'below target, spending over budget, goals that cannot reach their date at the current '
+      + 'rate, and transactions awaiting review. Use for "what should I look at" or "is anything '
+      + 'wrong". These are derived from the position, not a stored list. Takes no arguments.',
+    input_schema: { type: 'object' as const, properties: {}, required: [] as string[] },
+  },
+  {
     name: 'get_goals',
     description:
       'Every active savings goal with its target, progress, monthly contribution and how many '
@@ -106,6 +118,9 @@ export const executeTool = (
 
     case 'get_goals':
       return { tool: 'get_goals', data: context.goals };
+
+    case 'get_alerts':
+      return { tool: 'get_alerts', data: context.alerts };
 
     case 'run_spend_scenario': {
       const amount = typeof input.amount === 'number' ? input.amount : Number(input.amount);

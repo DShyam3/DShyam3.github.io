@@ -977,7 +977,7 @@ data lives. The prop lists collapse on their own after that.
 | 7.9 | pgvector + hybrid retrieval | corpus from 7.7 |
 | 7.10 | Credit: full model + PDF ingestion now; API adapter when contracted | see below |
 | 7.11 | Monthly review / "what changed" / anomalies | 7.4 |
-| 7.12 | Alerts and notifications | none |
+| 7.12 | Alerts and notifications — **in-app alerts done; delivery deferred, see below** | none |
 | 7.13 | Cross-profile: contacts, shared expenses, settlements | 7.1 |
 | 7.14 | Investments deepening, property, retirement projection | none |
 
@@ -1037,6 +1037,29 @@ query sits inside a loop body in `FinanceDataContext.tsx`, `useTrueLayer.ts` or
 Its MEDIUM about oversized files still names `FinancePage.tsx`, now 2,400 lines
 rather than 12,335. The remaining bulk is dialogs, which move to their surfaces
 if that number ever needs to come down further.
+
+#### 7.E-pre000 Alerts are derived, and delivery is deferred
+
+7.12 asked for "alerts and notifications". The alerts are built; the
+notifications are not, and the split is deliberate.
+
+Every alert is a pure function of the current position and today's date, so it
+appears when its condition is true and disappears when it stops being true.
+Nothing is stored, nothing is marked read, and there is no second source of
+truth to reconcile against the ledger. `deriveAlerts` covers overdue and
+imminent bills, an emergency fund below target, spending over budget, goals
+that cannot reach their date at the current rate, unreviewed transactions, and
+the missing budget itself.
+
+Delivery — push or email — is a different problem and needs infrastructure this
+does not have: a service worker and a push service, or an edge function and a
+mail provider, plus somewhere to record what has already been sent so the same
+bill is not announced nightly. That last part is what makes it a real feature
+rather than a wrapper, and it is not worth building before the alert set has
+settled.
+
+The same set is exposed as the `get_alerts` tool, so when the assistant lands
+it reads these rules rather than inventing its own.
 
 #### 7.E-pre0 Perceived speed is not the same as speed
 

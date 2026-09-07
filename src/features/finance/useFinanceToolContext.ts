@@ -10,6 +10,7 @@
 import { useFinanceData } from './FinanceDataContext';
 import { useFinanceTotals } from './useFinanceTotals';
 import { useScenarioState } from './useScenarioState';
+import { useFinanceAlerts } from './useFinanceAlerts';
 import { monthsToTarget, type FinanceToolContext } from '@/lib/finance';
 
 export function useFinanceToolContext(): FinanceToolContext {
@@ -19,6 +20,7 @@ export function useFinanceToolContext(): FinanceToolContext {
     netWorth, totalAssets, totalDebt, daysRemainingInMonth, nextPayday,
   } = useFinanceTotals();
   const { state } = useScenarioState();
+  const alerts = useFinanceAlerts(new Date().toISOString().slice(0, 10));
 
   return {
     position: {
@@ -34,6 +36,7 @@ export function useFinanceToolContext(): FinanceToolContext {
       daysRemainingInMonth,
     },
     scenario: state,
+    alerts,
     goals: goals
       .filter(g => g.status !== 'archived')
       .map(g => ({

@@ -16,6 +16,7 @@ const context: FinanceToolContext = {
     id: 'g1', name: 'Trip', targetAmount: 3000, currentAmount: 600,
     monthlyContribution: 300, isEmergencyFund: false, monthsToTarget: 8,
   }],
+  alerts: [{ code: 'no_budget', severity: 'info' }],
 };
 
 describe('executeTool', () => {
@@ -27,6 +28,13 @@ describe('executeTool', () => {
   it('returns goals', () => {
     const r = executeTool('get_goals', {}, context);
     expect(r).toEqual({ tool: 'get_goals', data: context.goals });
+  });
+
+  it('returns alerts', () => {
+    expect(executeTool('get_alerts', {}, context)).toEqual({
+      tool: 'get_alerts',
+      data: context.alerts,
+    });
   });
 
   it('runs a scenario through the real engine', () => {
@@ -71,7 +79,7 @@ describe('executeTool', () => {
 describe('TOOL_SCHEMAS', () => {
   it('describes every tool executeTool implements', () => {
     const named = TOOL_SCHEMAS.map(t => t.name).sort();
-    expect(named).toEqual(['get_goals', 'get_position', 'run_spend_scenario']);
+    expect(named).toEqual(['get_alerts', 'get_goals', 'get_position', 'run_spend_scenario']);
   });
 
   it('gives every tool a description, which is what stops it being misused', () => {

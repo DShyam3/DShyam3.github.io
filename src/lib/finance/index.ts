@@ -6,6 +6,7 @@
  * ever moves off GitHub Pages. Nothing here may import from `features/`.
  */
 
+export * from './alerts';
 export * from './credit';
 export * from './dates';
 export * from './debt';
