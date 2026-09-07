@@ -1243,6 +1243,8 @@ export type Database = {
       finance_truelayer_connection: {
         Row: {
           access_token: string | null
+          backfill_complete: boolean
+          backfilled_from: string | null
           created_at: string
           expires_at: string | null
           id: string
@@ -1252,6 +1254,8 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          backfill_complete?: boolean
+          backfilled_from?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
@@ -1261,6 +1265,8 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          backfill_complete?: boolean
+          backfilled_from?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string

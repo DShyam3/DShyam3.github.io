@@ -403,6 +403,17 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle()
 
+      // The other end of what is held, used to seed the history walk the first
+      // time it runs.
+      const { data: oldestRow } = await supabaseAdmin
+        .from('finance_transactions')
+        .select('date')
+        .eq('profile_id', selfProfileId)
+        .like('id', 'tl_tx_%')
+        .order('date', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
       const DAY_MS = 24 * 60 * 60 * 1000
       // Re-ask for a week either side of the boundary: a transaction can
       // settle days after the date it carries, so it may not have existed
@@ -421,54 +432,74 @@ serve(async (req) => {
         MAX_DAYS,
         daysSinceNewest === null ? INITIAL_DAYS : daysSinceNewest + OVERLAP_DAYS,
       )
-      const fromDate = new Date(Date.now() - daysToFetch * DAY_MS).toISOString()
 
-      // A. Process Bank Accounts (balance + transactions fetched in
-      // parallel per account, and accounts processed in parallel with each
-      // other -- previously this was 2 sequential round-trips per account).
-      // Shapes TrueLayer returns. Narrow to what is read rather than `any`, so a
-      // change at their end surfaces here instead of downstream.
+      // A. Accounts and balances. Fetched once: a balance is a point in time,
+      // not something a date range changes.
       type TlAccount = {
         account_id: string
         display_name?: string
         account_type?: string
         provider?: { display_name?: string }
       }
-      await Promise.all(accountsList.map(async (account: TlAccount) => {
-        const accId = `tl_acc_${account.account_id}`
+      type TlCard = {
+        account_id: string
+        display_name?: string
+        provider?: { display_name?: string }
+      }
 
-        const [balanceRes, txRes] = await Promise.all([
-          fetch(`${apiBaseUrl}/data/v1/accounts/${account.account_id}/balance`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-          fetch(`${apiBaseUrl}/data/v1/accounts/${account.account_id}/transactions?from=${fromDate}`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-        ])
+      /** `kind` picks the endpoint family and the id prefix. */
+      const sources: { kind: 'accounts' | 'cards'; raw: TlAccount | TlCard }[] = [
+        ...accountsList.map((raw: TlAccount) => ({ kind: 'accounts' as const, raw })),
+        ...cardsList.map((raw: TlCard) => ({ kind: 'cards' as const, raw })),
+      ]
+      const accountRowId = (kind: 'accounts' | 'cards', id: string) =>
+        kind === 'accounts' ? `tl_acc_${id}` : `tl_card_${id}`
 
+      await Promise.all(sources.map(async ({ kind, raw }) => {
+        const accId = accountRowId(kind, raw.account_id)
+        const balanceRes = await fetch(
+          `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/balance`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        )
         const balanceData = balanceRes.ok ? await balanceRes.json() : {}
         const balanceVal = balanceData.results?.[0]?.current ?? 0
+        const styling = getProviderStyling(raw.provider?.display_name || '')
+        const isCard = kind === 'cards'
 
-        const styling = getProviderStyling(account.provider?.display_name || '')
-        const accountRow = {
+        syncedAccounts.push({
           id: accId,
           is_default: false,
           profile_id: selfProfileId,
-          name: account.display_name || `${account.provider?.display_name} Checking`,
-          type: account.account_type === 'savings' ? 'savings' : 'checking',
-          issuer: account.provider?.display_name || 'TrueLayer Sandbox',
-          balance: Number(balanceVal),
+          name:
+            raw.display_name ||
+            `${raw.provider?.display_name} ${isCard ? 'Card' : 'Checking'}`,
+          type: isCard
+            ? 'credit'
+            : (raw as TlAccount).account_type === 'savings'
+              ? 'savings'
+              : 'checking',
+          issuer: raw.provider?.display_name || 'TrueLayer Sandbox',
+          // A card's outstanding balance is money owed.
+          balance: isCard ? -Math.abs(Number(balanceVal)) : Number(balanceVal),
           annual_fee: 0,
           emoji: styling.emoji,
           color: styling.color,
           updated_at: new Date().toISOString(),
-        }
+        })
+      }))
 
-        syncedAccounts.push(accountRow)
-
-        if (txRes.ok) {
-          const txData = await txRes.json()
-          const txs = txData.results || []
+      // B. Transactions for one date range, across every account and card.
+      // Repeatable, because the history walk calls it once per window.
+      const fetchRange = async (from: Date, to: Date): Promise<number> => {
+        const qs = `from=${from.toISOString()}&to=${to.toISOString()}`
+        const perSource = await Promise.all(sources.map(async ({ kind, raw }) => {
+          const accId = accountRowId(kind, raw.account_id)
+          const res = await fetch(
+            `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/transactions?${qs}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+          )
+          if (!res.ok) return 0
+          const txs = (await res.json()).results || []
           for (const tx of txs) {
             allNewTransactions.push({
               id: `tl_tx_${tx.transaction_id}`,
@@ -476,71 +507,72 @@ serve(async (req) => {
               profile_id: selfProfileId,
               name: tx.merchant_name || tx.description || 'TrueLayer Transaction',
               category: mapCategory(tx.transaction_category, tx.transaction_classification),
-              amount: -Number(tx.amount), // invert since debits are negative in TrueLayer, positive in app
+              // Debits are positive at TrueLayer and negative here.
+              amount: -Number(tx.amount),
               date: tx.timestamp.split('T')[0],
               is_reviewed: false,
               account_id: accId,
             })
           }
-        }
-      }))
-
-      // B. Process Card Accounts (same parallelization as accounts above)
-      type TlCard = {
-        account_id: string
-        display_name?: string
-        provider?: { display_name?: string }
+          return txs.length
+        }))
+        return perSource.reduce((a: number, b: number) => a + b, 0)
       }
-      await Promise.all(cardsList.map(async (card: TlCard) => {
-        const accId = `tl_card_${card.account_id}`
 
-        const [balanceRes, txRes] = await Promise.all([
-          fetch(`${apiBaseUrl}/data/v1/cards/${card.account_id}/balance`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-          fetch(`${apiBaseUrl}/data/v1/cards/${card.account_id}/transactions?from=${fromDate}`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-        ])
+      const now = new Date()
 
-        const balanceData = balanceRes.ok ? await balanceRes.json() : {}
-        const balanceVal = balanceData.results?.[0]?.current ?? 0
+      // C. Forward pass: everything since the newest row already held.
+      await fetchRange(new Date(now.getTime() - daysToFetch * DAY_MS), now)
 
-        const styling = getProviderStyling(card.provider?.display_name || '')
-        const accountRow = {
-          id: accId,
-          is_default: false,
-          profile_id: selfProfileId,
-          name: card.display_name || `${card.provider?.display_name} Card`,
-          type: 'credit',
-          issuer: card.provider?.display_name || 'TrueLayer Sandbox',
-          balance: -Math.abs(Number(balanceVal)), // force negative outstanding balance
-          annual_fee: 0,
-          emoji: styling.emoji,
-          color: styling.color,
+      // D. Backward pass: walk older windows until the provider runs dry.
+      //
+      // The retention limit is not published and differs per provider, so it is
+      // discovered -- ask for progressively older windows and stop when two in
+      // a row come back empty. Bounded per invocation because an edge function
+      // is killed long before a multi-year walk finishes; the frontier is
+      // persisted so the next sync resumes where this one stopped.
+      const BACKFILL_WINDOW_DAYS = 90
+      const MAX_WINDOWS_PER_RUN = 8
+      const EMPTY_WINDOWS_TO_STOP = 2
+      const ABSOLUTE_FLOOR = new Date(now.getTime() - 6 * 365 * DAY_MS)
+
+      let frontier = connection.backfilled_from
+        ? new Date(connection.backfilled_from)
+        // Not started: begin at the oldest row already held, or at the forward
+        // window's edge when there is nothing at all.
+        : oldestRow?.date
+          ? new Date(oldestRow.date)
+          : new Date(now.getTime() - daysToFetch * DAY_MS)
+
+      let backfillComplete = connection.backfill_complete === true
+      let emptyStreak = 0
+      let windowsWalked = 0
+
+      while (
+        !backfillComplete &&
+        windowsWalked < MAX_WINDOWS_PER_RUN &&
+        frontier > ABSOLUTE_FLOOR
+      ) {
+        const windowTo = frontier
+        const windowFrom = new Date(frontier.getTime() - BACKFILL_WINDOW_DAYS * DAY_MS)
+        const found = await fetchRange(windowFrom, windowTo)
+        windowsWalked++
+        frontier = windowFrom
+
+        emptyStreak = found === 0 ? emptyStreak + 1 : 0
+        if (emptyStreak >= EMPTY_WINDOWS_TO_STOP) backfillComplete = true
+      }
+
+      if (frontier <= ABSOLUTE_FLOOR) backfillComplete = true
+
+      await supabaseAdmin
+        .from('finance_truelayer_connection')
+        .update({
+          backfilled_from: frontier.toISOString().split('T')[0],
+          backfill_complete: backfillComplete,
           updated_at: new Date().toISOString(),
-        }
-
-        syncedAccounts.push(accountRow)
-
-        if (txRes.ok) {
-          const txData = await txRes.json()
-          const txs = txData.results || []
-          for (const tx of txs) {
-            allNewTransactions.push({
-              id: `tl_tx_${tx.transaction_id}`,
-              is_default: false,
-              profile_id: selfProfileId,
-              name: tx.merchant_name || tx.description || 'TrueLayer Card Transaction',
-              category: mapCategory(tx.transaction_category, tx.transaction_classification),
-              amount: -Number(tx.amount), // invert since debits are negative in TrueLayer, positive in app
-              date: tx.timestamp.split('T')[0],
-              is_reviewed: false,
-              account_id: accId,
-            })
-          }
-        }
-      }))
+        })
+        .eq('id', connection.id)
 
       // 4. Write what this sync produced, and touch nothing else.
       //
@@ -618,7 +650,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: true,
         synced_accounts: syncedAccounts.length,
-        synced_transactions: txRows.length
+        synced_transactions: txRows.length,
+        backfilled_from: frontier.toISOString().split('T')[0],
+        backfill_complete: backfillComplete,
+        windows_walked: windowsWalked
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })

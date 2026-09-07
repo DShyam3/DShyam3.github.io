@@ -1365,7 +1365,7 @@ upserted and never pruned.
 |---|---|---|
 | A | Scope deletes by profile, carry each row's own `profile_id`, upsert transactions instead of delete-then-insert | deploy only |
 | B | Provider identity, `consent_expires_at`, `last_synced_at`, `UNIQUE(profile_id, provider_id)`; connect inserts rather than replaces; sync loops connections | migration + deploy |
-| C | Paginate, and backfill history per connection in date windows, resumable via `backfilled_through` because an edge function will time out before a multi-year walk finishes | B |
+| C | Backfill history in date windows, resumable via `backfilled_from` because an edge function will time out before a multi-year walk finishes | **DONE** (pagination within a window still open) |
 | D | Daily `pg_cron` sync, as `watchlist-daily-sync` already does; surface consent expiry before it lapses | B |
 
 A is worth doing on its own and immediately: it is small, and it is the
