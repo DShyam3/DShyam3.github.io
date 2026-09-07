@@ -41,10 +41,15 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   { field: 'pensionEmployer', pattern: /\b(?:employer|company)('?s)?\s+pension|pension\s*\(?\s*(?:er|employer)\s*\)?/i },
   { field: 'pensionEmployee', pattern: /\b(?:employee'?s?\s+)?pension\b|\bpension\s*\(?\s*(?:ee|employee)\s*\)?/i },
   { field: 'studentLoan', pattern: /\bstudent\s+loan|\bpost\s*grad(?:uate)?\s+loan/i },
-  { field: 'nationalInsurance', pattern: /\bnational\s+insurance\b|\bni\s+contribution|\bemployee'?s?\s+ni\b|\bn\.?i\.?\s|\bnic\b/i },
-  { field: 'incomeTax', pattern: /\bpaye\b|\bincome\s+tax\b|\btax\s+(?:deducted|paid|this\s+period)\b|^\s*tax\b/i },
+  // `NI(category M)` is how at least one payroll system writes it, so the
+  // bracketed form has to match mid-line rather than only at a word gap.
+  { field: 'nationalInsurance', pattern: /\bnational\s+insurance\b|\bni\s*\(|\bni\s+contribution|\bemployee'?s?\s+ni\b|\bnic\b/i },
+  // Likewise `Tax(code 1257L)`.
+  { field: 'incomeTax', pattern: /\bpaye\b|\bincome\s+tax\b|\btax\s*\(|\btax\s+(?:deducted|paid|this\s+period)\b|^\s*tax\b/i },
   { field: 'net', pattern: /\bnet\s+pay\b|\btake[-\s]?home\b|\bnet\s+total\b|\bamount\s+payable\b/i },
-  { field: 'gross', pattern: /\bgross\s+(?:pay|earnings|total)\b|\btotal\s+gross\b|\bgross\b/i },
+  // "Total Earnings" is the period figure on layouts that reserve "Gross pay"
+  // for the running total. It is listed first so it wins when both appear.
+  { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b/i },
 ];
 
 const AMOUNTS = /-?£?\s?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|-?£?\s?\d+(?:\.\d{1,2})?/g;
@@ -73,7 +78,10 @@ const amountAfter = (line: string, from: number): number | null => {
     const value = parseFloat(raw.replace(/[£,\s]/g, ''));
     // Money is written with a decimal or a thousands separator. A bare "2" is
     // far more likely a plan number or a column index than an amount.
-    if (Number.isFinite(value) && /[.,]/.test(raw)) return Math.abs(value);
+    // Sign is kept. A payslip can show negative tax, and it means a refund --
+    // taking the modulus turns £52 back into £52 owed and breaks the
+    // arithmetic that would otherwise have caught the mistake.
+    if (Number.isFinite(value) && /[.,]/.test(raw)) return value;
   }
   return null;
 };
@@ -85,6 +93,22 @@ const amountAfter = (line: string, from: number): number | null => {
  * mistaking one is not a small error — it is a year's pay entered as a month's.
  */
 const CUMULATIVE = /year\s*to\s*date|\bytd\b|\bcumulative\b|\bto\s*date\b|\btaxable\s+pay\s+to\b/i;
+
+/**
+ * Note on running-totals blocks, which are the main hazard here.
+ *
+ * A payslip commonly repeats every label under a "Running Totals" heading with
+ * the year's figures, and reading one of those as the month's is not a small
+ * error — the row looks entirely plausible and the gross grows every month.
+ *
+ * Suppressing the block by its heading was tried and is wrong: the extracted
+ * text interleaves columns, so a period figure such as net pay can appear
+ * below the heading while still belonging to the month. What actually protects
+ * against it is order — the period figures come first on every layout seen, so
+ * first-writer-wins takes them and the running total is ignored as a repeat.
+ * That is why the gross rule lists "Total Earnings" ahead of "Gross pay":
+ * on those layouts the latter *is* the running total.
+ */
 
 const DATE_LABEL = /\bpay(?:ment)?\s*date\b|\bdate\s+paid\b|\bpay\s+period\s+end/i;
 

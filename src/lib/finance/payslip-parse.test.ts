@@ -40,6 +40,53 @@ Net Pay                  2,300.00       11,500.00
 Taxable Pay to Date                     15,000.00
 `;
 
+/**
+ * The shape that broke the first importer, with invented figures.
+ *
+ * Two things about it: "Gross pay" is the year-to-date figure, sitting under a
+ * "Running Totals" heading on its own line, while the period gross is "Total
+ * Earnings". And tax is negative, because that month it was a refund.
+ */
+const RUNNING_TOTALS_BLOCK = `
+Payment date on HMRC Personal Tax Account will show as 28/08/2022
+Earnings Units Rate Amount Deductions Amount
+Base Pay 1,000.00 Tax(code 1257L) -50.00
+NI(category M) 40.00
+Total Earnings 1,000.00 Total Deductions -10.00
+Running Totals Amount Paid
+Tax Year to Date Earnings 1,000.00
+Gross pay 2,000.00 Deductions -10.00
+Taxable pay 2,050.00
+Net pay 1,010.00
+`;
+
+describe('parsePayslipText — running-totals block', () => {
+  const parsed = parsePayslipText(RUNNING_TOTALS_BLOCK);
+
+  it('takes the period gross, not the running total beneath the heading', () => {
+    // The failure this replaces read 2,000.00 and grew every month.
+    expect(parsed.gross).toBe(1000);
+  });
+
+  it('keeps a negative tax, because that is a refund', () => {
+    expect(parsed.incomeTax).toBe(-50);
+  });
+
+  it('reads a bracketed NI label', () => {
+    expect(parsed.nationalInsurance).toBe(40);
+  });
+
+  it('reads net, and the whole thing reconciles', () => {
+    expect(parsed.net).toBe(1010);
+    // 1000 - (-50 + 40) = 1010.
+    expect(parsed.gross! - (parsed.incomeTax! + parsed.nationalInsurance!)).toBe(1010);
+  });
+
+  it('reads the pay date from a sentence rather than a label', () => {
+    expect(parsed.payDate).toBe('2022-08-28');
+  });
+});
+
 describe('parsePayslipText — two-column layout', () => {
   const parsed = parsePayslipText(TWO_COLUMN);
 

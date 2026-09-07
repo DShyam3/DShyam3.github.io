@@ -24,6 +24,7 @@ import { AlertTriangle, Check, ChevronDown, ChevronRight, Download, FileText, Pa
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
 import { PayslipImportDialog } from './PayslipImportDialog';
+import { employerLogo } from '../employer-logo';
 import { parsedFieldCount, type ParsedPayslip } from '@/lib/finance';
 import { useToast } from '@/hooks/use-toast';
 
@@ -320,6 +321,16 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                 {check.reconciles
                   ? <Check className="h-3.5 w-3.5 shrink-0 text-positive" aria-label="Reconciles" />
                   : <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Does not reconcile" />}
+                {/* The employer's mark, from the logos the About page already
+                    ships. Falls back to nothing rather than a placeholder:
+                    an empty slot reads better than a wrong badge. */}
+                {employerLogo(p.employer) && (
+                  <img
+                    src={employerLogo(p.employer)!}
+                    alt=""
+                    className="h-5 w-5 shrink-0 rounded object-contain"
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold text-foreground font-mono">{p.payDate}</div>
                   <div className="text-xs text-muted-foreground font-mono truncate">
