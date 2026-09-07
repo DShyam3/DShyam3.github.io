@@ -1114,9 +1114,13 @@ when a finance table passes ~1,000 rows, or when several profiles are in
 regular use and switching between them refetches two full ledgers often enough
 to notice.
 
-#### 7.E Security — the `documents` bucket is public
+#### 7.E Security — the `documents` bucket is public — **bucket DONE**
 
-Blocking prerequisite for 7.7. The existing bucket is world-readable:
+Blocking prerequisite for 7.7. `finance-documents` now exists: private, with
+`is_admin()` on select as well as write. The public `documents` bucket is left
+alone -- it holds one file, the CV, which is meant to be downloadable.
+
+The original finding, for the record. The existing bucket is world-readable:
 
 ```sql
 ('documents', 'documents', true, 52428800, ARRAY['application/pdf'])
