@@ -11,8 +11,9 @@ import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { formatGBP } from '@/features/finance/utils/calculations';
-import { runSpendScenario, type Verdict } from '@/lib/finance';
+import { executeTool, type Verdict } from '@/lib/finance';
 import { useScenarioState } from '../useScenarioState';
+import { useFinanceToolContext } from '../useFinanceToolContext';
 
 const VERDICT: Record<Verdict, { title: string; tone: string; blurb: string }> = {
   comfortable: {
@@ -44,14 +45,21 @@ const VERDICT: Record<Verdict, { title: string; tone: string; blurb: string }> =
 
 export default function ScenariosSurface() {
   const [raw, setRaw] = useState('');
-  const { state, assumptions } = useScenarioState();
+  const { assumptions } = useScenarioState();
+  const toolContext = useFinanceToolContext();
 
   const amount = Number.parseFloat(raw.replace(/[^0-9.]/g, ''));
   const hasAmount = Number.isFinite(amount) && amount > 0;
-  const result = useMemo(
-    () => (hasAmount ? runSpendScenario(amount, state) : null),
-    [hasAmount, amount, state],
-  );
+
+  // Deliberately routed through executeTool rather than calling the engine
+  // directly. The assistant in 7.6 will call the same tool with the same
+  // context, so the path it takes is the one this screen exercises every time
+  // it is used -- rather than a second, quieter path that only a model walks.
+  const result = useMemo(() => {
+    if (!hasAmount) return null;
+    const r = executeTool('run_spend_scenario', { amount }, toolContext);
+    return r.tool === 'run_spend_scenario' && 'data' in r ? r.data : null;
+  }, [hasAmount, amount, toolContext]);
 
   const delayed = result?.goalImpacts.filter(g => g.monthsDelayed && g.monthsDelayed > 0) ?? [];
 

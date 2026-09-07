@@ -628,6 +628,63 @@
   }
 }
 
+/* ─── Chrome on a laptop ────────────────────────────────────────────────
+   A desk monitor has height to spare and the shell is sized for it. A laptop
+   does not: at 1440x760 the header, the toolbar and the footer came to 282px
+   and left the wall 478, which is under what two rows of cards need however
+   small the cards are allowed to get -- so the wall fell back to one row of
+   very large posters, on the screen the site is most often read on.
+
+   Nothing is dropped here; every control stays. The faces come down a step,
+   the rows sit closer, and the category row stops wrapping to a second line,
+   which is the single biggest saving of the lot. Together they hand the wall
+   about 90px, which is the difference between one row and two.
+
+   52rem, because above it the sums already work: a 1200px window gets its
+   two rows at a card worth looking at without any of this. */
+
+@media (min-width: 768px) and (max-height: 52rem) {
+  .app-header .dot-matrix-text-md {
+    font-size: 1.15rem;
+  }
+
+  .app-header .dot-matrix-text-sm,
+  .app-footer .dot-matrix-text-xs {
+    font-size: 0.95rem;
+  }
+
+  /* The category row is the one that wraps. A step down on its face is what
+     keeps "SYNC" and "WEEKLY SCHEDULE" on the line above rather than on a
+     line of their own. */
+  .app-toolbar .dot-matrix-text-xs {
+    font-size: 0.95rem;
+  }
+
+  .watchlist-toolbar .nav-link {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .watchlist-toolbar.watchlist-toolbar {
+    padding-top: 0.125rem;
+  }
+
+  .watchlist-toolbar.watchlist-toolbar > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.375rem;
+  }
+
+  /* The search field, the three filter selects and the sort button are all
+     h-9 from the phone up. A 2rem control is still a comfortable target and
+     the row is the full height of its tallest child. */
+  .watchlist-toolbar .h-9 {
+    height: 2rem;
+  }
+
+  .watchlist-count .h-9 {
+    height: 1.75rem;
+  }
+}
+
 /* ─── Phones ────────────────────────────────────────────────────────────
    Doto is set large because its dots read smaller than the nominal size, but
    the sizes chosen for a monitor are simply too wide for a 375px screen --

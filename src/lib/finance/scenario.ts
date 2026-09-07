@@ -110,7 +110,14 @@ export const runSpendScenario = (amount: number, state: ScenarioState): Scenario
       goal.monthlyContribution > 0 ? Math.ceil(spend / goal.monthlyContribution) : null,
   }));
 
-  const maxComfortable = round2(Math.max(0, state.freeToSpend * (1 - TIGHT_THRESHOLD)));
+  // The largest spend that comes back 'comfortable', which means every
+  // constraint the verdict checks -- not just the budget one. Bounding this by
+  // free-to-spend alone let it advise an amount that would break the emergency
+  // fund, directly contradicting a 'breaks_emergency_fund' verdict shown
+  // immediately above it.
+  const budgetCeiling = state.freeToSpend * (1 - TIGHT_THRESHOLD);
+  const reserveCeiling = state.liquidAssets - state.emergencyFundTarget;
+  const maxComfortable = round2(Math.max(0, Math.min(budgetCeiling, reserveCeiling)));
 
   const monthsToSaveInstead =
     spend <= state.liquidAssets

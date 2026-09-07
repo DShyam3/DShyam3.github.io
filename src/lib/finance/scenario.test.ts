@@ -91,7 +91,26 @@ describe('goal impact', () => {
 
 describe('alternatives', () => {
   it('offers the largest spend that stays comfortable', () => {
+    // 20% short of 1000 free-to-spend, and well inside the 3000 of reserve
+    // headroom, so the budget is the binding constraint here.
     expect(runSpendScenario(900, base).maxComfortable).toBe(800);
+  });
+
+  it('never advises an amount that would break the emergency fund', () => {
+    // 2400 liquid against a 2000 target leaves 400 of headroom, which binds
+    // long before 80% of the 1000 free-to-spend does. Advising 800 here would
+    // contradict the verdict shown beside it.
+    const tightReserve = { ...base, liquidAssets: 2400 };
+    const r = runSpendScenario(900, tightReserve);
+    expect(r.maxComfortable).toBe(400);
+    expect(runSpendScenario(r.maxComfortable, tightReserve).verdict).not.toBe(
+      'breaks_emergency_fund',
+    );
+  });
+
+  it('offers nothing when there is no headroom at all', () => {
+    const noReserve = { ...base, liquidAssets: 1500, emergencyFundTarget: 2000 };
+    expect(runSpendScenario(100, noReserve).maxComfortable).toBe(0);
   });
 
   it('needs no saving when the cash is already there', () => {

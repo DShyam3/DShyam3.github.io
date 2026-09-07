@@ -994,7 +994,7 @@ const Watchlist = () => {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="watchlist-count flex items-center justify-between">
         <CountLabel
           count={
             loading
