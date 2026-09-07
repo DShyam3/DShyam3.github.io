@@ -279,3 +279,18 @@ describe('parsePayslipText — a bare Earnings total', () => {
     expect(parsePayslipText('Earnings Units Rate Amount').gross).toBeUndefined();
   });
 });
+
+describe('parsePayslipText — a payslip that never says "net"', () => {
+  it('reads Total Amount Paid as net', () => {
+    const parsed = parsePayslipText('Total Gross Pay 247.26\nTotal Amount Paid 247.26');
+    expect(parsed.net).toBe(247.26);
+    expect(parsed.gross).toBe(247.26);
+  });
+
+  it('reads a hyphenated month, which an earlier version missed', () => {
+    // "31-Dec-2025" matched neither the numeric nor the spaced-name form, so
+    // the payslip fell back to its filename and lost the day.
+    expect(parsePayslipText('Payment Date 31-Dec-2025').payDate).toBe('2025-12-31');
+    expect(parsePayslipText('Pay Day 28 August 2026').payDate).toBe('2026-08-28');
+  });
+});

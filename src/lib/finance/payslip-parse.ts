@@ -68,7 +68,8 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   // catch "Taxable", where the word boundary fails, and "Tax Code" is
   // harmless because the code that follows is not a money-shaped figure.
   { field: 'incomeTax', pattern: /\bpaye\b|\bincome\s+tax\b|\btax\s*\(|\btax\b/i },
-  { field: 'net', pattern: /\bnet\s+pay\b|\btake[-\s]?home\b|\bnet\s+total\b|\bamount\s+payable\b/i },
+  // "Total Amount Paid" is net on layouts that never use the word net.
+  { field: 'net', pattern: /\bnet\s+pay\b|\btake[-\s]?home\b|\bnet\s+total\b|\bamount\s+pay(?:able|ment)\b|\btotal\s+amount\s+paid\b/i },
   { field: 'taxablePay', pattern: /\btaxable\s+pay\b|\btaxable\s+gross\b/i },
   // "Total Earnings" is the period figure on layouts that reserve "Gross pay"
   // for the running total. It is listed first so it wins when both appear.
@@ -154,7 +155,7 @@ const DATE_LABELS: RegExp[] = [
   /\bpay\s+period\s+end|\bperiod\s+end(?:ing)?\b/i,
 ];
 
-/** Handles 28/08/2026, 28-08-2026 and 28 August 2026; returns ISO. */
+/** Handles 28/08/2026, 28-08-2026, 28 August 2026 and 31-Dec-2025; returns ISO. */
 const parseDate = (line: string): string | undefined => {
   const numeric = line.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
   if (numeric) {
@@ -162,8 +163,10 @@ const parseDate = (line: string): string | undefined => {
     const year = y.length === 2 ? `20${y}` : y;
     return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
+  // The separator may be a space or a hyphen: "28 August 2026" and
+  // "31-Dec-2025" are both in use, and only one of them was being read.
   const named = line.match(
-    /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})\b/i,
+    /\b(\d{1,2})[\s-]+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s-]+(\d{4})\b/i,
   );
   if (named) {
     const [, d, mon, y] = named;
