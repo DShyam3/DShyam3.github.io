@@ -1536,7 +1536,8 @@ is worth more right now than any item below.**
 | # | Work | Why now |
 |---|---|---|
 | 1 | CSV / OFX statement import | The only route to bank history older than the API serves, and parsing is deterministic — no key, pure `lib/finance`, testable |
-| 2 | Payslip upload + manual entry | Bucket exists (7.E done). Real deduction figures fix the double-modelled student loan in 7.N |
+| 2 | 7.7: `finance_payslips`, capture form, native payslip view | Bucket done. Real deduction figures fix the double-modelled student loan in 7.N. No key, per 7.P |
+| 2b | Extend `deriveAlerts` into the deterministic "what changed" summary | 7.Q: the standing summary must be reproducible, so it is rules over rows rather than generated prose |
 | 3 | 7.N A–C: `finance_debt_observations`, drift on reconcile, SLC statement dates | Migration only. The as-of-date bug is live today |
 | 4 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
 | 5 | `AccountsSurface` decomposition | 2,071 lines, 17 `useState`, 1 `useMemo` — the shape `BudgetSurface` had |
@@ -1573,12 +1574,20 @@ extraction is the one capability that genuinely differs between vendors, so
 that step wants checking against whichever model is chosen rather than assumed
 to port.
 
-- **7.6** — tools and context are written; the assistant needs the key
-- **7.7 extraction** — storage half is done, reading figures off a PDF is not
-- **7.8** — reconciliation, needs a corpus from 7.7
-- **7.9** — pgvector and hybrid retrieval, same
-- **7.10** — credit PDF ingestion, same
+7.P and 7.Q shrank this list to almost nothing. Storage, capture and
+reconciliation never needed a model; they only appeared to because extraction
+had been drawn into the middle of them.
+
+- **7.6 assistant** — schemas, executor, context and protocol translation are
+  all written. What is missing is the Edge Function and a key
+- **7.9** — embeddings are a third-party call, so hybrid retrieval needs an
+  embedding key (or a self-hosted model, per 7.P)
 - **7.K news** — tax *rates* are data and unblocked; tax *news* is content
+
+No longer blocked, and moved up: **7.7** (archive plus capture plus a native
+payslip view), **7.8** (reconciling captured figures against transactions), and
+**7.10**'s useful half (archive the credit report, capture the scores by hand).
+Automated extraction remains a later convenience for all three, not a gate.
 
 ##### Deferred by choice
 

@@ -1277,14 +1277,16 @@ function FinanceView() {
       </nav>
       {profiles.length > 1 && (
         <Select value={profileId ?? undefined} onValueChange={setProfileId}>
-          <SelectTrigger className="h-7 w-auto gap-1.5 rounded-lg border border-border/40 bg-background/60 px-2.5 text-xs font-mono shrink-0">
+          <SelectTrigger className="h-9 w-auto gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-mono shrink-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {profiles.map(p => (
-              <SelectItem key={p.id} value={p.id} className="text-xs font-sans">
+              <SelectItem key={p.id} value={p.id} className="text-sm font-sans">
                 <span className="flex items-center gap-2">
-                  <ProfileAvatar profile={p} />
+                  {/* `md` so the memoji reads as a face rather than a smudge —
+                      the trigger mirrors this row, so it is sized here. */}
+                  <ProfileAvatar profile={p} size="md" />
                   {p.name}
                 </span>
               </SelectItem>
