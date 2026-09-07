@@ -497,6 +497,57 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_debt_observations: {
+        Row: {
+          balance: number
+          created_at: string
+          debt_id: string
+          id: string
+          note: string | null
+          observed_on: string
+          profile_id: string
+          source: string
+          statement_date: string | null
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          debt_id: string
+          id: string
+          note?: string | null
+          observed_on: string
+          profile_id: string
+          source?: string
+          statement_date?: string | null
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          debt_id?: string
+          id?: string
+          note?: string | null
+          observed_on?: string
+          profile_id?: string
+          source?: string
+          statement_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_debt_observations_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "finance_debts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_debt_observations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_debts: {
         Row: {
           balance: number
@@ -504,6 +555,7 @@ export type Database = {
           created_at: string
           draws: Json
           emoji: string | null
+          final_payment: number
           id: string
           interest_rate: number
           is_default: boolean
@@ -514,6 +566,7 @@ export type Database = {
           original_amount: number
           payoff_date: string | null
           profile_id: string | null
+          rate_periods: Json
           repayment_type: string
           start_date: string | null
           student_loan_plan: string | null
@@ -527,6 +580,7 @@ export type Database = {
           created_at?: string
           draws?: Json
           emoji?: string | null
+          final_payment?: number
           id: string
           interest_rate?: number
           is_default?: boolean
@@ -537,6 +591,7 @@ export type Database = {
           original_amount?: number
           payoff_date?: string | null
           profile_id?: string | null
+          rate_periods?: Json
           repayment_type?: string
           start_date?: string | null
           student_loan_plan?: string | null
@@ -550,6 +605,7 @@ export type Database = {
           created_at?: string
           draws?: Json
           emoji?: string | null
+          final_payment?: number
           id?: string
           interest_rate?: number
           is_default?: boolean
@@ -560,6 +616,7 @@ export type Database = {
           original_amount?: number
           payoff_date?: string | null
           profile_id?: string | null
+          rate_periods?: Json
           repayment_type?: string
           start_date?: string | null
           student_loan_plan?: string | null

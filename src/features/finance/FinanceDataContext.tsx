@@ -53,6 +53,8 @@ import type {
   CreditScores,
   Debt,
   DebtDraw,
+  DebtObservation,
+  RatePeriod,
   FinanceSettings,
   Goal,
   InvestmentHolding,
@@ -183,6 +185,8 @@ function useProvideFinanceData() {
       repaymentType: d.repaymentType || 'amortising'
     }));
   });
+
+  const [debtObservations, setDebtObservations] = useState<DebtObservation[]>([]);
 
   const [recurrings, setRecurrings] = useState<RecurringBill[]>(() => {
     return [];
@@ -508,6 +512,92 @@ function useProvideFinanceData() {
     await fetchTransfers(profileId);
   };
 
+  /* ---- Debt Observations (7.N) ------------------------------------------- */
+  const addDebtObservation = async (observation: Omit<DebtObservation, 'id' | 'createdAt'>) => {
+    if (!isAdmin || !profileId) return;
+    const id = 'dobs_' + Date.now();
+    const created: DebtObservation = {
+      ...observation,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+    const nextObs = [created, ...debtObservations];
+    setDebtObservations(nextObs);
+
+    const updatedDebts = debts.map(d => {
+      if (d.id === observation.debtId) {
+        const obs = [created, ...(d.observations || [])];
+        return {
+          ...d,
+          balance: observation.balance,
+          observations: obs,
+        };
+      }
+      return d;
+    });
+    setDebts(updatedDebts);
+
+    const { error } = await supabase.from('finance_debt_observations').insert({
+      id,
+      profile_id: profileId,
+      debt_id: observation.debtId,
+      observed_on: observation.observedOn,
+      balance: observation.balance,
+      source: observation.source,
+      statement_date: observation.statementDate || null,
+      note: observation.note || null,
+    });
+
+    if (error) {
+      toast({ title: 'Could not record balance', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    await supabase.from('finance_debts')
+      .update({ balance: observation.balance })
+      .eq('id', observation.debtId)
+      .eq('profile_id', profileId);
+
+    toast({ title: 'Balance Recorded', description: `Recorded balance of £${observation.balance}.` });
+  };
+
+  const deleteDebtObservation = async (id: string, debtId: string) => {
+    if (!isAdmin || !profileId) return;
+    const nextObs = debtObservations.filter(o => o.id !== id);
+    setDebtObservations(nextObs);
+
+    const remainingForDebt = nextObs
+      .filter(o => o.debtId === debtId)
+      .sort((a, b) => (a.statementDate || a.observedOn).localeCompare(b.statementDate || b.observedOn));
+    const latestObs = remainingForDebt[remainingForDebt.length - 1];
+
+    const updatedDebts = debts.map(d => {
+      if (d.id === debtId) {
+        return {
+          ...d,
+          balance: latestObs ? latestObs.balance : d.balance,
+          observations: remainingForDebt,
+        };
+      }
+      return d;
+    });
+    setDebts(updatedDebts);
+
+    const { error } = await supabase.from('finance_debt_observations').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Could not delete observation', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    if (latestObs) {
+      await supabase.from('finance_debts')
+        .update({ balance: latestObs.balance })
+        .eq('id', debtId)
+        .eq('profile_id', profileId);
+    }
+    toast({ title: 'Observation Removed', description: 'Debt observation deleted.' });
+  };
+
   const fetchNetWorthHistory = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) return;
     const { data, error } = await supabase
@@ -547,6 +637,7 @@ function useProvideFinanceData() {
           bankAccountsRes,
           membershipsRes,
           debtsRes,
+          debtObservationsRes,
           creditScoresRes,
           budgetCategoriesRes,
           budgetItemsRes,
@@ -565,7 +656,8 @@ function useProvideFinanceData() {
           scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
           scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, use_case, emoji, color')),
           scoped(supabase.from('finance_memberships').select('id, is_default, name, type, status, annual_fee, use_case')),
-          scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, notes, emoji, color')),
+          scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color')),
+          scoped(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji')),
@@ -619,6 +711,7 @@ function useProvideFinanceData() {
           ['bank_accounts', bankAccountsRes],
           ['memberships', membershipsRes],
           ['debts', debtsRes],
+          ['debt_observations', debtObservationsRes],
           ['credit_scores', creditScoresRes],
           ['budget_categories', budgetCategoriesRes],
           ['budget_items', budgetItemsRes],
@@ -756,29 +849,51 @@ function useProvideFinanceData() {
         }));
         if (!membershipsRes.error) setMemberships(mappedMemberships);
 
+        const mappedObservations: DebtObservation[] = (debtObservationsRes.data || []).map(o => ({
+          id: o.id,
+          debtId: o.debt_id,
+          observedOn: o.observed_on,
+          balance: Number(o.balance) || 0,
+          source: (o.source as 'manual' | 'statement' | 'provider') || 'manual',
+          statementDate: o.statement_date || undefined,
+          note: o.note || undefined,
+          createdAt: o.created_at || undefined,
+        }));
+        if (!debtObservationsRes.error) setDebtObservations(mappedObservations);
+
         const userDebts = debtsRes.data?.filter(d => !d.is_default) || [];
         const defaultDebts = debtsRes.data?.filter(d => d.is_default) || [];
         const activeDebts = userDebts.length > 0 ? userDebts : defaultDebts;
 
-        const mappedDebts: Debt[] = activeDebts.map(d => ({
-          id: d.id,
-          name: d.name,
-          type: asDebtType(d.type),
-          lender: d.lender || '',
-          originalAmount: Number(d.original_amount) || 0,
-          balance: Number(d.balance) || 0,
-          interestRate: Number(d.interest_rate) || 0,
-          minPayment: Number(d.min_payment) || 0,
-          startDate: d.start_date || undefined,
-          payoffDate: d.payoff_date || undefined,
-          repaymentType: (d.repayment_type as Debt['repaymentType']) || 'amortising',
-          studentLoanPlan: (d.student_loan_plan as StudentLoanPlanKey) || undefined,
-          writeOffYears: d.write_off_years ?? undefined,
-          draws: Array.isArray(d.draws) ? (d.draws as unknown as DebtDraw[]) : [],
-          notes: d.notes || undefined,
-          emoji: d.emoji || undefined,
-          color: d.color || undefined
-        }));
+        const mappedDebts: Debt[] = activeDebts.map(d => {
+          const debtObs = mappedObservations.filter(o => o.debtId === d.id);
+          const latestObs = debtObs.length > 0
+            ? [...debtObs].sort((a, b) => (a.statementDate || a.observedOn).localeCompare(b.statementDate || b.observedOn)).pop()
+            : undefined;
+
+          return {
+            id: d.id,
+            name: d.name,
+            type: asDebtType(d.type),
+            lender: d.lender || '',
+            originalAmount: Number(d.original_amount) || 0,
+            balance: latestObs ? latestObs.balance : (Number(d.balance) || 0),
+            interestRate: Number(d.interest_rate) || 0,
+            minPayment: Number(d.min_payment) || 0,
+            startDate: d.start_date || undefined,
+            payoffDate: d.payoff_date || undefined,
+            repaymentType: (d.repayment_type as Debt['repaymentType']) || 'amortising',
+            studentLoanPlan: (d.student_loan_plan as StudentLoanPlanKey) || undefined,
+            writeOffYears: d.write_off_years ?? undefined,
+            draws: Array.isArray(d.draws) ? (d.draws as unknown as DebtDraw[]) : [],
+            ratePeriods: Array.isArray(d.rate_periods) ? (d.rate_periods as unknown as RatePeriod[]) : [],
+            finalPayment: Number(d.final_payment) || 0,
+            observations: debtObs,
+            notes: d.notes || undefined,
+            emoji: d.emoji || undefined,
+            color: d.color || undefined,
+          };
+        });
         if (!debtsRes.error) setDebts(mappedDebts);
 
         const userCreditScores = creditScoresRes.data?.filter(d => !d.is_default) || [];
@@ -1386,6 +1501,8 @@ function useProvideFinanceData() {
             student_loan_plan: d.studentLoanPlan || null,
             write_off_years: d.writeOffYears ?? null,
             draws: d.draws as unknown as Json,
+            rate_periods: (d.ratePeriods || []) as unknown as Json,
+            final_payment: d.finalPayment || 0,
             notes: d.notes || null,
             emoji: d.emoji || null,
             color: d.color || null
@@ -1654,6 +1771,10 @@ function useProvideFinanceData() {
     setCreditScores,
     setDatabaseDefaults,
     setDebts,
+    debtObservations,
+    setDebtObservations,
+    addDebtObservation,
+    deleteDebtObservation,
     setDefaultBudgetCategories,
     setGoals,
     setHolidayDefaults,

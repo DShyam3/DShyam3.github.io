@@ -1,5 +1,5 @@
 /**
- * Debt labels and balance projection. Pure; see REHAUL_PLAN.md 7.I.
+ * Debt labels and balance projection. Pure; see REHAUL_PLAN.md 7.I and 7.N.
  *
  * `projectDebtBalance` used to read `new Date()` internally, which made it
  * untestable and its output dependent on when it ran. The current year is now
@@ -36,7 +36,6 @@ export const STUDENT_LOAN_WRITE_OFF_YEARS: Record<StudentLoanPlanKey, number> = 
   postgrad: 30,
 };
 
-/** Only the fields the projection reads, so this module owns no domain type. */
 /**
  * A rate that takes effect on a date and holds until the next one.
  *
@@ -49,6 +48,28 @@ export interface RatePeriod {
   effectiveFrom: string;
   /** Annual, as a percentage — 5.5 means 5.5%. */
   rate: number;
+}
+
+/**
+ * A real observed balance for a debt on a known date (REHAUL_PLAN.md 7.N).
+ *
+ * Each row is an anchor. Projection runs forward from the latest anchor
+ * rather than from a floating, mutable `balance`.
+ */
+export interface DebtObservation {
+  id: string;
+  debtId: string;
+  observedOn: string;
+  balance: number;
+  source: 'manual' | 'statement' | 'provider';
+  /**
+   * Statement date: crucial for SLC (Student Loans Company) where annual statements
+   * reflect a balance as-of March/April, lagging portal checks by up to 18 months.
+   * If not provided, defaults to `observedOn`.
+   */
+  statementDate?: string;
+  note?: string;
+  createdAt?: string;
 }
 
 export interface ProjectableDebt {
@@ -68,6 +89,11 @@ export interface ProjectableDebt {
    * than to zero, so the projection settles here instead of clearing.
    */
   finalPayment?: number;
+  /**
+   * Historical observations anchoring the balance. If present, projection
+   * begins from the latest observation's date and balance.
+   */
+  observations?: DebtObservation[];
 }
 
 export interface DebtProjectionOptions {
@@ -128,14 +154,27 @@ const RUNAWAY_CUTOFF_MONTHS = 120;
  * - income_contingent: interest accrues monthly, repayments are a percentage
  *   of gross income above the plan threshold, and any remaining balance is
  *   written off once the plan's term elapses.
+ * - pcp: amortises down to the balloon payment (`finalPayment`), rather than zero.
  *
+ * When observations exist, projection begins from the latest anchor balance.
  * Returns one point per year so the chart stays readable over 40-year terms.
  */
 export const projectDebtBalance = (
   debt: ProjectableDebt,
   opts: DebtProjectionOptions,
 ): DebtProjectionPoint[] => {
-  const currentYear = opts.currentYear ?? new Date().getFullYear();
+  // If the debt carries recorded observations, anchor the projection on the latest observation
+  const latestObs = debt.observations && debt.observations.length > 0
+    ? [...debt.observations].sort((a, b) =>
+        (a.statementDate || a.observedOn).localeCompare(b.statementDate || b.observedOn)
+      ).pop()
+    : undefined;
+
+  const currentYear = opts.currentYear ?? (
+    latestObs
+      ? new Date(latestObs.statementDate || latestObs.observedOn).getFullYear()
+      : new Date().getFullYear()
+  );
 
   // Resolved per month when the debt carries a schedule, once otherwise. The
   // calendar is only built in the scheduled case, so the common path is
@@ -172,7 +211,7 @@ export const projectDebtBalance = (
   const monthlyPayment = isIncomeContingent ? annualRepayment / 12 : debt.minPayment;
 
   const points: DebtProjectionPoint[] = [];
-  let balance = debt.balance;
+  let balance = latestObs ? latestObs.balance : debt.balance;
   let paid = 0;
   let interest = 0;
   let writtenOff = 0;
@@ -183,10 +222,6 @@ export const projectDebtBalance = (
     if (writeOffMonth !== undefined && month > writeOffMonth) {
       writtenOff = balance;
       balance = 0;
-      // The write-off lands on the plan's actual anniversary. This used to be
-      // `Math.ceil(month / 12)`, which rounded a 30-year Plan 2 loan started in
-      // 2000 to 2031 rather than 2030, and put a visible kink at the end of the
-      // chart because every other point uses the fractional convention below.
       points.push({ year: currentYear + writeOffMonth / 12, balance, paid, interest, writtenOff });
       break;
     }
@@ -224,4 +259,166 @@ export const projectDebtBalance = (
   }
 
   return points;
+};
+
+export interface DebtDriftParams {
+  anchorBalance: number;
+  anchorDate: string; // YYYY-MM-DD
+  targetBalance: number;
+  targetDate: string; // YYYY-MM-DD
+  monthlyPayment: number;
+  interestRate: number; // Annual % (e.g. 5.5 for 5.5%)
+  ratePeriods?: RatePeriod[];
+}
+
+export interface DebtDriftResult {
+  observedBalance: number;
+  predictedBalance: number;
+  drift: number;
+  monthsElapsed: number;
+  impliedAnnualRate: number | null;
+}
+
+/**
+ * Calculates drift between a model's predicted balance and an actual observed figure.
+ *
+ * Given two consecutive anchors (or start date to observation), steps month by month
+ * applying interest and payments to determine the expected balance on `targetDate`.
+ *
+ * Also calculates `impliedAnnualRate` — the effective rate that explains the observed
+ * balance given the payments made.
+ */
+export const calculateDebtDrift = (params: DebtDriftParams): DebtDriftResult => {
+  const {
+    anchorBalance,
+    anchorDate,
+    targetBalance,
+    targetDate,
+    monthlyPayment,
+    interestRate,
+    ratePeriods,
+  } = params;
+
+  const d1 = new Date(anchorDate);
+  const d2 = new Date(targetDate);
+
+  if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime()) || d2 <= d1) {
+    return {
+      observedBalance: targetBalance,
+      predictedBalance: anchorBalance,
+      drift: targetBalance - anchorBalance,
+      monthsElapsed: 0,
+      impliedAnnualRate: interestRate,
+    };
+  }
+
+  const yearDiff = d2.getFullYear() - d1.getFullYear();
+  const monthDiff = d2.getMonth() - d1.getMonth();
+  const dayDiff = d2.getDate() - d1.getDate();
+  const exactMonths = Math.max(yearDiff * 12 + monthDiff + dayDiff / 30.4375, 0);
+  const wholeMonths = Math.max(Math.round(exactMonths), 1);
+
+  // Step month by month to predict expected balance
+  let predicted = anchorBalance;
+  for (let m = 1; m <= wholeMonths; m++) {
+    const stepDate = new Date(d1);
+    stepDate.setMonth(stepDate.getMonth() + m);
+    const rate = rateInForce(ratePeriods, interestRate, stepDate) / 100 / 12;
+    const interest = predicted * rate;
+    predicted += interest;
+    const payment = Math.min(monthlyPayment, predicted);
+    predicted -= payment;
+    if (predicted <= 0) {
+      predicted = 0;
+      break;
+    }
+  }
+
+  const drift = Math.round((targetBalance - predicted) * 100) / 100;
+
+  // Compute implied rate via binary search / bisection
+  let impliedRate: number | null = null;
+  if (wholeMonths > 0 && anchorBalance > 0) {
+    const simulateRate = (ratePct: number): number => {
+      let b = anchorBalance;
+      const mRate = ratePct / 100 / 12;
+      for (let m = 1; m <= wholeMonths; m++) {
+        b += b * mRate;
+        b -= Math.min(monthlyPayment, b);
+        if (b <= 0) return 0;
+      }
+      return b;
+    };
+
+    let low = -50;
+    let high = 150;
+    for (let iter = 0; iter < 35; iter++) {
+      const mid = (low + high) / 2;
+      const res = simulateRate(mid);
+      if (res < targetBalance) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    impliedRate = Math.round(((low + high) / 2) * 100) / 100;
+  }
+
+  return {
+    observedBalance: targetBalance,
+    predictedBalance: Math.round(predicted * 100) / 100,
+    drift,
+    monthsElapsed: wholeMonths,
+    impliedAnnualRate: impliedRate,
+  };
+};
+
+export interface StudentLoanPayslipItem {
+  payDate: string; // YYYY-MM-DD
+  studentLoan: number;
+}
+
+export interface StudentLoanReconcileResult {
+  statementBalance: number;
+  statementDate: string;
+  payslipDeductionsTotal: number;
+  payslipsCount: number;
+  adjustedBalance: number;
+}
+
+/**
+ * Bridges the Student Loans Company (SLC) 12-18 month reporting lag (REHAUL_PLAN.md 7.N).
+ *
+ * HMRC collects student loan deductions monthly via PAYE, but transfers them to SLC
+ * only once a year after the tax year ends. As a result, the balance on gov.uk is
+ * stale by design.
+ *
+ * This function takes an SLC observation and applies captured payslip deductions
+ * dated AFTER the observation's statementDate, giving a live, accurate figure.
+ */
+export const reconcileStudentLoanWithPayslips = (
+  observation: DebtObservation,
+  payslips: StudentLoanPayslipItem[],
+  asOfDate?: string,
+): StudentLoanReconcileResult => {
+  const statementDate = observation.statementDate || observation.observedOn;
+  const cutoff = asOfDate || new Date().toISOString().split('T')[0];
+
+  const relevantPayslips = payslips.filter(p => {
+    return p.payDate > statementDate && p.payDate <= cutoff && p.studentLoan > 0;
+  });
+
+  const totalDeductions = relevantPayslips.reduce((sum, p) => sum + p.studentLoan, 0);
+  const adjustedBalance = Math.max(
+    Math.round((observation.balance - totalDeductions) * 100) / 100,
+    0,
+  );
+
+  return {
+    statementBalance: observation.balance,
+    statementDate,
+    payslipDeductionsTotal: Math.round(totalDeductions * 100) / 100,
+    payslipsCount: relevantPayslips.length,
+    adjustedBalance,
+  };
 };

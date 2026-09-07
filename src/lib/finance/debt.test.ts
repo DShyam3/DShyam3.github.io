@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { projectDebtBalance, rateInForce, STUDENT_LOAN_WRITE_OFF_YEARS } from './debt';
+import {
+  calculateDebtDrift,
+  projectDebtBalance,
+  rateInForce,
+  reconcileStudentLoanWithPayslips,
+  STUDENT_LOAN_WRITE_OFF_YEARS,
+} from './debt';
 
 const opts = { grossSalary: 0, repaymentRate: 9, threshold: 27295, currentYear: 2025 };
 
@@ -229,3 +235,118 @@ describe('projectDebtBalance for PCP', () => {
     expect(noBalloon[noBalloon.length - 1].balance).toBe(0);
   });
 });
+
+describe('projectDebtBalance anchored on observations', () => {
+  it('anchors the opening balance to the latest observation', () => {
+    const debt = {
+      balance: 10000,
+      interestRate: 0,
+      minPayment: 100,
+      observations: [
+        { id: 'o1', debtId: 'd1', observedOn: '2024-01-01', balance: 12000, source: 'manual' as const },
+        { id: 'o2', debtId: 'd1', observedOn: '2025-01-01', balance: 8000, source: 'statement' as const },
+      ],
+    };
+    const points = projectDebtBalance(debt, opts);
+    expect(points[0].balance).toBe(8000);
+  });
+});
+
+describe('calculateDebtDrift', () => {
+  it('reports zero drift when observed balance exactly matches prediction', () => {
+    // 10,000 borrowed at 0% with 200/month payment over 5 months = 9,000
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-01-01',
+      targetBalance: 9000,
+      targetDate: '2025-06-01',
+      monthlyPayment: 200,
+      interestRate: 0,
+    });
+    expect(res.monthsElapsed).toBe(5);
+    expect(res.predictedBalance).toBe(9000);
+    expect(res.drift).toBe(0);
+    expect(res.impliedAnnualRate).toBeCloseTo(0, 1);
+  });
+
+  it('detects positive drift and higher implied interest rate when balance is higher than expected', () => {
+    // Expected 9,000 at 0%, but actual observed is 9,500 (e.g. interest was charged)
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-01-01',
+      targetBalance: 9500,
+      targetDate: '2025-06-01',
+      monthlyPayment: 200,
+      interestRate: 0,
+    });
+    expect(res.drift).toBe(500);
+    expect(res.impliedAnnualRate).toBeGreaterThan(0);
+  });
+
+  it('detects negative drift when balance is paid down faster than predicted', () => {
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-01-01',
+      targetBalance: 8500,
+      targetDate: '2025-06-01',
+      monthlyPayment: 200,
+      interestRate: 0,
+    });
+    expect(res.drift).toBe(-500);
+    expect(res.impliedAnnualRate).toBeLessThan(0);
+  });
+
+  it('recovers recorded interest rate accurately under amortisation', () => {
+    // Test that an amortising loan at 6% produces an implied rate ~6%
+    const rate = 6.0;
+    // Step 12 months manually to get exact target balance
+    let b = 20000;
+    const payment = 400;
+    for (let m = 1; m <= 12; m++) {
+      b += b * (rate / 100 / 12);
+      b -= payment;
+    }
+    const res = calculateDebtDrift({
+      anchorBalance: 20000,
+      anchorDate: '2024-01-01',
+      targetBalance: Math.round(b * 100) / 100,
+      targetDate: '2025-01-01',
+      monthlyPayment: payment,
+      interestRate: rate,
+    });
+    expect(res.drift).toBeCloseTo(0, 1);
+    expect(res.impliedAnnualRate).toBeCloseTo(rate, 0);
+  });
+});
+
+describe('reconcileStudentLoanWithPayslips', () => {
+  it('bridges SLC statement lag by applying post-statement payslip deductions', () => {
+    const observation = {
+      id: 'slc-1',
+      debtId: 'd_student',
+      observedOn: '2025-02-01',
+      statementDate: '2024-04-05',
+      balance: 30000,
+      source: 'statement' as const,
+    };
+
+    const payslips = [
+      // Prior to statement date: should be excluded
+      { payDate: '2024-03-28', studentLoan: 150 },
+      // Post statement date: should be included
+      { payDate: '2024-04-28', studentLoan: 150 },
+      { payDate: '2024-05-28', studentLoan: 150 },
+      { payDate: '2024-06-28', studentLoan: 200 },
+      // Zero deduction: excluded from count
+      { payDate: '2024-07-28', studentLoan: 0 },
+    ];
+
+    const result = reconcileStudentLoanWithPayslips(observation, payslips, '2024-12-31');
+    expect(result.statementBalance).toBe(30000);
+    expect(result.statementDate).toBe('2024-04-05');
+    expect(result.payslipsCount).toBe(3);
+    expect(result.payslipDeductionsTotal).toBe(500);
+    expect(result.adjustedBalance).toBe(29500);
+  });
+});
+

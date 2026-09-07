@@ -11,14 +11,16 @@ import { Debt, DebtDraw } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
   DEBT_TYPE_LABELS,
+  RatePeriod,
   STUDENT_LOAN_PLAN_LABELS,
   STUDENT_LOAN_WRITE_OFF_YEARS,
   StudentLoanPlanKey,
   projectDebtBalance,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { Edit2, Landmark, Plus, Trash2, TrendingDown } from 'lucide-react';
+import { CheckCircle2, Edit2, Landmark, Plus, Scale, Trash2, TrendingDown } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
+import DebtReconcileDialog from '../dialogs/DebtReconcileDialog';
 
 /**
  * Editor for a debt's borrowing tranches — e.g. one row per academic year of
@@ -132,12 +134,15 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
   const [isEditDebtOpen, setIsEditDebtOpen] = useState(false);
   const [activeDebt, setActiveDebt] = useState<Debt | null>(null);
   const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
+  const [reconcileDebt, setReconcileDebt] = useState<Debt | null>(null);
+  const [isReconcileOpen, setIsReconcileOpen] = useState(false);
 
-  const emptyDebtForm: Omit<Debt, 'id' | 'originalAmount' | 'balance' | 'interestRate' | 'minPayment'> & {
+  const emptyDebtForm: Omit<Debt, 'id' | 'originalAmount' | 'balance' | 'interestRate' | 'minPayment' | 'finalPayment'> & {
     originalAmount: number | '';
     balance: number | '';
     interestRate: number | '';
     minPayment: number | '';
+    finalPayment: number | '';
   } = {
     name: '',
     type: 'mortgage' as Debt['type'],
@@ -146,18 +151,20 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
     balance: '' as number | '',
     interestRate: '' as number | '',
     minPayment: '' as number | '',
+    finalPayment: '' as number | '',
     startDate: '',
     payoffDate: '',
     repaymentType: 'amortising' as Debt['repaymentType'],
     studentLoanPlan: undefined,
     writeOffYears: undefined,
     draws: [] as DebtDraw[],
+    ratePeriods: [] as RatePeriod[],
     notes: '',
     emoji: '',
     color: 'hsl(var(--destructive))',
   };
 
-  const [newDebt, setNewDebt] = useState<Omit<Debt, 'id' | 'originalAmount' | 'balance' | 'interestRate' | 'minPayment'> & { originalAmount: number | ''; balance: number | ''; interestRate: number | ''; minPayment: number | ''; }>(emptyDebtForm);
+  const [newDebt, setNewDebt] = useState<typeof emptyDebtForm>(emptyDebtForm);
   const [newDraw, setNewDraw] = useState<{ date: string; amount: number | ''; label: string }>({ date: '', amount: '', label: '' });
 
   const sumDraws = (draws: DebtDraw[]) => draws.reduce((sum, d) => sum + d.amount, 0);
@@ -213,11 +220,13 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
       balance,
       interestRate: newDebt.interestRate === '' ? 0 : newDebt.interestRate,
       minPayment: newDebt.minPayment === '' ? 0 : newDebt.minPayment,
+      finalPayment: newDebt.finalPayment === '' ? 0 : Math.abs(newDebt.finalPayment),
       startDate: newDebt.startDate || newDebt.draws[0]?.date || undefined,
       payoffDate: newDebt.payoffDate || undefined,
       writeOffYears: newDebt.repaymentType === 'income_contingent'
         ? (newDebt.writeOffYears ?? (newDebt.studentLoanPlan ? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan] : undefined))
         : undefined,
+      ratePeriods: newDebt.ratePeriods || [],
       notes: newDebt.notes || undefined,
       id: 'd_' + Date.now(),
     };
@@ -239,6 +248,8 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
       ...activeDebt,
       balance: Math.abs(activeDebt.balance),
       originalAmount: drawTotal > 0 ? drawTotal : Math.abs(activeDebt.originalAmount),
+      finalPayment: activeDebt.finalPayment ? Math.abs(activeDebt.finalPayment) : 0,
+      ratePeriods: activeDebt.ratePeriods || [],
       startDate: activeDebt.startDate || activeDebt.draws[0]?.date || undefined,
     };
     const updated = debts.map(d => d.id === normalized.id ? normalized : d);
@@ -354,7 +365,14 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                       )}
                     </td>
                     <td className="py-3 px-3">{debt.lender || '—'}</td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-destructive">{formatGBP(debt.balance)}</td>
+                    <td className="py-3 px-3 text-right font-mono">
+                      <div className="font-bold text-destructive">{formatGBP(debt.balance)}</div>
+                      {debt.observations && debt.observations.length > 0 && (
+                        <span className="text-[10px] text-muted-foreground block truncate">
+                          as of {debt.observations[0].statementDate || debt.observations[0].observedOn}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-3 text-right font-mono">{debt.interestRate.toFixed(2)}%</td>
                     <td className="py-3 px-3 text-right font-mono">{formatGBP(debt.minPayment)}</td>
                     <td className="py-3 px-3">
@@ -373,6 +391,19 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                     </td>
                     <td className="py-3 px-3 text-center">
                       <div className="flex justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Reconcile & Record Balance"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReconcileDebt(debt);
+                            setIsReconcileOpen(true);
+                          }}
+                          className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          <Scale className="h-3.5 w-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -418,8 +449,16 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {selectedDebt.repaymentType === 'income_contingent'
                     ? `${selectedDebt.studentLoanPlan ? STUDENT_LOAN_PLAN_LABELS[selectedDebt.studentLoanPlan] : 'Income-contingent'}: ${selectedDebt.studentLoanPlan ? (taxConfig.studentLoanRates[selectedDebt.studentLoanPlan] || 0) : 0}% of income above ${formatGBP(selectedDebt.studentLoanPlan ? (taxConfig.studentLoanThresholds[selectedDebt.studentLoanPlan] || 0) : 0)}, written off after ${selectedDebt.writeOffYears ?? '—'} years`
-                    : `Fixed repayment of ${formatGBP(selectedDebt.minPayment)}/month at ${selectedDebt.interestRate.toFixed(2)}%`}
+                    : selectedDebt.repaymentType === 'pcp'
+                      ? `PCP: ${formatGBP(selectedDebt.minPayment)}/month amortising to ${formatGBP(selectedDebt.finalPayment || 0)} balloon`
+                      : `Fixed repayment of ${formatGBP(selectedDebt.minPayment)}/month at ${selectedDebt.interestRate.toFixed(2)}%`}
                 </p>
+                {selectedDebt.observations && selectedDebt.observations.length > 0 && (
+                  <p className="text-[11px] font-mono text-positive mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Anchored on {selectedDebt.observations[0].statementDate || selectedDebt.observations[0].observedOn} verified balance of {formatGBP(selectedDebt.observations[0].balance)}
+                  </p>
+                )}
               </div>
               {debts.length > 1 && (
                 <Select value={selectedDebt.id} onValueChange={setSelectedDebtId}>
@@ -587,9 +626,24 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
                   <SelectItem value="amortising">Fixed monthly payment</SelectItem>
                   <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                  <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {newDebt.repaymentType === 'pcp' && (
+              <div className="space-y-1">
+                <Label htmlFor="debt-balloon" className="text-xs font-mono text-muted-foreground">Balloon / Final Payment (£)</Label>
+                <Input
+                  id="debt-balloon"
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 8000"
+                  value={newDebt.finalPayment}
+                  onChange={(e) => setNewDebt({ ...newDebt, finalPayment: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                />
+              </div>
+            )}
             {newDebt.repaymentType === 'income_contingent' && (
               <>
                 <div className="space-y-1">
@@ -810,9 +864,24 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                   <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
                     <SelectItem value="amortising">Fixed monthly payment</SelectItem>
                     <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                    <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {activeDebt.repaymentType === 'pcp' && (
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-balloon" className="text-xs font-mono text-muted-foreground">Balloon / Final Payment (£)</Label>
+                  <Input
+                    id="edit-debt-balloon"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 8000"
+                    value={activeDebt.finalPayment ?? ''}
+                    onChange={(e) => setActiveDebt({ ...activeDebt, finalPayment: parseFloat(e.target.value) || 0 })}
+                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
+              )}
               {activeDebt.repaymentType === 'income_contingent' && (
                 <>
                   <div className="space-y-1">
@@ -973,6 +1042,11 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
           )}
         </DialogContent>
       </Dialog>
+      <DebtReconcileDialog
+        debt={reconcileDebt}
+        open={isReconcileOpen}
+        onOpenChange={setIsReconcileOpen}
+      />
       {deleteDialog}
     </>
   );

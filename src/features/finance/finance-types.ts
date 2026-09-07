@@ -1,4 +1,5 @@
-import type { StudentLoanPlanKey } from '@/lib/finance';
+import type { DebtObservation, RatePeriod, StudentLoanPlanKey } from '@/lib/finance';
+export type { DebtObservation, RatePeriod };
 
 export interface FinanceSettings {
   grossSalary: number;
@@ -224,7 +225,7 @@ export interface Debt {
   type: 'mortgage' | 'student' | 'auto' | 'personal' | 'credit' | 'other';
   lender: string;
   originalAmount: number; // Amount borrowed; derived from draws when present
-  balance: number; // Outstanding amount owed, stored positive
+  balance: number; // Outstanding amount owed, stored positive (cached view of latest observation)
   interestRate: number; // Annual percentage rate
   minPayment: number; // Contractual monthly payment (amortising debts)
   startDate?: string; // When the debt was taken on (YYYY-MM-DD)
@@ -232,10 +233,14 @@ export interface Debt {
   // 'amortising' = fixed monthly payment (mortgage, car, personal loan).
   // 'income_contingent' = UK student loan: % of income above a threshold,
   // written off after a set number of years.
-  repaymentType: 'amortising' | 'income_contingent';
+  // 'pcp' = car finance with balloon payment (finalPayment).
+  repaymentType: 'amortising' | 'income_contingent' | 'pcp';
   studentLoanPlan?: StudentLoanPlanKey;
   writeOffYears?: number; // income_contingent only
   draws: DebtDraw[];
+  ratePeriods?: RatePeriod[];
+  finalPayment?: number;
+  observations?: DebtObservation[];
   notes?: string;
   emoji?: string;
   color?: string;
