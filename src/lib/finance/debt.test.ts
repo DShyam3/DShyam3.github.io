@@ -100,6 +100,31 @@ describe('projectDebtBalance', () => {
   it('returns only the opening point for a cleared debt', () => {
     expect(projectDebtBalance({ balance: 0, interestRate: 5, minPayment: 100 }, opts)).toHaveLength(1);
   });
+
+  it('includes historical points from startYear to currentYear when includeHistory is true', () => {
+    const points = projectDebtBalance(
+      {
+        balance: 50000,
+        originalAmount: 40000,
+        interestRate: 7,
+        minPayment: 100,
+        startDate: '2020-09-01',
+      },
+      { ...opts, currentYear: 2025, includeHistory: true },
+    );
+    expect(points[0].year).toBe(2020);
+    expect(points[0].balance).toBe(40000);
+    expect(points[0].paid).toBe(0);
+
+    const pt2023 = points.find(p => p.year === 2023);
+    expect(pt2023).toBeDefined();
+    expect(pt2023!.balance).toBeGreaterThan(40000);
+    expect(pt2023!.balance).toBeLessThan(50000);
+
+    const pt2025 = points.find(p => p.year === 2025);
+    expect(pt2025).toBeDefined();
+    expect(pt2025!.balance).toBe(50000);
+  });
 });
 
 describe('rateInForce', () => {

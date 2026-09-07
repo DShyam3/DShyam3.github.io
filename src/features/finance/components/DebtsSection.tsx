@@ -350,6 +350,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
         grossSalary: settings.grossSalary,
         repaymentRate: selectedPlan ? getPlanPercent(selectedPlan) : 0,
         threshold: selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 0,
+        includeHistory: true,
       })
     : [];
   const selectedDebtFinal = selectedDebtProjection[selectedDebtProjection.length - 1];

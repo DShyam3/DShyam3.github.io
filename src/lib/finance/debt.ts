@@ -81,6 +81,8 @@ export interface ProjectableDebt {
   studentLoanPlan?: StudentLoanPlanKey;
   writeOffYears?: number;
   startDate?: string;
+  originalAmount?: number;
+  draws?: { id: string; date: string; amount: number; label?: string }[];
   /** Optional schedule; `interestRate` stands in wherever it does not reach. */
   ratePeriods?: RatePeriod[];
   /**
@@ -109,6 +111,11 @@ export interface DebtProjectionOptions {
    * than a count of months. Defaults to the start of `currentYear`.
    */
   today?: Date;
+  /**
+   * When true, generates historical points from startYear up to currentYear to show
+   * how the debt grew from its original borrowed amount to the verified current balance.
+   */
+  includeHistory?: boolean;
 }
 
 export interface DebtProjectionPoint {
@@ -188,7 +195,9 @@ export const projectDebtBalance = (
     return rateInForce(debt.ratePeriods, debt.interestRate, on) / 100 / 12;
   };
 
-  const startYear = debt.startDate ? new Date(debt.startDate).getFullYear() : currentYear;
+  const startYear = debt.startDate
+    ? new Date(debt.startDate).getFullYear()
+    : (debt.draws && debt.draws.length > 0 ? new Date(debt.draws[0].date).getFullYear() : currentYear);
 
   const isIncomeContingent = debt.repaymentType === 'income_contingent';
   const writeOffYears =
@@ -215,6 +224,43 @@ export const projectDebtBalance = (
   let paid = 0;
   let interest = 0;
   let writtenOff = 0;
+
+  if (opts.includeHistory && startYear < currentYear) {
+    const startBalance = debt.originalAmount && debt.originalAmount > 0
+      ? debt.originalAmount
+      : (debt.draws && debt.draws.length > 0 ? debt.draws.reduce((sum, d) => sum + d.amount, 0) : balance);
+
+    const obsByYear = new Map<number, number>();
+    if (debt.observations) {
+      for (const obs of debt.observations) {
+        const y = new Date(obs.statementDate || obs.observedOn).getFullYear();
+        if (!Number.isNaN(y)) obsByYear.set(y, obs.balance);
+      }
+    }
+
+    const totalYears = currentYear - startYear;
+    for (let y = startYear; y < currentYear; y++) {
+      let yBalance: number;
+      if (obsByYear.has(y)) {
+        yBalance = obsByYear.get(y)!;
+      } else if (y === startYear) {
+        yBalance = startBalance;
+      } else if (startBalance > 0 && balance > 0) {
+        const t = (y - startYear) / totalYears;
+        yBalance = Math.round(startBalance * Math.pow(balance / startBalance, t) * 100) / 100;
+      } else {
+        yBalance = startBalance;
+      }
+      points.push({
+        year: y,
+        balance: yBalance,
+        paid: 0,
+        interest: Math.max(Math.round((yBalance - startBalance) * 100) / 100, 0),
+        writtenOff: 0,
+      });
+    }
+    interest = Math.max(Math.round((balance - startBalance) * 100) / 100, 0);
+  }
 
   points.push({ year: currentYear, balance, paid, interest, writtenOff });
 
