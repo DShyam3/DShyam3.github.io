@@ -14,6 +14,8 @@ export * from './geometry';
 export * from './history';
 export * from './holidays';
 export * from './llm';
+export * from './merchant';
+export * from './merchant-directory';
 export * from './payday';
 export * from './payslip';
 export * from './payslip-parse';
