@@ -446,7 +446,7 @@ return (
                 <div className="overflow-hidden rounded-lg border border-border/30 self-start">
                   <table className="w-full text-xs text-left">
                     <thead>
-                      <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
+                      <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-xs uppercase tracking-wider text-muted-foreground">
                         <th className="p-3">Category</th>
                         <th className="p-3 text-right">Value (%)</th>
                       </tr>
@@ -575,7 +575,7 @@ return (
                 <div className="overflow-hidden rounded-lg border border-border/30 self-start">
                   <table className="w-full text-xs text-left">
                     <thead>
-                      <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
+                      <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-xs uppercase tracking-wider text-muted-foreground">
                         <th className="p-3">Category</th>
                         <th className="p-3 text-right">Value (%)</th>
                       </tr>
@@ -833,7 +833,7 @@ return (
     {/* Copilot-style Budget list */}
     <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors font-mono">
       {/* Table Header */}
-      <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-mono border-b border-border/20 pb-2 px-2">
+      <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono border-b border-border/20 pb-2 px-2">
         <span className="flex-1">Regular Categories</span>
         <div className="flex items-center gap-3 text-right">
           <span className="w-20 text-right">Spent</span>

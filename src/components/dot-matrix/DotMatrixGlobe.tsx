@@ -1106,7 +1106,7 @@ export function DotMatrixGlobe({
                 Fades over the 500ms the dots take to roll up into the sphere. */}
             {dotData && (
                 <div
-                    className={`absolute bottom-4 left-4 z-10 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-[10px] sm:text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
+                    className={`absolute bottom-4 left-4 z-10 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
                         mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
                     }`}
                     title={EQUAL_EARTH_NOTE}
@@ -1118,7 +1118,7 @@ export function DotMatrixGlobe({
             {dotData && (
                 <button
                     onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
-                    className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-[10px] sm:text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
+                    className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
                     aria-label="Toggle 3D View"
                 >
                     {mode === '2d' ? <Globe className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}

@@ -46,10 +46,18 @@ the site silently fell back to the system monospace default.
   `font-black`, `font-light` or `font-thin` -- except a light weight is
   allowed on display text 60px and above.
 
-Known debt: `src/features/finance/` still has 263 arbitrary sub-12px sizes and
-19 off-scale weights. Everything else on the site is on the scale. Finance is
-being rewritten separately (Phase 7 in REHAUL_PLAN.md) and gets fixed there
-rather than by a find-and-replace across a 12,000-line file.
+The whole site is on the scale. Finance was the exception -- 263 arbitrary
+sub-12px sizes and 19 off-scale weights, deferred to the Phase 7 rewrite rather
+than fixed by a find-and-replace across a 12,000-line file. The rewrite cleared
+the weights, and the sizes came down with it until only `text-[10px]` and
+`text-[11px]` were left; those are now `text-xs`.
+
+One thing changed shape rather than size in the process: the globe's overlay
+pills read `text-[10px] sm:text-xs`, a deliberate step down on narrow screens.
+There is no on-scale size below 12, so the step is gone and they are `text-xs`
+throughout. They are `whitespace-nowrap` and absolutely positioned, so
+they were the one real overflow risk; measured at 375px they compute to 12px
+with no overflow and 82px of clearance between the two.
 
 ## Colours
 

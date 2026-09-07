@@ -277,22 +277,22 @@ export default function TaxIncomeSurface({
         {/* Breakdown Pill Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
           <div className="bg-muted/20 rounded-lg p-3 border border-border/30">
-            <span className="block text-[11px] font-mono text-muted-foreground uppercase">Base Gross Salary</span>
+            <span className="block text-xs font-mono text-muted-foreground uppercase">Base Gross Salary</span>
             <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-foreground">{formatGBP(settings.grossSalary)}</span>
           </div>
           <div className="bg-muted/20 rounded-lg p-3 border border-border/30">
-            <span className="block text-[11px] font-mono text-muted-foreground uppercase">Employer Pension ({settings.employerPensionPercent}%)</span>
+            <span className="block text-xs font-mono text-muted-foreground uppercase">Employer Pension ({settings.employerPensionPercent}%)</span>
             <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-positive">+{formatGBP(results.employerPensionRate)}</span>
           </div>
           <div className="bg-muted/20 rounded-lg p-3 border border-border/30">
-            <span className="block text-[11px] font-mono text-muted-foreground uppercase">Benefits & Perks</span>
+            <span className="block text-xs font-mono text-muted-foreground uppercase">Benefits & Perks</span>
             <span className={cn(
               "mt-1 block font-mono text-sm font-bold tabular-nums",
               results.totalBenefitsValue > 0 ? "text-positive" : "text-muted-foreground"
             )}>+{formatGBP(results.totalBenefitsValue)}</span>
           </div>
           <div className="bg-muted/20 rounded-lg p-3 border border-border/30">
-            <span className="block text-[11px] font-mono text-muted-foreground uppercase">Net Take-Home</span>
+            <span className="block text-xs font-mono text-muted-foreground uppercase">Net Take-Home</span>
             <span className="mt-1 block font-mono text-sm font-bold tabular-nums text-positive">{formatGBP(results.netTakeHome)}</span>
           </div>
         </div>
@@ -372,7 +372,7 @@ export default function TaxIncomeSurface({
                       <span className="font-semibold text-foreground">
                         Employer Pension ({settings.employerPensionPercent}%)
                       </span>
-                      <span className="text-[11px] text-muted-foreground font-mono leading-normal mt-0.5">
+                      <span className="text-xs text-muted-foreground font-mono leading-normal mt-0.5">
                         Employer contribution to pension
                       </span>
                     </div>
@@ -393,7 +393,7 @@ export default function TaxIncomeSurface({
                       <span className="font-semibold flex items-center gap-1.5 text-foreground">
                         <Gift className="w-3.5 h-3.5 shrink-0 text-primary" /> Benefits & Perks ({settings.packageBenefits?.length || 0})
                       </span>
-                      <span className="text-[11px] text-muted-foreground font-mono leading-normal mt-0.5">
+                      <span className="text-xs text-muted-foreground font-mono leading-normal mt-0.5">
                         {(settings.packageBenefits || []).map(b => `${b.emoji || '🎁'} ${b.name}`).join(', ')}
                       </span>
                     </div>
@@ -529,21 +529,21 @@ export default function TaxIncomeSurface({
 
         <div className="grid grid-cols-3 gap-2 border-b border-border/30 pb-4">
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Allowance</span>
+            <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Allowance</span>
             <span className="mt-1 block text-sm font-bold text-foreground tabular-nums">
               {settings.workHolidays}
-              <span className="ml-1 text-[11px] font-normal text-muted-foreground">d</span>
+              <span className="ml-1 text-xs font-normal text-muted-foreground">d</span>
             </span>
           </div>
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Left</span>
+            <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Left</span>
             <span className="mt-1 block text-sm font-bold text-positive tabular-nums">
               {settings.workHolidays - getHolidaysUsedCount()}
-              <span className="ml-1 text-[11px] font-normal text-muted-foreground">d</span>
+              <span className="ml-1 text-xs font-normal text-muted-foreground">d</span>
             </span>
           </div>
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Bank</span>
+            <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bank</span>
             <span className="mt-1 block text-sm font-bold text-chart-5 tabular-nums">
               {bankHolidaysLeft}/{settings.bankHolidays}
             </span>
@@ -551,7 +551,7 @@ export default function TaxIncomeSurface({
         </div>
 
         {/* Holiday Calendar Legend */}
-        <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-muted-foreground px-0.5 border-b border-border/30 pb-3">
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-muted-foreground px-0.5 border-b border-border/30 pb-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-chart-5/25 border border-chart-5/50" />
             <span className="text-chart-5 font-semibold">Bank Holiday</span>
@@ -607,7 +607,7 @@ export default function TaxIncomeSurface({
                     <span className="text-xs font-mono font-semibold text-foreground">{month}</span>
                     <div className="flex items-center gap-1.5 text-xs">
                       {monthWorkingDaysBooked > 0 && (
-                        <span className="bg-positive/20 text-positive font-mono text-[11px] px-1.5 py-0.5 rounded border border-positive/40 font-semibold">
+                        <span className="bg-positive/20 text-positive font-mono text-xs px-1.5 py-0.5 rounded border border-positive/40 font-semibold">
                           {monthWorkingDaysBooked}d booked
                         </span>
                       )}
@@ -616,7 +616,7 @@ export default function TaxIncomeSurface({
                   </div>
 
                   {/* Week headers */}
-                  <div className="grid grid-cols-7 gap-1 mb-1 text-[11px] font-mono font-semibold text-muted-foreground text-center">
+                  <div className="grid grid-cols-7 gap-1 mb-1 text-xs font-mono font-semibold text-muted-foreground text-center">
                     <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
                   </div>
 
@@ -678,7 +678,7 @@ export default function TaxIncomeSurface({
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs p-2.5 rounded-lg bg-popover border border-border/60 shadow-md font-mono">
                             <p className="font-bold text-foreground mb-1">{dayNum} {month} {settings.taxYear}</p>
-                            <div className="space-y-1 text-muted-foreground font-mono text-[11px]">
+                            <div className="space-y-1 text-muted-foreground font-mono text-xs">
                               {getTooltipDetails().map((detail, idx) => {
                                 let colorClass = "text-foreground/80";
                                 if (detail.startsWith('Bank Holiday')) {
@@ -704,7 +704,7 @@ export default function TaxIncomeSurface({
                     <div className="border-t border-border/20 mt-3 pt-3 space-y-3">
                       {/* Overlapping Holidays List */}
                       <div className="space-y-1.5">
-                        <span className="text-[11px] font-mono font-semibold text-muted-foreground uppercase tracking-wider block">Booked Leave</span>
+                        <span className="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider block">Booked Leave</span>
                         {overlappingHolidays.length > 0 ? (
                           <div className="space-y-1.5">
                             {overlappingHolidays.map(hol => (
@@ -715,7 +715,7 @@ export default function TaxIncomeSurface({
                               >
                                 <div className="space-y-0.5 min-w-0 pr-2 text-left">
                                   <span className="font-semibold font-mono text-foreground block truncate">{hol.occasion}</span>
-                                  <span className="text-[11px] text-muted-foreground block font-mono">
+                                  <span className="text-xs text-muted-foreground block font-mono">
                                     {formatHolidayDates(hol.startDate, hol.endDate)} ({hol.count} {hol.count === 1 ? 'day' : 'days'})
                                   </span>
                                 </div>

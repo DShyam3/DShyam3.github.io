@@ -366,14 +366,14 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                           <td className="py-3 font-sans font-medium text-foreground">
                             <span className="block font-semibold">{h.name}</span>
                             {h.ticker && (
-                              <span className="text-[11px] text-muted-foreground uppercase font-mono tracking-wider font-normal">
+                              <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider font-normal">
                                 {h.ticker}
                               </span>
                             )}
                           </td>
                           <td className="py-3">
                             <span
-                              className="px-2 py-0.5 rounded-md text-[11px] font-mono font-medium border"
+                              className="px-2 py-0.5 rounded-md text-xs font-mono font-medium border"
                               style={{
                                 color: CATEGORY_COLORS[h.category],
                                 borderColor: `${CATEGORY_COLORS[h.category]}33`,
@@ -398,7 +398,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                             gainLoss >= 0 ? "text-positive font-semibold" : "text-destructive"
                           )}>
                             <span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span>
-                            <span className="text-[11px] block">
+                            <span className="text-xs block">
                               {gainLoss >= 0 ? '+' : ''}{returnPct.toFixed(1)}%
                             </span>
                           </td>
@@ -484,7 +484,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   </ResponsiveContainer>
                   {/* Clean total indicator inside donut with ZERO overflow */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase">
+                    <span className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
                       Total
                     </span>
                     <span className="text-xs font-mono font-bold tabular-nums text-foreground mt-0.5">

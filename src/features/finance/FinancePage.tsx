@@ -1475,7 +1475,7 @@ function FinanceView() {
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Salary & Pension</h3>
-                    <p className="text-[11px] text-muted-foreground">Core income and contribution settings</p>
+                    <p className="text-xs text-muted-foreground">Core income and contribution settings</p>
                   </div>
                 </div>
 
@@ -1567,7 +1567,7 @@ function FinanceView() {
                         className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
                         required
                       />
-                      <p className="text-[11px] text-muted-foreground">Any past pay date to calculate every two weeks from.</p>
+                      <p className="text-xs text-muted-foreground">Any past pay date to calculate every two weeks from.</p>
                     </div>
                   )}
 
@@ -1647,7 +1647,7 @@ function FinanceView() {
                       <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                         <Gift className="w-3.5 h-3.5 text-primary" /> Benefits & Package Perks
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {settings.packageBenefits?.length ? `${settings.packageBenefits.length} active additions (${formatGBP(results.totalBenefitsValue)}/yr)` : 'No custom benefits added yet'}
                       </p>
                     </div>
@@ -1700,7 +1700,7 @@ function FinanceView() {
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Working days</h3>
-                    <p className="text-[11px] text-muted-foreground">Region, tax year, leave, and hours</p>
+                    <p className="text-xs text-muted-foreground">Region, tax year, leave, and hours</p>
                   </div>
                 </div>
 
@@ -1743,20 +1743,20 @@ function FinanceView() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Weekends</p>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground">Weekends</p>
                       <p className="mt-0.5 text-xs font-mono font-semibold text-foreground">
                         {settings.weekends}
-                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">days</span>
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">days</span>
                       </p>
                     </div>
                     <div className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         Bank holidays
                         {fetchingHolidays && <Loader2 className="h-3 w-3 animate-spin" />}
                       </p>
                       <p className="mt-0.5 text-xs font-mono font-semibold text-foreground">
                         {settings.bankHolidays}
-                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">days</span>
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">days</span>
                       </p>
                     </div>
                   </div>
@@ -1804,7 +1804,7 @@ function FinanceView() {
                     </div>
                     <div>
                       <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Advanced Configurations</h3>
-                      <p className="text-[11px] text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
+                      <p className="text-xs text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
                     </div>
                   </div>
                 </div>
@@ -1823,7 +1823,7 @@ function FinanceView() {
                     {expandedSection === 'tax' && (
                       <div className="p-4 bg-background/30 border-t border-border/20 space-y-4 text-xs">
                         <div className="space-y-3">
-                          <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Income Tax Bands (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider font-mono">Income Tax Bands (£)</h4>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <Label className="text-xs text-muted-foreground">Basic Rate Limit</Label>
@@ -1908,7 +1908,7 @@ function FinanceView() {
                         </div>
 
                         <div className="space-y-3 pt-3 border-t border-border/20">
-                          <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider font-mono">National Insurance Bands (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider font-mono">National Insurance Bands (£)</h4>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <Label className="text-xs text-muted-foreground">Lower Threshold</Label>
@@ -1978,7 +1978,7 @@ function FinanceView() {
                         </div>
 
                         <div className="space-y-3 pt-3 border-t border-border/20">
-                          <h4 className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Student Loan Thresholds (£)</h4>
+                          <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider font-mono">Student Loan Thresholds (£)</h4>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                             {(Object.keys(draftTaxConfig.studentLoanThresholds) as Array<keyof typeof draftTaxConfig.studentLoanThresholds>).map((plan) => {
                               if (plan === 'none') return null;

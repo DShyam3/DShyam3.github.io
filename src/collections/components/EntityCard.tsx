@@ -115,7 +115,7 @@ function MediaFace({
 
         {badge && (
           <div className="absolute top-2 left-2 z-10 pointer-events-none">
-            <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-background/80 text-muted-foreground backdrop-blur-sm shadow-sm border border-border/40">
+            <span className="text-xs font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-background/80 text-muted-foreground backdrop-blur-sm shadow-sm border border-border/40">
               {badge}
             </span>
           </div>
@@ -183,7 +183,7 @@ function TextFace({ title, subtitle, badge, actions, onOpen, openable }: FacePro
     >
       <Quote className="h-6 w-6 text-muted-foreground/20 absolute top-4 left-4" />
       {badge && (
-        <span className="absolute top-4 right-4 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+        <span className="absolute top-4 right-4 text-xs font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
           {badge}
         </span>
       )}
