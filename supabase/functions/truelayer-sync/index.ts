@@ -386,15 +386,42 @@ serve(async (req) => {
         return 'Wants' // default fallback
       }
 
-      // Determine if this is the initial sync by checking if we have any existing TrueLayer transactions in the database
-      const { count: existingTlTxCount } = await supabaseAdmin
+      // How far back to ask for.
+      //
+      // A fixed 30-day incremental window silently assumes you sync at least
+      // monthly. Left seven weeks between syncs and it leaves a hole: the
+      // fetch starts 30 days ago, the store ends where the last sync did, and
+      // nothing ever fills the gap between. Since nothing is deleted any more,
+      // an overlapping request is free -- the same rows simply upsert over
+      // themselves -- so the window is anchored to the data instead.
+      const { data: newestRow } = await supabaseAdmin
         .from('finance_transactions')
-        .select('id', { count: 'exact', head: true })
+        .select('date')
+        .eq('profile_id', selfProfileId)
         .like('id', 'tl_tx_%')
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-      const isInitialSync = !existingTlTxCount || existingTlTxCount === 0
-      const daysToFetch = isInitialSync ? 90 : 30 // Pull 90 days on initial sync, 30 days on subsequent syncs to keep it fast
-      const fromDate = new Date(Date.now() - daysToFetch * 24 * 60 * 60 * 1000).toISOString()
+      const DAY_MS = 24 * 60 * 60 * 1000
+      // Re-ask for a week either side of the boundary: a transaction can
+      // settle days after the date it carries, so it may not have existed
+      // when the sync that covered its date ran.
+      const OVERLAP_DAYS = 7
+      // Providers rarely serve more than a couple of years unattended, and an
+      // absurd range is likelier to be rejected than honoured.
+      const MAX_DAYS = 730
+      const INITIAL_DAYS = 90
+
+      const daysSinceNewest = newestRow?.date
+        ? Math.ceil((Date.now() - new Date(newestRow.date).getTime()) / DAY_MS)
+        : null
+
+      const daysToFetch = Math.min(
+        MAX_DAYS,
+        daysSinceNewest === null ? INITIAL_DAYS : daysSinceNewest + OVERLAP_DAYS,
+      )
+      const fromDate = new Date(Date.now() - daysToFetch * DAY_MS).toISOString()
 
       // A. Process Bank Accounts (balance + transactions fetched in
       // parallel per account, and accounts processed in parallel with each
