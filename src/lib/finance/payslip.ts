@@ -28,7 +28,34 @@ export interface Payslip {
   /** Where the archived PDF lives, if one was kept. The figures stand alone. */
   storagePath?: string;
   notes?: string;
+  /**
+   * The payslip's own line items, as it stated them.
+   *
+   * The columns above are the summary everything computes from; these are the
+   * detail behind it. Without them "£167.93 of other deductions" is a number
+   * with no story -- it was a gym membership and a separate arrears charge.
+   */
+  lines?: PayslipLine[];
 }
+
+export interface PayslipLine {
+  label: string;
+  /** Always positive. `kind` says which way it moves. */
+  amount: number;
+  /**
+   * `benefit` is a sacrifice taken from the pay column rather than listed
+   * under deductions -- pension, a gym membership. It reduces pay without
+   * being a deduction, which is why it needs its own name.
+   */
+  kind: 'payment' | 'deduction' | 'benefit';
+}
+
+/** Groups the lines for display, keeping the payslip's own order within each. */
+export const groupPayslipLines = (lines: readonly PayslipLine[] | undefined) => ({
+  payments: (lines ?? []).filter(l => l.kind === 'payment'),
+  benefits: (lines ?? []).filter(l => l.kind === 'benefit'),
+  deductions: (lines ?? []).filter(l => l.kind === 'deduction'),
+});
 
 /**
  * Everything taken off gross.

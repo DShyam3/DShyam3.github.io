@@ -16,15 +16,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
-  checkPayslip, compareToModel, deductionRate, effectiveTaxRate,
-  studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
+  checkPayslip, compareToModel, studentLoanPaidInTaxYear, sumPayslips,
+  taxYearOf, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
-import { AlertTriangle, ChevronDown, ChevronRight, Download, FileText, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
 import { PayslipImportDialog } from './PayslipImportDialog';
+import { PayslipDetailDialog } from './PayslipDetailDialog';
 import { employerLogo } from '../employer-logo';
 import { parsedFieldCount, type ParsedPayslip } from '@/lib/finance';
 import { useToast } from '@/hooks/use-toast';
@@ -124,31 +125,51 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
     () => payslips.filter(p => taxYearOf(p.payDate) === currentTaxYear),
     [payslips, currentTaxYear],
   );
-  const totals = useMemo(() => sumPayslips(thisYear), [thisYear]);
+  const allTime = useMemo(() => sumPayslips(payslips), [payslips]);
 
-  /* Grouped the way the documents are actually filed: one folder per tax
-     year, newest first, with the year's take-home on the header so the group
-     says something before it is opened. */
-  const byTaxYear = useMemo(() => {
-    const groups = new Map<number, Payslip[]>();
+  const [groupBy, setGroupBy] = useState<'employer' | 'year'>('employer');
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [detail, setDetail] = useState<Payslip | null>(null);
+
+  /* Two ways of asking the same question. By employer answers "what did that
+     job pay me"; by tax year answers "what did I earn that year", which is
+     the one HMRC asks. Both keep payslips newest first within a group. */
+  const groups = useMemo(() => {
+    const buckets = new Map<string, Payslip[]>();
     for (const p of payslips) {
-      const year = taxYearOf(p.payDate);
-      const bucket = groups.get(year);
+      const key = groupBy === 'employer' ? (p.employer || 'Unattributed') : String(taxYearOf(p.payDate));
+      const bucket = buckets.get(key);
       if (bucket) bucket.push(p);
-      else groups.set(year, [p]);
+      else buckets.set(key, [p]);
     }
-    return [...groups.entries()].sort((a, b) => b[0] - a[0]);
-  }, [payslips]);
 
-  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+    return [...buckets.entries()]
+      .map(([key, slips]) => {
+        const totals = sumPayslips(slips);
+        const newest = slips[0].payDate;
+        const oldest = slips[slips.length - 1].payDate;
+        return {
+          key,
+          slips,
+          totals,
+          logo: groupBy === 'employer' ? employerLogo(key) : null,
+          title: groupBy === 'employer' ? key : `${key}/${String(Number(key) + 1).slice(2)}`,
+          subtitle: groupBy === 'employer'
+            // A date range says how long the job lasted, which the count does not.
+            ? `${slips.length} payslip${slips.length === 1 ? '' : 's'} · ${formatDate(oldest)} – ${formatDate(newest)}`
+            : `${slips.length} payslip${slips.length === 1 ? '' : 's'} · ${formatGBP(totals.gross)} earned`,
+          sortKey: newest,
+        };
+      })
+      // Newest first either way, so the current job and the current year lead.
+      .sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+  }, [payslips, groupBy]);
 
   const loanComparison = useMemo(() => {
     const actual = studentLoanPaidInTaxYear(payslips, currentTaxYear);
     if (thisYear.length === 0 || modelledStudentLoanMonthly === undefined) {
       return compareToModel(actual, null);
     }
-    // Compared over the months actually captured, not twelve -- otherwise a
-    // part-captured year always looks like a shortfall.
     return compareToModel(actual, modelledStudentLoanMonthly * thisYear.length);
   }, [payslips, currentTaxYear, modelledStudentLoanMonthly, thisYear.length]);
 
@@ -249,14 +270,14 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
 
   return (
     <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground font-mono">Payslips</h3>
-          <p className="text-xs text-muted-foreground font-mono mt-0.5">
-            {payslips.length === 0
-              ? 'Capture the figures; the PDF is only an archive.'
-              : `${thisYear.length} in ${currentTaxYear}/${String(currentTaxYear + 1).slice(2)}`}
-          </p>
+          {payslips.length > 0 && (
+            <p className="text-xs text-muted-foreground font-mono mt-0.5">
+              {payslips.length} from {formatDate(payslips[payslips.length - 1].payDate)} to {formatDate(payslips[0].payDate)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button size="sm" variant="outline" onClick={() => setIsImportOpen(true)} className="h-8 rounded-lg text-xs font-mono gap-1.5 border-border/40 bg-background/30">
@@ -270,123 +291,125 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         </div>
       </div>
 
-      {thisYear.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            ['Gross', formatGBP(totals.gross)],
-            ['Take-home', formatGBP(totals.net)],
-            ['Deducted', `${deductionRate(sumAsSlip(totals)).toFixed(1)}%`],
-            ['Tax + NI', `${effectiveTaxRate(sumAsSlip(totals)).toFixed(1)}%`],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-lg border border-border/40 bg-card/40 px-3 py-2">
-              <div className="text-xs text-muted-foreground font-mono">{label}</div>
-              <div className="text-sm font-semibold text-foreground font-mono tabular-nums">{value}</div>
+      {payslips.length === 0 ? (
+        <p className="text-xs text-muted-foreground font-mono">
+          Import a folder of payslips, or add one by hand. The figures are read here in
+          your browser; the PDF is only ever stored.
+        </p>
+      ) : (
+        <>
+          {/* Lifetime, not this year: the point of holding four years of
+              payslips is being able to see across them. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              ['Earned', formatGBP(allTime.gross)],
+              ['Take-home', formatGBP(allTime.net)],
+              ['Tax + NI', formatGBP(allTime.incomeTax + allTime.nationalInsurance)],
+              ['Into pension', formatGBP(allTime.pensionEmployee + allTime.pensionEmployer)],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-border/40 bg-card/40 px-3 py-2">
+                <div className="text-xs text-muted-foreground font-mono">{label}</div>
+                <div className="text-sm font-semibold text-foreground font-mono tabular-nums">{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {loanComparison.modelled !== null && loanComparison.difference !== null && (
+            <div className="rounded-lg border border-border/40 bg-card/40 px-3 py-2 text-xs font-mono">
+              <span className="text-muted-foreground">Student loan, {currentTaxYear}/{String(currentTaxYear + 1).slice(2)}: </span>
+              <span className="font-semibold text-foreground tabular-nums">{formatGBP(loanComparison.actual)}</span>
+              <span className="text-muted-foreground"> deducted, against {formatGBP(loanComparison.modelled)} modelled</span>
+              {Math.abs(loanComparison.difference) >= 1 && (
+                <span className={cn('ml-1 font-semibold', loanComparison.difference > 0 ? 'text-chart-4' : 'text-positive')}>
+                  ({loanComparison.difference > 0 ? '+' : ''}{formatGBP(loanComparison.difference)})
+                </span>
+              )}
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* The concrete payoff: what was actually deducted, against what the tax
-          model predicted. Hidden until there is something to compare. */}
-      {loanComparison.modelled !== null && loanComparison.difference !== null && (
-        <div className="rounded-lg border border-border/40 bg-card/40 px-3 py-2 text-xs font-mono">
-          <span className="text-muted-foreground">Student loan, {currentTaxYear}/{String(currentTaxYear + 1).slice(2)}: </span>
-          <span className="font-semibold text-foreground tabular-nums">{formatGBP(loanComparison.actual)}</span>
-          <span className="text-muted-foreground"> deducted, against {formatGBP(loanComparison.modelled)} modelled</span>
-          {Math.abs(loanComparison.difference) >= 1 && (
-            <span className={cn('ml-1 font-semibold', loanComparison.difference > 0 ? 'text-chart-4' : 'text-positive')}>
-              ({loanComparison.difference > 0 ? '+' : ''}{formatGBP(loanComparison.difference)})
-            </span>
           )}
-        </div>
-      )}
 
-      {payslips.length > 0 && (
-        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-          {byTaxYear.map(([year, slips]) => (
-          <div key={year} className="space-y-1.5">
-            <button
-              type="button"
-              onClick={() => setCollapsed(c => ({ ...c, [year]: !c[year] }))}
-              className="flex w-full items-center gap-2 px-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {collapsed[year] ? <ChevronRight className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
-              <span className="font-semibold text-foreground">{year}/{String(year + 1).slice(2)}</span>
-              <span>{slips.length} payslip{slips.length === 1 ? '' : 's'}</span>
-              <span className="ml-auto tabular-nums">{formatGBP(sumPayslips(slips).net)}</span>
-            </button>
-            {!collapsed[year] && slips.map(p => {
-            const check = checkPayslip(p);
-            // Zero gross and zero net is not a payslip that balances, it is a
-            // payslip nobody has filled in yet. Ticking it would be a pass
-            // claimed from absent data.
-            const captured = p.gross > 0 || p.net > 0;
-            return (
-              <div key={p.id} className="flex items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 transition-colors">
-                {/* Only the exception is marked. A tick against every healthy
-                    row is nineteen ticks saying nothing, and it made the one
-                    row that needed attention harder to find rather than
-                    easier. The wording under the date already says when
-                    figures are missing. */}
-                {captured && !check.reconciles && (
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Does not reconcile" />
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-muted-foreground">Group by</span>
+            {(['employer', 'year'] as const).map(mode => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setGroupBy(mode)}
+                className={cn(
+                  'rounded-md border px-2 py-0.5 transition-colors',
+                  groupBy === mode
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border/40 text-muted-foreground hover:text-foreground hover:border-border/80',
                 )}
-                {/* Same treatment as the experience list on the About page:
-                    a white tile behind the mark. Most brand logos are dark
-                    artwork on transparency, so without it they are invisible
-                    in dark mode -- which is the theme this is usually read in. */}
-                {employerLogo(p.employer) && (
-                  <div className="h-9 w-9 shrink-0 flex items-center justify-center rounded-md bg-white ring-1 ring-black/10 p-1 overflow-hidden">
-                    <img
-                      src={employerLogo(p.employer)!}
-                      alt=""
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-foreground font-mono">{formatDate(p.payDate)}</div>
-                  <div className="text-xs text-muted-foreground font-mono truncate">
-                    {p.employer ? `${p.employer} · ` : ''}
-                    {!captured
-                      ? 'figures not captured yet'
-                      : `${formatGBP(totalDeductions(p))} deducted`}
-                    {captured && !check.reconciles && ` · off by ${formatGBP(check.difference)}`}
-                  </div>
-                </div>
-                {p.storagePath ? (
-                  <button
-                    type="button"
-                    onClick={() => void openDocument(p.storagePath!)}
-                    className="flex items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors shrink-0"
-                    title="Open the archived PDF in a new tab"
-                  >
-                    <Download className="h-3 w-3" />
-                    PDF
-                  </button>
-                ) : (
-                  <span className="text-xs text-muted-foreground/50 shrink-0" title="No PDF archived">—</span>
-                )}
-                <div className="text-xs font-semibold text-foreground font-mono tabular-nums shrink-0">
-                  {captured ? formatGBP(p.net) : '—'}
-                </div>
-                <button type="button" onClick={() => openEdit(p)} className="text-muted-foreground hover:text-foreground shrink-0" aria-label={`Edit payslip for ${formatDate(p.payDate)}`}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
+              >
+                {mode === 'employer' ? 'Employer' : 'Tax year'}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3 max-h-[30rem] overflow-y-auto pr-1">
+            {groups.map(group => (
+              <div key={group.key} className="space-y-1.5">
                 <button
                   type="button"
-                  onClick={() => removePayslip(p)}
-                  className="text-muted-foreground hover:text-destructive shrink-0"
-                  aria-label={`Delete payslip for ${formatDate(p.payDate)}`}
+                  onClick={() => setCollapsed(c => ({ ...c, [group.key]: !c[group.key] }))}
+                  className="flex w-full items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 transition-colors text-left"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  {collapsed[group.key]
+                    ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  {group.logo && (
+                    <div className="h-10 w-10 shrink-0 flex items-center justify-center rounded-md bg-white ring-1 ring-black/10 p-1.5">
+                      <img src={group.logo} alt="" className="w-full h-full object-contain" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-foreground font-mono truncate">{group.title}</div>
+                    <div className="text-xs text-muted-foreground font-mono truncate">{group.subtitle}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-semibold text-foreground font-mono tabular-nums">
+                      {formatGBP(group.totals.net)}
+                    </div>
+                    <div className="text-xs text-muted-foreground font-mono">take-home</div>
+                  </div>
                 </button>
+
+                {!collapsed[group.key] && (
+                  <div className="grid gap-1.5 sm:grid-cols-2 pl-2">
+                    {group.slips.map(p => {
+                      const check = checkPayslip(p);
+                      const captured = p.gross > 0 || p.net > 0;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setDetail(p)}
+                          className="flex items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 hover:border-border/80 transition-colors text-left"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-foreground font-mono">{formatDate(p.payDate)}</div>
+                            <div className="text-xs text-muted-foreground font-mono truncate">
+                              {groupBy === 'employer'
+                                ? (captured ? `${formatGBP(p.gross)} gross` : 'figures not captured yet')
+                                : (p.employer || (captured ? `${formatGBP(p.gross)} gross` : 'no employer'))}
+                            </div>
+                          </div>
+                          {captured && !check.reconciles && (
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Does not reconcile" />
+                          )}
+                          {p.storagePath && <FileText className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="PDF archived" />}
+                          <div className="text-xs font-semibold text-foreground font-mono tabular-nums shrink-0">
+                            {captured ? formatGBP(p.net) : '—'}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            );
-            })}
+            ))}
           </div>
-          ))}
-        </div>
+        </>
       )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -517,23 +540,16 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         </DialogContent>
       </Dialog>
 
+      <PayslipDetailDialog
+        payslip={detail}
+        onOpenChange={open => { if (!open) setDetail(null); }}
+        onEdit={p => { setDetail(null); openEdit(p); }}
+        onOpenPdf={path => void openDocument(path)}
+      />
+
       <PayslipImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
 
       {deleteDialog}
     </div>
   );
 }
-
-/** Year totals share the per-slip rate helpers by wearing the same shape. */
-const sumAsSlip = (t: ReturnType<typeof sumPayslips>): Payslip => ({
-  id: 'totals',
-  payDate: '',
-  gross: t.gross,
-  incomeTax: t.incomeTax,
-  nationalInsurance: t.nationalInsurance,
-  pensionEmployee: t.pensionEmployee,
-  pensionEmployer: t.pensionEmployer,
-  studentLoan: t.studentLoan,
-  otherDeductions: t.otherDeductions,
-  net: t.net,
-});

@@ -788,6 +788,27 @@ export type Database = {
           },
         ]
       }
+      finance_merchant_logos: {
+        Row: {
+          resolved_at: string
+          slug: string
+          source_domain: string | null
+          storage_path: string | null
+        }
+        Insert: {
+          resolved_at?: string
+          slug: string
+          source_domain?: string | null
+          storage_path?: string | null
+        }
+        Update: {
+          resolved_at?: string
+          slug?: string
+          source_domain?: string | null
+          storage_path?: string | null
+        }
+        Relationships: []
+      }
       finance_net_worth_snapshots: {
         Row: {
           assets: number
@@ -829,10 +850,11 @@ export type Database = {
       finance_payslips: {
         Row: {
           created_at: string
-          employer: string | null
+          employer: string
           gross: number
           id: string
           income_tax: number
+          lines: Json
           national_insurance: number
           net: number
           notes: string | null
@@ -849,10 +871,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          employer?: string | null
+          employer?: string
           gross?: number
           id: string
           income_tax?: number
+          lines?: Json
           national_insurance?: number
           net?: number
           notes?: string | null
@@ -869,10 +892,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          employer?: string | null
+          employer?: string
           gross?: number
           id?: string
           income_tax?: number
+          lines?: Json
           national_insurance?: number
           net?: number
           notes?: string | null
@@ -1252,6 +1276,7 @@ export type Database = {
           is_default: boolean
           is_recurring: boolean | null
           is_reviewed: boolean
+          merchant: string | null
           name: string
           notes: string | null
           profile_id: string | null
@@ -1270,6 +1295,7 @@ export type Database = {
           is_default?: boolean
           is_recurring?: boolean | null
           is_reviewed?: boolean
+          merchant?: string | null
           name: string
           notes?: string | null
           profile_id?: string | null
@@ -1288,6 +1314,7 @@ export type Database = {
           is_default?: boolean
           is_recurring?: boolean | null
           is_reviewed?: boolean
+          merchant?: string | null
           name?: string
           notes?: string | null
           profile_id?: string | null

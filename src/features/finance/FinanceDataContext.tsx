@@ -24,7 +24,7 @@ import {
 import defaultPresets from '@/data/presets.json';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import type { Payslip, ProfileTransfer } from '@/lib/finance';
+import type { Payslip, PayslipLine, ProfileTransfer } from '@/lib/finance';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
@@ -420,7 +420,7 @@ function useProvideFinanceData() {
     }
     const { data, error } = await supabase
       .from('finance_payslips')
-      .select('id, pay_date, employer, gross, income_tax, national_insurance, pension_employee, pension_employer, student_loan, other_deductions, net, storage_path, notes')
+      .select('id, pay_date, employer, gross, income_tax, national_insurance, pension_employee, pension_employer, student_loan, other_deductions, net, storage_path, notes, lines')
       .eq('profile_id', forProfile)
       .order('pay_date', { ascending: false });
     if (error) {
@@ -441,6 +441,7 @@ function useProvideFinanceData() {
       net: Number(r.net),
       storagePath: r.storage_path ?? undefined,
       notes: r.notes ?? undefined,
+      lines: Array.isArray(r.lines) ? (r.lines as unknown as PayslipLine[]) : [],
     })));
   }, [isAdmin]);
 
@@ -468,6 +469,7 @@ function useProvideFinanceData() {
       net: slip.net,
       storage_path: slip.storagePath ?? null,
       notes: slip.notes ?? null,
+      lines: (slip.lines ?? []) as unknown as never,
       updated_at: new Date().toISOString(),
     // Employer is part of the key: overlapping jobs can pay on the same day,
     // and without it the second payslip replaces the first (7.7).
