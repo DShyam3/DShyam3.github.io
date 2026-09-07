@@ -32,19 +32,19 @@ import { useTrueLayer } from '../useTrueLayer';
  * a lift not a restyle; Phase 7.C replaces them with design tokens.
  */
 const CREDIT_TIER_COLORS: Record<CreditTier, string> = {
-  1: 'hsl(var(--destructive))',
-  2: 'hsl(var(--chart-4))',
-  3: 'hsl(var(--positive))',
-  4: 'hsl(var(--positive))',
-  5: 'hsl(var(--positive))',
+  1: '#ef4444',
+  2: '#f59e0b',
+  3: '#84cc16',
+  4: '#10b981',
+  5: '#059669',
 };
 
 const CREDIT_TIER_CLASSES: Record<CreditTier, string> = {
-  1: 'text-destructive',
-  2: 'text-chart-4',
-  3: 'text-positive',
-  4: 'text-positive',
-  5: 'text-positive',
+  1: 'text-rose-500 dark:text-rose-400',
+  2: 'text-amber-500 dark:text-amber-400',
+  3: 'text-lime-500 dark:text-lime-400',
+  4: 'text-emerald-500 dark:text-emerald-400',
+  5: 'text-emerald-600 dark:text-emerald-400',
 };
 
 const bandColor = (band?: BureauBand | null): string | undefined =>
@@ -1046,7 +1046,14 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                 </p>
               </div>
               {rating && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-muted/30 text-foreground border border-border/40">
+                <span
+                  className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-semibold border"
+                  style={{
+                    color: rating.color,
+                    borderColor: `${rating.color}40`,
+                    backgroundColor: `${rating.color}15`,
+                  }}
+                >
                   {rating.text}
                 </span>
               )}
@@ -1070,8 +1077,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                   <path
                     d={describeArc(80, 75, 54, 140, scoreAngle)}
                     fill="none"
-                    stroke="currentColor"
-                    className="text-foreground"
+                    stroke={rating ? rating.color : bureau.color}
                     strokeWidth="7"
                     strokeLinecap="round"
                   />
@@ -1083,7 +1089,7 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                     cx={dotPos.x}
                     cy={dotPos.y}
                     r="4.5"
-                    fill="hsl(var(--foreground))"
+                    fill={rating ? rating.color : bureau.color}
                     stroke="hsl(var(--card))"
                     strokeWidth="2"
                   />
@@ -1094,7 +1100,8 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
                   x="80"
                   y="68"
                   textAnchor="middle"
-                  className="font-mono text-3xl font-bold tracking-tight fill-foreground"
+                  className="font-mono text-3xl font-bold tracking-tight"
+                  style={{ fill: rating ? rating.color : bureau.color }}
                 >
                   {latest ? latest.score : '—'}
                 </text>
@@ -1127,14 +1134,20 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               <div className="flex items-center gap-1 w-full h-1.5 rounded-full overflow-hidden bg-muted/20">
                 {bands.map(b => {
                   const isCurrent = latest && latest.score >= b.min && latest.score <= b.max;
+                  const isHovered = hoveredBands[bureau.key]?.name === b.name;
                   const widthPct = ((b.max - b.min) / bureau.maxScore) * 100;
                   return (
                     <div
                       key={b.name}
-                      style={{ width: `${widthPct}%` }}
+                      style={{
+                        width: `${widthPct}%`,
+                        backgroundColor: CREDIT_TIER_COLORS[b.tier],
+                      }}
                       className={cn(
-                        "h-full transition-all cursor-pointer",
-                        isCurrent ? "bg-primary opacity-100" : "bg-muted/40 hover:bg-muted/60 opacity-50"
+                        "h-full transition-all cursor-pointer rounded-sm",
+                        isCurrent || isHovered
+                          ? "opacity-100 ring-1 ring-foreground/40 shadow-sm"
+                          : "opacity-35 hover:opacity-75"
                       )}
                       title={`${b.name}: ${b.min}–${b.max}`}
                       onMouseEnter={() => setHoveredBands(prev => ({ ...prev, [bureau.key]: b }))}
@@ -1145,7 +1158,16 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
               </div>
 
               <div className="flex items-center justify-between text-[11px] font-mono min-h-[18px]">
-                <span className="text-muted-foreground">
+                <span
+                  className="font-medium"
+                  style={{
+                    color: hoveredBands[bureau.key]
+                      ? CREDIT_TIER_COLORS[hoveredBands[bureau.key]!.tier]
+                      : rating
+                        ? rating.color
+                        : undefined,
+                  }}
+                >
                   {hoveredBands[bureau.key]?.name ?? (rating?.text || 'Unrated')}
                 </span>
                 <span className="text-muted-foreground/60 tabular-nums">
@@ -1171,24 +1193,32 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
 
               {entries.length > 0 ? (
                 <div className="space-y-1 max-h-[100px] overflow-y-auto pr-1 scrollbar-thin">
-                  {[...entries].reverse().map(entry => (
-                    <div
-                      key={entry.id}
-                      className="group flex items-center justify-between py-1 px-2 rounded hover:bg-muted/20 transition-colors text-xs font-mono"
-                    >
-                      <span className="text-muted-foreground text-[11px]">{entry.date}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-foreground tabular-nums text-xs">{entry.score}</span>
-                        <button
-                          onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
-                          className="text-muted-foreground hover:text-destructive p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Delete entry"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                  {[...entries].reverse().map(entry => {
+                    const entryRating = getRatingFromBands(entry.score, bureau.key);
+                    return (
+                      <div
+                        key={entry.id}
+                        className="group flex items-center justify-between py-1 px-2 rounded hover:bg-muted/20 transition-colors text-xs font-mono"
+                      >
+                        <span className="text-muted-foreground text-[11px]">{entry.date}</span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="font-bold tabular-nums text-xs"
+                            style={{ color: entryRating.color }}
+                          >
+                            {entry.score}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
+                            className="text-muted-foreground hover:text-destructive p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete entry"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground/60 italic py-3 text-center font-mono">
