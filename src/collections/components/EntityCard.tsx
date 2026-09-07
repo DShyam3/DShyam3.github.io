@@ -129,7 +129,7 @@ function MediaFace({
         </div>
       </div>
 
-      <div className="p-3 flex flex-col gap-1 flex-1">
+      <div className="card-body p-3 flex flex-col gap-1 flex-1">
         {/* The title gets the line to itself. It used to share one with the
             price, which is `whitespace-nowrap shrink-0` and so took what it
             needed first -- on a narrow card that left the title ~40px and
@@ -138,7 +138,7 @@ function MediaFace({
             landed at a different height on every card, according to how many
             lines the title above it ran to, and the wall stopped lining up.
             It sits with the brand instead, on a row that is always there. */}
-        <h3 className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+        <h3 className="card-title text-sm font-medium line-clamp-2 min-h-[2.5rem]">
           {!openable && href ? (
             <a
               href={href}
@@ -153,7 +153,7 @@ function MediaFace({
             title
           )}
         </h3>
-        <div className="flex items-baseline justify-between gap-2 min-h-[1rem]">
+        <div className="card-meta flex items-baseline justify-between gap-2 min-h-[1rem]">
           <p className="text-xs text-muted-foreground line-clamp-1 min-w-0">
             {subtitle ?? '\u00a0'}
           </p>
@@ -163,7 +163,7 @@ function MediaFace({
             </span>
           )}
         </div>
-        <p className="text-xs text-muted-foreground/80 line-clamp-2 min-h-[2rem]">
+        <p className="card-sub text-xs text-muted-foreground/80 line-clamp-2 min-h-[2rem]">
           {excerpt ?? '\u00a0'}
         </p>
       </div>

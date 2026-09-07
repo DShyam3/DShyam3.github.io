@@ -294,6 +294,19 @@
        when nothing above it says otherwise. */
     --card-floor: 7rem;
     --card-text-h: 9.25rem;
+    /* The same block once the card is narrow enough to switch to the compact
+       body below -- one less line of text, a smaller title and tighter
+       padding. A laptop is the screen this exists for: at 860px tall there is
+       about 280px per row after the header, the toolbar and the footer, and a
+       full-height text block leaves 88px for the poster, which is under the
+       floor, so the wall falls back to a single row of very large cards. The
+       shorter block buys back the second row at a card around 120px wide.
+
+       6.25rem, not the 5.25 the parts add up to: on a card that narrow the
+       platform badge and the status pill stop sharing a line and the meta
+       row wraps to two, which is the right answer for the row and 20px the
+       sum has to carry. */
+    --card-text-h-compact: 6.25rem;
     --card-gap: 1rem;
     --card-ideal: 8.5rem;
     --card-min: clamp(var(--card-floor), min(var(--card-ideal), var(--card-fit, 100vw)), 20rem);
@@ -340,6 +353,56 @@
       --card-gap: 1.25rem;
     }
   }
+}
+
+/* An EntityCard's compact body is a title and one row of meta -- no wrapped
+   platform badges under it -- so it costs about 1.75rem less than a watchlist
+   card's. Set on the grid rather than on the collection wrapper because the
+   grid declares its own value, and a declaration on the element beats one
+   inherited from above it. */
+.collection-cards .card-grid {
+  --card-text-h-compact: 4.5rem;
+}
+
+/* ─── The compact card body ──────────────────────────────────────────────
+   The short body: the secondary line goes, the title drops to two smaller
+   lines and the padding tightens. It is worth what it costs only on a screen
+   where the full body leaves no poster worth looking at, and CardGrid is the
+   one that can tell -- it does the sum -- so it marks the grid rather than
+   the card answering to its own width. A width breakpoint would have had a
+   dead zone: a card is only allowed to be as wide as the regime it was sized
+   for, and the widest compact card is narrower than the narrowest full one.
+
+   Sized to --card-text-h-compact; if these rules change what the body costs,
+   that number has to follow, or the arithmetic drifts from what the card
+   renders and the second row is cut.
+
+   Deliberately outside @layer: these have to beat the Tailwind utilities on
+   the elements themselves, and everything in a layer loses to them. */
+[data-card-body='compact'] .card-body {
+  padding: 0.5rem;
+}
+
+[data-card-body='compact'] .card-title {
+  font-size: 0.75rem;
+  line-height: 1.15;
+  min-height: 1.75rem;
+  -webkit-line-clamp: 2;
+}
+
+[data-card-body='compact'] .card-title > span {
+  -webkit-line-clamp: 2;
+}
+
+/* The year, genre, brand or price line. It is the least of what the card says
+   and the only line that can go without leaving a hole. */
+[data-card-body='compact'] .card-sub {
+  display: none;
+}
+
+[data-card-body='compact'] .card-meta {
+  margin-top: 0.25rem;
+  min-height: 0;
 }
 
 /* ─── Footer ────────────────────────────────────────────────────────────

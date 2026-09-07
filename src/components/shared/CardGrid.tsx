@@ -61,10 +61,17 @@ function lengthOf(style: CSSStyleDeclaration, name: string, rootPx: number): num
  * sizing its children from the measurement is a feedback loop: bigger cards
  * make a taller column makes bigger cards.
  */
+/** What the sum comes back with: how wide a card may be, and which of the two
+ *  text blocks that width was solved for. */
+interface Answer {
+  width: number;
+  compact: boolean;
+}
+
 function useCardGridFit(ref: React.RefObject<HTMLDivElement>) {
-  // The last value written, so a resize that rounds to the same pixel does
-  // not touch the DOM.
-  const published = useRef<number | null>(null);
+  // The last answer written, so a resize that lands on the same one does not
+  // touch the DOM.
+  const published = useRef<Answer | null>(null);
 
   useEffect(() => {
     const grid = ref.current;
@@ -78,6 +85,7 @@ function useCardGridFit(ref: React.RefObject<HTMLDivElement>) {
     const clear = () => {
       if (published.current === null) return;
       grid.style.removeProperty('--card-fit');
+      delete grid.dataset.cardBody;
       published.current = null;
     };
 
@@ -101,7 +109,9 @@ function useCardGridFit(ref: React.RefObject<HTMLDivElement>) {
       const style = getComputedStyle(grid);
       const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
       const gap = parseFloat(style.rowGap) || 0;
+      const columnGap = parseFloat(style.columnGap) || gap;
       const text = lengthOf(style, '--card-text-h', rootPx);
+      const compactText = lengthOf(style, '--card-text-h-compact', rootPx) || text;
       const floor = lengthOf(style, '--card-floor', rootPx);
       const [width, height] = style
         .getPropertyValue('--card-aspect')
@@ -109,21 +119,57 @@ function useCardGridFit(ref: React.RefObject<HTMLDivElement>) {
         .map((part) => parseFloat(part));
       const aspect = width && height ? width / height : 2 / 3;
 
+      // How many cards the wall actually holds, across every grid on the page
+      // -- a grouped collection is several grids and the wall is all of them.
+      const cards = [...scroller.querySelectorAll(`.${CARD_GRID}`)].reduce(
+        (total, one) => total + one.childElementCount,
+        0,
+      );
+      // Whether a second row is worth sizing for. Shrinking the cards to fit
+      // two rows of a wall that only has one row of items buys nothing and
+      // costs a lot: four books drew 135px covers under 400px of empty page
+      // where they could have drawn 313px ones.
+      const worthTwoRows = (width: number) => {
+        const columns = Math.max(1, Math.floor((grid.clientWidth + columnGap) / (width + columnGap)));
+        return cards > columns;
+      };
+
       // Two rows if they can be had at a size worth looking at, one if not,
       // and the floor if even one row will not fit -- on a window that short
       // nothing is going to be whole, and the smallest card is the one that
       // leaves the least of itself under the fold.
-      const fitIn = (space: number) => {
-        const widthFor = (rows: number) =>
-          Math.floor(((space - gap * (rows + 1)) / rows - text) * aspect);
-        return [2, 1].map(widthFor).find((width) => width >= floor);
+      const fitIn = (space: number): Answer | undefined => {
+        const widthFor = (rows: number, block: number) =>
+          Math.floor(((space - gap * (rows + 1)) / rows - block) * aspect);
+        // Two answers per row count, because the card has two text blocks:
+        // the full one and the compact body -- see [data-card-body] in
+        // src/index.css. The full block is tried first and kept whenever it
+        // clears the floor: the compact body drops a line the card is better
+        // off keeping when there is room for it. Only when the full block
+        // leaves nothing worth looking at -- a laptop, where two rows of
+        // full-bodied cards want an 88px poster -- is the shorter block worth
+        // the line it costs.
+        const answerFor = (rows: number): Answer => {
+          const full = widthFor(rows, text);
+          if (full >= floor) return { width: full, compact: false };
+          return { width: widthFor(rows, compactText), compact: true };
+        };
+        return [2, 1]
+          .map(answerFor)
+          .find(
+            (answer, index) =>
+              answer.width >= floor && (index === 1 || worthTwoRows(answer.width)),
+          );
       };
       // The sliver first, the whole slice when nothing whole fits in it.
-      const fit = fitIn(sliver) ?? fitIn(slice) ?? floor;
+      const answer = fitIn(sliver) ?? fitIn(slice) ?? { width: floor, compact: true };
 
-      if (fit === published.current) return;
-      published.current = fit;
-      grid.style.setProperty('--card-fit', `${fit}px`);
+      if (answer.width === published.current?.width && answer.compact === published.current?.compact)
+        return;
+      published.current = answer;
+      grid.style.setProperty('--card-fit', `${answer.width}px`);
+      if (answer.compact) grid.dataset.cardBody = 'compact';
+      else delete grid.dataset.cardBody;
     };
 
     // The scroller's height settles a frame after a resize on some layouts --

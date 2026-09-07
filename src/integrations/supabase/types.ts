@@ -656,6 +656,8 @@ export type Database = {
           emoji: string | null
           id: string
           is_default: boolean
+          is_emergency_fund: boolean
+          monthly_contribution: number
           name: string
           profile_id: string | null
           start_date: string | null
@@ -670,6 +672,8 @@ export type Database = {
           emoji?: string | null
           id: string
           is_default?: boolean
+          is_emergency_fund?: boolean
+          monthly_contribution?: number
           name: string
           profile_id?: string | null
           start_date?: string | null
@@ -684,6 +688,8 @@ export type Database = {
           emoji?: string | null
           id?: string
           is_default?: boolean
+          is_emergency_fund?: boolean
+          monthly_contribution?: number
           name?: string
           profile_id?: string | null
           start_date?: string | null
@@ -894,6 +900,7 @@ export type Database = {
           currency: string
           emoji: string | null
           id: string
+          is_public: boolean
           is_self: boolean
           name: string
           owner_user_id: string | null
@@ -905,6 +912,7 @@ export type Database = {
           currency?: string
           emoji?: string | null
           id?: string
+          is_public?: boolean
           is_self?: boolean
           name: string
           owner_user_id?: string | null
@@ -916,6 +924,7 @@ export type Database = {
           currency?: string
           emoji?: string | null
           id?: string
+          is_public?: boolean
           is_self?: boolean
           name?: string
           owner_user_id?: string | null

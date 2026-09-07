@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,7 +58,10 @@ export default function GoalsSurface() {
     startDate: string;
     emoji: string;
     status: 'active' | 'archived';
-  }>({ name: '', targetAmount: '', targetDate: '', startDate: '', emoji: '', status: 'active' });
+    monthlyContribution: number | '';
+    isEmergencyFund: boolean;
+  }>({ name: '', targetAmount: '', targetDate: '', startDate: '', emoji: '', status: 'active',
+       monthlyContribution: '', isEmergencyFund: false });
 
   const [newContribution, setNewContribution] = useState<{
     amount: number | '';
@@ -92,13 +96,21 @@ export default function GoalsSurface() {
       startDate: newGoal.startDate || todayStr,
       status: newGoal.status || 'active',
       emoji: newGoal.emoji || undefined,
+      monthlyContribution: newGoal.monthlyContribution === '' ? 0 : newGoal.monthlyContribution,
+      // One emergency fund per profile, enforced by a partial unique index in
+      // the database. Clearing the others here keeps the UI from offering a
+      // save the database will reject.
+      isEmergencyFund: newGoal.isEmergencyFund,
       contributions: []
     };
-    const updated = [...goals, created];
+    const updated = [
+      ...(created.isEmergencyFund ? goals.map(g => ({ ...g, isEmergencyFund: false })) : goals),
+      created,
+    ];
     setGoals(updated);
     saveDataToSupabase('goals', updated);
     setIsAddGoalOpen(false);
-    setNewGoal({ name: '', targetAmount: '', targetDate: '', startDate: '', emoji: '', status: 'active' });
+    setNewGoal({ name: '', targetAmount: '', targetDate: '', startDate: '', emoji: '', status: 'active', monthlyContribution: '', isEmergencyFund: false });
     setSelectedGoalId(created.id);
     toast({ title: 'Goal Added', description: `Successfully created goal "${created.name}".` });
   };
@@ -157,10 +169,15 @@ export default function GoalsSurface() {
           startDate: editingGoal.startDate,
           targetDate: editingGoal.targetDate,
           emoji: editingGoal.emoji || undefined,
-          status: editingGoal.status || 'active'
+          status: editingGoal.status || 'active',
+          monthlyContribution: editingGoal.monthlyContribution ?? 0,
+          isEmergencyFund: editingGoal.isEmergencyFund ?? false,
         };
       }
-      return g;
+      // Only one goal per profile may be the emergency fund; the database
+      // enforces it with a partial unique index, so clear the others rather
+      // than letting the save fail.
+      return editingGoal.isEmergencyFund ? { ...g, isEmergencyFund: false } : g;
     });
 
     setGoals(updated);
@@ -674,6 +691,29 @@ export default function GoalsSurface() {
           required
         />
       </div>
+      <div className="space-y-1">
+        <Label htmlFor="goal-monthly" className="text-xs font-mono text-muted-foreground">Monthly Contribution (£)</Label>
+        <Input
+          id="goal-monthly"
+          type="number"
+          placeholder="e.g. 200"
+          value={newGoal.monthlyContribution}
+          onChange={(e) => setNewGoal({ ...newGoal, monthlyContribution: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+          className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">What you intend to put in each month. Used to work out how far a hypothetical spend pushes this goal back.</p>
+      </div>
+      <label className="flex items-start gap-2 pt-1">
+        <Checkbox
+          checked={newGoal.isEmergencyFund}
+          onCheckedChange={(c) => setNewGoal({ ...newGoal, isEmergencyFund: !!c })}
+          className="mt-0.5"
+        />
+        <span className="text-xs text-muted-foreground">
+          This is my emergency fund
+          <span className="block">Scenario runs treat its target as the floor your cash should not fall below. Only one goal can hold this.</span>
+        </span>
+      </label>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label htmlFor="goal-start-date" className="text-xs font-mono text-muted-foreground">Start Date</Label>
@@ -744,6 +784,29 @@ export default function GoalsSurface() {
             required
           />
         </div>
+        <div className="space-y-1">
+          <Label htmlFor="edit-goal-monthly" className="text-xs font-mono text-muted-foreground">Monthly Contribution (£)</Label>
+          <Input
+            id="edit-goal-monthly"
+            type="number"
+            placeholder="e.g. 200"
+            value={editingGoal.monthlyContribution ?? ''}
+            onChange={(e) => setEditingGoal({ ...editingGoal, monthlyContribution: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+            className="rounded-lg h-9 border-border/40 bg-background/50 font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">What you intend to put in each month. Used to work out how far a hypothetical spend pushes this goal back.</p>
+        </div>
+        <label className="flex items-start gap-2 pt-1">
+          <Checkbox
+            checked={editingGoal.isEmergencyFund ?? false}
+            onCheckedChange={(c) => setEditingGoal({ ...editingGoal, isEmergencyFund: !!c })}
+            className="mt-0.5"
+          />
+          <span className="text-xs text-muted-foreground">
+            This is my emergency fund
+            <span className="block">Scenario runs treat its target as the floor your cash should not fall below. Only one goal can hold this.</span>
+          </span>
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label htmlFor="edit-goal-start-date" className="text-xs font-mono text-muted-foreground">Start Date</Label>

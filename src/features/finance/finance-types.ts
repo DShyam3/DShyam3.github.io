@@ -51,6 +51,10 @@ export interface Goal {
   startDate?: string; // YYYY-MM-DD
   status?: 'active' | 'archived';
   emoji?: string;
+  /** The profile's emergency reserve. At most one goal per profile. */
+  isEmergencyFund?: boolean;
+  /** What the goal is meant to receive each month. 0 means unfunded. */
+  monthlyContribution?: number;
 }
 
 export interface BankAccount {

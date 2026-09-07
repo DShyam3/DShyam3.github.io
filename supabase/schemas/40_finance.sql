@@ -158,7 +158,12 @@ CREATE TABLE IF NOT EXISTS "public"."finance_goals" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "status" "text" DEFAULT 'active'::"text" NOT NULL,
-    "emoji" "text"
+    "emoji" "text",
+    -- The goal representing this profile's emergency reserve; scenario runs
+    -- treat its target as the floor cash should not fall below.
+    "is_emergency_fund" boolean DEFAULT false NOT NULL,
+    -- What the goal is intended to receive monthly. 0 means unfunded.
+    "monthly_contribution" numeric DEFAULT 0 NOT NULL
 );
 
 ALTER TABLE "public"."finance_goals" OWNER TO "postgres";
@@ -666,6 +671,10 @@ ALTER TABLE ONLY "public"."finance_profiles"
     ADD CONSTRAINT "finance_profiles_owner_user_id_fkey" FOREIGN KEY ("owner_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 -- Exactly one profile may be the operator's own.
+-- One emergency fund per profile. Template rows carry a null profile_id, and
+-- several nulls are distinct to a unique index, so they are unaffected.
+CREATE UNIQUE INDEX "idx_finance_goals_one_emergency_fund" ON "public"."finance_goals" ("profile_id") WHERE "is_emergency_fund";
+
 CREATE UNIQUE INDEX "idx_finance_profiles_self" ON "public"."finance_profiles" ("is_self") WHERE "is_self";
 
 ALTER TABLE ONLY "public"."finance_profile_transfers"

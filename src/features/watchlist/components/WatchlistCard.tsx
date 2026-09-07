@@ -238,13 +238,13 @@ export const WatchlistCard = React.memo(function WatchlistCard({
           )}
         </div>
 
-        <div className="p-2.5">
+        <div className="card-body p-2.5">
           {/* Two lines is the floor, not the ceiling: `min-h` keeps a
               one-line title from pulling its card's badges up out of line
               with its neighbours', while a long one is allowed a third line
               rather than ending in an ellipsis. Only the rare long title
               makes its row taller, which is the cheaper of the two. */}
-          <h3 className="font-serif text-sm font-medium leading-tight min-h-[2.5rem]">
+          <h3 className="card-title font-serif text-sm font-medium leading-tight min-h-[2.5rem]">
             <span className="line-clamp-3" style={{ textWrap: 'balance' }}>
               {displayTitle(item.title, item.year)}
             </span>
@@ -252,7 +252,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
           {/* Year and first genre. It wraps rather than truncating -- on a
               narrow card `truncate` was cutting the genre to "Animat...". */}
-          <p className="text-xs text-muted-foreground mt-0.5 min-h-[1rem]">
+          <p className="card-sub text-xs text-muted-foreground mt-0.5 min-h-[1rem]">
             {item.year}
             {item.year && item.genres && item.genres.length > 0 && ' · '}
             {item.genres?.[0]}
@@ -260,7 +260,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
           {/* Platform on the left, status and release date on the right, so the
               card keeps its height whether or not a title has both. */}
-          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-1.5 min-h-[22px]">
+          <div className="card-meta flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-1.5 min-h-[22px]">
             <PlatformBadge platform={item.streaming_platform} size={18} />
             {status && (
               isUpcomingStatus(status) && upcomingReleaseDate ? (

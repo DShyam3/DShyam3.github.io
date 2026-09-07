@@ -127,9 +127,13 @@ export function CollectionPage<T extends CollectionRow, R>({
           it has to know how tall a card is -- which is this collection's image
           aspect plus the text block. It defaults to the tallest shape on the
           site (2:3), so a collection of 16:9 stills would otherwise draw
-          needlessly small cards. */}
+          needlessly small cards.
+
+          `collection-cards` is the other half of the same sum: an EntityCard's
+          compact body is shorter than a watchlist card's, and the class is
+          where index.css says by how much. */}
       <div
-        className="px-4 md:px-0"
+        className="collection-cards px-4 md:px-0"
         style={
           {
             '--card-aspect': config.card.aspect ?? '2 / 3',
