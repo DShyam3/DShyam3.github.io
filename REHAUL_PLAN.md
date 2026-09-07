@@ -972,8 +972,8 @@ data lives. The prop lists collapse on their own after that.
 | 7.4 | Snapshots — balance, net worth, per profile — **DONE** | none |
 | 7.5 | Scenario engine — "what happens if I do X?" — **DONE** | 7.0 |
 | 7.6 | AI tool layer: typed tools over 7.0 + 7.5 — **tools and context done; assistant needs the key** | Edge Function + API key |
-| 7.7 | **Private bucket** + document pipeline (payslips, statements, receipts, credit PDFs) | bucket fix first |
-| 7.8 | Reconciliation engine — evidence, provenance, match scoring | 7.7 |
+| 7.7 | **Private bucket — DONE** + document *storage*, field capture and a native payslip view. Extraction is manual, then templates, then self-hosted OCR (7.P) | none — no key needed |
+| 7.8 | Reconciliation engine — evidence, provenance, match scoring | 7.7 capture (not extraction) |
 | 7.9 | pgvector + hybrid retrieval | corpus from 7.7 |
 | 7.10 | Credit: full model + PDF ingestion now; API adapter when contracted | see below |
 | 7.11 | Monthly review / "what changed" / anomalies | 7.4 |
@@ -1162,7 +1162,8 @@ CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "extensions";
 CREATE TABLE finance_embeddings (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id  uuid NOT NULL REFERENCES finance_profiles(id) ON DELETE CASCADE,
-  entity_type text NOT NULL,   -- transaction | document_chunk | goal | note
+  entity_type text NOT NULL,   -- transaction | payslip | goal | note (see 7.P:
+                               -- extracted records, never document text)
   entity_id   uuid NOT NULL,
   chunk_text  text NOT NULL,
   embedding   extensions.vector(1536)
@@ -1597,6 +1598,73 @@ a contract, not code).
 
 The ordering principle: data before features, and anything that silently
 produces wrong numbers before anything that produces new ones.
+
+#### 7.P The model sees a projection, never the source
+
+A rule that outranks the phases below it, and a correction to how 7.7–7.10
+were originally drawn.
+
+**Documents are not sent anywhere. They are stored.** A payslip PDF goes into
+the private bucket and stays there, so it can be downloaded in five years when
+a mortgage application asks for it. Nothing uploads it to a model. The figures
+that matter are captured into columns, and the app renders its own payslip view
+from those — which is better than a PDF viewer anyway, because it can be sorted,
+charted and compared.
+
+That inverts the original 7.7. It was drawn as *upload → model extracts →
+store*, which sends an entire document — salary, National Insurance number,
+address, employer reference, sometimes a bank account number — to a third party
+in order to learn six numbers. Storage and extraction are separate concerns and
+only one of them ever needs to leave the machine.
+
+**And what does leave is a projection.** 7.6 already works this way:
+`FinanceToolContext` is a closed set of derived figures with "nothing else is
+reachable" written on it. The rule generalises — every path to a model goes
+through a projection that is built by listing what to include, never by taking
+a row and removing fields. A denylist silently leaks whatever gets added to the
+table next; an allowlist cannot.
+
+Never sent, in any phase: National Insurance number, account and sort numbers,
+card numbers, addresses, employer references, payroll numbers, dates of birth,
+and any third party's name. Sent: amounts, dates, categories, and figures
+derived from them.
+
+##### The consequence for 7.F that is easy to miss
+
+Generating an embedding means sending the text to an embedding provider. So
+`entity_type = 'document_chunk'` in the 7.F table contradicts this section: it
+would ship raw payslip text to a third party through a different door. Embed
+the *extracted* records — "salary payment, £3,200, employer, 2026-08-28" — not
+the document they came from. If raw text ever genuinely needs embedding, that
+is a reason to self-host the embedding model, not a reason to relax the rule.
+
+##### Extraction, in the order it should be built
+
+1. **Manual entry, and it is not a stopgap.** A form with gross, tax, NI,
+   pension, student loan and net. Six fields, once a month, and it makes the
+   payslip view, the deduction trends and the 7.N student loan reconciliation
+   all real without any model at all.
+2. **Templates, for your own payslips.** One employer means one layout, and a
+   stable layout is a case where a template beats a model outright: it is
+   deterministic, testable, free, offline, and it fails loudly instead of
+   confidently inventing a number. This is the right tool for the job, not the
+   cheap version of it.
+3. **OCR when self-hosted, for the varied stuff.** Receipts are where layouts
+   genuinely differ and a template stops paying. That is the case for OCR, and
+   running it locally keeps the rule intact — the document still never leaves.
+
+The ordering matters because 1 and 2 cover the documents that recur, which are
+exactly the ones worth the effort, and neither needs a key or a vendor.
+
+##### What this changes elsewhere
+
+- **7.7** becomes storage plus capture plus a native payslip view. Extraction
+  moves out of it and stops being a blocker for anything.
+- **7.8** reconciles captured figures against transactions, which was always the
+  interesting half, and no longer waits on a document pipeline.
+- **7.9** embeds records rather than document chunks, per the note above.
+- **7.10** credit reports follow the same shape: archive the PDF, capture the
+  scores and accounts, never ship the report.
 
 #### 7.J Done means
 
