@@ -18,7 +18,7 @@ import {
   projectDebtBalance,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Edit2, Landmark, Plus, Scale, Trash2, TrendingDown } from 'lucide-react';
+import { CheckCircle2, Edit2, GraduationCap, Landmark, Plus, Scale, Trash2, TrendingDown } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import DebtReconcileDialog from '../dialogs/DebtReconcileDialog';
 
@@ -169,6 +169,13 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
 
   const sumDraws = (draws: DebtDraw[]) => draws.reduce((sum, d) => sum + d.amount, 0);
 
+  const calculateStudentMonthly = (plan: StudentLoanPlanKey = 'plan2') => {
+    const threshold = taxConfig.studentLoanThresholds[plan] || 0;
+    const rate = taxConfig.studentLoanRates[plan] || 0;
+    if (!settings.grossSalary || settings.grossSalary <= threshold) return 0;
+    return Math.round(((settings.grossSalary - threshold) * (rate / 100)) / 12 * 100) / 100;
+  };
+
   const handleAddDraw = () => {
     if (!newDraw.date || newDraw.amount === '') {
       toast({ title: 'Error', description: 'Enter a date and amount for the borrowing.', variant: 'destructive' });
@@ -212,6 +219,14 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
     }
     const balance = newDebt.balance === '' ? 0 : Math.abs(newDebt.balance);
     const drawTotal = sumDraws(newDebt.draws);
+    const isStudent = newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent';
+    const computedStudentMonthly = isStudent
+      ? calculateStudentMonthly(newDebt.studentLoanPlan || 'plan2')
+      : 0;
+    const minPayment = isStudent
+      ? (newDebt.minPayment !== '' && newDebt.minPayment > 0 ? newDebt.minPayment : computedStudentMonthly)
+      : (newDebt.minPayment === '' ? 0 : newDebt.minPayment);
+
     const created: Debt = {
       ...newDebt,
       originalAmount: drawTotal > 0
@@ -219,7 +234,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
         : (newDebt.originalAmount === '' ? balance : Math.abs(newDebt.originalAmount)),
       balance,
       interestRate: newDebt.interestRate === '' ? 0 : newDebt.interestRate,
-      minPayment: newDebt.minPayment === '' ? 0 : newDebt.minPayment,
+      minPayment,
       finalPayment: newDebt.finalPayment === '' ? 0 : Math.abs(newDebt.finalPayment),
       startDate: newDebt.startDate || newDebt.draws[0]?.date || undefined,
       payoffDate: newDebt.payoffDate || undefined,
@@ -244,10 +259,19 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
     e.preventDefault();
     if (!activeDebt) return;
     const drawTotal = sumDraws(activeDebt.draws);
+    const isStudent = activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent';
+    const computedStudentMonthly = isStudent
+      ? calculateStudentMonthly(activeDebt.studentLoanPlan || 'plan2')
+      : 0;
+    const minPayment = isStudent
+      ? (activeDebt.minPayment > 0 ? activeDebt.minPayment : computedStudentMonthly)
+      : (activeDebt.minPayment || 0);
+
     const normalized: Debt = {
       ...activeDebt,
       balance: Math.abs(activeDebt.balance),
       originalAmount: drawTotal > 0 ? drawTotal : Math.abs(activeDebt.originalAmount),
+      minPayment,
       finalPayment: activeDebt.finalPayment ? Math.abs(activeDebt.finalPayment) : 0,
       ratePeriods: activeDebt.ratePeriods || [],
       startDate: activeDebt.startDate || activeDebt.draws[0]?.date || undefined,
@@ -587,7 +611,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 placeholder="e.g. Flat Mortgage"
                 value={newDebt.name}
                 onChange={(e) => setNewDebt({ ...newDebt, name: e.target.value })}
-                className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                 required
               />
             </div>
@@ -595,7 +619,21 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
               <Label htmlFor="debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
               <Select
                 value={newDebt.type}
-                onValueChange={(val) => setNewDebt({ ...newDebt, type: val as Debt['type'] })}
+                onValueChange={(val) => {
+                  const isStudent = val === 'student';
+                  const defaultPlan = (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2');
+                  setNewDebt({
+                    ...newDebt,
+                    type: val as Debt['type'],
+                    repaymentType: isStudent ? 'income_contingent' : (newDebt.repaymentType === 'income_contingent' ? 'amortising' : newDebt.repaymentType),
+                    name: isStudent ? (newDebt.name || 'Student Loan (Plan 2)') : newDebt.name,
+                    lender: isStudent ? (newDebt.lender || 'Student Loans Company') : newDebt.lender,
+                    emoji: isStudent ? (newDebt.emoji || '🎓') : newDebt.emoji,
+                    studentLoanPlan: isStudent ? (newDebt.studentLoanPlan || defaultPlan) : newDebt.studentLoanPlan,
+                    writeOffYears: isStudent ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || defaultPlan]) : newDebt.writeOffYears,
+                    interestRate: isStudent && (newDebt.interestRate === '' || newDebt.interestRate === 0) ? 7.1 : newDebt.interestRate,
+                  });
+                }}
               >
                 <SelectTrigger id="debt-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
                   <SelectValue />
@@ -607,29 +645,33 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
-              <Select
-                value={newDebt.repaymentType}
-                onValueChange={(val) => setNewDebt({
-                  ...newDebt,
-                  repaymentType: val as Debt['repaymentType'],
-                  studentLoanPlan: val === 'income_contingent' ? (newDebt.studentLoanPlan || 'plan2') : undefined,
-                  writeOffYears: val === 'income_contingent'
-                    ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || 'plan2'])
-                    : undefined,
-                })}
-              >
-                <SelectTrigger id="debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                  <SelectItem value="amortising">Fixed monthly payment</SelectItem>
-                  <SelectItem value="income_contingent">% of income over threshold</SelectItem>
-                  <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
+            {newDebt.type !== 'student' && (
+              <div className="space-y-1">
+                <Label htmlFor="debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
+                <Select
+                  value={newDebt.repaymentType}
+                  onValueChange={(val) => setNewDebt({
+                    ...newDebt,
+                    repaymentType: val as Debt['repaymentType'],
+                    studentLoanPlan: val === 'income_contingent' ? (newDebt.studentLoanPlan || 'plan2') : undefined,
+                    writeOffYears: val === 'income_contingent'
+                      ? (newDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[newDebt.studentLoanPlan || 'plan2'])
+                      : undefined,
+                  })}
+                >
+                  <SelectTrigger id="debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
+                    <SelectItem value="amortising">Fixed monthly payment</SelectItem>
+                    <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                    <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {newDebt.repaymentType === 'pcp' && (
               <div className="space-y-1">
                 <Label htmlFor="debt-balloon" className="text-xs font-mono text-muted-foreground">Balloon / Final Payment (£)</Label>
@@ -644,7 +686,8 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 />
               </div>
             )}
-            {newDebt.repaymentType === 'income_contingent' && (
+
+            {(newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent') && (
               <>
                 <div className="space-y-1">
                   <Label htmlFor="debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
@@ -665,27 +708,36 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs font-mono text-muted-foreground">
-                    Repays {taxConfig.studentLoanRates[newDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[newDebt.studentLoanPlan || 'plan2'] || 0)}.
-                  </p>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="debt-writeoff" className="text-xs font-mono text-muted-foreground">Written Off After (years)</Label>
-                  <Input
-                    id="debt-writeoff"
-                    type="number"
-                    value={newDebt.writeOffYears ?? ''}
-                    onChange={(e) => setNewDebt({ ...newDebt, writeOffYears: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                  />
+
+                <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-1.5 text-xs font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Repayment mode:</span>
+                    <span className="font-semibold text-foreground">PAYE deduction (salary)</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Threshold:</span>
+                    <span className="text-foreground">{formatGBP(taxConfig.studentLoanThresholds[newDebt.studentLoanPlan || 'plan2'] || 0)}/yr</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border/20 pt-1.5">
+                    <span className="text-muted-foreground">Monthly deduction:</span>
+                    <span className="font-bold text-primary">
+                      {formatGBP(calculateStudentMonthly(newDebt.studentLoanPlan || 'plan2'))}/mo
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                    <span>Statutory write-off:</span>
+                    <span>{newDebt.writeOffYears ?? 30} years</span>
+                  </div>
                 </div>
               </>
             )}
+
             <div className="space-y-1">
               <Label htmlFor="debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
               <Input
                 id="debt-lender"
-                placeholder="e.g. Nationwide"
+                placeholder={newDebt.type === 'student' ? 'Student Loans Company' : 'e.g. Nationwide'}
                 value={newDebt.lender}
                 onChange={(e) => setNewDebt({ ...newDebt, lender: e.target.value })}
                 className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
@@ -693,12 +745,14 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="debt-original" className="text-xs font-mono text-muted-foreground">Original (£)</Label>
+                <Label htmlFor="debt-original" className="text-xs font-mono text-muted-foreground">
+                  {newDebt.type === 'student' ? 'Original Borrowed (£)' : 'Original (£)'}
+                </Label>
                 <Input
                   id="debt-original"
                   type="number"
                   step="0.01"
-                  placeholder="250000"
+                  placeholder={newDebt.type === 'student' ? '40758' : '250000'}
                   value={newDebt.draws.length > 0 ? sumDraws(newDebt.draws) : newDebt.originalAmount}
                   onChange={(e) => setNewDebt({ ...newDebt, originalAmount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                   disabled={newDebt.draws.length > 0}
@@ -709,12 +763,14 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 )}
               </div>
               <div className="space-y-1">
-                <Label htmlFor="debt-balance" className="text-xs font-mono text-muted-foreground">Owed Now (£)</Label>
+                <Label htmlFor="debt-balance" className="text-xs font-mono text-muted-foreground">
+                  {newDebt.type === 'student' ? 'Current Balance (£)' : 'Owed Now (£)'}
+                </Label>
                 <Input
                   id="debt-balance"
                   type="number"
                   step="0.01"
-                  placeholder="198400"
+                  placeholder={newDebt.type === 'student' ? '51052.24' : '198400'}
                   value={newDebt.balance}
                   onChange={(e) => setNewDebt({ ...newDebt, balance: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                   className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
@@ -722,35 +778,39 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={cn("grid gap-3", (newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
               <div className="space-y-1">
                 <Label htmlFor="debt-rate" className="text-xs font-mono text-muted-foreground">Interest Rate (%)</Label>
                 <Input
                   id="debt-rate"
                   type="number"
                   step="0.01"
-                  placeholder="4.75"
+                  placeholder="7.10"
                   value={newDebt.interestRate}
                   onChange={(e) => setNewDebt({ ...newDebt, interestRate: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                   className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
-                <Input
-                  id="debt-payment"
-                  type="number"
-                  step="0.01"
-                  placeholder="1150"
-                  value={newDebt.minPayment}
-                  onChange={(e) => setNewDebt({ ...newDebt, minPayment: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                />
-              </div>
+              {newDebt.type !== 'student' && newDebt.repaymentType !== 'income_contingent' && (
+                <div className="space-y-1">
+                  <Label htmlFor="debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
+                  <Input
+                    id="debt-payment"
+                    type="number"
+                    step="0.01"
+                    placeholder="1150"
+                    value={newDebt.minPayment}
+                    onChange={(e) => setNewDebt({ ...newDebt, minPayment: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={cn("grid gap-3", (newDebt.type === 'student' || newDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
               <div className="space-y-1">
-                <Label htmlFor="debt-start" className="text-xs font-mono text-muted-foreground">Taken On</Label>
+                <Label htmlFor="debt-start" className="text-xs font-mono text-muted-foreground">
+                  {newDebt.type === 'student' ? 'Course Start (Optional)' : 'Taken On'}
+                </Label>
                 <Input
                   id="debt-start"
                   type="date"
@@ -759,17 +819,45 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                   className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
-                <Input
-                  id="debt-payoff"
-                  type="date"
-                  value={newDebt.payoffDate}
-                  onChange={(e) => setNewDebt({ ...newDebt, payoffDate: e.target.value })}
-                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                />
-              </div>
+              {newDebt.type !== 'student' && newDebt.repaymentType !== 'income_contingent' && (
+                <div className="space-y-1">
+                  <Label htmlFor="debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
+                  <Input
+                    id="debt-payoff"
+                    type="date"
+                    value={newDebt.payoffDate}
+                    onChange={(e) => setNewDebt({ ...newDebt, payoffDate: e.target.value })}
+                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
+              )}
             </div>
+
+            {newDebt.type === 'student' && newDebt.draws.length === 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setNewDebt({
+                    ...newDebt,
+                    originalAmount: 40758,
+                    balance: newDebt.balance === '' ? 51052.24 : newDebt.balance,
+                    startDate: '2020-09-01',
+                    interestRate: newDebt.interestRate === '' ? 7.1 : newDebt.interestRate,
+                    draws: [
+                      { id: 'dw_1', date: '2020-09-01', amount: 13539, label: 'Year 1: Tuition £9,250 + Maintenance £4,289' },
+                      { id: 'dw_2', date: '2021-09-01', amount: 13672, label: 'Year 2: Tuition £9,250 + Maintenance £4,422' },
+                      { id: 'dw_3', date: '2022-09-01', amount: 900, label: 'Year 3 Placement: Tuition £900' },
+                      { id: 'dw_4', date: '2023-09-01', amount: 12647, label: 'Year 4: Tuition £9,250 + Maintenance £3,397' },
+                    ]
+                  });
+                }}
+                className="w-full text-xs font-mono h-8 border-dashed border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+              >
+                <GraduationCap className="h-3.5 w-3.5" />
+                Populate Plymouth Robotics BEng (£40,758 across 2020–2024)
+              </Button>
+            )}
 
             <DebtDrawsEditor
               draws={newDebt.draws}
@@ -833,7 +921,21 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                 <Label htmlFor="edit-debt-type" className="text-xs font-mono text-muted-foreground">Debt Type</Label>
                 <Select
                   value={activeDebt.type}
-                  onValueChange={(val) => setActiveDebt({ ...activeDebt, type: val as Debt['type'] })}
+                  onValueChange={(val) => {
+                    const isStudent = val === 'student';
+                    const defaultPlan = (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan as StudentLoanPlanKey : 'plan2');
+                    setActiveDebt({
+                      ...activeDebt,
+                      type: val as Debt['type'],
+                      repaymentType: isStudent ? 'income_contingent' : (activeDebt.repaymentType === 'income_contingent' ? 'amortising' : activeDebt.repaymentType),
+                      name: isStudent ? (activeDebt.name || 'Student Loan (Plan 2)') : activeDebt.name,
+                      lender: isStudent ? (activeDebt.lender || 'Student Loans Company') : activeDebt.lender,
+                      emoji: isStudent ? (activeDebt.emoji || '🎓') : activeDebt.emoji,
+                      studentLoanPlan: isStudent ? (activeDebt.studentLoanPlan || defaultPlan) : activeDebt.studentLoanPlan,
+                      writeOffYears: isStudent ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || defaultPlan]) : activeDebt.writeOffYears,
+                      interestRate: isStudent && (!activeDebt.interestRate || activeDebt.interestRate === 0) ? 7.1 : activeDebt.interestRate,
+                    });
+                  }}
                 >
                   <SelectTrigger id="edit-debt-type" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
                     <SelectValue />
@@ -845,29 +947,33 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="edit-debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
-                <Select
-                  value={activeDebt.repaymentType}
-                  onValueChange={(val) => setActiveDebt({
-                    ...activeDebt,
-                    repaymentType: val as Debt['repaymentType'],
-                    studentLoanPlan: val === 'income_contingent' ? (activeDebt.studentLoanPlan || 'plan2') : undefined,
-                    writeOffYears: val === 'income_contingent'
-                      ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || 'plan2'])
-                      : undefined,
-                  })}
-                >
-                  <SelectTrigger id="edit-debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
-                    <SelectItem value="amortising">Fixed monthly payment</SelectItem>
-                    <SelectItem value="income_contingent">% of income over threshold</SelectItem>
-                    <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+              {activeDebt.type !== 'student' && (
+                <div className="space-y-1">
+                  <Label htmlFor="edit-debt-repayment" className="text-xs font-mono text-muted-foreground">How It's Repaid</Label>
+                  <Select
+                    value={activeDebt.repaymentType}
+                    onValueChange={(val) => setActiveDebt({
+                      ...activeDebt,
+                      repaymentType: val as Debt['repaymentType'],
+                      studentLoanPlan: val === 'income_contingent' ? (activeDebt.studentLoanPlan || 'plan2') : undefined,
+                      writeOffYears: val === 'income_contingent'
+                        ? (activeDebt.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[activeDebt.studentLoanPlan || 'plan2'])
+                        : undefined,
+                    })}
+                  >
+                    <SelectTrigger id="edit-debt-repayment" className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
+                      <SelectItem value="amortising">Fixed monthly payment</SelectItem>
+                      <SelectItem value="income_contingent">% of income over threshold</SelectItem>
+                      <SelectItem value="pcp">PCP (with balloon payment)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {activeDebt.repaymentType === 'pcp' && (
                 <div className="space-y-1">
                   <Label htmlFor="edit-debt-balloon" className="text-xs font-mono text-muted-foreground">Balloon / Final Payment (£)</Label>
@@ -882,7 +988,8 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                   />
                 </div>
               )}
-              {activeDebt.repaymentType === 'income_contingent' && (
+
+              {(activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent') && (
                 <>
                   <div className="space-y-1">
                     <Label htmlFor="edit-debt-plan" className="text-xs font-mono text-muted-foreground">Student Loan Plan</Label>
@@ -903,26 +1010,36 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs font-mono text-muted-foreground">
-                      Repays {taxConfig.studentLoanRates[activeDebt.studentLoanPlan || 'plan2'] || 0}% of income above {formatGBP(taxConfig.studentLoanThresholds[activeDebt.studentLoanPlan || 'plan2'] || 0)}.
-                    </p>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="edit-debt-writeoff" className="text-xs font-mono text-muted-foreground">Written Off After (years)</Label>
-                    <Input
-                      id="edit-debt-writeoff"
-                      type="number"
-                      value={activeDebt.writeOffYears ?? ''}
-                      onChange={(e) => setActiveDebt({ ...activeDebt, writeOffYears: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
-                      className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                    />
+
+                  <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-1.5 text-xs font-mono">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Repayment mode:</span>
+                      <span className="font-semibold text-foreground">PAYE deduction (salary)</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Threshold:</span>
+                      <span className="text-foreground">{formatGBP(taxConfig.studentLoanThresholds[activeDebt.studentLoanPlan || 'plan2'] || 0)}/yr</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-border/20 pt-1.5">
+                      <span className="text-muted-foreground">Monthly deduction:</span>
+                      <span className="font-bold text-primary">
+                        {formatGBP(calculateStudentMonthly(activeDebt.studentLoanPlan || 'plan2'))}/mo
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                      <span>Statutory write-off:</span>
+                      <span>{activeDebt.writeOffYears ?? 30} years</span>
+                    </div>
                   </div>
                 </>
               )}
+
               <div className="space-y-1">
                 <Label htmlFor="edit-debt-lender" className="text-xs font-mono text-muted-foreground">Lender</Label>
                 <Input
                   id="edit-debt-lender"
+                  placeholder={activeDebt.type === 'student' ? 'Student Loans Company' : 'e.g. Nationwide'}
                   value={activeDebt.lender}
                   onChange={(e) => setActiveDebt({ ...activeDebt, lender: e.target.value })}
                   className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
@@ -930,7 +1047,9 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="edit-debt-original" className="text-xs font-mono text-muted-foreground">Original (£)</Label>
+                  <Label htmlFor="edit-debt-original" className="text-xs font-mono text-muted-foreground">
+                    {activeDebt.type === 'student' ? 'Original Borrowed (£)' : 'Original (£)'}
+                  </Label>
                   <Input
                     id="edit-debt-original"
                     type="number"
@@ -945,7 +1064,9 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                   )}
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="edit-debt-balance" className="text-xs font-mono text-muted-foreground">Owed Now (£)</Label>
+                  <Label htmlFor="edit-debt-balance" className="text-xs font-mono text-muted-foreground">
+                    {activeDebt.type === 'student' ? 'Current Balance (£)' : 'Owed Now (£)'}
+                  </Label>
                   <Input
                     id="edit-debt-balance"
                     type="number"
@@ -957,7 +1078,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={cn("grid gap-3", (activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
                 <div className="space-y-1">
                   <Label htmlFor="edit-debt-rate" className="text-xs font-mono text-muted-foreground">Interest Rate (%)</Label>
                   <Input
@@ -969,21 +1090,25 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                     className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="edit-debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
-                  <Input
-                    id="edit-debt-payment"
-                    type="number"
-                    step="0.01"
-                    value={activeDebt.minPayment}
-                    onChange={(e) => setActiveDebt({ ...activeDebt, minPayment: parseFloat(e.target.value) || 0 })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                  />
-                </div>
+                {activeDebt.type !== 'student' && activeDebt.repaymentType !== 'income_contingent' && (
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-payment" className="text-xs font-mono text-muted-foreground">Monthly (£)</Label>
+                    <Input
+                      id="edit-debt-payment"
+                      type="number"
+                      step="0.01"
+                      value={activeDebt.minPayment}
+                      onChange={(e) => setActiveDebt({ ...activeDebt, minPayment: parseFloat(e.target.value) || 0 })}
+                      className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={cn("grid gap-3", (activeDebt.type === 'student' || activeDebt.repaymentType === 'income_contingent') ? "grid-cols-1" : "grid-cols-2")}>
                 <div className="space-y-1">
-                  <Label htmlFor="edit-debt-start" className="text-xs font-mono text-muted-foreground">Taken On</Label>
+                  <Label htmlFor="edit-debt-start" className="text-xs font-mono text-muted-foreground">
+                    {activeDebt.type === 'student' ? 'Course Start (Optional)' : 'Taken On'}
+                  </Label>
                   <Input
                     id="edit-debt-start"
                     type="date"
@@ -992,16 +1117,18 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
                     className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="edit-debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
-                  <Input
-                    id="edit-debt-payoff"
-                    type="date"
-                    value={activeDebt.payoffDate || ''}
-                    onChange={(e) => setActiveDebt({ ...activeDebt, payoffDate: e.target.value || undefined })}
-                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
-                  />
-                </div>
+                {activeDebt.type !== 'student' && activeDebt.repaymentType !== 'income_contingent' && (
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-debt-payoff" className="text-xs font-mono text-muted-foreground">Expected Payoff</Label>
+                    <Input
+                      id="edit-debt-payoff"
+                      type="date"
+                      value={activeDebt.payoffDate || ''}
+                      onChange={(e) => setActiveDebt({ ...activeDebt, payoffDate: e.target.value || undefined })}
+                      className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               <DebtDrawsEditor
