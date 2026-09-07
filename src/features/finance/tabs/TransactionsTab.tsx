@@ -1089,7 +1089,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         <SelectItem value="none" className="text-xs font-mono">No goal linked</SelectItem>
                         {goals.map(g => (
                           <SelectItem key={g.id} value={g.id} className="text-xs font-mono">
-                            🎯 {g.name}
+                            {/* The goal's own emoji, as the transaction row
+                                shows it -- a hardcoded target made every goal
+                                in the picker look identical. */}
+                            {g.emoji || '🎯'} {g.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1341,7 +1344,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 <SelectContent className="bg-card border-border/40 z-[60] font-mono">
                   {goals.map(g => (
                     <SelectItem key={g.id} value={g.id} className="text-xs font-mono">
-                      🎯 {g.name}
+                      {g.emoji || '🎯'} {g.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

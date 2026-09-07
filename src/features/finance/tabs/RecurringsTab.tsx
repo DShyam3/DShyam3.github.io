@@ -1,6 +1,6 @@
 import React from 'react';
 import { RecurringBill } from '@/features/finance/finance-types';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Check, Plus, Edit2, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
 
@@ -236,7 +236,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                         )}
                         title={bill.isPaid ? "Mark as unpaid" : "Mark as paid"}
                       >
-                        {bill.isPaid && <span className="text-xs">✓</span>}
+                        {bill.isPaid && <Check className="h-3 w-3" />}
                       </button>
                     </div>
                   </div>

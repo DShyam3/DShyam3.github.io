@@ -2022,7 +2022,13 @@ export default function AccountsSurface({ totalLoanBalance }: { totalLoanBalance
           <SelectContent className="rounded-lg border border-border/40 bg-popover text-xs font-mono">
             {creditBureaus.map(b => (
               <SelectItem key={b.key} value={b.key} className="text-xs font-mono">
-                {b.emoji} {b.label} (0–{b.maxScore})
+                <span className="inline-flex items-center gap-2">
+                  {/* Each bureau already carries a palette colour for its
+                      chart series; the swatch uses that instead of a coloured
+                      circle emoji, which cannot follow the theme. */}
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
+                  {b.label} (0–{b.maxScore})
+                </span>
               </SelectItem>
             ))}
           </SelectContent>

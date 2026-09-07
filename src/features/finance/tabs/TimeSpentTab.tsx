@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Clock, Settings } from 'lucide-react';
+import { AlertTriangle, Clock, Settings } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 
 interface TimeSpentTabProps {
@@ -130,7 +130,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
 
       {trackedExceedsTotal && (
         <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-xs font-mono flex items-start gap-2.5">
-          <span className="text-base leading-none">⚠️</span>
+          <AlertTriangle className="h-4 w-4 shrink-0" />
           <div>
             <p className="font-semibold mb-0.5">Over-allocated Schedule</p>
             <p>
