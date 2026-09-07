@@ -118,6 +118,7 @@ serve(async (req) => {
       const { data: connection } = await supabaseAdmin
         .from('finance_truelayer_connection')
         .select('id, expires_at')
+        .eq('profile_id', selfProfileId)
         .maybeSingle()
 
       return new Response(JSON.stringify({
@@ -130,7 +131,18 @@ serve(async (req) => {
 
     // ACTION: disconnect
     if (action === 'disconnect') {
-      await supabaseAdmin.from('finance_truelayer_connection').delete().neq('id', '00000000-0000-0000-0000-000000000000') // delete all rows
+      // Scoped to this profile. The unscoped form deleted every profile's
+      // connection, so disconnecting one bank signed the others out too.
+      if (!selfProfileId) {
+        return new Response(JSON.stringify({ error: 'No finance profile found.' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      await supabaseAdmin
+        .from('finance_truelayer_connection')
+        .delete()
+        .eq('profile_id', selfProfileId)
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -178,8 +190,14 @@ serve(async (req) => {
       const { access_token, refresh_token, expires_in } = tokenData
       const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString()
 
-      // Clear existing connections and insert new one
-      await supabaseAdmin.from('finance_truelayer_connection').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      // Replace this profile's connection. Still one bank per profile -- the
+      // table has no provider identity yet, so a second row would be
+      // indistinguishable from the first (REHAUL_PLAN.md 7.M step B). What
+      // changes here is that it no longer signs out every other profile.
+      await supabaseAdmin
+        .from('finance_truelayer_connection')
+        .delete()
+        .eq('profile_id', selfProfileId)
       const { error: insertError } = await supabaseAdmin
         .from('finance_truelayer_connection')
         .insert({
@@ -214,6 +232,7 @@ serve(async (req) => {
       const { data: connection, error: connError } = await supabaseAdmin
         .from('finance_truelayer_connection')
         .select('*')
+        .eq('profile_id', selfProfileId)
         .maybeSingle()
 
       if (connError || !connection) {
@@ -284,8 +303,35 @@ serve(async (req) => {
         })
       }
 
-      const syncedAccounts = []
-      const allNewTransactions = []
+      // Shapes written back to Supabase. Named so the accumulators are not
+      // any[], which is what let a stray field through unnoticed before.
+      type SyncedAccountRow = {
+        id: string
+        is_default: boolean
+        profile_id: string | null
+        name: string
+        type: string
+        issuer: string
+        balance: number
+        annual_fee: number
+        emoji: string
+        color: string
+        updated_at: string
+      }
+      type SyncedTxRow = {
+        id: string
+        is_default: boolean
+        profile_id: string | null
+        name: string
+        category: string
+        amount: number
+        date: string
+        is_reviewed: boolean
+        account_id: string
+      }
+
+      const syncedAccounts: SyncedAccountRow[] = []
+      const allNewTransactions: SyncedTxRow[] = []
 
       // Helper function to get default emoji & color based on bank/provider name
       const getProviderStyling = (providerName: string) => {
@@ -469,112 +515,83 @@ serve(async (req) => {
         }
       }))
 
-      // 4. Update Bank Accounts Table (Delete and replace only our synced accounts to prevent clashing)
-      // Since saving in the frontend deletes is_default=false, we will upsert these.
-      // Wait, to keep them aligned, we should query existing bank accounts, merge with our new synced ones,
-      // and update the table.
-      const { data: existingAccounts } = await supabaseAdmin
-        .from('finance_bank_accounts')
-        .select('*')
-        .eq('is_default', false)
+      // 4. Write what this sync produced, and touch nothing else.
+      //
+      // This used to delete every row with is_default = false and reinsert a
+      // merged list. Two things were wrong with that. The delete was scoped by
+      // is_default alone, so it crossed every profile, and the reinsert stamped
+      // the self profile onto every row it wrote -- one sync collapsed all
+      // profiles onto one. And the reinserted list only ever contained the
+      // current fetch window, so bank history older than that window was
+      // deleted on every run and could not be re-fetched once the provider had
+      // aged it out.
+      //
+      // Upsert on the primary key does the whole job: TrueLayer ids are stable,
+      // so a row is created once and corrected in place afterwards. Nothing is
+      // ever deleted, which is the point -- the bank's window moves, this store
+      // does not.
+      const syncProfileId = connection.profile_id ?? selfProfileId
 
-      const mergedAccountsMap = new Map()
-      if (existingAccounts) {
-        existingAccounts.forEach(acc => mergedAccountsMap.set(acc.id, acc))
-      }
-      syncedAccounts.forEach(acc => {
-        const existing = mergedAccountsMap.get(acc.id)
-        mergedAccountsMap.set(acc.id, {
-          ...existing,
-          ...acc
-        })
-      })
-
-      // Clean and write accounts
-      await supabaseAdmin.from('finance_bank_accounts').delete().eq('is_default', false)
-      const accountsToWrite = Array.from(mergedAccountsMap.values())
-      if (accountsToWrite.length > 0) {
-        await supabaseAdmin.from('finance_bank_accounts').insert(accountsToWrite.map(a => ({
-          id: a.id,
-          is_default: false,
-          profile_id: selfProfileId,
-          name: a.name,
-          type: a.type,
-          issuer: a.issuer,
-          balance: a.balance,
-          annual_fee: a.annual_fee,
-          emoji: a.emoji,
-          color: a.color,
-        })))
+      // Supabase sends `in` filters and upsert payloads over the wire, so a
+      // ninety-day sync across several accounts has to be chunked.
+      const chunk = <T,>(rows: T[], size = 500): T[][] => {
+        const out: T[][] = []
+        for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size))
+        return out
       }
 
-      // 5. Update Transactions Table (Avoiding duplicates by matching id)
-      const { data: existingTx } = await supabaseAdmin
-        .from('finance_transactions')
-        .select('id, is_reviewed')
-        .eq('is_default', false)
-
-      const existingTxMap = new Map()
-      if (existingTx) {
-        existingTx.forEach(t => existingTxMap.set(t.id, t.is_reviewed))
-      }
-
-      // Filter new transactions and preserve review status for ones we already have
-      const finalTxList = []
-      const newTxIds = new Set()
-      
-      for (const tx of allNewTransactions) {
-        if (newTxIds.has(tx.id)) continue
-        newTxIds.add(tx.id)
-
-        if (existingTxMap.has(tx.id)) {
-          // Transaction already in DB, keep it with its current is_reviewed status
-          finalTxList.push({
-            ...tx,
-            is_reviewed: existingTxMap.get(tx.id)
+      const accountRows = syncedAccounts.map(a => ({ ...a, profile_id: syncProfileId }))
+      for (const batch of chunk(accountRows)) {
+        const { error } = await supabaseAdmin
+          .from('finance_bank_accounts')
+          .upsert(batch, { onConflict: 'id' })
+        if (error) {
+          return new Response(JSON.stringify({ error: `Failed to write accounts: ${error.message}` }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
-        } else {
-          // New transaction
-          finalTxList.push(tx)
         }
       }
 
-      // Also preserve any manually added transactions (not from TrueLayer) that exist in database
-      if (existingAccounts) {
-        // Find existing transactions that are NOT TrueLayer transactions
-        const nonTlTx = existingTx?.filter(t => !t.id.startsWith('tl_tx_')) || []
-        if (nonTlTx.length > 0) {
-          // Single batched lookup instead of one round-trip per transaction
-          const { data: fullTxRows } = await supabaseAdmin
-            .from('finance_transactions')
-            .select('*')
-            .in('id', nonTlTx.map(t => t.id))
-          if (fullTxRows) {
-            finalTxList.push(...fullTxRows)
-          }
+      // 5. Transactions, same rule. The bank may correct a description or an
+      // amount, so those are overwritten -- but is_reviewed is the user's, not
+      // the bank's, and has to survive a re-sync.
+      const byId = new Map<string, SyncedTxRow>()
+      for (const tx of allNewTransactions) byId.set(tx.id, tx)
+      const deduped = Array.from(byId.values())
+
+      const reviewedById = new Map<string, boolean>()
+      for (const batch of chunk(deduped.map(t => t.id))) {
+        const { data } = await supabaseAdmin
+          .from('finance_transactions')
+          .select('id, is_reviewed')
+          .in('id', batch)
+        for (const row of data ?? []) reviewedById.set(row.id, row.is_reviewed)
+      }
+
+      const txRows = deduped.map(t => ({
+        ...t,
+        profile_id: syncProfileId,
+        is_reviewed: reviewedById.get(t.id) ?? t.is_reviewed,
+      }))
+
+      for (const batch of chunk(txRows)) {
+        const { error } = await supabaseAdmin
+          .from('finance_transactions')
+          .upsert(batch, { onConflict: 'id' })
+        if (error) {
+          return new Response(JSON.stringify({ error: `Failed to write transactions: ${error.message}` }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
         }
       }
 
-      // Write merged transactions list
-      await supabaseAdmin.from('finance_transactions').delete().eq('is_default', false)
-      if (finalTxList.length > 0) {
-        await supabaseAdmin.from('finance_transactions').insert(finalTxList.map(t => ({
-          id: t.id,
-          is_default: false,
-          profile_id: selfProfileId,
-          name: t.name,
-          category: t.category,
-          amount: t.amount,
-          date: t.date,
-          is_reviewed: t.is_reviewed,
-          account_id: t.account_id || null,
-        })))
-      }
 
       return new Response(JSON.stringify({
         success: true,
         synced_accounts: syncedAccounts.length,
-        synced_transactions: finalTxList.filter(t => t.id.startsWith('tl_tx_')).length
+        synced_transactions: txRows.length
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -586,7 +603,11 @@ serve(async (req) => {
     })
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    // The detail goes to the function log, not to the caller: an unhandled
+    // throw here can carry a stack or a database message, and CLAUDE.md is
+    // explicit that neither belongs in a response body.
+    console.error('truelayer-sync failed', error)
+    return new Response(JSON.stringify({ error: 'Something went wrong' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
