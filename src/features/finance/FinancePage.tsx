@@ -32,6 +32,7 @@ import { useTrueLayer } from './useTrueLayer';
 import { useFinanceTotals } from './useFinanceTotals';
 import { SurfaceHero } from './components/SurfaceHero';
 import { ProfileAvatar } from './components/ProfileAvatar';
+import { NetWorthTrend } from './components/NetWorthTrend';
 import {
   ALL_PRESETS_FALLBACK,
   makeBudgetMath,
@@ -352,6 +353,7 @@ function FinanceView() {
     includeWorkLeaveInActual,
     setIncludeWorkLeaveInActual,
     profiles,
+    netWorthHistory,
   } = useFinanceData();
 
   // The visible section comes from the URL, not from state: a surface is a
@@ -1195,7 +1197,14 @@ function FinanceView() {
           value={formatGBP(netWorth)}
           // Crisp neutral foreground text per Treasury standards.
           tone="neutral"
-          detail={`Assets ${formatGBP(totalAssets)} · Debt ${formatGBP(totalDebt)}`}
+          detail={
+            <>
+              Assets {formatGBP(totalAssets)} · Debt {formatGBP(totalDebt)}
+              <div className="mt-3 max-w-sm">
+                <NetWorthTrend points={netWorthHistory} today={todayDateObj.toISOString().slice(0, 10)} />
+              </div>
+            </>
+          }
           // Only when there are actual debt rows. A liability recorded as an
           // overdrawn account is already inside totalDebt above, so an empty
           // "Loans outstanding £0.00" beside a visible student loan reads as

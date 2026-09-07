@@ -285,14 +285,22 @@
        the second row. It is not a constant in reality -- a narrower card
        wraps the title and the platform badges onto more lines -- so this is
        the tallest it was measured at, not the average, and --card-floor is
-       set low enough that the second row is still reachable on a screen only
-       1000px tall. Below that floor a poster stops being worth looking at.
+       set low enough that the second row is still reachable on a laptop.
+       Below that floor a poster stops being worth looking at.
 
        The image's aspect is deliberately NOT declared here: CollectionPage
        sets --card-aspect on an ancestor per collection, and a declaration on
        this element would shadow it. CardGrid falls back to the 2:3 poster
        when nothing above it says otherwise. */
-    --card-floor: 7rem;
+    /* 6.25rem, down from 7. The floor is a threshold, not a size: it is what
+       a row count has to clear to be worth taking, so it only ever decides
+       screens where the answer is already close. Every window with height to
+       spare -- an iPad, a 1200px desk monitor, a TV -- sizes its cards well
+       above it and never reads this number at all. The band it moves is a
+       laptop: 100px of poster is what makes two rows reachable at 1440x760
+       once the browser's own chrome is out of the way, where 112 left the
+       wall on one row of very large cards. */
+    --card-floor: 6.25rem;
     --card-text-h: 9.25rem;
     /* The same block once the card is narrow enough to switch to the compact
        body below -- one less line of text, a smaller title and tighter

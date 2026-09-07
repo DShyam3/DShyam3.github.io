@@ -10,6 +10,7 @@ export * from './credit';
 export * from './dates';
 export * from './debt';
 export * from './geometry';
+export * from './history';
 export * from './holidays';
 export * from './payday';
 export * from './scenario';

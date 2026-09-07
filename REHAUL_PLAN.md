@@ -969,9 +969,9 @@ data lives. The prop lists collapse on their own after that.
 | 7.2e | Per-surface queries | **measured, not built** — see below |
 | 7.3a | Targeted mutations: upsert-then-prune instead of delete-then-insert — **DONE** | 7.2d |
 | 7.3b | Retire the remaining `localStorage` seeds — **DONE** | 7.3a |
-| 7.4 | Snapshots — balance, net worth, per profile — **written, needs `db push`** | none |
-| 7.5 | Scenario engine — "what happens if I do X?" | 7.0 |
-| 7.6 | AI tool layer: typed tools over 7.0 + 7.5 | Edge Function + API key |
+| 7.4 | Snapshots — balance, net worth, per profile — **DONE** | none |
+| 7.5 | Scenario engine — "what happens if I do X?" — **DONE** | 7.0 |
+| 7.6 | AI tool layer: typed tools over 7.0 + 7.5 — **tools and context done; assistant needs the key** | Edge Function + API key |
 | 7.7 | **Private bucket** + document pipeline (payslips, statements, receipts, credit PDFs) | bucket fix first |
 | 7.8 | Reconciliation engine — evidence, provenance, match scoring | 7.7 |
 | 7.9 | pgvector + hybrid retrieval | corpus from 7.7 |

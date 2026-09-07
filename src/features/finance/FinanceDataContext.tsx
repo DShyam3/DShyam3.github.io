@@ -13,6 +13,7 @@
  */
 
 import {
+  useCallback,
   createContext,
   useContext,
   useEffect,
@@ -288,6 +289,12 @@ function useProvideFinanceData() {
   // Every profile the operator configures, and which one is on screen. The
   // self profile is the default; the switcher in the finance shell changes it,
   // and changing it refetches (7.2d).
+  // The snapshot series 7.4 has been recording nightly. Read separately from
+  // the mount batch: it is per-profile history rather than current state, and
+  // the surfaces that show it can tolerate arriving a moment later.
+  const [netWorthHistory, setNetWorthHistory] = useState<
+    { capturedOn: string; netWorth: number; assets: number; liabilities: number }[]
+  >([]);
   const [profiles, setProfiles] = useState<{ id: string; name: string; is_self: boolean; emoji: string | null }[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
 
@@ -300,6 +307,33 @@ function useProvideFinanceData() {
     if (!profileId) return q;
     return (q as { or: (f: string) => T }).or(`profile_id.eq.${profileId},is_default.eq.true`);
   };
+
+  const fetchNetWorthHistory = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) return;
+    const { data, error } = await supabase
+      .from('finance_net_worth_snapshots')
+      .select('captured_on, net_worth, assets, liabilities')
+      .eq('profile_id', forProfile)
+      .order('captured_on', { ascending: true });
+    if (error) {
+      // A missing series is not worth a toast: every other figure on the page
+      // is current state and still correct without it.
+      console.warn('net worth history unavailable', error.message);
+      return;
+    }
+    setNetWorthHistory(
+      (data ?? []).map(r => ({
+        capturedOn: r.captured_on,
+        netWorth: Number(r.net_worth),
+        assets: Number(r.assets),
+        liabilities: Number(r.liabilities),
+      })),
+    );
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchNetWorthHistory(profileId);
+  }, [fetchNetWorthHistory, profileId]);
 
   const fetchSupabaseData = async () => {
     if (!isAdmin) return;
@@ -1326,6 +1360,7 @@ function useProvideFinanceData() {
   };
 
   const value = {
+    netWorthHistory,
     profiles,
     setProfiles,
     fetchingHolidays,

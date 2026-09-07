@@ -56,8 +56,11 @@ export function SurfaceHero({ label, value, tone = 'neutral', detail, aside, loa
             <p className={cn('font-sans text-3xl font-bold tabular-nums sm:text-4xl', TONE[tone])}>
               {value}
             </p>
+            {/* A div, not a p: detail is a ReactNode and callers put block
+                content in it -- the net worth hero passes a chart -- which is
+                invalid inside a paragraph and React warns about it. */}
             {detail ? (
-              <p className="font-sans text-xs text-muted-foreground">{detail}</p>
+              <div className="font-sans text-xs text-muted-foreground">{detail}</div>
             ) : null}
           </>
         )}
