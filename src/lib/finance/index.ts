@@ -15,6 +15,7 @@ export * from './history';
 export * from './holidays';
 export * from './llm';
 export * from './payday';
+export * from './payslip';
 export * from './retirement';
 export * from './review';
 export * from './scenario';

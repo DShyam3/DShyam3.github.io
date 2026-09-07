@@ -826,6 +826,77 @@ export type Database = {
           },
         ]
       }
+      finance_payslips: {
+        Row: {
+          created_at: string
+          employer: string | null
+          gross: number
+          id: string
+          income_tax: number
+          national_insurance: number
+          net: number
+          notes: string | null
+          other_deductions: number
+          pay_date: string
+          pension_employee: number
+          pension_employer: number
+          period_end: string | null
+          period_start: string | null
+          profile_id: string
+          storage_path: string | null
+          student_loan: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          employer?: string | null
+          gross?: number
+          id: string
+          income_tax?: number
+          national_insurance?: number
+          net?: number
+          notes?: string | null
+          other_deductions?: number
+          pay_date: string
+          pension_employee?: number
+          pension_employer?: number
+          period_end?: string | null
+          period_start?: string | null
+          profile_id: string
+          storage_path?: string | null
+          student_loan?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          employer?: string | null
+          gross?: number
+          id?: string
+          income_tax?: number
+          national_insurance?: number
+          net?: number
+          notes?: string | null
+          other_deductions?: number
+          pay_date?: string
+          pension_employee?: number
+          pension_employer?: number
+          period_end?: string | null
+          period_start?: string | null
+          profile_id?: string
+          storage_path?: string | null
+          student_loan?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_payslips_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_profile_transfers: {
         Row: {
           amount: number
