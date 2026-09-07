@@ -17,3 +17,4 @@ export * from './payday';
 export * from './retirement';
 export * from './scenario';
 export * from './tools';
+export * from './transfers';

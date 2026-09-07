@@ -978,7 +978,7 @@ data lives. The prop lists collapse on their own after that.
 | 7.10 | Credit: full model + PDF ingestion now; API adapter when contracted | see below |
 | 7.11 | Monthly review / "what changed" / anomalies | 7.4 |
 | 7.12 | Alerts and notifications — **in-app alerts done; delivery deferred, see below** | none |
-| 7.13 | Cross-profile: contacts, shared expenses, settlements | 7.1 |
+| 7.13 | Cross-profile transfers — **DONE**; contacts and settlements deferred | 7.1 |
 | 7.14 | Investments deepening, property, retirement projection — **retirement done** | none |
 
 Two notes on the ordering. **7.4 gates more than it looks** — without snapshots

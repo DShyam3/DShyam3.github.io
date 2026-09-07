@@ -15,7 +15,7 @@
 
 export const SURFACES = [
   { key: 'home', label: 'Home', tabs: ['dashboard'] },
-  { key: 'spending', label: 'Spending', tabs: ['transactions', 'budget', 'recurrings'] },
+  { key: 'spending', label: 'Spending', tabs: ['transactions', 'budget', 'recurrings', 'transfers'] },
   { key: 'plan', label: 'Plan', tabs: ['cash-flow', 'goals', 'scenarios'] },
   { key: 'wealth', label: 'Wealth', tabs: ['accounts', 'investments', 'retirement'] },
   { key: 'income', label: 'Income', tabs: ['tax-income', 'time-spent'] },
@@ -30,6 +30,7 @@ export const TAB_LABELS: Record<TabKey, string> = {
   transactions: 'Transactions',
   budget: 'Budget',
   recurrings: 'Recurrings',
+  transfers: 'Transfers',
   'cash-flow': 'Cash Flow',
   goals: 'Goals',
   scenarios: 'What if',
@@ -80,7 +81,7 @@ export const surfaceForTab = (tab: TabKey): SurfaceKey => surfaceFor(tab).key;
  * pot, and stacking net worth on top of it puts two large unrelated figures in
  * the same eyeline and makes the reader choose which one matters.
  */
-export const SECTIONS_WITH_OWN_HERO: readonly TabKey[] = ['retirement'];
+export const SECTIONS_WITH_OWN_HERO: readonly TabKey[] = ['retirement', 'transfers'];
 
 export const showsSurfaceHero = (tab: TabKey): boolean =>
   !SECTIONS_WITH_OWN_HERO.includes(tab);

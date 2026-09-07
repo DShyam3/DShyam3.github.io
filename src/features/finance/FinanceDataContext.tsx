@@ -24,6 +24,7 @@ import {
 import defaultPresets from '@/data/presets.json';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
+import type { ProfileTransfer } from '@/lib/finance';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
@@ -312,6 +313,9 @@ function useProvideFinanceData() {
     { capturedOn: string; netWorth: number; assets: number; liabilities: number }[]
   >([]);
   const [profiles, setProfiles] = useState<FinanceProfile[]>([]);
+  // Movements between tracked profiles. Fetched for either side, because a
+  // transfer belongs to both ledgers and the switcher may be on either.
+  const [transfers, setTransfers] = useState<ProfileTransfer[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
 
   /**
@@ -353,6 +357,65 @@ function useProvideFinanceData() {
       // The optimistic patch above is now wrong, so pull the truth back.
       void fetchSupabaseData();
     }
+  };
+
+  const fetchTransfers = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) return;
+    const { data, error } = await supabase
+      .from('finance_profile_transfers')
+      .select('id, from_profile_id, to_profile_id, from_transaction_id, to_transaction_id, amount, date, note')
+      .or(`from_profile_id.eq.${forProfile},to_profile_id.eq.${forProfile}`)
+      .order('date', { ascending: false });
+    if (error) {
+      console.warn('transfers unavailable', error.message);
+      return;
+    }
+    setTransfers(
+      (data ?? []).map(r => ({
+        id: r.id,
+        fromProfileId: r.from_profile_id,
+        toProfileId: r.to_profile_id,
+        fromTransactionId: r.from_transaction_id,
+        toTransactionId: r.to_transaction_id,
+        amount: Number(r.amount),
+        date: r.date,
+        note: r.note ?? undefined,
+      })),
+    );
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchTransfers(profileId);
+  }, [fetchTransfers, profileId]);
+
+  const saveTransfer = async (t: Omit<ProfileTransfer, 'id'> & { id?: string }) => {
+    if (!isAdmin) return;
+    const row = {
+      ...(t.id ? { id: t.id } : {}),
+      from_profile_id: t.fromProfileId,
+      to_profile_id: t.toProfileId,
+      from_transaction_id: t.fromTransactionId ?? null,
+      to_transaction_id: t.toTransactionId ?? null,
+      amount: t.amount,
+      date: t.date,
+      note: t.note ?? null,
+    };
+    const { error } = await supabase.from('finance_profile_transfers').upsert(row);
+    if (error) {
+      toast({ title: 'Could not save transfer', description: error.message, variant: 'destructive' });
+      return;
+    }
+    await fetchTransfers(profileId);
+  };
+
+  const deleteTransfer = async (id: string) => {
+    if (!isAdmin) return;
+    const { error } = await supabase.from('finance_profile_transfers').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Could not delete transfer', description: error.message, variant: 'destructive' });
+      return;
+    }
+    await fetchTransfers(profileId);
   };
 
   const fetchNetWorthHistory = useCallback(async (forProfile: string | null) => {
@@ -423,9 +486,13 @@ function useProvideFinanceData() {
           supabase.from('finance_credit_bureaus').select('*'),
           supabase.from('finance_holiday_defaults').select('*'),
           supabase.from('finance_budget_presets').select('*'),
+          // `*` rather than a column list, unusually for this codebase: profiles is a
+          // handful of rows, and naming columns makes the query fail outright
+          // during the window where a migration adding one is written but not yet
+          // applied -- which silently empties the switcher rather than degrading.
           supabase
             .from('finance_profiles')
-            .select('id, name, is_self, is_public, emoji, currency, region, birth_year, retirement_age, pension_growth_percent')
+            .select('*')
             .order('is_self', { ascending: false })
         ]);
 
@@ -440,9 +507,10 @@ function useProvideFinanceData() {
           emoji: p.emoji,
           currency: p.currency,
           region: p.region,
-          birthYear: p.birth_year,
-          retirementAge: p.retirement_age,
-          pensionGrowthPercent: Number(p.pension_growth_percent),
+          // Defaulted rather than assumed present, for the same reason.
+          birthYear: p.birth_year ?? null,
+          retirementAge: p.retirement_age ?? 68,
+          pensionGrowthPercent: Number(p.pension_growth_percent ?? 4.5),
         }));
         setProfiles(loadedProfiles);
         if (!profileId) setProfileId(loadedProfiles.find(p => p.isSelf)?.id ?? loadedProfiles[0]?.id ?? null);
@@ -1438,6 +1506,9 @@ function useProvideFinanceData() {
   };
 
   const value = {
+    transfers,
+    saveTransfer,
+    deleteTransfer,
     updateProfile,
     netWorthHistory,
     profiles,

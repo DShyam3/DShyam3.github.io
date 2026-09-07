@@ -26,6 +26,7 @@ const CashFlowSurface = lazy(() => import('./surfaces/CashFlowSurface'));
 const GoalsSurface = lazy(() => import('./surfaces/GoalsSurface'));
 const ScenariosSurface = lazy(() => import('./surfaces/ScenariosSurface'));
 const RetirementSurface = lazy(() => import('./surfaces/RetirementSurface'));
+const TransfersSurface = lazy(() => import('./surfaces/TransfersSurface'));
 const BudgetSurface = lazy(() => import('./surfaces/BudgetSurface'));
 const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
 const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
@@ -1367,6 +1368,8 @@ function FinanceView() {
           {activeTab === 'scenarios' && <ScenariosSurface />}
 
           {activeTab === 'retirement' && <RetirementSurface />}
+
+          {activeTab === 'transfers' && <TransfersSurface />}
 
           {/* ==========================================
               TAB 6: ACCOUNTS
