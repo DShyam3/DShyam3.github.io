@@ -237,3 +237,18 @@ export interface Debt {
   emoji?: string;
   color?: string;
 }
+
+export interface FinanceProfile {
+  id: string;
+  name: string;
+  isSelf: boolean;
+  isPublic: boolean;
+  emoji: string | null;
+  currency: string;
+  region: string;
+  /** Year of birth; null until set. A year is all the projection needs. */
+  birthYear: number | null;
+  retirementAge: number;
+  /** Assumed annual growth after inflation. */
+  pensionGrowthPercent: number;
+}

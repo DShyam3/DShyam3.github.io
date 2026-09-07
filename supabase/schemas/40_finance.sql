@@ -331,6 +331,12 @@ CREATE TABLE IF NOT EXISTS "public"."finance_profiles" (
     "owner_user_id" "uuid",
     "currency" "text" DEFAULT 'GBP'::"text" NOT NULL,
     "region" "text" DEFAULT 'england-and-wales'::"text" NOT NULL,
+    -- Retirement planning inputs the ledger cannot infer. A year of birth is
+    -- all the projection needs, and profiles may hold family members.
+    "birth_year" integer,
+    "retirement_age" integer DEFAULT 68 NOT NULL,
+    -- Growth AFTER inflation, so projections are in today's money.
+    "pension_growth_percent" numeric DEFAULT 4.5 NOT NULL,
     "emoji" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL

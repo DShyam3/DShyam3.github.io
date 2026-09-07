@@ -18,6 +18,7 @@ import {
   tabFromPath,
   surfaceForTab,
   pathForTab,
+  showsSurfaceHero,
   type TabKey,
 } from './surfaces';
 import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
@@ -1329,7 +1330,7 @@ function FinanceView() {
             fallback is deliberately bare: the shell, nav and footer are
             already painted, so only the middle is waiting. */}
         <div className="flex flex-col py-6 sm:py-8 w-full min-w-0">
-          {surfaceHero}
+          {showsSurfaceHero(activeTab) ? surfaceHero : null}
 
           <Suspense fallback={<div className="py-16 text-center text-sm text-muted-foreground font-sans">Loading…</div>}>
           {/* ==========================================

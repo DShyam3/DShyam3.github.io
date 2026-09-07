@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
 import type {
   BankAccount,
+  FinanceProfile,
   BudgetCategory,
   BudgetItem,
   CreditBureauConfig,
@@ -295,7 +296,7 @@ function useProvideFinanceData() {
   const [netWorthHistory, setNetWorthHistory] = useState<
     { capturedOn: string; netWorth: number; assets: number; liabilities: number }[]
   >([]);
-  const [profiles, setProfiles] = useState<{ id: string; name: string; is_self: boolean; emoji: string | null }[]>([]);
+  const [profiles, setProfiles] = useState<FinanceProfile[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
 
   /**
@@ -306,6 +307,37 @@ function useProvideFinanceData() {
   const scoped = <T,>(q: T): T => {
     if (!profileId) return q;
     return (q as { or: (f: string) => T }).or(`profile_id.eq.${profileId},is_default.eq.true`);
+  };
+
+  /**
+   * Writes one profile's own fields. Separate from saveDataToSupabase, which
+   * replaces whole collections of ledger rows; a profile is a single row and
+   * its edits are patches, not replacements.
+   */
+  const updateProfile = async (
+    id: string,
+    patch: Partial<Pick<FinanceProfile, 'birthYear' | 'retirementAge' | 'pensionGrowthPercent' | 'name' | 'emoji'>>,
+  ) => {
+    if (!isAdmin) return;
+    const row: Record<string, unknown> = {};
+    if (patch.birthYear !== undefined) row.birth_year = patch.birthYear;
+    if (patch.retirementAge !== undefined) row.retirement_age = patch.retirementAge;
+    if (patch.pensionGrowthPercent !== undefined) row.pension_growth_percent = patch.pensionGrowthPercent;
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.emoji !== undefined) row.emoji = patch.emoji;
+    if (Object.keys(row).length === 0) return;
+
+    setProfiles(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
+    const { error } = await supabase.from('finance_profiles').update(row).eq('id', id);
+    if (error) {
+      toast({
+        title: 'Could not save profile',
+        description: error.message,
+        variant: 'destructive',
+      });
+      // The optimistic patch above is now wrong, so pull the truth back.
+      void fetchSupabaseData();
+    }
   };
 
   const fetchNetWorthHistory = useCallback(async (forProfile: string | null) => {
@@ -376,15 +408,29 @@ function useProvideFinanceData() {
           supabase.from('finance_credit_bureaus').select('*'),
           supabase.from('finance_holiday_defaults').select('*'),
           supabase.from('finance_budget_presets').select('*'),
-          supabase.from('finance_profiles').select('id, name, is_self, emoji').order('is_self', { ascending: false })
+          supabase
+            .from('finance_profiles')
+            .select('id, name, is_self, is_public, emoji, currency, region, birth_year, retirement_age, pension_growth_percent')
+            .order('is_self', { ascending: false })
         ]);
 
         // Written by the 7.1 migration, so at least the self profile is present
         // unless someone has deleted it. `saveDataToSupabase` refuses to write
         // without one.
-        const loadedProfiles = selfProfileRes.data ?? [];
+        const loadedProfiles = (selfProfileRes.data ?? []).map(p => ({
+          id: p.id,
+          name: p.name,
+          isSelf: p.is_self,
+          isPublic: p.is_public,
+          emoji: p.emoji,
+          currency: p.currency,
+          region: p.region,
+          birthYear: p.birth_year,
+          retirementAge: p.retirement_age,
+          pensionGrowthPercent: Number(p.pension_growth_percent),
+        }));
         setProfiles(loadedProfiles);
-        if (!profileId) setProfileId(loadedProfiles.find(p => p.is_self)?.id ?? loadedProfiles[0]?.id ?? null);
+        if (!profileId) setProfileId(loadedProfiles.find(p => p.isSelf)?.id ?? loadedProfiles[0]?.id ?? null);
 
         // A single failing table used to `throw` here, aborting the whole load
         // and silently dropping the page back to localStorage — which is how a
@@ -1360,6 +1406,7 @@ function useProvideFinanceData() {
   };
 
   const value = {
+    updateProfile,
     netWorthHistory,
     profiles,
     setProfiles,

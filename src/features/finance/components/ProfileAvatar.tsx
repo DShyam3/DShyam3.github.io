@@ -11,9 +11,9 @@ import { ASSETS_URL } from '@/lib/constants';
 export function ProfileAvatar({
   profile,
 }: {
-  profile: { is_self: boolean; emoji: string | null; name: string };
+  profile: { isSelf: boolean; emoji: string | null; name: string };
 }) {
-  if (profile.is_self) {
+  if (profile.isSelf) {
     return (
       <img
         src={`${ASSETS_URL}/memoji.png`}

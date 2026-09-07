@@ -71,3 +71,16 @@ export const tabFromPath = (surfaceSeg?: string, sectionSeg?: string): TabKey =>
 };
 
 export const surfaceForTab = (tab: TabKey): SurfaceKey => surfaceFor(tab).key;
+
+/**
+ * Sections that lead with their own headline figure.
+ *
+ * The surface hero answers "what is this surface about", which is usually what
+ * a section wants above it too. Retirement does not: it opens on a projected
+ * pot, and stacking net worth on top of it puts two large unrelated figures in
+ * the same eyeline and makes the reader choose which one matters.
+ */
+export const SECTIONS_WITH_OWN_HERO: readonly TabKey[] = ['retirement'];
+
+export const showsSurfaceHero = (tab: TabKey): boolean =>
+  !SECTIONS_WITH_OWN_HERO.includes(tab);

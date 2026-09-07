@@ -7,7 +7,7 @@
  * projection whose assumptions you cannot see is a guess wearing a suit.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,16 +19,33 @@ import {
 } from '@/lib/finance';
 import { useFinanceData } from '../FinanceDataContext';
 
-/** Long-run global equity returns after inflation sit around here. */
-const DEFAULT_REAL_GROWTH = 4.5;
-const DEFAULT_RETIREMENT_AGE = 68;
-
 export default function RetirementSurface() {
-  const { settings, bankAccounts } = useFinanceData();
+  const { settings, bankAccounts, profiles, profileId, updateProfile } = useFinanceData();
 
-  const [currentAge, setCurrentAge] = useState('30');
-  const [retireAge, setRetireAge] = useState(String(DEFAULT_RETIREMENT_AGE));
-  const [growth, setGrowth] = useState(String(DEFAULT_REAL_GROWTH));
+  // These live on the profile beside region and currency: they are facts about
+  // a person, not about a browser session, and they differ between profiles
+  // that share a screen.
+  const profile = profiles.find(p => p.id === profileId) ?? null;
+  const thisYear = new Date().getFullYear();
+
+  const [birthYear, setBirthYear] = useState('');
+  const [retireAge, setRetireAge] = useState('');
+  const [growth, setGrowth] = useState('');
+
+  // Re-seed the fields whenever the profile changes, including on first load
+  // and on a switch, without clobbering what is being typed.
+  useEffect(() => {
+    if (!profile) return;
+    setBirthYear(profile.birthYear ? String(profile.birthYear) : '');
+    setRetireAge(String(profile.retirementAge));
+    setGrowth(String(profile.pensionGrowthPercent));
+  }, [profile?.id, profile?.birthYear, profile?.retirementAge, profile?.pensionGrowthPercent]);
+
+  const commit = (patch: Parameters<typeof updateProfile>[1]) => {
+    if (profile) void updateProfile(profile.id, patch);
+  };
+
+  const currentAge = birthYear ? String(thisYear - Number(birthYear)) : '';
 
   // Whatever is already tracked as a pension. Nothing else is assumed to be
   // retirement money -- an ISA is not a pension unless you say so.
@@ -50,7 +67,16 @@ export default function RetirementSurface() {
     [currentPot, annualContribution, years, realGrowthPercent],
   );
 
-  const field = (id: string, label: string, value: string, set: (v: string) => void, suffix?: string) => (
+  // Saved on blur rather than per keystroke: a projection input is worth one
+  // write when you have finished typing it, not four while you are mid-number.
+  const field = (
+    id: string,
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    suffix?: string,
+    onCommit?: () => void,
+  ) => (
     <div className="space-y-1">
       <Label htmlFor={id} className="font-sans text-xs text-muted-foreground">{label}</Label>
       <div className="flex items-baseline gap-1">
@@ -59,6 +85,7 @@ export default function RetirementSurface() {
           inputMode="decimal"
           value={value}
           onChange={e => set(e.target.value)}
+          onBlur={onCommit}
           className="h-9 w-20 font-sans text-sm tabular-nums"
         />
         {suffix ? <span className="font-sans text-xs text-muted-foreground">{suffix}</span> : null}
@@ -85,9 +112,13 @@ export default function RetirementSurface() {
       </div>
 
       <div className="flex flex-wrap gap-6">
-        {field('ret-age-now', 'Age now', currentAge, setCurrentAge)}
-        {field('ret-age-stop', 'Retire at', retireAge, setRetireAge)}
-        {field('ret-growth', 'Real growth', growth, setGrowth, '% a year')}
+        {field('ret-birth-year', 'Born', birthYear, setBirthYear,
+          currentAge ? `age ${currentAge}` : 'year',
+          () => commit({ birthYear: birthYear ? Number(birthYear) : null }))}
+        {field('ret-age-stop', 'Retire at', retireAge, setRetireAge, undefined,
+          () => commit({ retirementAge: Number(retireAge) || 68 }))}
+        {field('ret-growth', 'Real growth', growth, setGrowth, '% a year',
+          () => commit({ pensionGrowthPercent: Number(growth) || 0 }))}
       </div>
 
       {years > 0 ? (
