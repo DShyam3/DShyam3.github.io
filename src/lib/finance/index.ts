@@ -16,6 +16,7 @@ export * from './holidays';
 export * from './llm';
 export * from './payday';
 export * from './payslip';
+export * from './payslip-parse';
 export * from './retirement';
 export * from './review';
 export * from './scenario';

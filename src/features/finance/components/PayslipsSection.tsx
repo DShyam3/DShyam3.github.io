@@ -22,6 +22,8 @@ import {
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Check, FileText, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
+import { extractPayslipFromPdf } from '../payslip-pdf';
+import { parsedFieldCount, type ParsedPayslip } from '@/lib/finance';
 import { useToast } from '@/hooks/use-toast';
 
 /** Every money field, as strings, because a half-typed number is not a number. */
@@ -36,6 +38,10 @@ const EMPTY_DRAFT: Draft = {
   employer: '', gross: '', incomeTax: '', nationalInsurance: '',
   pensionEmployee: '', pensionEmployer: '', studentLoan: '', otherDeductions: '', net: '',
 };
+
+/** Fills a blank field from the parser, leaving anything typed untouched. */
+const fill = (current: string, parsed: number | undefined): string =>
+  current.trim() !== '' || parsed === undefined ? current : String(parsed);
 
 const num = (v: string): number => {
   const n = parseFloat(v);
@@ -94,11 +100,17 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   const [storagePath, setStoragePath] = useState<string | undefined>();
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReading, setIsReading] = useState(false);
+  const [readCount, setReadCount] = useState<number | null>(null);
 
   // Shown live in the dialog rather than after saving: a payslip that does not
   // reconcile is almost always a typo, and the moment to catch it is while the
   // paper is still in front of you.
   const draftCheck = useMemo(() => checkPayslip(asPayslip(draft, 'draft')), [draft]);
+  // Zero against zero balances, arithmetically and uselessly. An untouched
+  // form has nothing to reconcile, and saying "matches net" over blank fields
+  // is a pass claimed from absent data.
+  const hasFigures = num(draft.gross) > 0 || num(draft.net) > 0;
 
   const currentTaxYear = useMemo(
     () => (payslips.length > 0 ? taxYearOf(payslips[0].payDate) : taxYearOf(new Date().toISOString())),
@@ -157,6 +169,43 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /**
+   * Reads the figures out of the chosen PDF and fills the blanks.
+   *
+   * Only the blanks: anything already typed is the person's, and a parser
+   * should not overwrite a correction someone made because it disagreed.
+   */
+  const handleFile = async (file: File | null) => {
+    setPendingFile(file);
+    setReadCount(null);
+    if (!file || file.type !== 'application/pdf') return;
+    setIsReading(true);
+    try {
+      const parsed = await extractPayslipFromPdf(file);
+      setReadCount(parsedFieldCount(parsed));
+      setDraft(d => ({
+        ...d,
+        payDate: d.payDate === EMPTY_DRAFT.payDate && parsed.payDate ? parsed.payDate : d.payDate,
+        gross: fill(d.gross, parsed.gross),
+        incomeTax: fill(d.incomeTax, parsed.incomeTax),
+        nationalInsurance: fill(d.nationalInsurance, parsed.nationalInsurance),
+        pensionEmployee: fill(d.pensionEmployee, parsed.pensionEmployee),
+        pensionEmployer: fill(d.pensionEmployer, parsed.pensionEmployer),
+        studentLoan: fill(d.studentLoan, parsed.studentLoan),
+        net: fill(d.net, parsed.net),
+      }));
+    } catch (err) {
+      // A PDF that cannot be read is not a failure worth blocking on: the
+      // fields are still there to type into, and the file still archives.
+      toast({
+        title: 'Could not read that PDF',
+        description: err instanceof Error ? err.message : 'Type the figures in instead.',
+      });
+    } finally {
+      setIsReading(false);
     }
   };
 
@@ -278,7 +327,8 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
               {editingId ? 'Edit payslip' : 'Add payslip'}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Figures only. Nothing here is sent anywhere.
+              Attach a payslip and its figures are read here, in this tab.
+              Nothing is sent anywhere.
             </DialogDescription>
           </DialogHeader>
 
@@ -343,7 +393,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                     id="payslip-file"
                     type="file"
                     accept="application/pdf,image/png,image/jpeg"
-                    onChange={e => setPendingFile(e.target.files?.[0] ?? null)}
+                    onChange={e => void handleFile(e.target.files?.[0] ?? null)}
                     className="rounded-lg h-9 border-primary/20 bg-background/50 text-xs file:text-xs file:mr-2"
                   />
                   {pendingFile && (
@@ -361,20 +411,28 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
               {pendingFile && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Paperclip className="h-3 w-3 shrink-0" />
-                  {pendingFile.name} — uploaded when you save
+                  {isReading
+                    ? 'Reading the figures…'
+                    : readCount !== null
+                      ? `Read ${readCount} of 7 figures — check them, then save.`
+                      : `${pendingFile.name} — uploaded when you save`}
                 </p>
               )}
             </div>
 
             <div className={cn(
               'rounded-lg border px-3 py-2 text-xs',
-              draftCheck.reconciles
+              !hasFigures
                 ? 'border-border/40 bg-card/40 text-muted-foreground'
-                : 'border-destructive/30 bg-destructive/10 text-destructive',
+                : draftCheck.reconciles
+                  ? 'border-border/40 bg-card/40 text-muted-foreground'
+                  : 'border-destructive/30 bg-destructive/10 text-destructive',
             )}>
-              {draftCheck.reconciles
-                ? <>Gross minus deductions is {formatGBP(draftCheck.expectedNet)}, which matches net.</>
-                : <>Gross minus deductions is {formatGBP(draftCheck.expectedNet)}, but net says {formatGBP(draftCheck.statedNet)} — off by {formatGBP(draftCheck.difference)}.</>}
+              {!hasFigures
+                ? <>Attach a payslip to read the figures from it, or type them in.</>
+                : draftCheck.reconciles
+                  ? <>Gross minus deductions is {formatGBP(draftCheck.expectedNet)}, which matches net.</>
+                  : <>Gross minus deductions is {formatGBP(draftCheck.expectedNet)}, but net says {formatGBP(draftCheck.statedNet)} — off by {formatGBP(draftCheck.difference)}.</>}
             </div>
           </div>
 

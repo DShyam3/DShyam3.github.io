@@ -53,3 +53,12 @@ __pycache__/
 # Launch-readiness scan reports (should-i-ship). Regenerated per run, and they
 # name specific files and weaknesses -- not something to publish in a repo.
 .should-i-ship/
+
+# Personal financial documents. A payslips folder was found sitting in the
+# repo root on 2026-09-07 -- real PDFs carrying salary, NI number and address,
+# untracked but one `git add -A` away from a public repository. Nothing had
+# been committed. Extraction runs in the browser (REHAUL_PLAN.md 7.P), so
+# these files never need to be here at all.
+Income & Taxes/
+*_Payslip.pdf
+*_Earnings.xlsx
