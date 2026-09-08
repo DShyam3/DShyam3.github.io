@@ -585,11 +585,11 @@ export default function TaxIncomeSurface({
               {bankHolidaysLeft}/{settings.bankHolidays}
             </span>
           </div>
-          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-left font-mono">
-            <span className="block text-xs font-semibold uppercase tracking-wider text-amber-500/80">Sick Taken</span>
-            <span className="mt-1 block text-sm font-bold text-amber-500 tabular-nums">
+          <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
+            <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sick</span>
+            <span className="mt-1 block text-sm font-bold text-chart-4 tabular-nums">
               {getSickDaysUsedCount()}
-              <span className="ml-1 text-xs font-normal text-amber-500/70">d</span>
+              <span className="ml-1 text-xs font-normal text-muted-foreground">d</span>
             </span>
           </div>
         </div>
@@ -605,8 +605,8 @@ export default function TaxIncomeSurface({
             <span className="text-positive font-semibold">Booked Leave</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-amber-500/25 border border-amber-500/50" />
-            <span className="text-amber-500 font-semibold">Sick Day</span>
+            <span className="w-2.5 h-2.5 rounded-sm bg-chart-4/25 border border-chart-4/50" />
+            <span className="text-chart-4 font-semibold">Sick Day</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-muted/40 border border-border/30" />
@@ -660,7 +660,7 @@ export default function TaxIncomeSurface({
                         </span>
                       )}
                       {monthSickDaysBooked > 0 && (
-                        <span className="bg-amber-500/20 text-amber-500 font-mono text-xs px-1.5 py-0.5 rounded-sm border border-amber-500/40 font-semibold">
+                        <span className="bg-chart-4/20 text-chart-4 font-mono text-xs px-1.5 py-0.5 rounded-sm border border-chart-4/40 font-semibold">
                           {monthSickDaysBooked}d sick
                         </span>
                       )}
@@ -698,7 +698,7 @@ export default function TaxIncomeSurface({
                       let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-xs font-mono flex items-center justify-center rounded-sm font-medium transition-colors ";
 
                       if (isBookedSick) {
-                        cellClass += "text-amber-500 font-bold bg-amber-500/20 border border-amber-500/50";
+                        cellClass += "text-chart-4 font-bold bg-chart-4/20 border border-chart-4/50";
                       } else if (isBookedHoliday) {
                         cellClass += "text-positive font-bold bg-positive/20 border border-positive/50";
                       } else if (isBankHoliday) {
@@ -743,7 +743,7 @@ export default function TaxIncomeSurface({
                                 if (detail.startsWith('Bank Holiday')) {
                                   colorClass = "text-chart-5 font-semibold";
                                 } else if (detail.startsWith('Sick Day')) {
-                                  colorClass = "text-amber-500 font-semibold";
+                                  colorClass = "text-chart-4 font-semibold";
                                 } else if (detail.startsWith('Booked Leave')) {
                                   colorClass = "text-positive font-semibold";
                                 } else if (detail === 'Weekend') {
@@ -774,16 +774,13 @@ export default function TaxIncomeSurface({
                                 <div
                                   key={hol.id}
                                   onClick={(e) => e.stopPropagation()}
-                                  className={cn(
-                                    "border rounded-lg p-2.5 flex items-center justify-between text-xs",
-                                    isSick ? "bg-amber-500/5 border-amber-500/30" : "bg-muted/30 border-border/30"
-                                  )}
+                                  className="border rounded-lg p-2.5 flex items-center justify-between text-xs bg-muted/30 border-border/30"
                                 >
                                   <div className="space-y-0.5 min-w-0 pr-2 text-left">
                                     <div className="flex items-center gap-1.5">
                                       <span className={cn(
                                         "text-[10px] uppercase font-mono font-semibold px-1 py-0.5 rounded border",
-                                        isSick ? "bg-amber-500/15 text-amber-500 border-amber-500/30" : "bg-positive/15 text-positive border-positive/30"
+                                        isSick ? "bg-chart-4/15 text-chart-4 border-chart-4/30" : "bg-positive/15 text-positive border-positive/30"
                                       )}>
                                         {isSick ? '🤒 Sick Day' : '🌴 Holiday'}
                                       </span>
@@ -846,10 +843,10 @@ export default function TaxIncomeSurface({
                                 type="button"
                                 onClick={() => setInlineType('holiday')}
                                 className={cn(
-                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors",
+                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors border",
                                   inlineType === 'holiday'
-                                    ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground"
+                                    ? "bg-positive/20 text-positive border-positive/40 font-semibold shadow-xs"
+                                    : "border-transparent text-muted-foreground hover:text-foreground"
                                 )}
                               >
                                 🌴 Holiday
@@ -858,10 +855,10 @@ export default function TaxIncomeSurface({
                                 type="button"
                                 onClick={() => setInlineType('sick')}
                                 className={cn(
-                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors",
+                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors border",
                                   inlineType === 'sick'
-                                    ? "bg-amber-500 text-amber-950 font-semibold shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground"
+                                    ? "bg-chart-4/20 text-chart-4 border-chart-4/40 font-semibold shadow-xs"
+                                    : "border-transparent text-muted-foreground hover:text-foreground"
                                 )}
                               >
                                 🤒 Sick Day
@@ -964,7 +961,7 @@ export default function TaxIncomeSurface({
                               e.stopPropagation();
                               handleStartNewHoliday(monthIdx, 'sick');
                             }}
-                            className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-amber-500/30 text-amber-500 hover:bg-amber-500/10 font-mono"
+                            className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-border/40 hover:bg-muted/50 font-mono"
                           >
                             <Plus className="h-3 w-3" /> Record Sick Day
                           </Button>
