@@ -18,7 +18,8 @@ import { useSchedule } from '@/features/watchlist/useSchedule';
 import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
 import { useAuth } from '@/contexts/AuthContext';
-import { buildDisplaySyncLog } from '@/features/watchlist/sync-logic';
+import { buildDisplaySyncLog, type DisplaySyncLogEntry } from '@/features/watchlist/sync-logic';
+import { SyncDetailDialog } from '@/features/watchlist/components/SyncDetailDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -203,6 +204,7 @@ const Watchlist = () => {
     new Set(),
   );
   const [showSyncLog, setShowSyncLog] = useState(false);
+  const [selectedSyncEntry, setSelectedSyncEntry] = useState<DisplaySyncLogEntry | null>(null);
   const displaySyncLog = useMemo(() => buildDisplaySyncLog(syncLog), [syncLog]);
   const [visibleCount, setVisibleCount] = useState(48);
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -751,80 +753,74 @@ const Watchlist = () => {
               style={{ maxHeight: '180px' }}
             >
               {displaySyncLog.map((entry) => {
-                const hasError = entry.status === 'error' || Boolean(entry.error_message);
+                const failureMatch = entry.error_message?.match(/^(\d+)\s*item\(s\)\s*failed/i);
+                const failureCountBadge = failureMatch ? `${failureMatch[1]} failed` : null;
                 return (
                   <div
                     key={entry.id}
+                    onClick={() => setSelectedSyncEntry(entry)}
+                    title="Click to view sync run details"
                     className={cn(
-                      'flex flex-col gap-1 text-xs py-1.5 px-2 rounded',
+                      'flex items-center justify-between gap-2 text-xs py-1 px-1.5 rounded cursor-pointer transition-colors select-none',
                       entry.is_missed || entry.status === 'error'
-                        ? 'bg-destructive/10 border border-destructive/20'
+                        ? 'bg-destructive/10 hover:bg-destructive/20 border border-destructive/20'
                         : entry.error_message
-                          ? 'bg-amber-500/10 border border-amber-500/20'
-                          : 'bg-secondary/30',
+                          ? 'bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20'
+                          : 'bg-secondary/30 hover:bg-secondary/60',
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {entry.is_missed || entry.status === 'error' ? (
-                          <XCircle className="h-3 w-3 text-destructive flex-shrink-0" />
-                        ) : entry.error_message ? (
-                          <AlertTriangle className="h-3 w-3 text-amber-500 flex-shrink-0" />
-                        ) : (
-                          <CheckCircle className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                        )}
-                        <span
-                          className={cn(
-                            'px-1 py-px rounded text-[10px] font-semibold tracking-wide flex-shrink-0',
-                            entry.is_missed || entry.status === 'error'
-                              ? 'bg-destructive/20 text-destructive'
-                              : entry.error_message
-                                ? 'bg-amber-500/20 text-amber-500'
-                                : 'bg-secondary text-muted-foreground',
-                          )}
-                        >
-                          {entry.is_missed
-                            ? 'MISSED'
-                            : entry.sync_type === 'auto'
-                              ? 'AUTO'
-                              : entry.sync_type === 'daily'
-                                ? 'DAILY'
-                                : 'MAN'}
-                        </span>
-                        <span
-                          className={cn(
-                            'truncate',
-                            entry.is_missed
-                              ? 'text-destructive font-medium'
-                              : 'text-muted-foreground',
-                          )}
-                        >
-                          {entry.is_missed
-                            ? 'No execution recorded'
-                            : `${entry.items_synced} items · ${(entry.duration_ms / 1000).toFixed(1)}s`}
-                        </span>
-                      </div>
-                      <span className="text-muted-foreground text-[11px] whitespace-nowrap flex-shrink-0">
-                        {new Date(entry.synced_at).toLocaleString([], {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    {entry.error_message && (
-                      <p
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {entry.is_missed || entry.status === 'error' ? (
+                        <XCircle className="h-2.5 w-2.5 text-destructive flex-shrink-0" />
+                      ) : entry.error_message ? (
+                        <AlertTriangle className="h-2.5 w-2.5 text-amber-500 flex-shrink-0" />
+                      ) : (
+                        <CheckCircle className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <span
                         className={cn(
-                          'text-[11px] pl-4.5 break-words font-mono',
+                          'px-1 py-px rounded text-[10px] font-semibold tracking-wide flex-shrink-0',
                           entry.is_missed || entry.status === 'error'
-                            ? 'text-destructive/90'
-                            : 'text-amber-500/90',
+                            ? 'bg-destructive/20 text-destructive'
+                            : entry.error_message
+                              ? 'bg-amber-500/20 text-amber-500'
+                              : 'bg-secondary text-muted-foreground',
                         )}
                       >
-                        {entry.error_message}
-                      </p>
-                    )}
+                        {entry.is_missed
+                          ? 'MISSED'
+                          : entry.sync_type === 'auto'
+                            ? 'AUTO'
+                            : entry.sync_type === 'daily'
+                              ? 'DAILY'
+                              : 'MAN'}
+                      </span>
+                      <span
+                        className={cn(
+                          'truncate',
+                          entry.is_missed
+                            ? 'text-destructive font-medium'
+                            : 'text-muted-foreground',
+                        )}
+                      >
+                        {entry.is_missed
+                          ? 'No execution recorded'
+                          : `${entry.items_synced} items · ${(entry.duration_ms / 1000).toFixed(1)}s`}
+                      </span>
+                      {failureCountBadge && !entry.is_missed && (
+                        <span className="text-[10px] px-1 py-px rounded bg-destructive/15 text-destructive font-medium flex-shrink-0">
+                          {failureCountBadge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-muted-foreground text-[11px] whitespace-nowrap flex-shrink-0">
+                      {new Date(entry.synced_at).toLocaleString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
                   </div>
                 );
               })}
@@ -1455,6 +1451,14 @@ const Watchlist = () => {
       </div>
 
       {deleteDialog}
+
+      <SyncDetailDialog
+        entry={selectedSyncEntry}
+        open={Boolean(selectedSyncEntry)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSyncEntry(null);
+        }}
+      />
     </AppShell>
   );
 };
