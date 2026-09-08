@@ -1342,7 +1342,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('last_sync_time', syncTime);
       await logSync(
         type,
-        'success',
+        failedTitles.length > 0 ? 'error' : 'success',
         itemsSynced,
         durationMs,
         wasCancelled

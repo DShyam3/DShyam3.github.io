@@ -18,6 +18,7 @@ import { useSchedule } from '@/features/watchlist/useSchedule';
 import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
 import { useAuth } from '@/contexts/AuthContext';
+import { buildDisplaySyncLog } from '@/features/watchlist/sync-logic';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -53,6 +54,7 @@ import {
   History,
   CheckCircle,
   XCircle,
+  AlertTriangle,
   Timer,
   Heart,
   Trash2,
@@ -201,6 +203,7 @@ const Watchlist = () => {
     new Set(),
   );
   const [showSyncLog, setShowSyncLog] = useState(false);
+  const displaySyncLog = useMemo(() => buildDisplaySyncLog(syncLog), [syncLog]);
   const [visibleCount, setVisibleCount] = useState(48);
   const observerTarget = useRef<HTMLDivElement>(null);
 
@@ -738,52 +741,93 @@ const Watchlist = () => {
               </Button>
             </div>
           </div>
-          {syncLog.length === 0 ? (
+          {displaySyncLog.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-2">
               No sync history yet
             </p>
           ) : (
             <div
-              className="space-y-1 overflow-y-auto pr-0.5"
-              style={{ maxHeight: '96px' }}
+              className="space-y-1.5 overflow-y-auto pr-0.5"
+              style={{ maxHeight: '180px' }}
             >
-              {syncLog.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-center justify-between gap-2 text-xs py-1 px-1.5 rounded bg-secondary/30"
-                >
-                  <div className="flex items-center gap-1.5">
-                    {entry.status === 'success' ? (
-                      <CheckCircle className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />
-                    ) : (
-                      <XCircle className="h-2.5 w-2.5 text-destructive flex-shrink-0" />
+              {displaySyncLog.map((entry) => {
+                const hasError = entry.status === 'error' || Boolean(entry.error_message);
+                return (
+                  <div
+                    key={entry.id}
+                    className={cn(
+                      'flex flex-col gap-1 text-xs py-1.5 px-2 rounded',
+                      entry.is_missed || entry.status === 'error'
+                        ? 'bg-destructive/10 border border-destructive/20'
+                        : entry.error_message
+                          ? 'bg-amber-500/10 border border-amber-500/20'
+                          : 'bg-secondary/30',
                     )}
-                    <span
-                      className={cn(
-                        'px-1 py-px rounded text-xs font-semibold tracking-wide bg-secondary text-muted-foreground',
-                      )}
-                    >
-                      {entry.sync_type === 'auto'
-                        ? 'AUTO'
-                        : entry.sync_type === 'daily'
-                          ? 'DAILY'
-                          : 'MAN'}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {entry.items_synced} items ·{' '}
-                      {(entry.duration_ms / 1000).toFixed(1)}s
-                    </span>
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {entry.is_missed || entry.status === 'error' ? (
+                          <XCircle className="h-3 w-3 text-destructive flex-shrink-0" />
+                        ) : entry.error_message ? (
+                          <AlertTriangle className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                        ) : (
+                          <CheckCircle className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        )}
+                        <span
+                          className={cn(
+                            'px-1 py-px rounded text-[10px] font-semibold tracking-wide flex-shrink-0',
+                            entry.is_missed || entry.status === 'error'
+                              ? 'bg-destructive/20 text-destructive'
+                              : entry.error_message
+                                ? 'bg-amber-500/20 text-amber-500'
+                                : 'bg-secondary text-muted-foreground',
+                          )}
+                        >
+                          {entry.is_missed
+                            ? 'MISSED'
+                            : entry.sync_type === 'auto'
+                              ? 'AUTO'
+                              : entry.sync_type === 'daily'
+                                ? 'DAILY'
+                                : 'MAN'}
+                        </span>
+                        <span
+                          className={cn(
+                            'truncate',
+                            entry.is_missed
+                              ? 'text-destructive font-medium'
+                              : 'text-muted-foreground',
+                          )}
+                        >
+                          {entry.is_missed
+                            ? 'No execution recorded'
+                            : `${entry.items_synced} items · ${(entry.duration_ms / 1000).toFixed(1)}s`}
+                        </span>
+                      </div>
+                      <span className="text-muted-foreground text-[11px] whitespace-nowrap flex-shrink-0">
+                        {new Date(entry.synced_at).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                    {entry.error_message && (
+                      <p
+                        className={cn(
+                          'text-[11px] pl-4.5 break-words font-mono',
+                          entry.is_missed || entry.status === 'error'
+                            ? 'text-destructive/90'
+                            : 'text-amber-500/90',
+                        )}
+                      >
+                        {entry.error_message}
+                      </p>
+                    )}
                   </div>
-                  <span className="text-muted-foreground text-xs whitespace-nowrap">
-                    {new Date(entry.synced_at).toLocaleString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
           <div className="text-xs text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">

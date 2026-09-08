@@ -402,7 +402,7 @@ serve(async (req) => {
     const hitCeiling = durationMs >= MAX_EXECUTION_TIME_MS && itemsSynced < itemsToSync.length
     await supabaseAdmin.from('sync_log').insert({
       sync_type: 'auto',
-      status: 'success',
+      status: failedTitles.length > 0 || hitCeiling ? 'error' : 'success',
       items_synced: itemsSynced,
       duration_ms: durationMs,
       error_message: hitCeiling
