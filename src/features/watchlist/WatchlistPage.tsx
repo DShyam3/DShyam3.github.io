@@ -691,7 +691,7 @@ const Watchlist = () => {
 
       {/* Sync Log Panel */}
       {isAdmin && showSyncLog && (
-        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm px-3 py-2 space-y-2">
+        <div className="sync-log-panel col-span-full w-full rounded-lg border border-border bg-card/50 backdrop-blur-sm px-3 py-2 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
               <History className="h-3 w-3" />

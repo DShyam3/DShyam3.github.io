@@ -721,8 +721,9 @@
     column-gap: 1rem;
   }
 
-  /* The category row keeps the full width above them both. */
-  .watchlist-toolbar.watchlist-toolbar > :first-child {
+  /* The category row and the sync log panel keep the full width above them both. */
+  .watchlist-toolbar.watchlist-toolbar > :first-child,
+  .watchlist-toolbar.watchlist-toolbar > .sync-log-panel {
     grid-column: 1 / -1;
   }
 
