@@ -128,7 +128,9 @@ function buildCorsHeaders(req: Request) {
 
 async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const query = new URLSearchParams({ ...params, api_key: TMDB_API_KEY || '' })
-  const res = await fetch(`${TMDB_BASE_URL}/${endpoint}?${query.toString()}`)
+  const res = await fetch(`${TMDB_BASE_URL}/${endpoint}?${query.toString()}`, {
+    signal: AbortSignal.timeout(15000),
+  })
   return res.json() as Promise<T>
 }
 
@@ -244,7 +246,15 @@ serve(async (req) => {
 
     // Same chunking as the client version, parallelized within each chunk.
     const chunkSize = 50
+    const MAX_EXECUTION_TIME_MS = 120_000
+
     for (let i = 0; i < itemsToSync.length; i += chunkSize) {
+      if (Date.now() - startTime > MAX_EXECUTION_TIME_MS) {
+        console.warn(
+          `[Cron Sync] Reached 120s ceiling (${((Date.now() - startTime) / 1000).toFixed(1)}s). Stopping early at ${itemsSynced}/${itemsToSync.length} items to record sync log.`
+        )
+        break
+      }
       const chunk = itemsToSync.slice(i, i + chunkSize)
       await Promise.all(
         chunk.map(async (item) => {
@@ -389,12 +399,17 @@ serve(async (req) => {
     }
 
     const durationMs = Date.now() - startTime
+    const hitCeiling = durationMs >= MAX_EXECUTION_TIME_MS && itemsSynced < itemsToSync.length
     await supabaseAdmin.from('sync_log').insert({
       sync_type: 'auto',
       status: 'success',
       items_synced: itemsSynced,
       duration_ms: durationMs,
-      error_message: failedTitles.length > 0 ? `${failedTitles.length} item(s) failed: ${failedTitles.join(', ')}` : null,
+      error_message: hitCeiling
+        ? `Reached 120s ceiling (${itemsSynced}/${itemsToSync.length} synced)${failedTitles.length > 0 ? `, ${failedTitles.length} failed: ${failedTitles.join(', ')}` : ''}`
+        : failedTitles.length > 0
+          ? `${failedTitles.length} item(s) failed: ${failedTitles.join(', ')}`
+          : null,
     })
     // Keep last 50 log rows, same as the client-side logSync
     const { data: oldLogs } = await supabaseAdmin.from('sync_log').select('id').order('synced_at', { ascending: false }).range(50, 1000)
