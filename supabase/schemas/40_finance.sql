@@ -290,7 +290,8 @@ CREATE TABLE IF NOT EXISTS "public"."finance_transactions" (
     "notes" "text",
     "tags" "text"[],
     "is_recurring" boolean DEFAULT false,
-    "account_id" "text"
+    "account_id" "text",
+    "provider_transaction_id" "text"
 );
 
 ALTER TABLE "public"."finance_transactions" OWNER TO "postgres";
@@ -306,11 +307,27 @@ CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_connection" (
     "expires_at" timestamp with time zone,
     "consent_expires_at" timestamp with time zone,
     "last_synced_at" timestamp with time zone,
+    "backfilled_from" date,
+    "backfill_complete" boolean DEFAULT false NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 
 ALTER TABLE "public"."finance_truelayer_connection" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_source_sync" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "connection_id" "uuid" NOT NULL,
+    "source_kind" "text" NOT NULL,
+    "provider_account_id" "text" NOT NULL,
+    "backfilled_from" "date",
+    "backfill_complete" boolean DEFAULT false NOT NULL,
+    "last_synced_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_truelayer_source_sync" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_oauth_states" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -436,6 +453,17 @@ ALTER TABLE ONLY "public"."finance_truelayer_connection"
 ALTER TABLE ONLY "public"."finance_truelayer_connection"
     ADD CONSTRAINT "finance_truelayer_connection_profile_provider_unique" UNIQUE ("profile_id", "provider_id");
 
+ALTER TABLE ONLY "public"."finance_truelayer_source_sync"
+    ADD CONSTRAINT "finance_truelayer_source_sync_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_truelayer_source_sync"
+    ADD CONSTRAINT "finance_truelayer_source_sync_connection_source_unique"
+    UNIQUE ("connection_id", "source_kind", "provider_account_id");
+
+ALTER TABLE ONLY "public"."finance_truelayer_source_sync"
+    ADD CONSTRAINT "finance_truelayer_source_sync_kind_check"
+    CHECK (("source_kind" = ANY (ARRAY['accounts'::"text", 'cards'::"text"])));
+
 ALTER TABLE ONLY "public"."finance_truelayer_oauth_states"
     ADD CONSTRAINT "finance_truelayer_oauth_states_pkey" PRIMARY KEY ("id");
 
@@ -450,6 +478,8 @@ CREATE INDEX "idx_finance_budget_items_category_id" ON "public"."finance_budget_
 CREATE INDEX "idx_finance_goal_contributions_goal_id" ON "public"."finance_goal_contributions" USING "btree" ("goal_id");
 
 CREATE INDEX "idx_finance_transactions_account_id" ON "public"."finance_transactions" USING "btree" ("account_id");
+
+CREATE UNIQUE INDEX "idx_finance_transactions_provider_source" ON "public"."finance_transactions" USING "btree" ("profile_id", "account_id", "provider_transaction_id") WHERE ("provider_transaction_id" IS NOT NULL);
 
 ALTER TABLE ONLY "public"."finance_budget_items"
     ADD CONSTRAINT "finance_budget_items_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "public"."finance_budget_categories"("id") ON DELETE CASCADE;
@@ -539,6 +569,8 @@ ALTER TABLE "public"."finance_tax_configs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_transactions" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."finance_truelayer_connection" ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE "public"."finance_truelayer_source_sync" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."finance_truelayer_oauth_states" ENABLE ROW LEVEL SECURITY;
 
@@ -658,6 +690,8 @@ GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "service_role";
 
+GRANT ALL ON TABLE "public"."finance_truelayer_source_sync" TO "service_role";
+
 GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "service_role";
@@ -696,8 +730,11 @@ REVOKE SELECT ON TABLE
   "public"."finance_tax_configs",
   "public"."finance_transactions",
   "public"."finance_truelayer_connection",
+  "public"."finance_truelayer_source_sync",
   "public"."finance_user_holidays"
 FROM "anon";
+
+REVOKE ALL ON TABLE "public"."finance_truelayer_source_sync" FROM "authenticated";
 
 REVOKE ALL ON TABLE "public"."finance_debts" FROM "anon";
 
@@ -814,6 +851,11 @@ ALTER TABLE ONLY "public"."finance_truelayer_connection"
     ADD CONSTRAINT "finance_truelayer_connection_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 CREATE INDEX "idx_finance_truelayer_connection_profile_id" ON "public"."finance_truelayer_connection" ("profile_id");
 CREATE INDEX "idx_finance_truelayer_connection_profile_provider" ON "public"."finance_truelayer_connection" ("profile_id", "provider_id");
+
+ALTER TABLE ONLY "public"."finance_truelayer_source_sync"
+    ADD CONSTRAINT "finance_truelayer_source_sync_connection_id_fkey"
+    FOREIGN KEY ("connection_id") REFERENCES "public"."finance_truelayer_connection"("id") ON DELETE CASCADE;
+CREATE INDEX "idx_finance_truelayer_source_sync_connection" ON "public"."finance_truelayer_source_sync" ("connection_id");
 
 ALTER TABLE ONLY "public"."finance_truelayer_oauth_states"
     ADD CONSTRAINT "finance_truelayer_oauth_states_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
@@ -957,6 +999,10 @@ $$;
 
 ALTER FUNCTION "public"."capture_finance_snapshots"() OWNER TO "postgres";
 
--- The job runs as postgres, so no role but the owner needs to call it.
+-- SECURITY DEFINER routines otherwise grant EXECUTE to PUBLIC by default.
+-- The Edge Function invokes this through the service role; the cron job runs
+-- as postgres, the owner.
+REVOKE ALL ON FUNCTION "public"."capture_finance_snapshots"() FROM PUBLIC;
 REVOKE ALL ON FUNCTION "public"."capture_finance_snapshots"() FROM "anon";
 REVOKE ALL ON FUNCTION "public"."capture_finance_snapshots"() FROM "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."capture_finance_snapshots"() TO "service_role";

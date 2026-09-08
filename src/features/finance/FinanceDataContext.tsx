@@ -660,7 +660,7 @@ function useProvideFinanceData() {
           selfProfileRes
         ] = await Promise.all([
           scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types')),
-          scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count')),
+          scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count, type')),
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
           scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
           scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, use_case, emoji, color')),
@@ -758,7 +758,8 @@ function useProvideFinanceData() {
           startDate: h.start_date,
           endDate: h.end_date,
           occasion: h.occasion || '',
-          count: Number(h.count) || 0
+          count: Number(h.count) || 0,
+          type: (h.type as 'holiday' | 'sick') || 'holiday'
         }));
 
         if (activeSettings) {
@@ -1421,7 +1422,8 @@ function useProvideFinanceData() {
             start_date: h.startDate,
             end_date: h.endDate,
             occasion: h.occasion || null,
-            count: h.count
+            count: h.count,
+            type: h.type || 'holiday'
           })), { onConflict: 'id' });
         }
       } else if (key === 'goals') {

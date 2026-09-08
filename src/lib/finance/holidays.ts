@@ -7,12 +7,15 @@
 
 import { isWeekend, toISODate } from './dates';
 
+export type LeaveType = 'holiday' | 'sick';
+
 export interface UserHoliday {
   id: string;
   startDate: string;
   endDate: string;
   occasion: string;
   count: number;
+  type?: LeaveType;
 }
 
 /** Expands day shorthand into individual day numbers. "3 + 12-14" -> [3,12,13,14]. */
@@ -105,19 +108,20 @@ export const getBookedDaysForMonth = (
   year: number,
   monthIdx: number,
   bankHolidays: string[],
-): { day: number; occasion: string }[] => {
-  const booked: { day: number; occasion: string }[] = [];
+): { day: number; occasion: string; type: LeaveType }[] => {
+  const booked: { day: number; occasion: string; type: LeaveType }[] = [];
 
   for (const hol of holidays) {
     const start = new Date(hol.startDate);
     const end = new Date(hol.endDate);
     if (isNaN(start.getTime()) || isNaN(end.getTime())) continue;
 
+    const leaveType: LeaveType = hol.type || 'holiday';
     const current = new Date(start);
     while (current <= end) {
       const inMonth = current.getFullYear() === year && current.getMonth() === monthIdx;
       if (inMonth && !isWeekend(current) && !bankHolidays.includes(toISODate(current))) {
-        booked.push({ day: current.getDate(), occasion: hol.occasion });
+        booked.push({ day: current.getDate(), occasion: hol.occasion, type: leaveType });
       }
       current.setDate(current.getDate() + 1);
     }

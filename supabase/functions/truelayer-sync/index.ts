@@ -35,8 +35,8 @@ function isValidOAuthState(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
 }
 
-async function hashOAuthState(state: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(state))
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
@@ -153,7 +153,7 @@ serve(async (req) => {
       // Store only a hash. The raw, 256-bit value is returned once to the
       // browser, which keeps it in sessionStorage until the provider returns.
       const state = createOAuthState()
-      const stateHash = await hashOAuthState(state)
+      const stateHash = await sha256Hex(state)
       const now = new Date()
       const expiresAt = new Date(now.getTime() + OAUTH_STATE_TTL_MS).toISOString()
 
@@ -279,7 +279,7 @@ serve(async (req) => {
         .from('finance_truelayer_oauth_states')
         .delete()
         .eq('profile_id', selfProfileId)
-        .eq('state_hash', await hashOAuthState(state))
+        .eq('state_hash', await sha256Hex(state))
         .eq('redirect_uri', redirectUri)
         .gt('expires_at', new Date().toISOString())
         .select('id')
@@ -346,19 +346,29 @@ serve(async (req) => {
         console.warn('Could not query /data/v1/me, will check /accounts fallback', meErr)
       }
 
-      // Fallback: check /data/v1/accounts if /data/v1/me did not resolve provider
+      // Fallback: discover the provider from an account or card if /me did
+      // not return it. A credit-card-only consent is still a valid connection.
       if (providerId === 'default') {
         try {
-          const accRes = await fetch(`${apiBaseUrl}/data/v1/accounts`, {
-            headers: { Authorization: `Bearer ${access_token}` },
-          })
-          if (accRes.ok) {
-            const accData = await accRes.json()
-            const firstAcc = accData.results?.[0]
-            if (firstAcc?.provider) {
-              providerId = firstAcc.provider.provider_id || providerId
-              providerName = firstAcc.provider.display_name || providerName
-              providerLogoUri = firstAcc.provider.logo_uri || null
+          const [accountsResponse, cardsResponse] = await Promise.all([
+            fetch(`${apiBaseUrl}/data/v1/accounts`, {
+              headers: { Authorization: `Bearer ${access_token}` },
+            }),
+            fetch(`${apiBaseUrl}/data/v1/cards`, {
+              headers: { Authorization: `Bearer ${access_token}` },
+            }),
+          ])
+          const sourceResponses = [accountsResponse, cardsResponse]
+          for (const response of sourceResponses) {
+            if (response.ok) {
+              const data = await response.json()
+              const firstSource = data.results?.[0]
+              if (firstSource?.provider) {
+                providerId = firstSource.provider.provider_id || providerId
+                providerName = firstSource.provider.display_name || providerName
+                providerLogoUri = firstSource.provider.logo_uri || null
+                break
+              }
             }
           }
         } catch {
@@ -366,14 +376,28 @@ serve(async (req) => {
         }
       }
 
+      // A placeholder identity would make unrelated connections conflict on
+      // (profile_id, provider_id) and replace one another. Do not store a
+      // token unless TrueLayer has identified the authorised institution.
+      if (providerId === 'default') {
+        console.error('TrueLayer did not return a provider identity for the new connection')
+        return new Response(JSON.stringify({
+          error: 'Could not identify the bank. Please try connecting it again.',
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       // Default consent expiry to ~90 days from now if not explicitly returned by API
       if (!consentExpiresAt) {
         consentExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
       }
 
-      // Upsert scoped to (profile_id, provider_id).
-      // Connect inserts or updates this provider rather than deleting other banks!
-      const { error: upsertError } = await supabaseAdmin
+      // Upsert scoped to (profile_id, provider_id). A renewed consent may
+      // expose a changed source list, so its per-source cursors are reset only
+      // after the replacement token was safely stored. Imported rows remain.
+      const { data: storedConnection, error: upsertError } = await supabaseAdmin
         .from('finance_truelayer_connection')
         .upsert({
           profile_id: selfProfileId,
@@ -384,14 +408,31 @@ serve(async (req) => {
           refresh_token,
           expires_at: expiresAt,
           consent_expires_at: consentExpiresAt,
+          backfilled_from: new Date().toISOString().split('T')[0],
+          backfill_complete: false,
+          last_synced_at: null,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'profile_id,provider_id',
         })
+        .select('id')
+        .single()
 
       if (upsertError) {
         console.error('Failed to store TrueLayer tokens:', upsertError)
         return new Response(JSON.stringify({ error: 'Could not store bank connection' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const { error: resetSourcesError } = await supabaseAdmin
+        .from('finance_truelayer_source_sync')
+        .delete()
+        .eq('connection_id', storedConnection.id)
+      if (resetSourcesError) {
+        console.error('Failed to reset TrueLayer source history state:', resetSourcesError)
+        return new Response(JSON.stringify({ error: 'Could not prepare bank history sync' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -443,7 +484,6 @@ serve(async (req) => {
         updated_at: string
       }
       type SyncedTxRow = {
-        id: string
         is_default: boolean
         profile_id: string | null
         name: string
@@ -453,11 +493,25 @@ serve(async (req) => {
         date: string
         is_reviewed: boolean
         account_id: string
+        provider_transaction_id: string
       }
 
       const syncedAccounts: SyncedAccountRow[] = []
       const allNewTransactions: SyncedTxRow[] = []
       const connectionErrors: { provider: string; error: string }[] = []
+      // A cursor means every row through that point is durable. Keep it in
+      // memory until account and transaction writes have both succeeded;
+      // otherwise an Edge Function timeout can make later runs skip data.
+      const pendingSourceProgress: {
+        id: string
+        backfilled_from: string
+        backfill_complete: boolean
+      }[] = []
+      const pendingConnectionProgress: {
+        id: string
+        backfilled_from: string
+        backfill_complete: boolean
+      }[] = []
 
       // Helper function to get default emoji & color based on bank/provider name
       const getProviderStyling = (providerName: string) => {
@@ -514,13 +568,11 @@ serve(async (req) => {
 
       const DAY_MS = 24 * 60 * 60 * 1000
       const OVERLAP_DAYS = 7
-      const MAX_DAYS = 730
-      const INITIAL_DAYS = 90
       const BACKFILL_WINDOW_DAYS = 90
       const MAX_WINDOWS_PER_RUN = 8
-      const EMPTY_WINDOWS_TO_STOP = 2
+      const EMPTY_WINDOWS_TO_STOP = 8
       const now = new Date()
-      const ABSOLUTE_FLOOR = new Date(now.getTime() - 6 * 365 * DAY_MS)
+      const ABSOLUTE_FLOOR = new Date('1970-01-01T00:00:00.000Z')
 
       type TlAccount = {
         account_id: string
@@ -533,9 +585,53 @@ serve(async (req) => {
         display_name?: string
         provider?: { display_name?: string; provider_id?: string; logo_uri?: string }
       }
+      type TlTransaction = {
+        transaction_id: string
+        merchant_name?: string
+        description?: string
+        transaction_category?: string
+        transaction_classification?: string[]
+        amount: number | string
+        timestamp: string
+      }
+
+      const importedAccountType = (accountType: string | undefined, isCard: boolean) => {
+        if (isCard) return 'credit' as const
+        switch (accountType?.trim().toLowerCase()) {
+          case 'savings':
+            return 'savings' as const
+          case 'investment':
+            return 'investment' as const
+          default:
+            return 'checking' as const
+        }
+      }
+      const importedAccountLabel = (accountType: string | undefined, isCard: boolean) => {
+        if (isCard) return 'Credit Card'
+        switch (importedAccountType(accountType, isCard)) {
+          case 'savings':
+            return 'Savings Account'
+          case 'investment':
+            return 'Investment Account'
+          default:
+            return 'Current Account'
+        }
+      }
+      const importedAccountName = (raw: TlAccount | TlCard, isCard: boolean) => {
+        const displayName = raw.display_name?.trim()
+        // Several UK providers return the account holder (for example,
+        // "Mr Dhyan Shyam") here, not the product. The product label is more
+        // useful and remains distinct from the provider shown as issuer.
+        const looksLikeAccountHolder = /^(mr|mrs|ms|miss|dr)\b/i.test(displayName || '')
+        return displayName && !looksLikeAccountHolder
+          ? displayName
+          : importedAccountLabel((raw as TlAccount).account_type, isCard)
+      }
 
       const accountRowId = (kind: 'accounts' | 'cards', id: string) =>
         kind === 'accounts' ? `tl_acc_${id}` : `tl_card_${id}`
+      const transactionSourceKey = (accountId: string, transactionId: string) =>
+        `${accountId}\u0000${transactionId}`
 
       // Loop through each linked bank connection
       for (const connection of connections) {
@@ -588,14 +684,17 @@ serve(async (req) => {
             headers: { Authorization: `Bearer ${accessToken}` },
           })
 
-          const accountsList: TlAccount[] = accountsRes.ok ? (await accountsRes.json()).results || [] : []
-          const cardsList: TlCard[] = cardsRes.ok ? (await cardsRes.json()).results || [] : []
-
-          if (!accountsRes.ok && !cardsRes.ok) {
-            console.warn(`Could not retrieve accounts for ${connection.provider_name}`)
+          // Do not advance a connection-wide cursor from a partial account
+          // list: a retry must get the opportunity to backfill every account
+          // and card covered by this consent.
+          if (!accountsRes.ok || !cardsRes.ok) {
+            console.warn(`Could not retrieve the complete account list for ${connection.provider_name}`)
             connectionErrors.push({ provider: connection.provider_name, error: 'Could not fetch accounts' })
             continue
           }
+
+          const accountsList: TlAccount[] = (await accountsRes.json()).results || []
+          const cardsList: TlCard[] = (await cardsRes.json()).results || []
 
           const sources: { kind: 'accounts' | 'cards'; raw: TlAccount | TlCard }[] = [
             ...accountsList.map(raw => ({ kind: 'accounts' as const, raw })),
@@ -619,138 +718,181 @@ serve(async (req) => {
               .eq('id', connection.id)
           }
 
-          // A. Balances
-          await Promise.all(sources.map(async ({ kind, raw }) => {
+          // A. Balances. Never overwrite a known balance with zero when the
+          // provider call itself failed.
+          const balances = await Promise.all(sources.map(async ({ kind, raw }) => {
             const accId = accountRowId(kind, raw.account_id)
             const balanceRes = await fetch(
               `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/balance`,
               { headers: { Authorization: `Bearer ${accessToken}` } },
             )
-            const balanceData = balanceRes.ok ? await balanceRes.json() : {}
+            if (!balanceRes.ok) {
+              throw new Error(`Could not fetch balance for ${kind}/${raw.account_id}`)
+            }
+            const balanceData = await balanceRes.json()
             const balanceVal = balanceData.results?.[0]?.current ?? 0
             const styling = getProviderStyling(raw.provider?.display_name || connection.provider_name)
             const isCard = kind === 'cards'
 
-            syncedAccounts.push({
+            return {
               id: accId,
               is_default: false,
               profile_id: selfProfileId,
-              name:
-                raw.display_name ||
-                `${raw.provider?.display_name || connection.provider_name} ${isCard ? 'Card' : 'Checking'}`,
-              type: isCard
-                ? 'credit'
-                : (raw as TlAccount).account_type === 'savings'
-                  ? 'savings'
-                  : 'checking',
+              name: importedAccountName(raw, isCard),
+              type: importedAccountType((raw as TlAccount).account_type, isCard),
               issuer: raw.provider?.display_name || connection.provider_name,
               balance: isCard ? -Math.abs(Number(balanceVal)) : Number(balanceVal),
               annual_fee: 0,
               emoji: styling.emoji,
               color: styling.color,
               updated_at: new Date().toISOString(),
-            })
+            }
           }))
+          syncedAccounts.push(...balances)
 
-          // B. Transactions for this connection
-          const connectionAccountIds = sources.map(s => accountRowId(s.kind, s.raw.account_id))
+          // B. Transactions. A bank connection can contain many accounts and
+          // cards, each with its own age and provider retention. Keep a
+          // durable cursor for every source rather than allowing one account's
+          // newest or oldest transaction to govern the others.
+          const sourceKey = (kind: 'accounts' | 'cards', providerAccountId: string) =>
+            `${kind}\u0000${providerAccountId}`
+          type SourceState = {
+            id: string
+            source_kind: 'accounts' | 'cards'
+            provider_account_id: string
+            backfilled_from: string | null
+            backfill_complete: boolean
+          }
+          const { data: storedSourceStates, error: storedSourceStatesError } = await supabaseAdmin
+            .from('finance_truelayer_source_sync')
+            .select('id, source_kind, provider_account_id, backfilled_from, backfill_complete')
+            .eq('connection_id', connection.id)
+          if (storedSourceStatesError) throw storedSourceStatesError
 
-          const { data: newestRow } = await supabaseAdmin
-            .from('finance_transactions')
-            .select('date')
-            .eq('profile_id', selfProfileId)
-            .in('account_id', connectionAccountIds)
-            .order('date', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-
-          const { data: oldestRow } = await supabaseAdmin
-            .from('finance_transactions')
-            .select('date')
-            .eq('profile_id', selfProfileId)
-            .in('account_id', connectionAccountIds)
-            .order('date', { ascending: true })
-            .limit(1)
-            .maybeSingle()
-
-          const daysSinceNewest = newestRow?.date
-            ? Math.ceil((Date.now() - new Date(newestRow.date).getTime()) / DAY_MS)
-            : null
-
-          const daysToFetch = Math.min(
-            MAX_DAYS,
-            daysSinceNewest === null ? INITIAL_DAYS : daysSinceNewest + OVERLAP_DAYS,
+          const statesBySource = new Map<string, SourceState>(
+            ((storedSourceStates || []) as SourceState[]).map(state => [
+              sourceKey(state.source_kind, state.provider_account_id), state,
+            ]),
           )
+          const unseenSources = sources.filter(source =>
+            !statesBySource.has(sourceKey(source.kind, source.raw.account_id)),
+          )
+          if (unseenSources.length > 0) {
+            const { data: insertedStates, error: insertStatesError } = await supabaseAdmin
+              .from('finance_truelayer_source_sync')
+              .insert(unseenSources.map(source => ({
+                connection_id: connection.id,
+                source_kind: source.kind,
+                provider_account_id: source.raw.account_id,
+              })))
+              .select('id, source_kind, provider_account_id, backfilled_from, backfill_complete')
+            if (insertStatesError) throw insertStatesError
+            for (const state of (insertedStates || []) as SourceState[]) {
+              statesBySource.set(sourceKey(state.source_kind, state.provider_account_id), state)
+            }
+          }
 
-          const fetchRange = async (from: Date, to: Date): Promise<number> => {
+          const sourceStates = sources.map(source => {
+            const state = statesBySource.get(sourceKey(source.kind, source.raw.account_id))
+            if (!state) throw new Error('Could not initialise TrueLayer source history state')
+            return { ...source, state }
+          })
+
+          const fetchSourceRange = async (
+            source: typeof sourceStates[number],
+            from: Date,
+            to: Date,
+          ): Promise<{ transactionCount: number; failed: boolean }> => {
             const qs = `from=${from.toISOString()}&to=${to.toISOString()}`
-            const perSource = await Promise.all(sources.map(async ({ kind, raw }) => {
-              const accId = accountRowId(kind, raw.account_id)
-              const res = await fetch(
-                `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/transactions?${qs}`,
-                { headers: { Authorization: `Bearer ${accessToken}` } },
-              )
-              if (!res.ok) return 0
-              const txs = (await res.json()).results || []
-              for (const tx of txs) {
-                allNewTransactions.push({
-                  id: `tl_tx_${tx.transaction_id}`,
-                  is_default: false,
-                  profile_id: selfProfileId,
-                  name: tx.merchant_name || tx.description || 'TrueLayer Transaction',
-                  merchant: tx.merchant_name || null,
-                  category: mapCategory(tx.transaction_category, tx.transaction_classification),
-                  amount: -Number(tx.amount),
-                  date: tx.timestamp.split('T')[0],
-                  is_reviewed: false,
-                  account_id: accId,
-                })
-              }
-              return txs.length
+            const { kind, raw } = source
+            const res = await fetch(
+              `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/transactions?${qs}`,
+              { headers: { Authorization: `Bearer ${accessToken}` } },
+            )
+            if (!res.ok) return { transactionCount: 0, failed: true }
+            const txs = ((await res.json()).results || []) as TlTransaction[]
+            const rows = txs
+              .filter(tx => typeof tx.transaction_id === 'string' && typeof tx.timestamp === 'string')
+              .map(tx => ({
+                is_default: false,
+                profile_id: selfProfileId,
+                name: tx.merchant_name || tx.description || 'TrueLayer Transaction',
+                merchant: tx.merchant_name || null,
+                category: mapCategory(tx.transaction_category || '', tx.transaction_classification || []),
+                amount: -Number(tx.amount),
+                date: tx.timestamp.split('T')[0],
+                is_reviewed: false,
+                account_id: accountRowId(kind, raw.account_id),
+                provider_transaction_id: tx.transaction_id,
+              }))
+            allNewTransactions.push(...rows)
+            return { transactionCount: rows.length, failed: false }
+          }
+
+          // Keep recent changes covered for every source. Its independent
+          // history cursor then walks backward from today without assuming a
+          // fixed age for a newly authorised account or card.
+          const recentResults = await Promise.all(sourceStates.map(source =>
+            fetchSourceRange(source, new Date(now.getTime() - OVERLAP_DAYS * DAY_MS), now),
+          ))
+          if (recentResults.some(result => result.failed)) {
+            connectionErrors.push({ provider: connection.provider_name, error: 'Could not fetch transactions' })
+            continue
+          }
+
+          const workingSources = sourceStates.map(source => ({
+            ...source,
+            frontier: source.state.backfilled_from ? new Date(source.state.backfilled_from) : now,
+            backfillComplete: source.state.backfill_complete === true,
+            emptyStreak: 0,
+          }))
+          let transactionFetchFailed = false
+
+          for (let window = 0; window < MAX_WINDOWS_PER_RUN; window++) {
+            const sourcesToBackfill = workingSources.filter(source =>
+              !source.backfillComplete && source.frontier > ABSOLUTE_FLOOR,
+            )
+            if (sourcesToBackfill.length === 0) break
+            const results = await Promise.all(sourcesToBackfill.map(async source => {
+              const windowTo = source.frontier
+              const windowFrom = new Date(windowTo.getTime() - BACKFILL_WINDOW_DAYS * DAY_MS)
+              return { source, result: await fetchSourceRange(source, windowFrom, windowTo), windowFrom }
             }))
-            return perSource.reduce((a: number, b: number) => a + b, 0)
+            for (const { source, result, windowFrom } of results) {
+              if (result.failed) {
+                transactionFetchFailed = true
+                continue
+              }
+              source.frontier = windowFrom
+              source.emptyStreak = result.transactionCount === 0 ? source.emptyStreak + 1 : 0
+              if (source.emptyStreak >= EMPTY_WINDOWS_TO_STOP || source.frontier <= ABSOLUTE_FLOOR) {
+                source.backfillComplete = true
+              }
+            }
           }
 
-          // Forward pass
-          await fetchRange(new Date(now.getTime() - daysToFetch * DAY_MS), now)
-
-          // Backward backfill pass
-          let frontier = connection.backfilled_from
-            ? new Date(connection.backfilled_from)
-            : oldestRow?.date
-              ? new Date(oldestRow.date)
-              : new Date(now.getTime() - daysToFetch * DAY_MS)
-
-          let backfillComplete = connection.backfill_complete === true
-          let emptyStreak = 0
-          let windowsWalked = 0
-
-          while (
-            !backfillComplete &&
-            windowsWalked < MAX_WINDOWS_PER_RUN &&
-            frontier > ABSOLUTE_FLOOR
-          ) {
-            const windowTo = frontier
-            const windowFrom = new Date(frontier.getTime() - BACKFILL_WINDOW_DAYS * DAY_MS)
-            const found = await fetchRange(windowFrom, windowTo)
-            windowsWalked++
-            frontier = windowFrom
-
-            emptyStreak = found === 0 ? emptyStreak + 1 : 0
-            if (emptyStreak >= EMPTY_WINDOWS_TO_STOP) backfillComplete = true
+          if (transactionFetchFailed) {
+            connectionErrors.push({ provider: connection.provider_name, error: 'Could not fetch transactions' })
+            continue
           }
 
-          if (frontier <= ABSOLUTE_FLOOR) backfillComplete = true
-
-          await supabaseAdmin
-            .from('finance_truelayer_connection')
-            .update({
-              backfilled_from: frontier.toISOString().split('T')[0],
-              backfill_complete: backfillComplete,
-              last_synced_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+          for (const source of workingSources) {
+            if (source.frontier <= ABSOLUTE_FLOOR) source.backfillComplete = true
+            pendingSourceProgress.push({
+              id: source.state.id,
+              backfilled_from: source.frontier.toISOString().split('T')[0],
+              backfill_complete: source.backfillComplete,
             })
-            .eq('id', connection.id)
+          }
+          const oldestFrontier = workingSources.reduce(
+            (oldest, source) => source.frontier < oldest ? source.frontier : oldest,
+            now,
+          )
+          pendingConnectionProgress.push({
+            id: connection.id,
+            backfilled_from: oldestFrontier.toISOString().split('T')[0],
+            backfill_complete: workingSources.every(source => source.backfillComplete),
+          })
 
         } catch (connLoopErr) {
           console.error(`Error syncing provider ${connection.provider_name}:`, connLoopErr)
@@ -782,24 +924,62 @@ serve(async (req) => {
         }
       }
 
-      // 5. Deduplicate and write transactions, preserving is_reviewed
-      const byId = new Map<string, SyncedTxRow>()
-      for (const tx of allNewTransactions) byId.set(tx.id, tx)
-      const deduped = Array.from(byId.values())
+      // 5. A provider transaction ID is only unique within its account. Keep
+      // its stable source identity separate from our primary key, so two bank
+      // accounts can legitimately contain the same provider-issued ID.
+      const bySource = new Map<string, SyncedTxRow>()
+      for (const tx of allNewTransactions) {
+        bySource.set(transactionSourceKey(tx.account_id, tx.provider_transaction_id), tx)
+      }
+      const deduped = Array.from(bySource.values())
 
-      const reviewedById = new Map<string, boolean>()
-      for (const batch of chunk(deduped.map(t => t.id))) {
-        const { data } = await supabaseAdmin
+      // Existing IDs remain unchanged: profile-transfer rows can reference
+      // them. New rows receive a deterministic hash of account + provider ID.
+      const existingBySource = new Map<string, { id: string; is_reviewed: boolean }>()
+      const syncedAccountIds = Array.from(new Set(deduped.map(tx => tx.account_id)))
+      const providerTransactionIds = Array.from(
+        new Set(deduped.map(tx => tx.provider_transaction_id)),
+      )
+      // This filter is encoded into a GET query by PostgREST. Historical
+      // imports can contain hundreds of provider IDs, so keep each URL well
+      // below proxy/request-line limits instead of using the generic 500-row
+      // write batch size.
+      for (const batch of chunk(providerTransactionIds, 100)) {
+        const { data, error } = await supabaseAdmin
           .from('finance_transactions')
-          .select('id, is_reviewed')
-          .in('id', batch)
-        for (const row of data ?? []) reviewedById.set(row.id, row.is_reviewed)
+          .select('id, is_reviewed, account_id, provider_transaction_id')
+          .eq('profile_id', selfProfileId)
+          .in('account_id', syncedAccountIds)
+          .in('provider_transaction_id', batch)
+        if (error) {
+          console.error('Failed to look up existing TrueLayer transactions:', error)
+          return new Response(JSON.stringify({ error: 'Could not prepare bank transactions' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        for (const row of data ?? []) {
+          if (row.account_id && row.provider_transaction_id) {
+            existingBySource.set(
+              transactionSourceKey(row.account_id, row.provider_transaction_id),
+              { id: row.id, is_reviewed: row.is_reviewed },
+            )
+          }
+        }
       }
 
-      const txRows = deduped.map(t => ({
-        ...t,
-        profile_id: selfProfileId,
-        is_reviewed: reviewedById.get(t.id) ?? t.is_reviewed,
+      const txRows = await Promise.all(deduped.map(async tx => {
+        const existing = existingBySource.get(
+          transactionSourceKey(tx.account_id, tx.provider_transaction_id),
+        )
+        return {
+          ...tx,
+          id: existing?.id ?? `tl_tx_${await sha256Hex(
+            transactionSourceKey(tx.account_id, tx.provider_transaction_id),
+          )}`,
+          profile_id: selfProfileId,
+          is_reviewed: existing?.is_reviewed ?? tx.is_reviewed,
+        }
       }))
 
       for (const batch of chunk(txRows)) {
@@ -815,11 +995,57 @@ serve(async (req) => {
         }
       }
 
+      // Commit each account/card cursor only after its fetched data is in the
+      // database. If this update itself fails, the bounded overlap makes the
+      // next run safely re-fetch those rows rather than losing them.
+      for (const progress of pendingSourceProgress) {
+        const { error } = await supabaseAdmin
+          .from('finance_truelayer_source_sync')
+          .update({
+            backfilled_from: progress.backfilled_from,
+            backfill_complete: progress.backfill_complete,
+            last_synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', progress.id)
+        if (error) {
+          console.error('Failed to advance TrueLayer source sync progress:', error)
+          return new Response(JSON.stringify({ error: 'Could not record bank sync progress' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
+
+      // This aggregate is retained for the existing connection-status UI.
+      // Its state now reflects all of the independent source cursors.
+      for (const progress of pendingConnectionProgress) {
+        const { error } = await supabaseAdmin
+          .from('finance_truelayer_connection')
+          .update({
+            backfilled_from: progress.backfilled_from,
+            backfill_complete: progress.backfill_complete,
+            last_synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', progress.id)
+        if (error) {
+          console.error('Failed to advance TrueLayer sync progress:', error)
+          return new Response(JSON.stringify({ error: 'Could not record bank sync progress' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
+
       // Update daily net worth & balance snapshots with freshly synced figures
       try {
-        await supabaseAdmin.rpc('capture_finance_snapshots')
-      } catch (snapErr) {
-        console.warn('Failed to capture finance snapshots after sync:', snapErr)
+        const { error: snapshotError } = await supabaseAdmin.rpc('capture_finance_snapshots')
+        if (snapshotError) {
+          console.warn('Failed to capture finance snapshots after sync:', snapshotError)
+        }
+      } catch (snapshotException) {
+        console.warn('Failed to capture finance snapshots after sync:', snapshotException)
       }
 
       return new Response(JSON.stringify({

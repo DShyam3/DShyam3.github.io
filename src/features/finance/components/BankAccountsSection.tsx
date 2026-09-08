@@ -11,7 +11,70 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BankAccount } from '@/features/finance/finance-types';
 import { formatGBP, getAccountDefaultColor, getAccountDefaultEmoji } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
-import { Activity, ArrowUpRight, Building2, Clock, CreditCard, Edit2, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Activity, ArrowUpRight, Clock, CreditCard, Edit2, Landmark, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
+
+type ProviderLogoSize = 'account' | 'connection';
+
+const PROVIDER_NAMES: Record<string, string> = {
+  americanexpress: 'American Express',
+  amex: 'American Express',
+  hsbc: 'HSBC',
+  lloyds: 'Lloyds',
+  revolut: 'Revolut',
+  santander: 'Santander',
+  santanderpersonal: 'Santander',
+};
+
+const OFFICIAL_PROVIDER_LOGOS: Record<string, string> = {
+  americanexpress: 'https://www.aexp-static.com/cdaas/one/statics/axp-dls/5.10.0/package/dist/img/dls_logos/dls-logo-bluebox-solid.svg',
+  amex: 'https://www.aexp-static.com/cdaas/one/statics/axp-dls/5.10.0/package/dist/img/dls_logos/dls-logo-bluebox-solid.svg',
+  santander: 'https://www.santander.co.uk/themes/custom/santander_web18_2_0/logo.svg',
+  santanderpersonal: 'https://www.santander.co.uk/themes/custom/santander_web18_2_0/logo.svg',
+};
+
+function providerKey(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function providerDisplayName(name: string) {
+  return PROVIDER_NAMES[providerKey(name)] || name;
+}
+
+function ProviderFallback({ name, size }: { name: string; size: ProviderLogoSize }) {
+  const shell = size === 'connection' ? 'h-10 w-10' : 'h-7 w-7';
+  return (
+    <div className={`${shell} rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0`} aria-label={`${name} bank`}>
+      <Landmark className={size === 'connection' ? 'w-5 h-5 text-primary' : 'w-3.5 h-3.5 text-primary'} aria-hidden="true" />
+    </div>
+  );
+}
+
+function ProviderLogo({ name, uri, size = 'connection' }: { name: string; uri: string | null; size?: ProviderLogoSize }) {
+  const [failedUris, setFailedUris] = useState<string[]>([]);
+  const displayName = providerDisplayName(name);
+  const shell = size === 'connection' ? 'h-10 w-10' : 'h-7 w-7';
+  const logoUris = [uri, OFFICIAL_PROVIDER_LOGOS[providerKey(name)]].filter(
+    (candidate): candidate is string => Boolean(candidate) && !failedUris.includes(candidate),
+  );
+  const logoUri = logoUris[0];
+
+  if (logoUri) {
+    return (
+      <img
+        src={logoUri}
+        alt={`${displayName} logo`}
+        className={`${shell} rounded-lg object-contain bg-card border border-border/40 p-1 shrink-0`}
+        onError={() => setFailedUris(current => current.includes(logoUri) ? current : [...current, logoUri])}
+      />
+    );
+  }
+
+  return <ProviderFallback name={displayName} size={size} />;
+}
+
+function isTrueLayerAccount(account: BankAccount) {
+  return account.id.startsWith('tl_acc_') || account.id.startsWith('tl_card_');
+}
 
 export default function BankAccountsSection() {
   const { toast } = useToast();
@@ -33,6 +96,12 @@ export default function BankAccountsSection() {
     disconnectTrueLayer,
     syncTrueLayer,
   } = useTrueLayer(fetchSupabaseData);
+
+  const providerLogoUris = new Map(
+    (trueLayerStatus?.connections ?? [])
+      .filter(connection => Boolean(connection.provider_logo_uri))
+      .map(connection => [providerKey(connection.provider_name), connection.provider_logo_uri]),
+  );
 
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
@@ -123,48 +192,60 @@ export default function BankAccountsSection() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20">
-              {bankAccounts.map(account => (
-                <tr key={account.id} className="hover:bg-muted/10 transition-colors">
-                  <td className="py-3 px-3 font-semibold text-foreground flex items-center gap-2">
-                    <span
-                      className="w-1.5 h-6 rounded-full shrink-0"
-                      style={{ backgroundColor: account.color || 'hsl(var(--muted-foreground))' }}
-                    />
-                    <span className="text-base shrink-0 leading-none">{account.emoji || '💰'}</span>
-                    <span>{account.name}</span>
-                  </td>
-                  <td className="py-3 px-3 capitalize">{account.type}</td>
-                  <td className="py-3 px-3">{account.issuer}</td>
-                  <td className={cn("py-3 px-3 text-right font-mono font-bold", account.balance >= 0 ? "text-positive" : "text-destructive")}>
-                    {formatGBP(account.balance)}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono">{formatGBP(account.annualFee)}</td>
-                  <td className="py-3 px-3 text-muted-foreground truncate max-w-[150px]">{account.useCase || '—'}</td>
-                  <td className="py-3 px-3 text-center">
-                    <div className="flex justify-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setActiveAccount(account);
-                          setIsEditAccountOpen(true);
-                        }}
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteAccount(account.id)}
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {bankAccounts.map(account => {
+                const isImported = isTrueLayerAccount(account);
+                const issuer = providerDisplayName(account.issuer);
+                const logoUri = providerLogoUris.get(providerKey(account.issuer)) ?? null;
+
+                return (
+                  <tr key={account.id} className="hover:bg-muted/10 transition-colors">
+                    <td className="py-3 px-3 font-semibold text-foreground flex items-center gap-2">
+                      {isImported ? (
+                        <ProviderLogo name={issuer} uri={logoUri} size="account" />
+                      ) : (
+                        <>
+                          <span
+                            className="w-1.5 h-6 rounded-full shrink-0"
+                            style={{ backgroundColor: account.color || 'hsl(var(--muted-foreground))' }}
+                          />
+                          <span className="text-base shrink-0 leading-none">{account.emoji || '💰'}</span>
+                        </>
+                      )}
+                      <span>{account.name}</span>
+                    </td>
+                    <td className="py-3 px-3 capitalize">{account.type}</td>
+                    <td className="py-3 px-3">{issuer}</td>
+                    <td className={cn("py-3 px-3 text-right font-mono font-bold", account.balance >= 0 ? "text-positive" : "text-destructive")}>
+                      {formatGBP(account.balance)}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono">{formatGBP(account.annualFee)}</td>
+                    <td className="py-3 px-3 text-muted-foreground truncate max-w-[150px]">{account.useCase || '—'}</td>
+                    <td className="py-3 px-3 text-center">
+                      <div className="flex justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setActiveAccount(account);
+                            setIsEditAccountOpen(true);
+                          }}
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteAccount(account.id)}
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {bankAccounts.length === 0 && (
                 <tr>
                   <td colSpan={7} className="text-center py-6 italic text-muted-foreground">No bank accounts added.</td>
@@ -210,6 +291,7 @@ export default function BankAccountsSection() {
               <div className="space-y-3 pt-1">
                 <div className="divide-y divide-border/20 rounded-lg border border-border/40 bg-background/50 overflow-hidden">
                   {connections.map(conn => {
+                    const providerName = providerDisplayName(conn.provider_name);
                     const expiry = conn.consent_expires_at || (conn.created_at ? new Date(new Date(conn.created_at).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString() : null);
                     const daysLeft = expiry
                       ? Math.max(0, Math.ceil((new Date(expiry).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
@@ -219,24 +301,20 @@ export default function BankAccountsSection() {
                     return (
                       <div key={conn.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-3 hover:bg-muted/10 transition-colors">
                         <div className="flex items-center gap-3 min-w-0">
-                          {conn.provider_logo_uri ? (
-                            <img
-                              src={conn.provider_logo_uri}
-                              alt={conn.provider_name}
-                              className="w-8 h-8 rounded-lg object-contain bg-card border border-border/40 p-1 shrink-0"
-                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                              <Building2 className="w-4 h-4 text-primary" />
-                            </div>
-                          )}
+                          <ProviderLogo name={providerName} uri={conn.provider_logo_uri} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-xs text-foreground truncate">{conn.provider_name}</span>
+                              <span className="font-semibold text-xs text-foreground truncate">{providerName}</span>
                               {conn.backfill_complete && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-positive/10 text-positive border border-positive/20 font-mono">
                                   Backfilled
+                                </span>
+                              )}
+                              {!conn.backfill_complete && conn.last_synced_at && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-mono">
+                                  {conn.backfilled_from
+                                    ? `Backfilling to ${new Date(conn.backfilled_from).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`
+                                    : 'Backfilling history'}
                                 </span>
                               )}
                             </div>

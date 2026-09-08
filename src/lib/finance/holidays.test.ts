@@ -97,6 +97,24 @@ describe('getBookedDaysForMonth', () => {
     const booked = getBookedDaysForMonth([holiday], 2025, 11, ['2025-12-25', '2025-12-26']);
     expect(booked.map(b => b.day)).toEqual([22, 23, 24]);
     expect(booked.every(b => b.occasion === 'Christmas')).toBe(true);
+    expect(booked.every(b => b.type === 'holiday')).toBe(true);
+  });
+
+  it('attributes type: "sick" for sick days', () => {
+    const sickLeave = {
+      id: 's1',
+      startDate: '2025-12-08',
+      endDate: '2025-12-09',
+      occasion: 'Flu',
+      count: 2,
+      type: 'sick' as const,
+    };
+    const booked = getBookedDaysForMonth([holiday, sickLeave], 2025, 11, ['2025-12-25', '2025-12-26']);
+    const sickDays = booked.filter(b => b.type === 'sick');
+    const holidayDays = booked.filter(b => b.type === 'holiday');
+    expect(sickDays.map(b => b.day)).toEqual([8, 9]);
+    expect(sickDays.every(b => b.occasion === 'Flu')).toBe(true);
+    expect(holidayDays.map(b => b.day)).toEqual([22, 23, 24]);
   });
 
   it('ignores days falling in another month', () => {

@@ -1336,6 +1336,7 @@ export type Database = {
           merchant: string | null
           name: string
           notes: string | null
+          provider_transaction_id: string | null
           profile_id: string | null
           tags: string[] | null
           updated_at: string
@@ -1355,6 +1356,7 @@ export type Database = {
           merchant?: string | null
           name: string
           notes?: string | null
+          provider_transaction_id?: string | null
           profile_id?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -1374,6 +1376,7 @@ export type Database = {
           merchant?: string | null
           name?: string
           notes?: string | null
+          provider_transaction_id?: string | null
           profile_id?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -1454,6 +1457,50 @@ export type Database = {
           },
         ]
       }
+      finance_truelayer_source_sync: {
+        Row: {
+          backfill_complete: boolean
+          backfilled_from: string | null
+          connection_id: string
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          provider_account_id: string
+          source_kind: string
+          updated_at: string
+        }
+        Insert: {
+          backfill_complete?: boolean
+          backfilled_from?: string | null
+          connection_id: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          provider_account_id: string
+          source_kind: string
+          updated_at?: string
+        }
+        Update: {
+          backfill_complete?: boolean
+          backfilled_from?: string | null
+          connection_id?: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          provider_account_id?: string
+          source_kind?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_truelayer_source_sync_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "finance_truelayer_connection"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_user_holidays: {
         Row: {
           count: number
@@ -1464,6 +1511,7 @@ export type Database = {
           occasion: string | null
           profile_id: string | null
           start_date: string
+          type: string
           updated_at: string
         }
         Insert: {
@@ -1475,6 +1523,7 @@ export type Database = {
           occasion?: string | null
           profile_id?: string | null
           start_date: string
+          type?: string
           updated_at?: string
         }
         Update: {
@@ -1486,6 +1535,7 @@ export type Database = {
           occasion?: string | null
           profile_id?: string | null
           start_date?: string
+          type?: string
           updated_at?: string
         }
         Relationships: [

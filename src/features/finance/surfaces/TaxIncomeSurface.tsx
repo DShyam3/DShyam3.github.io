@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { PackageBenefit, UserHoliday } from '@/features/finance/finance-types';
+import { LeaveType, PackageBenefit, UserHoliday } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { calculateWorkingDaysInRange, formatHolidayDates, getBookedDaysForMonth, getDaysInMonth, getStartDayOfWeek } from '@/lib/finance';
 import { cn } from '@/lib/utils';
@@ -122,6 +122,7 @@ export default function TaxIncomeSurface({
   // Holiday Tracker State (Tax & Income tab)
   const [expandedMonthIdx, setExpandedMonthIdx] = useState<number | null>(null);
   const [inlineBookMonthIdx, setInlineBookMonthIdx] = useState<number | null>(null);
+  const [inlineType, setInlineType] = useState<LeaveType>('holiday');
   const [inlineOccasion, setInlineOccasion] = useState('');
   const [inlineStartDate, setInlineStartDate] = useState('');
   const [inlineEndDate, setInlineEndDate] = useState('');
@@ -140,15 +141,26 @@ export default function TaxIncomeSurface({
   };
 
   const bankHolidaysLeft = getBankHolidaysLeft();
+  const currentTaxYear = settings.taxYear || new Date().getFullYear();
 
   const getHolidaysUsedCount = () => {
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
-    return normalizedHolidays.reduce((sum, h) => sum + (h.count || 0), 0);
+    return normalizedHolidays
+      .filter(h => h.type !== 'sick' && new Date(h.startDate).getFullYear() === currentTaxYear)
+      .reduce((sum, h) => sum + (h.count || 0), 0);
+  };
+
+  const getSickDaysUsedCount = () => {
+    const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
+    return normalizedHolidays
+      .filter(h => h.type === 'sick' && new Date(h.startDate).getFullYear() === currentTaxYear)
+      .reduce((sum, h) => sum + (h.count || 0), 0);
   };
 
   const resetInlineHolidayForm = () => {
     setInlineBookMonthIdx(null);
     setEditingHolidayId(null);
+    setInlineType('holiday');
     setInlineOccasion('');
     setInlineStartDate('');
     setInlineEndDate('');
@@ -159,15 +171,17 @@ export default function TaxIncomeSurface({
     setExpandedMonthIdx(monthIdx);
     setInlineBookMonthIdx(monthIdx);
     setEditingHolidayId(holiday.id);
+    setInlineType(holiday.type || 'holiday');
     setInlineOccasion(holiday.occasion);
     setInlineStartDate(holiday.startDate);
     setInlineEndDate(holiday.endDate);
     setInlineCount(holiday.count.toString());
   };
 
-  const handleStartNewHoliday = (monthIdx: number) => {
+  const handleStartNewHoliday = (monthIdx: number, type: LeaveType = 'holiday') => {
     setInlineBookMonthIdx(monthIdx);
     setEditingHolidayId(null);
+    setInlineType(type);
     setInlineOccasion('');
     const year = settings.taxYear || new Date().getFullYear();
     const pad = (n: number) => n.toString().padStart(2, '0');
@@ -193,8 +207,9 @@ export default function TaxIncomeSurface({
       id: editingHolidayId || 'hol_' + Date.now(),
       startDate: inlineStartDate,
       endDate: inlineEndDate,
-      occasion: inlineOccasion.trim() || 'Leave',
-      count: countVal
+      occasion: inlineOccasion.trim() || (inlineType === 'sick' ? 'Sick Leave' : 'Leave'),
+      count: countVal,
+      type: inlineType
     };
 
     const updatedHolidaysList = editingHolidayId
@@ -210,9 +225,10 @@ export default function TaxIncomeSurface({
     saveDataToSupabase('settings', updatedSettings);
 
     resetInlineHolidayForm();
+    const isSick = inlineType === 'sick';
     toast({
-      title: editingHolidayId ? 'Leave updated' : 'Leave booked',
-      description: `${editingHolidayId ? 'Updated' : 'Successfully booked'} "${savedHoliday.occasion}".`
+      title: editingHolidayId ? (isSick ? 'Sick leave updated' : 'Leave updated') : (isSick ? 'Sick day recorded' : 'Leave booked'),
+      description: `${editingHolidayId ? 'Updated' : 'Successfully recorded'} "${savedHoliday.occasion}".`
     });
   };
 
@@ -230,13 +246,13 @@ export default function TaxIncomeSurface({
     if (editingHolidayId === holidayId) {
       resetInlineHolidayForm();
     }
-    toast({ title: 'Holiday deleted', description: 'Booked leave has been successfully removed.' });
+    toast({ title: 'Record deleted', description: 'Leave record has been successfully removed.' });
   };
 
   const handleDeleteHoliday = (holidayId: string) =>
     askDelete({
-      title: 'Delete holiday',
-      description: 'Delete this holiday? This action cannot be undone.',
+      title: 'Delete leave record',
+      description: 'Delete this leave entry? This action cannot be undone.',
       onConfirm: () => performDeleteHoliday(holidayId),
     });
 
@@ -548,7 +564,7 @@ export default function TaxIncomeSurface({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 border-b border-border/30 pb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-border/30 pb-4">
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
             <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Allowance</span>
             <span className="mt-1 block text-sm font-bold text-foreground tabular-nums">
@@ -569,6 +585,13 @@ export default function TaxIncomeSurface({
               {bankHolidaysLeft}/{settings.bankHolidays}
             </span>
           </div>
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-left font-mono">
+            <span className="block text-xs font-semibold uppercase tracking-wider text-amber-500/80">Sick Taken</span>
+            <span className="mt-1 block text-sm font-bold text-amber-500 tabular-nums">
+              {getSickDaysUsedCount()}
+              <span className="ml-1 text-xs font-normal text-amber-500/70">d</span>
+            </span>
+          </div>
         </div>
 
         {/* Holiday Calendar Legend */}
@@ -580,6 +603,10 @@ export default function TaxIncomeSurface({
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-positive/25 border border-positive/50" />
             <span className="text-positive font-semibold">Booked Leave</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-amber-500/25 border border-amber-500/50" />
+            <span className="text-amber-500 font-semibold">Sick Day</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-muted/40 border border-border/30" />
@@ -596,8 +623,8 @@ export default function TaxIncomeSurface({
               const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
               const bookedDaysForMonth = getBookedDaysForMonth(normalizedHolidays, settings.taxYear, monthIdx, bankHolidaysList);
 
-              // Sum up the working days (excl. weekends & bank holidays) booked in this specific month
-              const monthWorkingDaysBooked = bookedDaysForMonth.length;
+              const monthHolidaysBooked = bookedDaysForMonth.filter(b => b.type !== 'sick').length;
+              const monthSickDaysBooked = bookedDaysForMonth.filter(b => b.type === 'sick').length;
 
               const isExpanded = expandedMonthIdx === monthIdx;
 
@@ -627,9 +654,14 @@ export default function TaxIncomeSurface({
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-mono font-semibold text-foreground">{month}</span>
                     <div className="flex items-center gap-1.5 text-xs">
-                      {monthWorkingDaysBooked > 0 && (
+                      {monthHolidaysBooked > 0 && (
                         <span className="bg-positive/20 text-positive font-mono text-xs px-1.5 py-0.5 rounded-sm border border-positive/40 font-semibold">
-                          {monthWorkingDaysBooked}d booked
+                          {monthHolidaysBooked}d booked
+                        </span>
+                      )}
+                      {monthSickDaysBooked > 0 && (
+                        <span className="bg-amber-500/20 text-amber-500 font-mono text-xs px-1.5 py-0.5 rounded-sm border border-amber-500/40 font-semibold">
+                          {monthSickDaysBooked}d sick
                         </span>
                       )}
                       <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", isExpanded && "rotate-90")} />
@@ -654,8 +686,10 @@ export default function TaxIncomeSurface({
 
                       const isBankHoliday = bankHolidaysList.includes(dateStr);
 
-                      const isBookedHoliday = bookedDaysForMonth.some(b => b.day === dayNum);
-                      const bookedOccasion = bookedDaysForMonth.find(b => b.day === dayNum)?.occasion || 'Leave';
+                      const bookedDay = bookedDaysForMonth.find(b => b.day === dayNum);
+                      const isBookedSick = bookedDay?.type === 'sick';
+                      const isBookedHoliday = !!bookedDay && !isBookedSick;
+                      const bookedOccasion = bookedDay?.occasion || (isBookedSick ? 'Sick Leave' : 'Leave');
 
                       const dateObj = new Date(settings.taxYear, monthIdx, dayNum);
                       const dayOfWeek = dateObj.getDay();
@@ -663,7 +697,9 @@ export default function TaxIncomeSurface({
 
                       let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-xs font-mono flex items-center justify-center rounded-sm font-medium transition-colors ";
 
-                      if (isBookedHoliday) {
+                      if (isBookedSick) {
+                        cellClass += "text-amber-500 font-bold bg-amber-500/20 border border-amber-500/50";
+                      } else if (isBookedHoliday) {
                         cellClass += "text-positive font-bold bg-positive/20 border border-positive/50";
                       } else if (isBankHoliday) {
                         cellClass += "text-chart-5 font-bold bg-chart-5/20 border border-chart-5/50";
@@ -678,7 +714,9 @@ export default function TaxIncomeSurface({
                         if (isBankHoliday) {
                           list.push(`Bank Holiday: ${bankHolidaysMap[dateStr] || 'Public Holiday'}`);
                         }
-                        if (isBookedHoliday) {
+                        if (isBookedSick) {
+                          list.push(`Sick Day: ${bookedOccasion}`);
+                        } else if (isBookedHoliday) {
                           list.push(`Booked Leave: ${bookedOccasion}`);
                         }
                         if (isWeekend) {
@@ -704,6 +742,8 @@ export default function TaxIncomeSurface({
                                 let colorClass = "text-foreground/80";
                                 if (detail.startsWith('Bank Holiday')) {
                                   colorClass = "text-chart-5 font-semibold";
+                                } else if (detail.startsWith('Sick Day')) {
+                                  colorClass = "text-amber-500 font-semibold";
                                 } else if (detail.startsWith('Booked Leave')) {
                                   colorClass = "text-positive font-semibold";
                                 } else if (detail === 'Weekend') {
@@ -725,53 +765,67 @@ export default function TaxIncomeSurface({
                     <div className="border-t border-border/20 mt-3 pt-3 space-y-3">
                       {/* Overlapping Holidays List */}
                       <div className="space-y-1.5">
-                        <span className="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider block">Booked Leave</span>
+                        <span className="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider block">Booked Leave &amp; Sick Days</span>
                         {overlappingHolidays.length > 0 ? (
                           <div className="space-y-1.5">
-                            {overlappingHolidays.map(hol => (
-                              <div
-                                key={hol.id}
-                                onClick={(e) => e.stopPropagation()}
-                                className="bg-muted/30 border border-border/30 rounded-lg p-2.5 flex items-center justify-between text-xs"
-                              >
-                                <div className="space-y-0.5 min-w-0 pr-2 text-left">
-                                  <span className="font-semibold font-mono text-foreground block truncate">{hol.occasion}</span>
-                                  <span className="text-xs text-muted-foreground block font-mono">
-                                    {formatHolidayDates(hol.startDate, hol.endDate)} ({hol.count} {hol.count === 1 ? 'day' : 'days'})
-                                  </span>
+                            {overlappingHolidays.map(hol => {
+                              const isSick = hol.type === 'sick';
+                              return (
+                                <div
+                                  key={hol.id}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={cn(
+                                    "border rounded-lg p-2.5 flex items-center justify-between text-xs",
+                                    isSick ? "bg-amber-500/5 border-amber-500/30" : "bg-muted/30 border-border/30"
+                                  )}
+                                >
+                                  <div className="space-y-0.5 min-w-0 pr-2 text-left">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={cn(
+                                        "text-[10px] uppercase font-mono font-semibold px-1 py-0.5 rounded border",
+                                        isSick ? "bg-amber-500/15 text-amber-500 border-amber-500/30" : "bg-positive/15 text-positive border-positive/30"
+                                      )}>
+                                        {isSick ? '🤒 Sick Day' : '🌴 Holiday'}
+                                      </span>
+                                      <span className="font-semibold font-mono text-foreground truncate">{hol.occasion}</span>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground block font-mono">
+                                      {formatHolidayDates(hol.startDate, hol.endDate)} ({hol.count} {hol.count === 1 ? 'day' : 'days'})
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStartEditHoliday(hol, monthIdx);
+                                      }}
+                                      className="h-7 w-7 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground"
+                                      title={isSick ? "Edit sick day" : "Edit holiday"}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteHoliday(hol.id);
+                                      }}
+                                      className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                      title={isSick ? "Delete entry" : "Delete holiday"}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleStartEditHoliday(hol, monthIdx);
-                                    }}
-                                    className="h-7 w-7 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground"
-                                    title="Edit holiday"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteHoliday(hol.id);
-                                    }}
-                                    className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                                    title="Delete holiday"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-xs text-muted-foreground font-mono italic text-center py-1">
-                            No leave booked for this month.
+                            No leave or sick days recorded for this month.
                           </div>
                         )}
                       </div>
@@ -782,14 +836,45 @@ export default function TaxIncomeSurface({
                           onClick={(e) => e.stopPropagation()}
                           className="bg-muted/30 border border-border/40 rounded-lg p-3 space-y-3 text-left font-mono"
                         >
-                          <span className="text-xs font-semibold uppercase tracking-wider block text-foreground">
-                            {editingHolidayId ? 'Edit Leave' : 'Book New Leave'}
-                          </span>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-xs font-semibold uppercase tracking-wider block text-foreground">
+                              {editingHolidayId ? (inlineType === 'sick' ? 'Edit Sick Day' : 'Edit Leave') : (inlineType === 'sick' ? 'Record Sick Day' : 'Book New Leave')}
+                            </span>
+                            {/* Type selector toggle */}
+                            <div className="flex items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40">
+                              <button
+                                type="button"
+                                onClick={() => setInlineType('holiday')}
+                                className={cn(
+                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors",
+                                  inlineType === 'holiday'
+                                    ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                🌴 Holiday
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setInlineType('sick')}
+                                className={cn(
+                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors",
+                                  inlineType === 'sick'
+                                    ? "bg-amber-500 text-amber-950 font-semibold shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                🤒 Sick Day
+                              </button>
+                            </div>
+                          </div>
                           <div className="space-y-2">
                             <div className="space-y-0.5">
-                              <Label className="text-xs text-muted-foreground font-mono">Occasion</Label>
+                              <Label className="text-xs text-muted-foreground font-mono">
+                                {inlineType === 'sick' ? 'Reason / Notes' : 'Occasion'}
+                              </Label>
                               <Input
-                                placeholder="e.g. Skiing, Paris Trip"
+                                placeholder={inlineType === 'sick' ? 'e.g. Cold / Flu, Migraine, Doctor visit' : 'e.g. Skiing, Paris Trip'}
                                 value={inlineOccasion}
                                 onChange={(e) => setInlineOccasion(e.target.value)}
                                 className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
@@ -860,17 +945,30 @@ export default function TaxIncomeSurface({
                           </div>
                         </div>
                       ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStartNewHoliday(monthIdx);
-                          }}
-                          className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-border/40 hover:bg-muted/50 font-mono"
-                        >
-                          <Plus className="h-3 w-3" /> Book Leave
-                        </Button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartNewHoliday(monthIdx, 'holiday');
+                            }}
+                            className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-border/40 hover:bg-muted/50 font-mono"
+                          >
+                            <Plus className="h-3 w-3" /> Book Leave
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartNewHoliday(monthIdx, 'sick');
+                            }}
+                            className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-amber-500/30 text-amber-500 hover:bg-amber-500/10 font-mono"
+                          >
+                            <Plus className="h-3 w-3" /> Record Sick Day
+                          </Button>
+                        </div>
                       )}
                     </div>
                   )}

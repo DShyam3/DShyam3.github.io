@@ -1,5 +1,5 @@
-import type { DebtObservation, RatePeriod, StudentLoanPlanKey } from '@/lib/finance';
-export type { DebtObservation, RatePeriod };
+import type { DebtObservation, LeaveType, RatePeriod, StudentLoanPlanKey } from '@/lib/finance';
+export type { DebtObservation, LeaveType, RatePeriod };
 
 export interface FinanceSettings {
   grossSalary: number;
@@ -40,6 +40,7 @@ export interface UserHoliday {
   endDate: string; // YYYY-MM-DD
   occasion: string;
   count: number;
+  type?: LeaveType; // 'holiday' | 'sick'
 }
 
 export interface Goal {
