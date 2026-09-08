@@ -197,8 +197,22 @@ export interface TimeSpentInputs {
   friendsHoursPerWeek: number;
 }
 
+export interface TrueLayerConnection {
+  id: string;
+  provider_id: string;
+  provider_name: string;
+  provider_logo_uri: string | null;
+  consent_expires_at: string | null;
+  last_synced_at: string | null;
+  backfilled_from: string | null;
+  backfill_complete: boolean;
+  expires_at: string | null;
+  created_at?: string;
+}
+
 export interface TrueLayerStatus {
   connected: boolean;
+  connections?: TrueLayerConnection[];
   expires_at: string | null;
 }
 

@@ -704,7 +704,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 className="text-xs rounded-lg hover:bg-muted font-mono h-8 text-primary border-border/40 gap-1"
               >
                 <RefreshCw className={cn("h-3 w-3", isSyncingTrueLayer && "animate-spin")} />
-                {isSyncingTrueLayer ? "Syncing..." : "Sync Bank"}
+                {isSyncingTrueLayer ? "Syncing..." : ((trueLayerStatus?.connections?.length ?? 0) > 1 ? `Sync Banks (${trueLayerStatus!.connections!.length})` : "Sync Bank")}
               </Button>
             )}
             <Button

@@ -50,14 +50,18 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     return data;
   };
 
-  const checkTrueLayerConnection = async () => {
+  const checkTrueLayerConnection = useCallback(async () => {
     try {
       const data = await callTrueLayerEdgeFunction('check_connection');
       setTrueLayerStatus(data);
     } catch (err) {
       console.error('Error checking TrueLayer connection:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void checkTrueLayerConnection();
+  }, [checkTrueLayerConnection]);
 
   const connectTrueLayer = async () => {
     setIsConnectingTrueLayer(true);
@@ -87,12 +91,12 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     }
   };
 
-  const disconnectTrueLayer = async () => {
+  const disconnectTrueLayer = async (connectionId?: string) => {
     try {
-      await callTrueLayerEdgeFunction('disconnect');
+      await callTrueLayerEdgeFunction('disconnect', connectionId ? { connection_id: connectionId } : {});
       toast({
         title: "Disconnected",
-        description: "Bank connection removed successfully.",
+        description: connectionId ? "Bank connection removed." : "Bank connections removed.",
       });
       checkTrueLayerConnection();
     } catch (err) {
@@ -137,10 +141,22 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     try {
       const data = await callTrueLayerEdgeFunction('sync_transactions');
       
+      const banksDesc = data.connections_synced > 1
+        ? ` across ${data.connections_synced} banks`
+        : '';
       toast({
         title: "Sync Completed",
-        description: `Successfully synced ${data.synced_accounts} accounts and ${data.synced_transactions} transactions.`,
+        description: `Successfully synced ${data.synced_accounts} accounts and ${data.synced_transactions} transactions${banksDesc}.`,
       });
+
+      if (data.errors?.length) {
+        toast({
+          title: "Partial Sync Warnings",
+          description: data.errors.map((e: { provider: string; error: string }) => `${e.provider}: ${e.error}`).join('; '),
+          variant: "destructive",
+        });
+      }
+
       await onSynced();
       void refreshMerchantLogos();
     } catch (err) {

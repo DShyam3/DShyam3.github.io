@@ -915,9 +915,9 @@ upserted and never pruned.
 | Step | Work | Gated on |
 |---|---|---|
 | A | Scope deletes by profile, carry each row's own `profile_id`, upsert transactions instead of delete-then-insert | deploy only |
-| B | Provider identity, `consent_expires_at`, `last_synced_at`, `UNIQUE(profile_id, provider_id)`; connect inserts rather than replaces; sync loops connections | migration + deploy |
+| B | Provider identity, `consent_expires_at`, `last_synced_at`, `UNIQUE(profile_id, provider_id)`; connect inserts rather than replaces; sync loops connections | **DONE** (migration `20260908180000_truelayer_multiple_connections.sql` + edge function v19) |
 | C | Backfill history in date windows, resumable via `backfilled_from` because an edge function will time out before a multi-year walk finishes | **DONE** (pagination within a window still open) |
-| D | Daily `pg_cron` sync, as `watchlist-daily-sync` already does; surface consent expiry before it lapses | B |
+| D | Daily `pg_cron` sync, as `watchlist-daily-sync` already does; surface consent expiry before it lapses | B (now unblocked) |
 
 A is worth doing on its own and immediately: it is small, and it is the
 difference between syncing being safe and being destructive.
@@ -1147,6 +1147,17 @@ stepping forward from verified anchors rather than a floating mutable balance:
 - `rate_periods` and `final_payment` (PCP balloon) stored and wired into projection
 - `DebtReconcileDialog` with live drift preview, implied rate, and observation history
 
+**7.M step B multi-bank TrueLayer connections — done.** Multiple distinct banks
+can now be connected and synced simultaneously without overwriting:
+- `finance_truelayer_connection` gained `provider_id`, `provider_name`,
+  `provider_logo_uri`, `consent_expires_at`, `last_synced_at`, and
+  `UNIQUE(profile_id, provider_id)` (migration `20260908180000_truelayer_multiple_connections.sql`)
+- `truelayer-sync` discovers provider identity via `/data/v1/me`, upserts
+  per provider, supports individual disconnect, and loops all active
+  connections during `sync_transactions` (deployed to live Supabase)
+- `BankAccountsSection` renders individual bank cards with logos, consent
+  expiration timers, individual disconnect actions, and "+ Connect Another Bank"
+
 What 7.7 does **not** close by itself — and is still open below — is **7.8**
 (reconcile net pay against transactions).
 
@@ -1173,10 +1184,9 @@ is worth more right now than any item below.**
 | 1 | CSV / OFX statement import | The only route to bank history older than the API serves, and parsing is deterministic — no key, pure `lib/finance`, testable |
 | 2 | Extend `deriveAlerts` into the deterministic "what changed" summary | 7.Q: the standing summary must be reproducible, so it is rules over rows rather than generated prose |
 | 3 | 7.8: reconcile captured payslip net pay against transactions | 7.7 is done; this is the next step that makes the figures useful beyond display |
-| 4 | 7.M step B: provider identity, multiple banks | Migration + deploy, both available |
+| 4 | 7.M step D: nightly `pg_cron` sync | Unblocked by 7.M step B; `watchlist-daily-sync` is the working precedent |
 | 5 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
 | 6 | Pagination inside a fetch window | A dense 90-day window still truncates |
-| 7 | 7.M step D: nightly `pg_cron` sync | `watchlist-daily-sync` is the working precedent |
 
 ##### Needs a decision, not a keyboard
 

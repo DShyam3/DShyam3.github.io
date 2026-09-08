@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BankAccount } from '@/features/finance/finance-types';
 import { formatGBP, getAccountDefaultColor, getAccountDefaultEmoji } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
-import { Activity, ArrowUpRight, Clock, CreditCard, Edit2, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Activity, ArrowUpRight, Building2, Clock, CreditCard, Edit2, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
 
 export default function BankAccountsSection() {
   const { toast } = useToast();
@@ -176,93 +176,159 @@ export default function BankAccountsSection() {
       </div>
 
       {/* TrueLayer Integration Card */}
-      <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="space-y-1">
-            <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary shrink-0" /> TrueLayer Open Banking
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              Automatically sync card transactions and account balances in sandbox mode.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {trueLayerStatus?.connected ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-positive/10 text-positive border border-positive/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-positive animate-pulse" />
-                Connected
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/40">
-                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                Not Connected
-              </span>
-            )}
-          </div>
-        </div>
+      {(() => {
+        const connections = trueLayerStatus?.connections ?? [];
+        const hasConnections = trueLayerStatus?.connected && connections.length > 0;
 
-        <div className="border-t border-border/30 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="text-xs space-y-1.5 max-w-xl">
-            {trueLayerStatus?.connected ? (
-              <>
-                <p className="text-muted-foreground">
-                  Your bank is securely linked. Live synchronization is active and will pull account details and transaction history.
+        return (
+          <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="space-y-0.5">
+                <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary shrink-0" /> TrueLayer Open Banking
+                </h4>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Link multiple UK bank accounts &amp; credit cards to automatically sync balances and transactions.
                 </p>
-                {trueLayerStatus.expires_at && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
-                    <Clock className="h-3 w-3" />
-                    <span>Consent expires on: {new Date(trueLayerStatus.expires_at).toLocaleString()}</span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-muted-foreground leading-relaxed">
-                Securely connect your UK/EU mock accounts to automatically fetch balances and recent card statements. No financial data is ever shared or exposed publicly.
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {trueLayerStatus?.connected ? (
-              <>
-                <Button
-                  onClick={syncTrueLayer}
-                  disabled={isSyncingTrueLayer}
-                  className="rounded-xl bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-9 px-4"
-                >
-                  <RefreshCw className={cn("h-3.5 w-3.5", isSyncingTrueLayer && "animate-spin")} />
-                  {isSyncingTrueLayer ? "Syncing..." : "Sync Now"}
-                </Button>
-                <Button
-                  onClick={disconnectTrueLayer}
-                  variant="destructive"
-                  className="rounded-xl gap-1.5 font-semibold text-xs h-9 px-4 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-white"
-                >
-                  Disconnect
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={connectTrueLayer}
-                disabled={isConnectingTrueLayer}
-                className="rounded-xl bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-9 px-4"
-              >
-                {isConnectingTrueLayer ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Connecting...
-                  </>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                {hasConnections ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-positive/10 text-positive border border-positive/20 font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-positive animate-pulse" />
+                    {connections.length} {connections.length === 1 ? 'Bank' : 'Banks'} Connected
+                  </span>
                 ) : (
-                  <>
-                    Connect Bank Account
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/40 font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                    Not Connected
+                  </span>
                 )}
-              </Button>
+              </div>
+            </div>
+
+            {hasConnections ? (
+              <div className="space-y-3 pt-1">
+                <div className="divide-y divide-border/20 rounded-lg border border-border/40 bg-background/50 overflow-hidden">
+                  {connections.map(conn => {
+                    const expiry = conn.consent_expires_at || conn.expires_at;
+                    const daysLeft = expiry
+                      ? Math.max(0, Math.ceil((new Date(expiry).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+                      : null;
+                    const isExpiringSoon = daysLeft !== null && daysLeft <= 14;
+
+                    return (
+                      <div key={conn.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-3 hover:bg-muted/10 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {conn.provider_logo_uri ? (
+                            <img
+                              src={conn.provider_logo_uri}
+                              alt={conn.provider_name}
+                              className="w-8 h-8 rounded-lg object-contain bg-card border border-border/40 p-1 shrink-0"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                              <Building2 className="w-4 h-4 text-primary" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-xs text-foreground truncate">{conn.provider_name}</span>
+                              {conn.backfill_complete && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-positive/10 text-positive border border-positive/20 font-mono">
+                                  Backfilled
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground font-mono mt-0.5">
+                              {conn.last_synced_at ? (
+                                <span>Synced: {new Date(conn.last_synced_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                              ) : (
+                                <span>Awaiting sync</span>
+                              )}
+                              {daysLeft !== null && (
+                                <span className={cn("inline-flex items-center gap-1", isExpiringSoon ? "text-amber-500 font-semibold" : "text-muted-foreground")}>
+                                  <Clock className="w-3 h-3" />
+                                  {daysLeft === 0 ? "Consent expired" : `Consent: ${daysLeft}d left`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => askDelete({
+                              name: conn.provider_name,
+                              onConfirm: () => disconnectTrueLayer(conn.id),
+                            })}
+                            className="h-7 px-2 text-xs font-mono text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Disconnect
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="border-t border-border/30 pt-3 flex flex-wrap items-center justify-between gap-3">
+                  <Button
+                    onClick={connectTrueLayer}
+                    disabled={isConnectingTrueLayer}
+                    variant="outline"
+                    className="rounded-lg gap-1.5 text-xs h-8 px-3 font-mono border-border/60 hover:border-border"
+                  >
+                    {isConnectingTrueLayer ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}
+                    Connect Another Bank
+                  </Button>
+
+                  <Button
+                    onClick={syncTrueLayer}
+                    disabled={isSyncingTrueLayer}
+                    className="rounded-lg bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-8 px-4 font-mono"
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5", isSyncingTrueLayer && "animate-spin")} />
+                    {isSyncingTrueLayer ? "Syncing..." : "Sync All Banks"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="border-t border-border/30 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <p className="text-xs text-muted-foreground font-mono max-w-xl leading-relaxed">
+                  Securely link your UK banks (e.g. Barclays, Monzo, Lloyds, Revolut) to automatically fetch balances and statements. You can link multiple banks side-by-side.
+                </p>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Button
+                    onClick={connectTrueLayer}
+                    disabled={isConnectingTrueLayer}
+                    className="rounded-lg bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-8 px-4 font-mono"
+                  >
+                    {isConnectingTrueLayer ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        Connect Bank Account
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* DIALOG: Add Account */}
       <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>

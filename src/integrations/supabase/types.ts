@@ -1400,10 +1400,15 @@ export type Database = {
           access_token: string | null
           backfill_complete: boolean
           backfilled_from: string | null
+          consent_expires_at: string | null
           created_at: string
           expires_at: string | null
           id: string
+          last_synced_at: string | null
           profile_id: string
+          provider_id: string
+          provider_logo_uri: string | null
+          provider_name: string
           refresh_token: string | null
           updated_at: string
         }
@@ -1411,10 +1416,15 @@ export type Database = {
           access_token?: string | null
           backfill_complete?: boolean
           backfilled_from?: string | null
+          consent_expires_at?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
+          last_synced_at?: string | null
           profile_id: string
+          provider_id: string
+          provider_logo_uri?: string | null
+          provider_name?: string
           refresh_token?: string | null
           updated_at?: string
         }
@@ -1422,10 +1432,15 @@ export type Database = {
           access_token?: string | null
           backfill_complete?: boolean
           backfilled_from?: string | null
+          consent_expires_at?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
+          last_synced_at?: string | null
           profile_id?: string
+          provider_id?: string
+          provider_logo_uri?: string | null
+          provider_name?: string
           refresh_token?: string | null
           updated_at?: string
         }
