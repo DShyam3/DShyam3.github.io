@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { TrueLayerStatus } from '@/features/finance/finance-types';
+import { rememberTrueLayerOAuthState } from './truelayer-oauth';
 
 export function useTrueLayer(onSynced: () => void | Promise<void>) {
   const { toast } = useToast();
@@ -66,15 +67,13 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
   const connectTrueLayer = async () => {
     setIsConnectingTrueLayer(true);
     try {
-      const state = Math.random().toString(36).substring(2, 15);
       const redirectUri = `${window.location.origin}/finance`;
-      
       const data = await callTrueLayerEdgeFunction('get_auth_url', {
         redirect_uri: redirectUri,
-        state: state
       });
       
-      if (data?.url) {
+      if (typeof data?.url === 'string' && typeof data?.state === 'string') {
+        rememberTrueLayerOAuthState(window.sessionStorage, data.state);
         window.location.href = data.url;
       } else {
         throw new Error('Failed to get auth URL');

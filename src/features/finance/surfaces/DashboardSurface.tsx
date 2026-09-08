@@ -836,15 +836,15 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         </CardHeader>
         <CardContent className="p-0 pt-4 space-y-4 font-mono">
           {budgetCategories
-            .map(cat => {
+            .map((cat, idx) => {
               const budget = cat.budgeted !== undefined ? cat.budgeted : cat.items.reduce((s, i) => s + i.budgeted, 0);
               const spent = cat.items.reduce((s, i) => s + getBudgetItemSpent(i, bankAccounts, recurrings), 0);
-              return { name: cat.name, emoji: cat.emoji || '📂', budget, spent };
+              return { id: cat.id || `${cat.name}-${idx}`, name: cat.name, emoji: cat.emoji || '📂', budget, spent };
             })
             .sort((a, b) => b.spent - a.spent)
             .slice(0, 3)
             .map(cat => (
-              <div key={cat.name} className="space-y-1 text-xs">
+              <div key={cat.id} className="space-y-1 text-xs">
                 <div className="flex justify-between gap-2 font-medium min-w-0 items-center">
                   <span className="truncate flex items-center gap-1.5 text-foreground font-semibold">
                     <span className="text-base leading-none shrink-0">{cat.emoji}</span>

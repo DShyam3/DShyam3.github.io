@@ -49,14 +49,15 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 /**
  * Best available caller identity. Supabase sits in front of this function and
- * appends the real client IP to x-forwarded-for, so the first entry is the
- * client's own claim and can be spoofed. Acceptable here: spoofing costs an
- * attacker nothing but gains them nothing a pool of real IPs would not, and
- * no decision more serious than "wait a minute" hangs on it.
+ * appends the real client IP to x-forwarded-for. Leading entries can be
+ * supplied by the caller, so use the proxy-appended final entry rather than a
+ * spoofable first value. This limiter only protects shared API quota; it is
+ * not an authentication or authorization boundary.
  */
 function callerKey(req: Request): string {
     const forwarded = req.headers.get('x-forwarded-for') || ''
-    return forwarded.split(',')[0].trim() || 'unknown'
+    const hops = forwarded.split(',').map((value) => value.trim()).filter(Boolean)
+    return hops[hops.length - 1] || 'unknown'
 }
 
 /**

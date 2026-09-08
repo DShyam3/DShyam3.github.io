@@ -1106,8 +1106,8 @@ Deno is the runtime these actually run on, so it is the right checker:
 deno check supabase/functions/**/*.ts
 ```
 
-Worth a `typecheck:functions` script and a line in CLAUDE.md's shipping
-checklist, so the next one is caught before deploy rather than by chance.
+`typecheck:functions` now runs in both CI and the production workflow, so an
+Edge Function type error is caught before merge rather than by chance.
 
 
 #### 7.O Where things stand, and what happens next
@@ -1263,7 +1263,7 @@ of done.
 
 | Condition | State |
 |---|---|
-| `npm run lint` 0/0, `typecheck`, `build` | met — and 372 tests |
+| `npm run lint` 0/0, `typecheck`, `build` | met — and 379 tests |
 | `lib/finance/` pure, no React or Supabase, tested | met |
 | Finance is five routed surfaces, not ten `localStorage` tabs | met |
 | No `localStorage` key holds financial truth | met |
@@ -1286,7 +1286,8 @@ All conditions are met.
 ## Appendix — Verification commands
 
 ```bash
-npm run typecheck     # not currently a CI gate; run by hand
+npm run typecheck     # application TypeScript check (CI gate)
+npm run typecheck:functions # Edge Function Deno check (CI gate)
 npm run lint
 npm run build
 ```
@@ -1299,4 +1300,3 @@ get_advisors(project_id, type: "performance")
 ```
 
 Expected steady state after Phase 1: security clean except the accepted `is_admin` RPC lints (S-4); performance clean.
-

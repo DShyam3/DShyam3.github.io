@@ -298,14 +298,30 @@ ALTER TABLE "public"."finance_transactions" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_connection" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "profile_id" "uuid" NOT NULL,
+    "provider_id" "text" NOT NULL,
+    "provider_name" "text" DEFAULT 'Bank'::"text" NOT NULL,
+    "provider_logo_uri" "text",
     "access_token" "text",
     "refresh_token" "text",
     "expires_at" timestamp with time zone,
+    "consent_expires_at" timestamp with time zone,
+    "last_synced_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 
 ALTER TABLE "public"."finance_truelayer_connection" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_oauth_states" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "state_hash" "text" NOT NULL,
+    "redirect_uri" "text" NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_truelayer_oauth_states" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."finance_user_holidays" (
     "id" "text" NOT NULL,
@@ -417,6 +433,15 @@ ALTER TABLE ONLY "public"."finance_transactions"
 ALTER TABLE ONLY "public"."finance_truelayer_connection"
     ADD CONSTRAINT "finance_truelayer_connection_pkey" PRIMARY KEY ("id");
 
+ALTER TABLE ONLY "public"."finance_truelayer_connection"
+    ADD CONSTRAINT "finance_truelayer_connection_profile_provider_unique" UNIQUE ("profile_id", "provider_id");
+
+ALTER TABLE ONLY "public"."finance_truelayer_oauth_states"
+    ADD CONSTRAINT "finance_truelayer_oauth_states_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_truelayer_oauth_states"
+    ADD CONSTRAINT "finance_truelayer_oauth_states_state_hash_key" UNIQUE ("state_hash");
+
 ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_pkey" PRIMARY KEY ("id");
 
@@ -436,6 +461,8 @@ ALTER TABLE ONLY "public"."finance_transactions"
     ADD CONSTRAINT "finance_transactions_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."finance_bank_accounts"("id") ON DELETE SET NULL;
 
 CREATE POLICY "Admin All Access" ON "public"."finance_truelayer_connection" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+
+CREATE POLICY "Admin Only" ON "public"."finance_truelayer_oauth_states" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
 
 CREATE POLICY "Admin Only" ON "public"."finance_bank_accounts" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
 
@@ -512,6 +539,8 @@ ALTER TABLE "public"."finance_tax_configs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_transactions" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."finance_truelayer_connection" ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE "public"."finance_truelayer_oauth_states" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."finance_user_holidays" ENABLE ROW LEVEL SECURITY;
 
@@ -629,6 +658,10 @@ GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "service_role";
 
+GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "service_role";
+
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_user_holidays" TO "anon";
 
 GRANT ALL ON TABLE "public"."finance_user_holidays" TO "authenticated";
@@ -667,6 +700,8 @@ REVOKE SELECT ON TABLE
 FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_debts" FROM "anon";
+
+REVOKE ALL ON TABLE "public"."finance_truelayer_oauth_states" FROM "anon";
 
 -- Phase 7.1 -- profiles. See REHAUL_PLAN.md 7.B.
 
@@ -778,6 +813,11 @@ CREATE INDEX "idx_finance_user_holidays_profile_id" ON "public"."finance_user_ho
 ALTER TABLE ONLY "public"."finance_truelayer_connection"
     ADD CONSTRAINT "finance_truelayer_connection_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 CREATE INDEX "idx_finance_truelayer_connection_profile_id" ON "public"."finance_truelayer_connection" ("profile_id");
+CREATE INDEX "idx_finance_truelayer_connection_profile_provider" ON "public"."finance_truelayer_connection" ("profile_id", "provider_id");
+
+ALTER TABLE ONLY "public"."finance_truelayer_oauth_states"
+    ADD CONSTRAINT "finance_truelayer_oauth_states_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+CREATE INDEX "idx_finance_truelayer_oauth_states_profile_expires_at" ON "public"."finance_truelayer_oauth_states" ("profile_id", "expires_at");
 
 ALTER TABLE "public"."finance_profiles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_profile_transfers" ENABLE ROW LEVEL SECURITY;

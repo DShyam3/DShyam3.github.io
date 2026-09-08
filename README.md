@@ -33,11 +33,14 @@ npm run dev        # http://localhost:8080
 
 # Other useful scripts
 npm run build       # production build
-npm run lint         # eslint (warnings allowed, errors fail the build)
-npm run typecheck    # tsc --noEmit -- not yet a CI gate, run it by hand
+npm run lint         # eslint -- 0 errors and 0 warnings required
+npm run typecheck    # application TypeScript check (runs in CI)
+npm run typecheck:functions # Deno check for Supabase Edge Functions (runs in CI)
 ```
 
 ## 🔐 Environment Setup (local `.env`)
+
+Copy [`.env.example`](.env.example) to `.env` and replace only its placeholder values. Do not add server secrets to this file or give them a `VITE_` prefix.
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY` — the anon key. Meant to be public; RLS is what actually protects data, not this key.
@@ -71,7 +74,8 @@ Table-level `GRANT`s are a second, independent layer. Supabase's defaults hand
 `20260905160000` revokes those on the content, watchlist and travel tables and
 grants back only `SELECT`. This matters because `TRUNCATE` is **not** filtered
 by RLS — Postgres applies row-level security to `SELECT`/`INSERT`/`UPDATE`/
-`DELETE` only. The `finance_*` tables still carry the permissive defaults.
+`DELETE` only. Finance migrations also revoke every `anon` grant from each
+`finance_*` table, including the token and OAuth-state tables.
 
 ### Edge Functions (`supabase/functions/`)
 
@@ -80,7 +84,7 @@ Server-side Deno functions, deployed independently of the frontend — **pushing
 | Function | Purpose | Required secrets | Callable by |
 |---|---|---|---|
 | `tmdb-proxy` | Proxies TMDB API calls so the TMDB key never reaches the browser. Endpoint allow-listed (only the shapes the app actually uses) to stop it being used as a free generic proxy. | `TMDB_API_KEY` | Public (needed for anonymous visitors browsing the Watchlist page), origin-restricted CORS |
-| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `ADMIN_EMAIL` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin only (checks caller's JWT email) |
+| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored, tab-bound, exact-redirect allow-listed and consumed before token exchange. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `ADMIN_EMAIL` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin only (checks caller's JWT email) |
 | `watchlist-cron-sync` | Server-side port of the Watchlist page's TV/movie sync logic (see below). Refreshes status, episodes, seasons, streaming platform from TMDB for every watchlist item. | `TMDB_API_KEY` (+ auto-injected Supabase vars) | Service role key only (called by pg_cron, not public) |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically into every edge function's environment by the platform — never set those manually. Everything else needs:
@@ -126,9 +130,9 @@ files.
 
 ## 📦 Deployment
 
-**Frontend** (GitHub Pages): pushing to `main` triggers `.github/workflows/deploy.yml` — installs, lints, builds, deploys `dist/` to Pages. Required repo secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_TMDB_IMAGE_BASE_URL`, `VITE_ADMIN_EMAIL`.
+**Frontend** (GitHub Pages): pushing to `main` triggers `.github/workflows/deploy.yml` — installs, runs lint plus application and Edge Function typechecks, tests, builds, and deploys `dist/` to Pages. Required repo secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_TMDB_IMAGE_BASE_URL`, `VITE_ADMIN_EMAIL`.
 
-**Edge functions**: not part of CI. Deploy manually (`supabase functions deploy <name>`) whenever anything under `supabase/functions/` changes.
+**Edge functions**: CI typechecks them, but deployment remains manual. Deploy `truelayer-sync` with the OAuth-state migration as one change (`supabase db push` followed by `supabase functions deploy truelayer-sync`).
 
 **Database changes**: not part of CI either. Run `supabase db push` after adding a migration to `supabase/migrations/`.
 

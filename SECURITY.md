@@ -70,7 +70,7 @@ The public scan only reads response headers and the served HTML. The real
 attack surface of this site is Supabase, and it was audited separately
 (2026-09-04):
 
-- **RLS**: enabled on all 39 public tables. Every `finance_*` table, including
+- **RLS**: enabled on all 40 public tables. Every `finance_*` table, including
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
   Content tables are anonymous-read, `is_admin()`-write.
 - **Edge functions**: `truelayer-sync` and `merchant-logo-cache` verify the JWT
@@ -78,6 +78,11 @@ attack surface of this site is Supabase, and it was audited separately
   endpoint allowlist so it cannot be used as a generic TMDB proxy;
   `watchlist-cron-sync` requires the service role key. All four use an origin
   allowlist for CORS.
+- **TrueLayer OAuth (deploy migration and function together)**: the callback
+  state is generated with 256 bits of server-side randomness, stored only as a
+  SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI
+  and finance profile. The browser verifies its tab-scoped copy first; the
+  function atomically consumes the matching state before exchanging a code.
 - **Outbound fetches (SSRF)**: `merchant-logo-cache` is the only function that
   requests anything from a host we do not run. It holds the host list as a
   constant; no URL, host or path is ever read from the request body, so it
@@ -101,10 +106,10 @@ attack surface of this site is Supabase, and it was audited separately
 - **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the
-  content, watchlist and travel tables and grants back only `SELECT`. The
-  `finance_*` tables still hold the permissive defaults; they are unreachable
-  through PostgREST today, but the grant is a latent privilege and should be
-  revoked with the finance work.
+  content, watchlist and travel tables and grants back only `SELECT`. Finance
+  migrations revoke every `anon` grant from `finance_*` tables; the OAuth
+  state table is deliberately included despite being service-role-only in
+  normal operation.
 - **Auth**: public email signup is enabled on the project. Since every policy
   now checks the admin email, a self-registered user gets nothing, but signup
   should be disabled in the dashboard (Authentication → Sign In / Providers)

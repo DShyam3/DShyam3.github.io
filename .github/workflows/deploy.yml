@@ -47,6 +47,11 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.7.5
+
       - name: Install dependencies
         # `ci`, not `install`: it installs exactly what package-lock.json says
         # and fails if the lock and manifest disagree, so a deploy cannot
@@ -79,6 +84,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Typecheck Edge Functions
+        run: npm run typecheck:functions
 
       - name: Test
         run: npm test

@@ -1,4 +1,4 @@
-# The same four gates the deploy runs, but before the code reaches main.
+# The same five gates the deploy runs, but before the code reaches main.
 #
 # deploy.yml only fires on a push to main, so until now lint, typecheck, test
 # and build first ran once the commit was already the default branch: a
@@ -43,6 +43,11 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.7.5
+
       - name: Install dependencies
         run: npm ci
 
@@ -51,6 +56,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Typecheck Edge Functions
+        run: npm run typecheck:functions
 
       - name: Test
         run: npm test

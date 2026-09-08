@@ -11,9 +11,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Default admin email to use with the password.
-// The user should create this user in Supabase Auth if not already created.
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@dhyanshyam.com';
+// This fallback must match the literal checked by public.is_admin(). The env
+// value controls the UI only; the database remains the authorization boundary.
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'd.shyam1256@gmail.com';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAdmin, setIsAdmin] = useState(false);

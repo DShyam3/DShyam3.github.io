@@ -28,6 +28,7 @@ const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
 const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
 const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
+import { consumeTrueLayerOAuthState } from './truelayer-oauth';
 import { useFinanceTotals } from './useFinanceTotals';
 import { SurfaceHero } from './components/SurfaceHero';
 import { ProfileAvatar } from './components/ProfileAvatar';
@@ -161,15 +162,20 @@ function FinanceView() {
   // Fetch all finance keys on mount
   const callbackProcessed = useRef(false);
 
-  const handleTrueLayerCallback = async (code: string) => {
+  const handleTrueLayerCallback = async (code: string, state: string | null) => {
     if (callbackProcessed.current) return;
     callbackProcessed.current = true;
     setIsConnectingTrueLayer(true);
     try {
+      if (!consumeTrueLayerOAuthState(window.sessionStorage, state)) {
+        throw new Error('This bank-link request has expired or did not match. Please start again.');
+      }
+
       const redirectUri = `${window.location.origin}/finance`;
       await callTrueLayerEdgeFunction('exchange_code', {
         code: code,
-        redirect_uri: redirectUri
+        redirect_uri: redirectUri,
+        state,
       });
 
       toast({
@@ -198,7 +204,7 @@ function FinanceView() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     if (code) {
-      handleTrueLayerCallback(code);
+      handleTrueLayerCallback(code, urlParams.get('state'));
     } else {
       checkTrueLayerConnection();
     }

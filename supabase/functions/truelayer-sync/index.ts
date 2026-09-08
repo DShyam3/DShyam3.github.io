@@ -4,8 +4,41 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 const ALLOWED_ORIGINS = new Set([
   'https://dshyam3.github.io',
   'http://localhost:8080',
+  'http://localhost:8081',
+  'http://localhost:8082',
   'http://localhost:5173',
 ])
+
+// A callback is safe only when its destination is an exact, registered app
+// URL. This list mirrors the browser origins but deliberately includes the
+// `/finance` callback path as part of the allowlist.
+const ALLOWED_REDIRECT_URIS = new Set([
+  'https://dshyam3.github.io/finance',
+  'http://localhost:8080/finance',
+  'http://localhost:8081/finance',
+  'http://localhost:8082/finance',
+  'http://localhost:5173/finance',
+])
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+
+function isAllowedRedirectUri(value: unknown): value is string {
+  return typeof value === 'string' && ALLOWED_REDIRECT_URIS.has(value)
+}
+
+function createOAuthState(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('')
+}
+
+function isValidOAuthState(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+}
+
+async function hashOAuthState(state: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(state))
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
 
 function buildCorsHeaders(req: Request) {
   const origin = req.headers.get('Origin') || ''
@@ -37,25 +70,31 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
-    // Verify user is authenticated and is the admin
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
-
-    const { data: { user }, error: userError } = await userClient.auth.getUser()
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: `Unauthorized: ${userError?.message || 'Invalid user'}` }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Verify caller is either internal service role (e.g. pg_cron) or authenticated admin
+    const isServiceRole = authHeader === `Bearer ${supabaseServiceKey}`
+    if (!isServiceRole) {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
       })
-    }
 
-    const adminEmail = Deno.env.get('ADMIN_EMAIL') || 'd.shyam1256@gmail.com'
-    if (user.email !== adminEmail) {
-      return new Response(JSON.stringify({ error: 'Forbidden: Access restricted to administrator' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      const { data: { user }, error: userError } = await userClient.auth.getUser()
+      if (userError || !user) {
+        if (userError) {
+          console.warn('TrueLayer request authentication failed:', userError)
+        }
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const adminEmail = Deno.env.get('ADMIN_EMAIL') || 'd.shyam1256@gmail.com'
+      if (user.email !== adminEmail) {
+        return new Response(JSON.stringify({ error: 'Forbidden: Access restricted to administrator' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     // Initialize Supabase Client with service key to read/write credentials
@@ -79,7 +118,8 @@ serve(async (req) => {
     let truelayerClientSecret = Deno.env.get('TRUELAYER_CLIENT_SECRET')
 
     if (!truelayerClientId || !truelayerClientSecret) {
-      return new Response(JSON.stringify({ error: 'Configuration error: TrueLayer credentials not set on server' }), {
+      console.error('TrueLayer credentials are not configured')
+      return new Response(JSON.stringify({ error: 'Service configuration error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -95,19 +135,58 @@ serve(async (req) => {
 
     // ACTION: get_auth_url
     if (action === 'get_auth_url') {
-      const { redirect_uri, state } = body
-      if (!redirect_uri) {
-        return new Response(JSON.stringify({ error: 'redirect_uri is required' }), {
+      const redirectUri = body.redirect_uri
+      if (!isAllowedRedirectUri(redirectUri)) {
+        return new Response(JSON.stringify({ error: 'Invalid redirect URI' }), {
           status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (!selfProfileId) {
+        return new Response(JSON.stringify({ error: 'No finance profile found; cannot start the connection.' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Store only a hash. The raw, 256-bit value is returned once to the
+      // browser, which keeps it in sessionStorage until the provider returns.
+      const state = createOAuthState()
+      const stateHash = await hashOAuthState(state)
+      const now = new Date()
+      const expiresAt = new Date(now.getTime() + OAUTH_STATE_TTL_MS).toISOString()
+
+      const { error: cleanupError } = await supabaseAdmin
+        .from('finance_truelayer_oauth_states')
+        .delete()
+        .eq('profile_id', selfProfileId)
+        .lt('expires_at', now.toISOString())
+      if (cleanupError) {
+        console.warn('Failed to remove expired TrueLayer OAuth states:', cleanupError)
+      }
+
+      const { error: stateError } = await supabaseAdmin
+        .from('finance_truelayer_oauth_states')
+        .insert({
+          profile_id: selfProfileId,
+          state_hash: stateHash,
+          redirect_uri: redirectUri,
+          expires_at: expiresAt,
+        })
+      if (stateError) {
+        console.error('Failed to store TrueLayer OAuth state:', stateError)
+        return new Response(JSON.stringify({ error: 'Could not start bank connection' }), {
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
       const scopes = 'info accounts balance transactions cards offline_access'
       const providersParam = isSandbox ? '&providers=uk-cs-mock%20uk-ob-all' : ''
-      const authUrl = `${authBaseUrl}/?response_type=code&client_id=${truelayerClientId}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${encodeURIComponent(scopes)}${providersParam}&state=${state || ''}`
+      const authUrl = `${authBaseUrl}/?response_type=code&client_id=${truelayerClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}${providersParam}&state=${encodeURIComponent(state)}`
 
-      return new Response(JSON.stringify({ url: authUrl }), {
+      return new Response(JSON.stringify({ url: authUrl, state }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -164,7 +243,8 @@ serve(async (req) => {
 
       const { error: delError } = await query
       if (delError) {
-        return new Response(JSON.stringify({ error: `Failed to disconnect: ${delError.message}` }), {
+        console.error('Failed to disconnect TrueLayer connection:', delError)
+        return new Response(JSON.stringify({ error: 'Could not disconnect bank connection' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -184,9 +264,31 @@ serve(async (req) => {
         })
       }
 
-      const { code, redirect_uri } = body
-      if (!code || !redirect_uri) {
-        return new Response(JSON.stringify({ error: 'code and redirect_uri are required' }), {
+      const { code, state } = body
+      const redirectUri = body.redirect_uri
+      if (typeof code !== 'string' || !code || !isAllowedRedirectUri(redirectUri) || !isValidOAuthState(state)) {
+        return new Response(JSON.stringify({ error: 'Invalid authorization callback' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Deleting the matching row before calling TrueLayer makes state
+      // single-use, even when a callback URL is replayed concurrently.
+      const { data: consumedState, error: stateError } = await supabaseAdmin
+        .from('finance_truelayer_oauth_states')
+        .delete()
+        .eq('profile_id', selfProfileId)
+        .eq('state_hash', await hashOAuthState(state))
+        .eq('redirect_uri', redirectUri)
+        .gt('expires_at', new Date().toISOString())
+        .select('id')
+        .maybeSingle()
+      if (stateError || !consumedState) {
+        if (stateError) {
+          console.error('Failed to consume TrueLayer OAuth state:', stateError)
+        }
+        return new Response(JSON.stringify({ error: 'Invalid or expired authorization state' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -200,14 +302,15 @@ serve(async (req) => {
           grant_type: 'authorization_code',
           client_id: truelayerClientId,
           client_secret: truelayerClientSecret,
-          redirect_uri: redirect_uri,
+          redirect_uri: redirectUri,
           code: code,
         }),
       })
 
       if (!tokenResponse.ok) {
         const errText = await tokenResponse.text()
-        return new Response(JSON.stringify({ error: `TrueLayer token exchange failed: ${errText}` }), {
+        console.error('TrueLayer token exchange failed:', tokenResponse.status, errText)
+        return new Response(JSON.stringify({ error: 'TrueLayer token exchange failed' }), {
           status: tokenResponse.status,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -287,7 +390,8 @@ serve(async (req) => {
         })
 
       if (upsertError) {
-        return new Response(JSON.stringify({ error: `Failed to store tokens: ${upsertError.message}` }), {
+        console.error('Failed to store TrueLayer tokens:', upsertError)
+        return new Response(JSON.stringify({ error: 'Could not store bank connection' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -456,7 +560,7 @@ serve(async (req) => {
             if (!refreshResponse.ok) {
               const errText = await refreshResponse.text()
               console.error(`Failed to refresh token for ${connection.provider_name}: ${errText}`)
-              connectionErrors.push({ provider: connection.provider_name, error: `Token refresh failed: ${errText}` })
+              connectionErrors.push({ provider: connection.provider_name, error: 'Token refresh failed' })
               continue
             }
 
@@ -652,7 +756,7 @@ serve(async (req) => {
           console.error(`Error syncing provider ${connection.provider_name}:`, connLoopErr)
           connectionErrors.push({
             provider: connection.provider_name,
-            error: connLoopErr instanceof Error ? connLoopErr.message : 'Sync failed',
+            error: 'Sync failed',
           })
         }
       }
@@ -670,7 +774,8 @@ serve(async (req) => {
           .from('finance_bank_accounts')
           .upsert(batch, { onConflict: 'id' })
         if (error) {
-          return new Response(JSON.stringify({ error: `Failed to write accounts: ${error.message}` }), {
+          console.error('Failed to write synced accounts:', error)
+          return new Response(JSON.stringify({ error: 'Could not write synced accounts' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
@@ -702,11 +807,19 @@ serve(async (req) => {
           .from('finance_transactions')
           .upsert(batch, { onConflict: 'id' })
         if (error) {
-          return new Response(JSON.stringify({ error: `Failed to write transactions: ${error.message}` }), {
+          console.error('Failed to write synced transactions:', error)
+          return new Response(JSON.stringify({ error: 'Could not write synced transactions' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
+      }
+
+      // Update daily net worth & balance snapshots with freshly synced figures
+      try {
+        await supabaseAdmin.rpc('capture_finance_snapshots')
+      } catch (snapErr) {
+        console.warn('Failed to capture finance snapshots after sync:', snapErr)
       }
 
       return new Response(JSON.stringify({
@@ -720,7 +833,7 @@ serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ error: `Invalid action: ${action}` }), {
+    return new Response(JSON.stringify({ error: 'Invalid action' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

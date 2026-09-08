@@ -8,7 +8,7 @@
     "build": "vite build",
     "postbuild": "cp dist/index.html dist/404.html",
     "build:dev": "vite build --mode development",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "ship-check": "npx should-i-ship@latest scan",
     "preview": "vite preview",
