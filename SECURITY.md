@@ -73,11 +73,12 @@ attack surface of this site is Supabase, and it was audited separately
 - **RLS**: enabled on all 40 public tables. Every `finance_*` table, including
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
   Content tables are anonymous-read, `is_admin()`-write.
-- **Edge functions**: `truelayer-sync` and `merchant-logo-cache` verify the JWT
-  and the admin email; `tmdb-proxy` is deliberately public but restricted to an
-  endpoint allowlist so it cannot be used as a generic TMDB proxy;
-  `watchlist-cron-sync` requires the service role key. All four use an origin
-  allowlist for CORS.
+- **Edge functions**: browser calls to `truelayer-sync` and
+  `merchant-logo-cache` verify the JWT and admin email; `truelayer-sync` also
+  accepts the service role only for its Vault-authenticated scheduled sync.
+  `tmdb-proxy` is deliberately public but restricted to an endpoint allowlist
+  so it cannot be used as a generic TMDB proxy; `watchlist-cron-sync` requires
+  the service role key. All four use an origin allowlist for CORS.
 - **TrueLayer OAuth (deploy migration and function together)**: the callback
   state is generated with 256 bits of server-side randomness, stored only as a
   SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI

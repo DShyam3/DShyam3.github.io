@@ -210,11 +210,11 @@ export default function BankAccountsSection() {
               <div className="space-y-3 pt-1">
                 <div className="divide-y divide-border/20 rounded-lg border border-border/40 bg-background/50 overflow-hidden">
                   {connections.map(conn => {
-                    const expiry = conn.consent_expires_at || conn.expires_at;
+                    const expiry = conn.consent_expires_at || (conn.created_at ? new Date(new Date(conn.created_at).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString() : null);
                     const daysLeft = expiry
                       ? Math.max(0, Math.ceil((new Date(expiry).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
                       : null;
-                    const isExpiringSoon = daysLeft !== null && daysLeft <= 14;
+                    const isExpiringSoon = daysLeft !== null && daysLeft <= 14 && daysLeft > 0;
 
                     return (
                       <div key={conn.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-3 hover:bg-muted/10 transition-colors">

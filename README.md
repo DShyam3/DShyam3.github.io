@@ -84,7 +84,7 @@ Server-side Deno functions, deployed independently of the frontend — **pushing
 | Function | Purpose | Required secrets | Callable by |
 |---|---|---|---|
 | `tmdb-proxy` | Proxies TMDB API calls so the TMDB key never reaches the browser. Endpoint allow-listed (only the shapes the app actually uses) to stop it being used as a free generic proxy. | `TMDB_API_KEY` | Public (needed for anonymous visitors browsing the Watchlist page), origin-restricted CORS |
-| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored, tab-bound, exact-redirect allow-listed and consumed before token exchange. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `ADMIN_EMAIL` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin only (checks caller's JWT email) |
+| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored, tab-bound, exact-redirect allow-listed and consumed before token exchange. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `ADMIN_EMAIL` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin user (JWT email check) or the service role for the scheduled sync |
 | `watchlist-cron-sync` | Server-side port of the Watchlist page's TV/movie sync logic (see below). Refreshes status, episodes, seasons, streaming platform from TMDB for every watchlist item. | `TMDB_API_KEY` (+ auto-injected Supabase vars) | Service role key only (called by pg_cron, not public) |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically into every edge function's environment by the platform — never set those manually. Everything else needs:
@@ -102,7 +102,7 @@ supabase functions deploy watchlist-cron-sync
 
 ### Scheduled sync (pg_cron)
 
-The `cron.schedule` call at the end of `supabase/migrations/20260904130000_baseline.sql` runs `watchlist-cron-sync` daily at 06:00 UTC via `pg_cron`/`pg_net`. It authenticates using the service role key, which it looks up from **Supabase Vault** at run time — the key is never written into the migration file or git history.
+The `cron.schedule` call at the end of `supabase/migrations/20260904130000_baseline.sql` runs `watchlist-cron-sync` daily at 06:00 UTC via `pg_cron`/`pg_net`; `20260908200000_truelayer_cron_sync.sql` runs `truelayer-sync` at 05:00 UTC. Each authenticates with the service role key fetched from **Supabase Vault** at run time — the key is never written into a migration file or git history.
 
 To set this up on a fresh project (one-time, run directly in the Supabase SQL Editor — **never commit the second command to git**):
 
