@@ -18,7 +18,7 @@ import {
   projectDebtBalance,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Edit2, Landmark, Plus, Scale, Trash2, TrendingDown } from 'lucide-react';
+import { CheckCircle2, Edit2, Layers, Landmark, Plus, Scale, Sparkles, Trash2, TrendingDown } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import DebtReconcileDialog from '../dialogs/DebtReconcileDialog';
 
@@ -141,6 +141,15 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
   const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
   const [reconcileDebt, setReconcileDebt] = useState<Debt | null>(null);
   const [isReconcileOpen, setIsReconcileOpen] = useState(false);
+  const [showProjection, setShowProjection] = useState(false);
+  const [forecastScope, setForecastScope] = useState<'single' | 'all'>('single');
+  const [simulatedSalary, setSimulatedSalary] = useState<number>(() => settings.grossSalary || 30000);
+
+  React.useEffect(() => {
+    if (settings.grossSalary && simulatedSalary === 30000) {
+      setSimulatedSalary(settings.grossSalary);
+    }
+  }, [settings.grossSalary, simulatedSalary]);
 
   const emptyDebtForm: Omit<Debt, 'id' | 'originalAmount' | 'balance' | 'interestRate' | 'minPayment' | 'finalPayment'> & {
     originalAmount: number | '';
@@ -174,17 +183,21 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
 
   const sumDraws = (draws: DebtDraw[]) => draws.reduce((sum, d) => sum + d.amount, 0);
 
-  const getPlanPercent = (plan: StudentLoanPlanKey = 'plan2') => {
+  const getPlanPercent = React.useCallback((plan: StudentLoanPlanKey = 'plan2') => {
     const raw = taxConfig.studentLoanRates[plan];
     if (raw === undefined || raw === null || raw === 0) return 9;
     return raw <= 1 ? Math.round(raw * 100) : raw;
+  }, [taxConfig.studentLoanRates]);
+
+  const calculateStudentMonthlyForSalary = (salary: number, plan: StudentLoanPlanKey = 'plan2') => {
+    const threshold = taxConfig.studentLoanThresholds[plan] || 27295;
+    const ratePercent = getPlanPercent(plan);
+    if (!salary || salary <= threshold) return 0;
+    return Math.round(((salary - threshold) * (ratePercent / 100)) / 12 * 100) / 100;
   };
 
   const calculateStudentMonthly = (plan: StudentLoanPlanKey = 'plan2') => {
-    const threshold = taxConfig.studentLoanThresholds[plan] || 27295;
-    const ratePercent = getPlanPercent(plan);
-    if (!settings.grossSalary || settings.grossSalary <= threshold) return 0;
-    return Math.round(((settings.grossSalary - threshold) * (ratePercent / 100)) / 12 * 100) / 100;
+    return calculateStudentMonthlyForSalary(settings.grossSalary || 0, plan);
   };
 
   const handleAddDraw = () => {
@@ -335,8 +348,13 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
       : d.minPayment;
     return sum + monthly;
   }, 0);
+  const dtiPercent = settings.grossSalary > 0
+    ? ((totalMinPayments * 12) / settings.grossSalary) * 100
+    : 0;
+
   const selectedDebt = debts.find(d => d.id === selectedDebtId) || debts[0] || null;
   const selectedPlan = selectedDebt?.studentLoanPlan || (selectedDebt?.type === 'student' ? 'plan2' : undefined);
+  const isSelectedStudent = selectedDebt?.type === 'student' || selectedDebt?.repaymentType === 'income_contingent';
   const selectedDebtEffective: Debt | null = selectedDebt
     ? {
         ...selectedDebt,
@@ -345,15 +363,82 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
         writeOffYears: selectedDebt.writeOffYears ?? (selectedPlan ? STUDENT_LOAN_WRITE_OFF_YEARS[selectedPlan] : undefined),
       }
     : null;
+
+  const simulatedStudentMonthly = isSelectedStudent && selectedPlan
+    ? calculateStudentMonthlyForSalary(simulatedSalary, selectedPlan)
+    : (selectedDebt?.minPayment || 0);
+
   const selectedDebtProjection = selectedDebtEffective
     ? projectDebtBalance(selectedDebtEffective, {
-        grossSalary: settings.grossSalary,
+        grossSalary: simulatedSalary,
         repaymentRate: selectedPlan ? getPlanPercent(selectedPlan) : 0,
         threshold: selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 0,
         includeHistory: true,
       })
     : [];
   const selectedDebtFinal = selectedDebtProjection[selectedDebtProjection.length - 1];
+  const isSelectedWrittenOff = (selectedDebtFinal?.writtenOff ?? 0) > 0;
+
+  const collatedProjection = React.useMemo(() => {
+    if (debts.length === 0) return [];
+    const projections = debts.map(d => {
+      const plan = d.studentLoanPlan || (d.type === 'student' ? 'plan2' : undefined);
+      const effective: Debt = {
+        ...d,
+        studentLoanPlan: plan,
+        repaymentType: plan ? 'income_contingent' : d.repaymentType,
+        writeOffYears: d.writeOffYears ?? (plan ? STUDENT_LOAN_WRITE_OFF_YEARS[plan] : undefined),
+      };
+      return projectDebtBalance(effective, {
+        grossSalary: simulatedSalary,
+        repaymentRate: plan ? getPlanPercent(plan) : 0,
+        threshold: plan ? (taxConfig.studentLoanThresholds[plan] || 27295) : 0,
+        includeHistory: true,
+      });
+    });
+
+    const allYears = Array.from(
+      new Set(projections.flatMap(pts => pts.map(p => Math.round(p.year))))
+    ).sort((a, b) => a - b);
+
+    return allYears.map(yr => {
+      let totalBalance = 0;
+      let totalPaid = 0;
+      let totalInterest = 0;
+      let totalWrittenOff = 0;
+
+      for (const pts of projections) {
+        if (pts.length === 0) continue;
+        const exact = pts.find(p => Math.round(p.year) === yr);
+        if (exact) {
+          totalBalance += exact.balance;
+          totalPaid += exact.paid;
+          totalInterest += exact.interest;
+          totalWrittenOff += exact.writtenOff;
+        } else {
+          const pastPts = pts.filter(p => Math.round(p.year) <= yr);
+          if (pastPts.length > 0) {
+            const last = pastPts[pastPts.length - 1];
+            totalBalance += last.balance;
+            totalPaid += last.paid;
+            totalInterest += last.interest;
+            totalWrittenOff += last.writtenOff;
+          }
+        }
+      }
+
+      return {
+        year: yr,
+        balance: Math.round(totalBalance),
+        paid: Math.round(totalPaid),
+        interest: Math.round(totalInterest),
+        writtenOff: Math.round(totalWrittenOff),
+      };
+    });
+  }, [debts, simulatedSalary, taxConfig, getPlanPercent]);
+
+  const collatedFinal = collatedProjection[collatedProjection.length - 1];
+
   const weightedInterestRate = totalLoanBalance > 0
     ? debts.reduce((sum, d) => sum + d.interestRate * d.balance, 0) / totalLoanBalance
     : 0;
@@ -379,7 +464,11 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
               { label: 'Total Owed', value: formatGBP(totalLoanBalance), tone: 'text-destructive' },
               { label: 'Paid Off', value: `${loanPayoffPercent.toFixed(1)}%`, tone: 'text-positive' },
               { label: 'Monthly Payments', value: formatGBP(totalMinPayments), tone: 'text-foreground' },
-              { label: 'Avg Rate', value: `${weightedInterestRate.toFixed(2)}%`, tone: 'text-foreground' },
+              {
+                label: 'Debt / Income',
+                value: settings.grossSalary > 0 ? `${dtiPercent.toFixed(1)}% DTI` : `${weightedInterestRate.toFixed(2)}% Avg`,
+                tone: 'text-foreground',
+              },
             ].map(stat => (
               <div key={stat.label} className="bg-card/50 border border-border/40 rounded-xl p-3 sm:p-4 hover:border-border/80 transition-colors">
                 <span className="text-xs uppercase tracking-wider text-muted-foreground font-mono font-semibold block">{stat.label}</span>
@@ -508,31 +597,70 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
           </table>
         </div>
 
-        {/* Payoff projection for the selected debt */}
-        {selectedDebt && (
-          <div className="rounded-xl border border-border/40 bg-card/50 p-4 sm:p-5 hover:border-border/80 transition-colors space-y-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-primary shrink-0" /> {selectedDebt.name} — Payoff Projection
-                </h4>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {(selectedDebt.repaymentType === 'income_contingent' || selectedDebt.type === 'student')
-                    ? `${STUDENT_LOAN_PLAN_LABELS[selectedPlan || 'plan2']}: ${getPlanPercent(selectedPlan || 'plan2')}% of income above ${formatGBP(selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 27295)}, written off after ${selectedDebtEffective?.writeOffYears ?? 30} years`
-                    : selectedDebt.repaymentType === 'pcp'
-                      ? `PCP: ${formatGBP(selectedDebt.minPayment)}/month amortising to ${formatGBP(selectedDebt.finalPayment || 0)} balloon`
-                      : `Fixed repayment of ${formatGBP(selectedDebt.minPayment)}/month at ${selectedDebt.interestRate.toFixed(2)}%`}
-                </p>
-                {selectedDebt.observations && selectedDebt.observations.length > 0 && (
-                  <p className="text-[11px] font-mono text-positive mt-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Anchored on {selectedDebt.observations[0].statementDate || selectedDebt.observations[0].observedOn} verified balance of {formatGBP(selectedDebt.observations[0].balance)}
-                  </p>
-                )}
+        {/* Payoff Forecast & Salary Simulator Toggle Card */}
+        {debts.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card/50 border border-border/40 rounded-xl p-4 hover:border-border/80 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                <TrendingDown className="h-5 w-5" />
               </div>
-              {debts.length > 1 && (
+              <div>
+                <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+                  <span>Payoff Forecast & Salary Simulator</span>
+                </h4>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                  Simulate salary progression, test 30-year student loan write-offs, and inspect collated borrowing
+                </p>
+              </div>
+            </div>
+            <Button
+              variant={showProjection ? 'secondary' : 'default'}
+              onClick={() => setShowProjection(!showProjection)}
+              className="w-full sm:w-auto rounded-lg text-xs font-mono h-8 px-4 gap-1.5 shrink-0"
+            >
+              {showProjection ? 'Hide Forecast ▴' : 'Explore Forecast & Simulator ▾'}
+            </Button>
+          </div>
+        )}
+
+        {/* Collapsible Payoff Projection & Simulator Panel */}
+        {showProjection && debts.length > 0 && (
+          <div className="rounded-xl border border-border/40 bg-card/50 p-4 sm:p-5 hover:border-border/80 transition-colors space-y-5">
+            {/* View Scope Tabs & Selector */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/30 pb-4">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center rounded-lg border border-border/40 bg-muted/20 p-0.5 text-xs font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setForecastScope('single')}
+                    className={cn(
+                      "px-3 py-1 rounded-md transition-colors",
+                      forecastScope === 'single'
+                        ? "bg-background text-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Single Debt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForecastScope('all')}
+                    className={cn(
+                      "px-3 py-1 rounded-md transition-colors flex items-center gap-1.5",
+                      forecastScope === 'all'
+                        ? "bg-background text-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Layers className="h-3 w-3" />
+                    All Debts Collated
+                  </button>
+                </div>
+              </div>
+
+              {forecastScope === 'single' && selectedDebt && debts.length > 1 && (
                 <Select value={selectedDebt.id} onValueChange={setSelectedDebtId}>
-                  <SelectTrigger className="bg-background/50 border border-border/40 rounded-lg h-9 text-xs w-full sm:w-56 shrink-0 font-mono">
+                  <SelectTrigger className="bg-background/50 border border-border/40 rounded-lg h-8 text-xs w-full sm:w-56 shrink-0 font-mono">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -544,97 +672,402 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
               )}
             </div>
 
-            {selectedDebtFinal && (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-0.5">
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Cleared By</span>
-                  <span className="text-sm font-bold font-mono text-foreground">
-                    {selectedDebtFinal.balance <= 0 ? Math.round(selectedDebtFinal.year) : 'Not on track'}
-                  </span>
+            {/* Scope: Single Debt */}
+            {forecastScope === 'single' && selectedDebt && (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-primary shrink-0" /> {selectedDebt.name} — Payoff Projection
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    {isSelectedStudent
+                      ? `${STUDENT_LOAN_PLAN_LABELS[selectedPlan || 'plan2']}: ${getPlanPercent(selectedPlan || 'plan2')}% of income above ${formatGBP(selectedPlan ? (taxConfig.studentLoanThresholds[selectedPlan] || 27295) : 27295)}, written off after ${selectedDebtEffective?.writeOffYears ?? 30} years`
+                      : selectedDebt.repaymentType === 'pcp'
+                        ? `PCP: ${formatGBP(selectedDebt.minPayment)}/month amortising to ${formatGBP(selectedDebt.finalPayment || 0)} balloon`
+                        : `Fixed repayment of ${formatGBP(selectedDebt.minPayment)}/month at ${selectedDebt.interestRate.toFixed(2)}%`}
+                  </p>
+                  {selectedDebt.observations && selectedDebt.observations.length > 0 && (
+                    <div className="mt-2 rounded-lg border border-positive/30 bg-positive/5 p-2.5 text-xs font-mono text-positive flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <span className="font-semibold text-foreground">
+                          Anchored on {selectedDebt.observations[0].statementDate || selectedDebt.observations[0].observedOn} verified balance of {formatGBP(selectedDebt.observations[0].balance)}
+                        </span>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-normal">
+                          Between statements, monthly compound interest ({selectedDebt.interestRate}%/yr) accrues and PAYE deductions ({formatGBP(calculateStudentMonthly(selectedPlan || 'plan2'))}/mo) roll the balance forward. Use <strong className="text-foreground">Reconcile (⚖)</strong> whenever a new SLC statement arrives to reset the anchor and reconcile drift.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-0.5">
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Total Repaid</span>
-                  <span className="text-sm font-bold font-mono text-foreground">{formatGBP(selectedDebtFinal.paid)}</span>
+
+                {/* Salary Simulator for Student Loans */}
+                {isSelectedStudent && (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 sm:p-4 space-y-3 font-mono">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                        <span className="text-xs uppercase tracking-wider font-semibold text-foreground">
+                          Interactive Salary Simulator
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Simulated Salary:</span>
+                        <span className="text-sm font-bold text-primary tabular-nums">{formatGBP(simulatedSalary)}/yr</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <input
+                        type="range"
+                        min={20000}
+                        max={120000}
+                        step={1000}
+                        value={simulatedSalary}
+                        onChange={(e) => setSimulatedSalary(Number(e.target.value))}
+                        className="w-full h-1.5 bg-muted/60 rounded-lg appearance-none cursor-pointer accent-primary"
+                        aria-label="Simulated Salary"
+                      />
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                        <span>£20k (Below Threshold)</span>
+                        <span>£45k</span>
+                        <span>£70k</span>
+                        <span>£95k</span>
+                        <span>£120k</span>
+                      </div>
+                    </div>
+
+                    {/* Quick preset chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[11px] text-muted-foreground mr-1">Presets:</span>
+                      {[
+                        { label: `Current (${formatGBP(settings.grossSalary || 0)})`, val: settings.grossSalary || 30000 },
+                        { label: '£35k', val: 35000 },
+                        { label: '£50k', val: 50000 },
+                        { label: '£65k', val: 65000 },
+                        { label: '£85k', val: 85000 },
+                        { label: '£100k', val: 100000 },
+                      ].map(preset => (
+                        <Button
+                          key={preset.label}
+                          type="button"
+                          size="sm"
+                          variant={simulatedSalary === preset.val ? 'default' : 'outline'}
+                          onClick={() => setSimulatedSalary(preset.val)}
+                          className="h-6 px-2 text-[10px] rounded-md border-border/40 font-mono"
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {/* Dynamic Outcome Callout */}
+                    <div className="text-xs text-muted-foreground bg-background/60 rounded-lg p-2.5 border border-border/30 leading-relaxed">
+                      {simulatedSalary <= (taxConfig.studentLoanThresholds[selectedPlan || 'plan2'] || 27295) ? (
+                        <span>
+                          At <strong className="text-foreground">{formatGBP(simulatedSalary)}/yr</strong>, earnings are below the {formatGBP(taxConfig.studentLoanThresholds[selectedPlan || 'plan2'] || 27295)} threshold. Monthly PAYE deduction is <strong className="text-positive">£0.00/mo</strong>. The entire balance will be written off at year 30.
+                        </span>
+                      ) : isSelectedWrittenOff && selectedDebtFinal ? (
+                        <span>
+                          At <strong className="text-foreground">{formatGBP(simulatedSalary)}/yr</strong>, you repay <strong className="text-foreground">{formatGBP(simulatedStudentMonthly)}/mo</strong> ({getPlanPercent(selectedPlan || 'plan2')}% over threshold). Over 30 years, you repay <strong className="text-positive">{formatGBP(selectedDebtFinal.paid)}</strong> total. The remaining <strong className="text-primary">{formatGBP(selectedDebtFinal.writtenOff)}</strong> is written off tax-free in {Math.round(selectedDebtFinal.year)}.
+                        </span>
+                      ) : selectedDebtFinal ? (
+                        <span>
+                          At <strong className="text-foreground">{formatGBP(simulatedSalary)}/yr</strong>, you repay <strong className="text-foreground">{formatGBP(simulatedStudentMonthly)}/mo</strong>. At this pace, you will fully clear your student loan in <strong className="text-positive">{Math.round(selectedDebtFinal.year)}</strong> after repaying <strong className="text-foreground">{formatGBP(selectedDebtFinal.paid)}</strong> total!
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+
+                {/* Single Debt Metric Cards */}
+                {selectedDebtFinal && (
+                  isSelectedStudent ? (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Repayment Outcome</span>
+                        <span className="text-sm font-bold font-mono text-foreground block truncate mt-1">
+                          {isSelectedWrittenOff
+                            ? `Written off in ${Math.round(selectedDebtFinal.year)}`
+                            : (selectedDebtFinal.balance <= 0 ? `Cleared in ${Math.round(selectedDebtFinal.year)}` : 'Active')}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">
+                          {isSelectedWrittenOff ? `${selectedDebtEffective?.writeOffYears ?? 30}-year statutory write-off` : 'Fully paid off'}
+                        </span>
+                      </div>
+
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Total You Repay</span>
+                        <span className="text-sm font-bold font-mono text-positive block truncate mt-1">
+                          {formatGBP(selectedDebtFinal.paid)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">
+                          Actual PAYE deductions
+                        </span>
+                      </div>
+
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Monthly Deduction</span>
+                        <span className="text-sm font-bold font-mono text-foreground block truncate mt-1">
+                          {formatGBP(simulatedStudentMonthly)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">
+                          At {formatGBP(simulatedSalary)}/yr
+                        </span>
+                      </div>
+
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Government Forgiven</span>
+                        <span className="text-sm font-bold font-mono text-primary block truncate mt-1">
+                          {formatGBP(selectedDebtFinal.writtenOff)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">
+                          Cancelled debt & interest
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Cleared By</span>
+                        <span className="text-sm font-bold font-mono text-foreground block truncate mt-1">
+                          {selectedDebtFinal.balance <= 0 ? `Year ${Math.round(selectedDebtFinal.year)}` : 'Not on track'}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">Amortisation term</span>
+                      </div>
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Total Repaid</span>
+                        <span className="text-sm font-bold font-mono text-foreground block truncate mt-1">
+                          {formatGBP(selectedDebtFinal.paid)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">Principal + interest</span>
+                      </div>
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Interest Paid</span>
+                        <span className="text-sm font-bold font-mono text-chart-4 block truncate mt-1">
+                          {formatGBP(selectedDebtFinal.interest)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">Cost of borrowing</span>
+                      </div>
+                      <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Principal Cleared</span>
+                        <span className="text-sm font-bold font-mono text-positive block truncate mt-1">
+                          {formatGBP(selectedDebtEffective ? selectedDebtEffective.balance : 0)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">Remaining balance</span>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* Single Debt Chart */}
+                <div className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={selectedDebtProjection} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="debtBalanceFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="debtPaidFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--positive))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--positive))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" vertical={false} />
+                      <XAxis
+                        dataKey="year"
+                        tickFormatter={(v) => String(Math.round(v))}
+                        tick={{ fontSize: 10 }}
+                        className="text-muted-foreground"
+                      />
+                      <YAxis
+                        tickFormatter={(v) => `£${Math.round(v / 1000)}k`}
+                        tick={{ fontSize: 10 }}
+                        width={48}
+                        className="text-muted-foreground"
+                      />
+                      <RechartsTooltip
+                        formatter={(value: number, name: string) => [formatGBP(value), name]}
+                        labelFormatter={(label) => `Year ${Math.round(Number(label))}`}
+                        contentStyle={{ borderRadius: '0.75rem', fontSize: '11px' }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '11px' }} />
+                      <Area
+                        type="monotone"
+                        dataKey="balance"
+                        name={isSelectedStudent ? "Paper Balance" : "Outstanding"}
+                        stroke="hsl(var(--destructive))"
+                        strokeWidth={2}
+                        fill="url(#debtBalanceFill)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="paid"
+                        name={isSelectedStudent ? "Total You Repaid" : "Repaid"}
+                        stroke="hsl(var(--positive))"
+                        strokeWidth={2}
+                        fill="url(#debtPaidFill)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="space-y-0.5">
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Interest Paid</span>
-                  <span className="text-sm font-bold font-mono text-chart-4">{formatGBP(selectedDebtFinal.interest)}</span>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Written Off</span>
-                  <span className="text-sm font-bold font-mono text-positive">{formatGBP(selectedDebtFinal.writtenOff)}</span>
-                </div>
+
+                {/* Borrowing tranches */}
+                {(selectedDebt.draws?.length ?? 0) > 0 && (
+                  <div className="border-t border-border/30 pt-4 space-y-2">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">
+                      Borrowing History — {formatGBP(sumDraws(selectedDebt.draws))} across {selectedDebt.draws.length} {selectedDebt.draws.length === 1 ? 'draw' : 'draws'}
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {[...selectedDebt.draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
+                        <div key={draw.id} className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs font-mono">
+                          <span className="font-mono font-bold text-foreground block">{formatGBP(draw.amount)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                            {draw.label ? ` · ${draw.label}` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={selectedDebtProjection} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="debtBalanceFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="debtPaidFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--positive))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--positive))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" vertical={false} />
-                  <XAxis
-                    dataKey="year"
-                    tickFormatter={(v) => String(Math.round(v))}
-                    tick={{ fontSize: 10 }}
-                    className="text-muted-foreground"
-                  />
-                  <YAxis
-                    tickFormatter={(v) => `£${Math.round(v / 1000)}k`}
-                    tick={{ fontSize: 10 }}
-                    width={48}
-                    className="text-muted-foreground"
-                  />
-                  <RechartsTooltip
-                    formatter={(value: number, name: string) => [formatGBP(value), name]}
-                    labelFormatter={(label) => `Year ${Math.round(Number(label))}`}
-                    contentStyle={{ borderRadius: '0.75rem', fontSize: '11px' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Area
-                    type="monotone"
-                    dataKey="balance"
-                    name="Outstanding"
-                    stroke="hsl(var(--destructive))"
-                    strokeWidth={2}
-                    fill="url(#debtBalanceFill)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="paid"
-                    name="Repaid"
-                    stroke="hsl(var(--positive))"
-                    strokeWidth={2}
-                    fill="url(#debtPaidFill)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {/* Scope: All Debts Collated */}
+            {forecastScope === 'all' && (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-primary shrink-0" /> All Debts Collated — Aggregate Payoff Projection
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Combined trajectory across all {debts.length} active debts vs income and servicing capacity.
+                  </p>
+                </div>
 
-            {/* Borrowing tranches */}
-            {(selectedDebt.draws?.length ?? 0) > 0 && (
-              <div className="border-t border-border/30 pt-4 space-y-2">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">
-                  Borrowing History — {formatGBP(sumDraws(selectedDebt.draws))} across {selectedDebt.draws.length} {selectedDebt.draws.length === 1 ? 'draw' : 'draws'}
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {[...selectedDebt.draws].sort((a, b) => a.date.localeCompare(b.date)).map(draw => (
-                    <div key={draw.id} className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs font-mono">
-                      <span className="font-mono font-bold text-foreground block">{formatGBP(draw.amount)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(draw.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
-                        {draw.label ? ` · ${draw.label}` : ''}
-                      </span>
-                    </div>
-                  ))}
+                {/* Collated Metric Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Total Debt Owed</span>
+                    <span className="text-sm font-bold font-mono text-destructive block truncate mt-1">
+                      {formatGBP(totalLoanBalance)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono block">
+                      Across {debts.length} {debts.length === 1 ? 'account' : 'accounts'}
+                    </span>
+                  </div>
+
+                  <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Total Repaid (Horizon)</span>
+                    <span className="text-sm font-bold font-mono text-positive block truncate mt-1">
+                      {formatGBP(collatedFinal?.paid || 0)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono block">
+                      Cumulative cash paid
+                    </span>
+                  </div>
+
+                  <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Annual Debt Servicing</span>
+                    <span className="text-sm font-bold font-mono text-foreground block truncate mt-1">
+                      {formatGBP(totalMinPayments * 12)}/yr
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono block">
+                      {formatGBP(totalMinPayments)}/month total
+                    </span>
+                  </div>
+
+                  <div className="bg-background/40 border border-border/30 rounded-xl p-3">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">Debt / Income (DTI)</span>
+                    <span className="text-sm font-bold font-mono text-foreground block truncate mt-1">
+                      {dtiPercent.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono block">
+                      {settings.grossSalary > 0 ? `Of £${Math.round(settings.grossSalary / 1000)}k gross salary` : 'No salary set'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Collated Chart */}
+                <div className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={collatedProjection} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="collatedBalanceFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="collatedPaidFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--positive))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--positive))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" vertical={false} />
+                      <XAxis
+                        dataKey="year"
+                        tickFormatter={(v) => String(Math.round(v))}
+                        tick={{ fontSize: 10 }}
+                        className="text-muted-foreground"
+                      />
+                      <YAxis
+                        tickFormatter={(v) => `£${Math.round(v / 1000)}k`}
+                        tick={{ fontSize: 10 }}
+                        width={48}
+                        className="text-muted-foreground"
+                      />
+                      <RechartsTooltip
+                        formatter={(value: number, name: string) => [formatGBP(value), name]}
+                        labelFormatter={(label) => `Year ${Math.round(Number(label))}`}
+                        contentStyle={{ borderRadius: '0.75rem', fontSize: '11px' }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '11px' }} />
+                      <Area
+                        type="monotone"
+                        dataKey="balance"
+                        name="Total Outstanding"
+                        stroke="hsl(var(--destructive))"
+                        strokeWidth={2}
+                        fill="url(#collatedBalanceFill)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="paid"
+                        name="Total Cash Repaid"
+                        stroke="hsl(var(--positive))"
+                        strokeWidth={2}
+                        fill="url(#collatedPaidFill)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Collated Debt Composition Breakdown */}
+                <div className="border-t border-border/30 pt-4 space-y-2">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block">
+                    Debt Portfolio Composition
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    {debts.map(d => {
+                      const share = totalLoanBalance > 0 ? (d.balance / totalLoanBalance) * 100 : 0;
+                      const monthly = (d.type === 'student' || d.repaymentType === 'income_contingent')
+                        ? calculateStudentMonthly(d.studentLoanPlan || 'plan2')
+                        : d.minPayment;
+                      return (
+                        <div key={d.id} className="rounded-lg border border-border/30 bg-muted/20 p-2.5 font-mono text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-foreground truncate">{d.name}</span>
+                            <span className="text-destructive font-bold">{formatGBP(d.balance)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                            <span>{share.toFixed(1)}% of debt</span>
+                            <span>{formatGBP(monthly)}/mo</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
