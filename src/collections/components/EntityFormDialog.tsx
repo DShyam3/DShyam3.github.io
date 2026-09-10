@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
@@ -47,8 +48,11 @@ function FileField<T extends CollectionRow>({
 
   return (
     <>
-      <div
-        className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
+      <button
+        type="button"
+        id={id}
+        aria-label={`Choose ${field.label}`}
+        className="w-full border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
         onClick={() => inputRef.current?.click()}
       >
         {preview ? (
@@ -68,10 +72,9 @@ function FileField<T extends CollectionRow>({
             )}
           </div>
         )}
-      </div>
+      </button>
       <input
         ref={inputRef}
-        id={id}
         type="file"
         accept={field.accept}
         className="hidden"
@@ -102,7 +105,7 @@ function ImageUploadButton({
         variant="outline"
         size="icon"
         className="shrink-0"
-        title={hasFile ? 'Remove upload' : 'Upload an image'}
+        aria-label={hasFile ? 'Remove upload' : 'Upload an image'}
         onClick={() => (hasFile ? onClear() : inputRef.current?.click())}
       >
         {hasFile ? <X className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
@@ -126,7 +129,7 @@ interface EntityFormDialogProps<T extends CollectionRow, R> {
   config: CollectionConfig<T, R>;
   /** Required in edit mode; the row being edited. */
   item?: T;
-  onSubmit: (values: FormValues) => void;
+  onSubmit: (values: FormValues) => void | Promise<unknown>;
   /**
    * What opens the form. Defaults to the pencil that sits over a card; the
    * detail dialog passes a labelled button instead, since it has the room and
@@ -254,12 +257,15 @@ export function EntityFormDialog<T extends CollectionRow, R>({
   const [files, setFiles] = useState<Record<string, File>>({});
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Re-seed on open so an edit dialog never shows a stale row, and an add
   // dialog starts clean after a previous submit.
   useEffect(() => {
     if (open) {
       setValues(initialValues(config.fields, item));
+      setSaveError('');
       setErrors({});
       setImageFailed({});
       setFiles({});
@@ -297,6 +303,8 @@ export function EntityFormDialog<T extends CollectionRow, R>({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving || uploading) return;
+    setSaveError('');
 
     // A file field counts as filled if a file is staged or a URL already exists.
     const missing = config.fields.filter((f) =>
@@ -305,7 +313,8 @@ export function EntityFormDialog<T extends CollectionRow, R>({
         : f.required && !values[f.name]?.trim(),
     );
     if (missing.length) {
-      setErrors(Object.fromEntries(missing.map((f) => [f.name, 'Required'])));
+      setErrors(Object.fromEntries(missing.map((f) => [f.name, `Enter ${f.label.toLowerCase()}`])));
+      document.getElementById(`${mode}-${config.table}-${missing[0].name}`)?.focus();
       toast.error('Please fill in all required fields');
       return;
     }
@@ -340,15 +349,21 @@ export function EntityFormDialog<T extends CollectionRow, R>({
 
     // Empty optional fields are sent as undefined rather than '' so the column
     // stays null instead of collecting blank strings.
-    onSubmit({
-      ...(Object.fromEntries(
-        config.fields.map((f) => [f.name, values[f.name]?.trim() || undefined]),
-      ) as FormValues),
-      ...uploaded,
-    });
+    setSaving(true);
+    try {
+      await onSubmit({
+        ...(Object.fromEntries(
+          config.fields.map((f) => [f.name, values[f.name]?.trim() || undefined]),
+        ) as FormValues),
+        ...uploaded,
+      });
 
-    toast.success(`${config.noun.singular} ${mode === 'add' ? 'added' : 'updated'}`);
-    setOpen(false);
+      setOpen(false);
+    } catch {
+      setSaveError('Could not save your changes. Your entries are still here; please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const optionsFor = (field: FieldDef<T>) =>
@@ -359,7 +374,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
     [];
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => { if (!saving && !uploading) setOpen(next); }}>
       <DialogTrigger asChild>
         {trigger ?? (mode === 'add' ? (
           <ActionButton icon={Plus} label={`Add ${config.noun.singular}`} />
@@ -367,7 +382,8 @@ export function EntityFormDialog<T extends CollectionRow, R>({
           <Button
             variant="ghost"
             size="icon"
-            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-primary hover:text-primary-foreground w-7 h-7"
+            aria-label={`Edit ${config.noun.singular}`}
+            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity bg-background/80 hover:bg-primary hover:text-primary-foreground w-7 h-7"
           >
             <Pencil className="w-3.5 h-3.5" />
           </Button>
@@ -385,12 +401,15 @@ export function EntityFormDialog<T extends CollectionRow, R>({
           <DialogTitle className="font-serif text-xl">
             {mode === 'add' ? `Add New ${config.noun.singular}` : `Edit ${config.noun.singular}`}
           </DialogTitle>
+          <DialogDescription>Fields marked * are required.</DialogDescription>
         </DialogHeader>
 
         <form
           onSubmit={handleSubmit}
           className="space-y-4 mt-4 flex-1 min-h-0 overflow-y-auto px-6"
         >
+          <fieldset disabled={saving || uploading} className="space-y-4">
+          {saveError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{saveError}</p>}
           {mode === 'add' && config.externalSearch && (
             <ExternalSearchField
               search={config.externalSearch}
@@ -402,6 +421,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             const id = `${mode}-${config.table}-${field.name}`;
             const error = errors[field.name];
             const value = values[field.name] ?? '';
+            const fieldA11y = { 'aria-invalid': Boolean(error), 'aria-describedby': error ? `${id}-error` : undefined, 'aria-required': Boolean(field.required) };
 
             return (
               <div key={field.name} className="space-y-2">
@@ -413,6 +433,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
                 {field.type === 'textarea' ? (
                   <Textarea
                     id={id}
+                    {...fieldA11y}
                     value={value}
                     onChange={(e) => setValue(field.name, e.target.value)}
                     placeholder={field.placeholder}
@@ -420,7 +441,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
                   />
                 ) : field.type === 'select' ? (
                   <Select value={value} onValueChange={(v) => setValue(field.name, v)}>
-                    <SelectTrigger id={id}>
+                    <SelectTrigger id={id} {...fieldA11y}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -443,6 +464,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
                   <div className="flex items-center gap-2">
                     <Input
                       id={id}
+                      {...fieldA11y}
                       type="url"
                       value={files[field.name] ? files[field.name].name : value}
                       readOnly={Boolean(files[field.name])}
@@ -484,6 +506,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
                 ) : (
                   <Input
                     id={id}
+                    {...fieldA11y}
                     type={field.type === 'url' ? 'url' : 'text'}
                     value={value}
                     onChange={(e) => setValue(field.name, e.target.value)}
@@ -495,7 +518,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
                   />
                 )}
 
-                {error && <p className="text-xs text-destructive">{error}</p>}
+                {error && <p id={`${id}-error`} role="alert" className="text-xs text-destructive">{error}</p>}
                 {field.type === 'image' && imageFailed[field.name] && (
                   <p className="text-xs text-destructive">
                     Couldn't load an image from that URL
@@ -509,16 +532,17 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             <Button
               type="button"
               variant="outline"
+              disabled={uploading || saving}
               onClick={() => setOpen(false)}
               className="flex-1"
             >
               Cancel
             </Button>
-            <Button type="submit" className="flex-1 gap-2" disabled={uploading}>
-              {uploading ? (
+            <Button type="submit" className="flex-1 gap-2" disabled={uploading || saving} aria-busy={uploading || saving}>
+              {uploading || saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading...
+                  {uploading ? 'Uploading…' : 'Saving…'}
                 </>
               ) : mode === 'add' ? (
                 `Add ${config.noun.singular}`
@@ -527,6 +551,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
               )}
             </Button>
           </div>
+          </fieldset>
         </form>
       </DialogContent>
     </Dialog>

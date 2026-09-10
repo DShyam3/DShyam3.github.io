@@ -1,3 +1,4 @@
+import { MetricProgress } from '@/components/ui/metric-progress';
 /**
  * Budget — the widest section on the Spending surface (REHAUL_PLAN.md 7.C).
  *
@@ -379,7 +380,7 @@ return (
     </div>
 
     {/* Header Overview: Spent vs Total Budget gauge */}
-    <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col md:flex-row items-center justify-around gap-6 font-mono">
+    <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col md:flex-row items-center justify-around gap-6 font-mono">
 
       {/* Left: Total Spent */}
       <div className="text-center md:text-left space-y-1">
@@ -933,26 +934,19 @@ return (
                   </div>
 
                   {/* Right: Spent, Budget, Left, Progress bar */}
-                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 font-mono text-xs pl-7 sm:pl-0">
-                    <span className="font-bold text-foreground w-20 text-right">{formatGBP(catSpent)}</span>
-                    <span className="font-medium text-muted-foreground/80 w-20 text-right">{formatGBP(catBudget)}</span>
+                  <div className="grid grid-cols-3 gap-3 shrink-0 font-mono text-xs w-full sm:w-80 lg:w-96 max-w-full">
+                    <span className="font-bold text-foreground text-right tabular-nums"><span className="block text-xs font-normal text-muted-foreground">Spent</span>{formatGBP(catSpent)}</span>
+                    <span className="font-medium text-right tabular-nums"><span className="block text-xs font-normal text-muted-foreground">Budget</span>{formatGBP(catBudget)}</span>
                     <span className={cn(
-                      "font-bold w-20 text-right",
+                      "font-bold text-right tabular-nums",
                       catLeft >= 0 ? "text-positive" : "text-destructive"
                     )}>
+                      <span className="block text-xs font-normal text-muted-foreground">Remaining</span>
                       {catLeft >= 0 ? formatGBP(catLeft) : `-${formatGBP(Math.abs(catLeft))}`}
                     </span>
 
                     {/* Progress bar */}
-                    <div className="w-32 md:w-48 h-1.5 bg-muted rounded-full overflow-hidden hidden md:inline-block">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-300",
-                          isOver ? "bg-[hsl(var(--destructive))]" : "bg-[hsl(var(--positive))]"
-                        )}
-                        style={{ width: `${Math.min(100, catBudget > 0 ? (catSpent / catBudget) * 100 : 0)}%` }}
-                      />
-                    </div>
+                    <MetricProgress className="col-span-3" label={category.name} value={catSpent} target={catBudget} intent="budget" valueText={`${formatGBP(catSpent)} / ${formatGBP(catBudget)}`} />
                   </div>
                 </div>
 
@@ -997,26 +991,19 @@ return (
                           </div>
 
                           {/* Right: Spent, Budget, Left, progress */}
-                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 font-mono text-xs pl-5 sm:pl-0">
-                            <span className="font-semibold text-foreground/80 w-20 text-right">{formatGBP(spentVal)}</span>
-                            <span className="text-muted-foreground/60 w-20 text-right">{formatGBP(item.budgeted)}</span>
+                          <div className="grid grid-cols-3 gap-3 shrink-0 font-mono text-xs w-full sm:w-80 lg:w-96 max-w-full">
+                            <span className="font-semibold text-foreground text-right tabular-nums"><span className="block text-xs font-normal text-muted-foreground">Spent</span>{formatGBP(spentVal)}</span>
+                            <span className="text-right tabular-nums"><span className="block text-xs text-muted-foreground">Budget</span>{formatGBP(item.budgeted)}</span>
                             <span className={cn(
-                              "w-20 text-right font-medium",
+                              "text-right font-medium tabular-nums",
                               itemLeft >= 0 ? "text-positive/90" : "text-destructive/90"
                             )}>
+                              <span className="block text-xs font-normal text-muted-foreground">Remaining</span>
                               {itemLeft >= 0 ? formatGBP(itemLeft) : `-${formatGBP(Math.abs(itemLeft))}`}
                             </span>
 
                             {/* Progress bar */}
-                            <div className="w-32 md:w-48 h-1 bg-muted rounded-full overflow-hidden hidden md:inline-block">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full transition-all duration-300",
-                                  isItemOver ? "bg-[hsl(var(--destructive))]" : "bg-[hsl(var(--positive))]"
-                                )}
-                                style={{ width: `${Math.min(100, item.budgeted > 0 ? (spentVal / item.budgeted) * 100 : 0)}%` }}
-                              />
-                            </div>
+                            <MetricProgress className="col-span-3" label={item.name} value={spentVal} target={item.budgeted} intent="budget" valueText={`${formatGBP(spentVal)} / ${formatGBP(item.budgeted)}`} />
                           </div>
                         </div>
                       );

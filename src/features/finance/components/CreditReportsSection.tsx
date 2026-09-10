@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { CreditScoreEntry } from '@/features/finance/finance-types';
 import { BUREAU_BANDS, BureauBand, CreditTier, describeArc, polarToCartesian } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { Plus, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
+import { Paperclip, Plus, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
+import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 
 const CREDIT_TIER_COLORS: Record<CreditTier, string> = {
   1: 'hsl(var(--destructive))',
@@ -36,6 +37,7 @@ export default function CreditReportsSection() {
     creditBureaus,
     creditScores,
     memberships,
+    profileId,
     saveDataToSupabase,
     setCreditScores,
   } = useFinanceData();
@@ -54,6 +56,8 @@ export default function CreditReportsSection() {
   }
 
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [isSavingScores, setIsSavingScores] = useState(false);
   const [bureauDrafts, setBureauDrafts] = useState<Record<'experian' | 'transunion' | 'equifax', BureauScoreDraft>>({
     experian: { included: true, score: '', originalScore: null },
     transunion: { included: true, score: '', originalScore: null },
@@ -80,6 +84,7 @@ export default function CreditReportsSection() {
 
     setBureauDrafts(drafts);
     setLogDate(new Date().toISOString().split('T')[0]);
+    setReportFile(null);
     setIsAddCreditScoreOpen(true);
   }, [creditBureaus, creditScores]);
 
@@ -93,7 +98,7 @@ export default function CreditReportsSection() {
     });
   };
 
-  const handleAddCreditScores = (e: React.FormEvent) => {
+  const handleAddCreditScores = async (e: React.FormEvent) => {
     e.preventDefault();
     const bureausToUpdate = creditBureaus.filter(b => bureauDrafts[b.key as 'experian' | 'transunion' | 'equifax']?.included);
 
@@ -120,8 +125,33 @@ export default function CreditReportsSection() {
       }
     }
 
+    let storagePath: string | undefined;
+    if (reportFile) {
+      if (!profileId) {
+        toast({
+          title: 'No profile loaded',
+          description: 'The report could not be archived because no finance profile is active.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setIsSavingScores(true);
+      try {
+        storagePath = (await uploadFinanceDocument(reportFile, profileId)).path;
+      } catch (error) {
+        toast({
+          title: 'Could not archive report',
+          description: error instanceof Error ? error.message : 'Please choose a PDF, PNG or JPEG and try again.',
+          variant: 'destructive',
+        });
+        setIsSavingScores(false);
+        return;
+      }
+    }
+
     const updated = { ...creditScores };
     const summaries: string[] = [];
+    const replacedPaths = new Set<string>();
 
     for (const bureau of bureausToUpdate) {
       const key = bureau.key as 'experian' | 'transunion' | 'equifax';
@@ -133,13 +163,22 @@ export default function CreditReportsSection() {
       const existingIdx = existingEntries.findIndex(e => e.date === logDate);
       if (existingIdx >= 0) {
         const copy = [...existingEntries];
-        copy[existingIdx] = { ...copy[existingIdx], score: scoreNum };
+        const previousPath = copy[existingIdx].storagePath;
+        if (storagePath && previousPath && previousPath !== storagePath) {
+          replacedPaths.add(previousPath);
+        }
+        copy[existingIdx] = {
+          ...copy[existingIdx],
+          score: scoreNum,
+          storagePath: storagePath ?? copy[existingIdx].storagePath,
+        };
         updated[key] = copy;
       } else {
         const newEntry: CreditScoreEntry = {
           id: 'cs_' + Date.now() + '_' + key,
           date: logDate,
           score: scoreNum,
+          storagePath,
         };
         updated[key] = [...existingEntries, newEntry].sort((a, b) => a.date.localeCompare(b.date));
       }
@@ -157,21 +196,50 @@ export default function CreditReportsSection() {
     }
 
     setCreditScores(updated);
-    saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores: updated });
+    await saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores: updated });
+    for (const oldPath of replacedPaths) {
+      const stillReferenced = Object.values(updated).some(entries =>
+        entries.some(entry => entry.storagePath === oldPath),
+      );
+      if (!stillReferenced) await deleteFinanceDocument(oldPath);
+    }
+    setIsSavingScores(false);
     setIsAddCreditScoreOpen(false);
     toast({
-      title: `Credit Scores Logged (${bureausToUpdate.length})`,
+      title: storagePath ? `Credit Scores and Report Logged (${bureausToUpdate.length})` : `Credit Scores Logged (${bureausToUpdate.length})`,
       description: summaries.join(' · '),
     });
   };
 
-  const performDeleteCreditScore = (bureau: 'experian' | 'transunion' | 'equifax', entryId: string) => {
+  const openScoreReport = async (path: string) => {
+    const url = await signedDocumentUrl(path);
+    if (!url) {
+      toast({
+        title: 'Could not open report',
+        description: 'The private document could not be opened. Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const performDeleteCreditScore = async (bureau: 'experian' | 'transunion' | 'equifax', entryId: string) => {
+    const removed = creditScores[bureau].find(entry => entry.id === entryId);
     const updated = {
       ...creditScores,
       [bureau]: creditScores[bureau].filter(e => e.id !== entryId),
     };
     setCreditScores(updated);
-    saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores: updated });
+    await saveDataToSupabase('accounts', { bankAccounts, memberships, creditScores: updated });
+    // A single report can substantiate scores from more than one bureau. Only
+    // remove its private object after the last local reference is gone.
+    if (removed?.storagePath) {
+      const stillReferenced = Object.values(updated).some(entries =>
+        entries.some(entry => entry.storagePath === removed.storagePath),
+      );
+      if (!stillReferenced) await deleteFinanceDocument(removed.storagePath);
+    }
     toast({ title: 'Score Entry Deleted', description: 'Credit score entry removed.' });
   };
 
@@ -401,7 +469,18 @@ export default function CreditReportsSection() {
                               >
                                 {entry.score}
                               </span>
+                              {entry.storagePath && (
+                                <button
+                                  type="button"
+                                  onClick={() => void openScoreReport(entry.storagePath!)}
+                                  className="text-muted-foreground hover:text-foreground p-0.5"
+                                  title="Open attached report"
+                                >
+                                  <Paperclip className="h-3 w-3" />
+                                </button>
+                              )}
                               <button
+                                type="button"
                                 onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
                                 className="text-muted-foreground hover:text-destructive p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                                 title="Delete entry"
@@ -478,6 +557,22 @@ export default function CreditReportsSection() {
                   None
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="credit-report-file" className="text-xs font-mono text-muted-foreground">
+                Report evidence <span className="text-muted-foreground/70">(optional)</span>
+              </Label>
+              <Input
+                id="credit-report-file"
+                type="file"
+                accept="application/pdf,image/png,image/jpeg"
+                onChange={(event) => setReportFile(event.target.files?.[0] ?? null)}
+                className="h-8 cursor-pointer border-border/40 bg-background/50 text-xs font-mono file:mr-2 file:border-0 file:bg-transparent file:text-xs file:font-medium"
+              />
+              <p className="text-[10px] leading-relaxed text-muted-foreground">
+                Stored privately with this score. PDF, PNG and JPEG are checked by file signature before upload.
+              </p>
             </div>
 
             {/* Bureau Cards */}
@@ -627,12 +722,13 @@ export default function CreditReportsSection() {
               </Button>
               <Button
                 type="submit"
-                disabled={creditBureaus.filter(b => bureauDrafts[b.key as 'experian' | 'transunion' | 'equifax']?.included).length === 0}
+                disabled={isSavingScores || creditBureaus.filter(b => bureauDrafts[b.key as 'experian' | 'transunion' | 'equifax']?.included).length === 0}
                 className="rounded-lg h-9 px-4 text-xs font-mono bg-primary text-primary-foreground"
               >
                 {(() => {
                   const count = creditBureaus.filter(b => bureauDrafts[b.key as 'experian' | 'transunion' | 'equifax']?.included).length;
                   if (count === 0) return 'Select at least 1 bureau';
+                  if (isSavingScores) return 'Archiving report…';
                   return `Log ${count} ${count === 1 ? 'Score' : 'Scores'}`;
                 })()}
               </Button>

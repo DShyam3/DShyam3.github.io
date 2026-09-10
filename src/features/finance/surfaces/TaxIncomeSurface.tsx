@@ -267,7 +267,7 @@ export default function TaxIncomeSurface({
     <div className="lg:col-span-8 flex flex-col gap-4">
 
       {/* Total Compensation Summary Card */}
-      <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/30 pb-4">
           <div className="space-y-1">
             <span className="text-xs uppercase tracking-wider font-mono font-semibold text-muted-foreground">
@@ -315,7 +315,7 @@ export default function TaxIncomeSurface({
       </div>
 
       {/* Standard Rates Breakdown */}
-      <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <div className="flex flex-col gap-3 mb-4 border-b border-border/50 pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-0.5 text-left min-w-0">
@@ -528,7 +528,7 @@ export default function TaxIncomeSurface({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-border/40 bg-card/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between hover:border-border/80 transition-colors">
+      <div className="surface-card flex flex-col gap-3 rounded-xl border border-border/40 bg-card/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between hover:border-border/80 transition-colors">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">Settings & Package Options</p>
           <p className="text-xs text-muted-foreground font-mono mt-0.5">
@@ -554,7 +554,7 @@ export default function TaxIncomeSurface({
     {/* Right Side: Combined leave balances and holiday tracker */}
     <div className="lg:col-span-4 flex flex-col gap-6">
 
-      <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
           <div className="min-w-0">
             <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-1.5">
@@ -978,7 +978,7 @@ export default function TaxIncomeSurface({
       </div>
 
       {/* Card 2: Payday Details */}
-      <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
           <div className="min-w-0">
             <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-1.5">

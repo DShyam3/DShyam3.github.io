@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import { BookOpen, ExternalLink, Image, Pencil, Quote, Trash2, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ function openableProps(openable: boolean, title: string, onOpen: () => void) {
     'aria-label': `${title} -- open details`,
     onClick: onOpen,
     onKeyDown: (event: React.KeyboardEvent) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
       // Space scrolls the page otherwise, and the card is the target here.
       event.preventDefault();
       onOpen();
@@ -81,8 +81,9 @@ function MediaFace({
   // down -- and a broken <img> renders as alt text on a grey box. Falling back
   // to the collection's icon costs nothing and needs no pre-flight request,
   // which a HEAD check would (and CORS would usually block anyway).
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = image && !imageFailed;
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const [loadedImage, setLoadedImage] = useState<string | null>(null);
+  const showImage = image && image !== failedImage;
 
   return (
     <div
@@ -96,20 +97,25 @@ function MediaFace({
         className="bg-muted relative overflow-hidden shrink-0"
         style={{ aspectRatio: aspect }}
       >
+        {showImage && loadedImage !== image && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground" role="status"><Fallback className="h-8 w-8" aria-hidden="true" /><span className="text-xs">Loading artwork…</span></div>}
         {showImage ? (
           <img
             src={image}
             alt={title}
             className={cn(
-              'w-full h-full',
+              'w-full h-full relative',
+              loadedImage !== image && 'opacity-0',
               imageFit === 'contain' ? 'object-contain p-4' : 'object-cover',
             )}
             loading="lazy"
-            onError={() => setImageFailed(true)}
+            onLoad={() => setLoadedImage(image || null)}
+            onError={() => setFailedImage(image || null)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Fallback className="h-10 w-10 text-muted-foreground/30" />
+          <div className="missing-art w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+            <Fallback className="h-9 w-9 text-primary" aria-hidden="true" />
+            <span className="text-sm font-medium line-clamp-3">{title}</span>
+            <span className="text-xs text-muted-foreground">No artwork available</span>
           </div>
         )}
 
@@ -122,7 +128,7 @@ function MediaFace({
         )}
 
         <div
-          className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+          className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
           {actions}
@@ -179,18 +185,18 @@ function TextFace({ title, subtitle, badge, actions, onOpen, openable }: FacePro
         'item-card p-6 group relative h-full flex flex-col',
         openable && 'cursor-pointer',
       )}
-      onClick={openable ? onOpen : undefined}
+      {...openableProps(openable, title, onOpen)}
     >
-      <Quote className="h-6 w-6 text-muted-foreground/20 absolute top-4 left-4" />
+      <Quote className="h-5 w-5 text-primary mb-4 shrink-0" aria-hidden="true" />
       {badge && (
         <span className="absolute top-4 right-4 text-xs font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
           {badge}
         </span>
       )}
-      <p className="text-base font-serif italic pl-8 line-clamp-4 flex-1">"{title}"</p>
-      {subtitle && <p className="text-sm text-muted-foreground mt-2 pl-8">— {subtitle}</p>}
+      <p className="text-base font-serif leading-relaxed whitespace-pre-wrap break-words flex-1">"{title}"</p>
+      {subtitle && <p className="text-sm text-muted-foreground mt-4">— {subtitle}</p>}
       <div
-        className="flex items-center justify-end gap-1 mt-4 pl-8"
+        className="flex items-center justify-end gap-1 mt-4"
         onClick={(e) => e.stopPropagation()}
       >
         {actions}
@@ -234,6 +240,7 @@ export function EntityCard<T extends CollectionRow, R>({
   onRemove,
 }: EntityCardProps<T, R>) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const { card } = config;
   const title = card.title(item);
@@ -277,10 +284,11 @@ export function EntityCard<T extends CollectionRow, R>({
         <Button
           variant="secondary"
           size="icon"
-          className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+          aria-label={`Delete ${title}`}
+          className="h-7 w-7 bg-background/90 shadow-sm"
           onClick={() => confirmRemove?.()}
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="h-3 w-3" />
         </Button>
       )}
     </>
@@ -309,7 +317,7 @@ export function EntityCard<T extends CollectionRow, R>({
 
   return (
     <>
-      <div className={cn(dimmed && 'opacity-60 hover:opacity-100 transition-opacity')}>
+      <div ref={cardRef} className={cn(dimmed && 'opacity-60 hover:opacity-100 transition-opacity')}>
         <Face
           Fallback={card.fallbackIcon ?? DEFAULT_FALLBACK[card.variant]}
           imageFit={card.imageFit ?? 'cover'}
@@ -331,6 +339,10 @@ export function EntityCard<T extends CollectionRow, R>({
       <CardDetailDialog
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          cardRef.current?.querySelector<HTMLElement>('[role="button"]')?.focus();
+        }}
         title={title}
         subtitle={subtitle}
         imageUrl={image}

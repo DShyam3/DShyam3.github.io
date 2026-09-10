@@ -5,7 +5,7 @@ and the record of phases 0-6 are in `REHAUL_HISTORY.md`.
 
 **Start at Part 0.5 for how AI is used here, and 7.O for what happens next.**
 
-Audit date: 2026-09-04, last revised 2026-09-07 (7.O: 7.7 payslips marked done).
+Audit date: 2026-09-04, last revised 2026-09-10 (7.O: durable investment holdings added alongside statement import, payslip reconciliation, deterministic change summary, scheduled TrueLayer sync, and versioned tax configurations).
 Supabase project:
 `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2, Postgres 15.8.1.030).
 
@@ -615,10 +615,12 @@ What is available now covers most of the value:
 - **The normalised model already exists.** `finance_credit_bureaus`,
   `finance_credit_scores`, `BUREAU_BANDS` and `getUniversalStanding` are the
   cross-bureau layer the spec asks for, already written.
-- **Ingestion by statutory report.** All three bureaus issue a full credit
-  report as PDF. That routes through the same extraction pipeline as payslips,
-  so credit is a *document* problem rather than an API problem, and costs
-  almost nothing extra once 7.7 exists.
+- **Ingestion by statutory report — done.** A credit-score entry can now carry
+  an optional PDF, PNG or JPEG archive in the private `finance-documents`
+  bucket. The file is magic-byte checked before upload and opens through a
+  five-minute signed URL; the native score history remains the data the app
+  calculates over. The same report can evidence scores from several bureaus
+  and is removed only when its final score reference is deleted.
 - **Adapter behind the interface.** Build the model and UI against manual and
   PDF ingestion. A bureau contract later drops in behind the same interface —
   ADR-002 applied exactly as intended.
@@ -815,12 +817,10 @@ Anything that recurs monthly and matters is worth a rule instead.
 The question "how does the site keep up when the Budget changes?" turns out to
 be two questions wearing one coat, and only one of them is hard.
 
-`finance_tax_configs` holds a single row: income tax bands, NI bands, student
-loan thresholds and rates. There is no tax year on it. Updating it for a new
-Budget therefore does not *add* the new bands, it *replaces* the old ones — so
-last year's take-home is recomputed with this year's numbers the moment you
-save. The figure on the Income surface is not wrong today; it becomes wrong
-retroactively, silently, the first time the rates move.
+`finance_tax_configs` used to hold one current row: income tax bands, NI bands,
+student-loan thresholds and rates. Updating it for a new Budget would not *add*
+the new bands, it would *replace* the old ones — so last year's take-home could
+be recomputed with this year's numbers the moment the configuration was saved.
 
 That is a schema gap, not a news problem.
 
@@ -830,17 +830,20 @@ That is a schema gap, not a news problem.
 | Store bands per effective date, pick by the date being computed | **Do this** |
 | Scrape gov.uk / HMRC for band changes | No. There is no stable API for this; the rates live in Budget documents and HTML tables that are restructured yearly. A scraper here fails silently and produces wrong money |
 
-The fix is an `effective_from date` column rather than a `tax_year` string.
+**Implemented:** an `effective_from date` column rather than a `tax_year`
+string (migration `20260910061010_tax_config_effective_from.sql`).
 Bands mostly change at the April boundary, but not always — the NI rate moved
 twice inside 2022/23 — so a year label cannot express the real history.
 Selection becomes: take the most recent band set whose `effective_from` is on
-or before the date of the figure being computed. `calculateFinance` gains that
-date as a parameter, which it should have had anyway, since it is already the
-kind of pure function that must not read the clock.
+or before the date of the figure being computed. `calculateFinance` now takes
+that date explicitly and refuses to apply a future configuration when history
+is missing.
 
-Seeding is a migration: the current bands become the row effective from the
-start of the current tax year, and earlier years get added as and when a
-historical figure actually needs them. No point inventing history nobody reads.
+The existing default and custom rate sets are both seeded from 6 April 2026;
+earlier years get added as and when a historical figure actually needs them.
+No point inventing history nobody reads. The settings dialog exposes the date:
+saving a different date creates a new version, while correcting an existing
+date remains an explicit edit to that historical rate set.
 
 **Tax news is a separate feature and should stay separate.** A change in the
 additional-rate threshold is *data* and belongs above. "The Chancellor has
@@ -905,8 +908,19 @@ migration; the function never reads it.
 id, no name, no consent expiry — and `exchange_code` deletes all rows before
 inserting. One bank is structural, not incidental.
 
-**It does not paginate.** No cursor handling anywhere, so even the 90-day
-window is silently truncated on a busy account.
+**The prior pagination finding was wrong for this integration.** The Data API
+v1 account/card transaction endpoints accept inclusive `from` and `to` dates
+and document no page or cursor token; they promise the settled transactions in
+that range. The earlier audit conflated this product with TrueLayer merchant
+accounts and the newer, separately-authorised Data API v3 connected-accounts
+flow. `truelayer-sync` now sends the documented date-only range rather than ISO
+timestamps, which also removes a likely cause of provider-specific historical
+HTTP 400 responses.
+
+True cursor pagination is possible only as part of an intentional move to the
+v3 connected-accounts product: it uses client-credential requests and a
+different connection lifecycle. That is an integration migration, not a safe
+query-string addition to the current OAuth v1 connection.
 
 The principle that follows: Open Banking gives a limited window and consent
 lapses, so the local database has to be authoritative. Bank-sourced rows are
@@ -916,8 +930,8 @@ upserted and never pruned.
 |---|---|---|
 | A | Scope deletes by profile, carry each row's own `profile_id`, upsert transactions instead of delete-then-insert | deploy only |
 | B | Provider identity, `consent_expires_at`, `last_synced_at`, `UNIQUE(profile_id, provider_id)`; connect inserts rather than replaces; sync loops connections | **DONE** (migration `20260908180000_truelayer_multiple_connections.sql` + edge function v19) |
-| C | Backfill history in date windows, resumable via `backfilled_from` because an edge function will time out before a multi-year walk finishes | **DONE** (pagination within a window still open) |
-| D | Daily `pg_cron` sync, as `watchlist-daily-sync` already does; surface consent expiry before it lapses | B (now unblocked) |
+| C | Backfill history in date windows, resumable via `backfilled_from` because an edge function will time out before a multi-year walk finishes | **DONE** (Data API v1 has no in-window cursor; requests use its documented inclusive date range) |
+| D | Daily `pg_cron` sync, as `watchlist-daily-sync` already does; surface consent expiry before it lapses | **DONE** (migration `20260908200000_truelayer_cron_sync.sql`; deployed job verified active and completing daily) |
 
 A is worth doing on its own and immediately: it is small, and it is the
 difference between syncing being safe and being destructive.
@@ -1115,9 +1129,8 @@ Edge Function type error is caught before merge rather than by chance.
 A status board rather than a design. 7.A–7.N say *what* and *why*; this says
 *what is left* and *in what order*. Update it as things land.
 
-**As of 2026-09-07 (evening).** 366 tests, lint at zero, typecheck clean, build
-clean. `main` up to date. Live project `yvtiybyuifkiwyrnjebe`, all migrations
-applied, `truelayer-sync` at v18.
+**As of 2026-09-10.** 414 tests, lint at zero, typecheck clean, build clean.
+Live project `yvtiybyuifkiwyrnjebe`, all migrations applied.
 
 ##### Landed since the last board update
 
@@ -1158,8 +1171,59 @@ can now be connected and synced simultaneously without overwriting:
 - `BankAccountsSection` renders individual bank cards with logos, consent
   expiration timers, individual disconnect actions, and "+ Connect Another Bank"
 
-What 7.7 does **not** close by itself — and is still open below — is **7.8**
-(reconcile net pay against transactions).
+**7.M step D scheduled TrueLayer sync — done.** `truelayer-daily-sync` invokes
+the protected Edge Function at 05:00 UTC using a service-role secret read from
+Supabase Vault at execution time. The job and its HTTP request both completed
+successfully on 2026-09-10; the function refreshes balances, transaction
+history and daily snapshots without requiring the browser to be open. Individual
+provider failures remain visible in the normal sync result, rather than making
+the other connected banks stale.
+
+**7.K effective-dated tax configurations — done.** Rate sets are now versioned
+by their first applicable date, with one version per date for each default or
+override timeline. Calculations accept an explicit date and select the latest
+applicable set, so they cannot accidentally turn a historical calculation into
+a calculation using a future Budget. The settings UI makes that date visible
+when adding the next rate set.
+
+**Statement import, 7.8 payslip reconciliation, and the standing summary — done.**
+
+- `statement-import.ts` parses CSV, OFX and QFX locally, preserves the
+  ledger's sign convention and provides stable per-account identities, giving
+  history older than an Open Banking provider returns.
+- `finance_payslip_transaction_reconciliations` stores only user-confirmed,
+  one-to-one payslip-to-transaction links. Composite foreign keys make a
+  cross-profile link impossible; matching is pure, penny-exact and limited to
+  a five-day window.
+- `change-summary.ts` compares like-for-like calendar month-to-date windows
+  over ledger rows. Home renders its actual received, spent, net and biggest
+  category movement; there is no generated or model-derived arithmetic.
+
+**7.10 credit-report evidence — done.** Manual score capture can now archive
+its source report beside the score in the existing private finance bucket.
+Every archive is file-signature checked, never exposed through a public URL,
+and displayed only through a short-lived signed URL. No report contents are
+sent to a model or treated as data until the user explicitly captures a score.
+
+**Investment holdings and local import — done.** The Investments screen is no
+longer populated by demo rows. Current positions are saved as profile-scoped,
+RLS-protected records in `finance_investment_holdings` (migration
+`20260910074712_finance_investment_holdings.sql`), with an optional link to an
+existing Investment account such as a broker or exchange. A composite foreign
+key makes a cross-profile account link impossible; its covering index lives in
+`20260910122724_investment_holding_account_index.sql`. An investment account's
+balance is deliberately described as uninvested cash, so its positions and
+cash cannot be counted twice.
+
+The CSV review flow reads Trading 212 activity/holdings and Kraken
+Trades/Balances exports locally. It saves only selected, normalised current
+positions and buy/sell history (`20260910124547_investment_activity_history.sql`);
+the original CSV is discarded when the dialog closes and no broker credential
+or raw export reaches Supabase. The importer never invents a price: a missing
+or non-GBP cost/valuation stays explicitly unknown (`cost_basis_known` /
+`current_price_known`, migration `20260910123738_investment_holding_price_facts.sql`)
+and is excluded from value/return figures until the user reviews it. Overlapping
+export periods are idempotent through a per-account provider reference.
 
 ##### The honest caveat
 
@@ -1177,16 +1241,18 @@ None of it is speculative — the logic underneath carries tests — but a layou
 that broke would not have announced itself. **Half an hour with the page open
 is worth more right now than any item below.**
 
-##### Ready to build, nothing blocking
+##### Next: browser smoke test
 
-| # | Work | Why now |
-|---|---|---|
-| 1 | CSV / OFX statement import | The only route to bank history older than the API serves, and parsing is deterministic — no key, pure `lib/finance`, testable |
-| 2 | Extend `deriveAlerts` into the deterministic "what changed" summary | 7.Q: the standing summary must be reproducible, so it is rules over rows rather than generated prose |
-| 3 | 7.8: reconcile captured payslip net pay against transactions | 7.7 is done; this is the next step that makes the figures useful beyond display |
-| 4 | 7.M step D: nightly `pg_cron` sync | Unblocked by 7.M step B; `watchlist-daily-sync` is the working precedent |
-| 5 | 7.K: `effective_from` on tax bands | Migration. Past figures are silently rewritten today |
-| 6 | Pagination inside a fetch window | A dense 90-day window still truncates |
+There is no remaining unblocked implementation item ahead of a look at the
+page. Exercise the changes below before choosing another feature: this catches
+the visual and session-state problems unit tests cannot see.
+
+Add the new Investments check: create an Investment account, add a holding
+linked to it, reload the page, edit it, and remove it. Its account's balance is
+cash only; the portfolio total should equal that cash plus the saved positions.
+Then use a non-critical Trading 212 or Kraken CSV: verify the review screen,
+the saved current positions and the activity ledger; re-import the same file
+and verify that neither the position nor activity counts duplicate.
 
 ##### Needs a decision, not a keyboard
 
@@ -1228,11 +1294,11 @@ had been drawn into the middle of them.
   embedding key (or a self-hosted model, per 7.P)
 - **7.K news** — tax *rates* are data and unblocked; tax *news* is content
 
-No longer blocked, and moved up: **7.8** (reconciling captured figures against
-transactions) and **7.10**'s useful half (archive the credit report, capture
-the scores by hand). **7.7 is done** — archive, capture, native view and
-browser-side PDF import. Automated extraction for payslips remains a later
-convenience, not a gate.
+**7.7 and 7.8 are done** — archive, capture, native view and browser-side PDF
+import; then explicit reconciliation against the imported/synced ledger. 7.10's
+useful half (archive the credit report and capture scores by hand) remains
+unblocked. Automated document extraction remains a later convenience, not a
+gate.
 
 ##### Deferred by choice
 
@@ -1242,14 +1308,10 @@ a contract, not code).
 
 ##### A suggested order
 
-1. **Look at the page.** Everything above assumes the last twenty commits render.
-   Include Income → payslips: import a folder, open a detail dialog, check the
-   student-loan comparison against the model.
-2. **CSV/OFX import** — the main data gap payslips do not cover (bank history
-   older than the API serves).
-3. ~~**7.N A–C**~~ — done; debt observations, drift reconcile, and SLC statement lag handling implemented. Next: **7.8** (reconcile net pay to transactions).
-4. ~~**`AccountsSurface`**~~ — done; decomposed into 4 dedicated section components.
-5. **The key**, and then 7.6 through 7.10 in order.
+1. **Look at the page.** Include Home → What changed, Income → payslips and
+   its bank-payment confirmation, then a CSV/OFX import on a non-critical
+   account. Logic that has not been seen is not fully verified.
+2. **The key**, then the remaining model-assisted work from 7.6–7.10.
 
 The ordering principle: data before features, and anything that silently
 produces wrong numbers before anything that produces new ones.

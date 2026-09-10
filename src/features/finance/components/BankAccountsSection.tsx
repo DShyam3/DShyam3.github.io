@@ -1,3 +1,4 @@
+import { AccountInspector } from './AccountInspector';
 import React, { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
@@ -81,6 +82,8 @@ export default function BankAccountsSection() {
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const {
     bankAccounts,
+    mockTransactions,
+    recurrings,
     creditScores,
     memberships,
     saveDataToSupabase,
@@ -178,81 +181,11 @@ export default function BankAccountsSection() {
           </Button>
         </div>
 
-        <div className="overflow-auto max-h-[60vh] bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors -mx-0">
-          <table className="min-w-[720px] w-full text-xs text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
-                <th className="py-3 px-3 whitespace-nowrap">Name</th>
-                <th className="py-3 px-3 whitespace-nowrap">Type</th>
-                <th className="py-3 px-3 whitespace-nowrap">Issuer</th>
-                <th className="py-3 px-3 text-right whitespace-nowrap">Balance</th>
-                <th className="py-3 px-3 text-right whitespace-nowrap">Annual Fee</th>
-                <th className="py-3 px-3 whitespace-nowrap">Use Case</th>
-                <th className="py-3 px-3 text-center whitespace-nowrap">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/20">
-              {bankAccounts.map(account => {
-                const isImported = isTrueLayerAccount(account);
-                const issuer = providerDisplayName(account.issuer);
-                const logoUri = providerLogoUris.get(providerKey(account.issuer)) ?? null;
-
-                return (
-                  <tr key={account.id} className="hover:bg-muted/10 transition-colors">
-                    <td className="py-3 px-3 font-semibold text-foreground flex items-center gap-2">
-                      {isImported ? (
-                        <ProviderLogo name={issuer} uri={logoUri} size="account" />
-                      ) : (
-                        <>
-                          <span
-                            className="w-1.5 h-6 rounded-full shrink-0"
-                            style={{ backgroundColor: account.color || 'hsl(var(--muted-foreground))' }}
-                          />
-                          <span className="text-base shrink-0 leading-none">{account.emoji || '💰'}</span>
-                        </>
-                      )}
-                      <span>{account.name}</span>
-                    </td>
-                    <td className="py-3 px-3 capitalize">{account.type}</td>
-                    <td className="py-3 px-3">{issuer}</td>
-                    <td className={cn("py-3 px-3 text-right font-mono font-bold", account.balance >= 0 ? "text-positive" : "text-destructive")}>
-                      {formatGBP(account.balance)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono">{formatGBP(account.annualFee)}</td>
-                    <td className="py-3 px-3 text-muted-foreground truncate max-w-[150px]">{account.useCase || '—'}</td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setActiveAccount(account);
-                            setIsEditAccountOpen(true);
-                          }}
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteAccount(account.id)}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {bankAccounts.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-6 italic text-muted-foreground">No bank accounts added.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {bankAccounts.map(account => <AccountInspector key={account.id} account={account} transactions={mockTransactions} bills={recurrings}
+            onEdit={() => { setActiveAccount(account); setIsEditAccountOpen(true); }}
+            onDelete={() => handleDeleteAccount(account.id)} />)}
+          {bankAccounts.length === 0 && <p className="surface-card rounded-3xl border p-6 text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">No accounts yet. Add an account to track balances and linked activity.</p>}
         </div>
       </div>
 
@@ -262,7 +195,7 @@ export default function BankAccountsSection() {
         const hasConnections = trueLayerStatus?.connected && connections.length > 0;
 
         return (
-          <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+          <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="space-y-0.5">
                 <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
@@ -456,17 +389,24 @@ export default function BankAccountsSection() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="acc-balance" className="text-xs font-mono text-muted-foreground">Balance (£)</Label>
+              <Label htmlFor="acc-balance" className="text-xs font-mono text-muted-foreground">
+                {newAccount.type === 'investment' ? 'Uninvested Cash Balance (£)' : 'Balance (£)'}
+              </Label>
               <Input
                 id="acc-balance"
                 type="number"
                 step="0.01"
-                placeholder="e.g. 5200 (Use negative for credit balance)"
+                placeholder={newAccount.type === 'investment' ? 'e.g. 250.00 cash not invested' : 'e.g. 5200 (Use negative for credit balance)'}
                 value={newAccount.balance}
                 onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                 className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                 required
               />
+              {newAccount.type === 'investment' && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Positions are recorded in Investments. Enter cash only here so your portfolio is not counted twice.
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-fee" className="text-xs font-mono text-muted-foreground">Annual Fee (£)</Label>
@@ -547,7 +487,9 @@ export default function BankAccountsSection() {
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="edit-acc-balance" className="text-xs font-mono text-muted-foreground">Balance (£)</Label>
+                <Label htmlFor="edit-acc-balance" className="text-xs font-mono text-muted-foreground">
+                  {activeAccount.type === 'investment' ? 'Uninvested Cash Balance (£)' : 'Balance (£)'}
+                </Label>
                 <Input
                   id="edit-acc-balance"
                   type="number"
@@ -557,6 +499,11 @@ export default function BankAccountsSection() {
                   className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                   required
                 />
+                {activeAccount.type === 'investment' && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Positions are recorded in Investments. Enter cash only here so your portfolio is not counted twice.
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-acc-fee" className="text-xs font-mono text-muted-foreground">Annual Fee (£)</Label>

@@ -1,0 +1,310 @@
+/* The decorative palette is independent of success/error colours. A page's
+   colour identifies its subject; only labelled status indicators convey state. */
+[data-section='about'],
+[data-section='finance'],
+[data-section='recipes'],
+[data-palette='sage'] {
+  --section-colour: var(--sage);
+}
+
+[data-section='travel'],
+[data-section='links'],
+[data-section='inventory'],
+[data-palette='sky'] {
+  --section-colour: var(--sky);
+}
+
+[data-section='books'],
+[data-section='articles'],
+[data-section='auth'],
+[data-section='watchlist'],
+[data-palette='lavender'] {
+  --section-colour: var(--lavender);
+}
+
+[data-section='inspiration'],
+[data-section='thoughts'],
+[data-palette='peach'] {
+  --section-colour: var(--peach);
+}
+
+[data-section='photos'],
+[data-section='beliefs'],
+[data-palette='rose'] {
+  --section-colour: var(--rose);
+}
+
+.app-shell {
+  isolation: isolate;
+  background-image:
+    radial-gradient(ellipse at 8% 0%, hsl(var(--section-colour, var(--sage)) / var(--wash-opacity)), transparent 48%),
+    radial-gradient(ellipse at 100% 58%, hsl(var(--peach) / var(--wash-opacity)), transparent 53%),
+    radial-gradient(ellipse at 36% 100%, hsl(var(--lavender) / var(--wash-opacity)), transparent 48%);
+}
+
+.app-header {
+  border-bottom-color: hsl(var(--section-colour, var(--sage)) / 0.35);
+}
+
+.app-header img {
+  box-shadow: 0 0 0 4px hsl(var(--section-colour, var(--sage)) / 0.2);
+}
+
+.app-header .nav-link {
+  border: 1px solid hsl(var(--border) / 0.65);
+  border-radius: 999px;
+  background: hsl(var(--card) / 0.65);
+  padding: 0.6rem 0.9rem;
+}
+
+.navigation-panel,
+.glass-dialog {
+  background-color: hsl(var(--popover) / 0.96);
+  background-image: radial-gradient(ellipse at 100% 0%, hsl(var(--lavender) / 0.12), transparent 65%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-color: hsl(var(--border) / 0.75);
+}
+
+.navigation-panel nav {
+  gap: 0.5rem;
+}
+
+.navigation-panel .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: linear-gradient(115deg, hsl(var(--section-colour) / 0.17), hsl(var(--card) / 0.65));
+}
+
+.navigation-panel .nav-link::before {
+  content: '';
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: hsl(var(--section-colour));
+  box-shadow: 0 0 0 3px hsl(var(--section-colour) / 0.14);
+}
+
+.navigation-panel .nav-link[aria-current='page'] {
+  border-color: hsl(var(--primary) / 0.6);
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.25);
+}
+
+.collection-filters .nav-link {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.finance-navigation .nav-link,
+.finance-navigation nav > button {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.collection-filters .nav-link:hover,
+.finance-navigation button:hover {
+  background-color: hsl(var(--card) / 0.7);
+}
+
+.collection-filters .nav-link-active,
+.finance-navigation .nav-link-active,
+.finance-navigation button[aria-current='page'] {
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  box-shadow: 0 3px 10px hsl(var(--primary) / 0.12);
+}
+
+.surface-card,
+.ambient-card,
+.app-shell .travel-sidebar {
+  background-color: hsl(var(--card) / var(--surface-opacity));
+  background-image: linear-gradient(135deg, hsl(var(--section-colour, var(--sage)) / 0.09), transparent 62%);
+  border-color: hsl(var(--border) / 0.7);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 28px -18px hsl(var(--foreground) / 0.18), inset 0 1px 0 hsl(var(--card) / 0.65);
+}
+
+.ambient-card,
+.surface-card[data-palette] {
+  background-image:
+    radial-gradient(ellipse at 100% 0%, hsl(var(--section-colour, var(--sage)) / var(--panel-tint)), transparent 70%),
+    radial-gradient(ellipse at 0% 100%, hsl(var(--section-colour, var(--sage)) / 0.18), transparent 60%);
+}
+
+.about-intro {
+  background-image:
+    radial-gradient(ellipse at 100% 0%, hsl(var(--sage) / var(--hero-tint)), transparent 78%),
+    radial-gradient(ellipse at 0% 100%, hsl(var(--peach) / 0.35), transparent 65%);
+}
+
+.portrait-card {
+  background: linear-gradient(145deg, hsl(var(--sage) / 0.35), hsl(var(--sky) / 0.22), hsl(var(--peach) / 0.28));
+}
+
+.finance-hero {
+  min-height: 9rem;
+}
+
+.finance-hero > :last-child:not(:first-child) {
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: hsl(var(--card) / 0.55);
+}
+
+.item-card {
+  background-color: hsl(var(--card) / var(--surface-opacity));
+  background-image: linear-gradient(140deg, hsl(var(--section-colour, var(--sage)) / 0.18), transparent 80%);
+  border: 1px solid hsl(var(--border) / 0.55);
+  box-shadow: 0 5px 20px -12px hsl(var(--foreground) / 0.2);
+}
+
+.item-card:hover {
+  border-color: hsl(var(--section-colour, var(--sage)) / 0.9);
+}
+
+.card-body {
+  background: linear-gradient(115deg, hsl(var(--section-colour, var(--sage)) / 0.12), transparent);
+}
+
+.app-shell .travel-map-col {
+  border: 1px solid hsl(var(--sky) / 0.3);
+  border-radius: 1.5rem;
+  padding: 1rem;
+  background:
+    radial-gradient(ellipse at 50% 45%, hsl(var(--sky) / 0.2), transparent 68%),
+    hsl(var(--card) / 0.4);
+}
+
+.app-footer {
+  border-color: hsl(var(--section-colour, var(--sage)) / 0.3);
+}
+
+@media (max-width: 639px) {
+  .surface-card,
+  .ambient-card,
+  .app-shell .travel-sidebar,
+  .app-shell .travel-map-col {
+    border-radius: 1.25rem;
+  }
+
+  .finance-hero {
+    padding: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-card,
+  .portrait-card img {
+    transition: none;
+  }
+
+  .item-card:hover,
+  .portrait-card:hover img {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .navigation-panel,
+  .glass-dialog,
+  .surface-card,
+  .ambient-card,
+  .item-card {
+    background-color: hsl(var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* The second pass: readable content, purposeful inspectors and input feedback. */
+.missing-art {
+  background: radial-gradient(ellipse at 20% 10%, hsl(var(--section-colour, var(--sage)) / .24), transparent 70%), hsl(var(--card));
+}
+.item-card:focus-visible,
+.record-preview:focus-visible,
+.travel-country-row:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+.record-preview:hover { border-color: hsl(var(--primary) / .5); }
+.record-inspector {
+  background-color: hsl(var(--card) / .97);
+}
+@media (min-width: 768px) {
+  .record-inspector {
+    left: auto;
+    right: 1rem;
+    top: 1rem;
+    transform: none;
+    max-height: calc(100dvh - 2rem);
+    /* Side panels should not inherit a centred dialog's slide transform. */
+    animation: none;
+  }
+}
+.collection-cards[data-presentation="reading"] .card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  align-items: stretch;
+  max-width: 76rem;
+  margin-inline: auto;
+}
+.collection-cards[data-presentation="reading"] .item-card {
+  background: hsl(var(--card) / .96);
+  max-width: 65ch;
+}
+.collection-cards[data-presentation="gallery"] .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+}
+.collection-cards[data-presentation="gallery"] .item-card img { object-fit: contain; }
+.app-shell[data-section="articles"] .card-body,
+.app-shell[data-section="thoughts"] .card-body {
+  background: hsl(var(--card) / .96);
+}
+.glass-dialog p { overflow-wrap: anywhere; }
+.glass-dialog .whitespace-pre-wrap { line-height: 1.8; max-width: 65ch; }
+.glass-dialog input, .glass-dialog textarea, .glass-dialog [role="combobox"] {
+  background-color: hsl(var(--background) / .94);
+}
+.glass-dialog [aria-invalid="true"] { border-color: hsl(var(--destructive)); }
+.glass-dialog input:disabled, .glass-dialog textarea:disabled { opacity: .6; }
+.travel-sidebar .travel-country-row { min-height: 44px; border-radius: 12px; }
+.travel-sidebar .travel-country-row--active { background: hsl(var(--primary) / .12); }
+.travel-sidebar .city-panel-header { padding: 1rem; background: hsl(var(--card)); }
+.travel-sidebar .city-panel-back { min-height: 44px; min-width: 44px; display: grid; place-items: center; }
+.travel-sidebar .city-list-row { min-height: 44px; }
+.travel-sidebar .city-panel-country-name { white-space: normal; overflow-wrap: anywhere; }
+.travel-sidebar .travel-country-name { white-space: normal; }
+.travel-sidebar .travel-remove-btn:focus-visible,
+.travel-sidebar .city-remove-btn:focus-visible { opacity: 1; }
+@media (pointer: coarse) {
+  .ui-button, .city-remove-btn, .travel-remove-btn,
+  .glass-dialog [role="combobox"], .glass-dialog input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .app-shell button[title] { min-height: 44px; min-width: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-dialog, [data-tx-row] { animation: none; transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .record-inspector, .missing-art, .collection-cards .item-card { background: hsl(var(--card)); }
+}
+.collection-cards[data-presentation="reading"] .card-grid > *,
+.collection-cards[data-presentation="gallery"] .card-grid > * { max-width: none; }
+.collection-cards[data-presentation="gallery"] .card-body { padding: 1rem; }
+.collection-cards[data-presentation="gallery"] .card-title { font-size: .875rem; line-height: 1.5; min-height: 2.5rem; }
+.collection-cards[data-presentation="gallery"] .card-sub { display: -webkit-box; }
+@media (max-width: 767px) {
+  .collection-cards[data-presentation="gallery"] .card-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
+}
+/* Dismiss immediately. Focus restoration must not wait for an exit animation
+   in a background tab or on a device that suspends painting. */
+.glass-dialog[data-state='closed'], .dialog-overlay[data-state='closed'] { animation: none; }

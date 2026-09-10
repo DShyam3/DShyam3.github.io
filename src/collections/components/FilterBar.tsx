@@ -45,7 +45,7 @@ export function FilterBar<T extends CollectionRow, R>({
     // dropped "Tech + EDC" with nothing to say it was still there. The
     // interpuncts went with it: a wrapped row leaves one dangling at the end
     // of a line, so spacing carries the separation instead.
-    <div className="flex flex-col md:flex-row md:items-start justify-between border-b border-border/50 px-4 md:px-0 gap-4 md:gap-6 py-3 md:py-2">
+    <div className="collection-filters flex flex-col md:flex-row md:items-start justify-between border-b border-border/50 px-4 md:px-0 gap-3 md:gap-4 py-3 md:py-2">
       <div className="flex flex-col flex-1 min-w-0">
         {config.facets.map((facet) => {
           const all = { key: ALL, label: 'All' };
@@ -61,7 +61,7 @@ export function FilterBar<T extends CollectionRow, R>({
             <nav
               key={facet.key}
               aria-label={`${facet.key} filter`}
-              className="flex flex-wrap items-center gap-x-4 md:gap-x-5 gap-y-1 py-1.5"
+              className="flex flex-wrap items-center gap-x-1.5 md:gap-x-2 gap-y-1 py-1.5"
             >
               {options.map((option) => (
                 <button
@@ -92,7 +92,7 @@ export function FilterBar<T extends CollectionRow, R>({
       </div>
 
       {showSearch && (
-        <div className="w-full md:w-[200px] lg:w-[260px] shrink-0">
+        <div className="w-full md:w-[170px] lg:w-[180px] shrink-0">
           <SearchBar
             query={search}
             onChange={setSearch}

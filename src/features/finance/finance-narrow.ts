@@ -18,6 +18,7 @@ import type {
   CreditBureauConfig,
   Debt,
   FinanceSettings,
+  InvestmentHolding,
   Membership,
   RecurringBill,
 } from '@/features/finance/finance-types';
@@ -64,6 +65,11 @@ export const asDebtType = oneOf<Debt['type']>(
 export const asMembershipType = oneOf<Membership['type']>(
   ['points', 'cashback', 'miles', 'perks'],
   'perks',
+);
+
+export const asInvestmentCategory = oneOf<InvestmentHolding['category']>(
+  ['Stock', 'ETF', 'Crypto', 'Mutual Fund', 'Real Estate', 'Cash', 'Other'],
+  'Other',
 );
 
 export const asUkRegion = oneOf<FinanceSettings['ukRegion']>(

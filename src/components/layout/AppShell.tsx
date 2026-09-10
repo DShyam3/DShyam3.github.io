@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,9 @@ export function AppShell({
   scrollable = true,
   toolbar,
 }: AppShellProps) {
+  const { pathname } = useLocation();
+  const section = pathname.split('/')[1] || 'about';
+
   return (
     // The shell is exactly one viewport tall at every width, and `clip` --
     // not `hidden` -- is what keeps it that way. An `overflow: hidden` box is
@@ -53,7 +57,7 @@ export function AppShell({
     // chrome was a header, a footer and a thirteen-link nav strip and left
     // the grid a ~30px slot. The strip is a menu button today, so the chrome
     // fits and the phone gets the same frame as everything else.
-    <div className="h-[100dvh] flex flex-col bg-background overflow-clip">
+    <div data-section={section} className="app-shell h-[100dvh] flex flex-col bg-background overflow-clip">
       {/* Thirteen nav links sit before the content on every page, so a
           keyboard user would otherwise tab through all of them on each one.
           Off-screen until focused, which is the point: it is for the people

@@ -36,8 +36,6 @@ const CATEGORIES = [
   { key: 'wishlist', label: 'Wishlist' },
 ];
 
-const labelFor = (key: string) => CATEGORIES.find((c) => c.key === key)?.label ?? key;
-
 export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
   table: 'books',
   path: '/books',
@@ -60,6 +58,7 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
 
   card: {
     variant: 'media',
+    imageFit: 'contain',
     // Book covers are 2:3.
     aspect: '2 / 3',
     fallbackIcon: BookOpen,
@@ -70,7 +69,9 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
     // Genre, not the blurb -- the description belongs in the dialog, where
     // there is room to read it.
     excerpt: (book) => book.genre ?? undefined,
-    badge: (book) => labelFor(book.category),
+    // The active filter already tells you the reading state. A large label on
+    // the artwork took attention away from the cover, especially in the
+    // default Completed view; the category remains available in its editor.
   },
 
   // Image fields take a pasted URL or an upload; uploads go to the photos

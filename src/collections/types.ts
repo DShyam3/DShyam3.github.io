@@ -54,6 +54,8 @@ export interface FacetDef<T> {
    * starts from Owned again.
    */
   resetsOthers?: boolean;
+  /** Custom matcher for option values that don't directly match the field value */
+  match?: (item: T, optionKey: string) => boolean;
 }
 
 /**
@@ -273,4 +275,32 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
 
   /** Validate on submit. Return a message keyed by field, or null if valid. */
   validate?: (values: FormValues) => Record<string, string> | null;
+
+  /** Custom view to replace the standard grid (e.g. EDC showcase) when active. Return null to render standard grid. */
+  customView?: (context: CollectionViewContext<T>) => ReactNode | null;
+
+  /** Custom toolbar actions next to the summary/add button (e.g. EDC Curate button). Return null for standard add button. */
+  customToolbarActions?: (context: CollectionToolbarContext<T>) => ReactNode | null;
+}
+
+export interface CollectionViewContext<T extends CollectionRow> {
+  items: T[];
+  allItems: T[];
+  loading: boolean;
+  filters: Record<string, string>;
+  setFilter: (key: string, value: string) => void;
+  isAdmin: boolean;
+  updateItem: (id: string, updates: Partial<T>) => Promise<unknown>;
+  removeItem: (id: string) => Promise<unknown>;
+  addItem: (values: Record<string, unknown>) => Promise<unknown>;
+  search: string;
+}
+
+export interface CollectionToolbarContext<T extends CollectionRow> {
+  items: T[];
+  allItems: T[];
+  filters: Record<string, string>;
+  isAdmin: boolean;
+  updateItem: (id: string, updates: Partial<T>) => Promise<unknown>;
+  addItem: (values: Record<string, unknown>) => Promise<unknown>;
 }

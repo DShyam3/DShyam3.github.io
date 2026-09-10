@@ -91,7 +91,7 @@ export default function MembershipsSection() {
           </Button>
         </div>
 
-        <div className="overflow-auto max-h-[60vh] bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors">
+        <div className="surface-card overflow-auto max-h-[60vh] bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors">
           <table className="min-w-[640px] w-full text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">

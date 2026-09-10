@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { MapPin, ArrowLeft, Search, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,8 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
   onRemoveCity,
   onBack,
 }) => {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { headingRef.current?.focus(); }, [countryCode]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   const { askDelete, deleteDialog } = useDeleteConfirm();
@@ -56,12 +58,12 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
   return (
     <div className="city-panel h-full flex flex-col">
       <div className="city-panel-header sticky top-0 bg-card z-10 p-3 border-b flex items-center gap-3">
-        <button onClick={onBack} className="city-panel-back p-1 hover:bg-muted rounded-md transition-colors">
+        <button aria-label="Back to visited countries" onClick={onBack} className="city-panel-back p-1 hover:bg-muted rounded-md transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <img src={flagUrl} alt={countryName} className="city-panel-flag w-6 h-4 object-cover rounded-sm shadow-sm" />
         <div className="city-panel-title flex-1 min-w-0">
-          <h3 className="city-panel-country-name text-sm font-semibold truncate uppercase tracking-wider">{countryName}</h3>
+          <h3 ref={headingRef} tabIndex={-1} className="city-panel-country-name text-sm font-semibold truncate uppercase tracking-wider">{countryName}</h3>
           <p className="city-panel-city-count text-xs text-muted-foreground uppercase">{visitedCities.length} CITIES VISITED</p>
         </div>
       </div>
@@ -71,6 +73,7 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
+              aria-label="Search cities"
               type="text"
               placeholder="SEARCH CITY..."
               className="pl-8 h-8 text-xs uppercase bg-muted/30"
@@ -126,7 +129,8 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
                         onConfirm: () => onRemoveCity(String(city.id)),
                       })
                     }
-                    className="city-remove-btn opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 hover:text-destructive transition-all"
+                    aria-label={`Remove ${city.city_name}`}
+                    className="city-remove-btn opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 p-1 hover:text-destructive transition-all"
                   >
                     <X className="w-3 h-3" />
                   </button>

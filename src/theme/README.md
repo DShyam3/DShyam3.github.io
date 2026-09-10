@@ -3,6 +3,9 @@
 Where the site's look is defined. If you want to change a font, a colour or a
 shadow, it is one of these.
 
+For the design direction, component recipes and future page work, see
+[DESIGN_SYSTEM.md](../../DESIGN_SYSTEM.md).
+
 | What | Where |
 |---|---|
 | Font stacks and the Google Fonts request | `src/theme/fonts.ts` |
@@ -59,45 +62,39 @@ throughout. They are `whitespace-nowrap` and absolutely positioned, so
 they were the one real overflow risk; measured at 375px they compute to 12px
 with no overflow and 82px of clearance between the two.
 
-## Card surfaces
+## Colour and surfaces
 
-Finance layers translucent panels over the page, and the opacity carries
-meaning. It had drifted to eight values across the codebase, several of them
-one-offs a step away from a neighbour. Four, each with a job:
+`src/index.css` owns the light/dark HSL tokens. `src/theme/surfaces.css`
+composes them into the ambient page backgrounds, cards, navigation and dialogs.
+The original Doto and Space Mono font families are retained.
 
-| Class | Role |
+The palette uses warm ivory or charcoal foundations, sage/lime primary controls,
+and peach, lavender, sky blue and rose accents. `AppShell` publishes
+`data-section` from the route, giving related pages a consistent accent:
+
+| Accent | Pages |
 |---|---|
-| `bg-card/50` | A panel. The default surface for a card or section |
-| `bg-card/40` | A row at rest inside one |
-| `bg-card/60` | That row hovered |
-| `bg-card/90` | That row selected |
+| Sage | About, Finance, Recipes |
+| Sky | Travel, Links, Inventory |
+| Lavender | Books, Articles, Watchlist, Auth |
+| Peach | Inspiration, Thoughts |
+| Rose | Photos, Beliefs |
 
-`bg-card/30` and `/45` were rest states and folded into `/40`; `/70` and `/80`
-were hover targets and folded into `/60`. Nothing lost a state it had.
+Shared `Card` and collection `item-card` surfaces inherit the page accent.
+Use `data-palette="sage|sky|lavender|peach|rose"` on a `Card`, or with
+`ambient-card` on a custom panel, for a stronger gradient. The home bento and
+finance summary cards deliberately mix accents. Ordinary rows stay quieter.
 
-Note the base `Card` component is solid `bg-card` -- the translucency is a
-finance idiom layered on top, not the site default.
+Decorative palette tokens are separate from `positive`, `destructive` and
+`chart-1..5`; colours never replace a status label or calculation. Text, inputs
+and popovers have their own contrast tokens in both themes. Glass is reserved
+for floating navigation and dialogs; card grids use translucent fills without
+hundreds of blur filters. Reduced transparency uses opaque surfaces, and reduced
+motion disables decorative card movement.
 
 ## Radii
 
-`--radius` is 0.5rem, and Tailwind's `lg` / `md` / `sm` derive from it (8px,
-6px, 4px). `rounded-xl` does not: it is Tailwind's own 0.75rem and is the
-finance card corner, used 126 times against `rounded-lg`'s 314. That
-inconsistency is real and still open -- collapsing it is a visible design
-decision rather than a cleanup, so it wants an eye on the page first.
-
-What has been settled: bare `rounded` computes to 4px, exactly the same as the
-token-derived `rounded-sm`, so the 15 uses of it are now `rounded-sm` and the
-off-token spelling is gone. `rounded-full` and a single deliberate
-`rounded-none` are unaffected.
-
-## Colours
-
-Colour tokens live in `src/index.css` as HSL triples, with a `:root` block for
-light and a `.dark` block for dark. Tailwind reads them through
-`hsl(var(--token))`, which is why `bg-background` works in both themes without
-a second definition.
-
-They are not in this folder because Tailwind's `@layer base` needs them in the
-stylesheet it processes. `src/index.css` is the source of truth for colour;
-this README is the signpost to it.
+`--radius` is 0.875rem (14px), with Tailwind `lg`, `md` and `sm` derived from it.
+Shared panels use 24px corners (20px on mobile), collection cards use 16px,
+and navigation/actions use pills. The card grid sizing and scroll ownership
+remain in `src/index.css` and `CardGrid`.

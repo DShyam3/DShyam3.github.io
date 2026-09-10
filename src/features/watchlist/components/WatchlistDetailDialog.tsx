@@ -18,6 +18,7 @@ import { PlatformBadge } from './PlatformLogo';
 interface WatchlistDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   item: WatchlistItem;
   status?: string;
   onDelete?: () => void;
@@ -44,6 +45,7 @@ interface WatchlistDetailDialogProps {
 export function WatchlistDetailDialog({
   open,
   onOpenChange,
+  onCloseAutoFocus,
   item,
   status,
   onDelete,
@@ -128,6 +130,7 @@ export function WatchlistDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
         className={cn(
           'max-h-[85vh] overflow-y-auto p-0 rounded-xl items-start',
           // Wider dialog for TV shows with seasons

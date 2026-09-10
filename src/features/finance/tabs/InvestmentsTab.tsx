@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { InvestmentHolding, BankAccount } from '@/features/finance/finance-types';
+import { InvestmentActivity, InvestmentHolding, BankAccount } from '@/features/finance/finance-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,8 @@ import {
   Coins,
   DollarSign,
   ArrowUpRight,
-  Info
+  Info,
+  Upload,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -42,12 +43,21 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { InvestmentImportDialog } from '@/features/finance/components/InvestmentImportDialog';
+import type { ImportedInvestmentActivity, ImportedInvestmentHolding, InvestmentImportProvider } from '@/lib/finance';
 
 interface InvestmentsTabProps {
+  activities: InvestmentActivity[];
   holdings: InvestmentHolding[];
-  onAddHolding: (holding: Omit<InvestmentHolding, 'id'>) => void;
-  onEditHolding: (holding: InvestmentHolding) => void;
+  onAddHolding: (holding: Omit<InvestmentHolding, 'id'>) => void | Promise<void>;
+  onEditHolding: (holding: InvestmentHolding) => void | Promise<void>;
   onDeleteHolding: (id: string) => void;
+  onImportHoldings: (
+    holdings: ImportedInvestmentHolding[],
+    activities: ImportedInvestmentActivity[],
+    accountId: string,
+    provider: InvestmentImportProvider,
+  ) => Promise<boolean> | boolean;
   formatGBP: (num: number) => string;
   bankAccounts: BankAccount[];
 }
@@ -62,6 +72,8 @@ const HOLDING_CATEGORIES = [
   'Other'
 ] as const;
 
+const UNLINKED_ACCOUNT = '__unlinked__';
+
 type HoldingCategory = typeof HOLDING_CATEGORIES[number];
 
 const CATEGORY_COLORS: Record<HoldingCategory, string> = {
@@ -75,24 +87,41 @@ const CATEGORY_COLORS: Record<HoldingCategory, string> = {
 };
 
 export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
+  activities,
   holdings,
   onAddHolding,
   onEditHolding,
   onDeleteHolding,
+  onImportHoldings,
   formatGBP,
   bankAccounts
 }) => {
   // State for Add/Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingHolding, setEditingHolding] = useState<InvestmentHolding | null>(null);
 
   // Form State
   const [formName, setFormName] = useState('');
   const [formTicker, setFormTicker] = useState('');
+  const [formAccountId, setFormAccountId] = useState<string | undefined>();
   const [formCategory, setFormCategory] = useState<HoldingCategory>('Stock');
   const [formShares, setFormShares] = useState(0);
   const [formAvgPrice, setFormAvgPrice] = useState(0);
   const [formCurrentPrice, setFormCurrentPrice] = useState(0);
+
+  const investmentAccounts = useMemo(
+    () => bankAccounts.filter(account => account.type === 'investment'),
+    [bankAccounts],
+  );
+  const accountNames = useMemo(
+    () => new Map(investmentAccounts.map(account => [account.id, account.name])),
+    [investmentAccounts],
+  );
+  const recentActivities = useMemo(
+    () => [...activities].sort((left, right) => right.occurredOn.localeCompare(left.occurredOn)).slice(0, 12),
+    [activities],
+  );
 
   // Future Value Projection Slider States
   const [calcInitial, setCalcInitial] = useState(10000);
@@ -104,10 +133,25 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
   const portfolioStats = useMemo(() => {
     let totalValue = 0;
     let totalCost = 0;
+    let comparableValue = 0;
+    let comparableCost = 0;
+
+    let valuatedHoldings = 0;
+    let comparableHoldings = 0;
 
     holdings.forEach(h => {
-      totalValue += h.shares * h.currentPrice;
-      totalCost += h.shares * h.avgPrice;
+      const currentPriceKnown = h.currentPriceKnown ?? true;
+      const costBasisKnown = h.costBasisKnown ?? true;
+      if (currentPriceKnown) {
+        totalValue += h.shares * h.currentPrice;
+        valuatedHoldings += 1;
+      }
+      if (costBasisKnown) totalCost += h.shares * h.avgPrice;
+      if (currentPriceKnown && costBasisKnown) {
+        comparableValue += h.shares * h.currentPrice;
+        comparableCost += h.shares * h.avgPrice;
+        comparableHoldings += 1;
+      }
     });
 
     // Also include cash balance from 'investment' accounts in bankAccounts
@@ -116,8 +160,8 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       .reduce((sum, acc) => sum + acc.balance, 0);
 
     const totalPortfolioValue = totalValue + investmentAccountsCash;
-    const profitLoss = totalValue - totalCost;
-    const totalReturnPercent = totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
+    const profitLoss = comparableValue - comparableCost;
+    const totalReturnPercent = comparableCost > 0 ? (profitLoss / comparableCost) * 100 : 0;
 
     return {
       totalHoldingsValue: totalValue,
@@ -125,7 +169,9 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       totalPortfolioValue,
       totalCost,
       profitLoss,
-      totalReturnPercent
+      totalReturnPercent,
+      valuatedHoldings,
+      comparableHoldings,
     };
   }, [holdings, bankAccounts]);
 
@@ -134,6 +180,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
     const categoriesMap: Record<string, number> = {};
 
     holdings.forEach(h => {
+      if (!(h.currentPriceKnown ?? true)) return;
       const val = h.shares * h.currentPrice;
       categoriesMap[h.category] = (categoriesMap[h.category] || 0) + val;
     });
@@ -194,6 +241,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
     setEditingHolding(null);
     setFormName('');
     setFormTicker('');
+    setFormAccountId(undefined);
     setFormCategory('Stock');
     setFormShares(0);
     setFormAvgPrice(0);
@@ -205,6 +253,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
     setEditingHolding(holding);
     setFormName(holding.name);
     setFormTicker(holding.ticker || '');
+    setFormAccountId(holding.accountId);
     setFormCategory(holding.category);
     setFormShares(holding.shares);
     setFormAvgPrice(holding.avgPrice);
@@ -214,21 +263,29 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName || formShares <= 0 || formAvgPrice <= 0 || formCurrentPrice <= 0) return;
+    if (
+      !formName.trim()
+      || !Number.isFinite(formShares) || formShares <= 0
+      || !Number.isFinite(formAvgPrice) || formAvgPrice < 0
+      || !Number.isFinite(formCurrentPrice) || formCurrentPrice < 0
+    ) return;
 
     const data = {
       name: formName,
       ticker: formTicker.toUpperCase() || undefined,
+      accountId: formAccountId,
       category: formCategory,
       shares: Number(formShares),
       avgPrice: Number(formAvgPrice),
-      currentPrice: Number(formCurrentPrice)
+      costBasisKnown: true,
+      currentPrice: Number(formCurrentPrice),
+      currentPriceKnown: true,
     };
 
     if (editingHolding) {
-      onEditHolding({ ...data, id: editingHolding.id });
+      void onEditHolding({ ...data, id: editingHolding.id });
     } else {
-      onAddHolding(data);
+      void onAddHolding(data);
     }
     setIsModalOpen(false);
   };
@@ -247,11 +304,11 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
             </div>
             {portfolioStats.investmentAccountsCash > 0 ? (
               <span className="text-xs text-muted-foreground/80 block font-mono">
-                Incl. {formatGBP(portfolioStats.investmentAccountsCash)} cash
+                {portfolioStats.valuatedHoldings}/{holdings.length} valued · incl. {formatGBP(portfolioStats.investmentAccountsCash)} cash
               </span>
             ) : (
               <span className="text-xs text-muted-foreground/80 block font-mono">
-                Across {holdings.length} holdings
+                {portfolioStats.valuatedHoldings}/{holdings.length} holdings valued
               </span>
             )}
           </div>
@@ -283,7 +340,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
               {portfolioStats.profitLoss >= 0 ? '+' : ''}{formatGBP(portfolioStats.profitLoss)}
             </div>
             <span className="text-xs text-muted-foreground/80 block font-mono">
-              All-time unrealised return
+              Across {portfolioStats.comparableHoldings}/{holdings.length} comparable holdings
             </span>
           </div>
         </Card>
@@ -300,7 +357,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
               {portfolioStats.totalReturnPercent >= 0 ? '+' : ''}{portfolioStats.totalReturnPercent.toFixed(2)}%
             </div>
             <span className="text-xs text-muted-foreground/80 block font-mono">
-              ROI on active holdings
+              ROI where cost and price are known
             </span>
           </div>
         </Card>
@@ -320,13 +377,23 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   {holdings.length} investment assets and return statistics
                 </CardDescription>
               </div>
-              <Button
-                onClick={handleOpenAdd}
-                size="sm"
-                className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 px-3.5 flex items-center gap-1.5 self-start sm:self-center font-mono"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Asset
-              </Button>
+              <div className="flex items-center gap-2 self-start sm:self-center">
+                <Button
+                  onClick={() => setIsImportOpen(true)}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-lg px-3 text-xs font-mono"
+                >
+                  <Upload className="mr-1.5 h-3.5 w-3.5" /> Import CSV
+                </Button>
+                <Button
+                  onClick={handleOpenAdd}
+                  size="sm"
+                  className="flex h-8 items-center gap-1.5 self-start rounded-lg bg-primary px-3.5 text-xs font-mono text-primary-foreground hover:bg-primary/90 sm:self-center"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Asset
+                </Button>
+              </div>
             </div>
 
             {holdings.length === 0 ? (
@@ -357,8 +424,11 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   </thead>
                   <tbody className="divide-y divide-border/20">
                     {holdings.map(h => {
+                      const costBasisKnown = h.costBasisKnown ?? true;
+                      const currentPriceKnown = h.currentPriceKnown ?? true;
                       const value = h.shares * h.currentPrice;
                       const cost = h.shares * h.avgPrice;
+                      const comparable = currentPriceKnown && costBasisKnown;
                       const gainLoss = value - cost;
                       const returnPct = cost > 0 ? (gainLoss / cost) * 100 : 0;
                       return (
@@ -368,6 +438,11 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                             {h.ticker && (
                               <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider font-normal">
                                 {h.ticker}
+                              </span>
+                            )}
+                            {h.accountId && accountNames.get(h.accountId) && (
+                              <span className="block text-xs text-muted-foreground font-mono font-normal mt-0.5">
+                                {accountNames.get(h.accountId)}
                               </span>
                             )}
                           </td>
@@ -387,25 +462,23 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                             {h.shares}
                           </td>
                           <td className="py-3 text-right font-mono tabular-nums">
-                            <span className="block text-muted-foreground">{formatGBP(h.avgPrice)}</span>
-                            <span className="block font-semibold text-foreground">{formatGBP(h.currentPrice)}</span>
+                            <span className="block text-muted-foreground">{costBasisKnown ? formatGBP(h.avgPrice) : 'Cost unknown'}</span>
+                            <span className="block font-semibold text-foreground">{currentPriceKnown ? formatGBP(h.currentPrice) : 'Needs price'}</span>
                           </td>
                           <td className="py-3 text-right font-mono tabular-nums font-semibold text-foreground">
-                            {formatGBP(value)}
+                            {currentPriceKnown ? formatGBP(value) : '—'}
                           </td>
                           <td className={cn(
                             "py-3 text-right font-mono tabular-nums",
-                            gainLoss >= 0 ? "text-positive font-semibold" : "text-destructive"
+                            !comparable ? "text-muted-foreground" : gainLoss >= 0 ? "text-positive font-semibold" : "text-destructive"
                           )}>
-                            <span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span>
-                            <span className="text-xs block">
-                              {gainLoss >= 0 ? '+' : ''}{returnPct.toFixed(1)}%
-                            </span>
+                            {comparable ? <><span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span><span className="block text-xs">{gainLoss >= 0 ? '+' : ''}{returnPct.toFixed(1)}%</span></> : '—'}
                           </td>
                           <td className="py-3 text-center">
-                            <div className="flex items-center justify-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center justify-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                               <Button
                                 onClick={() => handleOpenEdit(h)}
+                                aria-label={`Edit ${h.name}`}
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
@@ -414,6 +487,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                               </Button>
                               <Button
                                 onClick={() => onDeleteHolding(h.id)}
+                                aria-label={`Delete ${h.name}`}
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
@@ -521,6 +595,47 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
       </div>
+
+      <Card className="border border-border/40 bg-card/50 p-5 transition-colors hover:border-border/80">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-foreground">Imported activity</CardTitle>
+            <CardDescription className="mt-1 text-xs font-mono text-muted-foreground">Confirmed buy and sell rows from local broker/exchange CSV imports</CardDescription>
+          </div>
+          <span className="text-xs font-mono text-muted-foreground">{activities.length} saved record{activities.length === 1 ? '' : 's'}</span>
+        </div>
+        {recentActivities.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border/40 px-3 py-5 text-center text-xs text-muted-foreground">A Trading 212 or Kraken Trades export will keep its buy/sell history here after you review and import it.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border/35">
+            <table className="w-full min-w-[680px] text-left text-xs">
+              <thead className="border-b border-border/35 bg-muted/15 font-mono uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Date</th>
+                  <th className="px-3 py-2 font-semibold">Activity</th>
+                  <th className="px-3 py-2 font-semibold">Asset</th>
+                  <th className="px-3 py-2 text-right font-semibold">Quantity</th>
+                  <th className="px-3 py-2 text-right font-semibold">GBP / unit</th>
+                  <th className="px-3 py-2 font-semibold">Account</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/20">
+                {recentActivities.map(activity => (
+                  <tr key={activity.id} className="hover:bg-muted/10">
+                    <td className="px-3 py-2 font-mono tabular-nums text-muted-foreground">{activity.occurredOn}</td>
+                    <td className={cn('px-3 py-2 font-semibold uppercase', activity.activityType === 'buy' ? 'text-positive' : 'text-destructive')}>{activity.activityType}</td>
+                    <td className="px-3 py-2 text-foreground"><span className="font-semibold">{activity.name}</span>{activity.ticker && <span className="ml-2 font-mono text-muted-foreground">{activity.ticker}</span>}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">{activity.quantity}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">{activity.unitPriceGbp === undefined ? 'Not GBP' : formatGBP(activity.unitPriceGbp)}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{accountNames.get(activity.accountId) ?? 'Investment account'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {activities.length > recentActivities.length && <p className="mt-2 text-xs text-muted-foreground">Showing the latest {recentActivities.length} records.</p>}
+      </Card>
 
       {/* 3. FUTURE VALUE PROJECTION CALCULATOR */}
       <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
@@ -703,6 +818,14 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
         </div>
       </Card>
 
+      <InvestmentImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        bankAccounts={bankAccounts}
+        formatGBP={formatGBP}
+        onImport={onImportHoldings}
+      />
+
       {/* 4. ADD & EDIT HOLDING MODAL DIALOG */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:rounded-xl border border-border/40 bg-card p-6 max-w-md w-full">
@@ -759,6 +882,29 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="holding-account" className="text-foreground">Investment Account (Optional)</Label>
+                <Select
+                  value={formAccountId ?? UNLINKED_ACCOUNT}
+                  onValueChange={(value) => setFormAccountId(value === UNLINKED_ACCOUNT ? undefined : value)}
+                >
+                  <SelectTrigger id="holding-account" className="rounded-xl border-border/50 bg-background/50 text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl bg-card border border-border/60">
+                    <SelectItem value={UNLINKED_ACCOUNT} className="text-xs focus:bg-muted">No linked account</SelectItem>
+                    {investmentAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id} className="text-xs focus:bg-muted">
+                        {account.name}{account.issuer ? ` · ${account.issuer}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Add a broker or exchange as an Investment account in Accounts to link positions to it.
+                </p>
               </div>
 
               <div className="space-y-1.5">

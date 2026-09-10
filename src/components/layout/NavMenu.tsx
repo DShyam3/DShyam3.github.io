@@ -133,7 +133,7 @@ export function NavMenu({ className }: { className?: string }) {
         // room under the header would be cut off with no way to reach the
         // rest. It fits today at every size; this is the guard for the day it
         // does not.
-        className="app-scroll absolute left-2 right-2 top-full z-40 mt-2 max-h-[65dvh] overflow-y-auto rounded-xl border border-border bg-background p-2 shadow-[0_2px_4px_-2px_hsl(30_10%_15%/0.12),0_18px_40px_-12px_hsl(30_10%_15%/0.28)] sm:p-3 md:left-0 md:right-0 dark:shadow-[0_2px_4px_-2px_hsl(0_0%_0%/0.5),0_18px_40px_-12px_hsl(0_0%_0%/0.7)]"
+        className="navigation-panel app-scroll absolute left-2 right-2 top-full z-40 mt-2 max-h-[65dvh] overflow-y-auto rounded-xl border border-border bg-background p-2 shadow-[0_2px_4px_-2px_hsl(30_10%_15%/0.12),0_18px_40px_-12px_hsl(30_10%_15%/0.28)] sm:p-3 md:left-0 md:right-0 dark:shadow-[0_2px_4px_-2px_hsl(0_0%_0%/0.5),0_18px_40px_-12px_hsl(0_0%_0%/0.7)]"
       >
         <nav
           aria-label="Site"
@@ -150,6 +150,7 @@ export function NavMenu({ className }: { className?: string }) {
               <Link
                 key={link.to}
                 to={link.to}
+                data-section={link.to.slice(1) || 'about'}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'nav-link rounded-lg px-3 py-2.5 transition-colors hover:bg-secondary/60',

@@ -157,14 +157,14 @@ const Travel = () => {
     }, [hovered?.dotKey, visitedCities, viewMode]);
 
     const tooltipText = useMemo(() => {
-        if (!hovered) return isMobile ? 'TAP TO EXPLORE' : 'HOVER TO EXPLORE';
+        if (!hovered) return selectedCountry ? `${selectedCountry.name.toUpperCase()} · SELECTED` : isMobile ? 'TAP TO EXPLORE' : 'HOVER TO EXPLORE';
         if (viewMode === 'cities' && hoveredCities.length > 0) {
             return hoveredCities.map(c => c.city_name).join(', ').toUpperCase();
         }
         return visitedCodes.includes(hovered.code)
             ? `${hovered.name.toUpperCase()} - VISITED`
             : hovered.name.toUpperCase();
-    }, [hovered, viewMode, hoveredCities, visitedCodes, isMobile]);
+    }, [hovered, viewMode, hoveredCities, visitedCodes, isMobile, selectedCountry]);
 
     // Group SOVEREIGN visited countries by continent
     const byContinent = useMemo(() => {
@@ -247,8 +247,10 @@ const Travel = () => {
     }, [handleCountryClick]);
 
     const handleCityPanelBack = useCallback(() => {
+        const code = selectedCountry?.code;
         setSelectedCountry(null);
-    }, []);
+        requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-country="${code}"]`)?.focus());
+    }, [selectedCountry]);
 
     // Total visited cities count
     const totalCitiesVisited = visitedCities.length;
@@ -442,12 +444,19 @@ const Travel = () => {
                                                         <ul className="travel-country-list">
                                                             {countries.map((country) => {
                                                                 const flag = country.flag_url || `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`;
-                                                                const isHighlighted = hovered?.code === country.country_code;
+                                                                const isHighlighted = (selectedCountry?.code || hovered?.code) === country.country_code;
                                                                 const cityCount = citiesByCountry[country.country_code]?.length ?? 0;
                                                                 return (
                                                                     <li
                                                                         key={country.country_code}
                                                                         className={`travel-country-row${isHighlighted ? ' travel-country-row--active' : ''}`}
+                                                                        data-country={country.country_code}
+                                                                        role="button"
+                                                                        tabIndex={0}
+                                                                        aria-label={`Explore ${country.country_name}`}
+                                                                        onKeyDown={(event) => {
+                                                                            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleCountryClick(country.country_code, country.country_name); }
+                                                                        }}
                                                                         onClick={() => handleCountryClick(country.country_code, country.country_name)}
                                                                         style={{ cursor: 'pointer' }}
                                                                     >
@@ -501,13 +510,20 @@ const Travel = () => {
                                                     <ul className="travel-country-list">
                                                         {territoriesSorted.map((country) => {
                                                             const flag = country.flag_url || `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`;
-                                                            const isHighlighted = hovered?.code === country.country_code;
+                                                            const isHighlighted = (selectedCountry?.code || hovered?.code) === country.country_code;
                                                             const cityCount = citiesByCountry[country.country_code]?.length ?? 0;
                                                             return (
                                                                 <li
                                                                     key={country.country_code}
                                                                     className={`travel-country-row${isHighlighted ? ' travel-country-row--active' : ''}`}
-                                                                    onClick={() => handleCountryClick(country.country_code, country.country_name)}
+                                                                    data-country={country.country_code}
+                                                                        role="button"
+                                                                        tabIndex={0}
+                                                                        aria-label={`Explore ${country.country_name}`}
+                                                                        onKeyDown={(event) => {
+                                                                            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleCountryClick(country.country_code, country.country_name); }
+                                                                        }}
+                                                                        onClick={() => handleCountryClick(country.country_code, country.country_name)}
                                                                     style={{ cursor: 'pointer' }}
                                                                 >
                                                                     <div className="travel-flag">

@@ -17,6 +17,7 @@ import {
   PlusCircle,
   Tag,
   FileText,
+  FileUp,
   AlertCircle,
   TrendingDown,
   TrendingUp,
@@ -56,6 +57,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useReviewShortcuts } from '@/features/finance/useReviewShortcuts';
 import { useMerchantLogos } from '@/features/finance/useMerchantLogos';
 import { MerchantAvatar } from '@/features/finance/components/MerchantAvatar';
+import { StatementImportDialog } from '@/features/finance/components/StatementImportDialog';
 import { resolveMerchant } from '@/lib/finance';
 
 interface TransactionsTabProps {
@@ -98,6 +100,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const [newTxDate, setNewTxDate] = useState<Date>(new Date());
   const [newTxNotes, setNewTxNotes] = useState('');
   const [newTxTags, setNewTxTags] = useState('');
+  const [isStatementImportOpen, setIsStatementImportOpen] = useState(false);
 
   // Selected Transaction for Detail Panel
   const selectedTx = useMemo(() => {
@@ -526,7 +529,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       {/* LEFT SECTION: TRANSACTIONS LIST */}
       <div className="lg:col-span-2 flex flex-col space-y-4">
         {/* TOOLBAR: Search, Filter, Sort, Batch Actions */}
-        <div className="bg-card/50 border border-border/40 rounded-xl p-4 space-y-3 hover:border-border/80 transition-colors">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-4 space-y-3 hover:border-border/80 transition-colors">
           <div className="flex flex-col sm:flex-row items-center gap-3">
             {/* Search */}
             <div className="relative w-full sm:flex-1">
@@ -650,6 +653,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
               {/* Add Single Transaction */}
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsStatementImportOpen(true)}
+                className="h-9 rounded-lg border-border/40 bg-background/30 hover:bg-background/80 text-xs flex items-center gap-1.5 px-3 font-mono"
+              >
+                <FileUp className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Import</span>
+              </Button>
+
+              <Button
                 size="sm"
                 onClick={() => setIsAddOpen(true)}
                 className="h-9 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs flex items-center gap-1.5 px-3 font-mono"
@@ -670,7 +683,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               Hidden once the queue is empty -- a full bar every day is noise. */}
           {reviewProgress.remaining > 0 && (
             <div className="flex items-center gap-3 font-mono">
-              <div className="h-2 flex-1 bg-muted rounded-full overflow-hidden">
+              <div role="progressbar" aria-label="Transaction review" aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewProgress.percent} aria-valuetext={`${reviewProgress.reviewed} of ${reviewProgress.total} reviewed`} className="h-2 flex-1 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-positive rounded-full transition-[width] duration-300"
                   style={{ width: `${reviewProgress.percent}%` }}
@@ -760,7 +773,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         </div>
 
         {/* LIST RENDER: Grouped by date */}
-        <div className="bg-card/50 border border-border/40 rounded-xl p-4 min-h-[400px] flex flex-col justify-start hover:border-border/80 transition-colors">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-4 min-h-[400px] flex flex-col justify-start hover:border-border/80 transition-colors">
           {groupedTransactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 my-auto">
               <div className="p-3 bg-muted/20 rounded-xl border border-border/30">
@@ -835,7 +848,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               {groupedTransactions.map(({ date, list }) => (
                 <div key={date} className="space-y-2">
                   {/* Group Date Header */}
-                  <h4 className="text-xs font-sans font-bold tracking-wider text-muted-foreground px-4 py-1">
+                  <h4 className="text-xs font-sans font-bold tracking-wider text-muted-foreground px-4 py-2 border-b border-border/50">
                     {date}
                   </h4>
 
@@ -852,6 +865,14 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         <div
                           key={tx.id}
                           data-tx-row={tx.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${tx.name}, ${formatGBP(Math.abs(tx.amount))}, ${tx.isReviewed ? 'reviewed' : 'needs review'}`}
+                          aria-pressed={isSelected}
+                          onFocus={(event) => { if (event.target === event.currentTarget) setSelectedTxId(tx.id); }}
+                          onKeyDown={(event) => {
+                            if (event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); setSelectedTxId(tx.id); }
+                          }}
                           className={cn(
                             "flex items-center p-2.5 rounded-lg border border-transparent transition-all cursor-pointer select-none font-mono",
                             isSelected
@@ -868,6 +889,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           <div className="flex items-center gap-3 flex-1 min-w-0">
                             <div onClick={e => e.stopPropagation()} className="flex items-center">
                               <Checkbox
+                                aria-label={`Select ${tx.name}`}
                                 checked={isChecked}
                                 onCheckedChange={(checked) => handleSelectRow(tx.id, !!checked)}
                                 className="h-3.5 w-3.5 rounded-sm border-primary/30"
@@ -876,7 +898,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                             <div className="w-1.5 flex justify-center shrink-0">
                               {!tx.isReviewed && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--chart-3))] animate-pulse" />
+                                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                               )}
                             </div>
 
@@ -892,9 +914,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                             />
 
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-baseline gap-2">
-                                <span className="text-xs font-semibold text-foreground truncate block">
+                              <div className="flex flex-col xl:flex-row xl:items-baseline gap-1 xl:gap-2">
+                                <span className="text-xs font-semibold text-foreground break-words block">
                                   {tx.name}
+                                  <span className="block mt-1 font-normal text-muted-foreground">{tx.isReviewed ? 'Reviewed' : 'Needs review'}</span>
                                 </span>
                                 {accInfo && (
                                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/40 border border-border/40 px-2 py-0.5 rounded-md shrink-0 font-medium">
@@ -919,7 +942,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                               <Badge
                                 variant="outline"
                                 className={cn(
-                                  "text-xs font-medium tracking-wide uppercase px-2 py-0.5 border rounded-full font-mono",
+                                  "hidden md:inline-flex text-xs font-medium tracking-wide uppercase px-2 py-0.5 border rounded-full font-mono",
                                   getCategoryColor(tx.category)
                                 )}
                               >
@@ -928,7 +951,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                             )}
 
                             <div className={cn(
-                              "text-xs font-mono font-semibold text-right min-w-[70px]",
+                              "text-xs font-mono font-semibold tabular-nums text-right min-w-[90px]",
                               isIncome ? "text-positive" : "text-destructive"
                             )}>
                               {isIncome ? '+' : '-'}{formatGBP(Math.abs(tx.amount))}
@@ -947,7 +970,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       {/* RIGHT SECTION: TRANSACTION DETAILS PANEL */}
       <div className="flex flex-col space-y-4">
-        <div className="bg-card/50 border border-border/40 rounded-xl p-5 min-h-[500px] hover:border-border/80 transition-colors">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-5 min-h-[500px] hover:border-border/80 transition-colors">
           {selectedTx ? (
             <div className="space-y-6">
               {/* Detail Panel Header */}
@@ -1211,6 +1234,15 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
           )}
         </div>
       </div>
+
+      <StatementImportDialog
+        open={isStatementImportOpen}
+        onOpenChange={setIsStatementImportOpen}
+        transactions={transactions}
+        bankAccounts={bankAccounts}
+        formatGBP={formatGBP}
+        onImport={(updated) => onUpdateTransactions(updated)}
+      />
 
       {/* DIALOG: ADD TRANSACTION MANUALLY */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>

@@ -15,7 +15,39 @@
 import { calculateActualPayday, getDaysInMonth, normalizeHolidays, toISODate } from '@/lib/finance';
 import type { FinanceSettings, TaxConfig, UserHoliday } from '@/features/finance/finance-types';
 
-export const calculateFinance = (settings: FinanceSettings, taxConfig: TaxConfig) => {
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Picks the rate set that was in force on a given UK calendar date.
+ *
+ * Falling back to a future configuration would silently rewrite history, so a
+ * caller must add the missing historical rates instead.
+ */
+export const selectTaxConfigForDate = (
+  taxConfigs: readonly TaxConfig[],
+  asOfDate: string,
+): TaxConfig => {
+  if (!ISO_DATE.test(asOfDate)) {
+    throw new TypeError('Tax configuration selection requires a YYYY-MM-DD date.');
+  }
+
+  const config = taxConfigs
+    .filter(candidate => ISO_DATE.test(candidate.effectiveFrom) && candidate.effectiveFrom <= asOfDate)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+
+  if (!config) {
+    throw new RangeError(`No tax configuration is available for ${asOfDate}.`);
+  }
+
+  return config;
+};
+
+export const calculateFinance = (
+  settings: FinanceSettings,
+  taxConfigs: readonly TaxConfig[],
+  asOfDate: string,
+) => {
+  const taxConfig = selectTaxConfigForDate(taxConfigs, asOfDate);
   const {
     grossSalary,
     pensionType,

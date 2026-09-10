@@ -1,3 +1,4 @@
+import { MetricProgress } from '@/components/ui/metric-progress';
 /**
  * Goals — one of the two sections on the Plan surface (REHAUL_PLAN.md 7.C).
  *
@@ -310,11 +311,11 @@ export default function GoalsSurface() {
         const isActiveGoal = goal.id === selectedGoalId;
         const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
         return (
-          <div
+          <button type="button" aria-pressed={isActiveGoal}
             key={goal.id}
             onClick={() => setSelectedGoalId(isActiveGoal ? null : goal.id)}
             className={cn(
-              "p-3.5 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 font-mono",
+              "surface-card text-left p-5 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 font-mono",
               isActiveGoal
                 ? "bg-card/90 border-border/80 shadow-sm"
                 : "bg-card/40 border-border/30 hover:border-border/60 hover:bg-card/60"
@@ -327,20 +328,9 @@ export default function GoalsSurface() {
               </span>
               <span className="text-xs text-muted-foreground font-mono shrink-0">{formatReadableDate(goal.targetDate)}</span>
             </div>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-muted-foreground">
-                  <span className="font-bold text-foreground font-mono">{formatGBP(goal.currentAmount)}</span>
-                  <span> of </span>
-                  <span className="font-mono">{formatGBP(goal.targetAmount)}</span>
-                </span>
-                <span className="font-bold text-positive font-mono text-xs">{progress.toFixed(0)}%</span>
-              </div>
-              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-positive rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
-              </div>
-            </div>
-          </div>
+            <MetricProgress label={goal.name} value={goal.currentAmount} target={goal.targetAmount}
+              valueText={`${formatGBP(goal.currentAmount)} of ${formatGBP(goal.targetAmount)}`} />
+          </button>
         );
       };
 

@@ -1,56 +1,61 @@
-@import url('https://fonts.googleapis.com/css2?family=Doto:wght@400;500;600;700;800;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 40 20% 98%;
-    --foreground: 30 10% 15%;
+    --background: 48 25% 95%;
+    --foreground: 160 14% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 30 10% 15%;
+    --card-foreground: 160 14% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 30 10% 15%;
+    --popover-foreground: 160 14% 15%;
 
-    --primary: 30 10% 15%;
-    --primary-foreground: 40 20% 98%;
+    --primary: 155 30% 28%;
+    --primary-foreground: 60 30% 98%;
 
-    --secondary: 35 15% 94%;
-    --secondary-foreground: 30 10% 25%;
+    --secondary: 85 18% 90%;
+    --secondary-foreground: 155 18% 25%;
 
-    --muted: 35 10% 92%;
-    --muted-foreground: 30 8% 38%;
+    --muted: 70 13% 89%;
+    --muted-foreground: 155 8% 33%;
 
-    --accent: 25 60% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 76 65% 72%;
+    --accent-foreground: 155 25% 18%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 68% 42%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 15% 88%;
-    --input: 30 15% 88%;
-    --ring: 30 10% 15%;
+    --border: 100 12% 82%;
+    --input: 100 12% 82%;
+    --ring: 155 30% 32%;
 
-    --radius: 0.5rem;
+    --radius: 0.875rem;
+
+    /* Decorative palette, separate from financial status and chart colours. */
+    --sage: 92 38% 65%;
+    --peach: 23 85% 75%;
+    --lavender: 263 65% 79%;
+    --sky: 200 68% 72%;
+    --rose: 342 65% 78%;
+    --surface-opacity: 0.88;
+    --wash-opacity: 0.25;
+    --panel-tint: 0.45;
+    --hero-tint: 0.5;
 
     /* Custom tokens */
     --badge-new: 25 80% 50%;
     --badge-new-foreground: 0 0% 100%;
 
-    /* Data-viz palette. shadcn's Charts work defines --chart-1..5 as themed
-       tokens for exactly this, and finance was reaching for raw hex literals
-       instead -- which cannot follow the theme. Tuned to sit with the warm
-       accent rather than Tailwind's defaults; chart-1 IS the accent, so a
-       single-series chart matches the rest of the page. */
-    --chart-1: 25 60% 55%;
-    --chart-2: 173 45% 38%;
-    --chart-3: 210 40% 45%;
-    --chart-4: 43 70% 50%;
-    --chart-5: 340 45% 55%;
+    /* Data-viz palette: stronger contrast than decorative washes. Keep
+       series distinguishable in both themes and status colours separate. */
+    --chart-1: 155 35% 35%;
+    --chart-2: 210 55% 46%;
+    --chart-3: 267 38% 49%;
+    --chart-4: 27 70% 44%;
+    --chart-5: 344 48% 46%;
 
     /* Merchant monograms pick their own hue per merchant (see
        src/lib/finance/merchant.ts); only the lightness has to follow the
@@ -64,19 +69,17 @@
     --positive: 152 45% 34%;
     --positive-foreground: 0 0% 100%;
 
-    /* See src/theme/fonts.ts and src/theme/README.md.
-       --font-serif and --font-sans both resolve to Space Mono: the names are
-       Tailwind's, kept so existing font-serif/font-sans classes keep working,
-       but the site only has two faces -- Doto to display, Space Mono to read. */
+    /* Preserve the original type identity: Doto for display, Space Mono
+       for body and interface text. See src/theme/fonts.ts. */
     --font-matrix: 'Doto', monospace;
     --font-body: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-serif: var(--font-body);
     --font-sans: var(--font-body);
 
     --shadow-card:
-      0 1px 3px 0 hsl(30 10% 15% / 0.04), 0 1px 2px -1px hsl(30 10% 15% / 0.04);
+      0 1px 3px 0 hsl(160 14% 15% / 0.04), 0 1px 2px -1px hsl(160 14% 15% / 0.04);
     --shadow-card-hover:
-      0 10px 25px -5px hsl(30 10% 15% / 0.08), 0 8px 10px -6px hsl(30 10% 15% / 0.04);
+      0 10px 25px -5px hsl(160 14% 15% / 0.08), 0 8px 10px -6px hsl(160 14% 15% / 0.04);
 
     /* Shadow-as-border: layered shadows replace solid borders for depth */
     --shadow-border:
@@ -90,44 +93,53 @@
   }
 
   .dark {
-    --background: 222 20% 6%;
-    --foreground: 210 20% 96%;
+    --background: 165 13% 7%;
+    --foreground: 60 18% 93%;
 
-    --card: 220 18% 10%;
-    --card-foreground: 210 20% 96%;
+    --card: 160 9% 12%;
+    --card-foreground: 60 18% 93%;
 
-    --popover: 220 18% 10%;
-    --popover-foreground: 210 20% 96%;
+    --popover: 160 9% 12%;
+    --popover-foreground: 60 18% 93%;
 
-    --primary: 210 20% 96%;
-    --primary-foreground: 222 20% 6%;
+    --primary: 76 64% 73%;
+    --primary-foreground: 165 13% 7%;
 
-    --secondary: 220 16% 16%;
-    --secondary-foreground: 210 15% 88%;
+    --secondary: 160 10% 17%;
+    --secondary-foreground: 70 16% 87%;
 
-    --muted: 220 14% 18%;
-    --muted-foreground: 215 14% 72%;
+    --muted: 160 8% 22%;
+    --muted-foreground: 100 9% 80%;
 
-    --accent: 35 85% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 76 64% 73%;
+    --accent-foreground: 165 20% 12%;
 
-    --destructive: 0 62% 45%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 72% 65%;
+    --destructive-foreground: 0 25% 10%;
 
-    --chart-1: 35 85% 55%;
-    --chart-2: 173 55% 48%;
-    --chart-3: 210 60% 62%;
-    --chart-4: 43 85% 62%;
-    --chart-5: 340 60% 65%;
+    --chart-1: 76 64% 73%;
+    --chart-2: 200 65% 68%;
+    --chart-3: 263 65% 77%;
+    --chart-4: 27 85% 69%;
+    --chart-5: 342 65% 72%;
 
     --positive: 152 50% 50%;
-    --positive-foreground: 222 20% 6%;
+    --positive-foreground: 165 13% 7%;
 
     --monogram-lightness: 72%;
+    --sage: 85 38% 48%;
+    --peach: 23 65% 53%;
+    --lavender: 263 45% 57%;
+    --sky: 200 46% 46%;
+    --rose: 342 42% 53%;
+    --surface-opacity: 0.91;
+    --wash-opacity: 0.16;
+    --panel-tint: 0.32;
+    --hero-tint: 0.38;
 
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
-    --ring: 210 20% 96%;
+    --border: 160 8% 22%;
+    --input: 160 8% 22%;
+    --ring: 76 64% 73%;
 
     --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(220 20% 20% / 0.15);
     --shadow-card-hover:
@@ -236,11 +248,11 @@
   }
 
   .nav-link-active {
-    @apply text-foreground font-bold;
+    @apply text-primary font-bold;
   }
 
   .item-card {
-    @apply bg-card rounded-lg overflow-hidden;
+    @apply bg-card rounded-2xl overflow-hidden;
     box-shadow: var(--shadow-card);
     font-family: var(--font-serif);
     transition-property: box-shadow, transform;

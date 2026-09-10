@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateFinance } from './finance-calcs';
+import { calculateFinance, selectTaxConfigForDate } from './finance-calcs';
 import type { FinanceSettings, TaxConfig } from './finance-types';
 
 const sampleSettings: FinanceSettings = {
@@ -19,6 +19,7 @@ const sampleSettings: FinanceSettings = {
 };
 
 const sampleTaxConfig: TaxConfig = {
+  effectiveFrom: '2026-04-06',
   studentLoanThresholds: { none: Infinity, plan1: 24990, plan2: 27295, plan4: 31395, plan5: 25000, postgrad: 21000 },
   studentLoanRates: { none: 0, plan1: 0.09, plan2: 0.09, plan4: 0.09, plan5: 0.09, postgrad: 0.06 },
   incomeTaxBands: {
@@ -38,7 +39,7 @@ const sampleTaxConfig: TaxConfig = {
 
 describe('calculateFinance breakdown modes', () => {
   it('computes correct working days for all 3 modes', () => {
-    const results = calculateFinance(sampleSettings, sampleTaxConfig);
+    const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
 
     // Standard: (365 / 7) * 5 = 260.71428... (52.1429 weeks)
     expect(results.workingDaysStandard).toBeCloseTo((365 / 7) * 5, 4);
@@ -51,7 +52,7 @@ describe('calculateFinance breakdown modes', () => {
   });
 
   it('computes expected rates for £55,000 gross salary across all 3 modes', () => {
-    const results = calculateFinance(sampleSettings, sampleTaxConfig);
+    const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
     const actualWeeks = 365 / 7;
 
     // Standard / Normal: based on 52.1429 weeks (365 / 7)
@@ -71,7 +72,7 @@ describe('calculateFinance breakdown modes', () => {
   });
 
   it('provides all breakdown categories in standard mode', () => {
-    const results = calculateFinance(sampleSettings, sampleTaxConfig);
+    const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
     const standard = results.breakdown.standard;
 
     expect(standard.totalPackage.annual).toBeGreaterThan(standard.preTax.annual);
@@ -83,5 +84,35 @@ describe('calculateFinance breakdown modes', () => {
     // Verify daily is weekly / 5
     expect(standard.postTax.daily).toBeCloseTo(standard.postTax.weekly / 5, 4);
     expect(standard.postTax.hourly).toBeCloseTo(standard.postTax.daily / 8, 4);
+  });
+});
+
+describe('effective-dated tax configuration', () => {
+  const previousConfig: TaxConfig = {
+    ...sampleTaxConfig,
+    effectiveFrom: '2025-04-06',
+    nationalInsuranceBands: {
+      ...sampleTaxConfig.nationalInsuranceBands,
+      mainRatePercent: 12,
+    },
+  };
+
+  it('uses the most recent rate set at or before the requested date', () => {
+    expect(selectTaxConfigForDate([previousConfig, sampleTaxConfig], '2026-03-31'))
+      .toBe(previousConfig);
+    expect(selectTaxConfigForDate([previousConfig, sampleTaxConfig], '2026-04-06'))
+      .toBe(sampleTaxConfig);
+  });
+
+  it('does not apply a future configuration to an earlier figure', () => {
+    expect(() => selectTaxConfigForDate([sampleTaxConfig], '2026-04-05'))
+      .toThrow('No tax configuration is available for 2026-04-05.');
+  });
+
+  it('makes the calculation depend on the requested date rather than the clock', () => {
+    const beforeChange = calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-03-31');
+    const afterChange = calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-04-06');
+
+    expect(beforeChange.nationalInsurance).toBeGreaterThan(afterChange.nationalInsurance);
   });
 });

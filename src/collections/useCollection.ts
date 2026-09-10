@@ -73,6 +73,9 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
       config.facets.reduce((acc, facet) => {
         const value = filters[facet.key];
         if (facet.key === exceptKey || !value || value === ALL) return acc;
+        if (facet.match) {
+          return acc.filter((item) => facet.match!(item, value));
+        }
         // String comparison so boolean columns (is_wishlist) work as facets.
         return acc.filter((item) => String(item[facet.field]) === value);
       }, items),
@@ -134,6 +137,9 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
       if (!facet) return 0;
       const pool = applyFacets(searched, facetKey);
       if (optionKey === ALL) return pool.length;
+      if (facet.match) {
+        return pool.filter((item) => facet.match!(item, optionKey)).length;
+      }
       return pool.filter((item) => String(item[facet.field]) === optionKey).length;
     },
     [config.facets, searched, applyFacets],

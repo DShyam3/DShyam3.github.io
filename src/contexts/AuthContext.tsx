@@ -4,6 +4,7 @@ import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
     isAdmin: boolean;
+    isAuthLoading: boolean;
     login: (password: string) => Promise<boolean>;
     logout: () => Promise<void>;
     session: Session | null;
@@ -17,6 +18,7 @@ const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'd.shyam1256@gmail.com';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isAuthLoading, setIsAuthLoading] = useState(true);
     const [session, setSession] = useState<Session | null>(null);
 
     useEffect(() => {
@@ -25,18 +27,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return session.user.email === ADMIN_EMAIL;
         };
 
-        // Initial session check
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setIsAdmin(checkAdmin(session));
-        });
-
-        // Listen for auth changes
+        // INITIAL_SESSION resolves the saved session before protected routes
+        // decide whether to redirect. One subscription also avoids a stale
+        // getSession response overwriting a newer sign-in or sign-out event.
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
             setIsAdmin(checkAdmin(session));
+            setIsAuthLoading(false);
         });
 
         return () => subscription.unsubscribe();
@@ -67,8 +66,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const value = useMemo(
-        () => ({ isAdmin, login, logout, session }),
-        [isAdmin, login, logout, session],
+        () => ({ isAdmin, isAuthLoading, login, logout, session }),
+        [isAdmin, isAuthLoading, login, logout, session],
     );
 
     return (

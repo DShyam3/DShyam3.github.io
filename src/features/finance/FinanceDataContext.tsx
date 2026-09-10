@@ -24,7 +24,7 @@ import {
 import defaultPresets from '@/data/presets.json';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import type { Payslip, PayslipLine, ProfileTransfer } from '@/lib/finance';
+import type { Payslip, PayslipLine, PayslipTransactionReconciliation, ProfileTransfer } from '@/lib/finance';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
@@ -33,6 +33,7 @@ import {
   asBudgetGroup,
   asBureauKey,
   asDebtType,
+  asInvestmentCategory,
   asFrequency,
   asPensionType,
   asStudentLoanPlan,
@@ -57,6 +58,7 @@ import type {
   RatePeriod,
   FinanceSettings,
   Goal,
+  InvestmentActivity,
   InvestmentHolding,
   Membership,
   MockTransaction,
@@ -76,6 +78,7 @@ import {
   mergeMissingDefaultCategories,
   presetsToDefaultCategories,
 } from './finance-defaults';
+import { selectTaxConfigForDate } from './finance-calcs';
 
 export type BreakdownRateMode = 'normal' | 'including_leave' | 'excluding_leave';
 import {
@@ -83,6 +86,21 @@ import {
   sanitizeBankAccounts,
   sanitizeBudgetCategories,
 } from './utils/calculations';
+
+const EMPTY_TAX_CONFIG: TaxConfig = {
+  effectiveFrom: '2026-04-06',
+  studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
+  studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
+  incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
+  nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 },
+};
+
+const todayInLocalTimezone = () => {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+};
 
 /** All the state and the two Supabase functions. Kept as a hook so the context
  *  value's type is inferred from it rather than hand-maintained. */
@@ -164,14 +182,11 @@ function useProvideFinanceData() {
     return sanitizeBankAccounts([]);
   });
 
-  const [investmentHoldings, setInvestmentHoldings] = useState<InvestmentHolding[]>(() => {
-    return [
-      { id: 'h1', name: 'S&P 500 ETF', ticker: 'VOO', shares: 12.5, avgPrice: 420.50, currentPrice: 485.20, category: 'ETF' },
-      { id: 'h2', name: 'Apple Inc.', ticker: 'AAPL', shares: 15, avgPrice: 150.00, currentPrice: 189.30, category: 'Stock' },
-      { id: 'h3', name: 'Bitcoin', ticker: 'BTC', shares: 0.15, avgPrice: 35000.00, currentPrice: 62450.00, category: 'Crypto' },
-      { id: 'h4', name: 'Ethereum', ticker: 'ETH', shares: 1.2, avgPrice: 1800.00, currentPrice: 3120.00, category: 'Crypto' }
-    ];
-  });
+  // Investment positions are real profile-scoped rows, not dashboard demos.
+  // A blank portfolio is the honest loading/default state until Supabase
+  // returns the selected profile's holdings.
+  const [investmentHoldings, setInvestmentHoldings] = useState<InvestmentHolding[]>([]);
+  const [investmentActivities, setInvestmentActivities] = useState<InvestmentActivity[]>([]);
 
   const [memberships, setMemberships] = useState<Membership[]>(() => {
     return [];
@@ -205,15 +220,30 @@ function useProvideFinanceData() {
     return [];
   });
 
-  // Dynamic configurations fetched from Supabase
-  const [taxConfig, setTaxConfig] = useState<TaxConfig>(() => {
-    return {
-      studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
-      studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
-      incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
-      nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 }
-    };
-  });
+  // Tax rates are historical reference data. The active timeline is the
+  // admin override when present, otherwise the built-in default timeline.
+  const [taxConfigs, setTaxConfigs] = useState<TaxConfig[]>([EMPTY_TAX_CONFIG]);
+  const taxConfig = (() => {
+    try {
+      return selectTaxConfigForDate(taxConfigs, todayInLocalTimezone());
+    } catch {
+      // This only covers the loading/empty state. Historical calculations do
+      // not get this fallback: calculateFinance throws instead of using future
+      // rates for a past date.
+      return taxConfigs[0] ?? EMPTY_TAX_CONFIG;
+    }
+  })();
+  const setTaxConfig = useCallback((config: TaxConfig) => {
+    setTaxConfigs(previous => {
+      const index = previous.findIndex(item => item.effectiveFrom === config.effectiveFrom);
+      return index === -1
+        ? [...previous, config]
+        : previous.map((item, itemIndex) => itemIndex === index ? config : item);
+    });
+  }, []);
+  const resetTaxConfigs = useCallback((config: TaxConfig) => {
+    setTaxConfigs([config]);
+  }, []);
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(() => {
     return DEFAULT_RECURRING_TEMPLATES;
   });
@@ -328,6 +358,7 @@ function useProvideFinanceData() {
   // transfer belongs to both ledgers and the switcher may be on either.
   const [transfers, setTransfers] = useState<ProfileTransfer[]>([]);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
+  const [payslipReconciliations, setPayslipReconciliations] = useState<PayslipTransactionReconciliation[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
 
   /**
@@ -469,13 +500,58 @@ function useProvideFinanceData() {
     void fetchPayslips(profileId);
   }, [fetchPayslips, profileId]);
 
+  /* ---- Payslip ↔ bank payment confirmations (7.8) ----------------------
+     Suggestions stay local and are computed from rows. This small table is
+     intentionally only the explicit confirmation, so a weak bank reference
+     can never silently become a financial fact. */
+  const fetchPayslipReconciliations = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) {
+      setPayslipReconciliations([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('finance_payslip_transaction_reconciliations')
+      .select('id, payslip_id, transaction_id, confirmed_at')
+      .eq('profile_id', forProfile);
+    if (error) {
+      console.warn('payslip reconciliations unavailable');
+      return;
+    }
+    setPayslipReconciliations((data ?? []).map(row => ({
+      id: row.id,
+      payslipId: row.payslip_id,
+      transactionId: row.transaction_id,
+      confirmedAt: row.confirmed_at,
+    })));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchPayslipReconciliations(profileId);
+  }, [fetchPayslipReconciliations, profileId]);
+
   const savePayslip = async (slip: Payslip) => {
     if (!isAdmin || !profileId) return;
-    // Upsert on the natural key: capturing the same pay date twice corrects
-    // the row rather than adding a second one, which the unique index would
-    // reject anyway.
+    // An import can create a fresh client ID for an existing employer/pay-date
+    // row. Resolve its natural key first so correcting that row never changes
+    // the primary key a confirmed bank-payment link refers to.
+    const { data: existing, error: existingError } = await supabase
+      .from('finance_payslips')
+      .select('id')
+      .eq('profile_id', profileId)
+      .eq('employer', slip.employer ?? '')
+      .eq('pay_date', slip.payDate)
+      .maybeSingle();
+    if (existingError) {
+      toast({
+        title: 'Could not look up payslip',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const { error } = await supabase.from('finance_payslips').upsert({
-      id: slip.id,
+      id: existing?.id ?? slip.id,
       profile_id: profileId,
       pay_date: slip.payDate,
       employer: slip.employer ?? '',
@@ -491,24 +567,77 @@ function useProvideFinanceData() {
       notes: slip.notes ?? null,
       lines: (slip.lines ?? []) as unknown as never,
       updated_at: new Date().toISOString(),
-    // Employer is part of the key: overlapping jobs can pay on the same day,
-    // and without it the second payslip replaces the first (7.7).
-    }, { onConflict: 'profile_id,employer,pay_date' });
+    // An ID is immutable once persisted; the natural-key lookup above chooses
+    // it and the primary-key upsert updates the row safely.
+    }, { onConflict: 'id' });
     if (error) {
-      toast({ title: 'Could not save payslip', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Could not save payslip',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
       return;
     }
     await fetchPayslips(profileId);
   };
 
   const deletePayslip = async (id: string) => {
-    if (!isAdmin) return;
-    const { error } = await supabase.from('finance_payslips').delete().eq('id', id);
+    if (!isAdmin || !profileId) return;
+    const { error } = await supabase.from('finance_payslips').delete().eq('id', id).eq('profile_id', profileId);
     if (error) {
-      toast({ title: 'Could not delete payslip', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Could not delete payslip',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
       return;
     }
-    await fetchPayslips(profileId);
+    // The foreign key removes its confirmation too. Refresh both local views
+    // so its old transaction is immediately eligible for another review.
+    await Promise.all([fetchPayslips(profileId), fetchPayslipReconciliations(profileId)]);
+  };
+
+  const savePayslipReconciliation = async (payslipId: string, transactionId: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    const { error } = await supabase
+      .from('finance_payslip_transaction_reconciliations')
+      .upsert({
+        profile_id: profileId,
+        payslip_id: payslipId,
+        transaction_id: transactionId,
+        confirmed_at: new Date().toISOString(),
+      }, { onConflict: 'payslip_id' });
+    if (error) {
+      toast({
+        title: 'Could not link bank payment',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchPayslipReconciliations(profileId);
+    toast({ title: 'Bank payment linked' });
+    return true;
+  };
+
+  const deletePayslipReconciliation = async (payslipId: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    const { error } = await supabase
+      .from('finance_payslip_transaction_reconciliations')
+      .delete()
+      .eq('profile_id', profileId)
+      .eq('payslip_id', payslipId);
+    if (error) {
+      toast({
+        title: 'Could not unlink bank payment',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchPayslipReconciliations(profileId);
+    toast({ title: 'Bank payment unlinked' });
+    return true;
   };
 
   const deleteTransfer = async (id: string) => {
@@ -644,6 +773,8 @@ function useProvideFinanceData() {
           goalsRes,
           contributionsRes,
           bankAccountsRes,
+          investmentHoldingsRes,
+          investmentActivitiesRes,
           membershipsRes,
           debtsRes,
           debtObservationsRes,
@@ -664,15 +795,17 @@ function useProvideFinanceData() {
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
           scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
           scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, use_case, emoji, color')),
+          scopedByProfile(supabase.from('finance_investment_holdings').select('id, account_id, name, ticker, shares, avg_price, cost_basis_known, current_price, current_price_known, category')),
+          scopedByProfile(supabase.from('finance_investment_activities').select('id, account_id, provider, activity_type, occurred_on, name, ticker, quantity, unit_price_gbp, source_reference').order('occurred_on', { ascending: false })),
           scoped(supabase.from('finance_memberships').select('id, is_default, name, type, status, annual_fee, use_case')),
           scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color')),
           scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
-          scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score')),
+          scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji')),
           scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id')),
           scoped(supabase.from('finance_transactions').select('id, is_default, name, merchant, category, amount, date, is_reviewed, account_id, bank_account_id, goal_id, notes, tags, is_recurring')),
-          supabase.from('finance_tax_configs').select('id, is_default, student_loan_thresholds, student_loan_rates, income_tax_bands, national_insurance_bands'),
+          supabase.from('finance_tax_configs').select('id, is_default, effective_from, student_loan_thresholds, student_loan_rates, income_tax_bands, national_insurance_bands'),
           supabase.from('finance_recurring_templates').select('id, is_default, name, category, emoji, tag, default_amount, frequency, linked_budget_item_id, budget_category_name'),
           supabase.from('finance_credit_bureaus').select('id, is_default, key, label, emoji, color, max_score, gradient'),
           supabase.from('finance_holiday_defaults').select('id, is_default, month_index, count, dates, occasion'),
@@ -718,6 +851,8 @@ function useProvideFinanceData() {
           ['goals', goalsRes],
           ['goal_contributions', contributionsRes],
           ['bank_accounts', bankAccountsRes],
+          ['investment_holdings', investmentHoldingsRes],
+          ['investment_activities', investmentActivitiesRes],
           ['memberships', membershipsRes],
           ['debts', debtsRes],
           ['debt_observations', debtObservationsRes],
@@ -845,6 +980,34 @@ function useProvideFinanceData() {
         }));
         if (!bankAccountsRes.error) setBankAccounts(mappedBankAccounts);
 
+        const mappedInvestmentHoldings: InvestmentHolding[] = (investmentHoldingsRes.data ?? []).map(holding => ({
+          id: holding.id,
+          accountId: holding.account_id ?? undefined,
+          name: holding.name,
+          ticker: holding.ticker ?? undefined,
+          shares: Number(holding.shares),
+          avgPrice: Number(holding.avg_price),
+          costBasisKnown: holding.cost_basis_known ?? true,
+          currentPrice: Number(holding.current_price),
+          currentPriceKnown: holding.current_price_known ?? true,
+          category: asInvestmentCategory(holding.category),
+        }));
+        if (!investmentHoldingsRes.error) setInvestmentHoldings(mappedInvestmentHoldings);
+
+        const mappedInvestmentActivities: InvestmentActivity[] = (investmentActivitiesRes.data ?? []).map(activity => ({
+          id: activity.id,
+          accountId: activity.account_id,
+          provider: activity.provider === 'kraken' ? 'kraken' : 'trading212',
+          activityType: activity.activity_type === 'sell' ? 'sell' : 'buy',
+          occurredOn: activity.occurred_on,
+          name: activity.name,
+          ticker: activity.ticker ?? undefined,
+          quantity: Number(activity.quantity),
+          unitPriceGbp: activity.unit_price_gbp === null ? undefined : Number(activity.unit_price_gbp),
+          sourceReference: activity.source_reference,
+        }));
+        if (!investmentActivitiesRes.error) setInvestmentActivities(mappedInvestmentActivities);
+
         const userMemberships = membershipsRes.data?.filter(d => !d.is_default) || [];
         const defaultMemberships = membershipsRes.data?.filter(d => d.is_default) || [];
         const activeMemberships = userMemberships.length > 0 ? userMemberships : defaultMemberships;
@@ -911,9 +1074,9 @@ function useProvideFinanceData() {
         const activeCreditScores = userCreditScores.length > 0 ? userCreditScores : defaultCreditScores;
 
         const scoresObj: CreditScores = {
-          experian: activeCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score })),
-          transunion: activeCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score })),
-          equifax: activeCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score }))
+          experian: activeCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score, storagePath: s.storage_path ?? undefined })),
+          transunion: activeCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score, storagePath: s.storage_path ?? undefined })),
+          equifax: activeCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score, storagePath: s.storage_path ?? undefined }))
         };
         if (!creditScoresRes.error) setCreditScores(scoresObj);
 
@@ -990,21 +1153,22 @@ function useProvideFinanceData() {
         }));
         if (!transactionsRes.error) setMockTransactions(mappedTransactions);
 
-        const userTaxConfig = taxConfigsRes.data?.find(d => !d.is_default);
-        const defaultTaxConfig = taxConfigsRes.data?.find(d => d.is_default);
-        const activeTaxConfig = userTaxConfig || defaultTaxConfig;
+        const mapTaxConfig = (row: NonNullable<typeof taxConfigsRes.data>[number]): TaxConfig => ({
+          effectiveFrom: row.effective_from,
+          studentLoanThresholds: fromJsonb(row.student_loan_thresholds, {} as never),
+          studentLoanRates: fromJsonb(row.student_loan_rates, {} as never),
+          incomeTaxBands: fromJsonb(row.income_tax_bands, {} as never),
+          nationalInsuranceBands: fromJsonb(
+            row.national_insurance_bands,
+            {} as TaxConfig['nationalInsuranceBands'],
+          ),
+        });
+        const userTaxConfigs = (taxConfigsRes.data ?? []).filter(row => !row.is_default).map(mapTaxConfig);
+        const defaultTaxConfigs = (taxConfigsRes.data ?? []).filter(row => row.is_default).map(mapTaxConfig);
+        const activeTaxConfigs = userTaxConfigs.length > 0 ? userTaxConfigs : defaultTaxConfigs;
 
-        if (activeTaxConfig) {
-          const mappedTaxConfig: TaxConfig = {
-            studentLoanThresholds: fromJsonb(activeTaxConfig.student_loan_thresholds, {} as never),
-            studentLoanRates: fromJsonb(activeTaxConfig.student_loan_rates, {} as never),
-            incomeTaxBands: fromJsonb(activeTaxConfig.income_tax_bands, {} as never),
-            nationalInsuranceBands: fromJsonb(
-              activeTaxConfig.national_insurance_bands,
-              {} as TaxConfig['nationalInsuranceBands'],
-            )
-          };
-          setTaxConfig(mappedTaxConfig);
+        if (activeTaxConfigs.length > 0) {
+          setTaxConfigs(activeTaxConfigs);
         }
 
         const userTemplates = recurringTemplatesRes.data?.filter(d => !d.is_default) || [];
@@ -1237,25 +1401,12 @@ function useProvideFinanceData() {
           tags: t.tags || undefined,
           isRecurring: t.is_recurring || undefined
         }));
-        if (defaultTaxConfig) {
-          defaultsMap['tax_config'] = {
-            studentLoanThresholds: fromJsonb(
-              defaultTaxConfig.student_loan_thresholds,
-              {} as TaxConfig['studentLoanThresholds'],
-            ),
-            studentLoanRates: fromJsonb(
-              defaultTaxConfig.student_loan_rates,
-              {} as TaxConfig['studentLoanRates'],
-            ),
-            incomeTaxBands: fromJsonb(
-              defaultTaxConfig.income_tax_bands,
-              {} as TaxConfig['incomeTaxBands'],
-            ),
-            nationalInsuranceBands: fromJsonb(
-              defaultTaxConfig.national_insurance_bands,
-              {} as TaxConfig['nationalInsuranceBands'],
-            ),
-          };
+        if (defaultTaxConfigs.length > 0) {
+          try {
+            defaultsMap['tax_config'] = selectTaxConfigForDate(defaultTaxConfigs, todayInLocalTimezone());
+          } catch {
+            defaultsMap['tax_config'] = defaultTaxConfigs[0];
+          }
         }
         defaultsMap['recurring_templates'] = defaultTemplates.map(t => ({
           name: t.name,
@@ -1319,6 +1470,7 @@ function useProvideFinanceData() {
     | 'finance_budget_items'
     | 'finance_credit_scores'
     | 'finance_debts'
+    | 'finance_investment_holdings'
     | 'finance_goal_contributions'
     | 'finance_goals'
     | 'finance_memberships'
@@ -1333,7 +1485,8 @@ function useProvideFinanceData() {
    * which leaves a window where the data is simply gone -- a constraint
    * violation or a dropped connection between the two took the lot. Each save
    * now upserts first and calls this after, so a failure leaves the previous
-   * rows intact. Template rows (is_default) and other profiles are untouched.
+   * rows intact. Template rows (where a table has them) and other profiles are
+   * untouched.
    */
   const pruneScoped = async (
     table: ScopedFinanceTable,
@@ -1347,9 +1500,16 @@ function useProvideFinanceData() {
     const base = supabase
       .from<ScopedFinanceTable, never>(table)
       .delete()
-      .eq('is_default', false)
       .eq('profile_id', profileId);
-    const scopedBase = isTemplate === undefined ? base : base.eq('is_template', isTemplate);
+    // Holdings do not have defaults/templates: every row is a real position.
+    // The older finance tables do, so preserve the default rows when their
+    // collections are replaced.
+    const userRows = table === 'finance_investment_holdings'
+      ? base
+      : base.eq('is_default', false);
+    const scopedBase = isTemplate === undefined || table === 'finance_investment_holdings'
+      ? userRows
+      : userRows.eq('is_template', isTemplate);
     const { error } = await (ids.length > 0
       ? scopedBase.not('id', 'in', `(${ids.join(',')})`)
       : scopedBase);
@@ -1359,7 +1519,7 @@ function useProvideFinanceData() {
   // Each branch narrows `contentData` to the shape its key implies; the caller
   // passes whichever collection it just changed.
   const saveDataToSupabase = async (key: string, contentData: unknown) => {
-    if (!isAdmin) return;
+    if (!isAdmin) return false;
     // Every non-template finance row carries a profile_id, and the database
     // enforces it with a CHECK. Writing without one would fail per-statement
     // and leave the delete-then-insert save half applied, so refuse up front.
@@ -1369,7 +1529,7 @@ function useProvideFinanceData() {
         description: 'Finance data could not be saved because no profile was found.',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
     try {
       if (key === 'settings') {
@@ -1532,8 +1692,52 @@ function useProvideFinanceData() {
             profile_id: profileId,
             bureau: s.bureau,
             date: s.date,
-            score: s.score
+            score: s.score,
+            storage_path: s.storagePath || null,
           })), { onConflict: 'id' });
+        }
+      } else if (key === 'investments') {
+        const holdings = contentData as InvestmentHolding[];
+        // Upsert before pruning: if an edited position is invalid or the
+        // connection drops, the last persisted portfolio remains intact.
+        if (holdings.length > 0) {
+          const { error } = await supabase.from('finance_investment_holdings').upsert(holdings.map(holding => ({
+            id: holding.id,
+            profile_id: profileId,
+            account_id: holding.accountId ?? null,
+            name: holding.name.trim(),
+            ticker: holding.ticker?.trim().toUpperCase() || null,
+            shares: holding.shares,
+            avg_price: holding.avgPrice,
+            cost_basis_known: holding.costBasisKnown ?? true,
+            current_price: holding.currentPrice,
+            current_price_known: holding.currentPriceKnown ?? true,
+            category: holding.category,
+            updated_at: new Date().toISOString(),
+          })), { onConflict: 'id' });
+          if (error) throw error;
+        }
+        await pruneScoped('finance_investment_holdings', holdings.map(holding => holding.id));
+      } else if (key === 'investment-activities') {
+        // History is append/upsert only. A narrower subsequent export must
+        // never erase a valid older execution that was already confirmed.
+        const activities = contentData as InvestmentActivity[];
+        if (activities.length > 0) {
+          const { error } = await supabase.from('finance_investment_activities').upsert(activities.map(activity => ({
+            id: activity.id,
+            profile_id: profileId,
+            account_id: activity.accountId,
+            provider: activity.provider,
+            activity_type: activity.activityType,
+            occurred_on: activity.occurredOn,
+            name: activity.name,
+            ticker: activity.ticker?.trim().toUpperCase() || null,
+            quantity: activity.quantity,
+            unit_price_gbp: activity.unitPriceGbp ?? null,
+            source_reference: activity.sourceReference,
+            updated_at: new Date().toISOString(),
+          })), { onConflict: 'id' });
+          if (error) throw error;
         }
       } else if (key === 'budget') {
         const budgetCats = contentData as BudgetCategory[];
@@ -1614,14 +1818,19 @@ function useProvideFinanceData() {
         }
       } else if (key === 'tax_config') {
         const tcObj = contentData as TaxConfig;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(tcObj.effectiveFrom)) {
+          throw new Error('Tax rates need an effective date in YYYY-MM-DD format.');
+        }
         const { data: existingTc } = await supabase
           .from('finance_tax_configs')
           .select('id')
           .eq('is_default', false)
+          .eq('effective_from', tcObj.effectiveFrom)
           .maybeSingle();
 
         const tcRow = {
           is_default: false,
+          effective_from: tcObj.effectiveFrom,
           student_loan_thresholds: tcObj.studentLoanThresholds as never,
           student_loan_rates: tcObj.studentLoanRates as never,
           income_tax_bands: tcObj.incomeTaxBands as never,
@@ -1724,8 +1933,15 @@ function useProvideFinanceData() {
           await supabase.from('finance_budget_presets').insert(presetRows);
         }
       }
+      return true;
     } catch (err) {
       console.error(`Error saving ${key} to Supabase:`, err);
+      toast({
+        title: 'Could not save finance data',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
     }
   };
 
@@ -1736,6 +1952,9 @@ function useProvideFinanceData() {
     payslips,
     savePayslip,
     deletePayslip,
+    payslipReconciliations,
+    savePayslipReconciliation,
+    deletePayslipReconciliation,
     updateProfile,
     netWorthHistory,
     profiles,
@@ -1761,6 +1980,7 @@ function useProvideFinanceData() {
     goals,
     holidayDefaults,
     investmentHoldings,
+    investmentActivities,
     loadingDb,
     hasLoaded,
     memberships,
@@ -1790,6 +2010,7 @@ function useProvideFinanceData() {
     setGoals,
     setHolidayDefaults,
     setInvestmentHoldings,
+    setInvestmentActivities,
     setLoadingDb,
     setMemberships,
     setMockTransactions,
@@ -1805,9 +2026,11 @@ function useProvideFinanceData() {
     setSelectedGoalId,
     setSettings,
     setTaxConfig,
+    resetTaxConfigs,
     setTimeSpentInputs,
     settings,
     taxConfig,
+    taxConfigs,
     timeSpentInputs,
   };
 

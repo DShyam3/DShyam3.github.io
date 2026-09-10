@@ -21,6 +21,7 @@ interface CardDetailDialogProps {
   downloadName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   title: string;
   subtitle?: ReactNode;
   imageUrl?: string;
@@ -41,6 +42,7 @@ interface CardDetailDialogProps {
 export function CardDetailDialog({
   open,
   onOpenChange,
+  onCloseAutoFocus,
   title,
   subtitle,
   imageUrl,
@@ -56,7 +58,7 @@ export function CardDetailDialog({
 }: CardDetailDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl h-fit max-h-[85svh] overflow-x-hidden overflow-y-auto p-0 gap-0">
+      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-2xl h-fit max-h-[85svh] overflow-x-hidden overflow-y-auto p-0 gap-0">
         {/* Radix wires `aria-describedby` from this, and warns when a dialog
             has none: a screen reader was announcing the title and then going
             silent about what the dialog is. It is `sr-only` rather than
@@ -70,13 +72,13 @@ export function CardDetailDialog({
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (
-            <div className={cn('w-full overflow-hidden', imageIsContent ? 'max-h-[46svh]' : 'h-48')}>
+            <div className={cn('w-full overflow-hidden', imageIsContent ? 'max-h-[46svh] flex justify-center bg-muted/30' : 'h-48')}>
               <img
                 src={imageUrl}
                 alt={title}
                 className={cn(
                   'w-full',
-                  imageIsContent ? 'h-auto object-contain' : 'h-full object-cover',
+                  imageIsContent ? 'max-h-[46svh] object-contain' : 'h-full object-contain',
                 )}
               />
             </div>
@@ -174,7 +176,7 @@ export function CardDetailDialog({
                   // w-40 it was a thumbnail beside a column of text. The
                   // height cap is svh rather than vh so the dialog still
                   // clears an iPad's browser chrome in either orientation.
-                  imageIsContent ? 'max-w-full max-h-[58svh]' : 'w-56 object-cover',
+                  imageIsContent ? 'max-w-full max-h-[58svh]' : 'w-56 object-contain',
                 )}
               />
             </div>

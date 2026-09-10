@@ -1,3 +1,4 @@
+import { DebtInspector } from './DebtInspector';
 import React, { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
@@ -478,128 +479,19 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
           </div>
         )}
 
-        <div className="overflow-auto max-h-[60vh] bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors">
-          <table className="min-w-[820px] w-full text-xs text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
-                <th className="py-3 px-3 whitespace-nowrap">Name</th>
-                <th className="py-3 px-3 whitespace-nowrap">Type</th>
-                <th className="py-3 px-3 whitespace-nowrap">Lender</th>
-                <th className="py-3 px-3 text-right whitespace-nowrap">Balance</th>
-                <th className="py-3 px-3 text-right whitespace-nowrap">Rate</th>
-                <th className="py-3 px-3 text-right whitespace-nowrap">Monthly</th>
-                <th className="py-3 px-3 whitespace-nowrap min-w-[140px]">Payoff Progress</th>
-                <th className="py-3 px-3 text-center whitespace-nowrap">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/20">
-              {debts.map(debt => {
-                const original = Math.max(debt.originalAmount, debt.balance);
-                const paidPercent = original > 0 ? ((original - debt.balance) / original) * 100 : 0;
-                const isSelected = selectedDebt?.id === debt.id;
-                return (
-                  <tr
-                    key={debt.id}
-                    onClick={() => setSelectedDebtId(debt.id)}
-                    className={cn("cursor-pointer transition-colors", isSelected ? "bg-primary/5" : "hover:bg-muted/10")}
-                  >
-                    <td className="py-3 px-3 font-semibold text-foreground">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-1.5 h-6 rounded-full shrink-0"
-                          style={{ backgroundColor: debt.color || 'hsl(var(--destructive))' }}
-                        />
-                        <span className="text-base shrink-0 leading-none">{debt.emoji || '🏦'}</span>
-                        <span>{debt.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span>{DEBT_TYPE_LABELS[debt.type] || debt.type}</span>
-                      {(debt.studentLoanPlan || debt.type === 'student') && (
-                        <span className="block text-xs text-muted-foreground">{STUDENT_LOAN_PLAN_LABELS[debt.studentLoanPlan || 'plan2']}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3">{debt.lender || '—'}</td>
-                    <td className="py-3 px-3 text-right font-mono">
-                      <div className="font-bold text-destructive">{formatGBP(debt.balance)}</div>
-                      {debt.observations && debt.observations.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground block truncate">
-                          as of {debt.observations[0].statementDate || debt.observations[0].observedOn}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono">{debt.interestRate.toFixed(2)}%</td>
-                    <td className="py-3 px-3 text-right font-mono">
-                      {formatGBP((debt.type === 'student' || debt.repaymentType === 'income_contingent')
-                        ? calculateStudentMonthly(debt.studentLoanPlan || 'plan2')
-                        : debt.minPayment)}
-                    </td>
-                    <td className="py-3 px-3">
-                      <div className="space-y-1 min-w-[120px]">
-                        <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-positive transition-all"
-                            style={{ width: `${Math.min(Math.max(paidPercent, 0), 100)}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
-                          <span>{paidPercent.toFixed(0)}% paid</span>
-                          {debt.payoffDate && <span>{new Date(debt.payoffDate).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</span>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Reconcile & Record Balance"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setReconcileDebt(debt);
-                            setIsReconcileOpen(true);
-                          }}
-                          className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                        >
-                          <Scale className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveDebt({ ...debt, draws: debt.draws || [] });
-                            setIsEditDebtOpen(true);
-                          }}
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteDebt(debt.id); }}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {debts.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="text-center py-6 italic text-muted-foreground">No debts tracked.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {debts.map(debt => <DebtInspector key={debt.id} debt={debt}
+            monthlyPayment={(debt.type === 'student' || debt.repaymentType === 'income_contingent') ? calculateStudentMonthly(debt.studentLoanPlan || 'plan2') : debt.minPayment}
+            onInspect={() => setSelectedDebtId(debt.id)}
+            onReconcile={() => { setReconcileDebt(debt); setIsReconcileOpen(true); }}
+            onEdit={() => { setActiveDebt({ ...debt, draws: debt.draws || [] }); setIsEditDebtOpen(true); }}
+            onDelete={() => handleDeleteDebt(debt.id)} />)}
+          {debts.length === 0 && <p className="surface-card rounded-3xl border p-6 text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">No debts recorded. Add borrowing to see balances and repayment plans.</p>}
         </div>
 
         {/* Payoff Forecast & Salary Simulator Toggle Card */}
         {debts.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card/50 border border-border/40 rounded-xl p-4 hover:border-border/80 transition-colors">
+          <div className="surface-card flex flex-col sm:flex-row items-center justify-between gap-3 bg-card/50 border border-border/40 rounded-xl p-4 hover:border-border/80 transition-colors">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                 <TrendingDown className="h-5 w-5" />
@@ -625,7 +517,7 @@ export default function DebtsSection({ totalLoanBalance }: { totalLoanBalance: n
 
         {/* Collapsible Payoff Projection & Simulator Panel */}
         {showProjection && debts.length > 0 && (
-          <div className="rounded-xl border border-border/40 bg-card/50 p-4 sm:p-5 hover:border-border/80 transition-colors space-y-5">
+          <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-4 sm:p-5 hover:border-border/80 transition-colors space-y-5">
             {/* View Scope Tabs & Selector */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/30 pb-4">
               <div className="flex items-center gap-2">

@@ -11,7 +11,7 @@
  * call sites.
  */
 
-import { getDaysInMonth } from '@/lib/finance';
+import { calculateNetWorth, getDaysInMonth } from '@/lib/finance';
 import { useFinanceData } from './FinanceDataContext';
 import { makeBudgetMath, isDueThisMonth } from './finance-defaults';
 import { calculateFinance, getNextPaydayDetails } from './finance-calcs';
@@ -19,9 +19,10 @@ import { calculateFinance, getNextPaydayDetails } from './finance-calcs';
 export function useFinanceTotals() {
   const {
     settings,
-    taxConfig,
+    taxConfigs,
     budgetCategories,
     bankAccounts,
+    investmentHoldings,
     recurrings,
     debts,
     bankHolidaysList,
@@ -34,7 +35,9 @@ export function useFinanceTotals() {
     recurrings,
   );
 
-  const results = calculateFinance(settings, taxConfig);
+  const today = new Date();
+  const asOfDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const results = calculateFinance(settings, taxConfigs, asOfDate);
   const breakdownRates =
     breakdownRateMode === 'normal'
       ? results.breakdown.standard
@@ -57,10 +60,7 @@ export function useFinanceTotals() {
       label: `${cat.name} > ${item.name}`
     }))
   );
-  const totalAssets = bankAccounts.filter(a => a.balance > 0).reduce((sum, a) => sum + a.balance, 0);
-  const totalLoanBalance = debts.reduce((sum, d) => sum + d.balance, 0);
-  const totalDebt = Math.abs(bankAccounts.filter(a => a.balance < 0).reduce((sum, a) => sum + a.balance, 0)) + totalLoanBalance;
-  const netWorth = totalAssets - totalDebt;
+  const { totalAssets, totalLoanBalance, totalDebt, netWorth } = calculateNetWorth(bankAccounts, debts, investmentHoldings);
   const monthlyIncome = results.netTakeHome / 12;
   const netCashFlow = monthlyIncome - totalSpent;
   const totalFlow = monthlyIncome + totalSpent;

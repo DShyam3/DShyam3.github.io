@@ -4,6 +4,8 @@ import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { uploadPhoto } from '@/lib/storage';
 import { cn } from '@/lib/utils';
+import { EDC_SLOTS } from '@/features/inventory/edc/types';
+import { EdcToolbarButton, EdcShowcaseContainer } from '@/features/inventory/edc/EdcShowcase';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface InventoryRow extends CollectionRow {
@@ -19,14 +21,18 @@ export interface InventoryRow extends CollectionRow {
   description: string | null;
   specs: string | null;
   created_at: string;
+  is_edc?: boolean | null;
+  edc_slot?: string | null;
+  edc_order?: number | null;
 }
 
 /**
  * Inventory always shows exactly one category -- there is no "everything"
- * view -- so the facet opts out of the All option and starts on tech-edc.
+ * view -- so the facet opts out of the All option and starts on tech.
  */
 const CATEGORIES = [
-  { key: 'tech-edc', label: 'Tech + EDC' },
+  { key: 'tech', label: 'Tech' },
+  { key: 'edc', label: 'EDC' },
   { key: 'homelab', label: 'HomeLab' },
   { key: 'wardrobe', label: 'Wardrobe' },
   { key: 'kitchen', label: 'Kitchen' },
@@ -38,6 +44,7 @@ const CATEGORIES = [
 /** Display order for the subcategory sections shown under Wardrobe. */
 const WARDROBE_SUBCATEGORIES = [
   { key: 'accessories', label: 'Accessories' },
+  { key: 'bags', label: 'Bags & Luggage' },
   { key: 'sunglasses', label: 'Sunglasses' },
   { key: 'watches', label: 'Watches' },
   { key: 'perfumes-colognes', label: 'Perfumes / Colognes' },
@@ -146,6 +153,14 @@ const looksLikeSpecs = (text: string) => {
   return lines.every((line) => /^[-*•]\s+/.test(line) || splitLabel(line)[0] !== null);
 };
 
+const formatPrice = (value: number) =>
+  new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+
 /**
  * A build list is a list of receipts, so it is worth adding up. The item's own
  * price is what the whole thing cost; this is that same number arrived at from
@@ -153,7 +168,7 @@ const looksLikeSpecs = (text: string) => {
  */
 const specsTotal = (lines: SpecLine[]) => {
   const priced = lines.filter((line) => line.price);
-  if (priced.length < 2) return null;
+  if (priced.length < 1) return null;
   const symbol = priced[0].price!.slice(0, 1);
   const sum = priced.reduce(
     (total, line) => total + Number(line.price!.slice(1).replace(/,/g, '')),
@@ -166,12 +181,23 @@ const specsTotal = (lines: SpecLine[]) => {
   })}`;
 };
 
-const SpecTable = ({ lines }: { lines: SpecLine[] }) => {
-  const total = specsTotal(lines);
-  // A column of prices is worth the width when it adds up to something -- a
-  // build list. One lone price right-aligned across empty space lines up with
-  // nothing, so it sits next to the value it belongs to instead.
-  const priceColumn = total !== null;
+const SpecTable = ({
+  lines,
+  fallbackPrice,
+}: {
+  lines: SpecLine[];
+  fallbackPrice?: number | null;
+}) => {
+  const totalFromSpecs = specsTotal(lines);
+  const hasFallbackPrice = fallbackPrice != null && Number(fallbackPrice) > 0;
+  const total =
+    totalFromSpecs ??
+    (hasFallbackPrice ? formatPrice(Number(fallbackPrice)) : null);
+
+  // A column of prices is shown whenever individual lines carry prices (a build list
+  // or priced components). When the price comes solely from the item's overall price,
+  // the table stays two columns with the Total anchored at the bottom.
+  const priceColumn = totalFromSpecs !== null;
 
   const value = (line: SpecLine) =>
     line.value.map((segment, index) =>
@@ -224,7 +250,12 @@ const SpecTable = ({ lines }: { lines: SpecLine[] }) => {
       ))}
       {total && (
         <>
-          <dt className="col-span-2 mt-2 pt-2 border-t border-border/60 text-muted-foreground">
+          <dt
+            className={cn(
+              'mt-2 pt-2 border-t border-border/60 text-muted-foreground',
+              priceColumn ? 'col-span-2' : 'col-span-1',
+            )}
+          >
             Total
           </dt>
           <dd className="mt-2 pt-2 border-t border-border/60 tabular-nums text-right whitespace-nowrap font-medium">
@@ -235,14 +266,6 @@ const SpecTable = ({ lines }: { lines: SpecLine[] }) => {
     </dl>
   );
 };
-
-const formatPrice = (value: number) =>
-  new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
 
 export const inventoryCollection: CollectionConfig<InventoryRow> = {
   table: 'inventory_items',
@@ -259,10 +282,14 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       field: 'category',
       options: CATEGORIES,
       includeAll: false,
-      defaultValue: 'tech-edc',
+      defaultValue: 'tech',
       // Each category is its own set of things, so picking one starts from
       // Owned rather than inheriting whatever the last category was showing.
       resetsOthers: true,
+      match: (item, value) => {
+        if (value === 'edc') return Boolean(item.is_edc);
+        return item.category === value;
+      },
     },
     {
       // is_wishlist is a boolean column; facet values are compared as strings.
@@ -330,6 +357,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
 
   card: {
     variant: 'media',
+    imageFit: 'contain',
     // Product shots, square.
     aspect: '1 / 1',
     fallbackIcon: Package,
@@ -339,7 +367,16 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     // open, the rest stay flat.
     openable: (item) => Boolean(item.specs || item.description),
     title: (item) => item.name,
-    subtitle: (item) => item.brand ?? undefined,
+    subtitle: (item) => {
+      const origin =
+        item.category === 'wardrobe' && item.subcategory
+          ? `Wardrobe · ${item.subcategory}`
+          : item.category.toUpperCase();
+      if (item.brand) {
+        return `${item.brand} (${origin})`;
+      }
+      return origin;
+    },
     image: (item) => item.image ?? undefined,
     href: (item) => item.link ?? undefined,
     meta: (item) =>
@@ -348,7 +385,14 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
         : undefined,
     // Wishlist items are things not owned yet, so they sit back until hovered.
     dimmed: (item) => Boolean(item.is_wishlist),
-    badge: (item) => (item.is_wishlist ? 'Wishlist' : undefined),
+    badge: (item) => {
+      if (item.is_wishlist) return 'Wishlist';
+      if (item.is_edc) {
+        const slot = EDC_SLOTS.find((s) => s.key === item.edc_slot);
+        return slot ? `EDC · ${slot.shortLabel.toUpperCase()}` : 'EDC';
+      }
+      return undefined;
+    },
   },
 
   // Image fields take a pasted URL or an upload; uploads go to the photos
@@ -358,12 +402,29 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
   fields: [
     { name: 'name', label: 'Name', type: 'text', required: true },
     { name: 'brand', label: 'Brand', type: 'text' },
-    { name: 'category', label: 'Category', type: 'select', defaultValue: 'tech-edc' },
+    { name: 'category', label: 'Category', type: 'select', defaultValue: 'tech' },
     {
       name: 'subcategory',
       label: 'Subcategory (wardrobe and homelab only)',
       type: 'select',
       options: [...WARDROBE_SUBCATEGORIES, ...HOMELAB_SUBCATEGORIES],
+    },
+    {
+      name: 'is_edc',
+      label: 'Include in Everyday Carry (EDC)',
+      type: 'select',
+      options: [
+        { key: 'false', label: 'No' },
+        { key: 'true', label: 'Yes (Included in EDC)' },
+      ],
+      defaultValue: 'false',
+    },
+    {
+      name: 'edc_slot',
+      label: 'EDC Compartment',
+      type: 'select',
+      options: EDC_SLOTS.map((s) => ({ key: s.key, label: s.label })),
+      defaultValue: 'pockets',
     },
     { name: 'price', label: 'Price', type: 'text', placeholder: '0.00' },
     { name: 'image', label: 'Image URL', type: 'image' },
@@ -378,6 +439,36 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     },
   ],
 
+  customToolbarActions: ({ allItems, filters, isAdmin, updateItem }) => {
+    if (filters.category === 'edc') {
+      if (!isAdmin) return null;
+      return (
+        <EdcToolbarButton
+          allItems={allItems as InventoryRow[]}
+          updateItem={updateItem as (id: string, updates: Partial<InventoryRow>) => Promise<void>}
+        />
+      );
+    }
+    return undefined;
+  },
+
+  customView: ({ items, allItems, filters, isAdmin, updateItem, removeItem, search }) => {
+    if (filters.category === 'edc') {
+      return (
+        <EdcShowcaseContainer
+          items={items as InventoryRow[]}
+          allItems={allItems as InventoryRow[]}
+          config={inventoryCollection}
+          isAdmin={isAdmin}
+          updateItem={updateItem as (id: string, updates: Partial<InventoryRow>) => Promise<void>}
+          removeItem={removeItem}
+          search={search}
+        />
+      );
+    }
+    return null;
+  },
+
   renderDetail: (item) => {
     const specs = item.specs ? parseSpecs(item.specs) : [];
     const description = item.description ?? '';
@@ -385,13 +476,13 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       <>
         {specs.length > 0 && (
           <DetailSection label="Specs">
-            <SpecTable lines={specs} />
+            <SpecTable lines={specs} fallbackPrice={item.price} />
           </DetailSection>
         )}
         {description && (
           <DetailSection label="Notes">
             {looksLikeSpecs(description) ? (
-              <SpecTable lines={parseSpecs(description)} />
+              <SpecTable lines={parseSpecs(description)} fallbackPrice={item.price} />
             ) : (
               <p className="whitespace-pre-wrap">{description}</p>
             )}

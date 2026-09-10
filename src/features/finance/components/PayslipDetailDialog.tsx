@@ -13,10 +13,20 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { formatDate } from '@/lib/format-date';
-import { checkPayslip, formatPayslipLineLabel, groupPayslipLines, totalDeductions, type Payslip } from '@/lib/finance';
+import {
+  checkPayslip,
+  formatPayslipLineLabel,
+  groupPayslipLines,
+  totalDeductions,
+  type Payslip,
+  type PayslipTransactionCandidate,
+  type PayslipTransactionReconciliation,
+  type ReconciliationTransaction,
+} from '@/lib/finance';
 import { employerLogo } from '../employer-logo';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Download, Pencil } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Link2, Pencil, Unlink } from 'lucide-react';
+import { useState } from 'react';
 
 const Row = ({ label, value, tone }: { label: string; value: string; tone?: 'muted' | 'negative' }) => (
   <div className="flex items-baseline justify-between gap-4 py-1.5">
@@ -25,22 +35,58 @@ const Row = ({ label, value, tone }: { label: string; value: string; tone?: 'mut
   </div>
 );
 
-export function PayslipDetailDialog({ payslip, onOpenChange, onEdit, onOpenPdf }: {
+export function PayslipDetailDialog({
+  payslip,
+  reconciliation,
+  transaction,
+  candidates = [],
+  onOpenChange,
+  onEdit,
+  onOpenPdf,
+  onConfirmTransaction,
+  onRemoveTransaction,
+}: {
   payslip: Payslip | null;
+  reconciliation?: PayslipTransactionReconciliation;
+  transaction?: ReconciliationTransaction;
+  candidates?: readonly PayslipTransactionCandidate[];
   onOpenChange: (open: boolean) => void;
   onEdit: (p: Payslip) => void;
   onOpenPdf: (path: string) => void;
+  onConfirmTransaction: (transactionId: string) => Promise<boolean>;
+  onRemoveTransaction: () => Promise<boolean>;
 }) {
+  const [isUpdatingMatch, setIsUpdatingMatch] = useState(false);
   if (!payslip) return null;
   const check = checkPayslip(payslip);
   const { payments, benefits, deductions } = groupPayslipLines(payslip.lines);
   const hasLines = payments.length + benefits.length + deductions.length > 0;
   const logo = employerLogo(payslip.employer);
 
+  const confirmTransaction = async (transactionId: string) => {
+    if (isUpdatingMatch) return;
+    setIsUpdatingMatch(true);
+    try {
+      await onConfirmTransaction(transactionId);
+    } finally {
+      setIsUpdatingMatch(false);
+    }
+  };
+
+  const removeTransaction = async () => {
+    if (isUpdatingMatch) return;
+    setIsUpdatingMatch(true);
+    try {
+      await onRemoveTransaction();
+    } finally {
+      setIsUpdatingMatch(false);
+    }
+  };
+
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-md p-6 font-mono">
-        <DialogHeader>
+        <DialogHeader className="pr-12">
           <div className="flex items-center gap-3">
             {logo && (
               <div className="h-11 w-11 shrink-0 flex items-center justify-center rounded-lg bg-white ring-1 ring-black/10 p-1.5">
@@ -126,6 +172,69 @@ export function PayslipDetailDialog({ payslip, onOpenChange, onEdit, onOpenPdf }
               </p>
             )}
           </section>
+
+          {payslip.net > 0 && (
+            <section className="rounded-lg border border-border/40 bg-card/40 px-3 py-3">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <h4 className="text-xs uppercase tracking-wider text-muted-foreground">Bank payment</h4>
+              </div>
+
+              {reconciliation && transaction ? (
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 text-xs text-foreground">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-positive" aria-hidden="true" />
+                      Confirmed incoming payment
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {formatDate(transaction.date)} · {transaction.name} · {formatGBP(Math.abs(transaction.amount))}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    size="sm"
+                    disabled={isUpdatingMatch}
+                    onClick={() => void removeTransaction()}
+                    className="h-8 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    <Unlink className="h-3.5 w-3.5" /> Unlink
+                  </Button>
+                </div>
+              ) : candidates.length > 0 ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Exact take-home matches within five days. Confirm the one your bank received.
+                  </p>
+                  {candidates.map(candidate => (
+                    <div key={candidate.transactionId} className="flex items-center justify-between gap-3 rounded-md border border-border/30 px-2.5 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-foreground">{candidate.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(candidate.date)} · {formatGBP(Math.abs(candidate.amount))}
+                          {candidate.daysApart > 0 && ` · ${candidate.daysApart}d from pay date`}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isUpdatingMatch}
+                        onClick={() => void confirmTransaction(candidate.transactionId)}
+                        className="h-8 shrink-0 px-2 text-xs"
+                      >
+                        Confirm
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  No exact incoming take-home payment was found within five days of this pay date.
+                </p>
+              )}
+            </section>
+          )}
 
           {payslip.pensionEmployer > 0 && (
             <p className="text-xs text-muted-foreground">

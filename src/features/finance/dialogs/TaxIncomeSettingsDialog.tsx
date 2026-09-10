@@ -61,6 +61,7 @@ export function TaxIncomeSettingsDialog({
     setSettings,
     taxConfig,
     setTaxConfig,
+    resetTaxConfigs,
     recurringTemplates,
     setRecurringTemplates,
     creditBureaus,
@@ -167,6 +168,10 @@ export function TaxIncomeSettingsDialog({
       toast({ title: 'Invalid Hours', description: 'Working hours must be 0.1 - 24 hours/day.', variant: 'destructive' });
       return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(draftTaxConfig.effectiveFrom)) {
+      toast({ title: 'Invalid rate date', description: 'Choose the first date these tax rates apply.', variant: 'destructive' });
+      return;
+    }
 
     let newPayDay = parseInt(payDayInput, 10);
     if (paydaySchedule === 'monthly_date') {
@@ -247,6 +252,7 @@ export function TaxIncomeSettingsDialog({
       activeSavingsTypes: ALL_SAVINGS_IDS
     };
     const defaultTaxConfig: TaxConfig = databaseDefaults.tax_config || {
+      effectiveFrom: '2026-04-06',
       studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
       incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
@@ -261,6 +267,7 @@ export function TaxIncomeSettingsDialog({
       : DEFAULT_CATEGORY_TEMPLATES;
 
     setSettings(defaultSettings);
+    resetTaxConfigs(defaultTaxConfig);
     setDraftTaxConfig(defaultTaxConfig);
     setDraftRecurringTemplates(defaultRecurringTemplates);
     setDraftCreditBureaus(defaultCreditBureaus);
@@ -674,6 +681,23 @@ export function TaxIncomeSettingsDialog({
                   </button>
                   {expandedSection === 'tax' && (
                     <div className="p-4 bg-background/30 border-t border-border/20 space-y-4 text-xs">
+                      <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-1.5">
+                        <Label htmlFor="tax-effective-from" className="text-xs text-muted-foreground">Rates effective from</Label>
+                        <Input
+                          id="tax-effective-from"
+                          type="date"
+                          value={draftTaxConfig.effectiveFrom}
+                          onChange={(event) => setDraftTaxConfig({
+                            ...draftTaxConfig,
+                            effectiveFrom: event.target.value,
+                          })}
+                          className="h-9 rounded-lg font-mono text-xs border-border/40"
+                          required
+                        />
+                        <p className="text-[11px] leading-relaxed text-muted-foreground">
+                          Saving a new date creates a new rate set. Earlier pays and projections keep the rates that applied then.
+                        </p>
+                      </div>
                       <div className="space-y-3">
                         <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider font-mono">Income Tax Bands (£)</h4>
                         <div className="grid grid-cols-2 gap-3">

@@ -972,9 +972,9 @@ BEGIN
       (profile_id, captured_on, assets, liabilities, net_worth)
   SELECT p.id,
          CURRENT_DATE,
-         COALESCE(acc.assets, 0),
+         COALESCE(acc.assets, 0) + COALESCE(h.assets, 0),
          COALESCE(acc.overdrawn, 0) + COALESCE(d.debt, 0),
-         COALESCE(acc.assets, 0) - (COALESCE(acc.overdrawn, 0) + COALESCE(d.debt, 0))
+         COALESCE(acc.assets, 0) + COALESCE(h.assets, 0) - (COALESCE(acc.overdrawn, 0) + COALESCE(d.debt, 0))
     FROM finance_profiles p
     LEFT JOIN (
       SELECT profile_id,
@@ -990,6 +990,12 @@ BEGIN
        WHERE profile_id IS NOT NULL
        GROUP BY profile_id
     ) d ON d.profile_id = p.id
+    LEFT JOIN (
+      SELECT profile_id, SUM(shares * current_price) AS assets
+        FROM finance_investment_holdings
+       WHERE current_price_known
+       GROUP BY profile_id
+    ) h ON h.profile_id = p.id
   ON CONFLICT (profile_id, captured_on) DO UPDATE
     SET assets = EXCLUDED.assets,
         liabilities = EXCLUDED.liabilities,

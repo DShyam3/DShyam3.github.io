@@ -76,11 +76,11 @@ const Index = () => {
   return (
     <AppShell>
       <div className="selection:bg-primary/30">
-        <div className="flex flex-col px-4 md:px-0 2xl:px-8 py-8 2xl:py-6 max-w-6xl 2xl:max-w-[112rem] mx-auto w-full">
+        <div className="flex flex-col px-4 md:px-0 xl:px-8 py-8 xl:py-6 max-w-6xl xl:max-w-[112rem] mx-auto w-full">
           {/* Bento Grid Layout */}
-          <div className="w-full grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-[280px_1.15fr_1fr] gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[240px_minmax(0,1.15fr)_minmax(0,1fr)] gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
             {/* Profile Image (Mobile Only) */}
-            <div className="flex md:hidden bg-primary/5 border hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative shrink-0 w-fit mx-auto">
+            <div className="portrait-card flex md:hidden bg-primary/5 border hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative shrink-0 w-fit mx-auto">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
               <img
                 src={`${ASSETS_URL}/selfie.webp`}
@@ -101,7 +101,7 @@ const Index = () => {
               />
             </div>
 
-            <div className="2xl:col-start-2 2xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+            <div data-palette="sage" className="ambient-card about-intro xl:col-start-2 xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="mb-6 w-full overflow-hidden">
                 <DotMatrixText
                   text="ABOUT ME"
@@ -120,7 +120,7 @@ const Index = () => {
             </div>
 
             {/* Profile Image (Desktop Only) */}
-            <div className="2xl:col-start-1 2xl:row-start-1 hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto 2xl:w-full 2xl:mx-0" style={{ boxShadow: 'var(--shadow-border)' }}>
+            <div className="portrait-card xl:col-start-1 xl:row-start-1 hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto xl:w-full xl:mx-0" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
               <img
                 src={`${ASSETS_URL}/selfie.webp`}
@@ -134,7 +134,7 @@ const Index = () => {
                 // @types/react only declares the camelCase prop, so the
                 // spelling the browser wants has to go in as a spread.
                 {...{ fetchpriority: 'high' }}
-                className="relative max-w-[280px] w-full h-auto object-contain 2xl:absolute 2xl:inset-0 2xl:max-w-none 2xl:h-full 2xl:object-cover 2xl:object-center z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
+                className="relative max-w-[280px] w-full h-auto object-contain xl:absolute xl:inset-0 xl:max-w-none xl:h-full xl:object-cover xl:object-center z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
                 onError={(e) => {
                   e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
                 }}
@@ -146,9 +146,9 @@ const Index = () => {
                 columns: `contents` dissolves this wrapper so each card takes
                 its own cell -- experience under About Me, education above
                 projects -- leaving column 1 free for a full-height portrait. */}
-            <div className="flex flex-col gap-6 2xl:contents">
+            <div className="flex flex-col gap-6 xl:contents">
               {/* Experience */}
-              <div className="2xl:col-start-1 2xl:col-span-2 2xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div data-palette="sky" className="ambient-card xl:col-start-1 xl:col-span-2 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
                   <div className="w-full lg:w-auto lg:shrink-0">
                     <DotMatrixText
@@ -272,7 +272,7 @@ const Index = () => {
               </div>
 
               {/* Education */}
-              <div className="2xl:col-start-3 2xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div data-palette="lavender" className="ambient-card xl:col-start-3 xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="flex items-center justify-between mb-4">
                   <DotMatrixText
                     text="EDUCATION"
@@ -351,7 +351,7 @@ const Index = () => {
             </div>
 
             {/* Projects Portfolio (Full Fill Bottom) */}
-            <div className="2xl:col-start-3 2xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 2xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
+            <div data-palette="peach" className="ambient-card xl:col-start-3 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
                 <FolderGit2 className="w-8 h-8 text-primary/70" />
               </div>

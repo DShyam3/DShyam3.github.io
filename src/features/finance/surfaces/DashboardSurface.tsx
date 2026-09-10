@@ -1,3 +1,4 @@
+import { MetricProgress } from '@/components/ui/metric-progress';
 /**
  * Dashboard — the Home surface (REHAUL_PLAN.md 7.C).
  *
@@ -6,7 +7,7 @@
  * comes from useFinanceTotals, so it takes almost nothing from the page.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
@@ -21,11 +22,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Activity, ArrowUpRight, Check, CheckCircle2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useFinanceTotals } from '../useFinanceTotals';
+import { SurfaceHero } from '../components/SurfaceHero';
 import { Figure } from '../components/Figure';
 import { AlertList } from '../components/AlertList';
+import { WhatChangedCard } from '../components/WhatChangedCard';
 import { useFinanceAlerts } from '../useFinanceAlerts';
 import { useTrueLayer } from '../useTrueLayer';
 import { pathForTab, type TabKey } from '../surfaces';
+import { deriveFinanceChangeSummary } from '@/lib/finance';
 
 export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurringPaid: (id: string) => void }) {
   const { toast } = useToast();
@@ -105,53 +109,6 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     saveDataToSupabase('transactions', updated);
   };
 
-  // Compare this month's net cash flow to last month's same period
-  const getNetComparison = () => {
-    const today = new Date();
-    const todayDay = today.getDate();
-    const thisMonthPrefix = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-`;
-    
-    const lastMonthDate = new Date();
-    lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
-    const lastMonthYear = lastMonthDate.getFullYear();
-    const lastMonthIdx = lastMonthDate.getMonth();
-    const lastMonthPrefix = `${lastMonthYear}-${String(lastMonthIdx + 1).padStart(2, '0')}-`;
-    
-    // Calculate last month's spend up to today's date
-    const lastMonthTx = mockTransactions
-      .filter(tx => {
-        if (!tx.date.startsWith(lastMonthPrefix)) return false;
-        const day = parseInt(tx.date.split('-')[2], 10);
-        return !isNaN(day) && day <= todayDay;
-      })
-      .reduce((sum, tx) => sum + tx.amount, 0);
-
-    const lastMonthBills = recurrings
-      .filter(r => {
-        if (!isDueThisMonth(r, lastMonthIdx + 1)) return false;
-        return r.dueDate <= todayDay;
-      })
-      .reduce((sum, r) => sum + r.amount, 0);
-
-    const lastMonthSpend = lastMonthTx + lastMonthBills;
-    const lastMonthNet = monthlyIncome - lastMonthSpend;
-
-    const diff = netCashFlow - lastMonthNet;
-    const pct = lastMonthNet !== 0 ? (diff / Math.abs(lastMonthNet)) * 100 : 0;
-    
-    const prevMonthName = MONTH_NAMES[lastMonthIdx].slice(0, 3);
-    const rangeLabel = `${prevMonthName} 1 - ${prevMonthName} ${todayDay}, ${lastMonthYear}`;
-    
-    return {
-      lastMonthNet,
-      pct: Math.abs(pct),
-      isPositive: diff >= 0,
-      rangeLabel
-    };
-  };
-
-  const comparison = getNetComparison();
-
   // Composition bar percentages
   const spentPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
   const billsPercent = totalBudget > 0 ? (unpaidRecurrings / totalBudget) * 100 : 0;
@@ -175,6 +132,12 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     if (percent <= 1.0) return 'bg-chart-4';
     return 'bg-destructive';
   };
+
+  const todayIso = `${todayDateObj.getFullYear()}-${String(todayDateObj.getMonth() + 1).padStart(2, '0')}-${String(todayDateObj.getDate()).padStart(2, '0')}`;
+  const changeSummary = useMemo(
+    () => deriveFinanceChangeSummary(mockTransactions, todayIso),
+    [mockTransactions, todayIso],
+  );
 
 
   const getDashboardSpendData = () => {
@@ -349,12 +312,19 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   return (
     <>
 <div className="space-y-6">
-
+  <SurfaceHero
+    label="Free to spend this month"
+    value={formatGBP(freeToSpend)}
+    loading={!hasLoaded}
+    tone={freeToSpend < 0 ? 'negative' : 'neutral'}
+    detail={<>{totalBudget > 0 ? 'Budget' : 'Monthly income'} minus recorded spending and unpaid bills. {freeToSpend < 0 ? 'Spending and bills exceed this allowance.' : `${formatGBP(dailyFreeToSpend)} per day across ${daysRemainingInMonth} remaining days.`}</>}
+    aside={<Button variant="outline" onClick={() => setActiveTab('budget')}>Review plan <ArrowUpRight className="h-4 w-4" /></Button>}
+  />
   {/* PRIMARY COCKPIT: Spending Progress & Core Cards */}
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
     {/* Column 1 & 2: Spending Progress cumulative chart */}
-    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors lg:col-span-2 flex flex-col justify-between">
+    <Card data-palette="sky" className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors lg:col-span-2 flex flex-col justify-between">
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/30 pb-3">
           <div className="space-y-0.5">
@@ -498,7 +468,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     <div className="space-y-6 flex flex-col justify-between">
 
       {/* Combined Net & Spendable Card */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex-1 flex flex-col justify-between space-y-4 text-left">
+      <Card data-palette="sage" className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex-1 flex flex-col justify-between space-y-4 text-left">
         <div className="space-y-3.5">
           <div className="flex items-center justify-between border-b border-border/30 pb-3">
             <span className="text-xs uppercase tracking-wider font-mono font-semibold text-muted-foreground">Net & Budget</span>
@@ -521,23 +491,16 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 >
                 {netCashFlow >= 0 ? '+' : ''}{formatGBP(netCashFlow)}
               </Figure>
-              {/* Trend comparison */}
-              <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono truncate">
-                <span className={cn(
-                  "flex items-center px-1.5 py-0.5 rounded-md font-mono text-xs font-bold",
-                  comparison.isPositive ? "bg-positive/10 text-positive" : "bg-destructive/10 text-destructive"
-                )}>
-                  {comparison.isPositive ? '↗' : '↘'} {comparison.pct.toFixed(0)}%
-                </span>
-                <span>vs last month</span>
-              </div>
+              <p className="text-xs text-muted-foreground font-mono">
+                Planned take-home less recorded spending.
+              </p>
             </div>
 
             {/* Right column: Free to Spend */}
             <div className="space-y-1 border-l-0 sm:border-l border-border/20 pl-0 sm:pl-4 flex flex-col justify-between font-mono">
               <div>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <span>Free to Spend</span>
+                  <span>Unpaid bills</span>
                   <PiggyBank className="h-3 w-3 text-positive" />
                 </span>
                 <Figure
@@ -545,18 +508,10 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                   skeletonClassName="h-8 w-36"
                   className={cn("text-xl sm:text-2xl font-bold font-mono block tracking-tight whitespace-nowrap tabular-nums", freeToSpend >= 0 ? "text-positive" : "text-destructive")}
                 >
-                  {formatGBP(freeToSpend)}
+                  {formatGBP(unpaidRecurrings)}
                 </Figure>
               </div>
-              {freeToSpend > 0 ? (
-                <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                  <span className="font-bold text-foreground tabular-nums">{formatGBP(dailyFreeToSpend)}</span>/day left
-                </p>
-              ) : (
-                <p className="text-xs text-destructive/80 font-mono font-medium mt-0.5">
-                  Over budget
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground mt-1">Reserved in this month’s allowance</p>
             </div>
           </div>
         </div>
@@ -605,7 +560,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </Card>
 
       {/* Net Assets, Debt & Net Cash Flow block */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 text-left font-mono">
+      <Card data-palette="lavender" className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 text-left font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Worth</span>
         <Figure
           loading={!hasLoaded}
@@ -623,7 +578,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </Card>
 
       {/* Payday details card */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-3 text-left font-mono">
+      <Card data-palette="peach" className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-3 text-left font-mono">
         <div className="flex items-center justify-between border-b border-border/30 pb-2">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Payday</span>
           <button
@@ -854,12 +809,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     {formatGBP(cat.spent)} / {formatGBP(cat.budget)}
                   </span>
                 </div>
-                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={cn("h-full rounded-full transition-all duration-300", getProgressColor(cat.spent, cat.budget))}
-                    style={{ width: `${Math.min(100, cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0)}%` }}
-                  />
-                </div>
+                <MetricProgress label={`${cat.name} spending`} value={cat.spent} target={cat.budget} intent="budget" valueText={`${formatGBP(cat.spent)} / ${formatGBP(cat.budget)}`} />
               </div>
             ))}
         </CardContent>
@@ -869,6 +819,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
     {/* Right Side: Recurrings List & Active savings goals (lg:col-span-4) */}
     <div className="lg:col-span-4 space-y-6">
+
+      <WhatChangedCard summary={changeSummary} loading={!hasLoaded} />
 
       {/* Derived from the current position on every render, so an alert is
           gone the moment its condition is. Nothing to dismiss or mark read. */}

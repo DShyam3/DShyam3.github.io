@@ -743,7 +743,7 @@ export function DotMatrixGlobe({
                     color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
                     emphasis = 1.2;
                 } else {
-                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.04 : 0.06})` : `rgba(50, 70, 130, ${isMobile ? 0.05 : 0.07})`;
+                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.15 : 0.18})` : `rgba(50, 70, 130, ${isMobile ? 0.20 : 0.24})`;
                 }
             } else {
                 // Country view mode (existing behavior)
@@ -757,7 +757,7 @@ export function DotMatrixGlobe({
                     color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
                     emphasis = 1.2;
                 } else {
-                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.12 : 0.22})` : `rgba(50, 70, 130, ${isMobile ? 0.12 : 0.25})`;
+                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.30 : 0.34})` : `rgba(50, 70, 130, ${isMobile ? 0.36 : 0.40})`;
                 }
             }
 

@@ -38,6 +38,14 @@ export interface Payslip {
   lines?: PayslipLine[];
 }
 
+/** A confirmed one-to-one connection between a payslip and a bank payment. */
+export interface PayslipTransactionReconciliation {
+  id: string;
+  payslipId: string;
+  transactionId: string;
+  confirmedAt: string;
+}
+
 export interface PayslipLine {
   label: string;
   /** Always positive. `kind` says which way it moves. */

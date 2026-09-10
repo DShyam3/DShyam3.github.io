@@ -117,6 +117,8 @@ export interface CreditScoreEntry {
   id: string;
   date: string; // YYYY-MM-DD
   score: number;
+  /** Optional private PDF/image archive that was used to capture this score. */
+  storagePath?: string;
 }
 
 export interface CreditScores {
@@ -144,6 +146,8 @@ export interface MockTransaction {
 }
 
 export interface TaxConfig {
+  /** First UK date for which this rate set applies (YYYY-MM-DD). */
+  effectiveFrom: string;
   studentLoanThresholds: Record<'none' | 'plan1' | 'plan2' | 'plan4' | 'plan5' | 'postgrad', number>;
   studentLoanRates: Record<'none' | 'plan1' | 'plan2' | 'plan4' | 'plan5' | 'postgrad', number>;
   incomeTaxBands: {
@@ -219,12 +223,33 @@ export interface TrueLayerStatus {
 
 export interface InvestmentHolding {
   id: string;
+  /** Optional broker/exchange account in which this position is held. */
+  accountId?: string;
   name: string;
   ticker?: string;
   shares: number;
   avgPrice: number;
+  /** False when an import did not supply a GBP cost basis. */
+  costBasisKnown?: boolean;
   currentPrice: number;
+  /** False when an import did not supply a GBP valuation price. */
+  currentPriceKnown?: boolean;
   category: 'Stock' | 'ETF' | 'Crypto' | 'Mutual Fund' | 'Real Estate' | 'Cash' | 'Other';
+}
+
+export interface InvestmentActivity {
+  id: string;
+  accountId: string;
+  provider: 'trading212' | 'kraken';
+  activityType: 'buy' | 'sell';
+  occurredOn: string;
+  name: string;
+  ticker?: string;
+  quantity: number;
+  /** Undefined when the original export price was not GBP or was absent. */
+  unitPriceGbp?: number;
+  /** Stable provider reference used only to make overlapping imports idempotent. */
+  sourceReference: string;
 }
 
 export interface DebtDraw {

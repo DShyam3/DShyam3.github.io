@@ -36,6 +36,7 @@ import { NetWorthTrend } from './components/NetWorthTrend';
 import { Loader2 } from 'lucide-react';
 import type {
   BudgetItem,
+  InvestmentActivity,
   InvestmentHolding,
   MockTransaction,
   RecurringBill,
@@ -49,6 +50,12 @@ import { EditRecurringDialog } from '@/features/finance/dialogs/EditRecurringDia
 import { TaxIncomeSettingsDialog } from '@/features/finance/dialogs/TaxIncomeSettingsDialog';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import {
+  investmentActivityId,
+  type ImportedInvestmentActivity,
+  type ImportedInvestmentHolding,
+  type InvestmentImportProvider,
+} from '@/lib/finance';
 
 /**
  * The finance shell. Data comes from `FinanceDataProvider` below rather than
@@ -62,6 +69,7 @@ function FinanceView() {
     creditScores,
     fetchSupabaseData,
     goals,
+    investmentActivities,
     investmentHoldings,
     loadingDb,
     hasLoaded,
@@ -74,6 +82,7 @@ function FinanceView() {
     setBankAccounts,
     setBudgetCategories,
     setInvestmentHoldings,
+    setInvestmentActivities,
     setMockTransactions,
     setProfileId,
     setRecurrings,
@@ -108,7 +117,7 @@ function FinanceView() {
     return match || null;
   };
 
-  const { isAdmin } = useAuth();
+  const { isAdmin, isAuthLoading } = useAuth();
   const { toast } = useToast();
   const { askDelete, deleteDialog } = useDeleteConfirm();
 
@@ -281,36 +290,112 @@ function FinanceView() {
   // HANDLERS: INVESTMENTS CRUD
   // ==========================================
 
-  const handleAddHolding = (holding: Omit<InvestmentHolding, 'id'>) => {
+  const handleAddHolding = async (holding: Omit<InvestmentHolding, 'id'>) => {
     const created: InvestmentHolding = {
       ...holding,
       id: 'h_' + Date.now()
     };
     const updated = [...investmentHoldings, created];
     setInvestmentHoldings(updated);
-    toast({ title: 'Asset Added', description: `Successfully added ${created.name}.` });
+    if (await saveDataToSupabase('investments', updated)) {
+      toast({ title: 'Asset Added', description: `Successfully added ${created.name}.` });
+    } else {
+      void fetchSupabaseData();
+    }
   };
 
-  const handleEditHolding = (holding: InvestmentHolding) => {
+  const handleEditHolding = async (holding: InvestmentHolding) => {
     const updated = investmentHoldings.map(h => h.id === holding.id ? holding : h);
     setInvestmentHoldings(updated);
-    toast({ title: 'Asset Updated', description: `Successfully updated ${holding.name}.` });
+    if (await saveDataToSupabase('investments', updated)) {
+      toast({ title: 'Asset Updated', description: `Successfully updated ${holding.name}.` });
+    } else {
+      void fetchSupabaseData();
+    }
   };
 
-  const performDeleteHolding = (id: string) => {
+  const performDeleteHolding = async (id: string) => {
     const deleted = investmentHoldings.find(h => h.id === id);
     const updated = investmentHoldings.filter(h => h.id !== id);
     setInvestmentHoldings(updated);
-    if (deleted) {
+    if (deleted && await saveDataToSupabase('investments', updated)) {
       toast({ title: 'Asset Deleted', description: `Removed ${deleted.name} from portfolio.` });
+    } else if (deleted) {
+      void fetchSupabaseData();
     }
   };
 
   const handleDeleteHolding = (id: string) =>
     askDelete({
       name: investmentHoldings.find(h => h.id === id)?.name,
-      onConfirm: () => performDeleteHolding(id),
+      onConfirm: () => { void performDeleteHolding(id); },
     });
+
+  const handleImportHoldings = async (
+    imported: ImportedInvestmentHolding[],
+    importedActivities: ImportedInvestmentActivity[],
+    accountId: string,
+    provider: InvestmentImportProvider,
+  ) => {
+    const holdingKey = (holding: Pick<InvestmentHolding, 'accountId' | 'name' | 'ticker' | 'category'>) => {
+      const asset = (holding.ticker || holding.name).trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '');
+      return `${holding.accountId ?? ''}:${asset}:${holding.category}`;
+    };
+    const positionsByKey = new Map(investmentHoldings.map(holding => [holdingKey(holding), holding]));
+    const updated = [...investmentHoldings];
+    let created = 0;
+    let refreshed = 0;
+
+    imported.forEach(({ sourceRows: _sourceRows, ...holding }, index) => {
+      const nextHolding = { ...holding, accountId };
+      const existing = positionsByKey.get(holdingKey(nextHolding));
+      if (existing) {
+        const replacement: InvestmentHolding = { ...existing, ...nextHolding };
+        updated[updated.findIndex(current => current.id === existing.id)] = replacement;
+        positionsByKey.set(holdingKey(replacement), replacement);
+        refreshed += 1;
+      } else {
+        const id = `h_import_${Date.now()}_${index}`;
+        const createdHolding: InvestmentHolding = { ...nextHolding, id };
+        updated.push(createdHolding);
+        positionsByKey.set(holdingKey(createdHolding), createdHolding);
+        created += 1;
+      }
+    });
+
+    const importedHistory: InvestmentActivity[] = importedActivities.map(activity => ({
+      id: investmentActivityId(provider, accountId, activity),
+      accountId,
+      provider,
+      activityType: activity.activityType,
+      occurredOn: activity.occurredOn,
+      name: activity.name,
+      ticker: activity.ticker,
+      quantity: activity.quantity,
+      unitPriceGbp: activity.unitPriceGbp,
+      sourceReference: activity.sourceReference,
+    }));
+    const nextActivitiesById = new Map(investmentActivities.map(activity => [activity.id, activity]));
+    importedHistory.forEach(activity => nextActivitiesById.set(activity.id, activity));
+    const nextActivities = [...nextActivitiesById.values()].sort((left, right) => right.occurredOn.localeCompare(left.occurredOn));
+
+    setInvestmentHoldings(updated);
+    if (await saveDataToSupabase('investments', updated)) {
+      if (importedHistory.length > 0 && !(await saveDataToSupabase('investment-activities', importedHistory))) {
+        void fetchSupabaseData();
+        return false;
+      }
+      if (importedHistory.length > 0) setInvestmentActivities(nextActivities);
+      const action = [created ? `${created} added` : '', refreshed ? `${refreshed} updated` : ''].filter(Boolean).join(', ');
+      toast({
+        title: 'Investment CSV imported',
+        description: `${action || `${imported.length} saved`} from ${provider === 'kraken' ? 'Kraken' : 'Trading 212'}${importedHistory.length ? `; ${importedHistory.length} trade record${importedHistory.length === 1 ? '' : 's'} saved` : ''}. Review any unknown price facts.`,
+      });
+      return true;
+    }
+    void fetchSupabaseData();
+    return false;
+  };
   // ==========================================
   // HANDLERS: CREDIT SCORES
   // ==========================================
@@ -488,7 +573,19 @@ function FinanceView() {
   // HANDLERS: HOLIDAY TRACKER (TAX & INCOME TAB)
   // ==========================================
 
-  // Redirect if not admin
+  // Keep deep links intact while Supabase restores the saved session.
+  if (isAuthLoading) {
+    return (
+      <AppShell title="Finance" subtitle="Personal Income & Tax Dashboard">
+        <div role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+          Loading finance…
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Redirect only after authentication has been resolved.
   if (!isAdmin) {
     return <Navigate to="/" replace />;
   }
@@ -615,7 +712,7 @@ function FinanceView() {
   /* Handed to AppShell's toolbar slot, so the surface and section navs stay
      pinned while the surface underneath scrolls. */
   const toolbar = (
-    <div className="flex flex-col">
+    <div className="finance-navigation flex flex-col">
     {/* Primary navigation: the five surfaces. */}
     <div className="flex items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
       <nav className="flex flex-nowrap items-center justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
@@ -625,6 +722,7 @@ function FinanceView() {
             <div key={surface.key} className="flex items-center gap-2 md:gap-4">
               <button
                 onClick={() => navigate(pathForSurface(surface.key))}
+                aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'nav-link relative py-1 text-xs whitespace-nowrap flex items-center gap-1.5',
                   isActive && 'nav-link-active'
@@ -673,6 +771,7 @@ function FinanceView() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
+            aria-current={activeTab === tab ? 'page' : undefined}
             className={cn(
               'text-xs whitespace-nowrap font-sans transition-colors',
               activeTab === tab
@@ -793,9 +892,11 @@ function FinanceView() {
           {activeTab === 'investments' && (
             <InvestmentsTab
               holdings={investmentHoldings}
+              activities={investmentActivities}
               onAddHolding={handleAddHolding}
               onEditHolding={handleEditHolding}
               onDeleteHolding={handleDeleteHolding}
+              onImportHoldings={handleImportHoldings}
               formatGBP={formatGBP}
               bankAccounts={bankAccounts}
             />

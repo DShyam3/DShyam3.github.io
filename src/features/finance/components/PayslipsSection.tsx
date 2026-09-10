@@ -16,12 +16,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
-  checkPayslip, compareToModel, studentLoanPaidInTaxYear, sumPayslips,
-  taxYearOf, type Payslip,
+  checkPayslip, compareToModel, findPayslipTransactionCandidates, studentLoanPaidInTaxYear,
+  sumPayslips, taxYearOf, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
-import { AlertTriangle, ChevronDown, ChevronRight, FileText, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileText, Link2, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
 import { PayslipImportDialog } from './PayslipImportDialog';
@@ -93,7 +93,16 @@ const asPayslip = (d: Draft, id: string, storagePath?: string): Payslip => ({
 });
 
 export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStudentLoanMonthly?: number }) {
-  const { payslips, savePayslip, deletePayslip, profileId } = useFinanceData();
+  const {
+    payslips,
+    payslipReconciliations,
+    mockTransactions,
+    savePayslip,
+    deletePayslip,
+    savePayslipReconciliation,
+    deletePayslipReconciliation,
+    profileId,
+  } = useFinanceData();
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
@@ -134,6 +143,22 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   const [groupBy, setGroupBy] = useState<'employer' | 'year'>('year');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [detail, setDetail] = useState<Payslip | null>(null);
+
+  const reconciliationsByPayslip = useMemo(
+    () => new Map(payslipReconciliations.map(reconciliation => [reconciliation.payslipId, reconciliation])),
+    [payslipReconciliations],
+  );
+  const linkedTransactionIds = useMemo(
+    () => new Set(payslipReconciliations.map(reconciliation => reconciliation.transactionId)),
+    [payslipReconciliations],
+  );
+  const candidatesByPayslip = useMemo(() => {
+    const availableTransactions = mockTransactions.filter(transaction => !linkedTransactionIds.has(transaction.id));
+    return new Map(payslips.map(payslip => [
+      payslip.id,
+      findPayslipTransactionCandidates(payslip, availableTransactions),
+    ]));
+  }, [linkedTransactionIds, mockTransactions, payslips]);
 
   /* Two ways of asking the same question. By employer answers "what did that
      job pay me"; by tax year answers "what did I earn that year", which is
@@ -286,7 +311,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   const set = (key: keyof Draft) => (value: string) => setDraft(d => ({ ...d, [key]: value }));
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+    <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground font-mono">Payslips</h3>
@@ -404,6 +429,8 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                     {group.slips.map(p => {
                       const check = checkPayslip(p);
                       const captured = p.gross > 0 || p.net > 0;
+                      const reconciliation = reconciliationsByPayslip.get(p.id);
+                      const candidateCount = candidatesByPayslip.get(p.id)?.length ?? 0;
                       return (
                         <button
                           key={p.id}
@@ -426,6 +453,11 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                           {captured && !check.reconciles && (
                             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Does not reconcile" />
                           )}
+                          {reconciliation ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-positive" aria-label="Bank payment linked" />
+                          ) : candidateCount > 0 ? (
+                            <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Potential bank payment available" />
+                          ) : null}
                           {p.storagePath && <FileText className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="PDF archived" />}
                           <div className="text-right shrink-0">
                             <div className="text-xs font-semibold text-foreground font-mono tabular-nums">
@@ -574,9 +606,18 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
 
       <PayslipDetailDialog
         payslip={detail}
+        reconciliation={detail ? reconciliationsByPayslip.get(detail.id) : undefined}
+        transaction={detail ? mockTransactions.find(transaction => transaction.id === reconciliationsByPayslip.get(detail.id)?.transactionId) : undefined}
+        candidates={detail ? candidatesByPayslip.get(detail.id) : []}
         onOpenChange={open => { if (!open) setDetail(null); }}
         onEdit={p => { setDetail(null); openEdit(p); }}
         onOpenPdf={path => void openDocument(path)}
+        onConfirmTransaction={transactionId => detail
+          ? savePayslipReconciliation(detail.id, transactionId)
+          : Promise.resolve(false)}
+        onRemoveTransaction={() => detail
+          ? deletePayslipReconciliation(detail.id)
+          : Promise.resolve(false)}
       />
 
       <PayslipImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
+import { buildTrueLayerTransactionQuery } from '../_shared/truelayer-transaction-query.ts'
 
 const ALLOWED_ORIGINS = new Set([
   'https://dshyam3.github.io',
@@ -49,6 +50,17 @@ function buildCorsHeaders(req: Request) {
   }
 }
 
+/**
+ * TrueLayer uses this value to apply provider call limits to the person who
+ * authorised the connection, rather than to our shared Edge Function IP.
+ * It is deliberately transient: validate the proxy-supplied value, forward it
+ * only while serving that person's manual sync, and never write it to Postgres.
+ */
+function getPsuIp(req: Request): string | null {
+  const candidate = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || ''
+  return /^[0-9a-fA-F:.]{3,45}$/.test(candidate) ? candidate : null
+}
+
 serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
 
@@ -95,6 +107,16 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+    }
+
+    const psuIp = isServiceRole ? null : getPsuIp(req)
+    const trueLayerDataHeaders = (accessToken: string) => {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        'X-Client-Correlation-Id': crypto.randomUUID(),
+      }
+      if (psuIp) headers['X-PSU-IP'] = psuIp
+      return headers
     }
 
     // Initialize Supabase Client with service key to read/write credentials
@@ -328,7 +350,7 @@ serve(async (req) => {
 
       try {
         const meRes = await fetch(`${apiBaseUrl}/data/v1/me`, {
-          headers: { Authorization: `Bearer ${access_token}` },
+          headers: trueLayerDataHeaders(access_token),
         })
         if (meRes.ok) {
           const meData = await meRes.json()
@@ -352,10 +374,10 @@ serve(async (req) => {
         try {
           const [accountsResponse, cardsResponse] = await Promise.all([
             fetch(`${apiBaseUrl}/data/v1/accounts`, {
-              headers: { Authorization: `Bearer ${access_token}` },
+              headers: trueLayerDataHeaders(access_token),
             }),
             fetch(`${apiBaseUrl}/data/v1/cards`, {
-              headers: { Authorization: `Bearer ${access_token}` },
+              headers: trueLayerDataHeaders(access_token),
             }),
           ])
           const sourceResponses = [accountsResponse, cardsResponse]
@@ -574,6 +596,13 @@ serve(async (req) => {
       const now = new Date()
       const ABSOLUTE_FLOOR = new Date('1970-01-01T00:00:00.000Z')
 
+      const connectionErrorMessage = (resource: string, status: number) => {
+        if (status === 401 || status === 403) return 'Bank access needs renewing; reconnect this bank'
+        if (status === 429) return 'Bank request limit reached; retry later'
+        if (status >= 500) return 'Bank is temporarily unavailable; retry later'
+        return `Could not fetch ${resource} (HTTP ${status})`
+      }
+
       type TlAccount = {
         account_id: string
         display_name?: string
@@ -676,25 +705,43 @@ serve(async (req) => {
               .eq('id', connection.id)
           }
 
+          const logDataApiFailure = (resource: string, response: Response) => {
+            // The correlation ID lets us trace this exact provider call in
+            // TrueLayer support without logging a token, account ID, or body.
+            console.warn('TrueLayer Data API request failed', {
+              provider: connection.provider_name,
+              resource,
+              status: response.status,
+              correlationId: response.headers.get('x-tl-correlation-id'),
+            })
+          }
+
           // 3. Fetch Accounts & Cards for this connection
           const accountsRes = await fetch(`${apiBaseUrl}/data/v1/accounts`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
+            headers: trueLayerDataHeaders(accessToken),
           })
           const cardsRes = await fetch(`${apiBaseUrl}/data/v1/cards`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
+            headers: trueLayerDataHeaders(accessToken),
           })
 
-          // Do not advance a connection-wide cursor from a partial account
-          // list: a retry must get the opportunity to backfill every account
-          // and card covered by this consent.
-          if (!accountsRes.ok || !cardsRes.ok) {
-            console.warn(`Could not retrieve the complete account list for ${connection.provider_name}`)
-            connectionErrors.push({ provider: connection.provider_name, error: 'Could not fetch accounts' })
+          // A credit-card-only consent (for example American Express) has no
+          // debit accounts, while a current-account consent may have no cards.
+          // One unavailable list must not hide the valid list from the other.
+          if (!accountsRes.ok && !cardsRes.ok) {
+            logDataApiFailure('accounts', accountsRes)
+            logDataApiFailure('cards', cardsRes)
+            connectionErrors.push({
+              provider: connection.provider_name,
+              error: connectionErrorMessage('accounts or cards', Math.max(accountsRes.status, cardsRes.status)),
+            })
             continue
           }
 
-          const accountsList: TlAccount[] = (await accountsRes.json()).results || []
-          const cardsList: TlCard[] = (await cardsRes.json()).results || []
+          if (!accountsRes.ok) logDataApiFailure('accounts', accountsRes)
+          if (!cardsRes.ok) logDataApiFailure('cards', cardsRes)
+
+          const accountsList: TlAccount[] = accountsRes.ok ? (await accountsRes.json()).results || [] : []
+          const cardsList: TlCard[] = cardsRes.ok ? (await cardsRes.json()).results || [] : []
 
           const sources: { kind: 'accounts' | 'cards'; raw: TlAccount | TlCard }[] = [
             ...accountsList.map(raw => ({ kind: 'accounts' as const, raw })),
@@ -724,9 +771,10 @@ serve(async (req) => {
             const accId = accountRowId(kind, raw.account_id)
             const balanceRes = await fetch(
               `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/balance`,
-              { headers: { Authorization: `Bearer ${accessToken}` } },
+              { headers: trueLayerDataHeaders(accessToken) },
             )
             if (!balanceRes.ok) {
+              logDataApiFailure(`${kind} balance`, balanceRes)
               throw new Error(`Could not fetch balance for ${kind}/${raw.account_id}`)
             }
             const balanceData = await balanceRes.json()
@@ -802,14 +850,21 @@ serve(async (req) => {
             source: typeof sourceStates[number],
             from: Date,
             to: Date,
-          ): Promise<{ transactionCount: number; failed: boolean }> => {
-            const qs = `from=${from.toISOString()}&to=${to.toISOString()}`
+            resource: 'current transactions' | 'historical transactions',
+          ): Promise<{ transactionCount: number; failed: boolean; status?: number }> => {
+            // Data API v1 documents these as inclusive calendar dates. Sending
+            // ISO instants worked with some providers but led others to reject
+            // historical calls with HTTP 400, so use the supported shape.
+            const qs = buildTrueLayerTransactionQuery(from, to)
             const { kind, raw } = source
             const res = await fetch(
               `${apiBaseUrl}/data/v1/${kind}/${raw.account_id}/transactions?${qs}`,
-              { headers: { Authorization: `Bearer ${accessToken}` } },
+              { headers: trueLayerDataHeaders(accessToken) },
             )
-            if (!res.ok) return { transactionCount: 0, failed: true }
+            if (!res.ok) {
+              logDataApiFailure(resource, res)
+              return { transactionCount: 0, failed: true, status: res.status }
+            }
             const txs = ((await res.json()).results || []) as TlTransaction[]
             const rows = txs
               .filter(tx => typeof tx.transaction_id === 'string' && typeof tx.timestamp === 'string')
@@ -833,10 +888,14 @@ serve(async (req) => {
           // history cursor then walks backward from today without assuming a
           // fixed age for a newly authorised account or card.
           const recentResults = await Promise.all(sourceStates.map(source =>
-            fetchSourceRange(source, new Date(now.getTime() - OVERLAP_DAYS * DAY_MS), now),
+            fetchSourceRange(source, new Date(now.getTime() - OVERLAP_DAYS * DAY_MS), now, 'current transactions'),
           ))
           if (recentResults.some(result => result.failed)) {
-            connectionErrors.push({ provider: connection.provider_name, error: 'Could not fetch transactions' })
+            const status = recentResults.find(result => result.failed)?.status
+            connectionErrors.push({
+              provider: connection.provider_name,
+              error: status ? connectionErrorMessage('current transactions', status) : 'Could not fetch current transactions',
+            })
             continue
           }
 
@@ -847,6 +906,7 @@ serve(async (req) => {
             emptyStreak: 0,
           }))
           let transactionFetchFailed = false
+          let transactionFailureStatus: number | undefined
 
           for (let window = 0; window < MAX_WINDOWS_PER_RUN; window++) {
             const sourcesToBackfill = workingSources.filter(source =>
@@ -856,11 +916,20 @@ serve(async (req) => {
             const results = await Promise.all(sourcesToBackfill.map(async source => {
               const windowTo = source.frontier
               const windowFrom = new Date(windowTo.getTime() - BACKFILL_WINDOW_DAYS * DAY_MS)
-              return { source, result: await fetchSourceRange(source, windowFrom, windowTo), windowFrom }
+              return { source, result: await fetchSourceRange(source, windowFrom, windowTo, 'historical transactions'), windowFrom }
             }))
             for (const { source, result, windowFrom } of results) {
               if (result.failed) {
+                // When status is 400 or 422, the requested date range precedes the bank's
+                // supported historical window (e.g. HSBC's 90-day unattended limit or
+                // 1-2 year retention limit). This is the natural boundary of the provider's
+                // transaction history for this source, not a fatal server/network outage.
+                if (result.status === 400 || result.status === 422) {
+                  source.backfillComplete = true
+                  continue
+                }
                 transactionFetchFailed = true
+                transactionFailureStatus ||= result.status
                 continue
               }
               source.frontier = windowFrom
@@ -872,7 +941,12 @@ serve(async (req) => {
           }
 
           if (transactionFetchFailed) {
-            connectionErrors.push({ provider: connection.provider_name, error: 'Could not fetch transactions' })
+            connectionErrors.push({
+              provider: connection.provider_name,
+              error: transactionFailureStatus
+                ? connectionErrorMessage('historical transactions', transactionFailureStatus)
+                : 'Could not fetch historical transactions',
+            })
             continue
           }
 

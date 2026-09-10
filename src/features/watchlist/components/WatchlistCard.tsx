@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -71,6 +71,9 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   syncing,
 }: WatchlistCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [loadedImage, setLoadedImage] = useState<string | null>(null);
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -151,26 +154,36 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   return (
     <>
       <div
+        ref={cardRef}
+        role="button"
+        tabIndex={0}
+        aria-label={`${item.title} — open details`}
+        onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setDetailOpen(true); } }}
         className="item-card group cursor-pointer"
         onClick={() => setDetailOpen(true)}
       >
         <div className="aspect-[2/3] bg-muted relative overflow-hidden">
-          {item.image_url ? (
+          {item.image_url && item.image_url !== failedImage && loadedImage !== item.image_url && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground" role="status">{getCategoryIcon(item.category)}<span className="text-xs">Loading poster…</span></div>}
+          {item.image_url && item.image_url !== failedImage ? (
             <img
               src={item.image_url}
               alt={item.title}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              className={cn("w-full h-full object-contain relative", loadedImage !== item.image_url && "opacity-0")}
+              onLoad={() => setLoadedImage(item.image_url || null)}
+              onError={() => setFailedImage(item.image_url || null)}
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-secondary/30">
+            <div className="missing-art w-full h-full flex flex-col gap-3 p-4 text-center items-center justify-center">
               {getCategoryIcon(item.category)}
+              <span className="text-xs font-medium line-clamp-3">{item.title}</span>
+              <span className="text-xs text-muted-foreground">No poster available</span>
             </div>
           )}
 
           {/* Action buttons - top right on hover */}
           <div
-            className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
             {onMoveToFavourites && (
@@ -389,6 +402,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
       <WatchlistDetailDialog
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        onCloseAutoFocus={(event) => { event.preventDefault(); cardRef.current?.focus(); }}
         item={item}
         status={status}
         onDelete={

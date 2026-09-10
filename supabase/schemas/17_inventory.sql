@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_items" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "name" "text" NOT NULL,
     "brand" "text",
-    "category" "text" DEFAULT 'tech-edc'::"text" NOT NULL,
+    "category" "text" DEFAULT 'tech'::"text" NOT NULL,
     "price" numeric,
     "image" "text",
     "is_new" boolean DEFAULT false,
@@ -11,7 +11,10 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_items" (
     "subcategory" "text",
     "is_wishlist" boolean DEFAULT false,
     "description" "text",
-    "specs" "text"
+    "specs" "text",
+    "is_edc" boolean DEFAULT false,
+    "edc_slot" "text" DEFAULT 'pockets'::"text",
+    "edc_order" integer DEFAULT 0
 );
 
 ALTER TABLE "public"."inventory_items" OWNER TO "postgres";

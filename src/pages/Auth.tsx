@@ -50,7 +50,7 @@ const Auth = () => {
       <div className="flex-1 flex flex-col selection:bg-primary/30">
         
         <main className="flex-1 flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-md bg-card/40 backdrop-blur-md rounded-[2rem] p-8 border border-primary/10 shadow-2xl animate-in zoom-in-95 duration-500">
+          <div data-palette="lavender" className="ambient-card w-full max-w-md bg-card/40 backdrop-blur-md rounded-[2rem] p-8 border border-primary/10 shadow-2xl animate-in zoom-in-95 duration-500">
             <div className="flex flex-col items-center mb-8">
               <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
                 <Lock className="w-8 h-8 text-primary" />

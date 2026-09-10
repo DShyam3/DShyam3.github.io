@@ -36,6 +36,7 @@ export const inspirationsCollection: CollectionConfig<InspirationRow> = {
 
   card: {
     variant: 'media',
+    imageFit: 'contain',
     // Portraits, square.
     aspect: '1 / 1',
     fallbackIcon: User,

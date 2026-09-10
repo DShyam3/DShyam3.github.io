@@ -40,7 +40,8 @@ export function SurfaceHero({ label, value, tone = 'neutral', detail, aside, loa
   return (
     <section
       aria-label={label}
-      className="flex flex-col gap-3 border-b border-border/40 pb-5 sm:flex-row sm:items-end sm:justify-between"
+      data-palette={tone === 'negative' ? 'rose' : 'sage'}
+      className="ambient-card finance-hero mb-6 flex flex-col gap-3 rounded-3xl border border-border/40 p-6 sm:flex-row sm:items-end sm:justify-between"
     >
       <div className="min-w-0 space-y-1">
         <DotMatrixText text={label.toUpperCase()} size="xs" />

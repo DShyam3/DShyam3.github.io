@@ -35,6 +35,7 @@ export const photosCollection: CollectionConfig<PhotoRow> = {
 
   card: {
     variant: 'media',
+    imageFit: 'contain',
     // Square crop suits a mixed photo set.
     aspect: '1 / 1',
     fallbackIcon: ImageIcon,

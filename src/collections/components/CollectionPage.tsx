@@ -28,6 +28,7 @@ export function CollectionPage<T extends CollectionRow, R>({
   const {
     items,
     groups,
+    all,
     sortKey,
     setSortKey,
     sortOptions,
@@ -66,6 +67,28 @@ export function CollectionPage<T extends CollectionRow, R>({
   const count = items.length;
   const noun = count === 1 ? config.noun.singular : config.noun.plural;
 
+  const customViewContent = config.customView?.({
+    items,
+    allItems: all,
+    loading,
+    filters,
+    setFilter,
+    isAdmin,
+    updateItem,
+    removeItem,
+    addItem,
+    search,
+  });
+
+  const customToolbarContent = config.customToolbarActions?.({
+    items,
+    allItems: all,
+    filters,
+    isAdmin,
+    updateItem,
+    addItem,
+  });
+
   return (
     <AppShell
       title={config.title}
@@ -90,7 +113,7 @@ export function CollectionPage<T extends CollectionRow, R>({
                 count={loading ? undefined : count}
                 noun={noun.toLowerCase()}
               />
-              {showSortToggle && (
+              {showSortToggle && !customViewContent && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -111,69 +134,67 @@ export function CollectionPage<T extends CollectionRow, R>({
             </div>
             <div className="flex items-center gap-3 sm:gap-4">
               {config.summary?.(items, isAdmin)}
-              {isAdmin && (
-                <EntityFormDialog
-                  mode="add"
-                  config={config}
-                  onSubmit={(values) => addItem(values)}
-                />
+              {customToolbarContent !== undefined ? (
+                customToolbarContent
+              ) : (
+                isAdmin && (
+                  <EntityFormDialog
+                    mode="add"
+                    config={config}
+                    onSubmit={(values) => addItem(values)}
+                  />
+                )
               )}
             </div>
           </div>
         </>
       }
     >
-      {/* `.card-grid` sizes a card so two rows clear the fold, and to do that
-          it has to know how tall a card is -- which is this collection's image
-          aspect plus the text block. It defaults to the tallest shape on the
-          site (2:3), so a collection of 16:9 stills would otherwise draw
-          needlessly small cards.
-
-          `collection-cards` is the other half of the same sum: an EntityCard's
-          compact body is shorter than a watchlist card's, and the class is
-          where index.css says by how much. */}
-      <div
-        className="collection-cards px-4 md:px-0"
-        style={
-          {
-            '--card-aspect': config.card.aspect ?? '2 / 3',
-          } as CSSProperties
-        }
-      >
-        {loading ? (
-          <CardGrid>
-            {[...Array(8)].map((_, i) => (
-              <Skeleton key={i} className={layout.skeleton} />
-            ))}
-          </CardGrid>
-        ) : count === 0 ? (
-          <div className="py-20 text-center">
-            <p className="text-muted-foreground font-serif text-lg italic">
-              No {config.noun.plural.toLowerCase()} found
-            </p>
-            <p className="text-sm text-muted-foreground/70 mt-2">
-              Try adjusting your search or add new {config.noun.plural.toLowerCase()}
-            </p>
-          </div>
-        ) : groups ? (
-          <div className="space-y-8 pb-4">
-            {groups.map((group) => (
-              <section key={group.key}>
-                <div className="flex items-center gap-4 mb-5">
-                  <h3 className="text-lg font-semibold tracking-wide whitespace-nowrap">
-                    <DotMatrixText text={group.label.toUpperCase()} size="xs" />
-                  </h3>
-                  <div className="h-px bg-border flex-1" />
-                  <CountLabel count={group.items.length} />
-                </div>
-                <CardGrid>{cardsFor(group.items)}</CardGrid>
-              </section>
-            ))}
-          </div>
-        ) : (
-          <CardGrid>{cardsFor(items)}</CardGrid>
-        )}
-      </div>
+      {customViewContent ?? (
+        <div
+          className="collection-cards px-4 md:px-0"
+          data-presentation={config.card.variant === 'text' ? 'reading' : config.card.imageIsContent || config.path === '/inspiration' ? 'gallery' : 'grid'}
+          style={
+            {
+              '--card-aspect': config.card.aspect ?? '2 / 3',
+            } as CSSProperties
+          }
+        >
+          {loading ? (
+            <CardGrid>
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className={layout.skeleton} />
+              ))}
+            </CardGrid>
+          ) : count === 0 ? (
+            <div className="py-20 text-center">
+              <p className="text-muted-foreground font-serif text-lg italic">
+                No {config.noun.plural.toLowerCase()} found
+              </p>
+              <p className="text-sm text-muted-foreground/70 mt-2">
+                Try adjusting your search or add new {config.noun.plural.toLowerCase()}
+              </p>
+            </div>
+          ) : groups ? (
+            <div className="space-y-8 pb-4">
+              {groups.map((group) => (
+                <section key={group.key}>
+                  <div className="flex items-center gap-4 mb-5">
+                    <h3 className="text-lg font-semibold tracking-wide whitespace-nowrap">
+                      <DotMatrixText text={group.label.toUpperCase()} size="xs" />
+                    </h3>
+                    <div className="h-px bg-border flex-1" />
+                    <CountLabel count={group.items.length} />
+                  </div>
+                  <CardGrid>{cardsFor(group.items)}</CardGrid>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <CardGrid>{cardsFor(items)}</CardGrid>
+          )}
+        </div>
+      )}
     </AppShell>
   );
 }
