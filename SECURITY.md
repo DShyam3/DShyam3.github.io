@@ -74,7 +74,10 @@ attack surface of this site is Supabase, and it was audited separately
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
   Content tables are anonymous-read, `is_admin()`-write.
 - **Edge functions**: browser calls to `truelayer-sync` and
-  `merchant-logo-cache` verify the JWT and admin email; `truelayer-sync` also
+  `merchant-logo-cache` verify the JWT and then call `public.is_admin()`
+  through the caller's own token (`_shared/require-admin.ts`), so a function
+  and an RLS policy cannot disagree about who is an administrator;
+  `truelayer-sync` also
   accepts the service role only for its Vault-authenticated scheduled sync.
   `tmdb-proxy` is deliberately public but restricted to an endpoint allowlist
   so it cannot be used as a generic TMDB proxy; `watchlist-cron-sync` requires
@@ -85,20 +88,40 @@ attack surface of this site is Supabase, and it was audited separately
   and finance profile. The browser verifies its tab-scoped copy first; the
   function atomically consumes the matching state before exchanging a code.
 - **Outbound fetches (SSRF)**: `merchant-logo-cache` is the only function that
-  requests anything from a host we do not run. It holds the host list as a
-  constant; no URL, host or path is ever read from the request body, so it
-  cannot be steered. Redirects are followed by hand, at most three hops, and
-  only to another host on the same list — an automatic follow is how an
-  allowlist is normally escaped. What it stores is decided by magic bytes, not
-  by the remote host's `Content-Type`, and capped at 256 KB.
+  requests anything from a host we do not run, and it talks to exactly two:
+  `api.brandfetch.io` and `cdn.brandfetch.io`. No URL, host or path is ever
+  read from the request body, so it cannot be steered. The domain that brand
+  search returns is never fetched directly either — it is handed back to
+  Brandfetch's own CDN as a path — so a hostile search response cannot point us
+  at an internal address. What gets stored is decided by magic bytes, not by
+  the remote host's `Content-Type`, capped at 256 KB, and SVG is refused:
+  served from our own storage origin it could execute script if opened
+  directly.
 - **Merchant logos, and why they are not hotlinked**: rendering a logo straight
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
-  fetched once server-side instead and served from the `merchant-logos` bucket.
-  That bucket is public — a supermarket's logo is public — and holds nothing
-  user-specific: object keys are brand slugs, never a profile or transaction
-  id. Writes to it are `is_admin()`; the same is true of its index table
-  `finance_merchant_logos`, which is public-read by design.
+  resolved once server-side instead and served from the `merchant-logos`
+  bucket. That bucket is public — a supermarket's logo is public — and holds
+  nothing user-specific: object keys are brand slugs, never a profile or
+  transaction id. Writes to it are `is_admin()`; the same is true of its index
+  table `finance_merchant_logos`, which is public-read by design.
+- **What a merchant lookup discloses**: resolving a brand to a logo sends a
+  name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
+  are ever sent — public brand names committed to our own source. A merchant
+  the directory does not name is never queried, so the ledger cannot leak
+  through this path: not a counterparty, not an employer, not an account label,
+  not the account holder's own name.
+  This replaced a frequency threshold, which was the wrong control. Brand
+  search is fuzzy and never answers "no such brand" — asked about a person's
+  name it returns a real company with real confidence — and a transfer labelled
+  with the account holder's name recurs happily, so it passed the threshold and
+  resolved to an unrelated business whose logo then rendered on the row. Rows
+  cached under a slug the directory no longer names are deleted, object and
+  all, at the start of every run.
+  Each brand is asked about once for the whole install, with no user, amount or
+  date attached, and the answer is cached in our bucket so it is never asked
+  again. `BRANDFETCH_CLIENT_ID` lives in the function's env and carries no
+  `VITE_` prefix, so it never reaches the bundle.
 - **Secrets**: the TMDB API key lives only in edge function env, never in the
   bundle. Only `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
   `VITE_TMDB_IMAGE_BASE_URL` and `VITE_ADMIN_EMAIL` reach the client.
@@ -112,9 +135,19 @@ attack surface of this site is Supabase, and it was audited separately
   state table is deliberately included despite being service-role-only in
   normal operation.
 - **Auth**: public email signup is enabled on the project. Since every policy
-  now checks the admin email, a self-registered user gets nothing, but signup
-  should be disabled in the dashboard (Authentication → Sign In / Providers)
-  because this is a single-account site.
+  checks `public.is_admin()`, and that reads the `admin_users` table, a
+  self-registered user gets nothing — the account exists but holds no grant.
+  Signup should still be disabled in the dashboard (Authentication → Sign In /
+  Providers) because this is a single-account site. Disable *signup*, not the
+  email provider: the provider toggle gates sign-in too, and turning it off
+  locks the password box out of the site.
+
+- **Administrator identity**: a row in `public.admin_users`, keyed on
+  `auth.users.id`. It used to be an email literal inside `is_admin()`, which
+  meant a second administrator or a test account needed a migration, and which
+  rested on a claim the account holder can change. The table is readable by an
+  administrator and writable only by the service role — an admin session cannot
+  grant admin rights over the API. Adding one is a deliberate SQL statement.
 
 ## Accepted Supabase advisor lints
 

@@ -115,3 +115,63 @@ describe('resolveMerchant', () => {
     expect(m.known).toBe(false);
   });
 });
+
+/**
+ * Real rows from a Lloyds connection, where TrueLayer supplied no
+ * `merchant_name` at all and the sync falls back to the description. These are
+ * the shapes the normaliser actually has to survive.
+ */
+describe('bank descriptions, where no merchant name was given', () => {
+  it('holds two visits to one shop on the same key', () => {
+    expect(merchantSlug('CANAL 54 Geneve CH')).toBe(merchantSlug('CANAL 12 Geneve CH'));
+  });
+
+  it('strips the processor from a SumUp row', () => {
+    expect(normaliseMerchant('SUMUP *FONDATION DU M GENEVE CH'))
+      .toBe('fondation du m geneve ch');
+  });
+
+  it('gives every description something to draw', () => {
+    const rows = [
+      'CLUB LLOYDS WAIVED',
+      'CANAL 54 Geneve CH',
+      'Auer Chocolatier SA Geneve CH',
+      'Patek Philippe Museum Geneve CH',
+      'SUMUP *FONDATION DU M GENEVE CH',
+      'Threekids Le Bagel Art Geneve CH',
+    ];
+    for (const row of rows) {
+      const { initials, slug } = resolveMerchant(row);
+      expect(slug, row).not.toBe('');
+      expect(initials, row).not.toBe('?');
+      expect(initials.length, row).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
+describe('brand at the front of a branch description', () => {
+  it('finds the brand behind branch, town and country noise', () => {
+    const m = resolveMerchant('LIDL GB WOOLSTON LIDL GB WOOLS GB');
+    expect(m.slug).toBe('lidl');
+    expect(m.label).toBe('Lidl');
+    expect(m.known).toBe(true);
+  });
+
+  it('puts two branches of one chain on the same key and colour', () => {
+    const a = resolveMerchant('LIDL GB WOOLSTON LIDL GB WOOLS GB');
+    const b = resolveMerchant('LIDL GB SOUTHAMPTON GB');
+    expect(a.slug).toBe(b.slug);
+    expect(a.hue).toBe(b.hue);
+  });
+
+  it('matches whole words only, so a longer word is not the brand', () => {
+    // `bp` is a directory row; `bps-garage` must not resolve to it.
+    expect(resolveMerchant('BPS Garage Ltd').known).toBe(false);
+  });
+
+  it('leaves an unknown merchant alone', () => {
+    const m = resolveMerchant('SWISS YOUTHHOSTEL Zurich CH');
+    expect(m.known).toBe(false);
+    expect(m.initials).toBe('SY');
+  });
+});

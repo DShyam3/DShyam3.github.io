@@ -12,9 +12,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// This fallback must match the literal checked by public.is_admin(). The env
-// value controls the UI only; the database remains the authorization boundary.
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'd.shyam1256@gmail.com';
+// The address the password box signs in as, and nothing more.
+//
+// This site has one password field rather than an email and a password, so the
+// client has to supply an address to `signInWithPassword`. It is a convenience,
+// not a permission: administrator identity lives in `public.admin_users` and is
+// decided by `public.is_admin()`. Pointing this at a test account (see
+// `.env.example`) is how a local stack signs in as one.
+const LOGIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'd.shyam1256@gmail.com';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAdmin, setIsAdmin] = useState(false);
@@ -22,9 +27,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [session, setSession] = useState<Session | null>(null);
 
     useEffect(() => {
-        const checkAdmin = (session: Session | null) => {
-            if (!session || !session.user || !session.user.email) return false;
-            return session.user.email === ADMIN_EMAIL;
+        // Ask the database rather than compare the email ourselves. The client
+        // used to test the session's address against a literal, which was a
+        // second copy of the rule `is_admin()` enforces -- and a copy that
+        // could drift, showing admin controls to someone every write would
+        // then be refused for. One source of truth, queried.
+        let generation = 0;
+
+        const resolveAdmin = async (session: Session | null) => {
+            const current = ++generation;
+            if (!session) return { current, admin: false };
+            const { data, error } = await supabase.rpc('is_admin');
+            if (error) {
+                // Deny on failure. A network error is not a grant, and the
+                // database refuses the write regardless of what the UI shows.
+                console.error('Could not resolve admin status:', error.message);
+                return { current, admin: false };
+            }
+            return { current, admin: data === true };
         };
 
         // INITIAL_SESSION resolves the saved session before protected routes
@@ -34,8 +54,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
-            setIsAdmin(checkAdmin(session));
-            setIsAuthLoading(false);
+            void resolveAdmin(session).then(({ current, admin }) => {
+                // A sign-out that lands while an earlier check is still in
+                // flight must win. Without this the resolved older answer
+                // could restore admin state after the session had gone.
+                if (current !== generation) return;
+                setIsAdmin(admin);
+                setIsAuthLoading(false);
+            });
         });
 
         return () => subscription.unsubscribe();
@@ -44,7 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const login = useCallback(async (password: string): Promise<boolean> => {
         try {
             const { error } = await supabase.auth.signInWithPassword({
-                email: ADMIN_EMAIL,
+                email: LOGIN_EMAIL,
                 password: password,
             });
 

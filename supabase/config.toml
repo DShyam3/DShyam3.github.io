@@ -32,12 +32,21 @@ major_version = 15
 [db.pooler]
 enabled = false
 
+# Applied by `supabase db reset`, after migrations. Creates the administrator
+# account and the synthetic finance profile that automated smoke tests sign in
+# to; it refuses to run against a database that already holds any account.
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
 [studio]
 enabled = true
 port = 54323
 
-# Catches outbound mail locally instead of sending it.
-[inbucket]
+# Catches outbound mail locally instead of sending it. Named [inbucket] until
+# the CLI renamed the section; the old name still works but warns on every
+# command.
+[local_smtp]
 enabled = true
 port = 54324
 
@@ -59,7 +68,16 @@ refresh_token_reuse_interval = 10
 enable_signup = false
 
 [auth.email]
-enable_signup = false
+# Turns the email provider on. The CLI maps this key to
+# GOTRUE_EXTERNAL_EMAIL_ENABLED, which gates sign-IN as well as sign-up, so
+# setting it false disables the site's password box entirely -- the local stack
+# rejected every attempt with `email_provider_disabled`, which reads like a bad
+# password rather than a missing setting.
+#
+# Registration is still closed: `enable_signup = false` under [auth] above sets
+# GOTRUE_DISABLE_SIGNUP, which is the global switch. The two keys share a name
+# and do different jobs.
+enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
 

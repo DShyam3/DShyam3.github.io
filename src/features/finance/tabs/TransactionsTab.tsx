@@ -58,6 +58,7 @@ import { useReviewShortcuts } from '@/features/finance/useReviewShortcuts';
 import { useMerchantLogos } from '@/features/finance/useMerchantLogos';
 import { MerchantAvatar } from '@/features/finance/components/MerchantAvatar';
 import { StatementImportDialog } from '@/features/finance/components/StatementImportDialog';
+import { TransferReviewSection } from '@/features/finance/components/TransferReviewSection';
 import { resolveMerchant } from '@/lib/finance';
 
 interface TransactionsTabProps {
@@ -772,6 +773,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
           )}
         </div>
 
+        <TransferReviewSection />
+
         {/* LIST RENDER: Grouped by date */}
         <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-4 min-h-[400px] flex flex-col justify-start hover:border-border/80 transition-colors">
           {groupedTransactions.length === 0 ? (
@@ -860,6 +863,9 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       const accInfo = getAccountInfo(tx.bankAccountId || tx.accountId);
                       const goalInfo = getGoalInfo(tx.goalId);
                       const isIncome = tx.amount < 0;
+                      // Same precedence the avatar uses, so the cached logo it
+                      // is handed belongs to the merchant it actually draws.
+                      const logoKey = tx.merchant || tx.name;
 
                       return (
                         <div
@@ -904,11 +910,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                             <MerchantAvatar
                               merchant={tx.merchant}
+                              fallbackName={tx.name}
                               category={tx.category}
                               isIncome={isIncome}
                               cachedLogo={
-                                tx.merchant
-                                  ? merchantLogos.get(resolveMerchant(tx.merchant).slug)
+                                logoKey
+                                  ? merchantLogos.get(resolveMerchant(logoKey).slug)
                                   : undefined
                               }
                             />

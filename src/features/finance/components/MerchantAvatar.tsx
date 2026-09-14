@@ -22,12 +22,19 @@ import { bundledMerchantLogo } from '../merchant-logo-assets';
  */
 export function MerchantAvatar({
   merchant,
+  fallbackName,
   category,
   isIncome,
   cachedLogo,
   className,
 }: {
   merchant?: string | null;
+  /**
+   * Used when the bank named no merchant -- the row's own label. Most UK
+   * issuers return no `merchant_name` on TrueLayer's unenriched Data API, so
+   * without this the great majority of rows would have no identity at all.
+   */
+  fallbackName?: string | null;
   category?: string;
   isIncome: boolean;
   /** Public URL from `useMerchantLogos`, when the cache holds this merchant. */
@@ -42,7 +49,12 @@ export function MerchantAvatar({
     className,
   );
 
-  if (!merchant?.trim()) {
+  // The merchant column survives a rename and the display name does not, so
+  // it is preferred where it exists -- but a name is a far better answer than
+  // a category initial, which is the same letter on half the ledger.
+  const source = merchant?.trim() || fallbackName?.trim() || '';
+
+  if (!source) {
     return (
       <div
         aria-hidden
@@ -58,7 +70,7 @@ export function MerchantAvatar({
     );
   }
 
-  const { label, initials, hue, slug } = resolveMerchant(merchant);
+  const { label, initials, hue, slug } = resolveMerchant(source);
   const logo = bundledMerchantLogo(slug) ?? cachedLogo;
 
   if (logo && !imageFailed) {

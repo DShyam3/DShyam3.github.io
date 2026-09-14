@@ -61,6 +61,10 @@ const ROWS: [string, string, ...string[]][] = [
   ['starbucks', 'Starbucks', 'starbucks-coffee'],
   ['nandos', "Nando's", 'nando-s'],
   ['wagamama', 'Wagamama'],
+  ['subway', 'Subway'],
+  ['kfc', 'KFC'],
+  ['burger-king', 'Burger King', 'burgerking'],
+  ['dominos', "Domino's", 'domino-s', 'dominos-pizza'],
 
   ['tfl', 'Transport for London', 'tfl-travel', 'tfl-travel-ch', 'transport-for-london'],
   ['trainline', 'Trainline', 'thetrainline'],
@@ -97,6 +101,7 @@ const ROWS: [string, string, ...string[]][] = [
 
   ['puregym', 'PureGym', 'pure-gym'],
   ['thegym', 'The Gym Group', 'the-gym-group'],
+  ['american-express', 'American Express', 'amex', 'americanexpress'],
   ['nhs', 'NHS', 'nhs-prescription'],
   ['royal-mail', 'Royal Mail', 'royalmail'],
 ];

@@ -22,9 +22,11 @@ import {
   type ReactNode,
 } from 'react';
 import defaultPresets from '@/data/presets.json';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import type { Payslip, PayslipLine, PayslipTransactionReconciliation, ProfileTransfer } from '@/lib/finance';
+import type { StoredTransferLink } from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
@@ -86,6 +88,63 @@ import {
   sanitizeBankAccounts,
   sanitizeBudgetCategories,
 } from './utils/calculations';
+
+/**
+ * One `finance_profiles` row as the app's own shape.
+ *
+ * Module-level because two callers map it -- the profile resolution that runs
+ * before the bulk load, and the bulk load's own refresh of the switcher -- and
+ * two copies of the defaulting below would drift.
+ *
+ * Every optional column is defaulted rather than assumed present, so a row
+ * read during the window where a migration adding one is written but not yet
+ * applied degrades instead of throwing.
+ */
+const toFinanceProfile = (row: {
+  id: string;
+  name: string;
+  is_self: boolean;
+  is_public: boolean;
+  emoji: string | null;
+  currency: string;
+  region: string;
+  birth_year: number | null;
+  retirement_age: number | null;
+  pension_growth_percent: number | string | null;
+}): FinanceProfile => ({
+  id: row.id,
+  name: row.name,
+  isSelf: row.is_self,
+  isPublic: row.is_public,
+  emoji: row.emoji,
+  currency: row.currency,
+  region: row.region,
+  birthYear: row.birth_year ?? null,
+  retirementAge: row.retirement_age ?? 68,
+  pensionGrowthPercent: Number(row.pension_growth_percent ?? 4.5),
+});
+
+/**
+ * The `saveDataToSupabase` keys whose rows carry a `profile_id`.
+ *
+ * Listed rather than inferred, and as an allowlist rather than a list of
+ * exceptions: a key added here without a profile_id column fails loudly on the
+ * first save, whereas a denylist would silently let a new ledger table be
+ * written unscoped. The rest -- tax_config, recurring_templates,
+ * credit_bureaus, holiday_defaults, budget_presets -- are the shared reference
+ * tables from 7.E-pre2 and have no profile_id at all.
+ */
+const PROFILE_SCOPED_SAVE_KEYS = new Set([
+  'settings',
+  'goals',
+  'accounts',
+  'investments',
+  'investment-activities',
+  'budget',
+  'recurrings',
+  'transactions',
+  'default_budget_categories',
+]);
 
 const EMPTY_TAX_CONFIG: TaxConfig = {
   effectiveFrom: '2026-04-06',
@@ -359,7 +418,34 @@ function useProvideFinanceData() {
   const [transfers, setTransfers] = useState<ProfileTransfer[]>([]);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [payslipReconciliations, setPayslipReconciliations] = useState<PayslipTransactionReconciliation[]>([]);
+  const [transferLinks, setTransferLinks] = useState<StoredTransferLink[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
+
+  /**
+   * Both scoping helpers throw rather than fall back to an unfiltered query.
+   *
+   * They used to `return q` when `profileId` was null, which read as a
+   * harmless guard and was not: an unfiltered query returns *every* profile's
+   * rows, so the page rendered one profile's name above another profile's
+   * totals. Measured on a local stack — the self profile had no transactions
+   * and the Demo profile had twenty, and a cold load showed Demo's £2,838.00
+   * as the self profile's spending before the scoped refetch replaced it.
+   *
+   * A figure that is wrong for a few hundred milliseconds is still a figure
+   * someone can read, and a wrong number looks exactly like a right one
+   * (REHAUL_PLAN.md Part 0.5). Nothing should query these tables before the
+   * profile is known, so this is an invariant rather than a condition: the
+   * effect below waits for `profileId`, and a future caller that forgets gets
+   * a loud failure instead of quietly mixing two ledgers.
+   */
+  const requireProfile = (helper: string): string => {
+    if (!profileId) {
+      throw new Error(
+        `${helper} was called before a profile was resolved. Querying a finance table without a profile returns every profile's rows; wait for profileId instead.`,
+      );
+    }
+    return profileId;
+  };
 
   /**
    * A scoped table holds this profile's rows plus the shared templates, which
@@ -367,8 +453,8 @@ function useProvideFinanceData() {
    * `is_default` once they arrive.
    */
   const scoped = <T,>(q: T): T => {
-    if (!profileId) return q;
-    return (q as { or: (f: string) => T }).or(`profile_id.eq.${profileId},is_default.eq.true`);
+    const id = requireProfile('scoped');
+    return (q as { or: (f: string) => T }).or(`profile_id.eq.${id},is_default.eq.true`);
   };
 
   /**
@@ -376,9 +462,53 @@ function useProvideFinanceData() {
    * template column (e.g. debt observations).
    */
   const scopedByProfile = <T,>(q: T): T => {
-    if (!profileId) return q;
-    return (q as { eq: (col: string, val: string) => T }).eq('profile_id', profileId);
+    const id = requireProfile('scopedByProfile');
+    return (q as { eq: (col: string, val: string) => T }).eq('profile_id', id);
   };
+
+  /**
+   * Resolves which profile the page is looking at, before anything reads a
+   * profile-scoped table.
+   *
+   * This is its own step because the bulk load cannot scope itself until the
+   * answer exists. It used to be one of the twenty-odd queries inside that
+   * load, which meant the other twenty ran unscoped and the whole set was then
+   * fetched a second time once the profile landed — two full loads, the first
+   * of them wrong.
+   *
+   * `finance_profiles` is the one finance table that is legitimately read
+   * unscoped: the switcher lists all of them, and RLS already restricts it to
+   * an administrator.
+   */
+  const loadProfiles = useCallback(async (): Promise<string | null> => {
+    // `*` rather than a column list, unusually for this codebase: profiles is a
+    // handful of rows, and naming columns makes the query fail outright during
+    // the window where a migration adding one is written but not yet applied --
+    // which silently empties the switcher rather than degrading.
+    const { data, error } = await supabase
+      .from('finance_profiles')
+      .select('*')
+      .order('is_self', { ascending: false });
+
+    if (error) {
+      console.error('Could not load finance profiles:', error.message);
+      toast({
+        title: 'Could not load profiles',
+        description: 'Finance data cannot be shown until a profile resolves.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    const loaded = (data ?? []).map(toFinanceProfile);
+    setProfiles(loaded);
+
+    // Written by the 7.1 migration, so at least the self profile is present
+    // unless someone has deleted it.
+    const resolved = loaded.find(p => p.isSelf)?.id ?? loaded[0]?.id ?? null;
+    setProfileId(current => current ?? resolved);
+    return resolved;
+  }, [toast]);
 
   /**
    * Writes one profile's own fields. Separate from saveDataToSupabase, which
@@ -529,6 +659,51 @@ function useProvideFinanceData() {
     void fetchPayslipReconciliations(profileId);
   }, [fetchPayslipReconciliations, profileId]);
 
+  /* ---- Confirmed internal transfers -----------------------------------
+     Money moved between the owner's own accounts is neither income nor
+     spending, but in the ledger it looks exactly like both: a positive row
+     leaving one account and a negative row arriving in another. Left alone
+     it inflates every gross figure, and a round trip out to savings and
+     back inflates both sides at once.
+
+     `lib/finance/transfer-detection.ts` proposes the pairs; this table is
+     only the confirmations, for the same reason the payslip table above is.
+     An amount and a date agreeing is a coincidence often enough that acting
+     on it unasked would reclassify real income as internal movement.
+
+     Untyped client: `finance_transfer_links` is not in the generated types
+     yet -- same reason and same workaround as useWatchlistNews.ts, and it
+     goes when the types are regenerated. */
+  const fetchTransferLinks = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) {
+      setTransferLinks([]);
+      return;
+    }
+    const { data, error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_links')
+      .select('id, outflow_transaction_id, inflow_transaction_id, confirmed_at')
+      .eq('profile_id', forProfile);
+    if (error) {
+      console.warn('transfer links unavailable');
+      return;
+    }
+    setTransferLinks((data ?? []).map((row: {
+      id: string;
+      outflow_transaction_id: string;
+      inflow_transaction_id: string;
+      confirmed_at: string;
+    }) => ({
+      id: row.id,
+      outflowTransactionId: row.outflow_transaction_id,
+      inflowTransactionId: row.inflow_transaction_id,
+      confirmedAt: row.confirmed_at,
+    })));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchTransferLinks(profileId);
+  }, [fetchTransferLinks, profileId]);
+
   const savePayslip = async (slip: Payslip) => {
     if (!isAdmin || !profileId) return;
     // An import can create a fresh client ID for an existing employer/pay-date
@@ -606,7 +781,11 @@ function useProvideFinanceData() {
         payslip_id: payslipId,
         transaction_id: transactionId,
         confirmed_at: new Date().toISOString(),
-      }, { onConflict: 'payslip_id' });
+        /* The unique index is profile-scoped -- migration 20260910054857
+           replaced the single-column one this used to name. Conflicting on
+           `payslip_id` alone matches no index and PostgREST rejects the whole
+           upsert with 42P10. */
+      }, { onConflict: 'profile_id,payslip_id' });
     if (error) {
       toast({
         title: 'Could not link bank payment',
@@ -637,6 +816,56 @@ function useProvideFinanceData() {
     }
     await fetchPayslipReconciliations(profileId);
     toast({ title: 'Bank payment unlinked' });
+    return true;
+  };
+
+  const saveTransferLink = async (
+    outflowTransactionId: string,
+    inflowTransactionId: string,
+  ): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    /* onConflict names the composite unique index exactly. The single-column
+       form is what broke the payslip confirm above with Postgres 42P10, after
+       a later migration made that index profile-scoped. */
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_links')
+      .upsert({
+        id: `transfer_link_${outflowTransactionId}_${inflowTransactionId}`,
+        profile_id: profileId,
+        outflow_transaction_id: outflowTransactionId,
+        inflow_transaction_id: inflowTransactionId,
+        confirmed_at: new Date().toISOString(),
+      }, { onConflict: 'profile_id,outflow_transaction_id' });
+    if (error) {
+      toast({
+        title: 'Could not mark as a transfer',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchTransferLinks(profileId);
+    toast({ title: 'Marked as an internal transfer' });
+    return true;
+  };
+
+  const deleteTransferLink = async (id: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_links')
+      .delete()
+      .eq('profile_id', profileId)
+      .eq('id', id);
+    if (error) {
+      toast({
+        title: 'Could not undo the transfer link',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchTransferLinks(profileId);
+    toast({ title: 'No longer counted as a transfer' });
     return true;
   };
 
@@ -765,6 +994,11 @@ function useProvideFinanceData() {
 
   const fetchSupabaseData = async () => {
     if (!isAdmin) return;
+    // Every query below is scoped, and `scoped` throws without a profile. The
+    // effect already waits for one, but this function is also exposed on the
+    // context and called after a failed profile patch, so the precondition is
+    // stated here rather than assumed of every caller.
+    if (!profileId) return;
       setLoadingDb(true);
       try {
         const [
@@ -820,24 +1054,11 @@ function useProvideFinanceData() {
             .order('is_self', { ascending: false })
         ]);
 
-        // Written by the 7.1 migration, so at least the self profile is present
-        // unless someone has deleted it. `saveDataToSupabase` refuses to write
-        // without one.
-        const loadedProfiles = (selfProfileRes.data ?? []).map(p => ({
-          id: p.id,
-          name: p.name,
-          isSelf: p.is_self,
-          isPublic: p.is_public,
-          emoji: p.emoji,
-          currency: p.currency,
-          region: p.region,
-          // Defaulted rather than assumed present, for the same reason.
-          birthYear: p.birth_year ?? null,
-          retirementAge: p.retirement_age ?? 68,
-          pensionGrowthPercent: Number(p.pension_growth_percent ?? 4.5),
-        }));
-        setProfiles(loadedProfiles);
-        if (!profileId) setProfileId(loadedProfiles.find(p => p.isSelf)?.id ?? loadedProfiles[0]?.id ?? null);
+        // Refreshes the switcher. The active profile was already resolved by
+        // `loadProfiles` before this load ran -- it has to have been, or the
+        // scoped queries above could not have been built -- so this only picks
+        // up renames and newly added profiles.
+        setProfiles((selfProfileRes.data ?? []).map(toFinanceProfile));
 
         // A single failing table used to `throw` here, aborting the whole load
         // and silently dropping the page back to localStorage — which is how a
@@ -1455,10 +1676,24 @@ function useProvideFinanceData() {
       }
   };
 
+  // Step one: resolve the profile. Nothing profile-scoped may be read until
+  // this lands, so it is a separate effect rather than part of the load.
   useEffect(() => {
-    if (isAdmin) {
-      fetchSupabaseData();
-    }
+    if (!isAdmin || profileId) return;
+    void loadProfiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, profileId]);
+
+  // Step two: the ledger, always scoped.
+  //
+  // Gated on `profileId` rather than merely reacting to it. Previously this ran
+  // as soon as `isAdmin` turned true, with profileId still null, so the first
+  // pass fetched every profile's rows unfiltered and a second pass re-fetched
+  // them scoped -- two full loads of twenty-odd tables, the first of them
+  // showing one profile's totals under another profile's name.
+  useEffect(() => {
+    if (!isAdmin || !profileId) return;
+    fetchSupabaseData();
     // Refetches when the switcher changes profile: `scoped` filters on
     // profileId, so the whole ledger is a different set of rows (7.2d).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1520,10 +1755,19 @@ function useProvideFinanceData() {
   // passes whichever collection it just changed.
   const saveDataToSupabase = async (key: string, contentData: unknown) => {
     if (!isAdmin) return false;
-    // Every non-template finance row carries a profile_id, and the database
-    // enforces it with a CHECK. Writing without one would fail per-statement
-    // and leave the delete-then-insert save half applied, so refuse up front.
-    if (!profileId) {
+    // Every *ledger* row carries a profile_id, and the database enforces it
+    // with a CHECK. Writing without one would fail per-statement and leave the
+    // delete-then-insert save half applied, so refuse up front.
+    //
+    // The reference tables are the exception and must not be caught by this.
+    // `tax_config`, `recurring_templates`, `credit_bureaus`, `holiday_defaults`
+    // and `budget_presets` are shared rate sets and pick-lists with no
+    // profile_id column at all (7.E-pre2), so requiring a profile to write one
+    // refused a write that was never going to need it. That is not theoretical:
+    // the load self-heals an empty `finance_budget_presets` by calling this
+    // with `budget_presets`, which on a database seeded from migrations alone
+    // produced a "No profile loaded" error on every first visit.
+    if (PROFILE_SCOPED_SAVE_KEYS.has(key) && !profileId) {
       toast({
         title: 'No profile loaded',
         description: 'Finance data could not be saved because no profile was found.',
@@ -1955,6 +2199,9 @@ function useProvideFinanceData() {
     payslipReconciliations,
     savePayslipReconciliation,
     deletePayslipReconciliation,
+    transferLinks,
+    saveTransferLink,
+    deleteTransferLink,
     updateProfile,
     netWorthHistory,
     profiles,

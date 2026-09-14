@@ -13,7 +13,7 @@
  * every device, every reload, with nothing fetched and nothing stored.
  */
 
-import { MERCHANT_DIRECTORY } from './merchant-directory';
+import { MERCHANT_DIRECTORY, type MerchantDirectoryEntry } from './merchant-directory';
 
 /**
  * Payment processors that prefix the merchant they collected for: PayPal,
@@ -102,6 +102,32 @@ export const merchantHue = (raw: string): number => {
   return hash % 360;
 };
 
+/**
+ * The directory entry for a slug, matching on leading whole words.
+ *
+ * Exact matching was not enough once descriptions replaced merchant names. A
+ * real Lloyds row reads `LIDL GB WOOLSTON LIDL GB WOOLS GB`, which normalises
+ * to `lidl-gb-woolston-lidl-gb-wools-gb` and equals no alias anybody would
+ * think to write down. The brand is at the front, as it nearly always is --
+ * what follows is the branch, the town and the country.
+ *
+ * So the longest leading run of whole words wins: `lidl-gb` matches, `lidl`
+ * would too, and the branch noise after it is ignored. Whole words only,
+ * because a raw prefix would read `bps-garage` as BP.
+ */
+const directoryEntryFor = (slug: string): MerchantDirectoryEntry | undefined => {
+  const exact = MERCHANT_DIRECTORY[slug];
+  if (exact) return exact;
+
+  const words = slug.split('-').filter(Boolean);
+  // Longest first: `lidl-gb` should win over `lidl` where both are listed.
+  for (let take = words.length - 1; take > 0; take--) {
+    const entry = MERCHANT_DIRECTORY[words.slice(0, take).join('-')];
+    if (entry) return entry;
+  }
+  return undefined;
+};
+
 /** Everything a row needs to draw a merchant, whichever layer supplies it. */
 export interface MerchantVisual {
   /**
@@ -130,7 +156,7 @@ export interface MerchantVisual {
  */
 export const resolveMerchant = (raw: string): MerchantVisual => {
   const alias = merchantSlug(raw);
-  const entry = MERCHANT_DIRECTORY[alias];
+  const entry = directoryEntryFor(alias);
   const slug = entry?.slug ?? alias;
   return {
     slug,

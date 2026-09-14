@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:test": "node scripts/localstack-env.mjs && vite --mode localstack",
+    "db:reset": "supabase db reset",
     "build": "vite build",
     "postbuild": "cp dist/index.html dist/404.html",
     "build:dev": "vite build --mode development",

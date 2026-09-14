@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { buildTrueLayerTransactionQuery } from '../_shared/truelayer-transaction-query.ts'
+import { requireAdmin } from '../_shared/require-admin.ts'
 
 const ALLOWED_ORIGINS = new Set([
   'https://dshyam3.github.io',
@@ -89,21 +90,15 @@ serve(async (req) => {
         global: { headers: { Authorization: authHeader } },
       })
 
-      const { data: { user }, error: userError } = await userClient.auth.getUser()
-      if (userError || !user) {
-        if (userError) {
-          console.warn('TrueLayer request authentication failed:', userError)
+      // Asks public.is_admin() through the caller's own JWT, so this function
+      // and every RLS policy agree on who an administrator is.
+      const denial = await requireAdmin(userClient)
+      if (denial) {
+        if (denial.status === 401) {
+          console.warn('TrueLayer request authentication failed')
         }
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
-      const adminEmail = Deno.env.get('ADMIN_EMAIL') || 'd.shyam1256@gmail.com'
-      if (user.email !== adminEmail) {
-        return new Response(JSON.stringify({ error: 'Forbidden: Access restricted to administrator' }), {
-          status: 403,
+        return new Response(JSON.stringify({ error: denial.error }), {
+          status: denial.status,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
@@ -478,10 +473,13 @@ serve(async (req) => {
         })
       }
 
-      // 1. Fetch all connection details for this profile (7.M Step B)
+      // 1. Fetch all connection details for this profile (7.M Step B).
+      // Named columns rather than '*': this row holds the access and refresh
+      // tokens, so a wildcard pulls every future column into memory and into
+      // any log line that touches it. Add to this list deliberately.
       const { data: connections, error: connError } = await supabaseAdmin
         .from('finance_truelayer_connection')
-        .select('*')
+        .select('id, provider_id, provider_name, provider_logo_uri, access_token, refresh_token, expires_at')
         .eq('profile_id', selfProfileId)
 
       if (connError || !connections || connections.length === 0) {
@@ -872,7 +870,17 @@ serve(async (req) => {
                 is_default: false,
                 profile_id: selfProfileId,
                 name: tx.merchant_name || tx.description || 'TrueLayer Transaction',
-                merchant: tx.merchant_name || null,
+                // Falls back to the description because merchant identification
+                // is TrueLayer's paid enrichment: on the raw Data API most UK
+                // issuers return no merchant_name at all, and keying only off
+                // it left every row without an identity.
+                //
+                // A description is noisier than a name -- "SUMUP *FONDATION DU
+                // M GENEVE CH" -- but normaliseMerchant strips exactly the
+                // parts that vary between two visits to the same shop: the
+                // processor prefix, the store number, the till reference. What
+                // survives is stable, which is all a key has to be.
+                merchant: tx.merchant_name || tx.description || null,
                 category: mapCategory(tx.transaction_category || '', tx.transaction_classification || []),
                 amount: -Number(tx.amount),
                 date: tx.timestamp.split('T')[0],

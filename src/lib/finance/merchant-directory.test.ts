@@ -27,8 +27,14 @@ const recordLiteral = (name: string): Record<string, string> => {
   );
 };
 
-const DOMAINS = recordLiteral('MERCHANT_DOMAINS');
 const ALIASES = recordLiteral('MERCHANT_ALIASES');
+
+const FUNCTION_CANONICAL = (() => {
+  const start = FUNCTION_SOURCE.indexOf('const MERCHANT_CANONICAL = new Set<string>([');
+  expect(start, 'MERCHANT_CANONICAL not found in the function').toBeGreaterThan(-1);
+  const body = FUNCTION_SOURCE.slice(start, FUNCTION_SOURCE.indexOf('])', start));
+  return new Set([...body.matchAll(/'([^']+)'/g)].map(m => m[1]));
+})();
 
 const canonicalSlugs = new Set(
   Object.values(MERCHANT_DIRECTORY).map(entry => entry.slug),
@@ -51,12 +57,6 @@ describe('merchant directory', () => {
 });
 
 describe('merchant-logo-cache, against the directory', () => {
-  it('only allowlists domains for slugs the directory knows', () => {
-    for (const slug of Object.keys(DOMAINS)) {
-      expect(canonicalSlugs.has(slug), `${slug} has a domain but no directory row`).toBe(true);
-    }
-  });
-
   it('agrees with the directory on what each alias resolves to', () => {
     for (const [alias, canonical] of Object.entries(ALIASES)) {
       const entry = MERCHANT_DIRECTORY[alias];
@@ -65,10 +65,35 @@ describe('merchant-logo-cache, against the directory', () => {
     }
   });
 
-  it('carries every alias whose brand it can fetch a logo for', () => {
+  it('knows exactly the canonical slugs the directory does', () => {
+    // The function resolves a branch description by walking leading words
+    // against this set. A canonical slug missing here is a brand it can never
+    // recognise; one that is here and not in the directory is a key the
+    // browser would never ask for.
+    for (const slug of canonicalSlugs) {
+      expect(FUNCTION_CANONICAL.has(slug), `${slug} is missing from the function`).toBe(true);
+    }
+    for (const slug of FUNCTION_CANONICAL) {
+      expect(canonicalSlugs.has(slug), `${slug} is in the function but not the directory`).toBe(true);
+    }
+  });
+
+  it('hints domains only for brands the directory names', () => {
+    // A hint under an unknown slug is dead weight that reads as coverage: the
+    // brand is never looked up, so the domain is never used.
+    for (const slug of Object.keys(recordLiteral('MERCHANT_DOMAIN_HINTS'))) {
+      expect(canonicalSlugs.has(slug), `${slug} is hinted but not a directory brand`).toBe(true);
+    }
+  });
+
+  it('carries every alias the directory knows', () => {
+    // The function counts occurrences per canonical slug to decide what is
+    // worth looking up. An alias it does not recognise is counted as its own
+    // merchant, so a brand paid five times under two spellings could fall
+    // under the threshold on both and never resolve.
     for (const [alias, entry] of Object.entries(MERCHANT_DIRECTORY)) {
-      if (alias === entry.slug || !DOMAINS[entry.slug]) continue;
-      expect(ALIASES[alias], `${alias} would never reach the ${entry.slug} logo`).toBe(entry.slug);
+      if (alias === entry.slug) continue;
+      expect(ALIASES[alias], `${alias} would be counted apart from ${entry.slug}`).toBe(entry.slug);
     }
   });
 });

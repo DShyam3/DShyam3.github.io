@@ -6,8 +6,9 @@
  * reads them.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
+import { transferExcludedTransactionIds } from '@/lib/finance/transfer-detection';
 import { Figure } from '../components/Figure';
 import { MONTH_NAMES, isDueThisMonth } from '../finance-defaults';
 import { Card } from '@/components/ui/card';
@@ -34,7 +35,22 @@ interface CashFlowSurfaceProps {
 }
 
 export default function CashFlowSurface({ breakdownRates, todayDateObj }: CashFlowSurfaceProps) {
-  const { bankAccounts, mockTransactions, recurrings, hasLoaded } = useFinanceData();
+  const { bankAccounts, mockTransactions, recurrings, transferLinks, hasLoaded } = useFinanceData();
+
+  /* Confirmed internal transfers are neither income nor spending. Both legs
+     drop out: counting the outflow would report spending that never left the
+     owner's own accounts, and counting the inflow would report income never
+     earned. A round trip to savings and back would otherwise inflate both
+     sides of this surface at once. The rows stay in the ledger -- only these
+     totals ignore them. */
+  const excludedIds = useMemo(
+    () => transferExcludedTransactionIds(transferLinks),
+    [transferLinks],
+  );
+  const ledger = useMemo(
+    () => mockTransactions.filter(tx => !excludedIds.has(tx.id)),
+    [mockTransactions, excludedIds],
+  );
 
   const [cfPeriod, setCfPeriod] = useState<'ytd' | 'last_3m' | 'all_time' | 'custom'>('ytd');
   const [cfPeriodOpen, setCfPeriodOpen] = useState(false);
@@ -167,7 +183,7 @@ const buildMonthlyBuckets = () => {
     let monthSpend = 0;
 
     if (!isFuture) {
-      mockTransactions
+      ledger
         .filter(tx => tx.date.startsWith(prefix) && tx.amount > 0)
         .forEach(tx => {
           monthSpend += tx.amount;
@@ -197,7 +213,7 @@ const buildMonthlyBuckets = () => {
     let incomeSum = 0;
 
     if (!isFuture) {
-      mockTransactions
+      ledger
         .filter(tx => tx.date.startsWith(prefix) && tx.amount < 0)
         .forEach(tx => {
           const amt = Math.abs(tx.amount);

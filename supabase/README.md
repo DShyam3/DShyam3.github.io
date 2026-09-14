@@ -9,6 +9,9 @@ supabase/
   schemas/        Declarative schema, one file per collection. The readable
                   source of truth: to know what a table looks like, open its
                   file.
+  seed.sql        Local test fixture: an administrator account to sign in as.
+                  Runs on `supabase db reset`; refuses to run against a
+                  database that already holds any account.
   migrations/     Versioned migrations. Currently one baseline; new changes are
                   generated from schemas/ and land here.
   functions/      Deno edge functions, deployed separately from the frontend.
@@ -23,6 +26,7 @@ exactly.
 
 | File | Contents |
 |---|---|
+| `00_admin_users.sql` | `admin_users` — who is an administrator. Sorts ahead of `00_extensions.sql` because `01_functions.sql` reads it |
 | `00_extensions.sql` | extensions, `content_type` enum |
 | `01_functions.sql` | `is_admin()`, the two watchlist trigger functions |
 | `10_books` … `18_site_content` | one file per content collection |
@@ -225,11 +229,52 @@ npx supabase functions deploy <name>
 | `watchlist-cron-sync` | Scheduled port of the browser sync | Service role key |
 
 `merchant-logo-cache` is the only function that fetches from hosts outside our
-own infrastructure. The hosts it may touch are a constant inside it and are not
-reachable from a request body — see the SSRF note in `SECURITY.md`. It is
-called automatically after a TrueLayer sync; `{"refresh": true}` re-tries the
-merchants previously recorded as having no findable logo.
+own infrastructure, and it talks to exactly two — `api.brandfetch.io` and
+`cdn.brandfetch.io`. See the SSRF note in `SECURITY.md`. It needs one secret:
+
+```bash
+npx supabase secrets set BRANDFETCH_CLIENT_ID=<client id>
+```
+
+Brandfetch issues both an API key and a client ID; this wants the **client
+ID**, which is what Logo Link and the Brand Search API authenticate with. The
+API key is for their Brand API and is not used here.
+
+It is called automatically after a TrueLayer sync. Only merchants named in
+`src/lib/finance/merchant-directory.ts` are looked up — brand search never
+answers "no such brand", so anything else resolves to a confident wrong answer.
+At most 40 per run, since Brandfetch allows 200 requests per 5 minutes per IP;
+a run that hits the cap reports a `remaining` count and finishes on the next
+call. Every run also deletes cached logos whose slug the directory no longer
+names, reported as `purged`. `{"refresh": true}` re-tries merchants previously
+recorded as having no findable logo; do not put that on a schedule, since it
+re-walks every miss.
 
 The cron job `watchlist-daily-sync` calls `watchlist-cron-sync` at 06:00 daily.
 It reads a vault secret named `service_role_key`, which must exist on any fresh
 project or the job will run but the function will reject the call.
+
+
+## Running a local stack
+
+The finance page is behind the administrator gate, so it cannot be smoke-tested
+against production without handing over the real password. A local stack solves
+that: it has its own account, and the synthetic `Demo` profile that migration
+`20260907090000_demo_profile.sql` creates gives it something to render.
+
+```bash
+supabase start          # first run pulls images
+supabase db reset       # migrations, then seed.sql
+npm run dev:test        # vite against localhost:54321
+```
+
+`npm run dev:test` generates `.env.localstack.local` from `supabase status`, so
+the publishable key is never committed or guessed. The committed
+`.env.localstack` holds only the loopback URL and the account address.
+
+Sign in at `/auth` with the password in `seed.sql`
+(`local-test-only-password`). Administrator rights come from the `admin_users`
+row the seed inserts, not from the address — see `00_admin_users.sql`.
+
+The seed refuses to run if `auth.users` holds any account, which is what keeps a
+file that creates an administrator from ever being applied to something real.
