@@ -1,7 +1,9 @@
 # Digital Garden — visual design system
 
 Status: foundation implemented locally; further page composition is planned below.
-Updated: 9 September 2026.
+The instrument-panel direction added on 11 September 2026 is **direction, not
+implementation** — nothing in it has shipped yet.
+Updated: 11 September 2026.
 
 ## Direction
 
@@ -9,17 +11,50 @@ A personal digital garden with calm, colourful dashboards: soft surfaces,
 rounded cards, precise information and occasional depth. The interface should
 feel considered and tactile while retaining Dhyan's existing dot-matrix identity.
 
-The references supplied by Dhyan, from RonDesignLab, establish the direction:
+**RonDesignLab is the primary register.** It sets the surface, the composition
+and the mood of nearly every page: near-white ground, large-radius cards, one
+or two gradient focal tiles, an oversized figure, and a lot of air. When a
+decision is contested, this is the reference that wins.
 
 | Reference | What to borrow | Where it fits |
 |---|---|---|
-| Light health and credit dashboards | Soft gradients, rounded metric cards, clear hierarchy | About, Finance, collection summaries |
-| Floating credit detail panel | Frosted surface, grouped details, a clear bottom action | Detail dialogs and future account inspection |
+| Light health dashboard (Superpower) | Gradient focal tiles carrying one big figure, white supporting cards on a near-white ground, generous radius, a left icon rail | Finance overview, About, collection summaries |
+| Credit dashboard (Health Karma) | Oversized numeral with a smaller unit/decimal suffix, pill tab row, small circular action affordance per card, two-tone gradient pairs | Finance summary cards, net worth, any single-metric tile |
+| Floating credit detail panel | Frosted surface, grouped details, a timeline of marks, a clear bottom action | Detail dialogs, account and debt inspectors |
 | Sleep dashboard | Warm atmosphere and restrained glass over a meaningful scene | Selected immersive views |
-| Dark transport and anatomy dashboards | One dominant visual, supporting panels, compact charts | Travel and information-heavy finance views |
+| Anatomy dashboard | A dominant object with biomarker cards beside it: figure, unit, threshold marker, one status word | Investments, health-shaped data, any "many measures of one subject" view |
+| Traffic management | Dark map as the whole canvas, metrics railed down one side, one floating glass card over the scene | Travel |
+
+A second, *smaller* set from @srotimi_ui supplies the instrumentation — the
+ruled, bracketed, monospace grammar that sits inside those surfaces. It is an
+accent, not a competing direction. Where the two disagree, RonDesignLab wins.
+
+| Reference | What to borrow | Where it fits |
+|---|---|---|
+| Craft configurator (wireframe hull, bracketed side panels) | Corner-bracketed panel frames, a measured rail of readouts beside one dominant object, tabular figures | Travel globe, investment portfolio, a single collection "spec sheet" view |
+| Terrain/threat mesh dashboard | Wireframe overlay on a real scene, markers that carry a label rather than only a colour, a thin activity strip along the bottom | Travel map, finance activity over time |
+| Warehouse/routing isometric | Muted scene, live rows pinned to one side, status as text plus mark | Not yet sited — hold until a page needs it |
+| Compass/radar and micro-bar clusters | The *grammar* of dense readouts: monospace figures, fixed decimals, ruled ticks | Finance summary strips, import and sync status |
 
 These are visual references, not product specifications. Their imagery, data,
 tiny labels and interaction assumptions should not be copied directly.
+
+**The mix, stated as a ratio.** Roughly four parts RonDesignLab to one part
+@srotimi_ui. Soft gradient surface is the default a page starts from; the
+instrument grammar is what a *measured* panel inside it gets. A page that reads
+as a control room has overshot. This site already owns the instrument half for
+free — Doto and Space Mono make every figure a technical figure without any new
+chrome — which is exactly why the deliberate work goes into the soft half.
+
+Two further things the references share, worth naming because they are cheap
+here and expensive elsewhere:
+
+- **The dot-matrix halftone inside the gradient tiles is our identity already.**
+  Ron's focal cards fade out through a dot grid. Doto is a dot-matrix face. The
+  same motif, one already in the font stack.
+- **Near-white, not white.** The ground in those shots is a shade below the
+  cards sitting on it, which is what lets a shadow-free card read as a card.
+  `--background: 48 25% 95%` against `--card: 0 0% 100%` already does this.
 
 **Keep the original fonts.** Doto and Space Mono are part of the site's identity.
 The colour refresh must not replace either family with a general sans-serif.
@@ -84,7 +119,49 @@ falling across a surface, with no harsh bands behind text.
 - Use a single accent on most cards; a focal card may combine two.
 - Keep dark-mode washes weaker so white and muted text stay readable.
 - Use CSS gradients for these effects. A large generated image is unnecessary.
-- Gradients carry identity and hierarchy, not financial meaning.
+
+**When a gradient may carry meaning.** RonDesignLab's own note on these shots
+says the soft gradients "help communicate status, progress, and overall
+wellbeing at a glance" — which contradicts the rule this document has carried,
+that gradients mean nothing. Both are half right, so the rule is now split:
+
+- **Page and panel washes carry identity only.** The route accent behind About
+  or Finance says *where you are*, never *how you are doing*. Unchanged.
+- **A focal metric tile may carry status**, on three conditions: the stop
+  colours are picked by a computed threshold and not by hand; a text label
+  states the same status in words; and the figure itself is present and
+  readable. Colour is then the third telling of a fact, which is what the
+  accessibility rule below actually asks for.
+- **Never a spectrum.** Two or three named stops mapped to named bands. A
+  continuous green-to-red ramp implies a precision the underlying figure does
+  not have, and is unreadable to a large minority of viewers.
+- Status gradients use the status tokens, not `sage`/`peach`/`rose`. A rose
+  photo card and a red debt card must not be the same red.
+
+### Gradient metric cards
+
+The single most characteristic element in the references: a large-radius tile
+filled with a soft two-colour mesh gradient, one oversized figure sitting on
+it, and almost nothing else.
+
+- **One figure per tile.** The figure is the content. A label above it, a unit
+  or short qualifier after it, and at most one supporting line.
+- **The figure is large and light.** Scale up, do not embolden. Ron's `70`,
+  `730`, `832`, `$137,036` are all large and thin over colour.
+- **Suffix at a smaller size, baseline-aligned.** `$137` then `,036` smaller;
+  `12,340` then the minor unit smaller. This is where tabular numerals earn
+  their keep — a figure that changes must not shuffle its own decimal point.
+- **Mesh, not linear.** Two or three radial stops bleeding into each other,
+  soft-focus, no visible band. A linear gradient reads as a progress bar.
+- **Fade the tile out through a dot grid**, not through opacity. The halftone
+  motif is Doto's; it belongs here and nowhere else on the card.
+- **One small circular action per tile, top-right**, only if the tile has a
+  real destination. An arrow that leads nowhere is the commonest failure in
+  these shots.
+- **Text over gradient is checked at the tile's brightest point**, not its
+  average. Most of the reference tiles fail this; ours must not.
+- **Two per view, maximum.** Their whole effect depends on the white cards
+  around them. Six gradient tiles is a screensaver.
 
 ### Spatial UI
 
@@ -95,6 +172,46 @@ while selection, counts and details sit nearby.
 Use this selectively. A realistic bedroom, anatomy model or 3D object would add
 little to a book list or transaction table. Future depth should support an
 existing task, remain usable with a keyboard and work without 3D effects.
+
+### Instrument panels
+
+The instrument register is for pages where the subject is *measured* — a
+portfolio, a sync, a route, a map. It treats a panel as a readout: a frame with
+corners, a rail of labelled figures, a dominant object the figures describe.
+
+- **One instrument surface per page.** It is the dominant card in the bento,
+  not a new default for every tile. A book list is not an instrument.
+- **The frame is drawn, not filled.** Corner brackets, a hairline rule, a tick
+  rail — `1px` marks at low opacity over the existing dark card fill. No new
+  heavy chrome, no nested boxes three deep.
+- **Figures are tabular and fixed.** `font-variant-numeric: tabular-nums`,
+  consistent decimals, unit suffixed and never omitted. A column of figures must
+  align on the decimal point; that alignment is the whole effect.
+- **Every readout maps to a computed value.** This is the hard rule. The
+  references are full of decorative telemetry that means nothing — spark bars,
+  packet counts, orbit numbers. Here a number that looks like data *is* data,
+  computed from rows per `AGENTS.md`. If a panel needs a filler figure to look
+  right, the panel is the wrong size. Delete the slot, do not invent a metric.
+- **Decorative marks are `aria-hidden`.** Brackets, ticks, grid lines and the
+  rails between panels carry no meaning and must not reach a screen reader.
+- **Dark is a mode, not a section.** The instrument look lives on the existing
+  dark tokens. Do not hard-code a dark panel into the light theme; a panel that
+  only works on one theme has not been designed, it has been screenshotted.
+- **Wireframe only where it explains.** Travel's globe already earns a mesh.
+  A wireframe added to a page that has no spatial subject is costume.
+
+What is explicitly **not** borrowed: 8–10px uppercase labels, text below 4.5:1,
+low-contrast grey-on-grey panel copy, multi-column figure walls that no one
+reads, and any readout that exists to fill space. The references fail contrast
+throughout — they are stills, not interfaces that anyone has to use.
+
+Proposed tokens, not yet implemented, if this direction is built:
+
+| Token | Purpose |
+|---|---|
+| `--rule` | Hairline panel rules, tick marks and brackets |
+| `--grid-line` | Background lattice behind an instrument surface |
+| `--readout-label` | The one permitted uppercase label colour, meeting 4.5:1 |
 
 ## Palette
 
@@ -133,6 +250,22 @@ display scaling instead of inventing tiny captions to make a card fit.
 When a label is too long, wrap it or change the layout. Do not solve density by
 shrinking the whole interface or silently cutting off important information.
 
+**Uppercase labels — the one permitted form.** The instrument references run on
+8–10px uppercase mono; at that size it is texture, not text. If an uppercase
+label is used here it is a single defined class, not an ad-hoc style:
+
+- 12px minimum, never smaller, and never applied to a value — only to the label
+  naming it.
+- `letter-spacing: 0.08em`, `text-transform: uppercase` on sentence-case source
+  text, so the accessible name and the copy in the codebase stay readable.
+- 4.5:1 against the blended panel background, checked at the brightest point.
+- One per panel group. A wall of uppercase labels is the thing being avoided.
+
+Everything else stays sentence case. This is the narrow exception to “avoid
+excessive all-caps labels” under *Soft minimalism*, and it settles the open
+uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
+2026.
+
 ## Surface and component recipes
 
 | Component | Treatment | Implementation |
@@ -146,6 +279,9 @@ shrinking the whole interface or silently cutting off important information.
 | Finance summary | Large actual figure, explanation, optional secondary figure | `SurfaceHero`, `finance-hero` |
 | Dialog | Frosted container over a dimmed, blurred backdrop | `DialogContent`, `glass-dialog` |
 | Travel | Map framed as the main visual, separate readable list | `travel-map-col`, `travel-sidebar` |
+| Gradient metric tile *(planned)* | Large radius, soft mesh gradient, oversized light figure, smaller suffix, dot-grid fade, optional circular action | Not built — extend `ambient-card` with a figure slot |
+| Instrument panel *(planned)* | Dark card, hairline rule, corner brackets, tabular readout rail | Not built — extend `ambient-card`, do not fork `Card` |
+| Readout rail *(planned)* | Label above figure, tabular numerals, unit always shown | Not built — compose from `MetricProgress` and existing figure styles |
 
 Shared panels use 24px corners, reduced to 20px on phones. Collection cards use
 16px corners. Controls use pills where appropriate. `--radius` is 14px for the
@@ -186,6 +322,12 @@ an item's position in a list, so colours do not change whenever it is sorted.
 - Use brief, local transitions. Existing card hover movement is disabled under
   reduced motion. Future animations must respect that preference too.
 - No continuous gradient animation, scroll hijacking or parallax dependency.
+- No idling telemetry. A figure that ticks, sweeps or scrolls on a timer with no
+  underlying change is animation pretending to be data, and it never stops
+  costing battery. Update a readout when its value updates.
+- A wireframe, mesh or lattice is decoration over a working layout. Remove it
+  entirely under reduced motion or a missing WebGL context and the page must
+  still read; the figures beside it are the content.
 - Keep blur on a few floating layers. Collection grids should not create a
   backdrop filter for every item.
 - Keep the header/footer and main scroll ownership in `AppShell`. A visual
@@ -344,6 +486,38 @@ take precedence over this external reference. When an adapted rule is unclear,
 consult its linked Apple HIG source and the applicable web standard rather than
 treating the repository as an exhaustive or authoritative compliance checklist.
 
+## Other design skills — surveyed 11 September 2026
+
+Searched the installed skills, the claude.ai skill catalogue and the plugin
+catalogue for anything that generates this look. **Nothing in either catalogue
+matches "HUD", "sci-fi interface", "instrument panel" or "telemetry dashboard",
+and no skill produces a whole website in a house style.** The aesthetic comes
+from the tokens in this repository; a skill can only review or assist.
+
+What is already installed and worth using, in order of usefulness here:
+
+| Skill | Use it for | Caveat |
+|---|---|---|
+| `interfaces:better-ui` | Concentric radii, optical alignment, surface depth, hit areas — exactly the details a bracketed panel gets wrong | Operates on this repo directly, unlike the Apple reference below |
+| `interfaces:better-colors` | Building the `--rule` / `--grid-line` / `--readout-label` tokens and checking contrast on the dark panel | Semantic tokens only; will not invent the palette |
+| `interfaces:better-typography` | The uppercase-label rule, tabular numerals, the figure scale | Must be told Doto and Space Mono are fixed |
+| `dataviz` | Every readout rail, sparkline, meter and stat tile. Read it *before* writing chart code | Ships its own palette — swap for the tokens in `src/index.css`, do not adopt it wholesale |
+| `interfaces:better-layout` | Bento composition, reading order, progressive disclosure | — |
+| `interfaces:better-accessibility` | The 4.5:1 and `aria-hidden` obligations above | — |
+| `interfaces:better-interface` | A single combined pass across all of the above | Broad; use once per page, not per change |
+| `design` | Drafting an instrument panel as a canvas mockup before committing React | Produces a published Artifact, not site code |
+
+`artifact-design` and `artifact-diagramming` govern published Artifacts only and
+have no bearing on the site's own presentation.
+
+Suggested brief for a combined pass, once a first panel exists:
+
+> Run `interfaces:better-interface` over the finance overview and the travel
+> map. Follow `DESIGN_SYSTEM.md`, especially *Instrument panels*. Doto, Space
+> Mono and the palette are fixed. Judge the panel against the 12px uppercase
+> floor, 4.5:1 on the blended background, tabular figure alignment, and whether
+> every readout maps to a computed value. Report evidence and prioritised fixes.
+
 ## Review checklist
 
 1. Check light and dark mode at phone, tablet and desktop widths, plus a short
@@ -356,7 +530,10 @@ treating the repository as an exhaustive or authoritative compliance checklist.
 6. For finance, review a signed-in session with existing data before release.
    The local visual checks used actual shared components with clearly
    labelled illustrative figures; authenticated finance flows were not tested.
-7. Run the project's lint, application and function typechecks, build and
+7. For an instrument panel: confirm every figure traces to a computed value,
+   decorative marks are `aria-hidden`, figures align on the decimal, the panel
+   works in the light theme, and nothing animates without a value changing.
+8. Run the project's lint, application and function typechecks, build and
    launch-readiness scan. Refresh graphify after code changes.
 
 ## Sources of truth

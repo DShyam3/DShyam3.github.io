@@ -12,6 +12,8 @@ This platform is more than just a tracker; it's a window into what I value and h
 - **Insights**: Collections of books, articles, and inspirations that shape my perspective.
 - **Personal Touch**: A glimpse into my beliefs, favorite recipes, and photography.
 
+The full picture -- every surface and what it does -- is in [FEATURES.md](FEATURES.md).
+
 ## 🛠️ Technology Stack
 
 - **Frontend**: Vite, TypeScript, React, shadcn-ui, Tailwind CSS
@@ -98,7 +100,7 @@ supabase functions deploy watchlist-cron-sync
 
 ### Why there are two watchlist sync implementations
 
-`src/features/watchlist/WatchlistContext.tsx`'s `syncWatchlist` (browser) and `supabase/functions/watchlist-cron-sync/index.ts` (server) implement **the same logic twice**, deliberately — there's no module shared between the Vite/browser bundle and the Deno edge runtime. The browser version only runs while an admin has the Watchlist page open (manual sync button, or auto-triggered on page load); the edge function version runs on a schedule regardless of whether anyone has the site open. **If you change the sync logic, change both.**
+`src/features/watchlist/WatchlistContext.tsx`'s `syncWatchlist` (browser) and `supabase/functions/watchlist-cron-sync/index.ts` (server) implement **the same logic twice**, deliberately — there's no module shared between the Vite/browser bundle and the Deno edge runtime. The browser version runs only when an admin presses **Sync Updates** on the Library page — there is no client-side auto-sync any more, and opening News or Library never starts one; the edge function version runs on a schedule regardless of whether anyone has the site open. **If you change the sync logic, change both.**
 
 ### Scheduled sync (pg_cron)
 
