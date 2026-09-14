@@ -3,7 +3,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from 'next-themes';
 import { OpeningSequence } from '@/components/layout/OpeningSequence';
 import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
@@ -40,6 +40,7 @@ import Inspiration from './pages/Inspiration';
 import Photos from './pages/Photos';
 import Articles from './pages/Articles';
 import Recipes from './pages/Recipes';
+import WatchlistNews from './pages/WatchlistNews';
 import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
 
@@ -94,10 +95,13 @@ const PageLoader = () => (
 );
 
 // Flattened providers component
-// WatchlistProvider is deliberately NOT here: it runs a data fetch + a
-// 15-minute auto-sync loop on mount, and every one of its consumers lives
-// under the /watchlist route -- mounting it app-wide meant that logic ran
-// on every page view instead of just the Watchlist page.
+// WatchlistProvider is deliberately NOT here: its data fetch is the
+// watchlist/favourites table read every consumer needs, and every consumer
+// lives under /watchlist -- mounting it app-wide meant that fetch ran on
+// every page view instead of just there. It IS shared between News and
+// Library (see WatchlistLayout below): both read the same watchlist, and
+// splitting the provider between them meant leaving one route and coming
+// back refetched it from nothing.
 const AppProviders = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>
     <DotMatrixProvider>
@@ -107,9 +111,14 @@ const AppProviders = ({ children }: { children: React.ReactNode }) => (
   </AuthProvider>
 );
 
-const WatchlistPage = () => (
+// One provider instance for every /watchlist route, so moving between News
+// and Library does not refetch. It runs no sync of its own -- `syncWatchlist`
+// (the TMDB-calling one) only ever fires from a button click inside the
+// Library page, never on mount -- so News inherits nothing heavier than the
+// same table read Library already needed.
+const WatchlistLayout = () => (
   <WatchlistProvider>
-    <Watchlist />
+    <Outlet />
   </WatchlistProvider>
 );
 
@@ -169,7 +178,12 @@ const App = () => {
                   <Route path="/books" element={<Books />} />
                   <Route path="/beliefs" element={<Beliefs />} />
                   <Route path="/thoughts" element={<Thoughts />} />
-                  <Route path="/watchlist" element={<WatchlistPage />} />
+                  <Route element={<WatchlistLayout />}>
+                    <Route path="/watchlist" element={<WatchlistNews />} />
+                    <Route path="/watchlist/library" element={<Watchlist />} />
+                  </Route>
+                  {/* Kept so a saved or shared link to the old address still lands somewhere. */}
+                  <Route path="/watchlist/news" element={<Navigate to="/watchlist" replace />} />
                   <Route path="/inspiration" element={<Inspiration />} />
                   <Route path="/photos" element={<Photos />} />
                   <Route path="/articles" element={<Articles />} />

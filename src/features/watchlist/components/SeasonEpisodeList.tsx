@@ -1,9 +1,22 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Season } from '@/features/watchlist/useWatchlist';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
+import { Skeleton } from '@/components/ui/skeleton';
+
+/** Persists across shows -- revealing titles for one is revealing them for all. */
+const REVEAL_TITLES_KEY = 'watchlist_reveal_episode_titles';
+
+function loadRevealTitles(): boolean {
+  try {
+    return localStorage.getItem(REVEAL_TITLES_KEY) === 'true';
+  } catch {
+    // Storage unavailable (private mode, disabled) -- default to hidden.
+    return false;
+  }
+}
 
 interface SeasonEpisodeListProps {
   seasons: Season[];
@@ -36,7 +49,20 @@ export function SeasonEpisodeList({
   }, [seasons, showId, isSeasonWatched]);
 
   const [selectedSeason, setSelectedSeason] = useState(initialSeason);
+  const [revealTitles, setRevealTitles] = useState(loadRevealTitles);
   const unwatchedEpisodeRef = useRef<HTMLDivElement>(null);
+
+  const toggleRevealTitles = () => {
+    setRevealTitles((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(REVEAL_TITLES_KEY, String(next));
+      } catch {
+        // Storage unavailable -- the toggle still works for this render.
+      }
+      return next;
+    });
+  };
 
   const currentSeason = seasons.find((s) => s.season_number === selectedSeason);
 
@@ -122,6 +148,19 @@ export function SeasonEpisodeList({
                 <span className="ml-auto">
                   {currentSeason.episodes.length} episodes
                 </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleRevealTitles}
+                  className="h-6 px-2 gap-1 text-xs text-muted-foreground"
+                >
+                  {revealTitles ? (
+                    <EyeOff className="h-3 w-3" />
+                  ) : (
+                    <Eye className="h-3 w-3" />
+                  )}
+                  {revealTitles ? 'Hide titles' : 'Show titles'}
+                </Button>
               </div>
 
               {/* Mark Season Complete button */}
@@ -214,14 +253,23 @@ export function SeasonEpisodeList({
                             <span className="text-xs font-medium text-muted-foreground">
                               EP {episode.episode_number}
                             </span>
-                            <h4
-                              className={cn(
-                                'text-sm font-medium',
-                                watched && 'line-through opacity-70',
-                              )}
-                            >
-                              {episode.title}
-                            </h4>
+                            {!watched && !revealTitles ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <Skeleton className="h-4 w-32 max-w-[40vw]" />
+                                <span className="sr-only">
+                                  Episode title hidden to avoid spoilers
+                                </span>
+                              </span>
+                            ) : (
+                              <h4
+                                className={cn(
+                                  'text-sm font-medium',
+                                  watched && 'line-through opacity-70',
+                                )}
+                              >
+                                {episode.title}
+                              </h4>
+                            )}
                             {watched && <span className="text-xs">✓</span>}
                           </div>
                         </div>

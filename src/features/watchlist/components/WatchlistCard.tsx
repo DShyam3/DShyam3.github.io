@@ -26,6 +26,7 @@ import {
   isUpcomingStatus,
 } from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
+import { providerSearchUrl } from '@/features/watchlist/provider-links';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 
@@ -111,6 +112,9 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   };
 
   const status = getAutoStatus(item);
+  // A search page on the provider's own site, not a deep link -- see
+  // provider-links.ts.
+  const watchUrl = providerSearchUrl(item.streaming_platform, item.title);
 
   const upcomingReleaseDate = React.useMemo(() => {
     const now = new Date();
@@ -274,7 +278,21 @@ export const WatchlistCard = React.memo(function WatchlistCard({
           {/* Platform on the left, status and release date on the right, so the
               card keeps its height whether or not a title has both. */}
           <div className="card-meta flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-1.5 min-h-[22px]">
-            <PlatformBadge platform={item.streaming_platform} size={18} />
+            {watchUrl ? (
+              <a
+                href={watchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={`Watch on ${item.streaming_platform}`}
+                aria-label={`Watch on ${item.streaming_platform}`}
+                className="hover:opacity-80"
+              >
+                <PlatformBadge platform={item.streaming_platform} size={18} />
+              </a>
+            ) : (
+              <PlatformBadge platform={item.streaming_platform} size={18} />
+            )}
             {status && (
               isUpcomingStatus(status) && upcomingReleaseDate ? (
                 <span

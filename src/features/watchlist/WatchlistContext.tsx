@@ -11,11 +11,12 @@ import React, {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { buildMovieUpdates, buildShowUpdates } from './sync-logic';
-import type {
-  TMDBDetails,
-  TMDBEpisode,
-  TMDBSeasonDetails,
-} from './tmdb-types';
+import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
+import {
+  resolveFavouriteCategory,
+  type FavouriteCategory,
+  type TmdbFacts,
+} from './favourite-category';
 
 /** A TMDB episode that survived the "has an air date" filter. */
 type AiredEpisode = TMDBEpisode & { air_date: string };
@@ -55,9 +56,12 @@ async function fetchTMDBProxy<T>(
   // onto the function URL and parses the result as a URL, so building the
   // query string in ourselves works correctly.
   const query = new URLSearchParams({ endpoint, ...params }).toString();
-  const { data, error } = await supabase.functions.invoke(`tmdb-proxy?${query}`, {
-    method: 'GET',
-  });
+  const { data, error } = await supabase.functions.invoke(
+    `tmdb-proxy?${query}`,
+    {
+      method: 'GET',
+    },
+  );
   if (error) throw error;
   return data as T;
 }
@@ -110,11 +114,11 @@ export interface WatchlistItem {
   descriptionLoaded?: boolean;
   // TMDB returns the US spelling ('Canceled'); 'Cancelled' is kept for any
   // pre-existing stored rows using the British spelling.
-  series_status?: 'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
+  series_status?:
+    'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
 }
 
-/** The four buckets the favourites grid groups by. */
-export type FavouriteCategory = 'Bollywood' | 'Hollywood' | 'Anime' | 'Others';
+export type { FavouriteCategory } from './favourite-category';
 
 export interface FavouriteItem {
   id: string;
@@ -123,7 +127,36 @@ export interface FavouriteItem {
   media_type: 'movie' | 'tv';
   tmdb_id?: number;
   created_at: string;
+  /**
+   * The bucket the grid groups by, *resolved* rather than stored: derived
+   * from the TMDB facts below, and only falling back to the row's stored
+   * `category` string when a row predates the facts columns. Nothing writes
+   * this field directly.
+   */
   category: FavouriteCategory;
+  /** The stored TMDB facts the bucket is derived from. Null until synced. */
+  facts: TmdbFacts;
+}
+
+/** What an add flow supplies. `category` is resolved, so it is not in here. */
+export interface NewFavourite {
+  title: string;
+  poster?: string;
+  media_type: 'movie' | 'tv';
+  tmdb_id?: number;
+  /**
+   * The TMDB facts, when the add flow has them -- the favourites search does,
+   * because `search/tv` and `search/movie` already return them. The
+   * watchlist-to-favourites move does not, and relies on `category` below
+   * until the facts sync reaches the row.
+   */
+  facts?: TmdbFacts;
+  /**
+   * Fallback bucket written to the legacy `category` column. Read only when
+   * the facts are too thin to derive from, so it is a starting guess rather
+   * than a decision.
+   */
+  category?: FavouriteCategory;
 }
 
 // 'auto'   = the pg_cron edge function fired on schedule, no browser involved
@@ -154,15 +187,24 @@ interface WatchlistContextType {
   nextAutoSyncTime: string;
   syncLog: SyncLogEntry[];
   autoSyncEnabled: boolean;
-  syncWatchlist: (type?: 'manual' | 'daily', itemsOverride?: WatchlistItem[]) => Promise<void>;
+  syncWatchlist: (
+    type?: 'manual' | 'daily',
+    itemsOverride?: WatchlistItem[],
+  ) => Promise<void>;
   syncSingleItem: (id: string) => Promise<void>;
   cancelSync: () => void;
   addWatchlistItem: (
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
   ) => Promise<void>;
-  isAddPending: (item: { tmdb_id?: number; title: string; category: string }) => boolean;
+  isAddPending: (item: {
+    tmdb_id?: number;
+    title: string;
+    category: string;
+  }) => boolean;
   removeWatchlistItem: (id: string) => Promise<void>;
-  addFavourite: (item: Omit<FavouriteItem, 'id' | 'created_at'>) => Promise<void>;
+  addFavourite: (item: NewFavourite) => Promise<void>;
+  /** Fills in missing TMDB facts on existing favourites. Admin-only. */
+  syncFavouriteFacts: () => Promise<void>;
   removeFavourite: (id: string) => Promise<void>;
   toggleEpisodeWatched: (
     showId: string,
@@ -193,6 +235,13 @@ const WatchlistContext = createContext<WatchlistContextType | undefined>(
  * 06:00 while the sync actually landed at 07:00.
  */
 const AUTO_SYNC_UTC_HOUR = 6;
+
+/**
+ * How many favourites one facts sync will fetch. tmdb-proxy allows 60
+ * requests a minute; a loop with no cap would trip that and start failing
+ * mid-run, so the run stops short and asks to be run again.
+ */
+const FAVOURITE_FACTS_BATCH = 50;
 
 /** The next time the server-side cron will run, as a Date. */
 const getNextAutoSync = () => {
@@ -251,9 +300,12 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         // they load per item in loadItemDescription instead.
         supabase
           .from('movies')
-          .select('id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime')
+          .select(
+            'id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime',
+          )
           .order('title', { ascending: true }),
-        supabase.from('tv_shows')
+        supabase
+          .from('tv_shows')
           // Deliberately not `tv_show_episodes (*)`. Every mount of this page
           // was pulling all ~7,600 episode rows in full (~474 kB) purely to
           // render a grid of posters. The grid needs episode_number and
@@ -353,19 +405,31 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
       setWatchlist([...mappedMovies, ...mappedShows]);
 
-      const mappedFavourites: FavouriteItem[] = (favouritesResult.data || []).map(
-        (fav) => ({
+      const mappedFavourites: FavouriteItem[] = (
+        favouritesResult.data || []
+      ).map((fav) => {
+        const facts: TmdbFacts = {
+          original_language: fav.original_language,
+          origin_country: fav.origin_country,
+          genre_ids: fav.genre_ids,
+        };
+        return {
           id: fav.id.toString(),
           title: fav.title,
           poster: fav.poster || undefined,
-          // Both are plain text columns; the unions are this file's contract
-          // for what the add flows are allowed to write.
+          // A plain text column; the union is this file's contract for
+          // what the add flows are allowed to write.
           media_type: fav.media_type as FavouriteItem['media_type'],
           tmdb_id: fav.tmdb_id || undefined,
           created_at: fav.created_at || new Date().toISOString(),
-          category: (fav.category as FavouriteCategory) || 'Hollywood',
-        }),
-      );
+          // TMDB facts first, the stored string only as a fallback. A row
+          // synced from TMDB reclassifies itself when the rules improve; a
+          // row that predates the facts columns keeps whatever the old
+          // add-flow guessed, until the facts sync reaches it.
+          category: resolveFavouriteCategory(facts, fav.category),
+          facts,
+        };
+      });
       setFavourites(mappedFavourites);
 
       const newWatchedSet = new Set<string>();
@@ -429,8 +493,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     if (loadedShowsRef.current.has(showId)) return;
     loadedShowsRef.current.add(showId);
 
-    const { data, error } = await supabase.from('tv_show_seasons')
-      .select('id, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)')
+    const { data, error } = await supabase
+      .from('tv_show_seasons')
+      .select(
+        'id, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)',
+      )
       .eq('tv_show_id', parseInt(showId));
 
     if (error) {
@@ -506,9 +573,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         const entries = data as SyncLogEntry[];
         setSyncLog(entries);
         // Find most recent successful sync of any type
-        const lastSuccessful = entries.find(
-          (e) => e.status === 'success',
-        );
+        const lastSuccessful = entries.find((e) => e.status === 'success');
         if (lastSuccessful) {
           setLastSyncTime(lastSuccessful.synced_at);
         }
@@ -663,8 +728,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     [watchedEpisodes],
   );
 
-  const addItemKey = (item: { tmdb_id?: number; title: string; category: string }) =>
-    `${item.category}:${item.tmdb_id ?? item.title.toLowerCase()}`;
+  const addItemKey = (item: {
+    tmdb_id?: number;
+    title: string;
+    category: string;
+  }) => `${item.category}:${item.tmdb_id ?? item.title.toLowerCase()}`;
 
   const addWatchlistItem = async (
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
@@ -732,7 +800,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           let failedSeasonCount = 0;
 
           if (item.tmdb_id) {
-            const showDetails = await fetchTMDBProxy<TMDBDetails>(`tv/${item.tmdb_id}`);
+            const showDetails = await fetchTMDBProxy<TMDBDetails>(
+              `tv/${item.tmdb_id}`,
+            );
             const validSeasons = (showDetails.seasons || []).filter(
               // Skip Season 0 and seasons with no episodes
               (s) => s.season_number !== 0 && s.episode_count !== 0,
@@ -743,23 +813,27 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             const results = await Promise.all(
               validSeasons.map(async (s) => {
                 try {
-                  const [{ data: season, error: sErr }, sDetails] = await Promise.all([
-                    supabase.from('tv_show_seasons')
-                      .insert({
-                        tv_show_id: show.id,
-                        season_number: s.season_number,
-                        release_date: s.air_date || null,
-                      })
-                      .select()
-                      .single(),
-                    fetchTMDBProxy<TMDBSeasonDetails>(
-                      `tv/${item.tmdb_id}/season/${s.season_number}`,
-                    ),
-                  ]);
+                  const [{ data: season, error: sErr }, sDetails] =
+                    await Promise.all([
+                      supabase
+                        .from('tv_show_seasons')
+                        .insert({
+                          tv_show_id: show.id,
+                          season_number: s.season_number,
+                          release_date: s.air_date || null,
+                        })
+                        .select()
+                        .single(),
+                      fetchTMDBProxy<TMDBSeasonDetails>(
+                        `tv/${item.tmdb_id}/season/${s.season_number}`,
+                      ),
+                    ]);
                   if (sErr) return false;
 
                   // Filter out TBA episodes (episodes with no air date)
-                  const validEpisodes = (sDetails.episodes || []).filter(hasAirDate);
+                  const validEpisodes = (sDetails.episodes || []).filter(
+                    hasAirDate,
+                  );
                   if (validEpisodes.length > 0) {
                     const eps = validEpisodes.map((v) => ({
                       season_id: season.id,
@@ -813,8 +887,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const isAddPending = (item: { tmdb_id?: number; title: string; category: string }) =>
-    pendingAddKeys.has(addItemKey(item));
+  const isAddPending = (item: {
+    tmdb_id?: number;
+    title: string;
+    category: string;
+  }) => pendingAddKeys.has(addItemKey(item));
 
   const removeWatchlistItem = async (id: string) => {
     const itemToRemove = watchlist.find((item) => item.id === id);
@@ -867,12 +944,12 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const addFavourite = async (
-    item: Omit<FavouriteItem, 'id' | 'created_at'>,
-  ) => {
+  const addFavourite = async (item: NewFavourite) => {
     const exists = favourites.find(
       (f) =>
-        (item.tmdb_id && f.tmdb_id === item.tmdb_id && f.media_type === item.media_type) ||
+        (item.tmdb_id &&
+          f.tmdb_id === item.tmdb_id &&
+          f.media_type === item.media_type) ||
         f.title.toLowerCase() === item.title.toLowerCase(),
     );
     if (exists) {
@@ -884,12 +961,20 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
+      const facts = item.facts ?? {};
       const { error } = await supabase.from('favourites').insert({
         title: item.title,
         poster: item.poster || null,
         media_type: item.media_type,
         tmdb_id: item.tmdb_id || null,
-        category: item.category,
+        original_language: facts.original_language ?? null,
+        origin_country: facts.origin_country ?? null,
+        genre_ids: facts.genre_ids ?? null,
+        // The fallback string, read back only for a row whose facts stay
+        // thin. Resolved rather than left null so it always holds a real
+        // bucket -- a null here would fall through to a different last
+        // resort than the add dialog just advertised.
+        category: item.category ?? resolveFavouriteCategory(facts),
       });
       if (error) throw error;
       await fetchData();
@@ -1063,22 +1148,42 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           chunk.map(async (item) => {
             try {
               const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie';
-              const data = await fetchTMDBProxy<TMDBDetails>(`${tmdbType}/${item.tmdb_id}`, {
-                append_to_response: 'watch/providers',
-              });
+              const data = await fetchTMDBProxy<TMDBDetails>(
+                `${tmdbType}/${item.tmdb_id}`,
+                {
+                  append_to_response: 'watch/providers',
+                },
+              );
               if (!data.id) return;
 
               if (item.category === 'Movies') {
                 await supabase
                   .from('movies')
-                  .update(buildMovieUpdates(item, data, TMDB_IMAGE_BASE_URL, needsOverview))
+                  .update(
+                    buildMovieUpdates(
+                      item,
+                      data,
+                      TMDB_IMAGE_BASE_URL,
+                      needsOverview,
+                    ),
+                  )
                   .eq('id', parseInt(item.id));
               } else {
-                const tvUpdates = buildShowUpdates(item, data, TMDB_IMAGE_BASE_URL, needsOverview);
-                if (data.status && item.series_status && data.status !== item.series_status) {
+                const tvUpdates = buildShowUpdates(
+                  item,
+                  data,
+                  TMDB_IMAGE_BASE_URL,
+                  needsOverview,
+                );
+                if (
+                  data.status &&
+                  item.series_status &&
+                  data.status !== item.series_status
+                ) {
                   changesSummary.push(`${item.title}: status → ${data.status}`);
                 }
-                await supabase.from('tv_shows')
+                await supabase
+                  .from('tv_shows')
                   .update(tvUpdates)
                   .eq('id', parseInt(item.id));
 
@@ -1279,21 +1384,24 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                             const localS = item.seasons?.find(
                               (ls) => ls.season_number === s.season_number,
                             );
-                            const hasWatched = localS?.episodes.some(
-                              (ep) =>
-                                watchedEpisodes.has(
-                                  `${item.id}-s${s.season_number}-e${ep.episode_number}`,
-                                ),
+                            const hasWatched = localS?.episodes.some((ep) =>
+                              watchedEpisodes.has(
+                                `${item.id}-s${s.season_number}-e${ep.episode_number}`,
+                              ),
                             );
                             if (!hasWatched) {
-                              await supabase.from('tv_show_seasons')
+                              await supabase
+                                .from('tv_show_seasons')
                                 .delete()
                                 .eq('id', dbS.id);
                             }
                           }
                         }
                       } catch (e) {
-                        console.error('Failed to sync season during syncWatchlist:', e);
+                        console.error(
+                          'Failed to sync season during syncWatchlist:',
+                          e,
+                        );
                       }
                     }),
                   );
@@ -1414,6 +1522,115 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     await syncWatchlist('manual', [item]);
   };
 
+  /**
+   * Fills in the TMDB facts on favourites that have none, so their category
+   * bucket can be derived rather than read from the string the old add-flow
+   * froze into `category`.
+   *
+   * Capped per run because tmdb-proxy rate-limits to 60 requests a minute
+   * and this loop would otherwise burn through that in seconds.
+   *
+   * "Has none" means all three columns are *null*, not empty -- which is why
+   * the update below writes `[]` rather than null for an array TMDB had
+   * nothing for. Without that distinction there is no value the sync can
+   * write to mark such a row finished, so it would be re-fetched on every
+   * run forever and, since `stale` keeps the query's order, permanently
+   * occupy the head of the batch and starve every row behind it.
+   */
+  const syncFavouriteFacts = async () => {
+    const withTmdbId = favourites.filter((f) => f.tmdb_id);
+    const stale = withTmdbId.filter(
+      (f) =>
+        f.facts.original_language == null &&
+        f.facts.origin_country == null &&
+        f.facts.genre_ids == null,
+    );
+
+    if (stale.length === 0) {
+      const unsyncable = favourites.length - withTmdbId.length;
+      toast({
+        title: 'Already up to date',
+        description:
+          unsyncable > 0
+            ? `Every favourite TMDB can identify carries its facts. ${unsyncable} has no TMDB id and cannot be synced.`
+            : 'Every favourite carries its TMDB facts.',
+      });
+      return;
+    }
+
+    const batch = stale.slice(0, FAVOURITE_FACTS_BATCH);
+    syncCancelRef.current = false;
+    setSyncing(true);
+    setSyncProgress(0);
+    let synced = 0;
+    let failed = 0;
+    let attempted = 0;
+
+    try {
+      for (const fav of batch) {
+        // Shares the Sync Updates button's cancel flag, because it shares the
+        // toolbar's Cancel affordance. Without this the button rendered and
+        // did nothing for 50 sequential proxy calls.
+        if (syncCancelRef.current) break;
+        attempted++;
+        try {
+          const details = await fetchTMDBProxy<TMDBDetails>(
+            `${fav.media_type}/${fav.tmdb_id}`,
+          );
+          // The detail endpoints expand genres to objects; the derivation
+          // wants ids, and TMDB never returns both shapes at once.
+          const genreIds =
+            details.genres
+              ?.map((g) => g.id)
+              .filter((id): id is number => typeof id === 'number') ?? [];
+
+          const { error } = await supabase
+            .from('favourites')
+            .update({
+              original_language: details.original_language ?? null,
+              // Empty rather than null: see the note above on what marks a
+              // row finished.
+              origin_country: details.origin_country ?? [],
+              genre_ids: genreIds,
+            })
+            .eq('id', Number(fav.id));
+          if (error) throw error;
+          synced++;
+        } catch (error) {
+          console.error(`Favourite facts sync failed for ${fav.title}:`, error);
+          failed++;
+        }
+        setSyncProgress(Math.round((attempted / batch.length) * 100));
+      }
+
+      await fetchData();
+
+      // Counts what is still stale, not what this batch left over: a failed
+      // row is still stale, and reporting only `stale - batch` understates
+      // the remainder by exactly the failures.
+      const remaining = stale.length - synced;
+      const cancelled = syncCancelRef.current;
+      toast({
+        title: cancelled
+          ? 'Sync cancelled'
+          : failed > 0
+            ? 'Synced with errors'
+            : 'Favourites synced',
+        description: [
+          `${synced} updated`,
+          failed > 0 ? `${failed} failed` : null,
+          remaining > 0 ? `${remaining} left -- run again` : null,
+        ]
+          .filter(Boolean)
+          .join(', '),
+        variant: failed > 0 ? 'destructive' : undefined,
+      });
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncProgress(0), 1000);
+    }
+  };
+
   // Stops a full sync between chunks (see syncCancelRef declaration above).
   const cancelSync = () => {
     syncCancelRef.current = true;
@@ -1431,6 +1648,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
   const stableSyncWatchlist = useStableCallback(syncWatchlist);
   const stableSyncSingleItem = useStableCallback(syncSingleItem);
+  const stableSyncFavouriteFacts = useStableCallback(syncFavouriteFacts);
   const stableCancelSync = useStableCallback(cancelSync);
   const stableAddWatchlistItem = useStableCallback(addWatchlistItem);
   const stableIsAddPending = useStableCallback(isAddPending);
@@ -1456,6 +1674,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       autoSyncEnabled,
       syncWatchlist: stableSyncWatchlist,
       syncSingleItem: stableSyncSingleItem,
+      syncFavouriteFacts: stableSyncFavouriteFacts,
       cancelSync: stableCancelSync,
       addWatchlistItem: stableAddWatchlistItem,
       isAddPending: stableIsAddPending,
@@ -1484,6 +1703,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       autoSyncEnabled,
       stableSyncWatchlist,
       stableSyncSingleItem,
+      stableSyncFavouriteFacts,
       stableCancelSync,
       stableAddWatchlistItem,
       stableIsAddPending,

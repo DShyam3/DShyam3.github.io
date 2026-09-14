@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { CountLabel } from '@/components/shared/CountLabel';
@@ -17,8 +18,16 @@ import {
 import { useSchedule } from '@/features/watchlist/useSchedule';
 import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
+import {
+  FAVOURITE_CATEGORIES,
+  resolveFavouriteCategory,
+  type TmdbFacts,
+} from '@/features/watchlist/favourite-category';
 import { useAuth } from '@/contexts/AuthContext';
-import { buildDisplaySyncLog, type DisplaySyncLogEntry } from '@/features/watchlist/sync-logic';
+import {
+  buildDisplaySyncLog,
+  type DisplaySyncLogEntry,
+} from '@/features/watchlist/sync-logic';
 import { SyncDetailDialog } from '@/features/watchlist/components/SyncDetailDialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -60,6 +69,7 @@ import {
   Heart,
   Trash2,
   Loader2,
+  Newspaper,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -70,7 +80,10 @@ import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
 import { CardGrid } from '@/components/shared/CardGrid';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
-import { formatRuntime } from '@/features/watchlist/watchlist-utils';
+import {
+  formatRuntime,
+  totalWatchedRuntime,
+} from '@/features/watchlist/watchlist-utils';
 import {
   PlatformLogo,
   hasPlatformLogo,
@@ -83,8 +96,6 @@ const CATEGORIES = [
   'Upcoming',
   'Favourites',
 ] as const;
-
-const FAV_CATEGORIES = ['Bollywood', 'Hollywood', 'Anime', 'Others'] as const;
 
 const ALL_PLATFORMS = [
   'Netflix',
@@ -151,6 +162,7 @@ const Watchlist = () => {
     autoSyncEnabled,
     syncWatchlist,
     syncSingleItem,
+    syncFavouriteFacts,
     cancelSync,
     toggleEpisodeWatched,
     toggleSeasonWatched,
@@ -228,17 +240,15 @@ const Watchlist = () => {
     useState<FavouriteCategory>('Hollywood');
 
   /**
-   * Auto-tag a favourite from TMDB's original_language. Shown as the "Auto:"
-   * chip in the search results and stored as the favourite's category.
+   * The TMDB facts a search row already carries. `search/tv` returns all
+   * three; `search/movie` omits origin_country, which the derivation covers
+   * from original_language instead.
    */
-  const favouriteCategoryFor = (result: TMDBResult) =>
-    result.original_language === 'hi'
-      ? 'Bollywood'
-      : result.original_language === 'ja'
-        ? 'Anime'
-        : result.original_language === 'en'
-          ? 'Hollywood'
-          : 'Others';
+  const factsFor = (result: TMDBResult): TmdbFacts => ({
+    original_language: result.original_language ?? null,
+    origin_country: result.origin_country ?? null,
+    genre_ids: result.genre_ids ?? null,
+  });
 
   const handleAddFavourite = useCallback(
     async (result: TMDBResult) => {
@@ -250,7 +260,7 @@ const Watchlist = () => {
           : undefined,
         media_type: result.media_type,
         tmdb_id: result.id,
-        category: favouriteCategoryFor(result),
+        facts: factsFor(result),
       });
       setFavAddedItems((prev) => new Set(prev).add(itemKey));
     },
@@ -451,6 +461,12 @@ const Watchlist = () => {
     });
     return counts;
   }, [categoryItems]);
+
+  // sum(runtime) where watched, across the whole list -- REHAUL_PLAN.md 8.C.
+  const watchedRuntimeMinutes = useMemo(
+    () => totalWatchedRuntime(watchlist),
+    [watchlist],
+  );
 
   const getPlatformCount = (platform: string) => platformCounts[platform] || 0;
   const getGenreCount = (genre: string) => genreCounts[genre] || 0;
@@ -686,6 +702,17 @@ const Watchlist = () => {
             <CalendarDays className="h-4 w-4" />
             <DotMatrixText text="WEEKLY SCHEDULE" size="xs" wrap={false} />
           </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
+          >
+            <Link to="/watchlist">
+              <Newspaper className="h-4 w-4" />
+              <DotMatrixText text="NEWS" size="xs" wrap={false} />
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -753,8 +780,12 @@ const Watchlist = () => {
               style={{ maxHeight: '180px' }}
             >
               {displaySyncLog.map((entry) => {
-                const failureMatch = entry.error_message?.match(/^(\d+)\s*item\(s\)\s*failed/i);
-                const failureCountBadge = failureMatch ? `${failureMatch[1]} failed` : null;
+                const failureMatch = entry.error_message?.match(
+                  /^(\d+)\s*item\(s\)\s*failed/i,
+                );
+                const failureCountBadge = failureMatch
+                  ? `${failureMatch[1]} failed`
+                  : null;
                 return (
                   <div
                     key={entry.id}
@@ -1036,57 +1067,84 @@ const Watchlist = () => {
       )}
 
       <div className="watchlist-count flex items-center justify-between">
-        <CountLabel
-          count={
-            loading
-              ? undefined
-              : selectedCategory === 'Favourites'
-                ? favourites.length
-                : filteredWatchlist.length
-          }
-          noun={
-            selectedCategory === 'Favourites'
-              ? 'favourites'
-              : selectedCategory.toLowerCase()
-          }
-        />
-        {isAdmin && selectedCategory === 'Favourites' && (
-          <TmdbSearchDialog
-            open={favDialogOpen}
-            onOpenChange={setFavDialogOpen}
-            triggerLabel="Add Favourite"
-            title="Add to Favourites"
-            description="Search and add movies or TV shows to your favourites."
-            searchLabel="Search Movies & TV Shows"
-            placeholder="Type a movie or TV show name..."
-            query={favSearchQuery}
-            onQueryChange={setFavSearchQuery}
-            results={searchResults}
-            loading={searchLoading}
-            getPosterUrl={getPosterUrl}
-            resultKey={(r) => `${r.media_type}-${r.id}`}
-            isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
-            onSelect={handleAddFavourite}
-            renderStatus={(r) => (
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'text-xs px-2 py-0.5 rounded font-medium bg-secondary text-muted-foreground',
-                  )}
-                >
-                  {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
-                  Auto: {favouriteCategoryFor(r)}
-                </span>
-                {favAddedItems.has(`${r.media_type}-${r.id}`) && (
-                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Added
-                  </span>
-                )}
-              </div>
-            )}
+        <div className="flex items-center gap-3">
+          <CountLabel
+            count={
+              loading
+                ? undefined
+                : selectedCategory === 'Favourites'
+                  ? favourites.length
+                  : filteredWatchlist.length
+            }
+            noun={
+              selectedCategory === 'Favourites'
+                ? 'favourites'
+                : selectedCategory.toLowerCase()
+            }
           />
+          {!loading && watchedRuntimeMinutes > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {formatRuntime(watchedRuntimeMinutes)} watched
+            </span>
+          )}
+        </div>
+        {isAdmin && selectedCategory === 'Favourites' && (
+          <div className="flex items-center gap-2">
+            {/*
+              Fills in original_language / origin_country / genre_ids on
+              favourites added before those columns existed, which is what
+              lets their section be derived rather than read from the string
+              the old add-flow froze in.
+            */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={syncFavouriteFacts}
+              disabled={syncing}
+              title="Fetch missing TMDB data so categories can be derived"
+            >
+              <RefreshCcw
+                className={cn('h-3.5 w-3.5 mr-1.5', syncing && 'animate-spin')}
+              />
+              Sync TMDB Data
+            </Button>
+            <TmdbSearchDialog
+              open={favDialogOpen}
+              onOpenChange={setFavDialogOpen}
+              triggerLabel="Add Favourite"
+              title="Add to Favourites"
+              description="Search and add movies or TV shows to your favourites."
+              searchLabel="Search Movies & TV Shows"
+              placeholder="Type a movie or TV show name..."
+              query={favSearchQuery}
+              onQueryChange={setFavSearchQuery}
+              results={searchResults}
+              loading={searchLoading}
+              getPosterUrl={getPosterUrl}
+              resultKey={(r) => `${r.media_type}-${r.id}`}
+              isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
+              onSelect={handleAddFavourite}
+              renderStatus={(r) => (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'text-xs px-2 py-0.5 rounded font-medium bg-secondary text-muted-foreground',
+                    )}
+                  >
+                    {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
+                    Auto: {resolveFavouriteCategory(factsFor(r))}
+                  </span>
+                  {favAddedItems.has(`${r.media_type}-${r.id}`) && (
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                      Added
+                    </span>
+                  )}
+                </div>
+              )}
+            />
+          </div>
         )}
         {isAdmin && selectedCategory !== 'Favourites' && (
           <TmdbSearchDialog
@@ -1165,7 +1223,7 @@ const Watchlist = () => {
             ) : (
               <>
                 {/* Category Sections */}
-                {FAV_CATEGORIES.map((cat) => {
+                {FAVOURITE_CATEGORIES.map((cat) => {
                   const catFavs = favourites.filter((f) => f.category === cat);
                   if (catFavs.length === 0) return null;
 
@@ -1394,7 +1452,7 @@ const Watchlist = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {FAV_CATEGORIES.map((cat) => (
+                      {FAVOURITE_CATEGORIES.map((cat) => (
                         <SelectItem key={cat} value={cat}>
                           {cat}
                         </SelectItem>

@@ -60,6 +60,11 @@ export interface TMDBDetails {
   title?: string;
   name?: string;
   overview?: string;
+  original_language?: string;
+  // ISO 3166-1 alpha-2. TMDB returns this on both detail endpoints, but only
+  // on the *TV* search endpoint -- which is why a favourite added as a movie
+  // needs a detail call before its origin is known.
+  origin_country?: string[];
   poster_path?: string | null;
   release_date?: string | null;
   first_air_date?: string | null;
@@ -81,6 +86,11 @@ export interface TMDBSearchItem {
   poster_path: string | null;
   overview: string;
   original_language?: string;
+  // TV search only; absent from `search/movie`.
+  origin_country?: string[];
+  // Ids rather than names -- the search endpoints never expand them. 16 is
+  // Animation, 18 is Drama.
+  genre_ids?: number[];
 }
 
 export interface TMDBSearchResponse {

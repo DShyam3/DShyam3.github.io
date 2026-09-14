@@ -135,12 +135,20 @@ export type Database = {
         }
         Relationships: []
       }
+      // genre_ids, origin_country and original_language are hand-written ahead
+      // of the generator, which reads the live database and so cannot see
+      // 20260912120000_favourites_tmdb_facts.sql until it is applied.
+      // Regenerating after the migration lands reproduces them identically, at
+      // which point this comment can go.
       favourites: {
         Row: {
           category: string | null
           created_at: string | null
+          genre_ids: number[] | null
           id: number
           media_type: string
+          origin_country: string[] | null
+          original_language: string | null
           poster: string | null
           title: string
           tmdb_id: number | null
@@ -148,8 +156,11 @@ export type Database = {
         Insert: {
           category?: string | null
           created_at?: string | null
+          genre_ids?: number[] | null
           id?: number
           media_type?: string
+          origin_country?: string[] | null
+          original_language?: string | null
           poster?: string | null
           title: string
           tmdb_id?: number | null
@@ -157,8 +168,11 @@ export type Database = {
         Update: {
           category?: string | null
           created_at?: string | null
+          genre_ids?: number[] | null
           id?: number
           media_type?: string
+          origin_country?: string[] | null
+          original_language?: string | null
           poster?: string | null
           title?: string
           tmdb_id?: number | null
@@ -2301,7 +2315,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      // Hand-written ahead of the generator, which reads the live database and
+      // so cannot see 20260912090000_watchlist_up_next.sql until it is applied.
+      // This matches what the generator emits for a view: Row only, no Insert
+      // or Update. Regenerating after the migration lands reproduces it
+      // identically, at which point this comment can go.
+      watchlist_up_next: {
+        Row: {
+          episode_number: number
+          episode_title: string | null
+          has_started: boolean
+          platform: string
+          poster: string | null
+          release_date: string | null
+          runtime: number | null
+          season_in_progress: boolean
+          season_number: number
+          state: string
+          title: string
+          tv_show_id: number
+        }
+        Relationships: []
+      }
     }
     Functions: {
       capture_finance_snapshots: { Args: never; Returns: undefined }
