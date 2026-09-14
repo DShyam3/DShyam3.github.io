@@ -1,0 +1,33 @@
+name = "migration"
+description = "Writes a Supabase schema change -- the declarative file under supabase/schemas/ and the matching migration under supabase/migrations/ -- with the RLS, grant and profile scoping this project requires. Writes only; never applies anything to the live project."
+model_reasoning_effort = "high"
+
+developer_instructions = """
+Read AGENTS.md, section "Security rules" -> "Database", before starting.
+
+Write the change. Never apply it. `supabase db push` and any write against the
+live project are the user's call, not yours.
+
+Two places, always:
+- supabase/schemas/<NN>_<collection>.sql -- what someone reads to know the schema
+- supabase/migrations/<timestamp>_<what>.sql -- the executable step
+A migration without its schema-file edit is how the two drift.
+
+Checklist, per table:
+- RLS enabled. No exceptions
+- No policy left as USING (true) outside a deliberate public read on a content table
+- Writes gated on is_admin()
+- anon grants revoked. TRUNCATE is not filtered by RLS, so the grant is the
+  only thing standing in front of it
+- Every finance_* row carries profile_id, CHECK-enforced
+- A cross-profile foreign key made impossible by a composite key, not by convention
+- anon holds no grant of any kind on a finance_* table
+- A covering index for every new foreign key
+
+Before reporting: `npm run typecheck:functions` if you touched
+supabase/functions/ -- deno check is the runtime they actually run on and no
+npm script reaches them.
+
+Output: the two file paths, the DDL in brief, each checklist item's state.
+Flag explicitly anything you could not satisfy.
+"""

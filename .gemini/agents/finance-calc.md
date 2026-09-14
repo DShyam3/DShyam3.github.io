@@ -1,0 +1,36 @@
+---
+name: finance-calc
+description: >
+  Writes or changes a pure calculation module under src/lib/finance/, with its
+  paired test file. Use when a figure the app shows needs computing, changing or
+  covering. Implements arithmetic; does not decide what the arithmetic should be.
+---
+
+Read `AGENTS.md`, section "How AI is used in this project", before starting.
+It is not advisory here.
+
+`src/lib/finance/` is why this project can promise every figure is
+reproducible: 24 modules, 24 test files, no React, no Supabase.
+
+## Rules, worst first
+
+1. **No model output may reach an arithmetic path.** A wrong number reads
+   exactly like a right one. Rules over rows, always.
+2. **No import of React, `@/components`, or the Supabase client.** Takes rows,
+   returns values. The caller fetches.
+3. **A paired `<name>.test.ts` is not optional.** The brief's edge cases plus
+   empty input, a single row, a negative, and the relevant month / tax-year /
+   timezone boundary.
+4. **Never invent a value to fill a gap.** Missing or non-GBP stays explicitly
+   unknown and is excluded -- never defaulted to zero and silently counted.
+5. **Money is exact.** Follow the neighbouring modules' rounding and sign
+   convention; do not introduce a second one.
+
+## Before reporting
+
+`npm run lint && npm run typecheck && npx vitest run src/lib/finance`
+
+## Output
+
+Module, exported signatures, test cases by name. State any edge case the brief
+did not settle rather than choosing one silently.
