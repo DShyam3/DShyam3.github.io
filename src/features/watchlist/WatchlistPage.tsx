@@ -645,8 +645,8 @@ const Watchlist = () => {
      wall never gets back. */
   const toolbar = (
     <div className="watchlist-toolbar px-4 md:px-0 pt-2 space-y-4">
-      <div className="flex flex-wrap items-start gap-2 justify-between">
-        <div className="flex flex-wrap items-center gap-2 md:gap-4">
+      <div className="watchlist-toolbar-top flex flex-wrap items-start gap-2 justify-between">
+        <div className="watchlist-categories flex flex-wrap items-center gap-2 md:gap-4">
           {CATEGORIES.map((cat, index) => (
             <div key={cat} className="flex items-center gap-2 md:gap-4">
               <button
@@ -667,14 +667,14 @@ const Watchlist = () => {
                 <DotMatrixText text={`(${categoryCounts[cat]})`} size="xs" />
               </button>
               {index < CATEGORIES.length - 1 && (
-                <span className="text-muted-foreground/30 hidden md:inline">
+                <span className="watchlist-category-sep text-muted-foreground/30 hidden md:inline">
                   ·
                 </span>
               )}
             </div>
           ))}
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-start gap-2 w-full sm:w-auto">
+        <div className="watchlist-actions flex flex-col sm:flex-row sm:items-start gap-2 w-full sm:w-auto">
           {/* Syncing is the cron's job. The manual trigger lives inside
               this panel rather than on the toolbar, so the page does not
               advertise a button nobody should normally need. */}
@@ -684,12 +684,15 @@ const Watchlist = () => {
               size="sm"
               onClick={() => setShowSyncLog(!showSyncLog)}
               className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
+              aria-label="Sync"
+              title="Sync"
             >
               <History className={cn('h-4 w-4', syncing && 'animate-spin')} />
               <DotMatrixText
                 text={syncing ? `SYNCING ${syncProgress}%` : 'SYNC'}
                 size="xs"
                 wrap={false}
+                className="watchlist-action-label"
               />
             </Button>
           )}
@@ -698,9 +701,16 @@ const Watchlist = () => {
             size="sm"
             onClick={() => setShowSchedule(!showSchedule)}
             className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
+            aria-label="Weekly schedule"
+            title="Weekly schedule"
           >
             <CalendarDays className="h-4 w-4" />
-            <DotMatrixText text="WEEKLY SCHEDULE" size="xs" wrap={false} />
+            <DotMatrixText
+              text="WEEKLY SCHEDULE"
+              size="xs"
+              wrap={false}
+              className="watchlist-action-label"
+            />
           </Button>
           <Button
             asChild
@@ -708,9 +718,14 @@ const Watchlist = () => {
             size="sm"
             className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
           >
-            <Link to="/watchlist">
+            <Link to="/watchlist" aria-label="News" title="News">
               <Newspaper className="h-4 w-4" />
-              <DotMatrixText text="NEWS" size="xs" wrap={false} />
+              <DotMatrixText
+                text="NEWS"
+                size="xs"
+                wrap={false}
+                className="watchlist-action-label"
+              />
             </Link>
           </Button>
         </div>
@@ -1050,7 +1065,7 @@ const Watchlist = () => {
                   {sortOrder === 'alphabetical' && (
                     <>
                       <ArrowDownAZ className="h-3.5 w-3.5" />
-                      <DotMatrixText text="A-Z" size="xs" />
+                      <DotMatrixText text="A-Z" size="xs" wrap={false} />
                     </>
                   )}
                   {sortOrder === 'recent' && (

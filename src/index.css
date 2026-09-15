@@ -360,6 +360,20 @@
     max-width: none;
   }
 
+  /* The News page's poster walls (Out Now, Upcoming) are one section among
+     several, not the page, so fitting the card to the screen's height -- what
+     CardGrid does for a library wall -- is the wrong sum there: a short, wide
+     window drew one row of cards as tall as the window. They keep one small
+     size at every height instead, and a column stretches by at most one
+     card's share of the leftover width. */
+  .card-grid.news-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  }
+
+  .card-grid.news-card-grid > * {
+    max-width: none;
+  }
+
   /* 13rem, not 8.5: a 10rem column left ~142px of card body, and a platform
      wordmark plus a status pill needs ~163px to stay on one line. It was
      11.5rem, which cleared the badges but not the words above them -- on an
@@ -804,5 +818,122 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Footer on a tablet held upright ───────────────────────────────────
+   From 768px the footer is one row, but below 1024px the vh-scaled face is
+   too wide for it: on an iPad mini "Based in London,UK" and "Designed by
+   Dhyan Shyam" each broke onto two lines. The labels no longer wrap (see
+   Footer.tsx), and here they take the smaller face so the row fits. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-footer .dot-matrix-text-xs {
+    font-size: 0.95rem;
+  }
+}
+
+/* ─── Card walls on a tablet ─────────────────────────────────────────────
+   CardGrid does not fit cards to the screen's height below 1280px, nor on a
+   touch screen without a mouse at any width (see FIT_TO_SLICE there), so here
+   the card is sized on width alone: the News page's poster size on an iPad
+   mini (four across held upright, six sideways), growing with the width up to
+   13rem so an iPad Pro 13 on its side draws about six rather than ten. The
+   column is at least this and shares out the leftover width, and with no
+   --card-fit the card fills its column, so there is no gutter beside it. The
+   platform badge and status pill wrap to two lines on the narrower cards,
+   which a row absorbs by standing a little taller. */
+@media (min-width: 768px) and (max-width: 1279px),
+  (min-width: 1280px) and (hover: none),
+  (min-width: 1280px) and (pointer: coarse) {
+  .card-grid {
+    --card-ideal: clamp(9.5rem, 14vw, 13rem);
+  }
+}
+
+/* ─── Watchlist category row on a tablet ────────────────────────────────
+   Between md and 1280px the category row wrapped: on an iPad mini in
+   landscape the five categories came to ~1030px of a 998px row, so
+   FAVOURITES took a line of its own, and SYNC, WEEKLY SCHEDULE and NEWS
+   another -- three rows of chrome held upright. Here the row is one line
+   whatever the width: the separators go, the face drops to the phone's, the
+   actions are icons (each button carries its own aria-label). It never
+   scrolls sideways: a hidden category is one nobody finds, so anything still
+   too wide wraps. Classes are written in WatchlistPage.tsx. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .watchlist-toolbar-top {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .watchlist-categories {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.25rem 0.75rem;
+  }
+
+  .watchlist-categories > div {
+    flex-shrink: 0;
+  }
+
+  .watchlist-category-sep.watchlist-category-sep,
+  .watchlist-action-label.watchlist-action-label {
+    display: none;
+  }
+
+  .watchlist-toolbar .watchlist-categories .dot-matrix-text-xs {
+    font-size: 0.875rem;
+  }
+
+  .watchlist-actions {
+    flex-shrink: 0;
+    gap: 0.25rem;
+  }
+}
+
+/* Held upright the categories take two lines, and the actions belong to the
+   first of them rather than floating in the middle of the pair. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .watchlist-toolbar-top {
+    align-items: flex-start;
+  }
+}
+
+/* ─── Collection filter chips on a tablet held upright ──────────────────
+   The search field takes 170px of the row, which left an iPad mini's chips
+   558px: Thoughts' four came to ~595px, so REFLECTIONS took a line of its
+   own, and Recipes lost DESSERTS the same way. The chips take the phone's
+   face here, as the watchlist categories do, and four fit on one line with
+   room over. A facet with more options than that still wraps (FilterBar.tsx
+   explains why it never scrolls). */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .collection-filters .nav-link .dot-matrix-text-xs {
+    font-size: 0.875rem;
+  }
+}
+
+/* ─── Finance surface nav on a tablet held upright ──────────────────────
+   Beside the profile picker the five surfaces get ~600px of an iPad mini,
+   and at the desktop face with interpunct separators they came to ~655px,
+   so the row scrolled sideways and INCOME sat half off the edge. Here the
+   separators go, the face and pill padding match the collection chips, and
+   the row's vertical padding drops -- about 400px, one line, no scroll.
+   Classes are written in FinancePage.tsx. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .finance-navigation .finance-surface-nav {
+    gap: 0.25rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .finance-surface-sep.finance-surface-sep {
+    display: none;
+  }
+
+  .finance-navigation .finance-surface-nav .nav-link {
+    padding: 0.35rem 0.65rem;
+  }
+
+  .finance-navigation .finance-surface-nav .dot-matrix-text-xs {
+    font-size: 0.875rem;
   }
 }

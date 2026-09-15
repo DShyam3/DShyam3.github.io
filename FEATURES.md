@@ -29,6 +29,10 @@ Experience and education are rows, not markup: editable in place when signed in
 as admin, skeleton-loaded otherwise. The CV uploads to private storage and
 downloads through a short-lived signed URL.
 
+On a tablet held upright, Experience spans the full width with each role's title
+and employment type on one line and its location and dates on another; Education
+and the projects card share the row beneath it.
+
 ## Collections
 
 Nine lists — links, books, articles, inspirations, recipes, photos, inventory,
@@ -41,6 +45,11 @@ Each gets faceted filtering, search, and admin-only add/edit/remove. Adding a
 tenth collection is a file, a registry line, a route and a schema file — not a
 new implementation of the same idea.
 
+On a tablet held upright the filter chips use a smaller face, so a filter with
+four or so options (Thoughts, Recipes) sits on one line beside the search field.
+
+Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac.
+
 ## Watchlist
 
 TV and film tracking backed by TMDB, searchable by title through a server-side
@@ -48,23 +57,39 @@ proxy so the API key never reaches the browser.
 
 **Two views:**
 
-- **News** — the default view. A switch at the top chooses this week or this
-  month for the page. Out Now always shows this week's season premieres and
-  film releases, each with its platform in the corner. Watch Next follows (the
-  next episode of any season already under way, plus anything aired in the
-  last 14 days), then Upcoming: a grid of countdown cards for season premieres
-  and film releases in the coming week or month, nearest first. An Updates
-  list closes the page, covering the past week or month: new episodes
-  ("S1E23 · Emotion and Reason"), platform moves ("Netflix → Disney+") and
-  status changes (Ended, Cancelled, In production, Returning), each with a
-  poster, the platform and a relative date, in aligned columns. A title
-  appears in only one place — Watch Next first, then Out Now, then Updates —
-  and shows you are caught up on are left out of Out Now and Updates. Clicking
-  any card or row opens that title's details. TMDB's specials season is left
-  out, and a card whose artwork is missing shows its title instead.
+- **News** — the default view. A segmented pill at the top switches between
+  this week and this month, with the selected option filled. Out Now shows a
+  grid of portrait poster cards for season premieres and film releases from the
+  past week or month. The cards stay small (about 150–180px wide) and the
+  columns fill the width, two across on a phone. Each card shows the 2:3 poster,
+  the title, the release date (with "Season N ·" before it for a later season)
+  and the platform mark. Watch Next follows: the next episode of any season
+  already under way, plus anything aired in the last 14 days. Its cards share
+  the row's width, so three fit across a tablet, and the row scrolls sideways
+  on a phone. Upcoming shows the same poster cards for season premieres and film
+  releases in the coming week or month, nearest first, each with a small dated
+  pill showing the days left ("3d", or "Today"). The pinned Countdown card uses
+  an overlay layout. An Updates list closes the page, covering the past week or
+  month: new episodes ("S1E23 · Emotion and Reason"), platform moves
+  ("Netflix → Disney+") and status changes (Ended, Cancelled, In production,
+  Returning), each with a poster, the title with the change beneath it, then
+  the platform and the relative date. A title appears in only one place — Watch
+  Next first, then Out Now, then Updates — and shows you are caught up on are
+  left out of Out Now and Updates. Clicking any card or row opens that title's
+  details. TMDB's specials season is left out, and a card whose artwork is
+  missing shows its title instead.
 - **Library** — a searchable grid of every title, with season and episode
-  lists and progress. Unwatched episode titles stay hidden until revealed. The
-  header shows total time watched.
+  lists and progress. On a laptop or desktop the cards size so whole rows fit
+  the window. On a tablet or any touch screen they size to the width instead:
+  four across an iPad mini held upright, six across it sideways, and about six
+  across an iPad Pro 13 on its side. Unwatched episode titles stay
+  hidden until revealed. The header shows total time watched.
+
+**Tablets:**
+
+- The library category row hides separators and displays Sync, Weekly Schedule,
+  and News as icons only, fitting all five categories and actions on one line
+  in landscape or wrapping to two lines in portrait
 
 **Both views:**
 
@@ -78,6 +103,9 @@ proxy so the API key never reaches the browser.
 
 Countries and cities visited, rendered as maps by continent and by city, with
 membership and region groupings.
+
+On a tablet held upright, the map occupies a full-width row at the top, with the
+country list filling the space below and scrolling independently.
 
 ## Inventory and EDC
 
@@ -97,6 +125,10 @@ one a real URL with a working back button.
 A standing summary that compares like-for-like calendar month-to-date windows:
 actual received, spent, net, and the biggest category movement. Every figure is
 computed from ledger rows. In-app alerts surface what needs attention.
+
+On a tablet held upright, all five surfaces — Home, Spending, Plan, Wealth,
+Income — fit on one line beside the profile picker with no sideways scroll,
+using smaller text and tighter spacing.
 
 ### Spending
 
@@ -156,6 +188,13 @@ Four routes, in decreasing order of automation:
 
 Reconciliation between a payslip and a bank transaction is user-confirmed,
 one-to-one, penny-exact and limited to a five-day window.
+
+---
+
+## Interactions
+
+Tapping or clicking the backdrop of a dialog closes it without activating anything
+behind it.
 
 ---
 

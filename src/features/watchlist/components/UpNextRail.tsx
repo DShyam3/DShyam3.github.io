@@ -56,9 +56,13 @@ export function UpNextRail({ items, onSelect }: UpNextRailProps) {
                 key={item.tv_show_id}
                 type="button"
                 onClick={() => onSelect(item.tv_show_id)}
-                className="item-card flex w-64 shrink-0 gap-2.5 p-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                // Grow to share the row, down to 13rem before scrolling: three
+                // cards fit a 768px tablet without a scrollbar, a phone still
+                // scrolls with the next card peeking, and a wide screen caps
+                // each at 18rem rather than stretching one card across it.
+                className="item-card flex min-w-[13rem] max-w-[18rem] flex-1 basis-0 gap-2.5 p-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <div className="aspect-[2/3] w-16 shrink-0 overflow-hidden rounded bg-muted">
+                <div className="aspect-[2/3] w-14 shrink-0 overflow-hidden rounded bg-muted lg:w-16">
                   {item.poster ? (
                     <img
                       src={item.poster}

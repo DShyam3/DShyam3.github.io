@@ -35,7 +35,7 @@ export const recipesCollection: CollectionConfig<RecipeRow> = {
   table: 'recipes',
   path: '/recipes',
   title: 'Recipes',
-  subtitle: 'Dishes I love to make',
+  subtitle: 'My dishes',
   noun: { singular: 'Recipe', plural: 'Recipes' },
 
   searchFields: ['title', 'description'],

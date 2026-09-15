@@ -576,7 +576,7 @@ function FinanceView() {
   // Keep deep links intact while Supabase restores the saved session.
   if (isAuthLoading) {
     return (
-      <AppShell title="Finance" subtitle="Personal Income & Tax Dashboard">
+      <AppShell title="Finance" subtitle="Income & tax">
         <div role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
           Loading finance…
@@ -715,7 +715,7 @@ function FinanceView() {
     <div className="finance-navigation flex flex-col">
     {/* Primary navigation: the five surfaces. */}
     <div className="flex items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
-      <nav className="flex flex-nowrap items-center justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
+      <nav className="finance-surface-nav flex flex-nowrap items-center justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
         {SURFACES.map((surface, index) => {
           const isActive = activeSurface === surface.key;
           return (
@@ -731,7 +731,7 @@ function FinanceView() {
                 <DotMatrixText text={surface.label.toUpperCase()} size="xs" />
               </button>
               {index < SURFACES.length - 1 && (
-                <span className="text-muted-foreground/30 hidden md:inline">·</span>
+                <span className="finance-surface-sep text-muted-foreground/30 hidden md:inline">·</span>
               )}
             </div>
           );
@@ -791,7 +791,7 @@ function FinanceView() {
     <>
       <AppShell
         title="Finance"
-        subtitle="Personal Income & Tax Dashboard"
+        subtitle="Income & tax"
         toolbar={toolbar}
       >
         {/* The shell owns the scroll container and the fluid padding; this

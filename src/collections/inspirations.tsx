@@ -27,7 +27,7 @@ export const inspirationsCollection: CollectionConfig<InspirationRow> = {
   table: 'inspirations',
   path: '/inspiration',
   title: 'Inspiration',
-  subtitle: 'People I look up to',
+  subtitle: 'My inspirations',
   noun: { singular: 'Person', plural: 'People' },
 
   searchFields: ['name', 'description'],

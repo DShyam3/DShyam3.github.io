@@ -141,14 +141,16 @@ const Index = () => {
               />
             </div>
 
-            {/* Experience & Education. Two columns: stacked so they share row
-                2 with the projects card and both columns end level. Three
-                columns: `contents` dissolves this wrapper so each card takes
-                its own cell -- experience under About Me, education above
-                projects -- leaving column 1 free for a full-height portrait. */}
-            <div className="flex flex-col gap-6 xl:contents">
+            {/* Experience & Education. `contents` dissolves this wrapper so
+                each card takes its own cell. Two columns: experience spans
+                the row, education and projects share the row under it --
+                stacked in one half-width column, each entry had ~216px and
+                its title and dates wrapped, and projects stretched to match.
+                Three columns: experience under About Me, education above
+                projects, leaving column 1 free for a full-height portrait. */}
+            <div className="contents">
               {/* Experience */}
-              <div data-palette="sky" className="ambient-card xl:col-start-1 xl:col-span-2 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div data-palette="sky" className="ambient-card md:col-span-2 xl:col-start-1 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
                 <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
                   <div className="w-full lg:w-auto lg:shrink-0">
                     <DotMatrixText
@@ -208,7 +210,7 @@ const Index = () => {
                   ) : (
                     experience.map((item) => (
                       <div key={item.id} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
-                        <div className="flex items-start gap-4">
+                        <div className="relative flex items-start gap-4">
                           <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
                             <img
                               src={item.logo_url}
@@ -223,15 +225,16 @@ const Index = () => {
                               {item.company.substring(0, 4).toUpperCase()}
                             </span>
                           </div>
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium leading-snug text-foreground">
                               {item.title}
+                              {item.employment_type && (
+                                <span className="text-muted-foreground">
+                                  {' · '}
+                                  {item.employment_type}
+                                </span>
+                              )}
                             </p>
-                            {item.employment_type && (
-                              <p className="text-sm font-medium leading-snug text-foreground">
-                                {item.employment_type}
-                              </p>
-                            )}
                             <p className="text-sm font-medium leading-snug text-foreground">
                               {item.company}
                             </p>
@@ -240,7 +243,7 @@ const Index = () => {
                             </p>
                           </div>
                           {isAdmin && (
-                            <div className="ml-auto flex items-center gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                            <div className="absolute top-0 right-0 flex items-center gap-2 rounded-lg bg-card/90 opacity-0 group-hover/item:opacity-100 transition-opacity">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -301,7 +304,7 @@ const Index = () => {
                   ) : (
                     education.map((item) => (
                       <div key={item.id} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
-                        <div className="flex items-start gap-4">
+                        <div className="relative flex items-start gap-4">
                           <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
                             <img
                               src={item.logo_url}
@@ -309,7 +312,7 @@ const Index = () => {
                               className="w-full h-full object-contain no-outline"
                             />
                           </div>
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium leading-snug text-foreground">
                               {item.degree}
                             </p>
@@ -318,7 +321,7 @@ const Index = () => {
                             </p>
                           </div>
                           {isAdmin && (
-                            <div className="ml-auto flex items-center gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                            <div className="absolute top-0 right-0 flex items-center gap-2 rounded-lg bg-card/90 opacity-0 group-hover/item:opacity-100 transition-opacity">
                               <Button
                                 variant="ghost"
                                 size="icon"

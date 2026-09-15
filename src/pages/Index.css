@@ -32,6 +32,27 @@
   }
 }
 
+/* A tablet held upright is too narrow for two columns: beside the 460px list
+   an iPad mini left the globe a 218px sliver, so the map drew as a thumbnail
+   in a tall empty card and its projection toggle was clipped. Here the map
+   takes a full-width row on top and the list fills what is left, still
+   scrolling inside itself -- the page does not scroll from md up. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .travel-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: clamp(16rem, 36vh, 24rem) minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .travel-map-col {
+    order: 1;
+  }
+
+  .travel-sidebar-col {
+    order: 2;
+  }
+}
+
 /* ─── Left sidebar column (wrapper) ────────────────────────────────── */
 
 .travel-sidebar-col {

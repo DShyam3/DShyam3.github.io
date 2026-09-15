@@ -5,6 +5,7 @@ import {
   computeFirstSeenAt,
   daysUntil,
   displayTitle,
+  filterRecentByWindow,
   filterUpcomingByWindow,
   filterUpdatesByWindow,
   formatRuntime,
@@ -916,5 +917,39 @@ describe('filterUpcomingByWindow', () => {
     const rows = [row('2026-09-24')];
     expect(filterUpcomingByWindow(rows, 'week', today)).toHaveLength(0);
     expect(filterUpcomingByWindow(rows, 'month', today)).toHaveLength(1);
+  });
+});
+
+describe('filterRecentByWindow', () => {
+  const today = new Date('2026-09-14T00:00:00Z');
+  const row = (date: string | null) => ({ date });
+
+  it('keeps a release today in either window', () => {
+    expect(filterRecentByWindow([row('2026-09-14')], 'week', today)).toHaveLength(1);
+    expect(filterRecentByWindow([row('2026-09-14')], 'month', today)).toHaveLength(1);
+  });
+
+  it('keeps the last day inside the week window and drops the first day outside it', () => {
+    expect(filterRecentByWindow([row('2026-09-07')], 'week', today)).toHaveLength(1);
+    expect(filterRecentByWindow([row('2026-09-06')], 'week', today)).toHaveLength(0);
+  });
+
+  it('keeps the last day inside the month window and drops the first day outside it', () => {
+    expect(filterRecentByWindow([row('2026-08-15')], 'month', today)).toHaveLength(1);
+    expect(filterRecentByWindow([row('2026-08-14')], 'month', today)).toHaveLength(0);
+  });
+
+  it('drops a future date', () => {
+    expect(filterRecentByWindow([row('2026-09-15')], 'month', today)).toHaveLength(0);
+  });
+
+  it('drops a null date', () => {
+    expect(filterRecentByWindow([row(null)], 'month', today)).toHaveLength(0);
+  });
+
+  it('keeps a 10-day-old release in "This month" but not "This week"', () => {
+    const rows = [row('2026-09-04')];
+    expect(filterRecentByWindow(rows, 'week', today)).toHaveLength(0);
+    expect(filterRecentByWindow(rows, 'month', today)).toHaveLength(1);
   });
 });

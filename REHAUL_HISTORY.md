@@ -1918,3 +1918,19 @@ Upcoming and today back to seven days ago for Updates, both ends inclusive, so
 the same word means the same span in each direction. Out Now stays fixed at a
 week, because it answers "what is new right now" rather than a range the
 reader browses.
+
+**Card walls on tablets size to width, not screen height — 2026-09-15.**
+
+Before this, the shared `CardGrid` component sized cards on tablets (768–1279px)
+the same way as desktops: fit-to-screen-height, so whole rows fill the viewport.
+On an iPad mini in portrait (768×1024) this gave 115px cards with 5 columns; in
+landscape (1024×768) it gave one row of ~210px cards. The width-only sizing rule
+now applies to tablets as well as phones: cards are kept at 150–180px wide with
+columns filling the available width. The same iPad in portrait now shows 4 columns
+at 177px; in landscape, 6 columns at 156px. Laptops and desktops (1280px and wider)
+keep fit-to-screen-height: 10 columns at 121px on a 1440×900 display. On a
+tablet the whole-rows sum had no good answer in either orientation, so the fit
+now starts at 1280px (`FIT_TO_SLICE` in CardGrid.tsx) — and only with a fine
+pointer, because width cannot tell a big tablet from a laptop: an iPad Pro 13
+on its side (1366px) fitted ten 115px cards across. A touch screen with no
+mouse sizes on width at any width, the card growing with it up to 13rem.

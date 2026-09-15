@@ -28,7 +28,7 @@ export const photosCollection: CollectionConfig<PhotoRow> = {
   table: 'photos',
   path: '/photos',
   title: 'Photos',
-  subtitle: "Moments I've captured",
+  subtitle: 'My moments',
   noun: { singular: 'Photo', plural: 'Photos' },
 
   facets: [],

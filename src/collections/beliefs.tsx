@@ -17,7 +17,7 @@ export const beliefsCollection: CollectionConfig<BeliefRow> = {
   path: '/beliefs',
   adminOnly: true,
   title: 'Beliefs',
-  subtitle: 'Principles I live by',
+  subtitle: 'My principles',
   noun: { singular: 'Belief', plural: 'Beliefs' },
 
   facets: [],

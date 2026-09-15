@@ -14,12 +14,12 @@ export function Footer() {
                         rel="noopener noreferrer"
                         className="hover:opacity-70 transition-opacity flex items-center"
                     >
-                        <DotMatrixText text="Based in London,UK" size="xs" />
+                        <DotMatrixText text="Based in London,UK" size="xs" wrap={false} />
                     </a>
                     <DotMatrixClock />
                 </div>
                 <div className="flex items-center gap-4">
-                    <DotMatrixText text="Designed by Dhyan Shyam" size="xs" />
+                    <DotMatrixText text="Designed by Dhyan Shyam" size="xs" wrap={false} />
                 </div>
             </div>
         </footer>

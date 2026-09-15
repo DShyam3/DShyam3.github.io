@@ -24,7 +24,7 @@ export const articlesCollection: CollectionConfig<ArticleRow> = {
   table: 'articles',
   path: '/articles',
   title: 'Articles',
-  subtitle: 'Cool things on the internet',
+  subtitle: 'My reads',
   noun: { singular: 'Article', plural: 'Articles' },
 
   searchFields: ['title', 'author'],

@@ -66,7 +66,7 @@ export function PrivacyDialog() {
                 onClick={handleOpen}
                 className="flex items-center hover:opacity-70 transition-opacity cursor-pointer text-muted-foreground"
             >
-                <DotMatrixText text={`© ${new Date().getFullYear()}`} size="xs" />
+                <DotMatrixText text={`© ${new Date().getFullYear()}`} size="xs" wrap={false} />
             </button>
 
             {isOpen && (

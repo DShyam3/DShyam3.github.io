@@ -1,17 +1,14 @@
-import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Library, Tv } from 'lucide-react';
+import { Calendar, Library, Tv } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
+import { CARD_GRID } from '@/theme/layout';
 import { CountdownCard } from '@/components/shared/CountdownCard';
 import { UpNextRail } from '@/features/watchlist/components/UpNextRail';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
-import {
-  hasPlatformLogo,
-  PlatformBadge,
-  PlatformLogo,
-} from '@/features/watchlist/components/PlatformLogo';
+import { PlatformBadge } from '@/features/watchlist/components/PlatformLogo';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
 import { useUpNext } from '@/features/watchlist/useUpNext';
 import {
@@ -28,8 +25,10 @@ import {
 import {
   buildUpdatesFeed,
   daysUntil,
+  filterRecentByWindow,
   filterUpcomingByWindow,
   filterUpdatesByWindow,
+  getStatusColor,
   groupAnnouncementsByShow,
   groupRecentEpisodesByShow,
   isPremiereEpisode,
@@ -40,6 +39,7 @@ import {
   type UpdatesFeedRow,
   type UpdatesWindow,
 } from '@/features/watchlist/watchlist-utils';
+import { formatDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
 /** Which entity a click on a card or row resolves to -- looked up in
@@ -47,98 +47,28 @@ import { cn } from '@/lib/utils';
  *  can collide. */
 type EntityRef = { entityType: 'tv_show' | 'movie'; entityId: number };
 
-/** A row of horizontally-scrolling cards: a heading, then a keyboard-reachable
- *  scroller. `min-w-0` keeps the section from stretching its grid/flex column
- *  to fit the scroller's content -- without it the scroller grows the whole
- *  column and the page scrolls sideways (REHAUL_PLAN.md 8.C-bis).
- *
- *  `overflow-x-auto` forces the used value of `overflow-y` to `auto` too
- *  (the CSS rule for a box with one axis non-`visible`), which clips
- *  anything a card paints outside this box on hover or focus: the
- *  `-translate-y-1` lift (4px), the focus ring/outline (ring-2 +
- *  ring-offset-2, plus `.item-card:focus-visible`'s own 2px outline at a
- *  3px offset -- 5px total), and `--shadow-card-hover`'s blur (up to 30px
- *  in dark mode). `py-8` (32px) gives the scroller's own clip edge enough
- *  room above and below to paint all three without cropping; `-my-8`
- *  cancels the added height so cards sit exactly where they did and the
- *  gap to the next section is unchanged. Left/right are left alone: this
- *  same trick horizontally would bleed the scroller past its section (a
- *  block box with negative inline margins grows into that space either
- *  way `width` is computed), and `AppShell`'s `<main>` has an explicit
- *  `overflow-y-auto` that -- by the same rule -- makes its own `overflow-x`
- *  `auto` too, so that bleed would open a real, if narrow, page-level
- *  horizontal scrollbar. The trade-off: a card at either end of the rail
- *  can still lose a couple of pixels of ring or shadow sideways, the way
- *  most horizontal card rails do. */
-function NewsRow<T>({
-  heading,
-  items,
-  keyFor,
-  renderItem,
-}: {
-  heading: string;
-  items: T[];
-  keyFor: (item: T) => string;
-  renderItem: (item: T) => ReactNode;
-}) {
-  if (items.length === 0) return null;
-
-  return (
-    <section className="min-w-0 space-y-3">
-      <DotMatrixText text={heading} size="xs" />
-      {/* A plain wrapper, not the scroller itself, absorbs `space-y-3`'s
-          margin-top: that utility's compiled selector (two chained
-          `:not([hidden])`) outweighs a plain `-my-*` on the same element, so
-          a cancelling margin on the scroller itself would lose. See the
-          scroller's own comment for what the padding is for. */}
-      <div>
-        <div
-          className="flex gap-3 overflow-x-auto py-8 -my-8"
-          tabIndex={0}
-          role="region"
-          aria-label={heading}
-        >
-          {items.map((item) => (
-            <Fragment key={keyFor(item)}>{renderItem(item)}</Fragment>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/** The platform mark shown over an Out Now card: `PlatformLogo` where one
- *  exists, otherwise a plain text pill, both over a small scrim so either
- *  reads on any poster. Renders nothing when there is no platform. */
-function OutNowPlatformBadge({ platform }: { platform: string | null }) {
-  if (!platform) return null;
-  return (
-    <div className="absolute right-2 top-2 rounded-md bg-black/55 px-1.5 py-1">
-      {hasPlatformLogo(platform) ? (
-        <PlatformLogo platform={platform} size={14} />
-      ) : (
-        <span className="text-[10px] font-medium uppercase tracking-wide text-white">
-          {platform}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** Wide, image-filling card with the title over a dark scrim -- Out Now. The
- *  caption line is always reserved, invisible when absent, so the title sits
- *  on the same baseline whether or not the card has one. */
-function OutNowCard({
+/** Out Now's and Upcoming's card: the library's poster card
+ *  (`WatchlistCard`) in anatomy and classes -- a whole 2:3 poster, then
+ *  title, one sub line, and platform left / pill right -- so it sits in the
+ *  library's `.card-grid`, at the fixed size `.news-card-grid` gives it.
+ *  The artwork is portrait, which is why these are not landscape cards: a
+ *  landscape frame crops a poster through its title art. Without the library
+ *  card's actions, which belong there. */
+function NewsPosterCard({
   title,
   poster,
+  sub,
   platform,
-  caption,
+  pill,
+  srLabel,
   onClick,
 }: {
   title: string;
   poster: string | null;
+  sub: string;
   platform: string | null;
-  caption?: string;
+  pill?: ReactNode;
+  srLabel?: string;
   onClick: () => void;
 }) {
   const [broken, setBroken] = useState(false);
@@ -148,41 +78,68 @@ function OutNowCard({
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${title} — open details`}
-      className="item-card relative aspect-[16/9] w-60 shrink-0 overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      aria-label={`${srLabel ?? title} — open details`}
+      className="item-card group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      {showFallback ? (
-        <div className="missing-art absolute inset-0 flex items-center justify-center p-4 text-center">
-          <span className="line-clamp-3 font-serif text-lg font-medium leading-tight">
+      <div className="relative aspect-[2/3] overflow-hidden bg-muted">
+        {showFallback ? (
+          <div className="missing-art flex h-full w-full flex-col items-center justify-center gap-3 p-4 text-center">
+            <Tv className="h-5 w-5" />
+            <span className="line-clamp-3 text-xs font-medium">{title}</span>
+          </div>
+        ) : (
+          <img
+            src={poster ?? undefined}
+            alt={title}
+            loading="lazy"
+            onError={() => setBroken(true)}
+            className="h-full w-full object-contain"
+          />
+        )}
+      </div>
+
+      <div className="card-body p-2.5">
+        <h3 className="card-title min-h-[2.5rem] font-serif text-sm font-medium leading-tight">
+          <span className="line-clamp-3" style={{ textWrap: 'balance' }}>
             {title}
           </span>
+        </h3>
+        <p className="card-sub mt-0.5 min-h-[1rem] text-xs text-muted-foreground">{sub}</p>
+        <div className="card-meta mt-1.5 flex min-h-[22px] flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <PlatformBadge platform={platform ?? undefined} size={18} />
+          {pill}
         </div>
-      ) : (
-        <img
-          src={poster ?? undefined}
-          alt={title}
-          loading="lazy"
-          onError={() => setBroken(true)}
-          className="absolute inset-0 h-full w-full object-cover object-top"
-        />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-      <OutNowPlatformBadge platform={platform} />
-      <div className="absolute inset-x-3 bottom-3 text-white">
-        <p className="line-clamp-2 text-base font-medium leading-tight drop-shadow">{title}</p>
-        <p className={cn('mt-0.5 text-xs text-white/70', !caption && 'invisible')}>
-          {caption || ' '}
-        </p>
       </div>
     </button>
   );
 }
 
+/** The countdown pill on an Upcoming card, styled as the library card's
+ *  dated status pill. Just "3d", not "Out in 3d": at a narrow card
+ *  width, the longer text pushed the pill onto its own line
+ *  beside a text platform badge, and those cards stood taller than their
+ *  row. The card's accessible name carries the full sentence. */
+function CountdownPill({ days }: { days: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium tabular-nums',
+        getStatusColor('Releases in'),
+      )}
+    >
+      <Calendar className="h-3 w-3 shrink-0 text-muted-foreground" />
+      {days <= 0 ? 'Today' : `${days}d`}
+    </span>
+  );
+}
+
 /** One row of the merged Updates list, laid out on fixed grid tracks --
- *  poster | title | line | platform | date -- so every column lines up down
- *  the list. Below `sm` it collapses to poster | title (with the line
- *  stacked beneath) | date, hiding the platform column (REHAUL_PLAN.md
- *  8.C-bis). */
+ *  poster | title (with the line stacked beneath) | platform | date -- so
+ *  every column lines up down the list. The line sits under the title rather
+ *  than in a column of its own, which on a wide screen left a gap across the
+ *  middle of every row. Below `sm` the platform column is hidden
+ *  (REHAUL_PLAN.md 8.C-bis). */
 function UpdateRow({
   row,
   today,
@@ -200,9 +157,9 @@ function UpdateRow({
       type="button"
       onClick={onClick}
       aria-label={`${row.title} — open details`}
-      className="grid w-full grid-cols-[40px_minmax(0,1fr)_64px] items-center gap-x-3 gap-y-0.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[40px_minmax(0,1.4fr)_minmax(0,1fr)_88px_72px]"
+      className="grid w-full grid-cols-[44px_minmax(0,1fr)_64px] items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[56px_minmax(0,1fr)_104px_72px] sm:gap-x-4"
     >
-      <div className="col-start-1 row-span-2 row-start-1 h-12 w-8 shrink-0 self-center overflow-hidden rounded bg-muted sm:row-span-1">
+      <div className="col-start-1 row-span-2 row-start-1 aspect-[2/3] w-11 shrink-0 self-center overflow-hidden rounded bg-muted sm:w-14">
         {showFallback ? (
           <div className="missing-art flex h-full w-full items-center justify-center">
             <Tv className="h-3.5 w-3.5" />
@@ -218,19 +175,19 @@ function UpdateRow({
         )}
       </div>
 
-      <span className="col-start-2 row-start-1 min-w-0 truncate font-serif text-sm font-medium">
+      <span className="col-start-2 row-start-1 min-w-0 self-end truncate font-serif text-sm font-medium sm:text-base">
         {row.title}
       </span>
 
-      <span className="col-start-2 row-start-2 min-w-0 truncate text-xs text-muted-foreground sm:col-start-3 sm:row-start-1">
+      <span className="col-start-2 row-start-2 min-w-0 self-start truncate text-xs text-muted-foreground sm:text-sm">
         {row.sentence}
       </span>
 
-      <span className="hidden min-w-0 items-center sm:col-start-4 sm:row-start-1 sm:flex">
-        <PlatformBadge platform={row.platform ?? undefined} size={14} />
+      <span className="hidden min-w-0 items-center sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:flex">
+        <PlatformBadge platform={row.platform ?? undefined} size={16} />
       </span>
 
-      <span className="col-start-3 row-span-2 row-start-1 shrink-0 justify-self-end text-right text-xs text-muted-foreground sm:col-start-5 sm:row-span-1">
+      <span className="col-start-3 row-span-2 row-start-1 shrink-0 justify-self-end text-right text-xs text-muted-foreground sm:col-start-4 sm:text-sm">
         {relativeDay(row.occurredAt, today)}
       </span>
     </button>
@@ -238,9 +195,8 @@ function UpdateRow({
 }
 
 /** THIS WEEK / THIS MONTH -- the one page-level window (REHAUL_PLAN.md
- *  8.C-bis) that scopes both Upcoming (forward) and Updates (backward); see
- *  `WatchlistNews`'s toolbar, the only place it is rendered. Out Now stays
- *  fixed at 7 days and does not read this. */
+ *  8.C-bis) that scopes Out Now and Updates (backward) and Upcoming
+ *  (forward); see `WatchlistNews`'s toolbar, the only place it is rendered. */
 const NEWS_WINDOW_OPTIONS: { key: UpdatesWindow; label: string }[] = [
   { key: 'week', label: 'THIS WEEK' },
   { key: 'month', label: 'THIS MONTH' },
@@ -321,6 +277,7 @@ interface UpcomingRow extends EntityRef {
   key: string;
   title: string;
   poster: string | null;
+  platform: string;
   date: string;
   days: number;
   sentence: string;
@@ -353,26 +310,18 @@ function UpcomingGrid({
           {activeWindow === 'week' ? 'Nothing coming this week' : 'Nothing coming this month'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
+        <div className={cn(CARD_GRID, 'news-card-grid')}>
           {items.map((item) => (
-            <button
+            <NewsPosterCard
               key={item.key}
-              type="button"
+              title={item.title}
+              poster={item.poster}
+              platform={item.platform || null}
+              sub={formatDate(item.date)}
+              pill={<CountdownPill days={item.days} />}
+              srLabel={`${item.title} -- ${item.sentence}`}
               onClick={() => onSelect(item)}
-              aria-label={`${item.title} — open details`}
-              className="rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <CountdownCard
-                label={item.title}
-                date={item.date}
-                days={item.days}
-                srLabel={`${item.title} -- ${item.sentence}`}
-                image={item.poster}
-                imageAlt={item.title}
-                size="compact"
-                className="w-full"
-              />
-            </button>
+            />
           ))}
         </div>
       )}
@@ -398,7 +347,7 @@ const WatchlistNews = () => {
   const { watchlist, getAutoStatus, isEpisodeWatched, isSeasonWatched } = useWatchlist();
   const [selectedRef, setSelectedRef] = useState<EntityRef | null>(null);
   // Page level (REHAUL_PLAN.md 8.C-bis): drives both Upcoming (forward) and
-  // Updates (backward). Out Now stays fixed at 7 days and does not read this.
+  // Updates (backward), and Out Now (backward) too.
   const [newsWindow, setNewsWindow] = useState<UpdatesWindow>(readStoredNewsWindow);
 
   useEffect(() => {
@@ -427,12 +376,14 @@ const WatchlistNews = () => {
   const { upNext } = useUpNext();
   const watchNextIds = new Set(upNext.map((item) => item.tv_show_id));
 
-  // Out Now is this week only (REHAUL_PLAN.md 8.C-bis) -- it was 14 days for
-  // episodes and 30 for movies.
-  const { episodes: outNowEpisodes, loading: outNowTvLoading } = useRecentEpisodes(7);
-  const { movies: outNowMovies, loading: outNowMovieLoading } = useRecentMovies(7);
+  // Out Now and Updates both fetch their widest window (30 days) once; the
+  // page-level window filters client-side (filterRecentByWindow here,
+  // filterUpdatesByWindow below), so switching it never refetches. The one
+  // episode fetch serves both sections.
+  const { episodes: recentEpisodes, loading: recentLoading } = useRecentEpisodes(30);
+  const { movies: outNowMovies, loading: outNowMovieLoading } = useRecentMovies(30);
 
-  const outNowPremiereCandidates = premieresOf(outNowEpisodes);
+  const outNowPremiereCandidates = premieresOf(recentEpisodes);
   const { episodesBySeason: premiereSeasonEpisodes, loading: premiereSeasonLoading } =
     usePremiereSeasonEpisodes(
       outNowPremiereCandidates.map((ep) => ({
@@ -440,7 +391,7 @@ const WatchlistNews = () => {
         season_number: ep.season_number,
       })),
     );
-  const outNowLoading = outNowTvLoading || outNowMovieLoading || premiereSeasonLoading;
+  const outNowLoading = recentLoading || outNowMovieLoading || premiereSeasonLoading;
 
   // A premiere drops out of Out Now when its season is already finished (the
   // user is caught up -- see isSeasonFinished) or when the same show already
@@ -451,11 +402,9 @@ const WatchlistNews = () => {
     if (seasonEpisodes && isSeasonFinished(seasonEpisodes, today)) return false;
     return true;
   });
-  const outNowTvIds = new Set(outNowPremieres.map((ep) => ep.tv_show_id));
-
-  const outNowItems: OutNowRow[] = [
-    ...outNowPremieres.map(
-      (ep): OutNowRow => ({
+  const outNowItems: OutNowRow[] = filterRecentByWindow(
+    [
+      ...outNowPremieres.map((ep): OutNowRow => ({
         key: `tv-${ep.tv_show_id}-${ep.season_number}`,
         kind: 'premiere',
         title: ep.title,
@@ -464,10 +413,8 @@ const WatchlistNews = () => {
         date: ep.release_date,
         seasonNumber: ep.season_number,
         entityId: ep.tv_show_id,
-      }),
-    ),
-    ...outNowMovies.map(
-      (movie): OutNowRow => ({
+      })),
+      ...outNowMovies.map((movie): OutNowRow => ({
         key: `movie-${movie.id}`,
         kind: 'movie',
         title: movie.title,
@@ -475,9 +422,16 @@ const WatchlistNews = () => {
         platform: movie.platform,
         date: movie.release_date,
         entityId: movie.id,
-      }),
-    ),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+      })),
+    ],
+    newsWindow,
+    today,
+  ).sort((a, b) => b.date.localeCompare(a.date));
+  // From the rendered, windowed rows -- a premiere outside the window is not on
+  // screen, so it must not keep its show out of Updates either.
+  const outNowTvIds = new Set(
+    outNowItems.filter((item) => item.kind === 'premiere').map((item) => item.entityId),
+  );
 
   const { episodes: upcomingEpisodes, loading: upcomingTvLoading } = useUpcomingEpisodes();
   const { movies: upcomingMovies, loading: upcomingMovieLoading } = useUpcomingMovies();
@@ -489,6 +443,7 @@ const WatchlistNews = () => {
         key: `tv-${ep.tv_show_id}-${ep.season_number}`,
         title: ep.title,
         poster: ep.poster,
+        platform: ep.platform,
         date: ep.release_date,
         days,
         sentence: seasonPremiereSentence(ep.season_number, days),
@@ -502,6 +457,7 @@ const WatchlistNews = () => {
         key: `movie-${movie.id}`,
         title: movie.title,
         poster: movie.poster,
+        platform: movie.platform,
         date: movie.release_date,
         days,
         sentence: movieReleaseSentence(days, movie.release_date),
@@ -519,7 +475,6 @@ const WatchlistNews = () => {
   // so switching it never refetches.
   const { events, loading: eventsLoading } = useWatchlistEvents(30);
 
-  const { episodes: recentEpisodes, loading: recentLoading } = useRecentEpisodes(30);
   // A show already shown in Watch Next or Out Now does not also get a
   // released-episode row here (priority Watch Next > Out Now > Updates).
   // Platform and status rows are not deduplicated -- they are different news.
@@ -541,18 +496,34 @@ const WatchlistNews = () => {
 
   const toolbar = (
     <div className="flex items-center justify-between px-4 pt-2 md:px-0">
-      <nav aria-label="News time range" className="flex items-center gap-x-3">
-        {NEWS_WINDOW_OPTIONS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => setNewsWindow(option.key)}
-            aria-pressed={newsWindow === option.key}
-            className={cn('nav-link py-1', newsWindow === option.key && 'nav-link-active')}
-          >
-            <DotMatrixText text={option.label} size="xs" wrap={false} />
-          </button>
-        ))}
+      {/* A segmented control rather than nav-link text: `nav-link-active` only
+          changes weight and tints to --primary, which in light mode is nearly
+          the same dark tone as unselected text, so the selected window was
+          not visible. The selected option is a filled --primary pill. */}
+      <nav
+        aria-label="News time range"
+        className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-card/60 p-0.5"
+      >
+        {NEWS_WINDOW_OPTIONS.map((option) => {
+          const selected = newsWindow === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setNewsWindow(option.key)}
+              aria-pressed={selected}
+              className={cn(
+                'rounded-full px-3 py-1 transition-colors duration-200',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                selected
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-foreground/75 hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <DotMatrixText text={option.label} size="xs" wrap={false} />
+            </button>
+          );
+        })}
       </nav>
       <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 sm:h-9">
         <Link to="/watchlist/library">
@@ -581,30 +552,31 @@ const WatchlistNews = () => {
           </section>
         )}
 
-        {!outNowLoading && (
-          <NewsRow
-            heading="OUT NOW"
-            items={outNowItems}
-            keyFor={(item) => item.key}
-            renderItem={(item) => (
-              <OutNowCard
-                title={item.title}
-                poster={item.poster}
-                platform={item.platform}
-                caption={
-                  item.kind === 'premiere' && item.seasonNumber > 1
-                    ? `Season ${item.seasonNumber}`
-                    : undefined
-                }
-                onClick={() =>
-                  openDetail({
-                    entityType: item.kind === 'premiere' ? 'tv_show' : 'movie',
-                    entityId: item.entityId,
-                  })
-                }
-              />
-            )}
-          />
+        {!outNowLoading && outNowItems.length > 0 && (
+          <section className="min-w-0 space-y-3">
+            <DotMatrixText text="OUT NOW" size="xs" />
+            <div className={cn(CARD_GRID, 'news-card-grid')}>
+              {outNowItems.map((item) => (
+                <NewsPosterCard
+                  key={item.key}
+                  title={item.title}
+                  poster={item.poster}
+                  platform={item.platform}
+                  sub={
+                    item.kind === 'premiere' && item.seasonNumber > 1
+                      ? `Season ${item.seasonNumber} · ${formatDate(item.date)}`
+                      : formatDate(item.date)
+                  }
+                  onClick={() =>
+                    openDetail({
+                      entityType: item.kind === 'premiere' ? 'tv_show' : 'movie',
+                      entityId: item.entityId,
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </section>
         )}
 
         <UpNextRail

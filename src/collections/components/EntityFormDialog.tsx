@@ -405,8 +405,9 @@ export function EntityFormDialog<T extends CollectionRow, R>({
         </DialogHeader>
 
         <form
+          id={`${mode}-${config.table}-form`}
           onSubmit={handleSubmit}
-          className="space-y-4 mt-4 flex-1 min-h-0 overflow-y-auto px-6"
+          className="space-y-4 mt-4 flex-1 min-h-0 overflow-y-auto px-6 pb-1"
         >
           <fieldset disabled={saving || uploading} className="space-y-4">
           {saveError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{saveError}</p>}
@@ -528,31 +529,35 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             );
           })}
 
-          <div className="flex gap-3 pt-4 pb-6 sticky bottom-0 bg-background">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={uploading || saving}
-              onClick={() => setOpen(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1 gap-2" disabled={uploading || saving} aria-busy={uploading || saving}>
-              {uploading || saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {uploading ? 'Uploading…' : 'Saving…'}
-                </>
-              ) : mode === 'add' ? (
-                `Add ${config.noun.singular}`
-              ) : (
-                'Save Changes'
-              )}
-            </Button>
-          </div>
           </fieldset>
         </form>
+
+        {/* Outside the scrolling form rather than sticky inside it: a sticky
+            row needs an opaque fill to hide the fields beneath, and that fill
+            showed as a dark slab against the dialog's translucent gradient. */}
+        <div className="flex gap-3 px-6 pt-4 pb-6 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={uploading || saving}
+            onClick={() => setOpen(false)}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form={`${mode}-${config.table}-form`} className="flex-1 gap-2" disabled={uploading || saving} aria-busy={uploading || saving}>
+            {uploading || saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {uploading ? 'Uploading…' : 'Saving…'}
+              </>
+            ) : mode === 'add' ? (
+              `Add ${config.noun.singular}`
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -13,11 +13,11 @@ export interface LinkRow extends CollectionRow {
 
 /** Single source of truth for the categories: nav, form select and card badge. */
 const CATEGORIES = [
-  { key: 'websites', label: 'Websites' },
-  { key: 'iphone-apps', label: 'iPhone Apps' },
-  { key: 'ipad-apps', label: 'iPad Apps' },
-  { key: 'mac-apps', label: 'Mac Apps' },
   { key: 'dev-setup', label: 'Dev Setup' },
+  { key: 'websites', label: 'Websites' },
+  { key: 'iphone-apps', label: 'iPhone' },
+  { key: 'ipad-apps', label: 'iPad' },
+  { key: 'mac-apps', label: 'Mac' },
 ];
 
 const labelFor = (key: string) =>

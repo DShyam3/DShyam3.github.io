@@ -781,3 +781,23 @@ export const filterUpcomingByWindow = <T extends UpcomingWindowCandidate>(
         return age !== null && age >= 0 && age <= windowDays;
     });
 };
+
+/**
+ * Keeps only the rows released within the selected window, counting back from
+ * today -- `filterUpcomingByWindow`'s backward twin, and the same boundary as
+ * `filterUpdatesByWindow`: today counts, a release exactly `windowDays` ago
+ * counts, one day earlier does not. A future, null or unparseable date is
+ * dropped. Used by Out Now, which fetches its widest window (30 days) once
+ * and filters client-side so switching the window never refetches.
+ */
+export const filterRecentByWindow = <T extends UpcomingWindowCandidate>(
+    rows: T[],
+    window: UpdatesWindow,
+    today: Date,
+): T[] => {
+    const windowDays = UPDATES_WINDOW_DAYS[window];
+    return rows.filter((row) => {
+        const age = daysUntil(row.date, today);
+        return age !== null && age <= 0 && age >= -windowDays;
+    });
+};

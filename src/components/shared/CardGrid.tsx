@@ -7,8 +7,20 @@ import { CARD_GRID } from '@/theme/layout';
  * it leaves is only worth it above this: a phone's slice is half a viewport
  * and the cards it would have to draw to fill it are too small to read. Below
  * it they keep their natural size and `<main>` scrolls past them.
+ *
+ * 1280px, not md: on a tablet the whole-rows sum had no good answer in either
+ * orientation. An iPad mini held upright fitted two rows at 115px cards, five
+ * across; turned sideways, two rows would not clear the floor, so it fell back
+ * to one row of ~210px cards, each centred in a wider column. Between md and
+ * this, `.card-grid` sizes on width alone -- see the tablet rule in
+ * src/index.css.
+ *
+ * And a fine pointer, because width alone cannot tell a big tablet from a
+ * laptop: an iPad Pro 13 on its side is 1366px wide, and fitted two rows
+ * there came to ten 115px cards across. A touch screen with no mouse gets the
+ * tablet rule at any width.
  */
-const FIT_TO_SLICE = '(min-width: 768px)';
+const FIT_TO_SLICE = '(min-width: 1280px) and (hover: hover) and (pointer: fine)';
 
 /**
  * Reads a length written on the grid as a CSS custom property. They are all

@@ -138,14 +138,22 @@ export function Header({
               with the leftover width trailing off the end. From md the row is
               only as wide as its contents and the property does nothing. */}
           <div className="flex items-center justify-between gap-3 md:gap-4">
+            {/* A tablet held upright (768-1023px) has the one-row header but
+                not the width for it once the social links open: identity,
+                three icons, title and controls come to ~850px, and the title
+                ran into the icons. It steps aside while they are open. */}
             <div
-              className="text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity"
+              className={cn(
+                'text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity',
+                socialOpen && 'md:max-lg:hidden',
+              )}
               onClick={handleTitleClick}
             >
               <div>
                 <DotMatrixText
                   text={title.toUpperCase()}
                   size="sm"
+                  wrap={false}
                   className="text-foreground justify-start md:justify-end"
                 />
               </div>
@@ -153,6 +161,7 @@ export function Header({
                 <DotMatrixText
                   text={subtitle.toUpperCase()}
                   size="xs"
+                  wrap={false}
                   className="text-muted-foreground justify-start md:justify-end mt-1"
                 />
               </div>
