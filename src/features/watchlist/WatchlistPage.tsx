@@ -684,8 +684,7 @@ const Watchlist = () => {
               size="sm"
               onClick={() => setShowSyncLog(!showSyncLog)}
               className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
-              aria-label="Sync"
-              title="Sync"
+              aria-label={syncing ? `Syncing ${syncProgress}%` : 'Sync'}
             >
               <History className={cn('h-4 w-4', syncing && 'animate-spin')} />
               <DotMatrixText
@@ -702,7 +701,6 @@ const Watchlist = () => {
             onClick={() => setShowSchedule(!showSchedule)}
             className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
             aria-label="Weekly schedule"
-            title="Weekly schedule"
           >
             <CalendarDays className="h-4 w-4" />
             <DotMatrixText
@@ -718,7 +716,7 @@ const Watchlist = () => {
             size="sm"
             className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
           >
-            <Link to="/watchlist" aria-label="News" title="News">
+            <Link to="/watchlist" aria-label="News">
               <Newspaper className="h-4 w-4" />
               <DotMatrixText
                 text="NEWS"

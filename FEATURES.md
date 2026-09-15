@@ -25,13 +25,13 @@ Dot-matrix identity rendered in real text — Doto as a variable font, where the
 dots are circles that fuse as weight increases, so the look is reached for with
 weight rather than font-size. A dot-matrix globe and clock sit beside it.
 
-Experience and education are rows, not markup: editable in place when signed in
-as admin, skeleton-loaded otherwise. The CV uploads to private storage and
-downloads through a short-lived signed URL.
+Experience and education appear as one timeline, newest first, roles and degrees
+interleaved by start date. Both are editable in place when signed in as admin,
+skeleton-loaded otherwise. The CV uploads to private storage and downloads
+through a short-lived signed URL. Admins get a second add button for education.
 
-On a tablet held upright, Experience spans the full width with each role's title
-and employment type on one line and its location and dates on another; Education
-and the projects card share the row beneath it.
+On a tablet held upright, the timeline spans the full width. The projects card
+sits below it, filling the row entirely.
 
 ## Collections
 

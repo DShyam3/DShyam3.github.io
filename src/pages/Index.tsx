@@ -18,6 +18,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 
 import { useExperience, useEducation, Experience, Education } from '@/hooks/useResume';
+import { buildResumeTimeline } from '@/lib/resume-timeline';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ExperienceDialog, EducationDialog } from '@/components/admin/ResumeDialogs';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
@@ -33,6 +34,7 @@ const Index = () => {
   const { education, loading: eduLoading, addEducation, updateEducation, removeEducation } = useEducation();
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { content: siteContent } = useSiteContent(['about_me_1', 'about_me_2']);
+  const timeline = buildResumeTimeline(experience, education);
 
   const [expDialogOpen, setExpDialogOpen] = useState(false);
   const [eduDialogOpen, setEduDialogOpen] = useState(false);
@@ -141,80 +143,90 @@ const Index = () => {
               />
             </div>
 
-            {/* Experience & Education. `contents` dissolves this wrapper so
-                each card takes its own cell. Two columns: experience spans
-                the row, education and projects share the row under it --
-                stacked in one half-width column, each entry had ~216px and
-                its title and dates wrapped, and projects stretched to match.
-                Three columns: experience under About Me, education above
-                projects, leaving column 1 free for a full-height portrait. */}
-            <div className="contents">
-              {/* Experience */}
-              <div data-palette="sky" className="ambient-card md:col-span-2 xl:col-start-1 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
-                  <div className="w-full lg:w-auto lg:shrink-0">
-                    <DotMatrixText
-                      text="EXPERIENCE"
-                      size="sm"
-                      wrap={false}
-                      className="text-foreground tracking-widest pl-1 font-semibold"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-end">
-                    {isAdmin && (
-                      <>
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          className="hidden"
-                          ref={cvInputRef}
-                          onChange={handleCvUpload}
-                        />
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8 rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200 flex-shrink-0"
-                          onClick={() => { setEditingExp(undefined); setExpDialogOpen(true); }}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                        <ActionButton
-                          variant="outline"
-                          icon={uploadingCv ? Loader2 : Upload}
-                          iconClassName={uploadingCv ? 'animate-spin' : undefined}
-                          label="Upload CV"
-                          labelClassName="hidden lg:inline-flex"
-                          className="rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground hover:border-transparent shrink-0"
-                          onClick={() => cvInputRef.current?.click()}
-                          disabled={uploadingCv}
-                        />
-                      </>
-                    )}
-                    <ActionButton
-                      variant="outline"
-                      icon={Download}
-                      label="Download CV"
-                      className="rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground hover:border-transparent shrink-0 max-w-full"
-                      onClick={() => openAndDownload(cvUrl, 'Dhyan_Shyam_CV')}
-                    />
-                  </div>
+            {/* Experience and education, one timeline: every role and degree
+                by start date, newest first (see buildResumeTimeline). Two
+                columns: it spans the row and projects spans the row under it.
+                Three columns: it takes columns 1-2 of row 2, under the
+                portrait and About Me, and projects takes all of column 3. */}
+            <div data-palette="sky" className="ambient-card md:col-span-2 xl:col-start-1 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
+                <div className="w-full lg:w-auto lg:shrink-0">
+                  <DotMatrixText
+                    text="EXPERIENCE"
+                    size="sm"
+                    wrap={false}
+                    className="text-foreground tracking-widest pl-1 font-semibold"
+                  />
                 </div>
-                <div className="border-b border-border/50 mb-6"></div>
-                <div className="space-y-0">
-                  {expLoading ? (
-                    <div className="space-y-6">
-                      {[...Array(2)].map((_, i) => (
-                        <Skeleton key={i} className="h-20 w-full rounded-xl" />
-                      ))}
-                    </div>
-                  ) : (
-                    experience.map((item) => (
-                      <div key={item.id} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
+                <div className="flex flex-wrap gap-2 justify-end">
+                  {isAdmin && (
+                    <>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        ref={cvInputRef}
+                        onChange={handleCvUpload}
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200 flex-shrink-0"
+                        onClick={() => { setEditingExp(undefined); setExpDialogOpen(true); }}
+                        aria-label="Add experience"
+                        title="Add experience"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200 flex-shrink-0"
+                        onClick={() => { setEditingEdu(undefined); setEduDialogOpen(true); }}
+                        aria-label="Add education"
+                        title="Add education"
+                      >
+                        <GraduationCap className="w-4 h-4" />
+                      </Button>
+                      <ActionButton
+                        variant="outline"
+                        icon={uploadingCv ? Loader2 : Upload}
+                        iconClassName={uploadingCv ? 'animate-spin' : undefined}
+                        label="Upload CV"
+                        labelClassName="hidden lg:inline-flex"
+                        className="rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground hover:border-transparent shrink-0"
+                        onClick={() => cvInputRef.current?.click()}
+                        disabled={uploadingCv}
+                      />
+                    </>
+                  )}
+                  <ActionButton
+                    variant="outline"
+                    icon={Download}
+                    label="Download CV"
+                    className="rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground hover:border-transparent shrink-0 max-w-full"
+                    onClick={() => openAndDownload(cvUrl, 'Dhyan_Shyam_CV')}
+                  />
+                </div>
+              </div>
+              <div className="border-b border-border/50 mb-6"></div>
+              <div className="space-y-0">
+                {expLoading || eduLoading ? (
+                  <div className="space-y-6">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-20 w-full rounded-xl" />
+                    ))}
+                  </div>
+                ) : (
+                  timeline.map((entry) => {
+                    const org = entry.kind === 'experience' ? entry.item.company : entry.item.school;
+                    return (
+                      <div key={`${entry.kind}-${entry.item.id}`} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
                         <div className="relative flex items-start gap-4">
                           <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
                             <img
-                              src={item.logo_url}
-                              alt={item.company}
+                              src={entry.item.logo_url}
+                              alt={org}
                               className="w-full h-full object-contain no-outline"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
@@ -222,33 +234,44 @@ const Index = () => {
                               }}
                             />
                             <span className="hidden font-bold text-foreground text-xs tracking-widest w-full h-full flex items-center justify-center text-center leading-tight">
-                              {item.company.substring(0, 4).toUpperCase()}
+                              {org.substring(0, 4).toUpperCase()}
                             </span>
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium leading-snug text-foreground">
-                              {item.title}
-                              {item.employment_type && (
+                              {entry.kind === 'experience' ? entry.item.title : entry.item.degree}
+                              {entry.kind === 'experience' && entry.item.employment_type && (
                                 <span className="text-muted-foreground">
                                   {' · '}
-                                  {item.employment_type}
+                                  {entry.item.employment_type}
                                 </span>
                               )}
                             </p>
                             <p className="text-sm font-medium leading-snug text-foreground">
-                              {item.company}
+                              {org}
                             </p>
                             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground/80">
-                              {item.location} | {item.start_date} - {item.end_date}
+                              {[entry.item.location, `${entry.item.start_date} - ${entry.item.end_date}`]
+                                .filter(Boolean)
+                                .join(' | ')}
                             </p>
                           </div>
                           {isAdmin && (
-                            <div className="absolute top-0 right-0 flex items-center gap-2 rounded-lg bg-card/90 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                            <div className="ml-auto flex shrink-0 items-center gap-2 opacity-100 lg:opacity-0 lg:group-hover/item:opacity-100 lg:group-focus-within/item:opacity-100 transition-opacity">
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 rounded-lg hover:bg-primary/10"
-                                onClick={() => { setEditingExp(item); setExpDialogOpen(true); }}
+                                aria-label={`Edit ${org}`}
+                                onClick={() => {
+                                  if (entry.kind === 'experience') {
+                                    setEditingExp(entry.item);
+                                    setExpDialogOpen(true);
+                                  } else {
+                                    setEditingEdu(entry.item);
+                                    setEduDialogOpen(true);
+                                  }
+                                }}
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </Button>
@@ -256,11 +279,19 @@ const Index = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-destructive"
+                                aria-label={`Delete ${org}`}
                                 onClick={() =>
-                                  askDelete({
-                                    name: `${item.title} // ${item.company}`,
-                                    onConfirm: () => removeExperience(item.id),
-                                  })
+                                  askDelete(
+                                    entry.kind === 'experience'
+                                      ? {
+                                          name: `${entry.item.title} // ${entry.item.company}`,
+                                          onConfirm: () => removeExperience(entry.item.id),
+                                        }
+                                      : {
+                                          name: entry.item.degree,
+                                          onConfirm: () => removeEducation(entry.item.id),
+                                        },
+                                  )
                                 }
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -269,92 +300,15 @@ const Index = () => {
                           )}
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Education */}
-              <div data-palette="lavender" className="ambient-card xl:col-start-3 xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
-                <div className="flex items-center justify-between mb-4">
-                  <DotMatrixText
-                    text="EDUCATION"
-                    size="sm"
-                    className="text-foreground tracking-widest pl-1 font-semibold"
-                  />
-                  {isAdmin && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all duration-200"
-                      onClick={() => { setEditingEdu(undefined); setEduDialogOpen(true); }}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-                <div className="border-b border-border/50 mb-6"></div>
-                <div className="space-y-0">
-                  {eduLoading ? (
-                    <div className="space-y-6">
-                      {[...Array(2)].map((_, i) => (
-                        <Skeleton key={i} className="h-20 w-full rounded-xl" />
-                      ))}
-                    </div>
-                  ) : (
-                    education.map((item) => (
-                      <div key={item.id} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
-                        <div className="relative flex items-start gap-4">
-                          <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
-                            <img
-                              src={item.logo_url}
-                              alt={item.school}
-                              className="w-full h-full object-contain no-outline"
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium leading-snug text-foreground">
-                              {item.degree}
-                            </p>
-                            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground/80">
-                              {[item.school, item.location].filter(Boolean).join(', ')} | {item.start_date} - {item.end_date}
-                            </p>
-                          </div>
-                          {isAdmin && (
-                            <div className="absolute top-0 right-0 flex items-center gap-2 rounded-lg bg-card/90 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 rounded-lg hover:bg-primary/10"
-                                onClick={() => { setEditingEdu(item); setEduDialogOpen(true); }}
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-destructive"
-                                onClick={() =>
-                                  askDelete({
-                                    name: item.degree,
-                                    onConfirm: () => removeEducation(item.id),
-                                  })
-                                }
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
-            {/* Projects Portfolio (Full Fill Bottom) */}
-            <div data-palette="peach" className="ambient-card xl:col-start-3 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
+            {/* Projects Portfolio. Two columns: the full row under the
+                timeline. Three columns: all of column 3. */}
+            <div data-palette="peach" className="ambient-card md:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-start-1 xl:row-span-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
                 <FolderGit2 className="w-8 h-8 text-primary/70" />
               </div>
