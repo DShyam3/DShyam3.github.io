@@ -93,7 +93,10 @@ attack surface of this site is Supabase, and it was audited separately
   read from the request body, so it cannot be steered. The domain that brand
   search returns is never fetched directly either — it is handed back to
   Brandfetch's own CDN as a path — so a hostile search response cannot point us
-  at an internal address. What gets stored is decided by magic bytes, not by
+  at an internal address. Neither request follows a redirect on trust: the
+  brand search refuses redirects outright and treats a 3xx as a failed search,
+  and the image fetch follows at most 3, re-checking every hop against the
+  same two-host allowlist and refusing anything that is not `https`. What gets stored is decided by magic bytes, not by
   the remote host's `Content-Type`, capped at 256 KB, and SVG is refused:
   served from our own storage origin it could execute script if opened
   directly.

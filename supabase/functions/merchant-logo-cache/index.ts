@@ -266,12 +266,22 @@ async function searchBrand(
   try {
     res = await fetch(url, {
       headers: { 'Accept': 'application/json' },
+      // Never follow a redirect from the search API. The default ('follow')
+      // would chase a 3xx to any host, from a function holding the service
+      // role key -- the hole fetchImage closes by re-checking every hop. A
+      // search has no reason to redirect, so a 3xx is treated like any other
+      // failed search rather than followed.
+      redirect: 'manual',
       signal: AbortSignal.timeout(8000),
     })
   } catch {
     return null
   }
 
+  if (res.status >= 300 && res.status <= 399) {
+    await res.body?.cancel()
+    return null
+  }
   if (res.status === 429) {
     await res.body?.cancel()
     throw new RateLimited()

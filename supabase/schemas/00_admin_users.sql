@@ -44,20 +44,14 @@ ALTER TABLE ONLY "public"."admin_users"
 
 ALTER TABLE "public"."admin_users" ENABLE ROW LEVEL SECURITY;
 
--- An administrator may read the list, which is what lets the account page say
--- who has access. Nobody may write it through the API: granting administrator
--- rights is not something an administrator session should be able to do by
--- sending a request, so inserts and deletes go through the service role (the
--- seed script, or the SQL editor). RLS on with no write policy denies the rest
--- by default.
-CREATE POLICY "Admin read" ON "public"."admin_users"
-    FOR SELECT TO "authenticated" USING ("public"."is_admin"());
-
--- Note on recursion: that policy calls a function that reads this table.
--- `is_admin()` is SECURITY DEFINER and owned by postgres, and a table's owner
--- is exempt from its own RLS, so the inner read does not re-enter the policy.
--- This table must therefore never be given FORCE ROW LEVEL SECURITY, which
--- would remove that exemption and turn the check into infinite recursion.
+-- RLS is enabled here, with the table, so admin_users is never briefly
+-- unprotected in a from-empty build. The read policy itself lives in
+-- 01_functions.sql instead of here: it calls is_admin(), which is LANGUAGE
+-- sql and has its body validated by Postgres at creation time, so the policy
+-- must be created after that function exists -- and is_admin() itself must
+-- be created after this table exists, for the same reason. See
+-- 01_functions.sql, immediately after is_admin(), for the policy and its
+-- recursion note.
 
 -- Grants
 --

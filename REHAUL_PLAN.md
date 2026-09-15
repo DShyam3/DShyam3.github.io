@@ -161,8 +161,6 @@ needs a forward migration rather than an edit.
 
 | Severity | Where | Problem | Fix |
 |---|---|---|---|
-| High | `merchant-logo-cache/index.ts:267` | Brand search follows redirects to any host, from a function holding the service role key | `redirect: 'manual'`, treat 3xx as a miss; correct `SECURITY.md` |
-| High | `schemas/00_admin_users.sql:53` | Policy calls `is_admin()` before `01_functions.sql` defines it, so the schema cannot build from empty | Move the policy after `is_admin()` |
 | Medium | `useWatchlistNews.ts`, `useUpNext.ts` | Every hook turns a failed query into "Nothing this week" | Return `error`; render a failure line |
 | Medium | `CountdownCard.tsx:96,111`, `WatchlistNews.tsx:120` | `text-[10px]`, below the 12px minimum | `text-xs` |
 | Medium | `FinanceDataContext.tsx:651` | `select('*')` on `finance_profiles` in the mount path | Explicit columns |

@@ -23,6 +23,29 @@ $$;
 
 ALTER FUNCTION "public"."is_admin"() OWNER TO "postgres";
 
+-- This policy lives here rather than in 00_admin_users.sql, where the table
+-- it protects is defined: it calls is_admin() above, and is_admin() is
+-- LANGUAGE sql, so Postgres validates its body at creation time and needs the
+-- function to already exist. 00_admin_users.sql sorts first only because it
+-- has to -- is_admin() needs admin_users to exist first, for the same
+-- reason. RLS itself is still enabled with the table in 00_admin_users.sql,
+-- so admin_users is never briefly unprotected in a from-empty build.
+--
+-- An administrator may read the list, which is what lets the account page say
+-- who has access. Nobody may write it through the API: granting administrator
+-- rights is not something an administrator session should be able to do by
+-- sending a request, so inserts and deletes go through the service role (the
+-- seed script, or the SQL editor). RLS on with no write policy denies the rest
+-- by default.
+CREATE POLICY "Admin read" ON "public"."admin_users"
+    FOR SELECT TO "authenticated" USING ("public"."is_admin"());
+
+-- Note on recursion: that policy calls a function that reads this table.
+-- `is_admin()` is SECURITY DEFINER and owned by postgres, and a table's owner
+-- is exempt from its own RLS, so the inner read does not re-enter the policy.
+-- This table must therefore never be given FORCE ROW LEVEL SECURITY, which
+-- would remove that exemption and turn the check into infinite recursion.
+
 CREATE OR REPLACE FUNCTION "public"."update_episodes_watched_status"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public', 'pg_temp'
