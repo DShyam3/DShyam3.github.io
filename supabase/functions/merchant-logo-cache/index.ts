@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { requireAdmin } from '../_shared/require-admin.ts'
+import { corsOriginHeader } from '../_shared/site-origins.ts'
 
 // Route C of the transaction-logo work: resolve a merchant's mark ONCE,
 // server-side, and cache it in our own bucket.
@@ -28,16 +29,9 @@ import { requireAdmin } from '../_shared/require-admin.ts'
 // names a host, a URL or a path; if it ever does, this becomes an open proxy
 // sitting on the service role key.
 
-const ALLOWED_ORIGINS = new Set([
-  'https://dshyam3.github.io',
-  'http://localhost:8080',
-  'http://localhost:5173',
-])
-
 function buildCorsHeaders(req: Request) {
-  const origin = req.headers.get('Origin') || ''
   return {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.has(origin) ? origin : 'https://dshyam3.github.io',
+    ...corsOriginHeader(req),
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Vary': 'Origin',
   }
@@ -427,6 +421,22 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+
+    // A run can spend up to 2 x MAX_LOOKUPS_PER_RUN of Brandfetch's 200 per
+    // five minutes. Two runs a window stays under it however the function is
+    // called; after a bank sync, which has its own cooldown, it never binds.
+    const { data: overLimit, error: limitError } = await supabaseAdmin.rpc('check_rate_limit', {
+      p_key: 'merchant-logo-cache',
+      p_limit: 2,
+      p_window_seconds: 300,
+    })
+    if (limitError) console.error('logo cache limit check failed, allowing request:', limitError.message)
+    if (overLimit === true) {
+      return new Response(JSON.stringify({ error: 'Too many requests', retry_after: 300 }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '300' },
+      })
+    }
 
     const clientId = Deno.env.get('BRANDFETCH_CLIENT_ID')
     if (!clientId) {

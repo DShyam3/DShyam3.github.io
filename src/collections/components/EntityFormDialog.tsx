@@ -189,7 +189,7 @@ function ExternalSearchField<R>({
           value={term}
           onChange={(e) => handleChange(e.target.value)}
           placeholder={spec.placeholder}
-          className="pl-9"
+          className="pl-9 pr-9"
         />
         {loading && (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
@@ -383,7 +383,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             variant="ghost"
             size="icon"
             aria-label={`Edit ${config.noun.singular}`}
-            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity bg-background/80 hover:bg-primary hover:text-primary-foreground w-7 h-7"
+            className="card-actions transition-opacity bg-background/80 hover:bg-primary hover:text-primary-foreground w-7 h-7"
           >
             <Pencil className="w-3.5 h-3.5" />
           </Button>
@@ -397,7 +397,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
         viewport, the fields scroll, and the title and buttons stay put.
       */}
       <DialogContent className="sm:max-w-md p-0 max-h-[90dvh] flex flex-col overflow-hidden">
-        <DialogHeader className="px-6 pt-6 shrink-0">
+        <DialogHeader className="pl-6 pr-16 pt-6 shrink-0">
           <DialogTitle className="font-serif text-xl">
             {mode === 'add' ? `Add New ${config.noun.singular}` : `Edit ${config.noun.singular}`}
           </DialogTitle>

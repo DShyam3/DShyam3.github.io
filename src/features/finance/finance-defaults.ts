@@ -9,6 +9,7 @@
  */
 
 import defaultPresets from '@/data/presets.json';
+import { exactTaxYearOf } from '@/lib/finance/student-loan';
 import type {
   BankAccount,
   BudgetCategory,
@@ -16,7 +17,61 @@ import type {
   FinanceSettings,
   RecurringBill,
   RecurringTemplate,
+  TaxConfig,
 } from '@/features/finance/finance-types';
+
+/**
+ * The UK tax year (starting 6 April) `today` falls in; 2026 means 2026/27.
+ *
+ * Compared on local date fields. Going through an ISO string and `taxYearOf`
+ * reparses it as UTC midnight, which west of Greenwich puts 6 April back in
+ * the previous tax year.
+ */
+export const currentTaxYear = (today: Date = new Date()): number => exactTaxYearOf(today);
+
+/**
+ * Where a fortnightly pay cycle is counted from when none has been set.
+ *
+ * Any past Friday serves: only the date's parity against today matters, so
+ * this does not go stale as years pass. It is a constant rather than today
+ * because "today" would move the computed payday every day it was read, and
+ * every fallback site must agree or the settings form and the payday
+ * calculation disagree about the same unset field.
+ */
+export const DEFAULT_BIWEEKLY_ANCHOR = '2026-01-02';
+
+/**
+ * The settings a fresh profile starts from. Shared by the data provider's
+ * initial state and the settings dialog's "reset to defaults" fallback, so
+ * the two never drift the way the duplicated literals used to.
+ */
+export const createDefaultFinanceSettings = (activeSavingsTypes: string[], today: Date = new Date()): FinanceSettings => ({
+  grossSalary: 0,
+  pensionType: 'net_pay',
+  personalPensionPercent: 0,
+  employerPensionPercent: 0,
+  studentLoanPlan: 'none',
+  taxCode: '1257L',
+  personalAllowance: 12570,
+  weekends: 104,
+  bankHolidays: 8,
+  workHolidays: 25,
+  workingHoursPerDay: 7.5,
+  taxYear: currentTaxYear(today),
+  ukRegion: 'england-and-wales',
+  holidaysByUser: {},
+  activeSavingsTypes,
+});
+
+/** A zeroed tax-rate timeline, effective from that tax year's 6 April, used
+ *  until real rates are loaded or set. */
+export const createEmptyTaxConfig = (today: Date = new Date()): TaxConfig => ({
+  effectiveFrom: `${currentTaxYear(today)}-04-06`,
+  studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
+  studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
+  incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
+  nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 },
+});
 
 export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -44,9 +99,11 @@ export const createDefaultBudgetCategories = (): BudgetCategory[] => [
     emoji: '🏠',
     items: [
       { id: 'item_rent', name: 'Rent', budgeted: 0, spent: 0 },
-      { id: 'item_phone', name: 'Phone', budgeted: 0, spent: 0 },
-      { id: 'item_electric', name: 'Electric Bill', budgeted: 0, spent: 0 },
+      { id: 'item_council_tax', name: 'Council Tax', budgeted: 0, spent: 0 },
+      { id: 'item_electric', name: 'Energy', budgeted: 0, spent: 0 },
+      { id: 'item_water', name: 'Water', budgeted: 0, spent: 0 },
       { id: 'item_internet', name: 'Internet', budgeted: 0, spent: 0 },
+      { id: 'item_phone', name: 'Phone', budgeted: 0, spent: 0 },
     ],
   },
   {
@@ -84,8 +141,8 @@ export const createDefaultBudgetCategories = (): BudgetCategory[] => [
     emoji: '🚗',
     items: [
       { id: 'item_car_insurance', name: 'Car Insurance', budgeted: 0, spent: 0 },
-      { id: 'item_gas', name: 'Gas', budgeted: 0, spent: 0 },
-      { id: 'item_uber', name: 'Uber', budgeted: 0, spent: 0 },
+      { id: 'item_fuel', name: 'Fuel', budgeted: 0, spent: 0 },
+      { id: 'item_public_transport', name: 'Public Transport', budgeted: 0, spent: 0 },
     ],
   },
   {
@@ -113,14 +170,7 @@ export const createDefaultBudgetCategories = (): BudgetCategory[] => [
     budgeted: 0,
     group: 'wants',
     emoji: '💳',
-    items: [
-      { id: 'item_netflix', name: 'Netflix', budgeted: 0, spent: 0 },
-      { id: 'item_audible', name: 'Audible', budgeted: 0, spent: 0 },
-      { id: 'item_apple_tv', name: 'Apple TV+', budgeted: 0, spent: 0 },
-      { id: 'item_hulu', name: 'Hulu', budgeted: 0, spent: 0 },
-      { id: 'item_spotify', name: 'Spotify', budgeted: 0, spent: 0 },
-      { id: 'item_copilot', name: 'Copilot', budgeted: 0, spent: 0 },
-    ],
+    items: [],
   },
   {
     id: 'donations',
@@ -191,18 +241,13 @@ export const DEFAULT_BUDGET_CATEGORIES = createDefaultBudgetCategories();
 
 export const DEFAULT_RECURRING_TEMPLATES: RecurringTemplate[] = [
   { name: 'Rent', category: 'Rent', emoji: '🏠', tag: 'RENT', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_rent', budgetCategoryName: 'Home' },
-  { name: 'Phone Bill', category: 'Phone', emoji: '📱', tag: 'PHONE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_phone', budgetCategoryName: 'Home' },
-  { name: 'Electric Bill', category: 'Electric Bill', emoji: '💡', tag: 'ELECTRIC BILL', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_electric', budgetCategoryName: 'Home' },
+  { name: 'Council Tax', category: 'Council Tax', emoji: '🏛️', tag: 'COUNCIL TAX', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_council_tax', budgetCategoryName: 'Home' },
+  { name: 'Energy', category: 'Energy', emoji: '💡', tag: 'ENERGY', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_electric', budgetCategoryName: 'Home' },
+  { name: 'Water', category: 'Water', emoji: '💧', tag: 'WATER', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_water', budgetCategoryName: 'Home' },
   { name: 'Internet', category: 'Internet', emoji: '📶', tag: 'INTERNET', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_internet', budgetCategoryName: 'Home' },
+  { name: 'Phone Bill', category: 'Phone', emoji: '📱', tag: 'PHONE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_phone', budgetCategoryName: 'Home' },
   { name: 'Car Insurance', category: 'Car Insurance', emoji: '🚗', tag: 'CAR INSURANCE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_car_insurance', budgetCategoryName: 'Transportation' },
   { name: 'Gym membership', category: 'Gym', emoji: '💪', tag: 'GYM', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_gym', budgetCategoryName: 'Self Care' },
-  { name: 'Netflix', category: 'Netflix', emoji: '🎬', tag: 'NETFLIX', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_netflix', budgetCategoryName: 'Subscriptions' },
-  { name: 'Spotify', category: 'Spotify', emoji: '🎵', tag: 'SPOTIFY', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_spotify', budgetCategoryName: 'Subscriptions' },
-  { name: 'Hulu', category: 'Hulu', emoji: '📺', tag: 'HULU', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_hulu', budgetCategoryName: 'Subscriptions' },
-  { name: 'Apple TV+', category: 'Apple TV+', emoji: '📺', tag: 'APPLE TV+', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_apple_tv', budgetCategoryName: 'Subscriptions' },
-  { name: 'Audible', category: 'Audible', emoji: '📚', tag: 'AUDIBLE', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: 'item_audible', budgetCategoryName: 'Subscriptions' },
-  { name: 'Copilot', category: 'Copilot', emoji: '✨', tag: 'COPILOT', defaultAmount: 0, frequency: 'annually', linkedBudgetItemId: 'item_copilot', budgetCategoryName: 'Subscriptions' },
-  { name: 'ASPCA', category: 'Donations', emoji: '🐾', tag: 'DONATIONS', defaultAmount: 0, frequency: 'monthly', linkedBudgetItemId: '', budgetCategoryName: 'Donations' },
 ];
 
 export const {
@@ -236,19 +281,25 @@ export const isHousingCategory = (cat?: BudgetCategory): boolean => {
   if (!cat) return false;
   const name = cat.name.toLowerCase();
   const group = cat.group;
-  return group === 'needs' && (name.includes('home') || name.includes('house') || name.includes('rent') || name.includes('accommodation') || name.includes('living'));
+  // 'rent' is whole-word: a substring match also catches "parent", "current"
+  // and "different" -- the same collision class as isPetsCategory's 'cat'.
+  return group === 'needs' && (name.includes('home') || name.includes('house') || /\brent(s|al|als)?\b/.test(name) || name.includes('accommodation') || name.includes('living'));
 };
 
 export const isInsuranceCategory = (cat?: BudgetCategory): boolean => {
   if (!cat) return false;
   const name = cat.name.toLowerCase();
-  return name.includes('insurance') || name.includes('protect') || name.includes('insure') || name.includes('cover');
+  // 'cover' is whole-word (plus its inflections): a substring match also
+  // catches "recovery" and "discover".
+  return name.includes('insurance') || name.includes('protect') || name.includes('insure') || /\bcover(s|ed|age)?\b/.test(name);
 };
 
 export const isTransportCategory = (cat?: BudgetCategory): boolean => {
   if (!cat) return false;
   const name = cat.name.toLowerCase();
-  return name.includes('transport') || name.includes('travel') || name.includes('car') || name.includes('vehicle') || name.includes('commute') || name.includes('transit');
+  // 'car' is whole-word: a substring match also catches "care" and
+  // "childcare" -- it would otherwise claim the shipped "Self Care" category.
+  return name.includes('transport') || name.includes('travel') || /\bcars?\b/.test(name) || name.includes('vehicle') || name.includes('commute') || name.includes('transit');
 };
 
 export const isSubscriptionsCategory = (cat?: BudgetCategory): boolean => {
@@ -278,7 +329,11 @@ export const isHealthWellnessCategory = (cat?: BudgetCategory): boolean => {
 export const isPetsCategory = (cat?: BudgetCategory): boolean => {
   if (!cat) return false;
   const name = cat.name.toLowerCase();
-  return name.includes('pet') || name.includes('dog') || name.includes('cat') || name.includes('animal') || name.includes('vet');
+  // Whole-word only: a plain substring match on 'cat' also catches
+  // "Education", "Vacation" and "Communication", and 'pet' would catch
+  // "Carpet". Each is matched with its plural, since a word-boundary regex
+  // does not stop mid-word (e.g. \bcat\b would not match "cats").
+  return /\b(pets?|dogs?|cats?|animals?|vets?|veterinary)\b/.test(name);
 };
 
 export const isShoppingCategory = (cat?: BudgetCategory): boolean => {
@@ -296,7 +351,9 @@ export const isTravelHolidaysCategory = (cat?: BudgetCategory): boolean => {
 export const isOtherCategory = (cat?: BudgetCategory): boolean => {
   if (!cat) return false;
   const name = cat.name.toLowerCase();
-  return name.includes('other') || name.includes('misc') || name.includes('ad-hoc') || name.includes('general') || name.includes('cash') || name.includes('uncategorised');
+  // 'other' is whole-word: a substring match also catches "mother",
+  // "another" and "brother".
+  return /\bothers?\b/.test(name) || name.includes('misc') || name.includes('ad-hoc') || name.includes('general') || name.includes('cash') || name.includes('uncategorised');
 };
 
 export const isFamilyKidsCategory = (cat?: BudgetCategory): boolean => {

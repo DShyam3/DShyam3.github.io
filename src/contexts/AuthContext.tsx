@@ -18,8 +18,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // client has to supply an address to `signInWithPassword`. It is a convenience,
 // not a permission: administrator identity lives in `public.admin_users` and is
 // decided by `public.is_admin()`. Pointing this at a test account (see
-// `.env.example`) is how a local stack signs in as one.
-const LOGIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'd.shyam1256@gmail.com';
+// `.env.example`) is how a local stack signs in as one. No fallback: a fork
+// without this set signs in as no one rather than as the original owner.
+const LOGIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAdmin, setIsAdmin] = useState(false);
@@ -68,6 +69,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const login = useCallback(async (password: string): Promise<boolean> => {
+        if (!LOGIN_EMAIL) {
+            console.error('Login failed: sign-in is not configured (VITE_ADMIN_EMAIL is unset).');
+            return false;
+        }
         try {
             const { error } = await supabase.auth.signInWithPassword({
                 email: LOGIN_EMAIL,

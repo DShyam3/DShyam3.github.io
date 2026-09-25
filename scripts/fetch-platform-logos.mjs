@@ -10,16 +10,19 @@
  * the downloaded files are committed so the site never fetches them at runtime.
  */
 import 'dotenv/config';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const site = JSON.parse(await readFile(resolve(SCRIPT_DIR, '../src/config/site.json'), 'utf-8'));
 
 const API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = process.env.TMDB_BASE_URL || 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
 const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
-const USER_AGENT = 'DShyam3-website-logo-fetch/1.0 (https://github.com/DShyam3)';
-const OUT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../public/platform-logos');
+const USER_AGENT = `${new URL(site.url).host}-logo-fetch/1.0 (${site.url})`;
+const OUT_DIR = resolve(SCRIPT_DIR, '../public/platform-logos');
 
 // Display name -> where its logo comes from. `commons` is a File: title on
 // Wikimedia Commons (saved as .svg); `tmdb` is a provider id (saved as .png).

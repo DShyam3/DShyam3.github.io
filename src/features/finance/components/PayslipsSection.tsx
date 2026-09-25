@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import { useEducation, useExperience } from '@/hooks/useResume';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -105,6 +106,17 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   } = useFinanceData();
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { toast } = useToast();
+  const { experience } = useExperience();
+  const { education } = useEducation();
+  // The same logos as the About page's experience and education rows --
+  // nothing fetched, so an employer's mark is only ever one already on this site.
+  const orgs = useMemo(
+    () => [
+      ...experience.map(e => ({ name: e.company, logoUrl: e.logo_url })),
+      ...education.map(e => ({ name: e.school, logoUrl: e.logo_url })),
+    ],
+    [experience, education],
+  );
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -181,7 +193,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
           key,
           slips,
           totals,
-          logo: groupBy === 'employer' ? employerLogo(key) : null,
+          logo: groupBy === 'employer' ? employerLogo(key, orgs) : null,
           title: groupBy === 'employer' ? key : `${key}/${String(Number(key) + 1).slice(2)}`,
           subtitle:
             oldest === newest
@@ -192,7 +204,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
       })
       // Newest first either way, so the current job and the current year lead.
       .sort((a, b) => b.sortKey.localeCompare(a.sortKey));
-  }, [payslips, groupBy]);
+  }, [payslips, groupBy, orgs]);
 
   /* The headline figures answer whichever question the grouping is asking.
      Grouped by tax year, a lifetime total sits above per-year groups and
@@ -388,7 +400,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
             ))}
           </div>
 
-          <div className="space-y-3 max-h-[30rem] overflow-y-auto pr-1">
+          <div className="space-y-3">
             {groups.map(group => (
               <div key={group.key} className="space-y-1.5">
                 <button
@@ -488,7 +500,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="payslip-date" className="text-xs">Pay date</Label>
@@ -606,6 +618,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
 
       <PayslipDetailDialog
         payslip={detail}
+        logo={detail ? employerLogo(detail.employer, orgs) : null}
         reconciliation={detail ? reconciliationsByPayslip.get(detail.id) : undefined}
         transaction={detail ? mockTransactions.find(transaction => transaction.id === reconciliationsByPayslip.get(detail.id)?.transactionId) : undefined}
         candidates={detail ? candidatesByPayslip.get(detail.id) : []}

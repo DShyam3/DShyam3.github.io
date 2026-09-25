@@ -23,7 +23,6 @@ import {
   type PayslipTransactionReconciliation,
   type ReconciliationTransaction,
 } from '@/lib/finance';
-import { employerLogo } from '../employer-logo';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, CheckCircle2, Download, Link2, Pencil, Unlink } from 'lucide-react';
 import { useState } from 'react';
@@ -37,6 +36,7 @@ const Row = ({ label, value, tone }: { label: string; value: string; tone?: 'mut
 
 export function PayslipDetailDialog({
   payslip,
+  logo,
   reconciliation,
   transaction,
   candidates = [],
@@ -47,6 +47,7 @@ export function PayslipDetailDialog({
   onRemoveTransaction,
 }: {
   payslip: Payslip | null;
+  logo?: string | null;
   reconciliation?: PayslipTransactionReconciliation;
   transaction?: ReconciliationTransaction;
   candidates?: readonly PayslipTransactionCandidate[];
@@ -61,7 +62,6 @@ export function PayslipDetailDialog({
   const check = checkPayslip(payslip);
   const { payments, benefits, deductions } = groupPayslipLines(payslip.lines);
   const hasLines = payments.length + benefits.length + deductions.length > 0;
-  const logo = employerLogo(payslip.employer);
 
   const confirmTransaction = async (transactionId: string) => {
     if (isUpdatingMatch) return;

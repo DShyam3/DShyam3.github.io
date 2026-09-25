@@ -73,15 +73,21 @@ attack surface of this site is Supabase, and it was audited separately
 - **RLS**: enabled on all 40 public tables. Every `finance_*` table, including
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
   Content tables are anonymous-read, `is_admin()`-write.
-- **Edge functions**: browser calls to `truelayer-sync` and
-  `merchant-logo-cache` verify the JWT and then call `public.is_admin()`
-  through the caller's own token (`_shared/require-admin.ts`), so a function
-  and an RLS policy cannot disagree about who is an administrator;
-  `truelayer-sync` also
-  accepts the service role only for its Vault-authenticated scheduled sync.
-  `tmdb-proxy` is deliberately public but restricted to an endpoint allowlist
-  so it cannot be used as a generic TMDB proxy; `watchlist-cron-sync` requires
-  the service role key. All four use an origin allowlist for CORS.
+- **Edge functions**: browser calls to `truelayer-sync`,
+  `merchant-logo-cache` and `watchlist-cron-sync` verify the JWT and then call
+  `public.is_admin()` through the caller's own token
+  (`_shared/require-admin.ts`), so a function and an RLS policy cannot
+  disagree about who is an administrator; `truelayer-sync` and
+  `watchlist-cron-sync` also accept the service role, for their
+  Vault-authenticated scheduled runs. `tmdb-proxy` is deliberately public but
+  restricted to an endpoint allowlist so it cannot be used as a generic TMDB
+  proxy. All four use an origin allowlist for CORS.
+- **Rate limits**: every function that spends a third-party call limits it
+  server-side in the service-role-only `rate_limits` table -- `tmdb-proxy`
+  per IP, the admin-triggered syncs by a cooldown between runs
+  (`_shared/cooldown.ts`), `merchant-logo-cache` per five minutes. Scheduled
+  runs are exempt; a refused call answers 429 with `retry_after`. See
+  README.md, *Spam protection on the edge functions*.
 - **TrueLayer OAuth (deploy migration and function together)**: the callback
   state is generated with 256 bits of server-side randomness, stored only as a
   SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI

@@ -8,9 +8,13 @@
 
 import { useMemo, useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
-import { transferExcludedTransactionIds } from '@/lib/finance/transfer-detection';
+import { useSpendingLedger } from '../useSpendingLedger';
 import { Figure } from '../components/Figure';
-import { MONTH_NAMES, isDueThisMonth } from '../finance-defaults';
+import { MONTH_NAMES } from '../finance-defaults';
+import { CashFlowSankey } from '../components/CashFlowSankey';
+import {
+  cashFlowSankey, monthlyCashFlow, summariseCashFlow, type CashFlowTransaction,
+} from '@/lib/finance/cash-flow';
 import { Card } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { formatGBP } from '@/features/finance/utils/calculations';
@@ -35,21 +39,28 @@ interface CashFlowSurfaceProps {
 }
 
 export default function CashFlowSurface({ breakdownRates, todayDateObj }: CashFlowSurfaceProps) {
-  const { bankAccounts, mockTransactions, recurrings, transferLinks, hasLoaded } = useFinanceData();
+  const { bankAccounts, mockTransactions, recurrings, hasLoaded } = useFinanceData();
 
-  /* Confirmed internal transfers are neither income nor spending. Both legs
-     drop out: counting the outflow would report spending that never left the
-     owner's own accounts, and counting the inflow would report income never
-     earned. A round trip to savings and back would otherwise inflate both
-     sides of this surface at once. The rows stay in the ledger -- only these
-     totals ignore them. */
-  const excludedIds = useMemo(
-    () => transferExcludedTransactionIds(transferLinks),
-    [transferLinks],
-  );
-  const ledger = useMemo(
-    () => mockTransactions.filter(tx => !excludedIds.has(tx.id)),
-    [mockTransactions, excludedIds],
+  /* Confirmed internal transfers are neither income nor spending, so every
+     total here sums `ledger`, which drops them (useSpendingLedger). A round
+     trip to savings and back would otherwise inflate both sides of this
+     surface at once. */
+  const { ledger, exclusionsUnreliable } = useSpendingLedger();
+
+  /* Every figure on this surface comes from lib/finance/cash-flow, from these
+     rows and nothing else: no synthetic salary for a month without one, and
+     no recurring bills added on top of the payments that already record them. */
+  const cfTransactions = useMemo(
+    (): CashFlowTransaction[] => ledger.map(tx => ({
+      id: tx.id,
+      date: tx.date,
+      name: tx.name,
+      amount: tx.amount,
+      category: tx.category,
+      accountId: tx.bankAccountId || tx.accountId || null,
+      payer: tx.merchant || tx.name,
+    })),
+    [ledger],
   );
 
   const [cfPeriod, setCfPeriod] = useState<'ytd' | 'last_3m' | 'all_time' | 'custom'>('ytd');
@@ -149,158 +160,48 @@ const getCategoryDetails = (categoryName: string) => {
   return { emoji: '📦', color: 'hsl(var(--muted-foreground))' };
 };
 
-// Build monthly data buckets covering the period
-const buildMonthlyBuckets = () => {
-  const buckets: {
-    year: number;
-    month: number;
-    name: string;
-    fullName: string;
-    spend: number;
-    income: number;
-    net: number;
-    isFuture: boolean;
-    isCurrent: boolean;
-    monthIdx: number;
-    categoryBreakdown: { name: string; emoji: string; color: string; amount: number }[];
-    incomeItems: { id: string; date: string; name: string; accountName: string; amount: number }[];
-  }[] = [];
+// Whole months, as custom ranges always have been: the module buckets by
+// calendar month, and the period picker only chooses which months.
+const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const cfMonths = monthlyCashFlow(cfTransactions, monthKey(cfPeriodStart), monthKey(cfPeriodEnd), monthKey(todayDateObj));
 
-  const cursor = new Date(cfPeriodStart.getFullYear(), cfPeriodStart.getMonth(), 1);
-  const endMonth = new Date(cfPeriodEnd.getFullYear(), cfPeriodEnd.getMonth(), 1);
-  const now = new Date(todayDateObj.getFullYear(), todayDateObj.getMonth(), 1);
-
-  while (cursor <= endMonth) {
-    const yr = cursor.getFullYear();
-    const mo = cursor.getMonth();
-    const isFuture = cursor > now;
-    const isCurrent = yr === now.getFullYear() && mo === now.getMonth();
-    const shortName = MONTH_NAMES[mo].slice(0, 3);
-    const prefix = `${yr}-${String(mo + 1).padStart(2, '0')}-`;
-
-    // Calculate Category Spend Breakdown
-    const catSums: Record<string, number> = {};
-    let monthSpend = 0;
-
-    if (!isFuture) {
-      ledger
-        .filter(tx => tx.date.startsWith(prefix) && tx.amount > 0)
-        .forEach(tx => {
-          monthSpend += tx.amount;
-          const cat = tx.category || 'Other';
-          catSums[cat] = (catSums[cat] || 0) + tx.amount;
-        });
-
-      recurrings
-        .filter(r => isDueThisMonth(r, mo + 1))
-        .forEach(r => {
-          monthSpend += r.amount;
-          const cat = 'Bills & Subscriptions';
-          catSums[cat] = (catSums[cat] || 0) + r.amount;
-        });
-    }
-
-    const categoryBreakdown = Object.entries(catSums)
-      .map(([name, amount]) => {
-        const details = getCategoryDetails(name);
-        return { name, emoji: details.emoji, color: details.color, amount };
-      })
-      .sort((a, b) => b.amount - a.amount);
-
-    // Calculate Income Breakdown
-    // TODO: Implement autotagging of income into categories (e.g., Salary, Interest, Dividends, Transfers) to start autotagging income into custom categories.
-    const incomeItems: { id: string; date: string; name: string; accountName: string; amount: number }[] = [];
-    let incomeSum = 0;
-
-    if (!isFuture) {
-      ledger
-        .filter(tx => tx.date.startsWith(prefix) && tx.amount < 0)
-        .forEach(tx => {
-          const amt = Math.abs(tx.amount);
-          incomeSum += amt;
-          const acc = bankAccounts.find(a => a.id === (tx.bankAccountId || tx.accountId));
-          incomeItems.push({
-            id: tx.id,
-            date: tx.date,
-            name: tx.name,
-            accountName: acc ? `${acc.issuer || acc.name} ${acc.type === 'credit' ? '3860' : '8901'}` : 'Checking 8901',
-            amount: amt
-          });
-        });
-
-      if (incomeSum === 0 && cfMonthlyIncome > 0) {
-        incomeSum = cfMonthlyIncome;
-        incomeItems.push({
-          id: `salary-${prefix}`,
-          date: `${prefix}15`,
-          name: 'Gusto Payroll',
-          accountName: 'Total Checking 8901',
-          amount: cfMonthlyIncome
-        });
-      }
-    }
-
-    const net = incomeSum - monthSpend;
-    const label = cfPeriod === 'all_time' || cfPeriod === 'last_3m'
-      ? `${shortName} '${String(yr).slice(2)}`
-      : shortName;
-
-    buckets.push({
-      year: yr,
-      month: mo,
-      name: label,
-      fullName: MONTH_NAMES[mo],
-      spend: monthSpend,
-      income: incomeSum,
-      net,
-      isFuture,
-      isCurrent,
-      monthIdx: mo,
-      categoryBreakdown,
-      incomeItems
-    });
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-  return buckets;
+const accountLabel = (id: string | null): string => {
+  const account = id ? bankAccounts.find(a => a.id === id) : undefined;
+  return account ? (account.issuer || account.name) : 'No account';
 };
 
-const cfMonthlyData = buildMonthlyBuckets();
+// Presentation only: labels, emoji and colour on top of the module's figures.
+const cfMonthlyData = cfMonths.map(m => {
+  const shortName = MONTH_NAMES[m.month].slice(0, 3);
+  return {
+    ...m,
+    name: cfPeriod === 'all_time' || cfPeriod === 'last_3m' ? `${shortName} '${String(m.year).slice(2)}` : shortName,
+    fullName: MONTH_NAMES[m.month],
+    monthIdx: m.month,
+    categoryBreakdown: m.categories.map(c => ({ ...c, ...getCategoryDetails(c.name) })),
+    incomeItems: m.incomeItems.map(item => ({ ...item, accountName: accountLabel(item.accountId) })),
+  };
+});
 
 const activeData = cfMonthlyData.filter(m => !m.isFuture);
-const elapsedMonths = activeData.length;
-const ytdIncome = activeData.reduce((s, m) => s + m.income, 0);
-const ytdSpend = activeData.reduce((s, m) => s + m.spend, 0);
-const ytdNet = ytdIncome - ytdSpend;
-const avgMonthlyNet = elapsedMonths > 0 ? ytdNet / elapsedMonths : 0;
-const avgMonthlySpend = elapsedMonths > 0 ? ytdSpend / elapsedMonths : 0;
-const avgMonthlyIncome = elapsedMonths > 0 ? ytdIncome / elapsedMonths : 0;
-const savingsRate = ytdIncome > 0 ? ((ytdIncome - ytdSpend) / ytdIncome) * 100 : 0;
+const cfSummary = summariseCashFlow(cfMonths);
+const elapsedMonths = cfSummary.months;
+const ytdIncome = cfSummary.income;
+const ytdSpend = cfSummary.spend;
+const ytdNet = cfSummary.net;
+const avgMonthlyNet = cfSummary.avgMonthlyNet;
+const avgMonthlySpend = cfSummary.avgMonthlySpend;
+const avgMonthlyIncome = cfSummary.avgMonthlyIncome;
+const savingsRate = cfSummary.savingsRatePercent;
 const totalMonthlyRecurrings = recurrings
   .filter(r => r.frequency === 'monthly')
   .reduce((sum, r) => sum + r.amount, 0);
 const recurringBurnRate = cfMonthlyIncome > 0 ? (totalMonthlyRecurrings / cfMonthlyIncome) * 100 : 0;
-
-// Compute overall category spend summary for drawer
-const overallCategoryMap: Record<string, { emoji: string; color: string; amount: number }> = {};
-activeData.forEach(m => {
-  m.categoryBreakdown.forEach(cat => {
-    if (!overallCategoryMap[cat.name]) {
-      overallCategoryMap[cat.name] = { emoji: cat.emoji, color: cat.color, amount: 0 };
-    }
-    overallCategoryMap[cat.name].amount += cat.amount;
-  });
-});
-const overallCategories = Object.entries(overallCategoryMap)
-  .map(([name, val]) => ({ name, emoji: val.emoji, color: val.color, amount: val.amount }))
-  .sort((a, b) => b.amount - a.amount);
-
-// Yearly comparative metrics
-const spend2026 = activeData.filter(m => m.year === 2026).reduce((s, m) => s + m.spend, 0);
-const spend2025 = activeData.filter(m => m.year === 2025).reduce((s, m) => s + m.spend, 0);
-const income2026 = activeData.filter(m => m.year === 2026).reduce((s, m) => s + m.income, 0);
-const income2025 = activeData.filter(m => m.year === 2025).reduce((s, m) => s + m.income, 0);
-const net2026 = income2026 - spend2026;
-const net2025 = income2025 - spend2025;
+const overallCategories = cfSummary.categories.map(c => ({ ...c, ...getCategoryDetails(c.name) }));
+// Each year the period actually covers, newest first, with that year's own
+// monthly average -- not two fixed calendar years.
+const cfYears = cfSummary.byYear;
+const cfSankey = cashFlowSankey(cfMonths, cfTransactions);
 
 // Custom bar shape that renders rounded-top bars
 const RoundedBar = (props: { x?: number; y?: number; width?: number; height?: number; fill?: string; opacity?: number }) => {
@@ -466,6 +367,12 @@ return (
           <TrendingUp className="h-4 w-4 text-primary shrink-0" /> Cash Flow
         </h3>
         <p className="text-xs text-muted-foreground font-mono mt-0.5">Overview of income, spending, and net position</p>
+        {exclusionsUnreliable && (
+          <p role="alert" className="text-xs text-destructive font-mono mt-1">
+            Confirmed transfers could not load, so these totals count money moved
+            between your own accounts as income and spending.
+          </p>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         {/* Period Selector Dropdown */}
@@ -683,10 +590,10 @@ return (
 
       <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
-        <span className={cn("text-xl font-bold font-mono block tabular-nums", savingsRate >= 20 ? "text-positive" : savingsRate >= 0 ? "text-chart-4" : "text-destructive")}>
-          {savingsRate.toFixed(1)}%
+        <span className={cn("text-xl font-bold font-mono block tabular-nums", savingsRate === null ? "text-muted-foreground" : savingsRate >= 20 ? "text-positive" : savingsRate >= 0 ? "text-chart-4" : "text-destructive")}>
+          {savingsRate === null ? 'No income' : `${savingsRate.toFixed(1)}%`}
         </span>
-        <span className="text-xs text-muted-foreground">of income retained YTD</span>
+        <span className="text-xs text-muted-foreground">of income kept in this period</span>
       </Card>
 
       <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
@@ -697,6 +604,8 @@ return (
         <span className="text-xs text-muted-foreground">{formatGBP(totalMonthlyRecurrings)} / {formatGBP(cfMonthlyIncome)} monthly</span>
       </Card>
     </div>
+
+    <CashFlowSankey sankey={cfSankey} loading={!hasLoaded} />
 
     {/* ─── SLIDE-OVER SHEET / DRAWERS FOR VIEW MORE ─── */}
     <Sheet open={!!cfDrawerOpen} onOpenChange={(open) => !open && setCfDrawerOpen(null)}>
@@ -730,20 +639,15 @@ return (
               </div>
 
               <div className="space-y-2 text-xs font-mono">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">2026</span>
-                  <div className="flex gap-12">
-                    <span className="text-positive font-bold">{formatGBP(net2026)}</span>
-                    <span className="text-positive font-bold">{formatGBP(avgMonthlyNet)}</span>
+                {cfYears.map(y => (
+                  <div key={y.year} className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{y.year}</span>
+                    <div className="flex gap-12">
+                      <span className={cn("font-bold tabular-nums", y.net >= 0 ? "text-positive" : "text-destructive")}>{formatGBP(y.net)}</span>
+                      <span className={cn("font-bold tabular-nums", y.net >= 0 ? "text-positive" : "text-destructive")}>{formatGBP(y.avgMonthlyNet)}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">2025</span>
-                  <div className="flex gap-12">
-                    <span className="text-positive font-bold">{formatGBP(net2025 || 8754.61)}</span>
-                    <span className="text-positive font-bold">{formatGBP(729.55)}</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -777,7 +681,7 @@ return (
             <SheetHeader className="text-left space-y-1 border-b border-border/30 pb-3">
               <SheetTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Spend</SheetTitle>
               <SheetDescription className="text-xs text-muted-foreground font-mono">
-                Monthly spend not including recurrings left to pay
+                Spending recorded in the selected period
               </SheetDescription>
               <div className="pt-1">
                 <span className="text-2xl font-bold font-mono text-destructive tabular-nums">
@@ -799,20 +703,15 @@ return (
               </div>
 
               <div className="space-y-2 text-xs font-mono">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">2026</span>
-                  <div className="flex gap-12">
-                    <span className="text-foreground font-bold">{formatGBP(spend2026)}</span>
-                    <span className="text-foreground font-bold">{formatGBP(avgMonthlySpend)}</span>
+                {cfYears.map(y => (
+                  <div key={y.year} className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{y.year}</span>
+                    <div className="flex gap-12">
+                      <span className={cn("font-bold tabular-nums", "text-foreground")}>{formatGBP(y.spend)}</span>
+                      <span className={cn("font-bold tabular-nums", "text-foreground")}>{formatGBP(y.avgMonthlySpend)}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">2025</span>
-                  <div className="flex gap-12">
-                    <span className="text-foreground font-bold">{formatGBP(spend2025 || 24455.39)}</span>
-                    <span className="text-foreground font-bold">{formatGBP(2037.95)}</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -841,7 +740,7 @@ return (
             <SheetHeader className="text-left space-y-1 border-b border-border/30 pb-3">
               <SheetTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Income</SheetTitle>
               <SheetDescription className="text-xs text-muted-foreground font-mono">
-                Income this month
+                Income recorded in the selected period
               </SheetDescription>
               <div className="pt-1">
                 <span className="text-2xl font-bold font-mono text-positive tabular-nums">
@@ -863,20 +762,15 @@ return (
               </div>
 
               <div className="space-y-2 text-xs font-mono">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">2026</span>
-                  <div className="flex gap-12">
-                    <span className="text-positive font-bold">{formatGBP(income2026)}</span>
-                    <span className="text-positive font-bold">{formatGBP(avgMonthlyIncome)}</span>
+                {cfYears.map(y => (
+                  <div key={y.year} className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{y.year}</span>
+                    <div className="flex gap-12">
+                      <span className={cn("font-bold tabular-nums", "text-positive")}>{formatGBP(y.income)}</span>
+                      <span className={cn("font-bold tabular-nums", "text-positive")}>{formatGBP(y.avgMonthlyIncome)}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">2025</span>
-                  <div className="flex gap-12">
-                    <span className="text-positive font-bold">{formatGBP(income2025 || 33210.00)}</span>
-                    <span className="text-positive font-bold">{formatGBP(2767.50)}</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 

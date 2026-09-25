@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,10 @@ import {
 } from '@/features/finance/utils/calculations';
 import {
   ALL_SAVINGS_IDS,
+  createDefaultFinanceSettings,
+  createEmptyTaxConfig,
+  currentTaxYear,
+  DEFAULT_BIWEEKLY_ANCHOR,
   DEFAULT_RECURRING_TEMPLATES,
   DEFAULT_CATEGORY_TEMPLATES,
   SAVINGS_PRESETS
@@ -77,6 +81,15 @@ export function TaxIncomeSettingsDialog({
   const { isAdmin } = useAuth();
   const { toast } = useToast();
 
+  // 2020 through next tax year, plus whatever the loaded settings carry even
+  // if it falls outside that range -- a stored year should stay selectable.
+  const taxYearOptions = useMemo(() => {
+    const years = new Set<number>();
+    for (let y = 2020; y <= currentTaxYear() + 1; y++) years.add(y);
+    years.add(settings.taxYear);
+    return Array.from(years).sort((a, b) => a - b);
+  }, [settings.taxYear]);
+
   // Form Draft States for Configuration Editor
   const [draftTaxConfig, setDraftTaxConfig] = useState<TaxConfig>(taxConfig);
   const [draftRecurringTemplates, setDraftRecurringTemplates] = useState<RecurringTemplate[]>(recurringTemplates);
@@ -97,7 +110,7 @@ export function TaxIncomeSettingsDialog({
   const [payDayInput, setPayDayInput] = useState((settings.payDayOfMonth || 25).toString());
   const [paydaySchedule, setPaydaySchedule] = useState<FinanceSettings['paydaySchedule']>(settings.paydaySchedule || 'monthly_date');
   const [paydayWeekday, setPaydayWeekday] = useState<number>(settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
-  const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(settings.paydayBiweeklyAnchor || '2026-01-02');
+  const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
 
   useEffect(() => {
     if (isOpen) {
@@ -118,7 +131,7 @@ export function TaxIncomeSettingsDialog({
       setPayDayInput((settings.payDayOfMonth || 25).toString());
       setPaydaySchedule(settings.paydaySchedule || 'monthly_date');
       setPaydayWeekday(settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
-      setPaydayBiweeklyAnchor(settings.paydayBiweeklyAnchor || '2026-01-02');
+      setPaydayBiweeklyAnchor(settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
     }
   }, [isOpen, taxConfig, recurringTemplates, creditBureaus, settings]);
 
@@ -234,30 +247,8 @@ export function TaxIncomeSettingsDialog({
   };
 
   const handleResetDefaults = async () => {
-    const defaultSettings: FinanceSettings = databaseDefaults.settings || {
-      grossSalary: 0,
-      pensionType: 'net_pay',
-      personalPensionPercent: 0,
-      employerPensionPercent: 0,
-      studentLoanPlan: 'none',
-      taxCode: '1257L',
-      personalAllowance: 12570,
-      weekends: 104,
-      bankHolidays: 8,
-      workHolidays: 25,
-      workingHoursPerDay: 7.5,
-      taxYear: 2026,
-      ukRegion: 'england-and-wales',
-      holidaysByUser: {},
-      activeSavingsTypes: ALL_SAVINGS_IDS
-    };
-    const defaultTaxConfig: TaxConfig = databaseDefaults.tax_config || {
-      effectiveFrom: '2026-04-06',
-      studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
-      studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
-      incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
-      nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 }
-    };
+    const defaultSettings: FinanceSettings = databaseDefaults.settings || createDefaultFinanceSettings(ALL_SAVINGS_IDS);
+    const defaultTaxConfig: TaxConfig = databaseDefaults.tax_config || createEmptyTaxConfig();
     const defaultRecurringTemplates = databaseDefaults.recurring_templates?.length
       ? databaseDefaults.recurring_templates
       : DEFAULT_RECURRING_TEMPLATES;
@@ -286,7 +277,7 @@ export function TaxIncomeSettingsDialog({
     setPayDayInput((defaultSettings.payDayOfMonth || 25).toString());
     setPaydaySchedule(defaultSettings.paydaySchedule || 'monthly_date');
     setPaydayWeekday(defaultSettings.paydayWeekday !== undefined ? defaultSettings.paydayWeekday : 5);
-    setPaydayBiweeklyAnchor(defaultSettings.paydayBiweeklyAnchor || '2026-01-02');
+    setPaydayBiweeklyAnchor(defaultSettings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
 
     if (isAdmin) {
       try {
@@ -311,7 +302,7 @@ export function TaxIncomeSettingsDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="!flex !flex-col sm:rounded-xl border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none">
-        <DialogHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
+        <DialogHeader className="pl-4 pr-16 sm:pl-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
           <DialogTitle className="font-mono text-base font-bold tracking-tight text-foreground">Tax & Income Settings</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground font-mono">
             Salary, pension, tax code, and working day parameters.
@@ -591,10 +582,9 @@ export function TaxIncomeSettingsDialog({
                         <SelectValue placeholder="Select year..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
-                        <SelectItem value="2025">2025</SelectItem>
-                        <SelectItem value="2026">2026</SelectItem>
-                        <SelectItem value="2027">2027</SelectItem>
-                        <SelectItem value="2028">2028</SelectItem>
+                        {taxYearOptions.map(year => (
+                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -897,51 +887,54 @@ export function TaxIncomeSettingsDialog({
                     <div className="p-4 bg-background/30 border-t border-border/20 space-y-4 text-xs">
                       <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                         {draftRecurringTemplates.map((template, idx) => (
-                          <div key={idx} className="flex flex-col gap-2 p-2.5 rounded-lg border border-border/30 bg-card/50 relative group">
-                            <button
-                              type="button"
-                              onClick={() => setDraftRecurringTemplates(draftRecurringTemplates.filter((_, i) => i !== idx))}
-                              className="absolute top-2 right-2 text-destructive hover:text-destructive opacity-60 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                            <div className="grid grid-cols-12 gap-2 pr-6">
-                              <div className="col-span-2 space-y-1">
-                                <Label className="text-xs text-muted-foreground">Emoji</Label>
-                                <Input
-                                  value={template.emoji}
-                                  onChange={(e) => {
-                                    const updated = [...draftRecurringTemplates];
-                                    updated[idx] = { ...template, emoji: e.target.value };
-                                    setDraftRecurringTemplates(updated);
-                                  }}
-                                  className="h-8 text-center rounded-lg text-xs p-1 border-border/40"
-                                />
+                          <div key={idx} className="flex flex-col gap-2 p-2.5 rounded-lg border border-border/30 bg-card/50 group">
+                            <div className="flex items-end gap-2">
+                              <div className="grid min-w-0 flex-1 grid-cols-12 gap-2">
+                                <div className="col-span-2 space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Emoji</Label>
+                                  <Input
+                                    value={template.emoji}
+                                    onChange={(e) => {
+                                      const updated = [...draftRecurringTemplates];
+                                      updated[idx] = { ...template, emoji: e.target.value };
+                                      setDraftRecurringTemplates(updated);
+                                    }}
+                                    className="h-8 text-center rounded-lg text-xs p-1 border-border/40"
+                                  />
+                                </div>
+                                <div className="col-span-5 space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Name</Label>
+                                  <Input
+                                    value={template.name}
+                                    onChange={(e) => {
+                                      const updated = [...draftRecurringTemplates];
+                                      updated[idx] = { ...template, name: e.target.value };
+                                      setDraftRecurringTemplates(updated);
+                                    }}
+                                    className="h-8 rounded-lg text-xs border-border/40"
+                                  />
+                                </div>
+                                <div className="col-span-5 space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Category</Label>
+                                  <Input
+                                    value={template.category}
+                                    onChange={(e) => {
+                                      const updated = [...draftRecurringTemplates];
+                                      updated[idx] = { ...template, category: e.target.value };
+                                      setDraftRecurringTemplates(updated);
+                                    }}
+                                    className="h-8 rounded-lg text-xs border-border/40"
+                                  />
+                                </div>
                               </div>
-                              <div className="col-span-5 space-y-1">
-                                <Label className="text-xs text-muted-foreground">Name</Label>
-                                <Input
-                                  value={template.name}
-                                  onChange={(e) => {
-                                    const updated = [...draftRecurringTemplates];
-                                    updated[idx] = { ...template, name: e.target.value };
-                                    setDraftRecurringTemplates(updated);
-                                  }}
-                                  className="h-8 rounded-lg text-xs border-border/40"
-                                />
-                              </div>
-                              <div className="col-span-5 space-y-1">
-                                <Label className="text-xs text-muted-foreground">Category</Label>
-                                <Input
-                                  value={template.category}
-                                  onChange={(e) => {
-                                    const updated = [...draftRecurringTemplates];
-                                    updated[idx] = { ...template, category: e.target.value };
-                                    setDraftRecurringTemplates(updated);
-                                  }}
-                                  className="h-8 rounded-lg text-xs border-border/40"
-                                />
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setDraftRecurringTemplates(draftRecurringTemplates.filter((_, i) => i !== idx))}
+                                aria-label={`Remove ${template.name || 'template'}`}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center text-destructive hover:text-destructive opacity-60 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                             <div className="grid grid-cols-3 gap-2">
                               <div className="space-y-1">

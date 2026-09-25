@@ -29,6 +29,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { BudgetCategory, BudgetItem, MockTransaction, RecurringBill } from '@/features/finance/finance-types';
 import { formatGBP, getCategoryDefaultEmoji } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
+import { useSpendingLedger } from '../useSpendingLedger';
 import { Activity, ChevronDown, ChevronRight, Edit2, Info, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Bar, BarChart, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 
@@ -38,12 +39,13 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
   const {
     bankAccounts,
     budgetCategories,
-    mockTransactions,
     recurrings,
     saveDataToSupabase,
     setBudgetCategories,
     settings,
   } = useFinanceData();
+  // Spending history sums this: confirmed transfers are not spending.
+  const { ledger, exclusionsUnreliable } = useSpendingLedger();
 
   const { isItemActive, getCategoryBudget, getCategorySpent } = makeBudgetMath(
     settings.activeSavingsTypes,
@@ -321,7 +323,7 @@ const currentMonthName = new Date().toLocaleDateString('en-GB', { month: 'short'
 // arithmetic. What stays here is the part that is genuinely this page's: which
 // transactions and bills the current category filter admits.
 const today = new Date();
-const categoryTransactions = mockTransactions.filter(tx => isTxInCategory(tx, activeFilterCategory));
+const categoryTransactions = ledger.filter(tx => isTxInCategory(tx, activeFilterCategory));
 const recurringTotalForMonth = (month: number) =>
   recurrings
     .filter(r => isBillInCategory(r, activeFilterCategory) && isDueThisMonth(r, month))
@@ -444,7 +446,7 @@ return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Table */}
-                <div className="overflow-hidden rounded-lg border border-border/30 self-start">
+                <div className="min-w-0 overflow-x-auto rounded-lg border border-border/30 self-start">
                   <table className="w-full text-xs text-left">
                     <thead>
                       <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-xs uppercase tracking-wider text-muted-foreground">
@@ -573,7 +575,7 @@ return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Summary table */}
-                <div className="overflow-hidden rounded-lg border border-border/30 self-start">
+                <div className="min-w-0 overflow-x-auto rounded-lg border border-border/30 self-start">
                   <table className="w-full text-xs text-left">
                     <thead>
                       <tr className="bg-muted/30 border-b border-border/20 font-mono font-semibold text-xs uppercase tracking-wider text-muted-foreground">
@@ -689,7 +691,7 @@ return (
     })()}
 
     {/* Category Pill Filters Bar */}
-    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+    <div className="flex flex-wrap items-center gap-2 pb-2">
       <button
         onClick={() => setSelectedBudgetCategoryFilter('all')}
         className={cn(
@@ -730,6 +732,12 @@ return (
 
     {/* Copilot Money-style Key Metrics & Historical Monthly Trend */}
     <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-6 font-mono">
+      {exclusionsUnreliable && (
+        <p role="alert" className="text-xs text-destructive">
+          Confirmed transfers could not load, so this history counts money moved
+          between your own accounts as spending.
+        </p>
+      )}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-border/10 pb-6">
 
         {/* Left/Top: Title & Historical Bar Chart */}
@@ -898,7 +906,7 @@ return (
                     <span className="font-bold text-sm text-foreground truncate">{category.name}</span>
 
                     {/* Hover actions */}
-                    <div className="flex gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
+                    <div className="flex gap-0.5 card-actions shrink-0 ml-1.5">
                       <button
                         onClick={() => {
                           setActiveCategoryId(category.id);
@@ -969,7 +977,7 @@ return (
                             <span className="font-medium text-foreground/90 truncate">{item.name}</span>
 
                             {/* Item hover actions */}
-                            <div className="flex gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0 ml-1.5">
+                            <div className="flex gap-0.5 card-actions shrink-0 ml-1.5">
                               <button
                                 onClick={() => {
                                   setActiveBudgetItem({ ...item, categoryId: category.id });

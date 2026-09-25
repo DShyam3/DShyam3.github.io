@@ -3,6 +3,7 @@ import {
   calculateWorkingDaysInRange,
   formatDaysList,
   getBookedDaysForMonth,
+  isHalfDay,
   normalizeHolidays,
   parseDays,
   parseEntryDays,
@@ -124,6 +125,56 @@ describe('getBookedDaysForMonth', () => {
 
   it('skips a holiday with unparseable dates', () => {
     expect(getBookedDaysForMonth([{ ...holiday, startDate: 'nope' }], 2025, 11, [])).toEqual([]);
+  });
+
+  it('books a full day as fraction 1', () => {
+    const booked = getBookedDaysForMonth([holiday], 2025, 11, ['2025-12-25', '2025-12-26']);
+    expect(booked.every(b => b.fraction === 1)).toBe(true);
+  });
+
+  it('books a morning off as fraction 0.5 and carries the half', () => {
+    const half = { ...holiday, startDate: '2025-12-19', endDate: '2025-12-19', count: 0.5, halfDay: 'am' as const };
+    expect(getBookedDaysForMonth([half], 2025, 11, [])).toEqual([
+      { day: 19, occasion: 'Christmas', type: 'holiday', fraction: 0.5, halfDay: 'am' },
+    ]);
+  });
+
+  it('books a sick afternoon as fraction 0.5', () => {
+    const halfSick = { ...holiday, startDate: '2025-12-19', endDate: '2025-12-19', count: 0.5, type: 'sick' as const, halfDay: 'pm' as const };
+    const [day] = getBookedDaysForMonth([halfSick], 2025, 11, []);
+    expect(day.type).toBe('sick');
+    expect(day.fraction).toBe(0.5);
+    expect(day.halfDay).toBe('pm');
+  });
+
+  it('books an unmarked single day costing 0.5 as a full calendar day', () => {
+    const unmarked = { ...holiday, startDate: '2025-12-19', endDate: '2025-12-19', count: 0.5 };
+    const [day] = getBookedDaysForMonth([unmarked], 2025, 11, []);
+    expect(day.fraction).toBe(1);
+    expect(day.halfDay).toBeUndefined();
+  });
+
+  it('keeps every day of a range with a fractional total whole', () => {
+    const range = { ...holiday, startDate: '2025-12-15', endDate: '2025-12-17', count: 2.5 };
+    const booked = getBookedDaysForMonth([range], 2025, 11, []);
+    expect(booked.map(b => b.fraction)).toEqual([1, 1, 1]);
+  });
+});
+
+describe('isHalfDay', () => {
+  const day = { startDate: '2025-12-19', endDate: '2025-12-19', halfDay: 'am' as const };
+
+  it('is true for a single date marked morning or afternoon', () => {
+    expect(isHalfDay(day)).toBe(true);
+    expect(isHalfDay({ ...day, halfDay: 'pm' })).toBe(true);
+  });
+
+  it('is false for an unmarked day', () => {
+    expect(isHalfDay({ ...day, halfDay: undefined })).toBe(false);
+  });
+
+  it('is false for a range, even if marked', () => {
+    expect(isHalfDay({ ...day, endDate: '2025-12-20' })).toBe(false);
   });
 });
 

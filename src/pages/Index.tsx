@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ASSETS_URL } from '@/lib/constants';
 import { useSiteContent } from '@/hooks/useSiteContent';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import { SITE } from '@/config/site';
 
 
 import { useExperience, useEducation, Experience, Education } from '@/hooks/useResume';
@@ -78,7 +79,7 @@ const Index = () => {
   return (
     <AppShell>
       <div className="selection:bg-primary/30">
-        <div className="flex flex-col px-4 md:px-0 xl:px-8 py-8 xl:py-6 max-w-6xl xl:max-w-[112rem] mx-auto w-full">
+        <div className="flex flex-col px-4 md:px-0 xl:px-8 py-8 xl:py-6 max-w-full mx-auto w-full">
           {/* Bento Grid Layout */}
           <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[240px_minmax(0,1.15fr)_minmax(0,1fr)] gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
             {/* Profile Image (Mobile Only) */}
@@ -113,10 +114,10 @@ const Index = () => {
               </div>
               <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
                 <p>
-                  {siteContent.about_me_1 || "Welcome to my digital garden. I am Dhyan, a Robotic Engineer with a passion for building things that exist in both the physical and digital worlds."}
+                  {siteContent.about_me_1 || SITE.about[0]}
                 </p>
                 <p>
-                  {siteContent.about_me_2 || "This space is a curated collection of my beliefs, inspirations, and the tools I use to navigate life and engineering."}
+                  {siteContent.about_me_2 || SITE.about[1]}
                 </p>
               </div>
             </div>
@@ -147,7 +148,7 @@ const Index = () => {
                 by start date, newest first (see buildResumeTimeline). Two
                 columns: it spans the row and projects spans the row under it.
                 Three columns: it takes columns 1-2 of row 2, under the
-                portrait and About Me, and projects takes all of column 3. */}
+                portrait and About Me, with projects at the top of column 3. */}
             <div data-palette="sky" className="ambient-card md:col-span-2 xl:col-start-1 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
                 <div className="w-full lg:w-auto lg:shrink-0">
@@ -205,7 +206,7 @@ const Index = () => {
                     icon={Download}
                     label="Download CV"
                     className="rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground hover:border-transparent shrink-0 max-w-full"
-                    onClick={() => openAndDownload(cvUrl, 'Dhyan_Shyam_CV')}
+                    onClick={() => openAndDownload(cvUrl, SITE.cvFileName)}
                   />
                 </div>
               </div>
@@ -257,7 +258,7 @@ const Index = () => {
                             </p>
                           </div>
                           {isAdmin && (
-                            <div className="ml-auto flex shrink-0 items-center gap-2 opacity-100 lg:opacity-0 lg:group-hover/item:opacity-100 lg:group-focus-within/item:opacity-100 transition-opacity">
+                            <div className="ml-auto flex shrink-0 items-center gap-2 card-actions">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -307,8 +308,8 @@ const Index = () => {
             </div>
 
             {/* Projects Portfolio. Two columns: the full row under the
-                timeline. Three columns: all of column 3. */}
-            <div data-palette="peach" className="ambient-card md:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-start-1 xl:row-span-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group cursor-pointer flex-1" style={{ boxShadow: 'var(--shadow-border)' }}>
+                timeline. Three columns: a content-sized card in column 3. */}
+            <div data-palette="peach" className="ambient-card md:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-start-1 self-start bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
                 <FolderGit2 className="w-8 h-8 text-primary/70" />
               </div>

@@ -25,11 +25,14 @@ const RetirementSurface = lazy(() => import('./surfaces/RetirementSurface'));
 const TransfersSurface = lazy(() => import('./surfaces/TransfersSurface'));
 const BudgetSurface = lazy(() => import('./surfaces/BudgetSurface'));
 const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
+const DebtsSurface = lazy(() => import('./surfaces/DebtsSurface'));
+const StudentLoanSurface = lazy(() => import('./surfaces/StudentLoanSurface'));
 const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
 const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
 import { consumeTrueLayerOAuthState } from './truelayer-oauth';
 import { useFinanceTotals } from './useFinanceTotals';
+import { PaydaySummary, paydayCountdown } from './components/PaydaySummary';
 import { SurfaceHero } from './components/SurfaceHero';
 import { ProfileAvatar } from './components/ProfileAvatar';
 import { NetWorthTrend } from './components/NetWorthTrend';
@@ -49,6 +52,7 @@ import { AddRecurringDialog } from '@/features/finance/dialogs/AddRecurringDialo
 import { EditRecurringDialog } from '@/features/finance/dialogs/EditRecurringDialog';
 import { TaxIncomeSettingsDialog } from '@/features/finance/dialogs/TaxIncomeSettingsDialog';
 import { formatGBP } from '@/features/finance/utils/calculations';
+import { BankSyncStatus } from '@/features/finance/components/BankSyncStatus';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import {
   investmentActivityId,
@@ -129,6 +133,7 @@ function FinanceView() {
   const {
     trueLayerStatus,
     isSyncingTrueLayer,
+    syncAvailableAt,
     isConnectingTrueLayer,
     setIsConnectingTrueLayer,
     checkTrueLayerConnection,
@@ -652,7 +657,7 @@ function FinanceView() {
           aside={
             <>
               <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Next payday</p>
-              <p className="font-sans text-lg font-bold tabular-nums">{nextPayday?.daysRemaining ?? 0} days</p>
+              <p className="font-sans text-lg font-bold tabular-nums">{paydayCountdown(nextPayday?.daysRemaining ?? 0)}</p>
             </>
           }
         />
@@ -696,12 +701,18 @@ function FinanceView() {
           label="Take-home this tax year"
           value={formatGBP(results.netTakeHome)}
           tone="neutral"
-          detail={`${formatGBP(monthlyIncome)} a month after tax, pension and student loan`}
+          detail={`${formatGBP(monthlyIncome)} a month after tax, pension and student loan, modelled from your salary settings`}
+          // Tax & Income shows the package in full just below, so its slot
+          // carries payday instead; Time Spent has no other home for either.
           aside={
-            <>
-              <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Gross package</p>
-              <p className="font-sans text-lg font-bold tabular-nums">{formatGBP(results.totalPackage)}</p>
-            </>
+            activeTab === 'tax-income' ? (
+              <PaydaySummary settings={settings} nextPayday={nextPayday} />
+            ) : (
+              <>
+                <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Gross package</p>
+                <p className="font-sans text-lg font-bold tabular-nums">{formatGBP(results.totalPackage)}</p>
+              </>
+            )
           }
         />
       );
@@ -714,9 +725,9 @@ function FinanceView() {
   const toolbar = (
     <div className="finance-navigation flex flex-col">
     {/* Primary navigation: the five surfaces. */}
-    <div className="flex items-center justify-between border-b border-border/50 px-4 md:px-0 gap-4">
-      <nav className="finance-surface-nav flex flex-nowrap items-center justify-start gap-2 md:gap-4 py-4 overflow-x-auto scrollbar-hide flex-1">
-        {SURFACES.map((surface, index) => {
+    <div className="flex flex-wrap items-center justify-between border-b border-border/50 px-4 md:px-0 gap-x-4">
+      <nav aria-label="Finance" className="finance-surface-nav flex flex-wrap items-center justify-start gap-2 md:gap-4 py-3 flex-1">
+        {SURFACES.map((surface) => {
           const isActive = activeSurface === surface.key;
           return (
             <div key={surface.key} className="flex items-center gap-2 md:gap-4">
@@ -730,9 +741,6 @@ function FinanceView() {
               >
                 <DotMatrixText text={surface.label.toUpperCase()} size="xs" />
               </button>
-              {index < SURFACES.length - 1 && (
-                <span className="finance-surface-sep text-muted-foreground/30 hidden md:inline">·</span>
-              )}
             </div>
           );
         })}
@@ -766,7 +774,7 @@ function FinanceView() {
     {/* Secondary navigation: sections within a surface. Home has one
         section, so it renders no second row. */}
     {activeSections.length > 1 && (
-      <nav className="flex flex-nowrap items-center gap-4 md:gap-5 py-3 px-4 md:px-0 overflow-x-auto scrollbar-hide border-b border-border/30">
+      <nav aria-label="Finance sections" className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-5 py-3 px-4 md:px-0 border-b border-border/30">
         {activeSections.map(tab => (
           <button
             key={tab}
@@ -844,7 +852,11 @@ function FinanceView() {
           {/* ==========================================
               TAB 6: ACCOUNTS
               ========================================== */}
-          {activeTab === 'accounts' && <AccountsSurface totalLoanBalance={totalLoanBalance}/>}
+          {activeTab === 'accounts' && <AccountsSurface />}
+
+          {activeTab === 'debts' && <DebtsSurface />}
+
+          {activeTab === 'student-loan' && <StudentLoanSurface />}
 
           {/* ==========================================
               TAB 7: RECURRINGS
@@ -883,6 +895,14 @@ function FinanceView() {
               goals={goals}
               budgetCategories={budgetCategories}
               formatGBP={formatGBP}
+              syncStatus={
+                <BankSyncStatus
+                  status={trueLayerStatus}
+                  isSyncing={isSyncingTrueLayer}
+                  syncAvailableAt={syncAvailableAt}
+                  onSync={syncTrueLayer}
+                />
+              }
             />
           )}
 

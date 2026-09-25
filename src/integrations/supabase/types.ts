@@ -221,6 +221,7 @@ export type Database = {
         Row: {
           annual_fee: number
           balance: number
+          credit_limit: number | null
           color: string | null
           created_at: string
           emoji: string | null
@@ -236,6 +237,7 @@ export type Database = {
         Insert: {
           annual_fee?: number
           balance?: number
+          credit_limit?: number | null
           color?: string | null
           created_at?: string
           emoji?: string | null
@@ -251,6 +253,7 @@ export type Database = {
         Update: {
           annual_fee?: number
           balance?: number
+          credit_limit?: number | null
           color?: string | null
           created_at?: string
           emoji?: string | null
@@ -695,6 +698,7 @@ export type Database = {
         Row: {
           balance: number
           color: string | null
+          course_end_date: string | null
           created_at: string
           draws: Json
           emoji: string | null
@@ -720,6 +724,7 @@ export type Database = {
         Insert: {
           balance?: number
           color?: string | null
+          course_end_date?: string | null
           created_at?: string
           draws?: Json
           emoji?: string | null
@@ -745,6 +750,7 @@ export type Database = {
         Update: {
           balance?: number
           color?: string | null
+          course_end_date?: string | null
           created_at?: string
           draws?: Json
           emoji?: string | null
@@ -1479,6 +1485,101 @@ export type Database = {
           },
         ]
       }
+      finance_student_loan_rates: {
+        Row: {
+          bank_rate_percent: number | null
+          cap_percent: number | null
+          created_at: string
+          effective_from: string
+          id: string
+          is_default: boolean
+          plan2_lower_threshold: number | null
+          plan2_upper_threshold: number | null
+          rpi_percent: number
+          source: string | null
+          updated_at: string
+        }
+        Insert: {
+          bank_rate_percent?: number | null
+          cap_percent?: number | null
+          created_at?: string
+          effective_from: string
+          id?: string
+          is_default?: boolean
+          plan2_lower_threshold?: number | null
+          plan2_upper_threshold?: number | null
+          rpi_percent: number
+          source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bank_rate_percent?: number | null
+          cap_percent?: number | null
+          created_at?: string
+          effective_from?: string
+          id?: string
+          is_default?: boolean
+          plan2_lower_threshold?: number | null
+          plan2_upper_threshold?: number | null
+          rpi_percent?: number
+          source?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      finance_sync_log: {
+        Row: {
+          accounts_synced: number
+          banks: Json
+          connections_synced: number
+          duration_ms: number
+          error_message: string | null
+          id: string
+          profile_id: string
+          status: string
+          synced_at: string
+          transactions_new: number
+          transactions_synced: number
+          trigger: string
+        }
+        Insert: {
+          accounts_synced?: number
+          banks?: Json
+          connections_synced?: number
+          duration_ms?: number
+          error_message?: string | null
+          id?: string
+          profile_id: string
+          status: string
+          synced_at?: string
+          transactions_new?: number
+          transactions_synced?: number
+          trigger: string
+        }
+        Update: {
+          accounts_synced?: number
+          banks?: Json
+          connections_synced?: number
+          duration_ms?: number
+          error_message?: string | null
+          id?: string
+          profile_id?: string
+          status?: string
+          synced_at?: string
+          transactions_new?: number
+          transactions_synced?: number
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_sync_log_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_tax_configs: {
         Row: {
           created_at: string
@@ -1532,6 +1633,7 @@ export type Database = {
           name: string
           notes: string | null
           profile_id: string | null
+          provider_category: string | null
           provider_transaction_id: string | null
           tags: string[] | null
           updated_at: string
@@ -1552,6 +1654,7 @@ export type Database = {
           name: string
           notes?: string | null
           profile_id?: string | null
+          provider_category?: string | null
           provider_transaction_id?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -1572,6 +1675,7 @@ export type Database = {
           name?: string
           notes?: string | null
           profile_id?: string | null
+          provider_category?: string | null
           provider_transaction_id?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -1736,6 +1840,7 @@ export type Database = {
           count: number
           created_at: string
           end_date: string
+          half_day: string | null
           id: string
           is_default: boolean
           occasion: string | null
@@ -1748,6 +1853,7 @@ export type Database = {
           count?: number
           created_at?: string
           end_date: string
+          half_day?: string | null
           id: string
           is_default?: boolean
           occasion?: string | null
@@ -1760,6 +1866,7 @@ export type Database = {
           count?: number
           created_at?: string
           end_date?: string
+          half_day?: string | null
           id?: string
           is_default?: boolean
           occasion?: string | null
@@ -2282,18 +2389,24 @@ export type Database = {
           day_of_week: string
           id: number
           movie_id: number | null
+          scheduled_date: string | null
+          schedule_mode: string
           tv_show_id: number | null
         }
         Insert: {
           day_of_week: string
           id?: number
           movie_id?: number | null
+          scheduled_date?: string | null
+          schedule_mode?: string
           tv_show_id?: number | null
         }
         Update: {
           day_of_week?: string
           id?: number
           movie_id?: number | null
+          scheduled_date?: string | null
+          schedule_mode?: string
           tv_show_id?: number | null
         }
         Relationships: [

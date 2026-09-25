@@ -17,6 +17,8 @@ export interface ScheduleItem {
   title?: string;
   category?: 'TV Shows' | 'Movies' | 'Upcoming';
   image_url?: string;
+  scheduledDate?: string;
+  mode?: 'weekly' | 'date';
 }
 
 const DAYS = [
@@ -36,7 +38,22 @@ export function useSchedule() {
 
   const fetchSchedule = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('weekly_schedule').select('*');
+      let { data, error } = await supabase.from('weekly_schedule').select('*');
+
+      // Keep the existing weekly scheduler usable while the date columns are
+      // being rolled out. The legacy projection is safe because all existing
+      // rows are equivalent to recurring weekly entries.
+      if (error) {
+        const fallback = await supabase
+          .from('weekly_schedule')
+          .select('id, day_of_week, tv_show_id, movie_id');
+        data = fallback.data?.map((item) => ({
+          ...item,
+          scheduled_date: null,
+          schedule_mode: 'weekly',
+        })) ?? null;
+        error = fallback.error;
+      }
 
       if (error) throw error;
 
@@ -45,6 +62,8 @@ export function useSchedule() {
         watchlistItemId: (item.tv_show_id || item.movie_id || '').toString(),
         day: item.day_of_week as ScheduleItem['day'],
         category: item.tv_show_id ? 'TV Shows' : 'Movies',
+        scheduledDate: item.scheduled_date ?? undefined,
+        mode: item.schedule_mode === 'date' ? 'date' : 'weekly',
       }));
 
       setSchedule(mapped);
@@ -66,6 +85,8 @@ export function useSchedule() {
         day_of_week: item.day,
         tv_show_id: isTVShow ? parseInt(item.watchlistItemId) : null,
         movie_id: !isTVShow ? parseInt(item.watchlistItemId) : null,
+        scheduled_date: item.scheduledDate ?? null,
+        schedule_mode: item.mode ?? 'weekly',
       };
 
       const { data, error } = await supabase
@@ -149,7 +170,12 @@ export function useSchedule() {
   };
 
   const getScheduleForDay = (day: (typeof DAYS)[number]) => {
-    return schedule.filter((item) => item.day === day);
+    const monthKey = new Date().toISOString().slice(0, 7);
+    return schedule.filter((item) =>
+      item.mode !== 'date'
+        ? item.day === day
+        : item.day === day && item.scheduledDate?.startsWith(monthKey),
+    );
   };
 
   const isInSchedule = (watchlistItemId: string) => {

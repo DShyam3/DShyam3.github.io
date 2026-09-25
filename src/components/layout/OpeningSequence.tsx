@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { ASSETS_URL } from '@/lib/constants';
+import { SITE } from '@/config/site';
 
 import { StarField } from '@/components/layout/StarField';
 import './OpeningSequence.css';
@@ -13,7 +14,7 @@ interface OpeningSequenceProps {
 // and keeping it here is what lets the intro effect below honestly declare an
 // empty dependency array.
 const CONFIG = {
-    fullText: "Hi, I'm Dhyan Shyam",
+    fullText: `Hi, I'm ${SITE.name}`,
     typeSpeed: 100,
     initialDelay: 600
 };

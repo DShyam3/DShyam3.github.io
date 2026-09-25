@@ -1934,3 +1934,439 @@ now starts at 1280px (`FIT_TO_SLICE` in CardGrid.tsx) — and only with a fine
 pointer, because width cannot tell a big tablet from a laptop: an iPad Pro 13
 on its side (1366px) fitted ten 115px cards across. A touch screen with no
 mouse sizes on width at any width, the card growing with it up to 13rem.
+
+
+**One width-driven layout contract, with explicit distance viewing — 2026-09-21.**
+
+The tablet-only exception above is superseded: shared card grids now size by
+available width on laptops and desktops too. Fitting whole rows to viewport
+height made cards smaller on short windows and introduced different reading
+sizes for otherwise similar devices. Stable base type, bounded content widths
+and wrapping controls now carry one layout across brands and orientations.
+Touch affordances follow pointer capability rather than a tablet-width guess.
+
+TV mode is chosen in the menu and persisted, rather than inferred from pixel
+resolution: a 4K desk monitor and a television viewed across a room need different
+scales. The mode increases type and controls and adds spatial focus navigation.
+This implementation is local; physical devices and actual TV remotes still need
+validation.
+
+
+**Keep show context beside episode browsing — 2026-09-21.**
+
+Series details now give the episode rail its own scroll area, so browsing a long
+season does not move the poster and show information out of view. Tablet layouts
+stack the rail below that context; larger layouts place it alongside. Long show
+information remains independently scrollable to avoid clipping. Episode names
+are always visible, removing the extra reveal action. The earlier hidden-title
+behavior is superseded.
+
+**Weekly schedule and episode progression use the rows already in the tree — 2026-09-21.**
+
+Scheduling continues to use the existing `weekly_schedule` day rows. When a
+title is added from News, its release weekday is the sensible default while
+the admin can still choose another weekly day. Episode progression is derived
+deterministically from each episode's `release_date` and watched rows: the
+next unwatched released episode is actionable, while future episodes remain
+unreleased and unavailable until their release date.
+
+**News scheduling supports weekly and one-off release dates — 2026-09-21.**
+
+The schedule dialog offers an automatic weekly release-day mode and a one-off
+calendar date. TV shows default to weekly on their release weekday; films
+default to their specific release date. The `schedule_mode` and
+`schedule_date` migration adds this distinction to the existing schedule rows.
+The migration is prepared locally but has not been applied to the database.
+
+#### 8.K Server-side watchlist sync and per-function spam protection — 2026-09-22
+
+**The watchlist sync runs only server-side.** The browser kept its own copy of
+the sync in `WatchlistContext.tsx`, deliberately duplicated with
+`watchlist-cron-sync` because Deno cannot import from `src/`. The browser copy
+called TMDB through `tmdb-proxy`, which allows 60 requests a minute per IP. A
+full sync of the library (1,167 titles when this closed) makes one call per title
+plus one per recent season, so a manual run failed most titles every time; the
+nightly cron, calling TMDB directly, finished in about a minute. The Sync
+buttons now call the function with the admin's session, and the browser copy
+and its tests are deleted. That also retires the standing hazard of keeping two
+copies of the rules in step.
+
+**Limits are enforced by the function, not the button.** A disabled button
+stops a double click, not a second tab, a reload or a script. Each function
+that spends a third-party call refuses excess with 429 and `retry_after`, and
+keeps its state in `rate_limits`, the service-role-only table `tmdb-proxy`
+already counted in, so no schema was added. Scheduled service-role runs are
+exempt.
+
+**Sliding cooldowns for the syncs, fixed windows elsewhere.** `check_rate_limit`
+counts per clock-aligned window. For a sync, "one per ten minutes" has to mean
+ten minutes after the last run; a fixed window lets two runs through a second
+apart across a boundary. `_shared/cooldown.ts` inserts one row per claim, then
+looks for any other claim in the window: if there is one, it deletes its own
+row and refuses. Two racing claims both refuse and retry shortly, so a race
+costs a retry, never a second run. Per-minute caps (single-title resync, logo
+cache) keep the fixed window, where boundary bursts do not matter.
+
+### Phase 7.J — Wealth sections: Student Loan split from Debts (2026-09-23)
+
+**7.J.1 — Student loans belong in their own section.** Income-contingent
+repayment and write-off make "paid off %", "debt-free by" and DTI calculations
+wrong for student loans when combined with mortgages, car finance and credit
+cards. Phase 7 modelled repayment from a fixed interest and minimum payment;
+student loans need a salary-linked calculation and a write-off date instead.
+Finance › Wealth splits Debts from Student Loan, giving each a separate hero
+number and projection, and allowing the dashboard and Plan surface to calculate
+net worth and DTI correctly without student loans skewing them.
+
+**7.J.2 — Projections draw from verified anchors only.** The earlier code
+interpolated balances between statements using a geometric curve, which was
+fiction wherever it was drawn. Phase 7.J stops drawing years before the first
+verified balance, because there is no non-invented way to fill them. A debt's
+projection runs from its latest known statement; a student loan's runs from the
+latest SLC statement plus interest accrued since then, with payslip deductions
+replacing modelled ones up to the latest payslip date.
+
+**7.J.3 — Real student loans use actual payslip deductions where known.** The
+projection could match the headline balance only if the interest and repayment
+calculation came from one run. It does: the simulator runs the loan month by
+month using actual student-loan line items from payslips where they exist, and
+models the rest from salary and an assumed pay rise. Anywhere payslip data
+ends, the model continues seamlessly, and the two halves cannot disagree.
+
+**7.J.4 — Course end date is inferred, not stored.** Repayment begins the April
+after the course ends, and write-off counts from that April. Storing the date
+would need a migration and a new column. Instead, it is inferred from the
+borrowing pattern: Aug–Dec draws ⇒ course ends 30 June next year; Jan–Jul
+draws ⇒ 30 June same year. Keeps the schema stable and lets every loan's
+inference stand as a testable rule in the code.
+
+**7.J.5 — Published student loan rates are versioned rows, not code constants.**
+`finance_student_loan_rates` is keyed by effective date, the same shape as
+`finance_tax_configs`. A year's SLC rate update is one INSERT, not a code
+release. The app falls back gracefully if the row is not yet applied (reads are
+unoptimistic; rates assume sensible defaults until a table query returns the
+actual rows). New rows may be added retroactively — the engine re-runs interest
+calculations when a loan's balance is recorded with an earlier date than the
+latest rate row.
+
+**7.J.6 — Interest rate is derived, not entered.** The student loan shows which
+published rate applies to its balance. Storing one is history; the engine
+derives it. Changing SLC rates changes every loan's displayed rate without
+edits, and the feature survives `finance_student_loan_rates` being empty while
+deploying. A student loan's stored interest rate is used for the projection when
+no published row covers it; a one-click save updates the stored rate when the
+derivation changes.
+
+**7.J.7 — Interest in an anchor month is pro-rated.** When a balance is recorded
+on the 15th, the interest charge for that month runs from the 15th only, not
+from the 1st. The engine calculates the number of days after the recorded date,
+applies the daily rate to that period, and adds it to that month's interest.
+This keeps interest accrual aligned to reality: if a balance is known on a
+specific date, what happened before it is not the engine's business.
+
+**7.J.8 — SLC's billing timing is modelled exactly — 2026-09-23.** The owner
+reconciles the app against SLC's own statements, so the model must reflect SLC's
+timing rather than accruing the full income-linked rate as it accrues: Plan 2
+interest charges at the annual RPI rate during the tax year, and the income-linked
+portion accrues monthly as a pending top-up, landing at a fixed lag after the tax
+year ends (default 6 months, matching typical HMRC confirmation timing, editable
+as the owner sees SLC's own landing dates). The headline figure shows what SLC
+should display at the end of this month, plus the pending top-up and roughly when
+it lands.
+
+**7.J.9 — A tax year's income, not current salary, sets its Plan 2 rate.** Each
+year's Plan 2 threshold is compared against the *prior* tax year's actual income
+to set repayment *this* year. The engine derives annual income from payslips
+(stored in full for complete past years, scaled for partial past years, this
+year's pay so far plus current salary projected to year end for the current year)
+and surfaces it under "Income by tax year" so reconciliation is legible.
+
+**7.J.10 — Published rate history seeded from gov.uk announcements.** Rather
+than hardcoding rates in code or requiring a migration for each SLC update, the
+`finance_student_loan_rates` table captures each published change — one row per
+effective date, with RPI, cap, Plan 2 threshold, Plan 2 full-rate income and
+Bank Rate — sourced from gov.uk/guidance/how-interest-is-calculated-plan-2 and
+cross-checked against the owner's statement. Rows are matched at month end so a
+6 April threshold change applies from April. Historical rows seeded 6 April 2020
+through 1 September 2026 (24 rows); new rates are added as SLC publishes them.
+A published rates editor appears in the Student Loan assumptions panel, with
+add/delete for rows and a notice when no row covers today — the yearly update
+step that happens each April.
+
+### Public UK edition — a public version leaves no personal data in the code (2026-09-24)
+
+**Owner decision 2026-09-24: a public version would be UK-only; everything
+specific to one person was removed from code.** The codebase now holds no
+credentials, no personal bank details, no employer names in hard-coded lists,
+no hand-kept provider names, and no analytics configuration. All of these shift
+to either environment variables (VITE_ADMIN_EMAIL required for deploy), a single
+site configuration file (`src/config/site.json`), or server-side allowlists in
+Supabase secrets.
+
+The reasons bind the implementation:
+
+- **No hard-coded personal data, so a public fork reads as generic from day one.**
+  A different owner changes only config files, not code. Employer logos come from
+  their own experience/education rows; bank colours from TrueLayer (the provider
+  already chosen). Default budget categories are UK-wide (Energy, Council Tax,
+  etc.), not this owner's subscriptions. Payslip parser recognises 60+ line types
+  instead of 3, and derives neither employer pension nor employer NI as the
+  employee's. Analytics only appears when an id is set; the privacy notice says
+  "None." otherwise.
+
+- **Edge functions stay portable through centralised CORS and OAuth configuration.**
+  SITE_ORIGIN as a Supabase function secret means a fork can move the live site
+  later without editing code. TrueLayer OAuth and function CORS read it at
+  request time via `supabase/functions/_shared/site-origins.ts` (13 Deno tests).
+  Without SITE_ORIGIN set, production origins get no Access-Control-Allow-Origin
+  (fail closed, never null).
+
+- **Site identity lives in one file.** `src/config/site.json` holds name, title,
+  tagline, role, description, location, URL, socials, CV filename and about
+  fallbacks. Header, footer, opening sequence, home page, privacy notice,
+  index.html meta tags (via a Vite plugin), OG-image and logo-fetch scripts all
+  read it. A fork changes one file, not twenty.
+
+**The parser never derives "other deductions" — 2026-09-24.** Payslip parsing
+tried and reverted in the same session: gross − net − named deductions "confirmed"
+by a stated Total Deductions. The reviewer showed the check reduces to gross −
+net == total, which is true on almost any payslip, so an unlabelled student loan
+("SLC Repayment") or pension ("LGPS") became "other" and the payslip then
+reconciled, removing the only warning. An unreconciled payslip that asks a person
+is the better failure. The parser now reads bare "NI", "Ees/EE NI", "Stud Loan",
+"SL Plan N", "Total Pay", "Net Payable", and correctly distinguishes employer
+NI in all its forms; it does not invent deductions (92 parser tests).
+
+
+**Watching plans belong in News; display size is a reading preference — 2026-09-23.**
+
+Your Week now places today's and planned days beside watchlist news, with a full
+calendar available on expansion. This replaces the separate Schedule view and
+keeps planning near the titles that prompt it. News and Library share poster
+anatomy and scheduling controls instead of maintaining parallel card layouts.
+
+Standard/Larger replaces TV mode. Resolution cannot establish viewing distance,
+and the preference now changes reading size while keeping native keyboard
+behavior; the custom spatial-navigation layer is removed. The fixed slim frame
+and compact Library controls supersede the earlier scrolling-toolbar decision.
+
+### 8.L Transfer detection — pairing, dismissal, and evidence (2026-09-24)
+
+**Binding multiple profiles by amount, not by date window.** The initial plan
+grouped likely transfers in a date window (same day or day before/after) and
+paired the largest unmatched amounts. This could hide unconfirmed transfers that
+sat unsquared for months. Instead, transfer detection now builds an index of
+inflows keyed by amount in pence, so any two transactions matching that amount —
+regardless of date — are proposed as a pair. The cost is roughly linear (one hash
+lookup per outflow) while keeping the whole history in scope. Confirmed pairs are
+removed from the pool before one-to-one assignment, so dismissing a link does not
+prevent a transaction from pairing with another match.
+
+**Dismissed transfers are stored, not filtered after the fact.** Initial design
+proposed storing only confirmed links and deriving dismissals by exclusion: rows
+that matched but were not linked. This forced every consumer to remember the
+exclusion rule and apply it independently, a fragile pattern. Instead, dismissed
+pairs live in their own `finance_transfer_dismissals` table alongside links,
+scoped to `(profile_id, outflow, inflow)` — the pair itself, not the individual
+transaction — with a `reason` column for notes. The table itself enforces the
+uniqueness that matters: a dismissed pair cannot be re-proposed without undoing
+the dismissal. RLS grants SELECT/INSERT/UPDATE/DELETE to `is_admin()` only;
+dismissals are profile-scoped via foreign keys.
+
+**A failed transfer-links read clears stale data and flags the figures.** When a
+profile is switched, the cached links for the previous profile may belong to a
+different set of accounts entirely. Stale links silently exclude amounts from
+Cash Flow and spending, invisible to the reader until they notice the figures
+changed. Now: a failed fetch clears the cache (no stale data), sets a flag
+`transferLinksFailed`, and the Cash Flow header and Possible Transfers card
+render a red alert line saying totals include money moved between own accounts
+until links load. Stale exclusions are impossible; missing exclusions are visible.
+
+### 8.M Bank sync history — logging proof and run visibility (2026-09-24)
+
+**Sync proof is a row, not pg_cron's job_run_details.** The nightly bank sync
+runs on a pg_cron schedule at 05:00 UTC, calling an HTTP endpoint that queues
+the sync work. PostgreSQL's `pg_cron.job_run_details` records when the call was
+queued, not when the work completed — a "succeeded" status means the HTTP
+request succeeded, not that transactions arrived or balances synced. Without a
+row written by the function itself, there is no way to detect a timeout, a crash,
+or a queued-but-never-completed run. The new `finance_sync_log` table records
+one row per sync run (triggered or manual), with status (success/partial/error),
+banks synced, transaction counts, duration, and per-bank outcome. A night with
+no row means the scheduled run was missed.
+
+**Sync history is visible on the client.** A popover on the Transactions tab
+toolbar and beside "Sync All Banks" in Wealth → Accounts shows run history
+(Nightly / Manual / Missed), each bank's last sync and consent expiry within 14
+days, the next nightly run time, and a manual sync trigger. A red dot on the
+trigger marks the newest run or newest nightly run when it is not a success. The
+frontend reads the history once on mount and clears the params; it does not poll.
+The `formatRelativeTime` function, shared with Watchlist, renders relative times.
+
+### 7.L Guidance alerts and credit limits (2026-09-24)
+
+**Guidance reuses the alerts engine, not a separate module.** Statements like
+"you are carrying £2,400 at 24.9% while £3,000 sits in a current account" are
+arithmetic over rows already read (`lib/finance/credit.ts`, `lib/finance/debt.ts`).
+The alerts engine (`src/lib/finance/alerts.ts`, phrased in `components/AlertList.tsx`,
+shown in Home's alert list) is where decisions live as data: `costly_debt_beside_cash`
+and `credit_utilisation_high` are typed alerts keyed by the data they need. One
+derived, never-stored list. Same pure/deterministic stance as the ledger.
+
+**10% APR is a named constant, not a Bank Rate comparison.** No account interest
+rates (AER) are stored, and `finance_student_loan_rates.bank_rate_percent` is NULL
+in every seeded row. The threshold sits well above Bank Rate's 2023 peak of 5.25%
+and stands in for what cash earns. Storing AER would let the rule compare debt
+against actual cash rates — left open for a future migration.
+
+**Spare cash measured against the emergency-fund goal target, not all cash.**
+With no target the rule is silent rather than treating all account balances as spare.
+Credit unions and home-saver accounts (typical savings buckets) are left out because
+they have no balance row; the current+savings account sum is the reachable spare cash.
+
+**Student loans and mortgages excluded.** Income-contingent forgiveness carries
+writeoff dates and caps that early repayment would foreclose — different question
+than "this debt is costing interest I can afford to stop". APR-based guidance is
+for debt where paying early is always right.
+
+**Utilisation compares the rounded displayed percent.** The percent shown and the
+reason it fired never disagree. Unknown limits are left out entirely (not treated as
+zero), so a card's utilisation cannot be calculated when the limit is not known.
+
+**Credit limit storage.** New nullable column `finance_bank_accounts.credit_limit`
+(CHECK ≥ 0; migration `20260924130000`); field on add/edit account forms for credit cards.
+Blank means unknown, not £0. Account view shows "Credit limit" or "Not known". TrueLayer
+sync upserts rows in homogeneous batches (all with limit, all without limit) so the union
+operation does not NULL a hand-entered limit on a row without one in the same batch.
+Sync now writes the card's limit from TrueLayer's `credit_limit` when returned.
+
+**Wording is figures only, never instruction.** FCA framing: alert list provides
+information, not advice. "Debt at 10% APR / Spare cash £3,000 / Coverable £2,400 /
+About one year's interest £240/yr" names facts. No recommendation, no redirect toward
+a product.
+
+### Footer optical spacing (2026-09-24)
+
+The owner requested spacing that accounts for unequal side-label widths.
+London and the clock therefore sit in the remaining flex space between the
+copyright label and credit, giving equal blank gaps on either side rather
+than centring on the page midpoint in an equal-column grid. The credit uses
+two separate text spans, stacked at 768–1023px and in one row from 1024px;
+the phone credit remains hidden.
+
+### 8.H Finance transfer detection — extend and complete (2026-09-24)
+
+**One hook owns "which rows count as spending/income":** `useSpendingLedger()`
+filters confirmed transfers and supplies Home's month summary, Budget's spending
+history and Cash Flow. Before, only Cash Flow excluded transfers, so the same
+month showed two spending totals depending on the page — Home showed one figure,
+Budget showed another. Transaction lists keep every row; the filter applies to
+figures only.
+
+**One-sided transfers use a separate verdict table, not nullable legs or a column
+on transactions.** A one-sided transfer is a bank or name-identified row with no
+matching payment in another tracked account. They are stored in `finance_transfer_single_legs`
+as a separate decision table `(profile_id, transaction_id, verdict)`, where verdict
+is `internal` (the owner's own account), `external` (real spending/income), or NULL
+(undecided). This keeps `finance_transfer_links` strictly pairs, and confirmations
+stay beside the ledger rather than splitting into separate storage. The same stance
+as payslip reconciliations and dismissals: decisions live in a separate table, keyed
+by the transaction itself.
+
+**Only direct evidence proposes a one-sided transfer.** The bank's own `transfer`
+label (written to `provider_category` by TrueLayer) or a transfer-like pattern in
+the transaction name are the only signals. The "Savings" budget category does not
+count — it says how the owner labelled spending, not where the money went. No silent
+categorisation happens; every one-sided transfer waits for an owner verdict before
+it affects figures.
+
+**Bank transfers are filed as "Transfers", not the Wants fallback.** TrueLayer
+returns `provider_category = "TRANSFER"` for rows the bank itself calls a transfer.
+Instead of mapping this to `Wants` as before, the sync now files it as a row with
+`category = "Transfers"` (a user-facing label, not a verdict). Transfer detection
+still runs and proposes confirmation; the label is a signal from the bank, not a
+final answer.
+
+**The sync keeps an existing row's category.** Previous syncs re-mapped every row's
+category from the bank's `provider_category` on every run. This meant a re-categorisation
+made inside the 7-day overlap window that the next sync re-reads would be silently
+overwritten. Now: on insert, `provider_category` maps to `category`; on update, the
+category stays unchanged. Re-mapping happens only if the owner re-categorises by hand.
+
+### 8.H Finance — Cash Flow rebuilt on tested ledger engine (2026-09-24)
+
+**Cash Flow reports the ledger only.** It previously added every recurring bill due in a
+month on top of spending, which double-counted any bill paid from a synced account.
+To forecast spending including unpaid bills, Recurrings is the right surface. Cash Flow
+shows what actually moved.
+
+**No payroll invention.** A month without income rows showed an estimated salary from
+tax settings. Removed: placeholder figures from the original template (`net2025 ||
+8754.61` and raw literals) read as the owner's numbers, fake account digits ('3860'
+and '8901'), and fixed hard-coded rows for 2025 and 2026. Year rows are now derived
+from the chosen period.
+
+**The Sankey reads the same months as the headline.** `summariseCashFlow` and
+`cashFlowSankey` share `monthlyCashFlow`, so the two cannot disagree on income,
+spending or period totals. recharts' Sankey with `iterations={0}` and `sort={false}`
+is deterministic, already a dependency, and cheaper to deploy than `d3-sankey`.
+
+**"Other" nodes always last; the hub names the larger side.** Recharts sizes nodes
+per their flow, so a smaller source or sink always occupies less space. Naming the
+hub for the major direction — "Spending" when outflows exceed inflows — ensures
+it never labels a figure bigger than income as income. "From balances" uses hatching
+(plus red) because the project's positive/destructive tokens fall below colour-blind
+separation in dark mode (deutan ΔE 5.3), a problem per-chart tokens do not fix.
+
+**Drawers list each year with its monthly average.** When a period spans 2024 and
+2025, users see both years' totals and monthly figures separately, not a blended
+average.
+
+---
+
+### Phase 8 — Transactions performance and sync
+
+**Transactions list pages at 100 rows.** The owner's page with 1,000 transactions rendered 18,656 DOM nodes, and clicking the sync button triggered a 963ms long task before the popover opened. The restyle/relayout cost of adding the sync popover on top exceeded 1,000ms total. The popover itself opens in ~20ms, so the bottleneck is DOM size. Paging draws 100 rows at a time with "Show 100 more". The data set — rows matched by filters and search — stays unified so filters, select-all and the review queue see every transaction; only the rendered list is paged. The selected row is always drawn so keyboard navigation and deep links from Home remain unaffected.
+
+**Sync bug: `annual_fee: 0` was written every run.** The original sync sent all columns including `annual_fee`, so a row synced from the bank arrived with `annual_fee: 0`. That overwrote the owner's manually entered value. The fix omits `annual_fee` from every synced row — Postgres defaults it to 0 on insert, and the upsert preserves the owner's value on update, the same reasoning as `credit_limit`. The owner then chose that the sync sets `name`, `emoji` and `color` only when it first creates an account. The first attempt omitted them for existing accounts, and the nightly run of 2026-09-25 failed on every account: an upsert is an INSERT first, and Postgres checks NOT NULL on the proposed row before it finds the conflict, so a row without `name` fails even when it exists. The fix sends each existing account's stored values back. Omitting a column is safe only where it is nullable or has a default (`annual_fee`, `credit_limit`); a NOT NULL column with no default must be on every row. `_shared/upsert-batches.ts` records the rule.
+
+
+### Watchlist calendar — retain the weekday while caught up
+
+**Finite episode plans keep the saved preference dormant — 2026-09-24.**
+A weekly schedule is a preferred watching day, not permission to repeat a title
+forever. The calendar projects remaining known episodes one per saved weekday,
+respecting release dates, and hides the plan when there are none left. It keeps
+the schedule row so a later announced season can resume on the chosen weekday;
+catching up does not delete the owner's preference. Unknown dates remain TBC
+instead of implying an indefinite release schedule. This is a local projection
+over existing rows and needs no new migration.
+
+### Layout containment — the middle card (2026-09-25)
+
+**One vertical scroller per route, the middle card.** Nested vertical scroll is
+allowed only for deliberate sibling panes (Travel's list, the Transactions
+details, Updates at 1280px+, the holiday tracker at 1024px+) and temporary
+overlays. Why: capped lists inside a scrolling page gave two scroll positions,
+and heights guessed from `100vh - 22rem` broke whenever the chrome changed.
+
+**Frame from 768px, frameless below.** Why: a frame on a phone doubles the
+gutter.
+
+**Toolbars live inside the card.** They pin only from 768px and at ≤25% of the
+card's height; AppShell measures this with ResizeObserver and publishes
+`data-toolbar-pin`, `--toolbar-h` and `--frame-h`. Why: CSS cannot read how
+controls wrap. Inspiration's filters wrap to 291px (34% of the card) at 768×1024,
+and a self-scrolling toolbar hides filters.
+
+**Travel is a "workspace" only at ≥1024px wide and ≥600px tall.** Why: the shell
+switched off scrolling from 768px while Travel stacked through 1023px, so content
+was unreachable. Measured at 900×1000: main was 858px, content 1985px, overflow
+hidden. The height floor stops a short laptop window pinning a map with no room
+left for the list.
+
+**Payday folded into the Tax & Income summary; the gross package stays in the
+compensation card.** The figure is described as modelled, not as money received.
+
+**LAYOUT_CONTAINMENT_PLAN.md folded into REHAUL_PLAN.md and deleted.** Why: the
+project keeps six documents with one job each.

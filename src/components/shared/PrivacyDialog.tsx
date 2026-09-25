@@ -1,12 +1,33 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useId, useState } from 'react';
+import { ArrowUpRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { SITE } from '@/config/site';
 import './PrivacyDialog.css';
 
-type Tab = 'privacy' | 'inspiration';
+type Tab = 'privacy' | 'credits';
+
+const TABS: { id: Tab; label: string; icon: typeof ShieldCheck }[] = [
+  { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
+  { id: 'credits', label: 'Credits', icon: Sparkles },
+];
+
+const INSPIRATION_LINKS = [
+  { name: 'Opening Page', url: 'https://martingauer.com', author: 'Martin Gauer' },
+  { name: 'Inventory', url: 'https://goods.jackcohen.com/?category=Wishlist', author: 'Jack Cohen' },
+  { name: 'Links', url: 'https://www.linklowdown.com/category/mac-app', author: 'Linklowdown' },
+];
 
 /**
- * Label and value on their own lines.
+ * Label above value on a phone, beside it from 640px up (see the CSS).
  *
  * These sections were paragraphs, which in a dot-matrix face at this size is
  * a wall nobody reads -- and the one thing a privacy notice has to be is
@@ -33,139 +54,116 @@ function FactList({ items }: { items: [string, string][] }) {
   );
 }
 
+/**
+ * The footer's copyright mark, and the privacy notice and credits behind it.
+ *
+ * Built on the shared Dialog rather than its own overlay. The overlay it had
+ * rendered in place inside the footer, whose stacking context sits below the
+ * header's, so the header painted over the top of the card; and its own
+ * tablet breakpoint turned it into a bottom sheet on an iPad in portrait.
+ * The shared Dialog portals to the body and brings the site's glass surface,
+ * gutters, scrolling body, close button, focus trap and Escape with it.
+ */
 export function PrivacyDialog() {
-    const [isOpen, setIsOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<Tab>('privacy');
+  const [activeTab, setActiveTab] = useState<Tab>('privacy');
+  const id = useId();
+  const year = String(new Date().getFullYear());
 
-    const inspirationLinks = [
-        {
-            name: 'Opening Page',
-            url: 'https://martingauer.com',
-            description: 'Martin Gauer'
-        },
-        {
-            name: 'Inventory',
-            url: 'https://goods.jackcohen.com/?category=Wishlist',
-            description: 'Jack Cohen'
-        },
-        {
-            name: 'Links',
-            url: 'https://www.linklowdown.com/category/mac-app',
-            description: 'Linklowdown'
-        }
-    ];
+  return (
+    <Dialog onOpenChange={(open) => open && setActiveTab('privacy')}>
+      <DialogTrigger
+        className="flex items-center hover:opacity-70 transition-opacity cursor-pointer text-muted-foreground"
+        aria-label="Privacy and credits"
+      >
+        <DotMatrixText text={`© ${year}`} size="xs" wrap={false} />
+      </DialogTrigger>
 
-    const handleOpen = () => {
-        setIsOpen(true);
-        setActiveTab('privacy'); // Reset to privacy tab when opening
-    };
+      <DialogContent className="privacy-dialog max-w-2xl">
+        <DialogHeader className="text-left">
+          <DialogTitle className="sr-only">Privacy and credits</DialogTitle>
+          <DialogDescription className="sr-only">
+            How this site handles your data, and the work that inspired it.
+          </DialogDescription>
+          <div role="tablist" aria-label="Privacy and credits" className="flex gap-2">
+            {TABS.map(({ id: tab, label, icon: Icon }) => (
+              <Button
+                key={tab}
+                id={`${id}-${tab}-tab`}
+                role="tab"
+                aria-selected={activeTab === tab}
+                aria-controls={`${id}-${tab}-panel`}
+                variant={activeTab === tab ? 'secondary' : 'ghost'}
+                className="gap-2"
+                onClick={() => setActiveTab(tab)}
+              >
+                <Icon />
+                {label}
+              </Button>
+            ))}
+          </div>
+        </DialogHeader>
 
-    return (
-        <>
-            <button
-                onClick={handleOpen}
-                className="flex items-center hover:opacity-70 transition-opacity cursor-pointer text-muted-foreground"
-            >
-                <DotMatrixText text={`© ${new Date().getFullYear()}`} size="xs" wrap={false} />
-            </button>
+        {activeTab === 'privacy' && (
+          <div
+            role="tabpanel"
+            id={`${id}-privacy-panel`}
+            aria-labelledby={`${id}-privacy-tab`}
+            className="privacy-panel"
+          >
+            {/* One list, no section headings: the tab names it, and owner and
+                year were already on the button that opened it. Short enough
+                to fit a laptop or phone without the body scrolling. */}
+            <FactList
+              items={[
+                ['Cookies', 'None'],
+                ['Personal data', 'None collected'],
+                [
+                  'Analytics',
+                  // Stated only when the script is actually injected (vite.config.ts
+                  // adds it only for a configured website id).
+                  SITE.analytics.umamiWebsiteId
+                    ? 'Umami, cookieless. Page, referrer, country. No profile, no tracking across sites.'
+                    : 'None.',
+                ],
+                ['Admin sign-in', 'Stores a session in your browser'],
+                [
+                  'Copyright',
+                  `© ${year} ${SITE.name}. All rights reserved. Content and design are original work.`,
+                ],
+              ]}
+            />
+          </div>
+        )}
 
-            {isOpen && (
-                <div className="privacy-overlay" onClick={() => setIsOpen(false)}>
-                    <div className="privacy-card" onClick={(e) => e.stopPropagation()}>
-                        <button
-                            onClick={() => setIsOpen(false)}
-                            className="privacy-close"
-                            aria-label="Close"
-                        >
-                            <X size={20} />
-                        </button>
-
-                        {/* Tab Navigation */}
-                        <div className="privacy-tabs gap-4 pt-4">
-                            <button
-                                className={`privacy-tab flex justify-center pb-3 ${activeTab === 'privacy' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('privacy')}
-                            >
-                                <DotMatrixText text="Privacy" size="xs" className={activeTab === 'privacy' ? '' : 'opacity-60'} />
-                            </button>
-                            <button
-                                className={`privacy-tab flex justify-center pb-3 ${activeTab === 'inspiration' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('inspiration')}
-                            >
-                                <DotMatrixText text="Credits" size="xs" className={activeTab === 'inspiration' ? '' : 'opacity-60'} />
-                            </button>
-                        </div>
-
-                        {/* Tab Content */}
-                        <div className="privacy-content">
-                            {activeTab === 'privacy' && (
-                                <div className="tab-panel">
-                                    <section className="privacy-section">
-                                        <h3 className="privacy-subtitle mb-4">
-                                            <DotMatrixText text="Privacy" size="xs" />
-                                        </h3>
-                                        <FactList
-                                            items={[
-                                                ['Cookies', 'None'],
-                                                ['Personal data', 'None collected'],
-                                                [
-                                                    'Analytics',
-                                                    'Umami, cookieless. Page, referrer, country. No profile, no tracking across sites.',
-                                                ],
-                                                ['Admin sign-in', 'Stores a session in your browser'],
-                                            ]}
-                                        />
-                                    </section>
-
-                                    <section className="privacy-section mt-8">
-                                        <h3 className="privacy-subtitle mb-4">
-                                            <DotMatrixText text="Copyright" size="xs" />
-                                        </h3>
-                                        <FactList
-                                            items={[
-                                                ['Owner', 'Dhyan Shyam'],
-                                                ['Year', String(new Date().getFullYear())],
-                                                [
-                                                    'Rights',
-                                                    'All reserved. Content and design are original work.',
-                                                ],
-                                            ]}
-                                        />
-                                    </section>
-                                </div>
-                            )}
-
-                            {activeTab === 'inspiration' && (
-                                <div className="tab-panel">
-                                    <section className="privacy-section">
-                                        <div className="privacy-text mb-6">
-                                            <DotMatrixText
-                                                text="This website was inspired by the following sources:"
-                                                size="xs"
-                                            />
-                                        </div>
-                                        <ul className="inspiration-list">
-                                            {inspirationLinks.map((link, index) => (
-                                                <li key={index} className="inspiration-item">
-                                                    <a
-                                                        href={link.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inspiration-link flex flex-col gap-3 py-1"
-                                                    >
-                                                        <DotMatrixText text={link.name} size="xs" />
-                                                        <DotMatrixText text={`- ${link.description}`} size="xs" className="opacity-80" />
-                                                    </a>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </section>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </>
-    );
+        {activeTab === 'credits' && (
+          <div
+            role="tabpanel"
+            id={`${id}-credits-panel`}
+            aria-labelledby={`${id}-credits-tab`}
+            className="privacy-panel"
+          >
+            <DotMatrixText text="Inspired by" size="xs" className="privacy-fact-term" />
+            <ul className="privacy-credits grid gap-2">
+              {INSPIRATION_LINKS.map((link) => (
+                <li key={link.url}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="privacy-credit group flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/50 px-4 py-3 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="grid gap-1.5 min-w-0">
+                      <DotMatrixText text={link.name} size="xs" />
+                      <DotMatrixText text={link.author} size="xs" className="privacy-fact-term" />
+                    </span>
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }

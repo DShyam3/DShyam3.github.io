@@ -609,7 +609,7 @@ export default function GoalsSurface() {
             {/* Contributions List */}
             <div className="space-y-3 pt-4 border-t border-border/30">
               <span className="text-xs font-bold text-foreground">Contribution Ledger</span>
-              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+              <div className="space-y-2">
                 {goal.contributions.map(c => {
                   const acc = c.bankAccountId ? bankAccounts.find(a => a.id === c.bankAccountId) : null;
                   return (

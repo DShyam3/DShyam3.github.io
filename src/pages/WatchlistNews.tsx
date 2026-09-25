@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Library, Tv } from 'lucide-react';
+import { Calendar, Library, Newspaper, Tv } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
@@ -41,19 +41,18 @@ import {
 } from '@/features/watchlist/watchlist-utils';
 import { formatDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
+import { useSchedule, type ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
+import { useAuth } from '@/contexts/AuthContext';
+import { PosterCard } from '@/features/watchlist/components/PosterCard';
+import { SmartScheduleDialog, scheduleReleaseDate } from '@/features/watchlist/components/SmartScheduleDialog';
+import { YourWeek } from '@/features/watchlist/components/YourWeek';
 
 /** Which entity a click on a card or row resolves to -- looked up in
  *  `useWatchlist()`'s list by both fields, since a TV show and a movie id
  *  can collide. */
 type EntityRef = { entityType: 'tv_show' | 'movie'; entityId: number };
 
-/** Out Now's and Upcoming's card: the library's poster card
- *  (`WatchlistCard`) in anatomy and classes -- a whole 2:3 poster, then
- *  title, one sub line, and platform left / pill right -- so it sits in the
- *  library's `.card-grid`, at the fixed size `.news-card-grid` gives it.
- *  The artwork is portrait, which is why these are not landscape cards: a
- *  landscape frame crops a poster through its title art. Without the library
- *  card's actions, which belong there. */
+/** News data adapter for the same poster and schedule action used by Library. */
 function NewsPosterCard({
   title,
   poster,
@@ -62,6 +61,7 @@ function NewsPosterCard({
   pill,
   srLabel,
   onClick,
+  schedule,
 }: {
   title: string;
   poster: string | null;
@@ -70,47 +70,25 @@ function NewsPosterCard({
   pill?: ReactNode;
   srLabel?: string;
   onClick: () => void;
+  schedule?: {
+    scheduled: boolean;
+    releaseDate?: string;
+    defaultMode: 'weekly' | 'date';
+    onAdd: (day: ScheduleEntry['day'], date: string, mode: 'weekly' | 'date') => void;
+    onRemove: () => void;
+  };
 }) {
-  const [broken, setBroken] = useState(false);
-  const showFallback = !poster || broken;
-
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`${srLabel ?? title} — open details`}
-      className="item-card group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    >
-      <div className="relative aspect-[2/3] overflow-hidden bg-muted">
-        {showFallback ? (
-          <div className="missing-art flex h-full w-full flex-col items-center justify-center gap-3 p-4 text-center">
-            <Tv className="h-5 w-5" />
-            <span className="line-clamp-3 text-xs font-medium">{title}</span>
-          </div>
-        ) : (
-          <img
-            src={poster ?? undefined}
-            alt={title}
-            loading="lazy"
-            onError={() => setBroken(true)}
-            className="h-full w-full object-contain"
-          />
-        )}
-      </div>
-
-      <div className="card-body p-2.5">
-        <h3 className="card-title min-h-[2.5rem] font-serif text-sm font-medium leading-tight">
-          <span className="line-clamp-3" style={{ textWrap: 'balance' }}>
-            {title}
-          </span>
-        </h3>
-        <p className="card-sub mt-0.5 min-h-[1rem] text-xs text-muted-foreground">{sub}</p>
-        <div className="card-meta mt-1.5 flex min-h-[22px] flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <PlatformBadge platform={platform ?? undefined} size={18} />
-          {pill}
-        </div>
-      </div>
-    </button>
+    <>
+      <PosterCard title={title} poster={poster}
+        subtitle={<span aria-label={srLabel}>{sub}</span>}
+        meta={<><PlatformBadge platform={platform ?? undefined} size={18} />{pill}</>}
+        onOpen={onClick} scheduled={schedule?.scheduled}
+        onSchedule={schedule ? () => { if (schedule.scheduled) schedule.onRemove(); else setScheduleOpen(true); } : undefined}
+      />
+      {schedule && <SmartScheduleDialog open={scheduleOpen} onOpenChange={setScheduleOpen} title={title} releaseDate={schedule.releaseDate} defaultMode={schedule.defaultMode} onAdd={schedule.onAdd} />}
+    </>
   );
 }
 
@@ -237,7 +215,9 @@ function UpdatesList({
           {activeWindow === 'week' ? 'Nothing this week' : 'Nothing this month'}
         </p>
       ) : (
-        <div className="divide-y divide-border/50">
+        // Its own scroll only from xl, where it is a column beside Upcoming;
+        // stacked, a capped list would be a scroller inside the page's.
+        <div className="watchlist-updates-scroll divide-y divide-border/50 rounded-xl border border-border/50 xl:max-h-[min(36rem,65dvh)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2" tabIndex={0} role="region" aria-label="Recent watchlist updates">
           {rows.map((row) => (
             <UpdateRow
               key={row.key}
@@ -297,10 +277,12 @@ function UpcomingGrid({
   items,
   activeWindow,
   onSelect,
+  scheduleFor,
 }: {
   items: UpcomingRow[];
   activeWindow: UpdatesWindow;
   onSelect: (ref: EntityRef) => void;
+  scheduleFor?: (item: UpcomingRow) => React.ComponentProps<typeof NewsPosterCard>['schedule'];
 }) {
   return (
     <section className="min-w-0 space-y-3">
@@ -321,6 +303,7 @@ function UpcomingGrid({
               pill={<CountdownPill days={item.days} />}
               srLabel={`${item.title} -- ${item.sentence}`}
               onClick={() => onSelect(item)}
+              schedule={scheduleFor?.(item)}
             />
           ))}
         </div>
@@ -344,7 +327,10 @@ function UpcomingGrid({
  */
 const WatchlistNews = () => {
   const today = new Date();
-  const { watchlist, getAutoStatus, isEpisodeWatched, isSeasonWatched } = useWatchlist();
+  const { watchlist, loading: watchlistLoading, getAutoStatus, isEpisodeWatched, isSeasonWatched, toggleEpisodeWatched } = useWatchlist();
+  const { isAdmin } = useAuth();
+  const { schedule, loading: scheduleLoading, addToSchedule, removeFromSchedule, updateScheduleDay, removeFromScheduleByWatchlistId, isInSchedule } = useSchedule();
+  const [detailScheduleOpen, setDetailScheduleOpen] = useState(false);
   const [selectedRef, setSelectedRef] = useState<EntityRef | null>(null);
   // Page level (REHAUL_PLAN.md 8.C-bis): drives both Upcoming (forward) and
   // Updates (backward), and Out Now (backward) too.
@@ -368,6 +354,28 @@ const WatchlistNews = () => {
     );
 
   const openDetail = useCallback((ref: EntityRef) => setSelectedRef(ref), []);
+  const scheduleFor = useCallback((entityType: EntityRef['entityType'], entityId: number, title: string, date: string): React.ComponentProps<typeof NewsPosterCard>['schedule'] => {
+    if (!isAdmin) return undefined;
+    const watchlistItemId = String(entityId);
+    const category = entityType === 'tv_show' ? 'TV Shows' : 'Movies';
+    return {
+      scheduled: isInSchedule(watchlistItemId),
+      releaseDate: date,
+      defaultMode: entityType === 'tv_show' ? ('weekly' as const) : ('date' as const),
+      onAdd: (day: ScheduleEntry['day'], scheduledDate: string, mode: 'weekly' | 'date') => addToSchedule({
+        watchlistItemId,
+        day: mode === 'date'
+          ? new Date(`${scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }) as ScheduleEntry['day']
+          : day,
+        title,
+        category,
+        image_url: undefined,
+        scheduledDate: mode === 'date' ? scheduledDate : undefined,
+        mode,
+      }),
+      onRemove: () => { void removeFromScheduleByWatchlistId(watchlistItemId); },
+    };
+  }, [addToSchedule, isAdmin, isInSchedule, removeFromScheduleByWatchlistId]);
 
   const { pinned, loading: pinnedLoading } = usePinnedTitle();
   const pinnedDays = pinned ? daysUntil(pinned.release_date, today) : null;
@@ -495,7 +503,11 @@ const WatchlistNews = () => {
   );
 
   const toolbar = (
-    <div className="flex items-center justify-between px-4 pt-2 md:px-0">
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <nav aria-label="Watchlist" className="flex flex-wrap items-center gap-2">
+        <Button asChild variant="secondary"><Link to="/watchlist" aria-current="page"><Newspaper />News</Link></Button>
+        <Button asChild variant="ghost"><Link to="/watchlist/library"><Library />Library</Link></Button>
+      </nav>
       {/* A segmented control rather than nav-link text: `nav-link-active` only
           changes weight and tints to --primary, which in light mode is nearly
           the same dark tone as unselected text, so the selected window was
@@ -525,37 +537,37 @@ const WatchlistNews = () => {
           );
         })}
       </nav>
-      <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 sm:h-9">
-        <Link to="/watchlist/library">
-          <Library className="h-4 w-4" />
-          <DotMatrixText text="LIBRARY" size="xs" wrap={false} />
-        </Link>
-      </Button>
+
     </div>
   );
 
   return (
     <AppShell title="Watchlist" subtitle="What to watch now" toolbar={toolbar}>
-      <div className="space-y-8 px-4 py-6 md:px-0">
-        {!pinnedLoading && showCountdown && pinned && (
-          <section className="min-w-0 space-y-3">
-            <DotMatrixText text="COUNTDOWN" size="xs" />
-            <CountdownCard
-              label={pinned.title}
-              date={pinned.release_date!}
-              days={pinnedDays!}
-              srLabel={`${pinnedDays} day${pinnedDays === 1 ? '' : 's'} until ${pinned.title}`}
-              image={pinned.poster}
-              imageAlt={pinned.title}
-              className="w-full sm:max-w-md"
-            />
-          </section>
-        )}
+      <div className="watchlist-news-grid grid grid-cols-1 gap-8 py-6">
+        <UpNextRail
+          items={upNext}
+          onSelect={(tvShowId) => openDetail({ entityType: 'tv_show', entityId: tvShowId })}
+          plannedDays={Object.fromEntries(schedule.filter((entry) => entry.category === 'TV Shows').map((entry) => [entry.watchlistItemId, entry.mode === 'date' && entry.scheduledDate ? new Date(`${entry.scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : entry.day]))}
+        />
+
+        <YourWeek
+          schedule={schedule}
+          loading={scheduleLoading || watchlistLoading}
+          watchlist={watchlist}
+          removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
+          updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
+          addToSchedule={isAdmin ? addToSchedule : undefined}
+          toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+          isEpisodeWatched={isEpisodeWatched}
+          isSeasonWatched={isSeasonWatched}
+          getAutoStatus={getAutoStatus}
+          isInSchedule={isInSchedule}
+        />
 
         {!outNowLoading && outNowItems.length > 0 && (
           <section className="min-w-0 space-y-3">
             <DotMatrixText text="OUT NOW" size="xs" />
-            <div className={cn(CARD_GRID, 'news-card-grid')}>
+            <div className={cn(CARD_GRID, 'news-card-grid', 'watchlist-news-full-width')}>
               {outNowItems.map((item) => (
                 <NewsPosterCard
                   key={item.key}
@@ -573,27 +585,39 @@ const WatchlistNews = () => {
                       entityId: item.entityId,
                     })
                   }
+                  schedule={scheduleFor(item.kind === 'premiere' ? 'tv_show' : 'movie', item.entityId, item.title, item.date)}
                 />
               ))}
             </div>
           </section>
         )}
 
-        <UpNextRail
-          items={upNext}
-          onSelect={(tvShowId) => openDetail({ entityType: 'tv_show', entityId: tvShowId })}
-        />
-
         {!upcomingLoading && (
           <UpcomingGrid
-            items={upcomingWindowItems}
-            activeWindow={newsWindow}
-            onSelect={openDetail}
+          items={upcomingWindowItems}
+          activeWindow={newsWindow}
+          onSelect={openDetail}
+          scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)}
           />
         )}
 
         {!updatesLoading && (
           <UpdatesList rows={updatesFeed} activeWindow={newsWindow} today={today} onSelect={openDetail} />
+        )}
+
+        {!pinnedLoading && showCountdown && pinned && (
+          <section className="col-span-full min-w-0 space-y-3">
+            <DotMatrixText text="COUNTDOWN" size="xs" />
+            <CountdownCard
+              label={pinned.title}
+              date={pinned.release_date!}
+              days={pinnedDays!}
+              srLabel={`${pinnedDays} day${pinnedDays === 1 ? '' : 's'} until ${pinned.title}`}
+              image={pinned.poster}
+              imageAlt={pinned.title}
+              className="w-full sm:max-w-md"
+            />
+          </section>
         )}
       </div>
 
@@ -605,10 +629,20 @@ const WatchlistNews = () => {
           }}
           item={selectedItem}
           status={getAutoStatus(selectedItem)}
+          onSchedule={isAdmin ? () => setDetailScheduleOpen(true) : undefined}
+          onRemoveFromSchedule={isAdmin ? () => { void removeFromScheduleByWatchlistId(selectedItem.id); } : undefined}
+          isScheduled={isInSchedule(selectedItem.id)}
+          toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
           isEpisodeWatched={isEpisodeWatched}
           isSeasonWatched={isSeasonWatched}
         />
       )}
+      {selectedItem && isAdmin && <SmartScheduleDialog
+        open={detailScheduleOpen} onOpenChange={setDetailScheduleOpen}
+        title={selectedItem.title} releaseDate={scheduleReleaseDate(selectedItem)}
+        defaultMode={selectedItem.category === 'TV Shows' ? 'weekly' : 'date'}
+        onAdd={(day, date, mode) => { void addToSchedule({ watchlistItemId: selectedItem.id, category: selectedItem.category, title: selectedItem.title, image_url: selectedItem.image_url, day, mode, scheduledDate: mode === 'date' ? date : undefined }); }}
+      />}
     </AppShell>
   );
 };

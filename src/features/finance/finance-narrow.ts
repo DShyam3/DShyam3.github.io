@@ -18,6 +18,7 @@ import type {
   CreditBureauConfig,
   Debt,
   FinanceSettings,
+  HalfDay,
   InvestmentHolding,
   Membership,
   RecurringBill,
@@ -81,6 +82,10 @@ export const asPaydaySchedule = oneOf<NonNullable<FinanceSettings['paydaySchedul
   ['monthly_date', 'last_working_day', 'last_friday', 'biweekly', 'weekly', 'semimonthly'],
   'monthly_date',
 );
+
+/** Optional, so it has no fallback: anything but a known half reads as a full day. */
+export const asHalfDay = (value: string | null | undefined): HalfDay | undefined =>
+  value === 'am' || value === 'pm' ? value : undefined;
 
 /**
  * A jsonb column read back as a known shape.

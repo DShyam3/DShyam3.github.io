@@ -18,9 +18,11 @@ them here too — this file is generated art, not a live component, so nothing
 warns you.
 """
 
+import json
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 OUT = Path("public/og-image.png")
 
@@ -34,10 +36,12 @@ BORDER = "#E6E1DA"
 
 FONT = "/System/Library/Fonts/Menlo.ttc"
 
-WORDMARK = "DHYAN SHYAM"
-TAGLINE = "MY DIGITAL GARDEN"
-LEFT_FOOT = "ROBOTIC ENGINEER"
-RIGHT_FOOT = "DSHYAM3.GITHUB.IO"
+SITE = json.loads((Path(__file__).parent / "../src/config/site.json").read_text())
+
+WORDMARK = SITE["name"].upper()
+TAGLINE = SITE["tagline"].upper()
+LEFT_FOOT = SITE["role"].upper()
+RIGHT_FOOT = (urlparse(SITE["url"]).netloc or SITE["url"]).upper()
 
 # Wordmark grid. The pitch is derived from WORDMARK_WIDTH rather than fixed,
 # because the column count falls out of the rasterised text — pinning the pitch

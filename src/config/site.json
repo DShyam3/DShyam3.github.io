@@ -1,0 +1,25 @@
+{
+  "name": "Dhyan Shyam",
+  "siteTitle": "Dhyan's website",
+  "tagline": "My Digital Garden",
+  "role": "Robotic Engineer",
+  "description": "A curated collection of my cherished things, books, and thoughts.",
+  "location": "London, UK",
+  "url": "https://dshyam3.github.io",
+  "twitterHandle": "@DhyanShyam",
+  "cvFileName": "Dhyan_Shyam_CV",
+  "about": [
+    "Welcome to my digital garden. I am Dhyan, a Robotic Engineer with a passion for building things that exist in both the physical and digital worlds.",
+    "This space is a curated collection of my beliefs, inspirations, and the tools I use to navigate life and engineering."
+  ],
+  "socials": [
+    { "label": "LinkedIn", "href": "https://www.linkedin.com/in/dhyan-shyam/", "icon": "linkedin" },
+    { "label": "GitHub", "href": "https://github.com/DShyam3", "icon": "github" },
+    { "label": "Email", "href": "mailto:d.shyam1256@gmail.com", "icon": "mail" }
+  ],
+  "analytics": {
+    "umamiScriptUrl": "https://cloud.umami.is/script.js",
+    "umamiWebsiteId": "824d16a6-3ee4-4ead-b20f-4a6d4ec9d682",
+    "umamiDashboardUrl": "https://cloud.umami.is/analytics/eu/websites"
+  }
+}

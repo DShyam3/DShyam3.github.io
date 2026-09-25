@@ -125,7 +125,7 @@ export function EdcBuilderDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border-border/80">
-        <DialogHeader className="p-5 pb-4 border-b border-border/60 bg-muted/20">
+        <DialogHeader className="p-5 pb-4 pr-16 border-b border-border/60 bg-muted/20">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <DialogTitle className="flex items-center gap-2 text-lg">

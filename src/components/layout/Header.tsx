@@ -8,6 +8,7 @@ import { socialIcons } from '@/components/icons/SocialIcons';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ASSETS_URL } from '@/lib/constants';
+import { SITE } from '@/config/site';
 
 
 interface HeaderProps {
@@ -16,24 +17,13 @@ interface HeaderProps {
 }
 
 export function Header({
-  title = "Dhyan's website",
-  subtitle = 'My Digital Garden',
+  title = SITE.siteTitle,
+  subtitle = SITE.tagline,
 }: HeaderProps) {
   const [socialOpen, setSocialOpen] = useState(false);
   const navigate = useNavigate();
 
-  const socialLinks = useMemo(
-    () => [
-      {
-        label: 'LinkedIn',
-        href: 'https://www.linkedin.com/in/dhyan-shyam/',
-        icon: 'linkedin' as const,
-      },
-      { label: 'GitHub', href: 'https://github.com/DShyam3', icon: 'github' as const },
-      { label: 'Email', href: 'mailto:d.shyam1256@gmail.com', icon: 'mail' as const },
-    ],
-    [],
-  );
+  const socialLinks = useMemo(() => SITE.socials, []);
 
   // Secret admin link handler
   const handleTitleClick = () => {
@@ -49,9 +39,9 @@ export function Header({
         {/* One row: identity on the left, page title and controls on the
             right. The nav strip that used to sit underneath is now the menu
             button in that right-hand cluster. */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex flex-col min-[700px]:flex-row min-[700px]:items-center min-[700px]:justify-between gap-3 flex-wrap">
           {/* Left side: Profile with social links */}
-          <div className="flex items-start md:items-center justify-between w-full md:w-auto gap-2 md:gap-3">
+          <div className="flex items-start md:items-center justify-between w-full min-[700px]:w-auto gap-2 md:gap-3">
             <div
               className="flex items-center gap-3 flex-shrink-0 cursor-pointer select-none transition-opacity hover:opacity-80 md:w-auto"
               onClick={() => navigate('/')}
@@ -59,25 +49,26 @@ export function Header({
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
                   navigate('/');
                 }
               }}
             >
               <img
                 src={`${ASSETS_URL}/memoji.png`}
-                alt="Dhyan Shyam memoji avatar"
+                alt={`${SITE.name} memoji avatar`}
                 className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-secondary object-cover flex-shrink-0"
                 loading="eager"
               />
 
               <div className="flex flex-col items-start gap-0.5 leading-none">
                 <DotMatrixText
-                  text="DHYAN SHYAM"
+                  text={SITE.name.toUpperCase()}
                   size="md"
                   className="text-foreground"
                 />
                 <DotMatrixText
-                  text="ROBOTIC ENGINEER"
+                  text={SITE.role.toUpperCase()}
                   size="xs"
                   className="text-muted-foreground"
                 />
@@ -89,9 +80,9 @@ export function Header({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 order-2 md:order-1 flex-shrink-0"
+                className="h-11 w-11 order-2 md:order-1 flex-shrink-0"
                 onClick={() => setSocialOpen((v) => !v)}
-                aria-label="Open social links"
+                aria-label={socialOpen ? "Close social links" : "Open social links"}
                 aria-expanded={socialOpen}
               >
                 <div
@@ -122,7 +113,9 @@ export function Header({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={label}
-                      className="p-1.5 md:p-2 text-foreground hover:bg-secondary/50 rounded transition-colors flex-shrink-0"
+                      tabIndex={socialOpen ? 0 : -1}
+                      aria-hidden={!socialOpen}
+                      className="min-h-11 min-w-11 justify-center p-2 text-foreground hover:bg-secondary/50 rounded transition-colors flex-shrink-0"
                     >
                       <Icon className="h-5 w-5 md:h-6 md:w-6" />
                     </a>
@@ -144,7 +137,7 @@ export function Header({
                 ran into the icons. It steps aside while they are open. */}
             <div
               className={cn(
-                'text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity',
+                'header-page-title min-w-0 text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity',
                 socialOpen && 'md:max-lg:hidden',
               )}
               onClick={handleTitleClick}

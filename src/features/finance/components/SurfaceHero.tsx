@@ -69,7 +69,9 @@ export function SurfaceHero({ label, value, tone = 'neutral', detail, aside, loa
       {loading ? (
         <Skeleton className="h-10 w-28 shrink-0 rounded-lg" />
       ) : aside ? (
-        <div className="shrink-0 text-left sm:text-right">{aside}</div>
+        // Capped so a wordier aside (next payday) wraps rather than pushing
+        // under the figure, which cannot wrap.
+        <div className="shrink-0 min-w-0 text-left sm:max-w-[45%] sm:text-right">{aside}</div>
       ) : null}
     </section>
   );

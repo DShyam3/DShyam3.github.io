@@ -16,11 +16,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { LeaveType, PackageBenefit, UserHoliday } from '@/features/finance/finance-types';
+import { FinanceSettings, HalfDay, LeaveType, PackageBenefit, UserHoliday } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
-import { calculateWorkingDaysInRange, formatHolidayDates, getBookedDaysForMonth, getDaysInMonth, getStartDayOfWeek } from '@/lib/finance';
+import { HALF_DAY, calculateWorkingDaysInRange, formatHolidayDates, getBookedDaysForMonth, getDaysInMonth, getStartDayOfWeek, isHalfDay } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { Calendar, ChevronRight, DollarSign, Gift, Info, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
+import { Calendar, ChevronRight, Gift, Pencil, Plus, PoundSterling, Settings, Trash2 } from 'lucide-react';
 import { useFinanceTotals } from '../useFinanceTotals';
 import { PayslipsSection } from '../components/PayslipsSection';
 import { getNormalizedHolidays } from '../finance-calcs';
@@ -31,6 +31,75 @@ interface TaxIncomeSurfaceProps {
   setIsSettingsOpen: (open: boolean) => void;
   isBenefitsDialogOpen: boolean;
   setIsBenefitsDialogOpen: (open: boolean) => void;
+}
+
+const HALF_DAY_LABEL: Record<HalfDay, string> = { am: 'morning', pm: 'afternoon' };
+const HALF_DAY_BUTTON: Record<HalfDay, string> = { am: 'Morning', pm: 'Afternoon' };
+
+type Period = 'annual' | 'monthly' | 'weekly' | 'daily' | 'hourly';
+
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'annual', label: 'Annual' },
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'weekly', label: 'Weekly' },
+  { key: 'daily', label: 'Daily' },
+  { key: 'hourly', label: 'Hourly' },
+];
+
+const RATE_MODES: { key: BreakdownRateMode; label: string }[] = [
+  { key: 'normal', label: 'Normal' },
+  { key: 'including_leave', label: 'Incl. Paid Leave' },
+  { key: 'excluding_leave', label: 'Excl. Paid Leave' },
+];
+
+const PENSION_TYPE_LABEL: Record<FinanceSettings['pensionType'], string> = {
+  net_pay: 'Net pay arrangement',
+  salary_sacrifice: 'Salary sacrifice',
+  relief_at_source: 'Relief at source',
+};
+
+/** One line of the breakdown table. A `total` is ruled off above; the
+ *  `result` is the take-home figure the table ends on. */
+interface BreakdownRow {
+  key: string;
+  label: string;
+  note?: string;
+  rates: Record<Period, number>;
+  sign?: '+' | '-';
+  tone?: string;
+  kind?: 'total' | 'result';
+}
+
+function PillSwitch<T extends string>({ label, options, value, onChange, className }: {
+  label: string;
+  options: { key: T; label: string }[];
+  value: T;
+  onChange: (value: NoInfer<T>) => void;
+  className?: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className={cn('grid w-full grid-flow-col auto-cols-fr sm:flex sm:w-fit bg-muted/20 border border-border/30 rounded-lg p-0.5 gap-0.5 font-mono', className)}>
+      {options.map(opt => {
+        const isActive = value === opt.key;
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onChange(opt.key)}
+            className={cn(
+              'px-1.5 sm:px-2.5 py-1 text-xs leading-tight font-mono rounded-md transition-all sm:whitespace-nowrap',
+              isActive
+                ? 'bg-primary text-primary-foreground shadow-sm font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+            )}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function TaxIncomeSurface({
@@ -47,6 +116,7 @@ export default function TaxIncomeSurface({
     saveDataToSupabase,
     setSettings,
     settings,
+    taxConfig,
     bankHolidaysList,
     bankHolidaysMap,
     breakdownRateMode,
@@ -54,9 +124,65 @@ export default function TaxIncomeSurface({
   } = useFinanceData();
 
   const {
-    results, breakdownRates, breakdownWorkingDays, nextPayday, daysInMonth,
+    results, breakdownRates, breakdownWorkingDays, daysInMonth,
     currentYear, todayDateObj,
   } = useFinanceTotals();
+
+  // Only read when the card is too narrow for all five period columns.
+  const [period, setPeriod] = useState<Period>('monthly');
+
+  // £-formatted with no pence: NI thresholds are round pounds, so the ".00"
+  // formatGBP always adds is only noise here.
+  const formatGBPNoPence = (n: number) => formatGBP(n).replace(/\.00$/, '');
+
+  const { lowerThreshold, upperThreshold, mainRatePercent, upperRatePercent } = taxConfig.nationalInsuranceBands;
+  const nationalInsuranceNote = lowerThreshold > 0 && upperThreshold > 0
+    ? `${mainRatePercent}% (${formatGBPNoPence(lowerThreshold)}–${formatGBPNoPence(upperThreshold)}), ${upperRatePercent}% above`
+    : undefined;
+
+  // Package, then what comes off the salary, then what lands. Take-home is
+  // base salary less deductions; employer pension and perks never pass
+  // through pay, so the package total is not what the deductions come from.
+  const breakdownGroups: BreakdownRow[][] = [
+    [
+      { key: 'salary', label: 'Base salary', rates: breakdownRates.preTax },
+      ...(results.employerPensionRate > 0 ? [{
+        key: 'employer-pension', label: `Employer pension (${settings.employerPensionPercent}%)`,
+        rates: breakdownRates.employerPension, sign: '+' as const, tone: 'text-positive',
+      }] : []),
+      ...(results.totalBenefitsValue > 0 ? [{
+        key: 'benefits', label: `Benefits & perks (${settings.packageBenefits?.length || 0})`,
+        note: (settings.packageBenefits || []).map(b => `${b.emoji || '🎁'} ${b.name}`).join(', '),
+        rates: breakdownRates.benefits, sign: '+' as const, tone: 'text-positive',
+      }] : []),
+      { key: 'package', label: 'Total package', rates: breakdownRates.totalPackage, kind: 'total' },
+    ],
+    [
+      ...(results.personalPensionRate > 0 ? [{
+        key: 'pension', label: `Personal pension (${settings.personalPensionPercent}%)`,
+        note: PENSION_TYPE_LABEL[settings.pensionType], rates: breakdownRates.pension, sign: '-' as const,
+      }] : []),
+      ...(results.incomeTax > 0 ? [{ key: 'tax', label: 'Income tax', rates: breakdownRates.tax, sign: '-' as const }] : []),
+      ...(results.nationalInsurance > 0 ? [{
+        key: 'ni', label: 'National Insurance', note: nationalInsuranceNote,
+        rates: breakdownRates.ni, sign: '-' as const,
+      }] : []),
+      ...(results.studentLoan > 0 ? [{
+        key: 'student-loan', label: `Student loan (${getPlanName(settings.studentLoanPlan)})`,
+        rates: breakdownRates.studentLoan, sign: '-' as const,
+      }] : []),
+      {
+        key: 'deductions', label: 'Total deductions', rates: breakdownRates.deductions,
+        sign: '-', tone: 'text-destructive', kind: 'total',
+      },
+    ],
+    [
+      {
+        key: 'take-home', label: 'Take-home pay', note: 'Base salary less deductions',
+        rates: breakdownRates.postTax, tone: 'text-positive', kind: 'result',
+      },
+    ],
+  ];
 
   // Benefits & Perks Manager Dialog State
   const [newBenefitName, setNewBenefitName] = useState('');
@@ -128,6 +254,24 @@ export default function TaxIncomeSurface({
   const [inlineEndDate, setInlineEndDate] = useState('');
   const [inlineCount, setInlineCount] = useState('1');
   const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+  const [inlineHalfDay, setInlineHalfDay] = useState<HalfDay | null>(null);
+
+  const inlineIsSingleDay = !!inlineStartDate && inlineStartDate === inlineEndDate;
+  const inlineDayIsWorking = inlineIsSingleDay && calculateWorkingDaysInRange(inlineStartDate, inlineStartDate, bankHolidaysList) === 1;
+
+  // A half day survives a date change only while the booking is still one
+  // working day; otherwise it becomes a count of whole working days.
+  const recountInline = (start: string, end: string) => {
+    const workingDays = calculateWorkingDaysInRange(start, end, bankHolidaysList);
+    const keepHalf = !!inlineHalfDay && start === end && workingDays === 1;
+    if (!keepHalf) setInlineHalfDay(null);
+    setInlineCount(String(keepHalf ? HALF_DAY : workingDays));
+  };
+
+  const chooseInlineLength = (half: HalfDay | null) => {
+    setInlineHalfDay(half);
+    setInlineCount(String(half ? HALF_DAY : inlineDayIsWorking ? 1 : 0));
+  };
 
   // Calculate remaining bank holidays
   const getBankHolidaysLeft = () => {
@@ -165,6 +309,7 @@ export default function TaxIncomeSurface({
     setInlineStartDate('');
     setInlineEndDate('');
     setInlineCount('1');
+    setInlineHalfDay(null);
   };
 
   const handleStartEditHoliday = (holiday: UserHoliday, monthIdx: number) => {
@@ -176,6 +321,7 @@ export default function TaxIncomeSurface({
     setInlineStartDate(holiday.startDate);
     setInlineEndDate(holiday.endDate);
     setInlineCount(holiday.count.toString());
+    setInlineHalfDay(isHalfDay(holiday) ? holiday.halfDay ?? null : null);
   };
 
   const handleStartNewHoliday = (monthIdx: number, type: LeaveType = 'holiday') => {
@@ -188,6 +334,7 @@ export default function TaxIncomeSurface({
     setInlineStartDate(`${year}-${pad(monthIdx + 1)}-01`);
     setInlineEndDate(`${year}-${pad(monthIdx + 1)}-01`);
     setInlineCount('1');
+    setInlineHalfDay(null);
   };
 
   const handleSaveInlineHoliday = (monthIdx: number) => {
@@ -202,14 +349,16 @@ export default function TaxIncomeSurface({
     }
 
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
+    const halfDay = inlineIsSingleDay && inlineHalfDay ? inlineHalfDay : undefined;
 
     const savedHoliday: UserHoliday = {
       id: editingHolidayId || 'hol_' + Date.now(),
       startDate: inlineStartDate,
       endDate: inlineEndDate,
       occasion: inlineOccasion.trim() || (inlineType === 'sick' ? 'Sick Leave' : 'Leave'),
-      count: countVal,
-      type: inlineType
+      count: halfDay ? HALF_DAY : countVal,
+      type: inlineType,
+      ...(halfDay ? { halfDay } : {})
     };
 
     const updatedHolidaysList = editingHolidayId
@@ -279,15 +428,18 @@ export default function TaxIncomeSurface({
             </h2>
             <p className="text-xs text-muted-foreground font-mono">
               Base Salary + Employer Pension ({settings.employerPensionPercent}%) + Benefits & Perks
+              {' · '}
+              {settings.ukRegion === 'england-and-wales' ? 'England & Wales' : settings.ukRegion === 'scotland' ? 'Scotland' : 'Northern Ireland'} tax rules
             </p>
           </div>
-          <Button
-            onClick={() => setIsBenefitsDialogOpen(true)}
-            size="sm"
-            className="rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 px-3 font-mono shrink-0 self-start sm:self-center"
-          >
-            <Gift className="w-3.5 h-3.5" /> Manage Benefits ({settings.packageBenefits?.length || 0})
-          </Button>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+            <Button onClick={() => setIsBenefitsDialogOpen(true)} variant="outline" size="sm" className="h-8 rounded-lg gap-1.5 border-border/40 text-xs font-mono">
+              <Gift className="h-3.5 w-3.5 text-primary" /> Benefits ({settings.packageBenefits?.length || 0})
+            </Button>
+            <Button onClick={() => setIsSettingsOpen(true)} size="sm" className="h-8 rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-mono">
+              <Settings className="h-3.5 w-3.5" /> Settings
+            </Button>
+          </div>
         </div>
 
         {/* Breakdown Pill Grid */}
@@ -315,233 +467,100 @@ export default function TaxIncomeSurface({
       </div>
 
       {/* Standard Rates Breakdown */}
-      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
-        <div className="flex flex-col gap-3 mb-4 border-b border-border/50 pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-0.5 text-left min-w-0">
-              <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-primary shrink-0" /> Breakdown Rates
-              </h3>
-              <p className="text-xs text-muted-foreground font-mono">
-                Rules applied ({settings.ukRegion === 'england-and-wales' ? 'England' : settings.ukRegion}, weekends excluded)
-              </p>
-              <p className="text-xs text-muted-foreground font-mono pt-1">
-                {breakdownRateMode === 'normal' &&
-                  `${typeof breakdownWorkingDays === 'number' ? breakdownWorkingDays.toFixed(1) : breakdownWorkingDays} days per year — standard 52.14 weeks (5 days/week, ${settings.workingHoursPerDay} hrs/day).`}
-                {breakdownRateMode === 'including_leave' &&
-                  `${breakdownWorkingDays} paid days per year — bank holidays and ${settings.workHolidays} days paid leave included.`}
-                {breakdownRateMode === 'excluding_leave' &&
-                  `${breakdownWorkingDays} working days per year — bank holidays and ${settings.workHolidays} days paid leave excluded.`}
-              </p>
-            </div>
-            <div className="flex bg-muted/20 border border-border/30 rounded-lg p-0.5 gap-0.5 font-mono shrink-0 self-start">
-              {[
-                { key: 'normal', label: 'Normal' },
-                { key: 'including_leave', label: 'Incl. Paid Leave' },
-                { key: 'excluding_leave', label: 'Excl. Paid Leave' },
-              ].map((opt) => {
-                const isActive = breakdownRateMode === opt.key;
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => setBreakdownRateMode(opt.key as BreakdownRateMode)}
-                    className={cn(
-                      "px-2.5 py-1 text-xs font-mono rounded-md transition-all whitespace-nowrap",
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-sm font-semibold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 sm:p-6 hover:border-border/80 transition-colors">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1 text-left min-w-0">
+            <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+              <PoundSterling className="w-4 h-4 text-primary shrink-0" /> Breakdown Rates
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {settings.ukRegion === 'england-and-wales' ? 'England' : settings.ukRegion} rules, weekends excluded.{' '}
+              {breakdownRateMode === 'normal' &&
+                `${typeof breakdownWorkingDays === 'number' ? breakdownWorkingDays.toFixed(1) : breakdownWorkingDays} days a year: 52.14 weeks of 5 days, ${settings.workingHoursPerDay} hours each.`}
+              {breakdownRateMode === 'including_leave' &&
+                `${breakdownWorkingDays} paid days a year, bank holidays and ${settings.workHolidays} days of leave included.`}
+              {breakdownRateMode === 'excluding_leave' &&
+                `${breakdownWorkingDays} working days a year, bank holidays and ${settings.workHolidays} days of leave excluded.`}
+            </p>
           </div>
+          <PillSwitch
+            label="Days counted"
+            options={RATE_MODES}
+            value={breakdownRateMode}
+            onChange={setBreakdownRateMode}
+            className="shrink-0 self-start"
+          />
         </div>
 
-        <div className="overflow-x-auto -mx-1 px-1 scrollbar-thin">
-          <table className="min-w-[640px] w-full text-sm text-left border-collapse">
+        <div className="pay-breakdown mt-6">
+          <PillSwitch
+            label="Period shown"
+            options={PERIODS}
+            value={period}
+            onChange={setPeriod}
+            className="pay-breakdown-periods mb-4"
+          />
+          <table className="w-full text-sm">
+            <caption className="sr-only">Pay by period</caption>
             <thead>
-              <tr className="border-b border-border/40 text-muted-foreground text-xs uppercase tracking-wider font-mono font-semibold">
-                <th className="py-2.5 pr-4 w-full sticky left-0 z-10 bg-background border-r border-border/40">Category</th>
-                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Annual</th>
-                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Monthly</th>
-                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Weekly</th>
-                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Daily</th>
-                <th className="py-2.5 px-3 text-right w-px whitespace-nowrap">Hourly</th>
+              <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                <th scope="col" className="pb-2.5 pr-4 text-left font-normal"><span className="sr-only">Item</span></th>
+                {PERIODS.map(p => (
+                  <th
+                    key={p.key}
+                    scope="col"
+                    data-period
+                    data-active={p.key === period || undefined}
+                    className="pb-2.5 pl-4 text-right font-normal whitespace-nowrap"
+                  >
+                    {p.label}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/20 font-mono text-xs text-foreground">
-
-              {/* Total Package Header Row */}
-              <tr className="hover:bg-muted/20 transition-colors font-mono font-bold border-b border-border/40 text-foreground">
-                <td className="py-3 pr-4 w-full font-bold text-sm whitespace-nowrap flex items-center gap-1.5 sticky left-0 z-10 bg-background border-r border-border/40">
-                  <Gift className="w-4 h-4 text-primary shrink-0" /> Total Compensation Package
-                </td>
-                <td className="py-3 px-3 text-right w-px font-mono font-bold text-sm tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.totalPackage.annual)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono font-bold text-sm tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.totalPackage.monthly)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono font-bold text-sm tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.totalPackage.weekly)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono font-bold text-sm tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.totalPackage.daily)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono font-bold text-sm tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.totalPackage.hourly)}</td>
-              </tr>
-
-              {/* Gross Salary */}
-              <tr className="hover:bg-muted/10 transition-colors font-medium">
-                <td className="py-3 pr-4 w-full font-semibold font-sans text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Gross Base Salary</td>
-                <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.preTax.annual)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.preTax.monthly)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.preTax.weekly)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.preTax.daily)}</td>
-                <td className="py-3 px-3 text-right w-px font-mono tabular-nums whitespace-nowrap">{formatGBP(breakdownRates.preTax.hourly)}</td>
-              </tr>
-
-              {/* Employer Pension Addition */}
-              {results.employerPensionRate > 0 && (
-                <tr className="hover:bg-muted/10 transition-colors">
-                  <td className="py-3 pr-4 w-full font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
-                    <div className="flex flex-col justify-center min-w-[120px]">
-                      <span className="font-semibold text-foreground">
-                        Employer Pension ({settings.employerPensionPercent}%)
-                      </span>
-                      <span className="text-xs text-muted-foreground font-mono leading-normal mt-0.5">
-                        Employer contribution to pension
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.employerPension.hourly)}</td>
-                </tr>
-              )}
-
-              {/* Employer Benefits & Perks Addition */}
-              {results.totalBenefitsValue > 0 && (
-                <tr className="hover:bg-muted/10 transition-colors">
-                  <td className="py-3 pr-4 w-full font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
-                    <div className="flex flex-col justify-center min-w-[120px]">
-                      <span className="font-semibold flex items-center gap-1.5 text-foreground">
-                        <Gift className="w-3.5 h-3.5 shrink-0 text-primary" /> Benefits & Perks ({settings.packageBenefits?.length || 0})
-                      </span>
-                      <span className="text-xs text-muted-foreground font-mono leading-normal mt-0.5">
-                        {(settings.packageBenefits || []).map(b => `${b.emoji || '🎁'} ${b.name}`).join(', ')}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono font-semibold text-positive tabular-nums whitespace-nowrap">+{formatGBP(breakdownRates.benefits.hourly)}</td>
-                </tr>
-              )}
-
-              {/* Pension Contributions */}
-              {results.personalPensionRate > 0 && (
-                <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                  <td className="py-3 pr-4 w-full font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
-                    <div className="flex flex-col justify-center min-w-[120px]">
-                      <span className="font-bold text-foreground">Personal Pension ({settings.personalPensionPercent}%)</span>
-                      <span className="text-xs text-muted-foreground/90 font-medium leading-normal mt-0.5">
-                        {settings.pensionType === 'net_pay' ? 'Net Pay' :
-                          settings.pensionType === 'salary_sacrifice' ? 'Salary Sacrifice' :
-                            'Relief at Source'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px font-mono tabular-nums text-destructive font-semibold whitespace-nowrap">-{formatGBP(breakdownRates.pension.hourly)}</td>
-                </tr>
-              )}
-
-              {/* Income Tax */}
-              {results.incomeTax > 0 && (
-                <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                  <td className="py-3 pr-4 w-full font-sans font-bold text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Income Tax</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.tax.hourly)}</td>
-                </tr>
-              )}
-
-              {/* National Insurance */}
-              {results.nationalInsurance > 0 && (
-                <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                  <td className="py-3 pr-4 w-full font-sans text-left sticky left-0 z-10 bg-background border-r border-border/40">
-                    <div className="flex flex-col justify-center min-w-[120px]">
-                      <span className="font-bold text-foreground">National Insurance</span>
-                      <span className="text-xs text-muted-foreground/90 font-medium leading-normal mt-0.5">
-                        8% (£12,570-£50,270), 2% above
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.ni.hourly)}</td>
-                </tr>
-              )}
-
-              {/* Student Loan */}
-              {results.studentLoan > 0 && (
-                <tr className="hover:bg-muted/10 transition-colors text-foreground">
-                  <td className="py-3 pr-4 w-full font-sans font-bold text-foreground whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Student Loan ({getPlanName(settings.studentLoanPlan)})</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.annual)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.monthly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.weekly)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.daily)}</td>
-                  <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono tabular-nums text-destructive font-semibold">-{formatGBP(breakdownRates.studentLoan.hourly)}</td>
-                </tr>
-              )}
-
-              {/* Total Deductions */}
-              <tr className="hover:bg-destructive/10 transition-colors font-mono text-destructive bg-destructive/5">
-                <td className="py-3 pr-4 w-full font-bold whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Total Deductions</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold tabular-nums">-{formatGBP(breakdownRates.deductions.annual)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold tabular-nums">-{formatGBP(breakdownRates.deductions.monthly)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold tabular-nums">-{formatGBP(breakdownRates.deductions.weekly)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold tabular-nums">-{formatGBP(breakdownRates.deductions.daily)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold tabular-nums">-{formatGBP(breakdownRates.deductions.hourly)}</td>
-              </tr>
-
-              {/* Take Home Pay */}
-              <tr className="hover:bg-positive/10 transition-colors border-t border-border/40 font-mono font-bold text-positive bg-positive/5">
-                <td className="py-3 pr-4 w-full font-bold text-sm whitespace-nowrap sticky left-0 z-10 bg-background border-r border-border/40">Take-Home Pay</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.annual)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.monthly)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.weekly)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.daily)}</td>
-                <td className="py-3 px-3 text-right w-px whitespace-nowrap font-mono font-bold text-sm tabular-nums">{formatGBP(breakdownRates.postTax.hourly)}</td>
-              </tr>
-
-            </tbody>
+            {breakdownGroups.map((group, groupIdx) => (
+              <tbody key={groupIdx}>
+                {group.map((row, rowIdx) => {
+                  const cell = cn(
+                    'py-2 align-top',
+                    groupIdx === 0 && rowIdx === 0 && 'pt-3',
+                    row.kind === 'total' && 'pt-3',
+                    row.kind === 'result' && 'pt-4 text-base',
+                    rowIdx === group.length - 1 && groupIdx < breakdownGroups.length - 1 && 'pb-6',
+                  );
+                  return (
+                    <tr
+                      key={row.key}
+                      className={cn(
+                        row.kind === 'total' && 'border-t border-border/40',
+                        row.kind === 'result' && 'border-t border-border/70',
+                      )}
+                    >
+                      <th scope="row" className={cn(cell, 'pr-4 text-left text-foreground', row.kind ? 'font-semibold' : 'font-normal')}>
+                        {row.label}
+                        {row.note && <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{row.note}</span>}
+                      </th>
+                      {PERIODS.map(p => (
+                        <td
+                          key={p.key}
+                          data-period
+                          data-active={p.key === period || undefined}
+                          className={cn(
+                            cell,
+                            'pl-4 text-right font-mono tabular-nums whitespace-nowrap',
+                            row.tone ?? 'text-foreground',
+                            row.kind && 'font-semibold',
+                          )}
+                        >
+                          {row.sign}{formatGBP(row.rates[p.key])}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            ))}
           </table>
-        </div>
-      </div>
-
-      <div className="surface-card flex flex-col gap-3 rounded-xl border border-border/40 bg-card/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between hover:border-border/80 transition-colors">
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">Settings & Package Options</p>
-          <p className="text-xs text-muted-foreground font-mono mt-0.5">
-            {settings.ukRegion === 'england-and-wales' ? 'England & Wales' : settings.ukRegion === 'scotland' ? 'Scotland' : 'Northern Ireland'} tax rules, employer pension ({settings.employerPensionPercent}%), and package benefits.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-          <Button onClick={() => setIsBenefitsDialogOpen(true)} variant="outline" size="sm" className="h-8 rounded-lg gap-1.5 border-border/40 text-xs font-mono">
-            <Gift className="h-3.5 w-3.5 text-primary" /> Benefits ({settings.packageBenefits?.length || 0})
-          </Button>
-          <Button onClick={() => setIsSettingsOpen(true)} size="sm" className="h-8 rounded-lg gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-mono shrink-0">
-            <Settings className="h-3.5 w-3.5" /> Settings
-          </Button>
         </div>
       </div>
 
@@ -609,13 +628,17 @@ export default function TaxIncomeSurface({
             <span className="text-chart-4 font-semibold">Sick Day</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm border border-dashed border-muted-foreground/60 bg-[linear-gradient(90deg,hsl(var(--muted-foreground)/0.4)_50%,transparent_50%)]" />
+            <span>Half Day (AM left, PM right)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-muted/40 border border-border/30" />
             <span>Working Day</span>
           </div>
         </div>
 
         <TooltipProvider delayDuration={150}>
-          <div id="holiday-months-container" className="holiday-scrollbar space-y-4 max-h-[330px] overflow-y-auto pr-3 lg:max-h-[315px]">
+          <div id="holiday-months-container" className="holiday-scrollbar space-y-4 lg:max-h-[315px] lg:overflow-y-auto lg:pr-3">
             {MONTH_NAMES.map((month, monthIdx) => {
               const daysInMonth = getDaysInMonth(settings.taxYear, monthIdx);
               const startDayOfWeek = getStartDayOfWeek(settings.taxYear, monthIdx);
@@ -623,8 +646,8 @@ export default function TaxIncomeSurface({
               const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
               const bookedDaysForMonth = getBookedDaysForMonth(normalizedHolidays, settings.taxYear, monthIdx, bankHolidaysList);
 
-              const monthHolidaysBooked = bookedDaysForMonth.filter(b => b.type !== 'sick').length;
-              const monthSickDaysBooked = bookedDaysForMonth.filter(b => b.type === 'sick').length;
+              const monthHolidaysBooked = bookedDaysForMonth.filter(b => b.type !== 'sick').reduce((sum, b) => sum + b.fraction, 0);
+              const monthSickDaysBooked = bookedDaysForMonth.filter(b => b.type === 'sick').reduce((sum, b) => sum + b.fraction, 0);
 
               const isExpanded = expandedMonthIdx === monthIdx;
 
@@ -689,6 +712,7 @@ export default function TaxIncomeSurface({
                       const bookedDay = bookedDaysForMonth.find(b => b.day === dayNum);
                       const isBookedSick = bookedDay?.type === 'sick';
                       const isBookedHoliday = !!bookedDay && !isBookedSick;
+                      const bookedHalf = bookedDay?.halfDay;
                       const bookedOccasion = bookedDay?.occasion || (isBookedSick ? 'Sick Leave' : 'Leave');
 
                       const dateObj = new Date(settings.taxYear, monthIdx, dayNum);
@@ -697,10 +721,20 @@ export default function TaxIncomeSurface({
 
                       let cellClass = "w-7 h-7 sm:w-6 sm:h-6 text-xs font-mono flex items-center justify-center rounded-sm font-medium transition-colors ";
 
+                      // A half day fills the half it takes: the left for a morning,
+                      // the right for an afternoon.
                       if (isBookedSick) {
-                        cellClass += "text-chart-4 font-bold bg-chart-4/20 border border-chart-4/50";
+                        cellClass += bookedHalf === 'am'
+                          ? "text-chart-4 font-bold border border-dashed border-chart-4/60 bg-[linear-gradient(90deg,hsl(var(--chart-4)/0.3)_50%,transparent_50%)]"
+                          : bookedHalf === 'pm'
+                            ? "text-chart-4 font-bold border border-dashed border-chart-4/60 bg-[linear-gradient(270deg,hsl(var(--chart-4)/0.3)_50%,transparent_50%)]"
+                            : "text-chart-4 font-bold bg-chart-4/20 border border-chart-4/50";
                       } else if (isBookedHoliday) {
-                        cellClass += "text-positive font-bold bg-positive/20 border border-positive/50";
+                        cellClass += bookedHalf === 'am'
+                          ? "text-positive font-bold border border-dashed border-positive/60 bg-[linear-gradient(90deg,hsl(var(--positive)/0.3)_50%,transparent_50%)]"
+                          : bookedHalf === 'pm'
+                            ? "text-positive font-bold border border-dashed border-positive/60 bg-[linear-gradient(270deg,hsl(var(--positive)/0.3)_50%,transparent_50%)]"
+                            : "text-positive font-bold bg-positive/20 border border-positive/50";
                       } else if (isBankHoliday) {
                         cellClass += "text-chart-5 font-bold bg-chart-5/20 border border-chart-5/50";
                       } else if (isWeekend) {
@@ -714,10 +748,11 @@ export default function TaxIncomeSurface({
                         if (isBankHoliday) {
                           list.push(`Bank Holiday: ${bankHolidaysMap[dateStr] || 'Public Holiday'}`);
                         }
+                        const halfNote = bookedHalf ? ` (${HALF_DAY_LABEL[bookedHalf]})` : '';
                         if (isBookedSick) {
-                          list.push(`Sick Day: ${bookedOccasion}`);
+                          list.push(`Sick Day${halfNote}: ${bookedOccasion}`);
                         } else if (isBookedHoliday) {
-                          list.push(`Booked Leave: ${bookedOccasion}`);
+                          list.push(`Booked Leave${halfNote}: ${bookedOccasion}`);
                         }
                         if (isWeekend) {
                           list.push('Weekend');
@@ -787,7 +822,7 @@ export default function TaxIncomeSurface({
                                       <span className="font-semibold font-mono text-foreground truncate">{hol.occasion}</span>
                                     </div>
                                     <span className="text-xs text-muted-foreground block font-mono">
-                                      {formatHolidayDates(hol.startDate, hol.endDate)} ({hol.count} {hol.count === 1 ? 'day' : 'days'})
+                                      {formatHolidayDates(hol.startDate, hol.endDate)} ({isHalfDay(hol) && hol.halfDay ? `half day, ${HALF_DAY_LABEL[hol.halfDay]}` : `${hol.count} ${hol.count === 1 ? 'day' : 'days'}`})
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
@@ -886,10 +921,7 @@ export default function TaxIncomeSurface({
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setInlineStartDate(val);
-                                    if (inlineEndDate) {
-                                      const workingDays = calculateWorkingDaysInRange(val, inlineEndDate, bankHolidaysList);
-                                      setInlineCount(workingDays.toString());
-                                    }
+                                    if (inlineEndDate) recountInline(val, inlineEndDate);
                                   }}
                                   className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
                                 />
@@ -902,15 +934,40 @@ export default function TaxIncomeSurface({
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setInlineEndDate(val);
-                                    if (inlineStartDate) {
-                                      const workingDays = calculateWorkingDaysInRange(inlineStartDate, val, bankHolidaysList);
-                                      setInlineCount(workingDays.toString());
-                                    }
+                                    if (inlineStartDate) recountInline(inlineStartDate, val);
                                   }}
                                   className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
                                 />
                               </div>
                             </div>
+                            {inlineIsSingleDay && (
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <Label className="text-xs text-muted-foreground font-mono">Length</Label>
+                                <div className="flex items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40">
+                                  {([null, 'am', 'pm'] as const).map(half => {
+                                    const selected = inlineHalfDay === half;
+                                    return (
+                                      <button
+                                        key={half ?? 'full'}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        disabled={half !== null && !inlineDayIsWorking}
+                                        title={half !== null && !inlineDayIsWorking ? 'Not a working day' : undefined}
+                                        onClick={() => chooseInlineLength(half)}
+                                        className={cn(
+                                          "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors border disabled:opacity-40 disabled:pointer-events-none",
+                                          selected
+                                            ? "bg-primary/15 text-foreground border-primary/40 font-semibold shadow-xs"
+                                            : "border-transparent text-muted-foreground hover:text-foreground"
+                                        )}
+                                      >
+                                        {half ? HALF_DAY_BUTTON[half] : 'Full day'}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                             <div className="space-y-0.5">
                               <Label className="text-xs text-muted-foreground font-mono">Days count (working days)</Label>
                               <Input
@@ -918,6 +975,7 @@ export default function TaxIncomeSurface({
                                 step="0.5"
                                 min="0"
                                 value={inlineCount}
+                                disabled={!!inlineHalfDay}
                                 onChange={(e) => setInlineCount(e.target.value)}
                                 className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
                               />
@@ -977,66 +1035,13 @@ export default function TaxIncomeSurface({
 
       </div>
 
-      {/* Card 2: Payday Details */}
-      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
-          <div className="min-w-0">
-            <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-primary shrink-0" /> Payday Details
-            </h3>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">Your configured payday schedule and next expected pay date.</p>
-          </div>
-        </div>
-
-        <div className="space-y-3.5">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-muted-foreground font-medium">Schedule Type</span>
-            <span className="font-semibold text-foreground capitalize">
-              {settings.paydaySchedule === 'monthly_date' && `Monthly (${settings.payDayOfMonth || 25}th)`}
-              {settings.paydaySchedule === 'last_working_day' && 'Last Working Day'}
-              {settings.paydaySchedule === 'last_friday' && 'Last Friday of Month'}
-              {settings.paydaySchedule === 'biweekly' && 'Bi-weekly (Every 2 weeks)'}
-              {settings.paydaySchedule === 'weekly' && `Weekly (${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][settings.paydayWeekday ?? 5]}s)`}
-              {settings.paydaySchedule === 'semimonthly' && 'Semi-monthly (15th & Last working day)'}
-              {!settings.paydaySchedule && `Monthly (${settings.payDayOfMonth || 25}th)`}
-            </span>
-          </div>
-
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-muted-foreground font-medium">Next Payday</span>
-            <span className="font-semibold text-foreground">
-              {nextPayday.date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-          </div>
-
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-muted-foreground font-medium">Status</span>
-            <span className={cn(
-              "font-mono px-2 py-0.5 rounded-lg font-bold text-xs tabular-nums",
-              nextPayday.daysRemaining === 0 ? "bg-positive/20 text-positive border border-positive/40" : "bg-primary/10 text-primary border border-primary/20"
-            )}>
-              {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
-            </span>
-          </div>
-
-          {nextPayday.adjusted && (
-            <div className="rounded-lg bg-muted/30 border border-border/30 p-2.5 text-xs text-muted-foreground flex items-start gap-1.5 leading-normal font-mono">
-              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
-              <span>
-                Adjusted to working day before due to {nextPayday.adjustReason === 'weekend' ? 'a weekend' : 'a bank holiday'}.
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
     </div>
 
   </div>
 
 </div>
 <Dialog open={isBenefitsDialogOpen} onOpenChange={setIsBenefitsDialogOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+  <DialogContent className="sm:rounded-xl border border-border/40 bg-card p-6 max-w-lg w-full">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
         <Gift className="w-4 h-4 text-primary" /> Manage Package Benefits & Perks
@@ -1156,7 +1161,7 @@ export default function TaxIncomeSurface({
       {/* Active Benefits List */}
       <div className="space-y-2">
         <Label className="text-xs font-medium text-muted-foreground font-mono">Configured Package Additions</Label>
-        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+        <div className="space-y-2">
           {(settings.packageBenefits || []).map((benefit) => {
             const annualVal = benefit.type === 'percentage'
               ? (settings.grossSalary * ((benefit.amount || 0) / 100))

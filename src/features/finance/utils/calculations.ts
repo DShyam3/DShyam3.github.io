@@ -104,11 +104,6 @@ export const getCategoryDefaultEmoji = (name: string): string => {
 
 export const getAccountDefaultEmoji = (type: string, name: string): string => {
   const lower = name.toLowerCase();
-  if (lower.includes('chase')) return '🏦';
-  if (lower.includes('monzo')) return '🍊';
-  if (lower.includes('revolut')) return '💳';
-  if (lower.includes('amex') || lower.includes('american express')) return '✈️';
-  if (lower.includes('vanguard')) return '📈';
   if (lower.includes('checking') || lower.includes('current')) return '💵';
   if (lower.includes('savings')) return '🐷';
   if (type === 'credit') return '💳';
@@ -125,14 +120,26 @@ export const getAccountDefaultEmoji = (type: string, name: string): string => {
  * that you recognise an account by its colour. Tokenising them would make the
  * accounts list less informative, not more consistent.
  */
+const BRAND_COLORS: readonly (readonly [string, string])[] = [
+  ['chase', 'hsl(175 69% 22%)'], // teal
+  ['monzo', 'hsl(19 100% 50%)'], // monzo hot coral
+  ['revolut', 'hsl(217 91% 60%)'], // blue
+  ['amex', 'hsl(224 64% 33%)'], // deep blue
+  ['american express', 'hsl(224 64% 33%)'], // deep blue
+  ['vanguard', 'hsl(0 83% 35%)'], // dark red
+  ['barclaycard', 'hsl(196 100% 47%)'], // barclays blue
+  ['barclays', 'hsl(196 100% 47%)'], // barclays blue
+  ['hsbc', 'hsl(355 100% 43%)'], // hsbc red
+  ['lloyds', 'hsl(164 100% 21%)'], // lloyds green
+  ['natwest', 'hsl(275 52% 32%)'], // natwest purple
+  ['santander', 'hsl(0 100% 46%)'], // santander red
+  ['halifax', 'hsl(209 100% 36%)'], // halifax blue
+];
+
 export const getAccountDefaultColor = (name: string): string => {
   const lower = name.toLowerCase();
-  if (lower.includes('chase')) return 'hsl(175 69% 22%)'; // teal
-  if (lower.includes('monzo')) return 'hsl(19 100% 50%)'; // monzo hot coral
-  if (lower.includes('revolut')) return 'hsl(217 91% 60%)'; // blue
-  if (lower.includes('amex') || lower.includes('american express')) return 'hsl(224 64% 33%)'; // deep blue
-  if (lower.includes('vanguard')) return 'hsl(0 83% 35%)'; // dark red
-  return 'hsl(215 16% 35%)'; // slate
+  const match = BRAND_COLORS.find(([brand]) => lower.includes(brand));
+  return match ? match[1] : 'hsl(215 16% 35%)'; // slate
 };
 
 /**

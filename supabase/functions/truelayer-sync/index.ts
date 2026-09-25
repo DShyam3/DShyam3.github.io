@@ -2,26 +2,24 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { buildTrueLayerTransactionQuery } from '../_shared/truelayer-transaction-query.ts'
 import { requireAdmin } from '../_shared/require-admin.ts'
-
-const ALLOWED_ORIGINS = new Set([
-  'https://dshyam3.github.io',
-  'http://localhost:8080',
-  'http://localhost:8081',
-  'http://localhost:8082',
-  'http://localhost:5173',
-])
+import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/cooldown.ts'
+import { groupRowsByColumns } from '../_shared/upsert-batches.ts'
+import { corsOriginHeader, allowedRedirectUris } from '../_shared/site-origins.ts'
 
 // A callback is safe only when its destination is an exact, registered app
-// URL. This list mirrors the browser origins but deliberately includes the
+// URL. This mirrors the browser origins but deliberately includes the
 // `/finance` callback path as part of the allowlist.
-const ALLOWED_REDIRECT_URIS = new Set([
-  'https://dshyam3.github.io/finance',
-  'http://localhost:8080/finance',
-  'http://localhost:8081/finance',
-  'http://localhost:8082/finance',
-  'http://localhost:5173/finance',
-])
+const ALLOWED_REDIRECT_URIS = allowedRedirectUris('/finance')
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+
+/**
+ * Gap enforced between two manual bank syncs. Every sync walks every linked
+ * account at the bank, and banks throttle how often a connection may be read,
+ * so a button pressed on repeat spends that allowance for nothing new. The
+ * 05:00 pg_cron run is exempt; linking a bank clears it (see exchange_code).
+ */
+const MANUAL_SYNC_COOLDOWN_SECONDS = 15 * 60
+const MANUAL_SYNC_COOLDOWN_KEY = 'truelayer-sync:manual'
 
 function isAllowedRedirectUri(value: unknown): value is string {
   return typeof value === 'string' && ALLOWED_REDIRECT_URIS.has(value)
@@ -43,9 +41,8 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 function buildCorsHeaders(req: Request) {
-  const origin = req.headers.get('Origin') || ''
   return {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.has(origin) ? origin : 'https://dshyam3.github.io',
+    ...corsOriginHeader(req),
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Vary': 'Origin',
   }
@@ -455,6 +452,10 @@ serve(async (req) => {
         })
       }
 
+      // The client syncs straight after linking. A cooldown held from an
+      // earlier sync would refuse the first read of a bank nobody has read.
+      await releaseCooldown(supabaseAdmin, MANUAL_SYNC_COOLDOWN_KEY)
+
       return new Response(JSON.stringify({
         success: true,
         provider_id: providerId,
@@ -473,6 +474,43 @@ serve(async (req) => {
         })
       }
 
+      // One finance_sync_log row for every run that finishes or fails in a way
+      // this action handles, so the history can tell a night the job failed
+      // from a night it never ran. A wall-clock timeout or an exception caught
+      // by the outer handler writes nothing, and the history shows that night
+      // as missed. Best effort: a failed log write must not turn a good sync
+      // into an error. Messages stored here are the generic ones this function
+      // already returns, never raw provider or database errors.
+      type BankRunResult = { name: string; status: 'synced' | 'failed'; transactions: number; error?: string }
+      const runStartedAt = Date.now()
+      const recordRun = async (run: {
+        status: 'success' | 'partial' | 'error'
+        errorMessage?: string
+        connectionsSynced?: number
+        accountsSynced?: number
+        transactionsSynced?: number
+        transactionsNew?: number
+        banks?: BankRunResult[]
+      }) => {
+        try {
+          const { error } = await supabaseAdmin.from('finance_sync_log').insert({
+            profile_id: selfProfileId,
+            trigger: isServiceRole ? 'scheduled' : 'manual',
+            status: run.status,
+            duration_ms: Date.now() - runStartedAt,
+            connections_synced: run.connectionsSynced ?? 0,
+            accounts_synced: run.accountsSynced ?? 0,
+            transactions_synced: run.transactionsSynced ?? 0,
+            transactions_new: run.transactionsNew ?? 0,
+            banks: run.banks ?? [],
+            error_message: run.errorMessage ?? null,
+          })
+          if (error) console.warn('Failed to record bank sync run:', error)
+        } catch (logException) {
+          console.warn('Failed to record bank sync run:', logException)
+        }
+      }
+
       // 1. Fetch all connection details for this profile (7.M Step B).
       // Named columns rather than '*': this row holds the access and refresh
       // tokens, so a wildcard pulls every future column into memory and into
@@ -483,10 +521,28 @@ serve(async (req) => {
         .eq('profile_id', selfProfileId)
 
       if (connError || !connections || connections.length === 0) {
+        // Only the nightly job logs this: a manual press is answered on
+        // screen, but an unattended run with no bank to call is exactly what
+        // the history is for.
+        if (isServiceRole) {
+          await recordRun({
+            status: 'error',
+            errorMessage: connError ? 'Could not read bank connections' : 'No bank connection found',
+          })
+        }
         return new Response(JSON.stringify({ error: 'No TrueLayer bank connection found. Please link your account first.' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
+      }
+
+      // Claimed only once there is a bank to call, so a refused or empty
+      // request does not hold the cooldown.
+      let cooldownClaimedAt: number | null = null
+      if (!isServiceRole) {
+        const wait = await claimCooldown(supabaseAdmin, MANUAL_SYNC_COOLDOWN_KEY, MANUAL_SYNC_COOLDOWN_SECONDS)
+        if (wait > 0) return cooldownResponse(wait, 'A bank sync', corsHeaders)
+        cooldownClaimedAt = Date.now()
       }
 
       // Shapes written back to Supabase
@@ -498,16 +554,22 @@ serve(async (req) => {
         type: string
         issuer: string
         balance: number
-        annual_fee: number
+        // No annual_fee: the bank does not report one, so the owner enters it,
+        // and an upsert overwrites every column it names. Absent from every
+        // row, a new account takes the column's default of 0 and an existing
+        // one keeps what the owner set.
         emoji: string
         color: string
         updated_at: string
+        /** Cards only, and only when the bank returned one; see the upsert. */
+        credit_limit?: number
       }
       type SyncedTxRow = {
         is_default: boolean
         profile_id: string | null
         name: string
         merchant: string | null
+        provider_category: string | null
         category: string
         amount: number
         date: string
@@ -552,6 +614,14 @@ serve(async (req) => {
       const mapCategory = (category: string, classifications: string[]): string => {
         const primary = category ? category.toLowerCase() : ''
         const list = (classifications || []).map(c => c.toLowerCase())
+
+        // A bank transfer may be a move between the owner's own accounts, a
+        // payment to someone, or money coming back -- nothing here can tell
+        // which, so it is labelled for what it is rather than filed under a
+        // spending category. Whether it counts is decided in transfer review.
+        if (primary === 'transfer') {
+          return 'Transfers'
+        }
 
         if (list.includes('groceries') || list.includes('eating_out') || primary === 'food_and_drink') {
           return 'Food & Drink'
@@ -660,8 +730,16 @@ serve(async (req) => {
       const transactionSourceKey = (accountId: string, transactionId: string) =>
         `${accountId}\u0000${transactionId}`
 
+      // Per bank, for the sync history: rows fetched (before de-duplication)
+      // and whether it failed. Keyed by connection id, since two connections
+      // can share a display name.
+      const fetchedByConnection = new Map<string, number>()
+      const failureByConnection = new Map<string, string>()
+
       // Loop through each linked bank connection
       for (const connection of connections) {
+        const fetchedBefore = allNewTransactions.length
+        const errorsBefore = connectionErrors.length
         try {
           let accessToken = connection.access_token
           let refreshToken = connection.refresh_token
@@ -779,8 +857,13 @@ serve(async (req) => {
             const balanceVal = balanceData.results?.[0]?.current ?? 0
             const styling = getProviderStyling(raw.provider?.display_name || connection.provider_name)
             const isCard = kind === 'cards'
+            // Card balances carry the limit; account balances do not. Kept
+            // only when it is a real, non-negative number.
+            const rawLimit = isCard ? Number(balanceData.results?.[0]?.credit_limit) : NaN
+            const creditLimit = Number.isFinite(rawLimit) && rawLimit >= 0 ? { credit_limit: rawLimit } : {}
 
             return {
+              ...creditLimit,
               id: accId,
               is_default: false,
               profile_id: selfProfileId,
@@ -788,7 +871,6 @@ serve(async (req) => {
               type: importedAccountType((raw as TlAccount).account_type, isCard),
               issuer: raw.provider?.display_name || connection.provider_name,
               balance: isCard ? -Math.abs(Number(balanceVal)) : Number(balanceVal),
-              annual_fee: 0,
               emoji: styling.emoji,
               color: styling.color,
               updated_at: new Date().toISOString(),
@@ -881,6 +963,10 @@ serve(async (req) => {
                 // processor prefix, the store number, the till reference. What
                 // survives is stable, which is all a key has to be.
                 merchant: tx.merchant_name || tx.description || null,
+                // The bank's own label, kept verbatim beside the mapped
+                // category below. Transfer detection reads it as evidence;
+                // it never decides a category on its own.
+                provider_category: tx.transaction_category?.trim().toLowerCase() || null,
                 category: mapCategory(tx.transaction_category || '', tx.transaction_classification || []),
                 amount: -Number(tx.amount),
                 date: tx.timestamp.split('T')[0],
@@ -982,8 +1068,35 @@ serve(async (req) => {
             provider: connection.provider_name,
             error: 'Sync failed',
           })
+        } finally {
+          fetchedByConnection.set(connection.id, allNewTransactions.length - fetchedBefore)
+          if (connectionErrors.length > errorsBefore) {
+            failureByConnection.set(connection.id, connectionErrors[errorsBefore].error)
+          }
         }
       }
+
+      const bankResults: BankRunResult[] = connections.map(connection => {
+        const failure = failureByConnection.get(connection.id)
+        return {
+          name: connection.provider_name,
+          status: failure ? 'failed' : 'synced',
+          transactions: fetchedByConnection.get(connection.id) ?? 0,
+          ...(failure ? { error: failure } : {}),
+        }
+      })
+      // What was already written when a later step failed, so the log does
+      // not report zero for rows that are in the database.
+      const written = { accounts: 0, transactions: 0 }
+      const failRun = (errorMessage: string) =>
+        recordRun({
+          status: 'error',
+          errorMessage,
+          connectionsSynced: connections.length,
+          accountsSynced: written.accounts,
+          transactionsSynced: written.transactions,
+          banks: bankResults,
+        })
 
       // 4. Write what this sync produced
       const chunk = <T,>(rows: T[], size = 500): T[][] => {
@@ -993,18 +1106,58 @@ serve(async (req) => {
       }
 
       const accountRows = syncedAccounts.map(a => ({ ...a, profile_id: selfProfileId }))
-      for (const batch of chunk(accountRows)) {
-        const { error } = await supabaseAdmin
+
+      // Name, emoji and colour are the bank's suggestion for a new account and
+      // the owner's once it exists: the edit form changes all three, and
+      // rewriting them on every run undid those edits overnight.
+      //
+      // They are sent back as they stand, not left out. An upsert is an
+      // INSERT first, and Postgres checks NOT NULL on the proposed row before
+      // it finds the conflict -- so a row without `name` fails even when it
+      // exists. That took down the nightly run of 2026-09-25.
+      const ownerValues = new Map<string, { name: string; emoji: string | null; color: string | null }>()
+      if (accountRows.length > 0) {
+        const { data, error } = await supabaseAdmin
           .from('finance_bank_accounts')
-          .upsert(batch, { onConflict: 'id' })
+          .select('id, name, emoji, color')
+          .in('id', accountRows.map(row => row.id))
         if (error) {
-          console.error('Failed to write synced accounts:', error)
-          return new Response(JSON.stringify({ error: 'Could not write synced accounts' }), {
+          console.error('Failed to look up existing synced accounts:', error)
+          await failRun('Could not prepare synced accounts')
+          return new Response(JSON.stringify({ error: 'Could not prepare synced accounts' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
+        for (const row of data ?? []) {
+          ownerValues.set(row.id, { name: row.name, emoji: row.emoji, color: row.color })
+        }
       }
+      const rowsToWrite: Record<string, unknown>[] = accountRows.map(row => {
+        const kept = ownerValues.get(row.id)
+        return kept ? { ...row, ...kept } : row
+      })
+
+      // Grouped by exactly the columns each row carries, so a hand-entered
+      // credit limit is never blanked by a batch-mate that sends one (see
+      // _shared/upsert-batches).
+      for (const group of groupRowsByColumns(rowsToWrite)) {
+        for (const batch of chunk(group)) {
+          const { error } = await supabaseAdmin
+            .from('finance_bank_accounts')
+            .upsert(batch, { onConflict: 'id' })
+          if (error) {
+            console.error('Failed to write synced accounts:', error)
+            await failRun('Could not write synced accounts')
+            return new Response(JSON.stringify({ error: 'Could not write synced accounts' }), {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
+      }
+
+      written.accounts = accountRows.length
 
       // 5. A provider transaction ID is only unique within its account. Keep
       // its stable source identity separate from our primary key, so two bank
@@ -1017,7 +1170,7 @@ serve(async (req) => {
 
       // Existing IDs remain unchanged: profile-transfer rows can reference
       // them. New rows receive a deterministic hash of account + provider ID.
-      const existingBySource = new Map<string, { id: string; is_reviewed: boolean }>()
+      const existingBySource = new Map<string, { id: string; is_reviewed: boolean; category: string | null }>()
       const syncedAccountIds = Array.from(new Set(deduped.map(tx => tx.account_id)))
       const providerTransactionIds = Array.from(
         new Set(deduped.map(tx => tx.provider_transaction_id)),
@@ -1029,12 +1182,13 @@ serve(async (req) => {
       for (const batch of chunk(providerTransactionIds, 100)) {
         const { data, error } = await supabaseAdmin
           .from('finance_transactions')
-          .select('id, is_reviewed, account_id, provider_transaction_id')
+          .select('id, is_reviewed, category, account_id, provider_transaction_id')
           .eq('profile_id', selfProfileId)
           .in('account_id', syncedAccountIds)
           .in('provider_transaction_id', batch)
         if (error) {
           console.error('Failed to look up existing TrueLayer transactions:', error)
+          await failRun('Could not prepare bank transactions')
           return new Response(JSON.stringify({ error: 'Could not prepare bank transactions' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1044,7 +1198,7 @@ serve(async (req) => {
           if (row.account_id && row.provider_transaction_id) {
             existingBySource.set(
               transactionSourceKey(row.account_id, row.provider_transaction_id),
-              { id: row.id, is_reviewed: row.is_reviewed },
+              { id: row.id, is_reviewed: row.is_reviewed, category: row.category },
             )
           }
         }
@@ -1061,6 +1215,10 @@ serve(async (req) => {
           )}`,
           profile_id: selfProfileId,
           is_reviewed: existing?.is_reviewed ?? tx.is_reviewed,
+          // The category is the owner's once the row exists. Re-mapping it on
+          // every sync reverted any re-categorisation made inside the overlap
+          // window, which the next run re-reads.
+          category: existing?.category || tx.category,
         }
       }))
 
@@ -1070,12 +1228,15 @@ serve(async (req) => {
           .upsert(batch, { onConflict: 'id' })
         if (error) {
           console.error('Failed to write synced transactions:', error)
+          await failRun('Could not write synced transactions')
           return new Response(JSON.stringify({ error: 'Could not write synced transactions' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
       }
+
+      written.transactions = txRows.length
 
       // Commit each account/card cursor only after its fetched data is in the
       // database. If this update itself fails, the bounded overlap makes the
@@ -1092,6 +1253,7 @@ serve(async (req) => {
           .eq('id', progress.id)
         if (error) {
           console.error('Failed to advance TrueLayer source sync progress:', error)
+          await failRun('Could not record bank sync progress')
           return new Response(JSON.stringify({ error: 'Could not record bank sync progress' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1113,6 +1275,7 @@ serve(async (req) => {
           .eq('id', progress.id)
         if (error) {
           console.error('Failed to advance TrueLayer sync progress:', error)
+          await failRun('Could not record bank sync progress')
           return new Response(JSON.stringify({ error: 'Could not record bank sync progress' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1130,12 +1293,29 @@ serve(async (req) => {
         console.warn('Failed to capture finance snapshots after sync:', snapshotException)
       }
 
+      const failedBanks = bankResults.filter(bank => bank.status === 'failed').length
+      const everyBankFailed = failedBanks === bankResults.length
+      await recordRun({
+        status: failedBanks === 0 ? 'success' : everyBankFailed ? 'error' : 'partial',
+        errorMessage: everyBankFailed ? 'Every bank failed to sync' : undefined,
+        connectionsSynced: connections.length,
+        accountsSynced: syncedAccounts.length,
+        transactionsSynced: txRows.length,
+        transactionsNew: deduped.filter(tx => !existingBySource.has(
+          transactionSourceKey(tx.account_id, tx.provider_transaction_id),
+        )).length,
+        banks: bankResults,
+      })
+
       return new Response(JSON.stringify({
         success: true,
         synced_accounts: syncedAccounts.length,
         synced_transactions: txRows.length,
         connections_synced: connections.length,
         errors: connectionErrors.length > 0 ? connectionErrors : undefined,
+        retry_after: cooldownClaimedAt === null
+          ? undefined
+          : Math.max(0, MANUAL_SYNC_COOLDOWN_SECONDS - Math.floor((Date.now() - cooldownClaimedAt) / 1000)),
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })

@@ -132,22 +132,23 @@ export function WatchlistDetailDialog({
       <DialogContent
         onCloseAutoFocus={onCloseAutoFocus}
         className={cn(
-          'max-h-[85vh] overflow-y-auto p-0 rounded-xl items-start',
+          // Series details keep their episode rail separate from the information panel.
+          'max-h-[85dvh] overflow-hidden p-0 rounded-xl items-start',
           // Wider dialog for TV shows with seasons
-          hasSeasons ? 'sm:max-w-4xl lg:max-w-5xl' : 'sm:max-w-2xl',
+          hasSeasons ? 'watchlist-detail-with-seasons sm:max-w-3xl lg:max-w-4xl' : 'sm:max-w-2xl',
         )}
       >
         <DialogDescription className="sr-only">
           Details for {item.title}, including seasons, schedule, and watch status.
         </DialogDescription>
         {/* Mobile Layout - stacked */}
-        <div className="sm:hidden">
+        <div className="sm:hidden flex flex-col">
           {item.image_url && (
-            <div className="w-full max-h-[60vh] relative overflow-hidden rounded-t-xl bg-background flex justify-center">
+            <div className="w-full max-h-[40vh] shrink-0 relative overflow-hidden rounded-t-xl bg-background flex justify-center">
               <img
                 src={item.image_url}
                 alt={item.title}
-                className="h-auto max-h-[60vh] w-auto object-contain"
+                className="h-auto max-h-[40vh] w-auto object-contain"
               />
             </div>
           )}
@@ -227,7 +228,7 @@ export function WatchlistDetailDialog({
 
             {/* Seasons for mobile */}
             {hasSeasons && (
-              <div className="mt-4">
+              <div className="watchlist-episode-rail mt-4" role="region" aria-label="Episodes" tabIndex={0}>
                 <SeasonEpisodeList
                   showId={item.id}
                   seasons={item.seasons!}
@@ -273,7 +274,8 @@ export function WatchlistDetailDialog({
                   size="sm"
                   onClick={onResync}
                   disabled={syncing}
-                  title="Resync this title's data from TMDB"
+                  aria-label="Resync title"
+                      title="Resync this title's data from TMDB"
                   className="gap-1.5 flex-1 sm:flex-initial justify-center"
                 >
                   <RefreshCcw className={cn('h-4 w-4', syncing && 'animate-spin')} />
@@ -319,27 +321,34 @@ export function WatchlistDetailDialog({
         </div>
 
         {/* Desktop Layout - side by side */}
-        <div className="hidden sm:flex items-start">
+        <div className={cn(
+          'watchlist-detail-grid hidden sm:grid items-start min-h-0',
+          item.image_url ? 'sm:grid-cols-[auto_minmax(0,1fr)]' : 'sm:grid-cols-1',
+          hasSeasons && (item.image_url ? 'xl:grid-cols-[auto_minmax(0,1fr)_20rem]' : 'xl:grid-cols-[minmax(0,1fr)_20rem]'),
+        )}>
           {/* Left: Poster - smaller for natural look */}
           {item.image_url && (
-            <div className="shrink-0 p-6 flex items-start bg-secondary/5">
+            <div className="watchlist-detail-poster shrink-0 p-4 flex items-start bg-secondary/5">
               <img
                 src={item.image_url}
                 alt={item.title}
-                className="w-40 h-auto rounded-lg shadow-lg"
+                className="w-24 lg:w-32 h-auto rounded-lg shadow-lg"
               />
             </div>
           )}
 
           {/* Middle: Info */}
           <div
+            tabIndex={hasSeasons ? 0 : undefined}
+            role={hasSeasons ? "region" : undefined}
+            aria-label={hasSeasons ? "Show details" : undefined}
             className={cn(
-              'flex-1 p-6 min-w-0 flex flex-col',
-              hasSeasons && 'border-r',
+              'watchlist-detail-info p-4 min-w-0 flex flex-col',
+              hasSeasons && 'xl:border-r',
             )}
           >
             <DialogHeader className="text-left">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="font-serif text-xl font-medium">
                     {item.link ? (
@@ -374,11 +383,12 @@ export function WatchlistDetailDialog({
                           : onSchedule
                       }
                       className={cn(
-                        'h-8 w-8 flex-shrink-0',
+                        'h-11 w-11 flex-shrink-0',
                         isScheduled
                           ? 'text-foreground'
                           : 'text-muted-foreground',
                       )}
+                      aria-label={isScheduled ? 'Remove from schedule' : 'Add to schedule'}
                       title={
                         isScheduled ? 'Remove from schedule' : 'Add to schedule'
                       }
@@ -391,7 +401,8 @@ export function WatchlistDetailDialog({
                       variant="ghost"
                       size="icon"
                       onClick={onMoveToFavourites}
-                      className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      className="h-11 w-11 flex-shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      aria-label="Move to favourites"
                       title="Move to Favourites"
                     >
                       <Heart className="h-4 w-4" />
@@ -403,7 +414,8 @@ export function WatchlistDetailDialog({
                       size="icon"
                       onClick={onResync}
                       disabled={syncing}
-                      className="h-8 w-8 flex-shrink-0 text-muted-foreground"
+                      className="h-11 w-11 flex-shrink-0 text-muted-foreground"
+                      aria-label="Resync title"
                       title="Resync this title's data from TMDB"
                     >
                       <RefreshCcw className={cn('h-4 w-4', syncing && 'animate-spin')} />
@@ -479,7 +491,7 @@ export function WatchlistDetailDialog({
 
             {/* Delete button - pushed to bottom */}
             {onDelete && (
-              <div className="mt-auto pt-8 flex justify-end">
+              <div className="mt-auto pt-5 flex justify-end">
                 {isDeleting ? (
                   <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
                     <Button
@@ -515,8 +527,7 @@ export function WatchlistDetailDialog({
 
           {/* Right: Seasons (TV Shows only) */}
           {hasSeasons && (
-            <div className="w-80 lg:w-96 shrink-0 p-4 overflow-y-auto max-h-[70vh] bg-muted/30">
-              <h3 className="text-sm font-medium mb-3">Seasons & Episodes</h3>
+            <div role="region" aria-label="Episodes" tabIndex={0} className={cn("watchlist-episode-rail xl:col-span-1 min-w-0 p-4 bg-muted/30 border-t xl:border-t-0", item.image_url && "col-span-2")}>
               <SeasonEpisodeList
                 showId={item.id}
                 seasons={item.seasons!}

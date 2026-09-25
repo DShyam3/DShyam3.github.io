@@ -120,19 +120,12 @@ function MediaFace({
         )}
 
         {badge && (
-          <div className="absolute top-2 left-2 z-10 pointer-events-none">
-            <span className="text-xs font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-background/80 text-muted-foreground backdrop-blur-sm shadow-sm border border-border/40">
+          <div className="absolute top-2 left-2 z-10 max-w-[calc(100%-1rem)] pointer-events-none">
+            <span className="block truncate text-xs font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-background/80 text-muted-foreground backdrop-blur-sm shadow-sm border border-border/40">
               {badge}
             </span>
           </div>
         )}
-
-        <div
-          className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {actions}
-        </div>
       </div>
 
       <div className="card-body p-3 flex flex-col gap-1 flex-1">
@@ -172,6 +165,16 @@ function MediaFace({
         <p className="card-sub text-xs text-muted-foreground/80 line-clamp-2 min-h-[2rem]">
           {excerpt ?? '\u00a0'}
         </p>
+        {/* Below the text rather than over the artwork, where they covered
+            the badge and the missing-art caption on a narrow card. */}
+        {actions && (
+          <div
+            className="card-actions mt-auto flex justify-end gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -256,8 +259,8 @@ export function EntityCard<T extends CollectionRow, R>({
 
   const Face = FACES[card.variant];
 
-  // A card's trash icon sits over the image, a mis-click away from the card
-  // itself, so it asks first.
+  // A card's trash icon sits on the card, a mis-click away from opening it,
+  // so it asks first.
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const confirmRemove = onRemove
     ? (after?: () => void) =>
@@ -294,8 +297,8 @@ export function EntityCard<T extends CollectionRow, R>({
     </>
   );
 
-  // The same form as the pencil over the card, wearing a label instead: inside
-  // the dialog there is room for one, and no image for it to sit on top of.
+  // The same form as the pencil on the card, wearing a label instead: inside
+  // the dialog there is room for one.
   const editAction = onUpdate ? (
     <EntityFormDialog
       mode="edit"
@@ -329,7 +332,7 @@ export function EntityCard<T extends CollectionRow, R>({
           badge={badge}
           meta={meta}
           href={href}
-          actions={actions}
+          actions={onUpdate || onRemove ? actions : null}
           openable={openable}
           onOpen={() => setDetailOpen(true)}
         />

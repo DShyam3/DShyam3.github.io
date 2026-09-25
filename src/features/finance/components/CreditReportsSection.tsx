@@ -453,7 +453,7 @@ export default function CreditReportsSection() {
                   </div>
 
                   {entries.length > 0 ? (
-                    <div className="space-y-1 max-h-[100px] overflow-y-auto pr-1 scrollbar-thin">
+                    <div className="space-y-1">
                       {[...entries].reverse().map(entry => {
                         const entryRating = getRatingFromBands(entry.score, bureau.key);
                         return (
@@ -482,7 +482,7 @@ export default function CreditReportsSection() {
                               <button
                                 type="button"
                                 onClick={() => handleDeleteCreditScore(bureau.key, entry.id)}
-                                className="text-muted-foreground hover:text-destructive p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-muted-foreground hover:text-destructive p-0.5 card-actions"
                                 title="Delete entry"
                               >
                                 <Trash2 className="h-3 w-3" />
@@ -507,7 +507,7 @@ export default function CreditReportsSection() {
       {/* Log Credit Scores Dialog */}
       <Dialog open={isAddCreditScoreOpen} onOpenChange={setIsAddCreditScoreOpen}>
         <DialogContent className="sm:rounded-xl border border-border/40 bg-card sm:max-w-lg font-mono shadow-none p-5 sm:p-6 gap-3">
-          <DialogHeader className="space-y-1 pr-8">
+          <DialogHeader className="space-y-1">
             <DialogTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
               <span>Log Credit Scores</span>
               <span className="text-[10px] font-normal text-muted-foreground px-1.5 py-0.5 rounded-sm bg-muted/40 border border-border/30">

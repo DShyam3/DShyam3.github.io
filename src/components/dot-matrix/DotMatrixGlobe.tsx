@@ -64,6 +64,25 @@ async function loadCountryNames(): Promise<Record<string, string>> {
     return cachedCountryNames;
 }
 
+/**
+ * How far past its own edge the flat map may be pulled, in CSS pixels. The
+ * excess is never a resting place: `settlePan` gives it back on release.
+ */
+const PAN_OVERSCROLL = 90;
+
+/** Past the edge a drag moves a third as far, so the pull reads as elastic. */
+function rubberDelta(pan: number, delta: number, limit: number): number {
+    const pullingFurtherOut = Math.abs(pan) > limit && Math.sign(pan) === Math.sign(delta);
+    return pullingFurtherOut ? delta * 0.35 : delta;
+}
+
+/** One frame of spring-back towards the allowed range; a no-op inside it. */
+function settlePan(pan: number, limit: number): number {
+    const inRange = Math.max(-limit, Math.min(limit, pan));
+    const excess = pan - inRange;
+    return Math.abs(excess) < 0.5 ? inRange : inRange + excess * 0.82;
+}
+
 export function DotMatrixGlobe({
     visitedCountryCodes,
     visitedCityDots,
@@ -105,6 +124,10 @@ export function DotMatrixGlobe({
         targetOffsetLat: null as number | null,
         targetPanXNorm: null as number | null,
         targetPanYNorm: null as number | null,
+        // Pan limits for the current zoom, written each frame by `draw` so the
+        // pointer handlers can apply edge resistance without recomputing them.
+        boundX: 0,
+        boundY: 0,
     });
     const animRef = useRef({
         progress: 0,
@@ -413,10 +436,23 @@ export function DotMatrixGlobe({
                 }
             }
 
-            const maxPanX = Math.max(0, (mapW * curZoom - W) / 2) + 100;
-            const maxPanY = Math.max(0, (mapH * curZoom - H) / 2) + 100;
-            dragRef.current.panX = Math.max(-maxPanX, Math.min(maxPanX, dragRef.current.panX));
-            dragRef.current.panY = Math.max(-maxPanY, Math.min(maxPanY, dragRef.current.panY));
+            // Rubber band rather than a hard stop: a drag may pull the map past
+            // its edge, but nothing rests there. The moment the finger lifts the
+            // excess springs back, so there is no way to park the map off-centre.
+            const maxPanX = Math.max(0, (mapW * curZoom - W) / 2);
+            const maxPanY = Math.max(0, (mapH * curZoom - H) / 2);
+            dragRef.current.boundX = maxPanX;
+            dragRef.current.boundY = maxPanY;
+
+            if (dragRef.current.isDragging) {
+                const hardX = maxPanX + PAN_OVERSCROLL;
+                const hardY = maxPanY + PAN_OVERSCROLL;
+                dragRef.current.panX = Math.max(-hardX, Math.min(hardX, dragRef.current.panX));
+                dragRef.current.panY = Math.max(-hardY, Math.min(hardY, dragRef.current.panY));
+            } else if (dragRef.current.targetPanXNorm === null && dragRef.current.targetPanYNorm === null) {
+                dragRef.current.panX = settlePan(dragRef.current.panX, maxPanX);
+                dragRef.current.panY = settlePan(dragRef.current.panY, maxPanY);
+            }
         }
 
         const { panX, panY } = dragRef.current;
@@ -771,12 +807,6 @@ export function DotMatrixGlobe({
         for (const p of backDots) drawDot(p);
         for (const p of frontDots) drawDot(p);
 
-        // Add auto-recentering for 2D pan when fully zoomed out
-        if (mode === '2d' && curZoom <= 1.01) {
-            dragRef.current.panX *= 0.9;
-            dragRef.current.panY *= 0.9;
-        }
-
         if (progress > 0 || animRef.current.progress !== target) {
             requestRef.current = requestAnimationFrame((t) => draw(t));
         } else if (mode === '2d' && (Math.abs(dragRef.current.targetZoom - curZoom) > 0.01 || Math.abs(panX) > 1 || Math.abs(panY) > 1)) {
@@ -926,8 +956,8 @@ export function DotMatrixGlobe({
                     dragRef.current.offsetLat -= dy * 0.005;
                     dragRef.current.offsetLat = Math.max(-1.2, Math.min(1.2, dragRef.current.offsetLat));
                 } else if (mode === '2d') {
-                    dragRef.current.panX += dx;
-                    dragRef.current.panY += dy;
+                    dragRef.current.panX += rubberDelta(dragRef.current.panX, dx, dragRef.current.boundX);
+                    dragRef.current.panY += rubberDelta(dragRef.current.panY, dy, dragRef.current.boundY);
                 }
             } else if (e.touches.length === 2) {
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -1034,8 +1064,8 @@ export function DotMatrixGlobe({
                 dragRef.current.offsetLat -= dy * 0.005;
                 dragRef.current.offsetLat = Math.max(-1.2, Math.min(1.2, dragRef.current.offsetLat));
             } else if (mode === '2d') {
-                dragRef.current.panX += dx;
-                dragRef.current.panY += dy;
+                dragRef.current.panX += rubberDelta(dragRef.current.panX, dx, dragRef.current.boundX);
+                dragRef.current.panY += rubberDelta(dragRef.current.panY, dy, dragRef.current.boundY);
             }
 
             // Re-draw immediately without waiting for hover logic frame
@@ -1100,30 +1130,32 @@ export function DotMatrixGlobe({
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             />
-            {/* Says what you are looking at, and nothing more -- there is one
-                projection now. Hidden over the globe, which is in no projection
-                at all, so the label never names something the map is not.
-                Fades over the 500ms the dots take to roll up into the sphere. */}
+            {/* One bar for both, so on a narrow map the toggle wraps onto a
+                line of its own instead of sliding over the label. */}
             {dotData && (
-                <div
-                    className={`absolute bottom-4 left-4 z-10 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
-                        mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
-                    }`}
-                    title={EQUAL_EARTH_NOTE}
-                    aria-hidden={mode === '3d'}
-                >
-                    {EQUAL_EARTH_LABEL}
+                <div className="absolute inset-x-4 bottom-4 z-10 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
+                    {/* Says what you are looking at, and nothing more -- there is one
+                        projection now. Hidden over the globe, which is in no projection
+                        at all, so the label never names something the map is not.
+                        Fades over the 500ms the dots take to roll up into the sphere. */}
+                    <div
+                        className={`px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
+                            mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
+                        }`}
+                        title={EQUAL_EARTH_NOTE}
+                        aria-hidden={mode === '3d'}
+                    >
+                        {EQUAL_EARTH_LABEL}
+                    </div>
+                    <button
+                        onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
+                        className="ml-auto flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
+                        aria-label="Toggle 3D View"
+                    >
+                        {mode === '2d' ? <Globe className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}
+                        {mode === '2d' ? '3D Globe' : '2D Map'}
+                    </button>
                 </div>
-            )}
-            {dotData && (
-                <button
-                    onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
-                    className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
-                    aria-label="Toggle 3D View"
-                >
-                    {mode === '2d' ? <Globe className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}
-                    {mode === '2d' ? '3D Globe' : '2D Map'}
-                </button>
             )}
             </div>
         </div>

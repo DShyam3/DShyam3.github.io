@@ -14,6 +14,7 @@
 
 import { calculateActualPayday, getDaysInMonth, normalizeHolidays, toISODate } from '@/lib/finance';
 import type { FinanceSettings, TaxConfig, UserHoliday } from '@/features/finance/finance-types';
+import { DEFAULT_BIWEEKLY_ANCHOR } from './finance-defaults';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -184,7 +185,7 @@ export const getNextPaydayDetails = (
   const schedule = settings.paydaySchedule || 'monthly_date';
   const scheduledPayday = settings.payDayOfMonth || 25;
   const weekday = settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5; // default Friday
-  const anchorStr = settings.paydayBiweeklyAnchor || '2026-01-02';
+  const anchorStr = settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR;
 
   let paydayDate = new Date();
   let adjusted = false;

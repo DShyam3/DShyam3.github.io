@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { corsOriginHeader } from '../_shared/site-origins.ts'
 
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY')
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
@@ -14,16 +15,9 @@ const ALLOWED_ENDPOINT_PATTERNS = [
     /^tv\/\d+\/season\/\d+$/,
 ]
 
-const ALLOWED_ORIGINS = new Set([
-    'https://dshyam3.github.io',
-    'http://localhost:8080',
-    'http://localhost:5173',
-])
-
 function buildCorsHeaders(req: Request) {
-    const origin = req.headers.get('Origin') || ''
     return {
-        'Access-Control-Allow-Origin': ALLOWED_ORIGINS.has(origin) ? origin : 'https://dshyam3.github.io',
+        ...corsOriginHeader(req),
         'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
         'Vary': 'Origin',
     }
@@ -140,7 +134,11 @@ serve(async (req) => {
         const response = await fetch(`${TMDB_BASE_URL}/${endpoint}?${tmdbParams.toString()}`)
         const data = await response.json()
 
+        // TMDB's own status, not a blanket 200. Its 404 and 429 bodies carry
+        // no `id`, and a caller told "OK" reads that as "nothing changed"
+        // rather than as a failure it should report.
         return new Response(JSON.stringify(data), {
+            status: response.status,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
     } catch (error) {

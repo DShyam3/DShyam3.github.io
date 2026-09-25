@@ -37,6 +37,12 @@ function phrase(alert: FinanceAlert): string {
       return `Spending is ${formatGBP(alert.overBy)} over budget this month.`;
     case 'goal_off_track':
       return `${alert.goalName} needs ${plural(alert.monthsNeeded, 'month', 'months')} at the current rate but has ${alert.monthsAvailable}.`;
+    // Stated as figures, never as an instruction: what the debt costs and what
+    // the cash beside it could cover. Choosing is the owner's call.
+    case 'costly_debt_beside_cash':
+      return `${formatGBP(alert.costlyDebtTotal)} of debt charges ${alert.aprThresholdPercent}% or more (highest: ${alert.highestAprDebtName} at ${alert.highestAprPercent}%), while ${formatGBP(alert.spareCash)} of cash sits above your emergency fund. A year's interest on the ${formatGBP(alert.coverable)} that cash could cover is about ${formatGBP(alert.annualInterestCovered)}.`;
+    case 'credit_utilisation_high':
+      return `Cards are ${alert.utilisationPercent}% used (${formatGBP(alert.totalOwed)} of ${formatGBP(alert.totalLimit)} in known limits), above the ${alert.thresholdPercent}% where credit scores commonly step. Highest: ${alert.highestCardName} at ${alert.highestCardPercent}%.`;
     case 'no_budget':
       return 'No budget set, so spending has nothing to be measured against.';
     case 'unreviewed_transactions':

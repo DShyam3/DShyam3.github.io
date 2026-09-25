@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Blend two complete palettes rather than restarting transitions on every
+   descendant. The new snapshot is live, so the icon keeps moving throughout. */
+::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: theme-reveal 350ms ease-in-out both;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(root) {
+  animation: none;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+@keyframes theme-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 @layer base {
   :root {
     --background: 48 25% 95%;
@@ -156,27 +188,9 @@
     @apply border-border;
   }
 
-  /* One knob for the whole site.
-     Every size on the page -- type, padding, gaps, card columns -- is in rem,
-     so the root size is the single place the site's scale is decided. Below
-     ~1600px 1vw is under 16px and the clamp floors it, so nothing changes on
-     a laptop. Above that the site grows with the viewport instead of leaving
-     the extra pixels as centring margin, which is what made a 5K display
-     render laptop-sized chrome in the middle of an empty page.
-
-     The vh term is the brake. The shell splits a fixed viewport between
-     chrome and content, so on a short, very wide monitor (an ultrawide, a
-     tablet in landscape) scaling on width alone would spend the scarce height
-     on a bigger header. min() lets whichever axis is tighter decide.
-
-     The coefficients are deliberately shy of 1vw. Growing everything in step
-     with the width means the card text block and the chrome grow too, and on
-     a 16:9 monitor that ate the second row of cards faster than the extra
-     width added columns. Height is the second term, and the shorter of the
-     two wins: a wide but short window is the one that cannot afford bigger
-     text. The 40px ceiling is only reachable on a genuinely large display. */
+  /* Preserve browser text preferences. Display scale is explicit in TV mode. */
   html {
-    font-size: clamp(16px, min(0.8vw, 1.5vh), 40px);
+    font-size: 100%;
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -272,179 +286,20 @@
     color: hsl(var(--badge-new-foreground));
   }
 
-  /* ─── The card wall ────────────────────────────────────────────────────
-     Every page that shows a grid of cards uses this one class, so the wall
-     does not reflow as you move between Books, Inventory and the Watchlist.
-     CardGrid renders it; src/theme/layout.ts exports the class name.
-
-     A card is as wide as the screen can afford (--card-ideal), but never so
-     wide that a second row falls below the fold. That second rule is the one
-     that matters: the shell pins the header and footer, so the grid gets a
-     fixed slice of the viewport, and on a short screen -- a laptop, a tablet
-     in landscape -- a width-only rule drew one row and a sliver of the next.
-
-     --card-fit is that second-row width, and CardGrid computes it, because
-     the sum it comes from is not one CSS can do. It needs the height the grid
-     actually has (everything above the first card -- header, filter bar,
-     count row, the watchlist's category tabs -- varies with the viewport),
-     and it needs to be dropped entirely when it lands below --card-floor: a
-     wall that cannot show two readable rows is better off with big cards and
-     one row than with small cards and still one row. Absent, the fallbacks
-     below leave --card-ideal in charge.
-
-     The cap lands on the card rather than the column because `1fr` columns
-     share out the leftover width, so a column is always at least --card-min
-     and usually wider -- capping the minimum would not stop the stretch from
-     pushing row two off screen. The column still stretches; the card inside
-     it stops at --card-max and centres, which costs a few pixels of gutter
-     and keeps the fit honest. */
+  /* A card keeps a readable width regardless of screen height or pointer type. */
   .card-grid {
-    /* Read by CardGrid, which does the arithmetic. --card-text-h is the block
-       under the image; it is the generous end of what that block measures,
-       since guessing high costs a slightly small card and guessing low costs
-       the second row. It is not a constant in reality -- a narrower card
-       wraps the title and the platform badges onto more lines -- so this is
-       the tallest it was measured at, not the average, and --card-floor is
-       set low enough that the second row is still reachable on a laptop.
-       Below that floor a poster stops being worth looking at.
-
-       The image's aspect is deliberately NOT declared here: CollectionPage
-       sets --card-aspect on an ancestor per collection, and a declaration on
-       this element would shadow it. CardGrid falls back to the 2:3 poster
-       when nothing above it says otherwise. */
-    /* 6.25rem, down from 7. The floor is a threshold, not a size: it is what
-       a row count has to clear to be worth taking, so it only ever decides
-       screens where the answer is already close. Every window with height to
-       spare -- an iPad, a 1200px desk monitor, a TV -- sizes its cards well
-       above it and never reads this number at all. The band it moves is a
-       laptop: 100px of poster is what makes two rows reachable at 1440x760
-       once the browser's own chrome is out of the way, where 112 left the
-       wall on one row of very large cards. */
-    --card-floor: 6.25rem;
-    --card-text-h: 9.25rem;
-    /* The same block once the card is narrow enough to switch to the compact
-       body below -- one less line of text, a smaller title and tighter
-       padding. A laptop is the screen this exists for: at 860px tall there is
-       about 280px per row after the header, the toolbar and the footer, and a
-       full-height text block leaves 88px for the poster, which is under the
-       floor, so the wall falls back to a single row of very large cards. The
-       shorter block buys back the second row at a card around 120px wide.
-
-       6.25rem, not the 5.25 the parts add up to: on a card that narrow the
-       platform badge and the status pill stop sharing a line and the meta
-       row wraps to two, which is the right answer for the row and 20px the
-       sum has to carry. */
-    --card-text-h-compact: 6.25rem;
+    --card-min: 8.5rem;
     --card-gap: 1rem;
-    --card-ideal: 8.5rem;
-    --card-min: clamp(var(--card-floor), min(var(--card-ideal), var(--card-fit, 100vw)), 20rem);
-    --card-max: clamp(var(--card-min), var(--card-fit, 22rem), 22rem);
-
     display: grid;
     gap: var(--card-gap);
-    padding-top: var(--card-gap);
-    padding-bottom: var(--card-gap);
-    grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+    padding-block: var(--card-gap);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--card-min)), 1fr));
+    align-items: stretch;
   }
-
-  .card-grid > * {
-    width: 100%;
-    max-width: var(--card-max);
-    margin-inline: auto;
-  }
-
-  /* Anything spanning the whole wall is not a card -- the empty states say
-     "no items in upcoming yet" across the grid -- and capping it to a card's
-     width squeezed the sentence into a column. */
-  .card-grid > .col-span-full {
-    max-width: none;
-  }
-
-  /* The News page's poster walls (Out Now, Upcoming) are one section among
-     several, not the page, so fitting the card to the screen's height -- what
-     CardGrid does for a library wall -- is the wrong sum there: a short, wide
-     window drew one row of cards as tall as the window. They keep one small
-     size at every height instead, and a column stretches by at most one
-     card's share of the leftover width. */
-  .card-grid.news-card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
-  }
-
-  .card-grid.news-card-grid > * {
-    max-width: none;
-  }
-
-  /* 13rem, not 8.5: a 10rem column left ~142px of card body, and a platform
-     wordmark plus a status pill needs ~163px to stay on one line. It was
-     11.5rem, which cleared the badges but not the words above them -- on an
-     iPad that column gave the title about 15 characters a line, so anything
-     longer than "A Good Girl's Gu" ended in an ellipsis, and the year and
-     genre under it were cut too. 13rem buys ~5 more characters a line, which
-     is the difference between a clipped title and a whole one for most of
-     the wall. It costs columns: about seven across a 1500px window where
-     there were nine. Below sm the badges wrap instead, which is the right
-     trade on a phone. */
+  .card-grid > * { min-width: 0; width: 100%; }
   @media (min-width: 640px) {
-    .card-grid {
-      --card-ideal: clamp(13rem, 12vw, 18rem);
-    }
+    .card-grid { --card-min: 12.5rem; --card-gap: 1.25rem; }
   }
-
-  @media (min-width: 768px) {
-    .card-grid {
-      --card-gap: 1.25rem;
-    }
-  }
-}
-
-/* An EntityCard's compact body is a title and one row of meta -- no wrapped
-   platform badges under it -- so it costs about 1.75rem less than a watchlist
-   card's. Set on the grid rather than on the collection wrapper because the
-   grid declares its own value, and a declaration on the element beats one
-   inherited from above it. */
-.collection-cards .card-grid {
-  --card-text-h-compact: 4.5rem;
-}
-
-/* ─── The compact card body ──────────────────────────────────────────────
-   The short body: the secondary line goes, the title drops to two smaller
-   lines and the padding tightens. It is worth what it costs only on a screen
-   where the full body leaves no poster worth looking at, and CardGrid is the
-   one that can tell -- it does the sum -- so it marks the grid rather than
-   the card answering to its own width. A width breakpoint would have had a
-   dead zone: a card is only allowed to be as wide as the regime it was sized
-   for, and the widest compact card is narrower than the narrowest full one.
-
-   Sized to --card-text-h-compact; if these rules change what the body costs,
-   that number has to follow, or the arithmetic drifts from what the card
-   renders and the second row is cut.
-
-   Deliberately outside @layer: these have to beat the Tailwind utilities on
-   the elements themselves, and everything in a layer loses to them. */
-[data-card-body='compact'] .card-body {
-  padding: 0.5rem;
-}
-
-[data-card-body='compact'] .card-title {
-  font-size: 0.75rem;
-  line-height: 1.15;
-  min-height: 1.75rem;
-  -webkit-line-clamp: 2;
-}
-
-[data-card-body='compact'] .card-title > span {
-  -webkit-line-clamp: 2;
-}
-
-/* The year, genre, brand or price line. It is the least of what the card says
-   and the only line that can go without leaving a hole. */
-[data-card-body='compact'] .card-sub {
-  display: none;
-}
-
-[data-card-body='compact'] .card-meta {
-  margin-top: 0.25rem;
-  min-height: 0;
 }
 
 /* ─── Footer ────────────────────────────────────────────────────────────
@@ -464,24 +319,12 @@
     text-wrap: balance;
   }
 
-  /* The page's own width.
-
-     There is no max-width. Every cap this had -- 1920, then 2400 -- was a
-     number chosen for the monitor in front of whoever set it, and on anything
-     wider it turned into centring margin: on a 5120px display the 2400px cap
-     left 1360px of empty page down each side. The padding is fluid instead,
-     so the gutter grows with the screen while the content keeps the rest.
-
-     Padding is in vw rather than steps, because the steps had the same
-     problem in miniature -- the 1280px rule was still in force at 5000px. It
-     is deliberately tight: this is a wall of cards, and a gutter's job here
-     is to keep the first card off the bezel, not to frame the page. */
+  /* Shared alignment for navigation, collections and dashboards. */
   .wide-container {
     width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: clamp(0.75rem, 1.25vw, 2rem);
-    padding-right: clamp(0.75rem, 1.25vw, 2rem);
+    max-width: var(--page-max, 100rem);
+    margin-inline: auto;
+    padding-inline: var(--page-gutter, clamp(1rem, 2vw, 2rem));
   }
 
   .scrollbar-hide {
@@ -629,159 +472,12 @@
   }
 }
 
-@media (min-width: 768px) {
-  header.app-header {
-    padding-top: clamp(0.75rem, 1.5vh, 1.5rem);
-    padding-bottom: clamp(0.75rem, 1.3vh, 1.25rem);
-  }
-
-  .app-header .dot-matrix-text-md {
-    font-size: clamp(1.4rem, 0.6rem + 1.6vh, 1.75rem);
-  }
-
-  .app-header .dot-matrix-text-sm {
-    font-size: clamp(1.15rem, 0.5rem + 1.3vh, 1.4rem);
-  }
-
-  footer.app-footer {
-    padding-top: clamp(0.5rem, 1vh, 1.25rem);
-    padding-bottom: clamp(0.5rem, 1vh, 1.25rem);
-  }
-
-  /* The footer face rides the same scale. It was raised because a footer set
-     in fine print reads as an afterthought, but that is an argument about a
-     wide monitor; on a short one the height is what is scarce. */
-  .app-footer .dot-matrix-text-xs {
-    font-size: clamp(1.15rem, 0.6rem + 1.1vh, 1.5rem);
-  }
-
-  .card-grid {
-    --card-gap: clamp(0.75rem, 1.2vh, 1.25rem);
-  }
-
-  /* The toolbar is pinned chrome too -- see WatchlistPage, which writes the
-     phone's pt-2 and space-y-4 and hands the rest to this. */
-  .watchlist-toolbar.watchlist-toolbar {
-    padding-top: clamp(0.25rem, 0.6vh, 0.5rem);
-  }
-
-  .watchlist-toolbar.watchlist-toolbar > :not([hidden]) ~ :not([hidden]) {
-    margin-top: clamp(0.5rem, 1.2vh, 1rem);
-  }
-}
-
-/* ─── Chrome on a laptop ────────────────────────────────────────────────
-   A desk monitor has height to spare and the shell is sized for it. A laptop
-   does not: at 1440x760 the header, the toolbar and the footer came to 282px
-   and left the wall 478, which is under what two rows of cards need however
-   small the cards are allowed to get -- so the wall fell back to one row of
-   very large posters, on the screen the site is most often read on.
-
-   Nothing is dropped here; every control stays. The faces come down a step,
-   the rows sit closer, and the category row stops wrapping to a second line,
-   which is the single biggest saving of the lot. Together they hand the wall
-   about 90px, which is the difference between one row and two.
-
-   52rem, because above it the sums already work: a 1200px window gets its
-   two rows at a card worth looking at without any of this. */
-
-@media (min-width: 768px) and (max-height: 52rem) {
-  .app-header .dot-matrix-text-md {
-    font-size: 1.15rem;
-  }
-
-  .app-header .dot-matrix-text-sm,
-  .app-footer .dot-matrix-text-xs {
-    font-size: 0.95rem;
-  }
-
-  /* The category row is the one that wraps. A step down on its face is what
-     keeps "SYNC" and "WEEKLY SCHEDULE" on the line above rather than on a
-     line of their own. */
-  .app-toolbar .dot-matrix-text-xs {
-    font-size: 0.95rem;
-  }
-
-  .watchlist-toolbar .nav-link {
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-
-  .watchlist-toolbar.watchlist-toolbar {
-    padding-top: 0.125rem;
-  }
-
-  .watchlist-toolbar.watchlist-toolbar > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 0.375rem;
-  }
-
-  /* The search field, the three filter selects and the sort button are all
-     h-9 from the phone up. A 2rem control is still a comfortable target and
-     the row is the full height of its tallest child. */
-  .watchlist-toolbar .h-9 {
-    height: 2rem;
-  }
-
-  .watchlist-count .h-9 {
-    height: 1.75rem;
-  }
-}
-
-/* The count and the Add Item button are a row of their own, spending about
-   34px of a laptop's height on two short labels with the width of the window
-   empty beside them. On a screen wide enough to seat them next to the filter
-   bar they move up onto its line: the toolbar becomes a two-column grid, the
-   category row spans both, the filters take the first column and the count
-   the second. Nothing is dropped and nothing shrinks -- the row simply stops
-   being a row -- and 34px is the difference between one row of cards and two
-   on a 1440x760 window with the bookmarks bar showing.
-
-   Only from 1100px: below it the filter bar already wants the whole line, and
-   a count pushed onto the end of it would wrap and cost the height back. */
-
-@media (min-width: 1100px) and (max-height: 52rem) {
-  .watchlist-toolbar.watchlist-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: 1rem;
-  }
-
-  /* The category row and the sync log panel keep the full width above them both. */
-  .watchlist-toolbar.watchlist-toolbar > :first-child,
-  .watchlist-toolbar.watchlist-toolbar > .sync-log-panel {
-    grid-column: 1 / -1;
-  }
-
-  /* The rhythm between rows is set by the space-y margins WatchlistPage
-     writes; in the grid the count is beside the filters, not under them. */
-  .watchlist-toolbar.watchlist-toolbar > .watchlist-count {
-    margin-top: 0;
-    gap: 1rem;
-  }
-}
-
 /* ─── Phones ────────────────────────────────────────────────────────────
    Doto is set large because its dots read smaller than the nominal size, but
    the sizes chosen for a monitor are simply too wide for a 375px screen --
    the site name alone filled a line. Each face drops one step below md. */
 
-/* ─── The filter bar's share of a phone ─────────────────────────────────
-   A filter bar is the one piece of chrome that grows with the collection:
-   Inventory's is seven category chips, a search field and a count, and it
-   came to 309px of an 812px phone -- more than the card wall underneath it.
-   It could get away with that while the document scrolled and it scrolled
-   away with everything else. Under a pinned shell it is spending the grid's
-   height, so it is held to under a third of the viewport and scrolls inside
-   itself past that. Above md there is room and this never bites. */
 
-@media (max-width: 767px) {
-  .app-toolbar {
-    max-height: 30dvh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-}
 
 @media (max-width: 767px) {
   .dot-matrix-text-xs {
@@ -818,122 +514,5 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-/* ─── Footer on a tablet held upright ───────────────────────────────────
-   From 768px the footer is one row, but below 1024px the vh-scaled face is
-   too wide for it: on an iPad mini "Based in London,UK" and "Designed by
-   Dhyan Shyam" each broke onto two lines. The labels no longer wrap (see
-   Footer.tsx), and here they take the smaller face so the row fits. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .app-footer .dot-matrix-text-xs {
-    font-size: 0.95rem;
-  }
-}
-
-/* ─── Card walls on a tablet ─────────────────────────────────────────────
-   CardGrid does not fit cards to the screen's height below 1280px, nor on a
-   touch screen without a mouse at any width (see FIT_TO_SLICE there), so here
-   the card is sized on width alone: the News page's poster size on an iPad
-   mini (four across held upright, six sideways), growing with the width up to
-   13rem so an iPad Pro 13 on its side draws about six rather than ten. The
-   column is at least this and shares out the leftover width, and with no
-   --card-fit the card fills its column, so there is no gutter beside it. The
-   platform badge and status pill wrap to two lines on the narrower cards,
-   which a row absorbs by standing a little taller. */
-@media (min-width: 768px) and (max-width: 1279px),
-  (min-width: 1280px) and (hover: none),
-  (min-width: 1280px) and (pointer: coarse) {
-  .card-grid {
-    --card-ideal: clamp(9.5rem, 14vw, 13rem);
-  }
-}
-
-/* ─── Watchlist category row on a tablet ────────────────────────────────
-   Between md and 1280px the category row wrapped: on an iPad mini in
-   landscape the five categories came to ~1030px of a 998px row, so
-   FAVOURITES took a line of its own, and SYNC, WEEKLY SCHEDULE and NEWS
-   another -- three rows of chrome held upright. Here the row is one line
-   whatever the width: the separators go, the face drops to the phone's, the
-   actions are icons (each button carries its own aria-label). It never
-   scrolls sideways: a hidden category is one nobody finds, so anything still
-   too wide wraps. Classes are written in WatchlistPage.tsx. */
-@media (min-width: 768px) and (max-width: 1279px) {
-  .watchlist-toolbar-top {
-    flex-wrap: nowrap;
-    align-items: center;
-  }
-
-  .watchlist-categories {
-    flex: 1 1 auto;
-    min-width: 0;
-    gap: 0.25rem 0.75rem;
-  }
-
-  .watchlist-categories > div {
-    flex-shrink: 0;
-  }
-
-  .watchlist-category-sep.watchlist-category-sep,
-  .watchlist-action-label.watchlist-action-label {
-    display: none;
-  }
-
-  .watchlist-toolbar .watchlist-categories .dot-matrix-text-xs {
-    font-size: 0.875rem;
-  }
-
-  .watchlist-actions {
-    flex-shrink: 0;
-    gap: 0.25rem;
-  }
-}
-
-/* Held upright the categories take two lines, and the actions belong to the
-   first of them rather than floating in the middle of the pair. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .watchlist-toolbar-top {
-    align-items: flex-start;
-  }
-}
-
-/* ─── Collection filter chips on a tablet held upright ──────────────────
-   The search field takes 170px of the row, which left an iPad mini's chips
-   558px: Thoughts' four came to ~595px, so REFLECTIONS took a line of its
-   own, and Recipes lost DESSERTS the same way. The chips take the phone's
-   face here, as the watchlist categories do, and four fit on one line with
-   room over. A facet with more options than that still wraps (FilterBar.tsx
-   explains why it never scrolls). */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .collection-filters .nav-link .dot-matrix-text-xs {
-    font-size: 0.875rem;
-  }
-}
-
-/* ─── Finance surface nav on a tablet held upright ──────────────────────
-   Beside the profile picker the five surfaces get ~600px of an iPad mini,
-   and at the desktop face with interpunct separators they came to ~655px,
-   so the row scrolled sideways and INCOME sat half off the edge. Here the
-   separators go, the face and pill padding match the collection chips, and
-   the row's vertical padding drops -- about 400px, one line, no scroll.
-   Classes are written in FinancePage.tsx. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .finance-navigation .finance-surface-nav {
-    gap: 0.25rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-  }
-
-  .finance-surface-sep.finance-surface-sep {
-    display: none;
-  }
-
-  .finance-navigation .finance-surface-nav .nav-link {
-    padding: 0.35rem 0.65rem;
-  }
-
-  .finance-navigation .finance-surface-nav .dot-matrix-text-xs {
-    font-size: 0.875rem;
   }
 }

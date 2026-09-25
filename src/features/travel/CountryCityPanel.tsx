@@ -56,8 +56,10 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
   }, [searchQuery, cities, visitedCities]);
 
   return (
-    <div className="city-panel h-full flex flex-col">
-      <div className="city-panel-header sticky top-0 bg-card z-10 p-3 border-b flex items-center gap-3">
+    // Height and stickiness come from Index.css, which releases both when
+    // Travel stacks; utilities here would win over that and keep them.
+    <div className="city-panel flex flex-col">
+      <div className="city-panel-header p-3 border-b flex items-center gap-3">
         <button aria-label="Back to visited countries" onClick={onBack} className="city-panel-back p-1 hover:bg-muted rounded-md transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </button>
@@ -99,7 +101,7 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
                   }}
                 >
                   <span>{city.city_name.toUpperCase()}</span>
-                  <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100" />
+                  <Plus className="w-3 h-3 card-actions" />
                 </button>
               ))}
             </div>
@@ -107,7 +109,7 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
         </div>
       )}
 
-      <div className="city-panel-list flex-1 overflow-y-auto p-1">
+      <div className="city-panel-list flex-1 p-1">
         {visitedCities.length === 0 ? (
           <div className="city-panel-empty py-12 flex flex-col items-center justify-center text-muted-foreground">
             <MapPin className="w-8 h-8 opacity-20 mb-2" />
@@ -130,7 +132,7 @@ export const CountryCityPanel: React.FC<CountryCityPanelProps> = ({
                       })
                     }
                     aria-label={`Remove ${city.city_name}`}
-                    className="city-remove-btn opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 p-1 hover:text-destructive transition-all"
+                    className="city-remove-btn card-actions p-1 hover:text-destructive transition-all"
                   >
                     <X className="w-3 h-3" />
                   </button>

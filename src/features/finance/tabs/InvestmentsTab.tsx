@@ -475,7 +475,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                             {comparable ? <><span className="block">{gainLoss >= 0 ? '+' : ''}{formatGBP(gainLoss)}</span><span className="block text-xs">{gainLoss >= 0 ? '+' : ''}{returnPct.toFixed(1)}%</span></> : '—'}
                           </td>
                           <td className="py-3 text-center">
-                            <div className="flex items-center justify-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            <div className="flex items-center justify-center gap-1 card-actions transition-opacity">
                               <Button
                                 onClick={() => handleOpenEdit(h)}
                                 aria-label={`Edit ${h.name}`}

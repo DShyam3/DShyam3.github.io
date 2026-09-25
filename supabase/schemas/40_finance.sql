@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS "public"."finance_bank_accounts" (
     "issuer" "text",
     "balance" numeric DEFAULT 0 NOT NULL,
     "annual_fee" numeric DEFAULT 0 NOT NULL,
+    "credit_limit" numeric,
     "use_case" "text",
     "emoji" "text",
     "color" "text",
@@ -15,6 +16,9 @@ CREATE TABLE IF NOT EXISTS "public"."finance_bank_accounts" (
 );
 
 ALTER TABLE "public"."finance_bank_accounts" OWNER TO "postgres";
+
+COMMENT ON COLUMN "public"."finance_bank_accounts"."credit_limit" IS
+    'The card''s credit limit in GBP. For bank-synced cards, truelayer-sync writes it from TrueLayer''s card balance `credit_limit` whenever the bank returns one; otherwise the owner enters it. NULL means the limit is unknown, not zero -- a card with no known limit is left out of credit utilisation rather than counted as fully used. Meaningful only for type ''credit''.';
 
 CREATE TABLE IF NOT EXISTS "public"."finance_budget_categories" (
     "id" "text" NOT NULL,
@@ -112,6 +116,8 @@ CREATE TABLE IF NOT EXISTS "public"."finance_debts" (
     "payoff_date" "date",
     "repayment_type" "text" DEFAULT 'amortising'::"text" NOT NULL,
     "student_loan_plan" "text",
+    -- Last day of study; sets when a student loan is first due for repayment.
+    "course_end_date" "date",
     "write_off_years" integer,
     "draws" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
     "notes" "text",
@@ -261,6 +267,28 @@ CREATE TABLE IF NOT EXISTS "public"."finance_settings" (
 
 ALTER TABLE "public"."finance_settings" OWNER TO "postgres";
 
+-- Global reference data, versioned by the date it takes effect -- same idea
+-- as finance_tax_configs. Not scoped to a profile: the Student Loans
+-- Company publishes one set of parameters a year, not one per person.
+CREATE TABLE IF NOT EXISTS "public"."finance_student_loan_rates" (
+    "id" "text" DEFAULT ("gen_random_uuid"())::"text" NOT NULL,
+    "is_default" boolean DEFAULT false NOT NULL,
+    "effective_from" "date" NOT NULL,
+    "rpi_percent" numeric NOT NULL,
+    "cap_percent" numeric,
+    "plan2_upper_threshold" numeric,
+    "bank_rate_percent" numeric,
+    "source" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "plan2_lower_threshold" numeric
+);
+
+ALTER TABLE "public"."finance_student_loan_rates" OWNER TO "postgres";
+
+COMMENT ON COLUMN "public"."finance_student_loan_rates"."plan2_lower_threshold" IS
+    'Plan 2 income at or below which interest is RPI only (the Plan 2 repayment threshold for that tax year).';
+
 CREATE TABLE IF NOT EXISTS "public"."finance_tax_configs" (
     "id" "text" DEFAULT ("gen_random_uuid"())::"text" NOT NULL,
     "is_default" boolean DEFAULT false NOT NULL,
@@ -339,6 +367,93 @@ CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_source_sync" (
 
 ALTER TABLE "public"."finance_truelayer_source_sync" OWNER TO "postgres";
 
+-- Durable log of each TrueLayer bank sync run, nightly (pg_cron) or manual
+-- (an admin action), so the finance UI can show sync history and a missed
+-- nightly run is visible rather than silent. Written only by the
+-- truelayer-sync edge function under the service role, which bypasses RLS --
+-- never by the browser, which only reads it as the admin. Grows about 1-3
+-- rows a day; no retention policy is needed at that rate.
+CREATE TABLE IF NOT EXISTS "public"."finance_sync_log" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "synced_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "trigger" "text" NOT NULL,
+    "status" "text" NOT NULL,
+    "duration_ms" integer DEFAULT 0 NOT NULL,
+    "connections_synced" integer DEFAULT 0 NOT NULL,
+    "accounts_synced" integer DEFAULT 0 NOT NULL,
+    "transactions_synced" integer DEFAULT 0 NOT NULL,
+    "transactions_new" integer DEFAULT 0 NOT NULL,
+    "banks" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "error_message" "text"
+);
+
+ALTER TABLE "public"."finance_sync_log" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_sync_log"
+    ADD CONSTRAINT "finance_sync_log_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_sync_log"
+    ADD CONSTRAINT "finance_sync_log_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_sync_log"
+    ADD CONSTRAINT "finance_sync_log_trigger_check"
+    CHECK (("trigger" = ANY (ARRAY['scheduled'::"text", 'manual'::"text"])));
+
+ALTER TABLE ONLY "public"."finance_sync_log"
+    ADD CONSTRAINT "finance_sync_log_status_check"
+    CHECK (("status" = ANY (ARRAY['success'::"text", 'partial'::"text", 'error'::"text"])));
+
+ALTER TABLE ONLY "public"."finance_sync_log"
+    ADD CONSTRAINT "finance_sync_log_duration_ms_check"
+    CHECK ("duration_ms" >= 0);
+
+-- Leads with profile_id, so it also serves as the profile-scoped lookup
+-- index -- what the sync-history UI queries (a profile's runs, most recent
+-- first) and what a missed-nightly-run check scans.
+CREATE INDEX "idx_finance_sync_log_profile_synced_at"
+    ON "public"."finance_sync_log" ("profile_id", "synced_at" DESC);
+
+ALTER TABLE "public"."finance_sync_log" ENABLE ROW LEVEL SECURITY;
+
+-- Read-only from the API, deliberately: only the truelayer-sync edge
+-- function writes this table, over the service role, which bypasses RLS.
+-- No INSERT/UPDATE/DELETE policy exists for authenticated or anon, so those
+-- verbs are denied by RLS's default-deny the same way admin_users denies
+-- writes to its own "Admin read" policy (01_functions.sql) -- copied here:
+-- is_admin() only, no further profile scoping, because this is a
+-- single-admin site and is_admin() already is the whole boundary.
+CREATE POLICY "Admin read" ON "public"."finance_sync_log"
+    FOR SELECT TO "authenticated"
+    USING ((SELECT "public"."is_admin"()));
+
+-- Least privilege, not the legacy anon-grant pattern used elsewhere in this
+-- file: anon holds no grant of any kind -- this is a finance_* table, and
+-- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
+-- both REVOKEs below are load-bearing, not decorative. authenticated gets
+-- SELECT only, matching the policy above: no write grant exists because no
+-- write policy exists to authorise it.
+REVOKE ALL ON TABLE "public"."finance_sync_log" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_sync_log" FROM "authenticated";
+GRANT SELECT ON TABLE "public"."finance_sync_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_sync_log" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_sync_log" IS
+    'Durable log of TrueLayer bank sync runs (trigger = ''scheduled'' for the nightly pg_cron job, ''manual'' for an admin-initiated sync), so the finance UI can show sync history and a missed nightly run is visible rather than silent. A run that times out or crashes writes no row and shows as missed. Written only by the truelayer-sync edge function under the service role, which bypasses RLS; the browser reads it as the admin.';
+
+COMMENT ON COLUMN "public"."finance_sync_log"."transactions_synced" IS
+    'Total transaction rows written this run, including rows already stored that were re-fetched inside the overlap window. See transactions_new for rows that were actually new.';
+
+COMMENT ON COLUMN "public"."finance_sync_log"."transactions_new" IS
+    'Rows this run inserted that were not already stored. Always <= transactions_synced.';
+
+COMMENT ON COLUMN "public"."finance_sync_log"."banks" IS
+    'Per-bank outcome for this run: array of {name text, status ''synced''|''failed'', transactions int, error text optional}. transactions counts rows fetched from that bank before de-duplication, including the re-fetched overlap window, so it is not a count of new rows. error is present only when status is ''failed''.';
+
+COMMENT ON COLUMN "public"."finance_sync_log"."error_message" IS
+    'A generic, user-safe summary of what went wrong for the run as a whole. Never the raw provider or SQL error -- see Error Handling in AGENTS.md.';
+
 CREATE TABLE IF NOT EXISTS "public"."finance_truelayer_oauth_states" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "profile_id" "uuid" NOT NULL,
@@ -359,10 +474,18 @@ CREATE TABLE IF NOT EXISTS "public"."finance_user_holidays" (
     "occasion" "text",
     "count" numeric DEFAULT 0 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "type" "text" DEFAULT 'holiday'::"text" NOT NULL,
+    "half_day" "text"
 );
 
 ALTER TABLE "public"."finance_user_holidays" OWNER TO "postgres";
+
+COMMENT ON COLUMN "public"."finance_user_holidays"."type" IS
+    'Leave type: "holiday" (counts against annual holiday allowance) or "sick" (tracked separately as sick leave taken).';
+
+COMMENT ON COLUMN "public"."finance_user_holidays"."half_day" IS
+    'Which half of a single-day booking is taken: "am" (morning) or "pm" (afternoon). NULL for a full day or a range. A half day costs 0.5 days.';
 
 CREATE TABLE IF NOT EXISTS "public"."finance_profiles" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -451,6 +574,30 @@ ALTER TABLE ONLY "public"."finance_recurring_templates"
 ALTER TABLE ONLY "public"."finance_settings"
     ADD CONSTRAINT "finance_settings_pkey" PRIMARY KEY ("id");
 
+ALTER TABLE ONLY "public"."finance_student_loan_rates"
+    ADD CONSTRAINT "finance_student_loan_rates_pkey" PRIMARY KEY ("id");
+
+-- Defaults and any future per-profile override are separate timelines, one
+-- row per scope and effective date -- same shape as finance_tax_configs.
+ALTER TABLE ONLY "public"."finance_student_loan_rates"
+    ADD CONSTRAINT "finance_student_loan_rates_scope_effective_from_key" UNIQUE ("is_default", "effective_from");
+
+ALTER TABLE ONLY "public"."finance_student_loan_rates"
+    ADD CONSTRAINT "finance_student_loan_rates_rpi_percent_check"
+    CHECK (("rpi_percent" >= ('-10'::integer)::numeric) AND ("rpi_percent" <= (50)::numeric));
+
+ALTER TABLE ONLY "public"."finance_student_loan_rates"
+    ADD CONSTRAINT "finance_student_loan_rates_cap_percent_check"
+    CHECK (("cap_percent" IS NULL) OR (("cap_percent" >= (0)::numeric) AND ("cap_percent" <= (50)::numeric)));
+
+ALTER TABLE ONLY "public"."finance_student_loan_rates"
+    ADD CONSTRAINT "finance_student_loan_rates_plan2_upper_threshold_check"
+    CHECK (("plan2_upper_threshold" IS NULL) OR ("plan2_upper_threshold" > (0)::numeric));
+
+ALTER TABLE ONLY "public"."finance_student_loan_rates"
+    ADD CONSTRAINT "finance_student_loan_rates_plan2_lower_threshold_check"
+    CHECK (("plan2_lower_threshold" IS NULL) OR ("plan2_lower_threshold" > (0)::numeric));
+
 ALTER TABLE ONLY "public"."finance_tax_configs"
     ADD CONSTRAINT "finance_tax_configs_pkey" PRIMARY KEY ("id");
 
@@ -536,6 +683,8 @@ CREATE POLICY "Admin Only" ON "public"."finance_recurring_templates" TO "authent
 
 CREATE POLICY "Admin Only" ON "public"."finance_settings" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
 
+CREATE POLICY "Admin Only" ON "public"."finance_student_loan_rates" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+
 CREATE POLICY "Admin Only" ON "public"."finance_tax_configs" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
 
 CREATE POLICY "Admin Only" ON "public"."finance_transactions" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
@@ -573,6 +722,8 @@ ALTER TABLE "public"."finance_recurring_bills" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_recurring_templates" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."finance_settings" ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE "public"."finance_student_loan_rates" ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."finance_tax_configs" ENABLE ROW LEVEL SECURITY;
 
@@ -682,6 +833,18 @@ GRANT ALL ON TABLE "public"."finance_settings" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_settings" TO "service_role";
 
+-- finance_student_loan_rates: least privilege, not the legacy anon-grant
+-- pattern above. anon holds no grant of any kind -- this is a finance_*
+-- table, and ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on
+-- creation, so both REVOKEs below are load-bearing, not decorative.
+REVOKE ALL ON TABLE "public"."finance_student_loan_rates" FROM "anon";
+
+REVOKE ALL ON TABLE "public"."finance_student_loan_rates" FROM "authenticated";
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."finance_student_loan_rates" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."finance_student_loan_rates" TO "service_role";
+
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_tax_configs" TO "anon";
 
 GRANT ALL ON TABLE "public"."finance_tax_configs" TO "authenticated";
@@ -789,6 +952,9 @@ ALTER TABLE ONLY "public"."finance_bank_accounts"
     ADD CONSTRAINT "finance_bank_accounts_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 ALTER TABLE ONLY "public"."finance_bank_accounts"
     ADD CONSTRAINT "finance_bank_accounts_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+ALTER TABLE ONLY "public"."finance_bank_accounts"
+    ADD CONSTRAINT "finance_bank_accounts_credit_limit_check"
+    CHECK (("credit_limit" IS NULL) OR ("credit_limit" >= (0)::numeric));
 CREATE INDEX "idx_finance_bank_accounts_profile_id" ON "public"."finance_bank_accounts" ("profile_id");
 
 ALTER TABLE ONLY "public"."finance_budget_categories"
@@ -855,6 +1021,11 @@ ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+ALTER TABLE ONLY "public"."finance_user_holidays"
+    ADD CONSTRAINT "finance_user_holidays_type_check" CHECK ("type" IN ('holiday', 'sick'));
+ALTER TABLE ONLY "public"."finance_user_holidays"
+    ADD CONSTRAINT "finance_user_holidays_half_day_check"
+    CHECK ("half_day" IS NULL OR ("half_day" IN ('am', 'pm') AND "start_date" = "end_date" AND "count" = 0.5));
 CREATE INDEX "idx_finance_user_holidays_profile_id" ON "public"."finance_user_holidays" ("profile_id");
 
 ALTER TABLE ONLY "public"."finance_truelayer_connection"
@@ -1089,9 +1260,159 @@ CREATE POLICY "Admin Only" ON "public"."finance_transfer_links"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
+-- Least privilege, not the legacy anon-grant pattern used elsewhere in this
+-- file: anon holds no grant of any kind -- this is a finance_* table, and
+-- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
+-- the REVOKE below is load-bearing, not decorative. "ALL" to authenticated
+-- was reviewed and narrowed: it included TRUNCATE, which RLS does not
+-- govern, so the grant was the only thing standing in front of it.
 REVOKE ALL ON TABLE "public"."finance_transfer_links" FROM "anon";
-GRANT ALL ON TABLE "public"."finance_transfer_links" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_transfer_links" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transfer_links" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_transfer_links" TO "service_role";
 
 COMMENT ON TABLE "public"."finance_transfer_links" IS
     'User-confirmed, one-to-one links between an outflow and an inflow transaction that together are one leg of a transfer between the owner''s own accounts. Excluded from income and spending totals; never inferred automatically.';
+
+-- Pairs a person has looked at and said are NOT a transfer: the negative of
+-- finance_transfer_links above. src/lib/finance/transfer-detection.ts only
+-- proposes candidates; once a pair is dismissed here, detection stops
+-- proposing it again. Same composite-FK, profile-scoped shape as the table
+-- above -- see its header comment for the cross-profile reasoning.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_transfer_dismissals" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "outflow_transaction_id" "text" NOT NULL,
+    "inflow_transaction_id" "text" NOT NULL,
+    "dismissed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_transfer_dismissals" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_transfer_dismissals"
+    ADD CONSTRAINT "finance_transfer_dismissals_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_transfer_dismissals"
+    ADD CONSTRAINT "finance_transfer_dismissals_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Relies on the unique index idx_finance_transactions_profile_id_id, the
+-- same one finance_transfer_links depends on.
+ALTER TABLE ONLY "public"."finance_transfer_dismissals"
+    ADD CONSTRAINT "finance_transfer_dismissals_profile_outflow_fkey"
+    FOREIGN KEY ("profile_id", "outflow_transaction_id")
+    REFERENCES "public"."finance_transactions"("profile_id", "id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_transfer_dismissals"
+    ADD CONSTRAINT "finance_transfer_dismissals_profile_inflow_fkey"
+    FOREIGN KEY ("profile_id", "inflow_transaction_id")
+    REFERENCES "public"."finance_transactions"("profile_id", "id") ON DELETE CASCADE;
+
+-- A transaction cannot be both legs of its own dismissed pair.
+ALTER TABLE ONLY "public"."finance_transfer_dismissals"
+    ADD CONSTRAINT "finance_transfer_dismissals_distinct_legs_check"
+    CHECK ("outflow_transaction_id" <> "inflow_transaction_id");
+
+-- Deliberately one index, not one-per-leg the way finance_transfer_links
+-- has two: dismissing A->B must not stop A->C being proposed later, so the
+-- uniqueness is on the pair, not on either leg alone. It leads with
+-- profile_id, so it also serves as the profile-scoped lookup index -- no
+-- separate idx_finance_transfer_dismissals_profile_id is needed. The client
+-- upserts with onConflict: 'profile_id,outflow_transaction_id,
+-- inflow_transaction_id'; this column order must match that exactly, or
+-- every write fails with Postgres 42P10 the way the payslip reconciliation
+-- client did before it was corrected to a composite index.
+CREATE UNIQUE INDEX "idx_finance_transfer_dismissals_profile_pair"
+    ON "public"."finance_transfer_dismissals" ("profile_id", "outflow_transaction_id", "inflow_transaction_id");
+
+ALTER TABLE "public"."finance_transfer_dismissals" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_transfer_dismissals"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+-- Least privilege, not the legacy anon-grant pattern used elsewhere in this
+-- file: anon holds no grant of any kind -- this is a finance_* table, and
+-- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
+-- both REVOKEs below are load-bearing, not decorative.
+REVOKE ALL ON TABLE "public"."finance_transfer_dismissals" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_transfer_dismissals" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transfer_dismissals" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_transfer_dismissals" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_transfer_dismissals" IS
+    'User-rejected candidate pairs from transfer detection: a person looked at this outflow/inflow pair and said it is not a transfer. Records a rejection only -- changes no figure, no balance, no total. A dismissed pair is simply never proposed again by src/lib/finance/transfer-detection.ts.';
+
+-- A person's verdict on ONE transaction that looks like a transfer but has
+-- no matching leg in the ledger -- money sent to, or received from, an
+-- account that is not tracked here, or a payment to another person that
+-- merely looks like a transfer. Distinct from finance_transfer_links (a
+-- confirmed pair) and finance_transfer_dismissals (a rejected pair) above:
+-- both of those are about two transactions. This table is about one
+-- transaction that never had a second leg to pair against. Same
+-- composite-FK, profile-scoped shape as both -- see finance_transfer_links
+-- above for the cross-profile reasoning.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_transfer_single_legs" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "transaction_id" "text" NOT NULL,
+    "verdict" "text" NOT NULL,
+    "decided_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_transfer_single_legs" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_transfer_single_legs"
+    ADD CONSTRAINT "finance_transfer_single_legs_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_transfer_single_legs"
+    ADD CONSTRAINT "finance_transfer_single_legs_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Relies on the unique index idx_finance_transactions_profile_id_id, the
+-- same one finance_transfer_links and finance_transfer_dismissals depend on.
+ALTER TABLE ONLY "public"."finance_transfer_single_legs"
+    ADD CONSTRAINT "finance_transfer_single_legs_profile_transaction_fkey"
+    FOREIGN KEY ("profile_id", "transaction_id")
+    REFERENCES "public"."finance_transactions"("profile_id", "id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_transfer_single_legs"
+    ADD CONSTRAINT "finance_transfer_single_legs_verdict_check"
+    CHECK ("verdict" IN ('internal', 'external'));
+
+-- One verdict per transaction. Leads with profile_id, so it also serves as
+-- the profile-scoped lookup index -- no separate
+-- idx_finance_transfer_single_legs_profile_id is needed. The client upserts
+-- with onConflict: 'profile_id,transaction_id'; this column order must
+-- match that exactly, or every write fails with Postgres 42P10 the way the
+-- payslip reconciliation client did before it was corrected to a composite
+-- index.
+CREATE UNIQUE INDEX "idx_finance_transfer_single_legs_profile_transaction"
+    ON "public"."finance_transfer_single_legs" ("profile_id", "transaction_id");
+
+ALTER TABLE "public"."finance_transfer_single_legs" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_transfer_single_legs"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+-- Least privilege, not the legacy anon-grant pattern used elsewhere in this
+-- file: anon holds no grant of any kind -- this is a finance_* table, and
+-- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
+-- both REVOKEs below are load-bearing, not decorative.
+REVOKE ALL ON TABLE "public"."finance_transfer_single_legs" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_transfer_single_legs" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transfer_single_legs" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_transfer_single_legs" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_transfer_single_legs" IS
+    'A person''s verdict on one transaction that looks like a transfer but has no matching leg in the ledger. ''internal'' means the row moved money to or from an account of the owner''s that is not tracked here, and it is excluded from income and spending totals exactly as both legs of a confirmed finance_transfer_links pair are. ''external'' means the person said it is real spending or income -- it changes no figure and only stops the row being proposed again. Never inferred automatically.';
+
+COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
+    'internal = excluded from income/spending totals like a confirmed transfer leg; external = real spending or income, changes no figure.';

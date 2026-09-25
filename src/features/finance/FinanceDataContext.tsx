@@ -25,8 +25,10 @@ import defaultPresets from '@/data/presets.json';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import type { Payslip, PayslipLine, PayslipTransactionReconciliation, ProfileTransfer } from '@/lib/finance';
-import type { StoredTransferLink } from '@/lib/finance/transfer-detection';
+import type { Payslip, PayslipLine, PayslipTransactionReconciliation, ProfileTransfer, StudentLoanRateRow } from '@/lib/finance';
+import type {
+  SingleLegVerdict, StoredSingleLegDecision, StoredTransferDismissal, StoredTransferLink,
+} from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
@@ -37,6 +39,7 @@ import {
   asDebtType,
   asInvestmentCategory,
   asFrequency,
+  asHalfDay,
   asPensionType,
   asStudentLoanPlan,
   asMembershipType,
@@ -74,6 +77,10 @@ import {
   ALL_PRESETS_FALLBACK,
   ALL_SAVINGS_IDS,
   createDefaultBudgetCategories,
+  createDefaultFinanceSettings,
+  createEmptyTaxConfig,
+  currentTaxYear,
+  DEFAULT_BIWEEKLY_ANCHOR,
   DEFAULT_BUDGET_CATEGORIES,
   DEFAULT_CATEGORY_TEMPLATES,
   DEFAULT_RECURRING_TEMPLATES,
@@ -89,6 +96,9 @@ import {
   sanitizeBudgetCategories,
 } from './utils/calculations';
 
+/** A published student loan rate row as stored: shipped (`isDefault`) or entered by you. */
+export type StoredStudentLoanRate = StudentLoanRateRow & { id: string; isDefault: boolean; source?: string };
+
 /**
  * One `finance_profiles` row as the app's own shape.
  *
@@ -100,6 +110,16 @@ import {
  * read during the window where a migration adding one is written but not yet
  * applied degrades instead of throwing.
  */
+/**
+ * Every column `toFinanceProfile` reads, and nothing else. Named rather than
+ * `*` so a column added later -- `owner_user_id` already rides along unused --
+ * does not reach the client until something here asks for it. A migration
+ * adding a column the client reads must land before the client does; the
+ * failure is a loud toast, not an empty switcher.
+ */
+const FINANCE_PROFILE_COLUMNS =
+  'id, name, is_self, is_public, emoji, currency, region, birth_year, retirement_age, pension_growth_percent';
+
 const toFinanceProfile = (row: {
   id: string;
   name: string;
@@ -145,14 +165,6 @@ const PROFILE_SCOPED_SAVE_KEYS = new Set([
   'transactions',
   'default_budget_categories',
 ]);
-
-const EMPTY_TAX_CONFIG: TaxConfig = {
-  effectiveFrom: '2026-04-06',
-  studentLoanThresholds: { none: Infinity, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
-  studentLoanRates: { none: 0, plan1: 0, plan2: 0, plan4: 0, plan5: 0, postgrad: 0 },
-  incomeTaxBands: { basicRateLimit: 0, higherRateLimit: 0, basicRatePercent: 0, higherRatePercent: 0, additionalRatePercent: 0 },
-  nationalInsuranceBands: { lowerThreshold: 0, upperThreshold: 0, mainRatePercent: 0, upperRatePercent: 0 },
-};
 
 const todayInLocalTimezone = () => {
   const date = new Date();
@@ -200,31 +212,13 @@ function useProvideFinanceData() {
   const [databaseDefaults, setDatabaseDefaults] = useState<DatabaseDefaults>({});
 
   // Data States
-  const [settings, setSettings] = useState<FinanceSettings>(() => {
-    return {
-      grossSalary: 0,
-      pensionType: 'net_pay',
-      personalPensionPercent: 0,
-      employerPensionPercent: 0,
-      studentLoanPlan: 'none',
-      taxCode: '1257L',
-      personalAllowance: 12570,
-      weekends: 104,
-      bankHolidays: 8,
-      workHolidays: 25,
-      workingHoursPerDay: 7.5,
-      taxYear: 2026,
-      ukRegion: 'england-and-wales',
-      holidaysByUser: {},
-      activeSavingsTypes: ALL_SAVINGS_IDS
-    };
-  });
+  const [settings, setSettings] = useState<FinanceSettings>(() => createDefaultFinanceSettings(ALL_SAVINGS_IDS));
 
   const [timeSpentInputs, setTimeSpentInputs] = useState(() => {
     return {
       sleepHoursPerDay: 8.0,
-      commuteDaysPerWeek: 5,
-      commuteHoursPerDay: 2,
+      commuteDaysPerWeek: 0,
+      commuteHoursPerDay: 0,
       gettingReadyHoursPerDay: 1.0,
       gymDaysPerWeek: 0,
       gymHoursPerSession: 0,
@@ -281,7 +275,7 @@ function useProvideFinanceData() {
 
   // Tax rates are historical reference data. The active timeline is the
   // admin override when present, otherwise the built-in default timeline.
-  const [taxConfigs, setTaxConfigs] = useState<TaxConfig[]>([EMPTY_TAX_CONFIG]);
+  const [taxConfigs, setTaxConfigs] = useState<TaxConfig[]>(() => [createEmptyTaxConfig()]);
   const taxConfig = (() => {
     try {
       return selectTaxConfigForDate(taxConfigs, todayInLocalTimezone());
@@ -289,7 +283,7 @@ function useProvideFinanceData() {
       // This only covers the loading/empty state. Historical calculations do
       // not get this fallback: calculateFinance throws instead of using future
       // rates for a past date.
-      return taxConfigs[0] ?? EMPTY_TAX_CONFIG;
+      return taxConfigs[0] ?? createEmptyTaxConfig();
     }
   })();
   const setTaxConfig = useCallback((config: TaxConfig) => {
@@ -327,7 +321,7 @@ function useProvideFinanceData() {
   const [payDayInput, setPayDayInput] = useState(settings.payDayOfMonth?.toString() || '25');
   const [paydaySchedule, setPaydaySchedule] = useState<FinanceSettings['paydaySchedule']>(() => settings.paydaySchedule || 'monthly_date');
   const [paydayWeekday, setPaydayWeekday] = useState<number>(() => settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
-  const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(() => settings.paydayBiweeklyAnchor || '2026-01-02');
+  const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(() => settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
 
   // UK bank holidays, fetched once from gov.uk. Shared because payday, leave
   // and the tax view all need the same list (7.2c-i).
@@ -419,6 +413,15 @@ function useProvideFinanceData() {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [payslipReconciliations, setPayslipReconciliations] = useState<PayslipTransactionReconciliation[]>([]);
   const [transferLinks, setTransferLinks] = useState<StoredTransferLink[]>([]);
+  // True when the last read of the links failed. Every figure that excludes
+  // transfers is then overstated, and the surfaces showing one say so.
+  const [transferLinksFailed, setTransferLinksFailed] = useState(false);
+  const [transferDismissals, setTransferDismissals] = useState<StoredTransferDismissal[]>([]);
+  // Verdicts on transfer-looking rows with no second leg in the ledger. An
+  // 'internal' verdict excludes the row from totals, so a failed read makes
+  // the figures unreliable in the same way failed links do.
+  const [transferSingleLegs, setTransferSingleLegs] = useState<StoredSingleLegDecision[]>([]);
+  const [transferSingleLegsFailed, setTransferSingleLegsFailed] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
 
   /**
@@ -481,13 +484,9 @@ function useProvideFinanceData() {
    * an administrator.
    */
   const loadProfiles = useCallback(async (): Promise<string | null> => {
-    // `*` rather than a column list, unusually for this codebase: profiles is a
-    // handful of rows, and naming columns makes the query fail outright during
-    // the window where a migration adding one is written but not yet applied --
-    // which silently empties the switcher rather than degrading.
     const { data, error } = await supabase
       .from('finance_profiles')
-      .select('*')
+      .select(FINANCE_PROFILE_COLUMNS)
       .order('is_self', { ascending: false });
 
     if (error) {
@@ -630,6 +629,70 @@ function useProvideFinanceData() {
     void fetchPayslips(profileId);
   }, [fetchPayslips, profileId]);
 
+  /* ---- Published student loan interest parameters ----------------------
+     RPI, cap, Plan 2's full-rate income and Bank Rate, by the date SLC
+     applies them. Reference data rather than anyone's own: every profile
+     reads the same rows. Missing table or no rows leaves the list empty and
+     the section falls back to its stated assumptions. */
+  const [studentLoanRates, setStudentLoanRates] = useState<StoredStudentLoanRate[]>([]);
+  const fetchStudentLoanRates = useCallback(async () => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('finance_student_loan_rates')
+      .select('id, is_default, effective_from, rpi_percent, cap_percent, plan2_lower_threshold, plan2_upper_threshold, bank_rate_percent, source')
+      .order('effective_from', { ascending: true });
+    if (error) {
+      console.warn('student loan rates unavailable', error.message);
+      return;
+    }
+    const rows = (data ?? []).map(r => ({
+      id: r.id,
+      isDefault: r.is_default,
+      source: r.source ?? undefined,
+      effectiveFrom: r.effective_from,
+      rpi: Number(r.rpi_percent),
+      rateCap: r.cap_percent === null ? null : Number(r.cap_percent),
+      plan2LowerThreshold: r.plan2_lower_threshold === null ? null : Number(r.plan2_lower_threshold),
+      plan2UpperThreshold: r.plan2_upper_threshold === null ? null : Number(r.plan2_upper_threshold),
+      bankRate: r.bank_rate_percent === null ? null : Number(r.bank_rate_percent),
+    }));
+    // A row you entered for a date replaces the shipped row for the same date.
+    const own = new Set(rows.filter(r => !r.isDefault).map(r => r.effectiveFrom));
+    setStudentLoanRates(rows.filter(r => !r.isDefault || !own.has(r.effectiveFrom)));
+  }, [isAdmin]);
+  useEffect(() => { void fetchStudentLoanRates(); }, [fetchStudentLoanRates]);
+
+  /** Adds or replaces your row for a date. */
+  const saveStudentLoanRate = async (row: Omit<StoredStudentLoanRate, 'id' | 'isDefault'>) => {
+    if (!isAdmin) return;
+    const { error } = await supabase.from('finance_student_loan_rates').upsert({
+      is_default: false,
+      effective_from: row.effectiveFrom,
+      rpi_percent: row.rpi,
+      cap_percent: row.rateCap,
+      plan2_lower_threshold: row.plan2LowerThreshold ?? null,
+      plan2_upper_threshold: row.plan2UpperThreshold,
+      bank_rate_percent: row.bankRate,
+      source: row.source ?? null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'is_default,effective_from' });
+    if (error) {
+      toast({ title: 'Could not save the rates', description: error.message, variant: 'destructive' });
+      return;
+    }
+    await fetchStudentLoanRates();
+  };
+
+  const deleteStudentLoanRate = async (id: string) => {
+    if (!isAdmin) return;
+    const { error } = await supabase.from('finance_student_loan_rates').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Could not delete the rates', description: error.message, variant: 'destructive' });
+      return;
+    }
+    await fetchStudentLoanRates();
+  };
+
   /* ---- Payslip ↔ bank payment confirmations (7.8) ----------------------
      Suggestions stay local and are computed from rows. This small table is
      intentionally only the explicit confirmation, so a weak bank reference
@@ -677,16 +740,23 @@ function useProvideFinanceData() {
   const fetchTransferLinks = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) {
       setTransferLinks([]);
+      setTransferLinksFailed(false);
       return;
     }
     const { data, error } = await (supabase as unknown as SupabaseClient)
       .from('finance_transfer_links')
       .select('id, outflow_transaction_id, inflow_transaction_id, confirmed_at')
       .eq('profile_id', forProfile);
+    /* Cleared rather than kept: the links held may belong to the profile the
+       switcher just left, and a stale exclusion is invisible where a missing
+       one is flagged. */
     if (error) {
       console.warn('transfer links unavailable');
+      setTransferLinks([]);
+      setTransferLinksFailed(true);
       return;
     }
+    setTransferLinksFailed(false);
     setTransferLinks((data ?? []).map((row: {
       id: string;
       outflow_transaction_id: string;
@@ -703,6 +773,40 @@ function useProvideFinanceData() {
   useEffect(() => {
     void fetchTransferLinks(profileId);
   }, [fetchTransferLinks, profileId]);
+
+  /* Pairs a person has said are not transfers. They change no figure -- only
+     which pairs detection proposes -- so a failed read degrades to proposing
+     them again, and needs no flag. Untyped for the same reason as the links. */
+  const fetchTransferDismissals = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) {
+      setTransferDismissals([]);
+      return;
+    }
+    const { data, error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_dismissals')
+      .select('id, outflow_transaction_id, inflow_transaction_id, dismissed_at')
+      .eq('profile_id', forProfile);
+    if (error) {
+      console.warn('transfer dismissals unavailable');
+      setTransferDismissals([]);
+      return;
+    }
+    setTransferDismissals((data ?? []).map((row: {
+      id: string;
+      outflow_transaction_id: string;
+      inflow_transaction_id: string;
+      dismissed_at: string;
+    }) => ({
+      id: row.id,
+      outflowTransactionId: row.outflow_transaction_id,
+      inflowTransactionId: row.inflow_transaction_id,
+      dismissedAt: row.dismissed_at,
+    })));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchTransferDismissals(profileId);
+  }, [fetchTransferDismissals, profileId]);
 
   const savePayslip = async (slip: Payslip) => {
     if (!isAdmin || !profileId) return;
@@ -869,6 +973,142 @@ function useProvideFinanceData() {
     return true;
   };
 
+  const dismissTransferPair = async (
+    outflowTransactionId: string,
+    inflowTransactionId: string,
+  ): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    // onConflict matches idx_finance_transfer_dismissals_profile_pair exactly.
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_dismissals')
+      .upsert({
+        id: `transfer_dismissal_${outflowTransactionId}_${inflowTransactionId}`,
+        profile_id: profileId,
+        outflow_transaction_id: outflowTransactionId,
+        inflow_transaction_id: inflowTransactionId,
+        dismissed_at: new Date().toISOString(),
+      }, { onConflict: 'profile_id,outflow_transaction_id,inflow_transaction_id' });
+    if (error) {
+      toast({
+        title: 'Could not dismiss the pair',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchTransferDismissals(profileId);
+    toast({ title: 'Pair dismissed' });
+    return true;
+  };
+
+  /* Untyped for the same reason as the links. Cleared on failure rather than
+     kept, for the same reason too. */
+  const fetchTransferSingleLegs = useCallback(async (forProfile: string | null) => {
+    if (!isAdmin || !forProfile) {
+      setTransferSingleLegs([]);
+      setTransferSingleLegsFailed(false);
+      return;
+    }
+    const { data, error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_single_legs')
+      .select('id, transaction_id, verdict, decided_at')
+      .eq('profile_id', forProfile);
+    if (error) {
+      console.warn('single-leg transfer decisions unavailable');
+      setTransferSingleLegs([]);
+      setTransferSingleLegsFailed(true);
+      return;
+    }
+    setTransferSingleLegsFailed(false);
+    setTransferSingleLegs((data ?? []).map((row: {
+      id: string;
+      transaction_id: string;
+      verdict: SingleLegVerdict;
+      decided_at: string;
+    }) => ({
+      id: row.id,
+      transactionId: row.transaction_id,
+      verdict: row.verdict,
+      decidedAt: row.decided_at,
+    })));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchTransferSingleLegs(profileId);
+  }, [fetchTransferSingleLegs, profileId]);
+
+  const decideTransferSingleLeg = async (
+    transactionId: string,
+    verdict: SingleLegVerdict,
+  ): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    // onConflict matches idx_finance_transfer_single_legs_profile_transaction.
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_single_legs')
+      .upsert({
+        id: `transfer_single_${transactionId}`,
+        profile_id: profileId,
+        transaction_id: transactionId,
+        verdict,
+        decided_at: new Date().toISOString(),
+      }, { onConflict: 'profile_id,transaction_id' });
+    if (error) {
+      toast({
+        title: 'Could not save that',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchTransferSingleLegs(profileId);
+    toast({
+      title: verdict === 'internal'
+        ? 'Counted as a move between your own accounts'
+        : 'Counted as real spending or income',
+    });
+    return true;
+  };
+
+  const undoTransferSingleLeg = async (id: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_single_legs')
+      .delete()
+      .eq('profile_id', profileId)
+      .eq('id', id);
+    if (error) {
+      toast({
+        title: 'Could not undo that',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchTransferSingleLegs(profileId);
+    toast({ title: 'Back up for review' });
+    return true;
+  };
+
+  const restoreTransferPair = async (id: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from('finance_transfer_dismissals')
+      .delete()
+      .eq('profile_id', profileId)
+      .eq('id', id);
+    if (error) {
+      toast({
+        title: 'Could not restore the pair',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    await fetchTransferDismissals(profileId);
+    toast({ title: 'Pair restored for review' });
+    return true;
+  };
+
   const deleteTransfer = async (id: string) => {
     if (!isAdmin) return;
     const { error } = await supabase.from('finance_profile_transfers').delete().eq('id', id);
@@ -1001,6 +1241,24 @@ function useProvideFinanceData() {
     if (!profileId) return;
       setLoadingDb(true);
       try {
+        // course_end_date arrived in a later migration. Ask for it, and fall
+        // back to the older column list against a database that has not had
+        // it applied (42703: undefined column), so debts still load rather
+        // than the whole query failing.
+        const debtColumns = 'id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color';
+        const loadDebts = async () => {
+          const withCourseEnd = await scoped(supabase.from('finance_debts').select(`${debtColumns}, course_end_date`));
+          if (withCourseEnd.error?.code !== '42703') return withCourseEnd;
+          return scoped(supabase.from('finance_debts').select(debtColumns));
+        };
+        // half_day likewise arrived later; without it leave loads as full days.
+        const holidayColumns = 'id, is_default, start_date, end_date, occasion, count, type';
+        const loadHolidays = async () => {
+          const withHalfDay = await scoped(supabase.from('finance_user_holidays').select(`${holidayColumns}, half_day`));
+          if (withHalfDay.error?.code !== '42703') return withHalfDay;
+          return scoped(supabase.from('finance_user_holidays').select(holidayColumns));
+        };
+
         const [
           settingsRes,
           userHolidaysRes,
@@ -1025,40 +1283,37 @@ function useProvideFinanceData() {
           selfProfileRes
         ] = await Promise.all([
           scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types')),
-          scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count, type')),
+          loadHolidays(),
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
           scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
-          scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, use_case, emoji, color')),
+          scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, credit_limit, use_case, emoji, color')),
           scopedByProfile(supabase.from('finance_investment_holdings').select('id, account_id, name, ticker, shares, avg_price, cost_basis_known, current_price, current_price_known, category')),
           scopedByProfile(supabase.from('finance_investment_activities').select('id, account_id, provider, activity_type, occurred_on, name, ticker, quantity, unit_price_gbp, source_reference').order('occurred_on', { ascending: false })),
           scoped(supabase.from('finance_memberships').select('id, is_default, name, type, status, annual_fee, use_case')),
-          scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color')),
+          loadDebts(),
           scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji')),
           scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id')),
-          scoped(supabase.from('finance_transactions').select('id, is_default, name, merchant, category, amount, date, is_reviewed, account_id, bank_account_id, goal_id, notes, tags, is_recurring')),
+          scoped(supabase.from('finance_transactions').select('id, is_default, name, merchant, provider_category, category, amount, date, is_reviewed, account_id, bank_account_id, goal_id, notes, tags, is_recurring')),
           supabase.from('finance_tax_configs').select('id, is_default, effective_from, student_loan_thresholds, student_loan_rates, income_tax_bands, national_insurance_bands'),
           supabase.from('finance_recurring_templates').select('id, is_default, name, category, emoji, tag, default_amount, frequency, linked_budget_item_id, budget_category_name'),
           supabase.from('finance_credit_bureaus').select('id, is_default, key, label, emoji, color, max_score, gradient'),
           supabase.from('finance_holiday_defaults').select('id, is_default, month_index, count, dates, occasion'),
           supabase.from('finance_budget_presets').select('id, is_default, preset_type, name, emoji, group_type'),
-          // `*` rather than a column list, unusually for this codebase: profiles is a
-          // handful of rows, and naming columns makes the query fail outright
-          // during the window where a migration adding one is written but not yet
-          // applied -- which silently empties the switcher rather than degrading.
           supabase
             .from('finance_profiles')
-            .select('*')
+            .select(FINANCE_PROFILE_COLUMNS)
             .order('is_self', { ascending: false })
         ]);
 
         // Refreshes the switcher. The active profile was already resolved by
         // `loadProfiles` before this load ran -- it has to have been, or the
         // scoped queries above could not have been built -- so this only picks
-        // up renames and newly added profiles.
-        setProfiles((selfProfileRes.data ?? []).map(toFinanceProfile));
+        // up renames and newly added profiles. A failed refresh keeps the list
+        // `loadProfiles` already put there rather than emptying the switcher.
+        if (!selfProfileRes.error) setProfiles((selfProfileRes.data ?? []).map(toFinanceProfile));
 
         // A single failing table used to `throw` here, aborting the whole load
         // and silently dropping the page back to localStorage — which is how a
@@ -1109,14 +1364,18 @@ function useProvideFinanceData() {
         const defaultHolidaysList = userHolidaysRes.data?.filter(d => d.is_default) || [];
         const holidays = userHolidaysList.length > 0 ? userHolidaysList : defaultHolidaysList;
 
-        const mappedHolidays: UserHoliday[] = holidays.map(h => ({
-          id: h.id,
-          startDate: h.start_date,
-          endDate: h.end_date,
-          occasion: h.occasion || '',
-          count: Number(h.count) || 0,
-          type: (h.type as 'holiday' | 'sick') || 'holiday'
-        }));
+        const mappedHolidays: UserHoliday[] = holidays.map(h => {
+          const halfDay = asHalfDay((h as { half_day?: string | null }).half_day);
+          return {
+            id: h.id,
+            startDate: h.start_date,
+            endDate: h.end_date,
+            occasion: h.occasion || '',
+            count: Number(h.count) || 0,
+            type: (h.type as 'holiday' | 'sick') || 'holiday',
+            ...(halfDay ? { halfDay } : {})
+          };
+        });
 
         if (activeSettings) {
           const loadedSettings: FinanceSettings = {
@@ -1131,12 +1390,12 @@ function useProvideFinanceData() {
             bankHolidays: Number(activeSettings.bank_holidays) || 8,
             workHolidays: Number(activeSettings.work_holidays) || 25,
             workingHoursPerDay: Number(activeSettings.working_hours_per_day) || 7.5,
-            taxYear: Number(activeSettings.tax_year) || 2026,
+            taxYear: Number(activeSettings.tax_year) || currentTaxYear(),
             ukRegion: asUkRegion(activeSettings.uk_region),
             payDayOfMonth: activeSettings.pay_day_of_month || 25,
             paydaySchedule: asPaydaySchedule(activeSettings.payday_schedule),
             paydayWeekday: activeSettings.payday_weekday !== null ? activeSettings.payday_weekday : 5,
-            paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || '2026-01-02',
+            paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: activeSettings.active_savings_types ?? [],
             holidaysByUser: mappedHolidays
           };
@@ -1147,7 +1406,7 @@ function useProvideFinanceData() {
           setPayDayInput((loadedSettings.payDayOfMonth || 25).toString());
           setPaydaySchedule(loadedSettings.paydaySchedule || 'monthly_date');
           setPaydayWeekday(loadedSettings.paydayWeekday !== undefined ? loadedSettings.paydayWeekday : 5);
-          setPaydayBiweeklyAnchor(loadedSettings.paydayBiweeklyAnchor || '2026-01-02');
+          setPaydayBiweeklyAnchor(loadedSettings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
         }
 
         const userGoals = goalsRes.data?.filter(d => !d.is_default) || [];
@@ -1195,6 +1454,7 @@ function useProvideFinanceData() {
           issuer: a.issuer || '',
           balance: Number(a.balance) || 0,
           annualFee: Number(a.annual_fee) || 0,
+          creditLimit: a.credit_limit === null ? null : Number(a.credit_limit),
           useCase: a.use_case || undefined,
           emoji: a.emoji || undefined,
           color: a.color || undefined
@@ -1275,6 +1535,8 @@ function useProvideFinanceData() {
             interestRate: Number(d.interest_rate) || 0,
             minPayment: Number(d.min_payment) || 0,
             startDate: d.start_date || undefined,
+            // Absent when loaded through the pre-migration fallback above.
+            courseEndDate: (d as { course_end_date?: string | null }).course_end_date || undefined,
             payoffDate: d.payoff_date || undefined,
             repaymentType: (d.repayment_type as Debt['repaymentType']) || 'amortising',
             studentLoanPlan: (d.student_loan_plan as StudentLoanPlanKey) || undefined,
@@ -1361,6 +1623,7 @@ function useProvideFinanceData() {
           id: t.id,
           name: t.name,
           merchant: t.merchant || undefined,
+          providerCategory: t.provider_category || undefined,
           category: t.category || '',
           amount: Number(t.amount) || 0,
           date: t.date,
@@ -1513,12 +1776,16 @@ function useProvideFinanceData() {
             bankHolidays: Number(defaultSettings.bank_holidays) || 8,
             workHolidays: Number(defaultSettings.work_holidays) || 25,
             workingHoursPerDay: Number(defaultSettings.working_hours_per_day) || 7.5,
-            taxYear: Number(defaultSettings.tax_year) || 2026,
+            // This is the shared template every new profile and "reset to defaults"
+            // starts from, not a profile's own settings, so the stored value is
+            // never trusted here: it would otherwise pin every future profile to
+            // whichever tax year the row was last written with.
+            taxYear: currentTaxYear(),
             ukRegion: asUkRegion(defaultSettings.uk_region),
             payDayOfMonth: defaultSettings.pay_day_of_month || 25,
             paydaySchedule: asPaydaySchedule(defaultSettings.payday_schedule),
             paydayWeekday: defaultSettings.payday_weekday !== null ? defaultSettings.payday_weekday : 5,
-            paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || '2026-01-02',
+            paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: defaultSettings.active_savings_types || [],
             holidaysByUser: defaultHolidaysList.map(h => ({
               id: h.id,
@@ -1558,6 +1825,7 @@ function useProvideFinanceData() {
             issuer: a.issuer || '',
             balance: Number(a.balance) || 0,
             annualFee: Number(a.annual_fee) || 0,
+            creditLimit: a.credit_limit === null ? null : Number(a.credit_limit),
             useCase: a.use_case || undefined,
             emoji: a.emoji || undefined,
             color: a.color || undefined
@@ -1819,7 +2087,7 @@ function useProvideFinanceData() {
           : Object.values(settingsObj.holidaysByUser || {});
         await pruneScoped('finance_user_holidays', holidaysList.map(h => h.id));
         if (holidaysList.length > 0) {
-          await supabase.from('finance_user_holidays').upsert(holidaysList.map(h => ({
+          const holidayRow = (h: UserHoliday) => ({
             id: h.id,
             is_default: false,
             profile_id: profileId,
@@ -1828,7 +2096,17 @@ function useProvideFinanceData() {
             occasion: h.occasion || null,
             count: h.count,
             type: h.type || 'holiday'
-          })), { onConflict: 'id' });
+          });
+          // half_day is always sent, so turning a half day back into a full
+          // one clears it. A database without the half_day migration rejects
+          // the column (PGRST204); save the rest rather than nothing.
+          const saved = await supabase.from('finance_user_holidays').upsert(
+            holidaysList.map(h => ({ ...holidayRow(h), half_day: h.halfDay ?? null })),
+            { onConflict: 'id' },
+          );
+          if (saved.error?.code === 'PGRST204') {
+            await supabase.from('finance_user_holidays').upsert(holidaysList.map(h => holidayRow(h)), { onConflict: 'id' });
+          }
         }
       } else if (key === 'goals') {
         const goalsList = contentData as Goal[];
@@ -1879,6 +2157,7 @@ function useProvideFinanceData() {
             issuer: a.issuer || null,
             balance: a.balance,
             annual_fee: a.annualFee,
+            credit_limit: a.creditLimit ?? null,
             use_case: a.useCase || null,
             emoji: a.emoji || null,
             color: a.color || null
@@ -1911,6 +2190,9 @@ function useProvideFinanceData() {
             interest_rate: d.interestRate,
             min_payment: d.minPayment,
             start_date: d.startDate || null,
+            // Sent only when set, so saving keeps working against a database
+            // that has not had the course_end_date migration applied yet.
+            ...(d.courseEndDate ? { course_end_date: d.courseEndDate } : {}),
             payoff_date: d.payoffDate || null,
             repayment_type: d.repaymentType || 'amortising',
             student_loan_plan: d.studentLoanPlan || null,
@@ -2048,6 +2330,9 @@ function useProvideFinanceData() {
             // omitted column would be fine on conflict but NULLs the row on
             // an insert, which is how a synced merchant would quietly vanish.
             merchant: t.merchant || null,
+            // provider_category is left out on purpose: only the sync writes
+            // it, an update leaves an omitted column alone, and a row this
+            // client inserts is manual, so NULL is the right value there.
             category: t.category || null,
             amount: t.amount,
             date: t.date,
@@ -2194,14 +2479,26 @@ function useProvideFinanceData() {
     saveTransfer,
     deleteTransfer,
     payslips,
+    studentLoanRates,
+    saveStudentLoanRate,
+    deleteStudentLoanRate,
     savePayslip,
     deletePayslip,
     payslipReconciliations,
     savePayslipReconciliation,
     deletePayslipReconciliation,
     transferLinks,
+    // Either half of what decides a transfer exclusion failed to load, so
+    // every figure that drops transfers may be overstated.
+    transferExclusionsFailed: transferLinksFailed || transferSingleLegsFailed,
     saveTransferLink,
     deleteTransferLink,
+    transferDismissals,
+    dismissTransferPair,
+    restoreTransferPair,
+    transferSingleLegs,
+    decideTransferSingleLeg,
+    undoTransferSingleLeg,
     updateProfile,
     netWorthHistory,
     profiles,

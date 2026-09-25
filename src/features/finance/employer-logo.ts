@@ -1,61 +1,53 @@
 /**
- * The mark for an employer, from the logos already in `public/org-logos/`.
+ * The mark for an employer, from the logos already on the experience and
+ * education rows of this site.
  *
- * Those files are there for the experience section of the About page, so an
- * employer named on a payslip usually already has one. Matching is by slug, so
- * adding a logo is dropping a file in that directory — no edit here.
- *
- * Bundled and local: nothing is fetched, so a row draws its mark offline and
- * without a request that would tell anyone who employs this person.
+ * Nothing is fetched from a third party: an employer named on a payslip
+ * draws its mark from the logos this person already uploaded for their own
+ * About page, offline and without a request that would tell anyone who
+ * employs them. Matching is by slug, so a row without a stored logo simply
+ * shows none.
  */
-
-const KNOWN = [
-  'airbus-defence-and-space',
-  'keysight-technologies',
-  'lodestar-space',
-  'ocean-infinity',
-  'university-college-london',
-  'university-of-plymouth',
-] as const;
-
-const EXTENSIONS: Record<string, string> = {
-  'airbus-defence-and-space': 'png',
-  'keysight-technologies': 'svg',
-  'lodestar-space': 'png',
-  'ocean-infinity': 'svg',
-  'university-college-london': 'png',
-  'university-of-plymouth': 'png',
-};
 
 const slugify = (name: string): string =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-/**
- * Names that will not slug their way to the right file.
- *
- * `capgemini` is here because those payslips are for an Airbus placement, and
- * it is a one-off for the imported history rather than a rule about the two
- * companies. Delete the line when those payslips no longer need it.
- */
-const ALIASES: Record<string, string> = {
-  capgemini: 'airbus-defence-and-space',
-  airbus: 'airbus-defence-and-space',
-  keysight: 'keysight-technologies',
-  ucl: 'university-college-london',
-  oceaninfinity: 'ocean-infinity',
-  lodestar: 'lodestar-space',
-  plymouth: 'university-of-plymouth',
-};
-
-/** The public path of the employer's mark, or null when there is not one. */
-export function employerLogo(employer: string | undefined): string | null {
+/** The logo of the employer with the closest-matching name, or null. */
+export function employerLogo(
+  employer: string | undefined,
+  orgs: readonly { name: string; logoUrl?: string | null }[],
+): string | null {
   if (!employer) return null;
   const slug = slugify(employer);
-  const resolved = ALIASES[slug]
-    ?? ALIASES[slug.replace(/-/g, '')]
-    // A slug that merely starts with a known one still matches, so
-    // "Keysight Technologies UK Ltd" finds keysight-technologies.
-    ?? KNOWN.find(k => slug === k || slug.startsWith(k) || k.startsWith(slug));
-  if (!resolved || !EXTENSIONS[resolved]) return null;
-  return `/org-logos/${resolved}.${EXTENSIONS[resolved]}`;
+  if (!slug) return null;
+
+  // Empty slugs are dropped: a blank or non-Latin name slugs to '', and ''
+  // is a prefix of everything, so one such row would lend its logo to every
+  // payslip. A row missing its name (site content is loosely typed) is
+  // skipped rather than allowed to throw.
+  const slugged = orgs
+    .map(org => ({ org, slug: slugify(org.name ?? '') }))
+    .filter(({ slug: orgSlug }) => orgSlug !== '');
+
+  // Prefixes are compared on whole slug words, so "Arm" never finds "Armagh
+  // Council", and the longest match wins when several orgs qualify.
+  const longest = (matches: typeof slugged) =>
+    matches.sort((a, b) => b.slug.length - a.slug.length)[0]?.org.logoUrl ?? null;
+
+  const exact = slugged.filter(({ slug: orgSlug }) => orgSlug === slug);
+  if (exact.length > 0) return longest(exact);
+
+  // A longer legal name still matches, so "Acme Robotics UK Ltd" finds
+  // "Acme Robotics".
+  const prefixOfEmployer = slugged.filter(({ slug: orgSlug }) => slug.startsWith(`${orgSlug}-`));
+  if (prefixOfEmployer.length > 0) return longest(prefixOfEmployer);
+
+  // The reverse only once the employer slug is long enough that a short one
+  // is not matching half the organisations on the site.
+  if (slug.length >= 4) {
+    const prefixOfOrg = slugged.filter(({ slug: orgSlug }) => orgSlug.startsWith(`${slug}-`));
+    if (prefixOfOrg.length > 0) return longest(prefixOfOrg);
+  }
+
+  return null;
 }

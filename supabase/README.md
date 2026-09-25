@@ -224,9 +224,25 @@ npx supabase functions deploy <name>
 | Function | Purpose | Auth |
 |---|---|---|
 | `tmdb-proxy` | Keeps the TMDB key server-side | Public, restricted to an endpoint allowlist |
-| `truelayer-sync` | Open-banking pull for Finance | Verifies JWT + admin email |
-| `merchant-logo-cache` | Caches merchant logos into the `merchant-logos` bucket | Verifies JWT + admin email |
-| `watchlist-cron-sync` | Scheduled port of the browser sync | Service role key |
+| `truelayer-sync` | Open-banking pull for Finance | Verifies JWT + `is_admin()`, or service role |
+| `merchant-logo-cache` | Caches merchant logos into the `merchant-logos` bucket | Verifies JWT + `is_admin()` |
+| `watchlist-cron-sync` | The watchlist sync, nightly and from the Sync buttons | Verifies JWT + `is_admin()`, or service role |
+
+All four read a shared `SITE_ORIGIN` secret for their CORS allowlist (and
+`truelayer-sync` also for its OAuth redirect allowlist) -- see
+`_shared/site-origins.ts`. Set it once, before the first deploy of any of
+them:
+
+| Secret | Purpose | Used by |
+|---|---|---|
+| `SITE_ORIGIN` | The deployed site's own origin, e.g. `https://dshyam3.github.io` | `tmdb-proxy`, `truelayer-sync`, `merchant-logo-cache`, `watchlist-cron-sync` |
+
+```bash
+npx supabase secrets set SITE_ORIGIN=https://dshyam3.github.io
+```
+
+Left unset, `corsAllowOrigin` fails closed: every production browser's request
+is refused, and only the local dev origins still work.
 
 `merchant-logo-cache` is the only function that fetches from hosts outside our
 own infrastructure, and it talks to exactly two — `api.brandfetch.io` and

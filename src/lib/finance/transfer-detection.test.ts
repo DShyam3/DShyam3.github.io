@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  findSingleLegTransferCandidates,
   findTransferCycles,
   findTransferPairCandidates,
   TRANSFER_MATCH_WINDOW_DAYS,
+  transferExcludedTransactionIds,
+  transferPairKey,
+  type ConfirmedTransferLink,
+  type SingleLegVerdict,
   type TransferCandidateTransaction,
   type TransferPairCandidate,
 } from './transfer-detection';
@@ -175,6 +180,49 @@ describe('findTransferPairCandidates', () => {
 
     expect(candidates[0]?.signals).toEqual(['exact_amount']);
   });
+
+  it('never proposes a dismissed pair again', () => {
+    const candidates = findTransferPairCandidates(
+      [
+        tx({ id: 'out1', amount: 500, accountId: 'current' }),
+        tx({ id: 'in1', amount: -500, accountId: 'savings' }),
+      ],
+      TRANSFER_MATCH_WINDOW_DAYS,
+      new Set([transferPairKey('out1', 'in1')]),
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it('lets a row whose closest pairing was dismissed pair with its next-best partner', () => {
+    const rows = [
+      tx({ id: 'out1', date: '2026-01-01', amount: 500, accountId: 'current' }),
+      tx({ id: 'inNear', date: '2026-01-01', amount: -500, accountId: 'savings' }),
+      tx({ id: 'inFar', date: '2026-01-03', amount: -500, accountId: 'isa' }),
+    ];
+
+    expect(findTransferPairCandidates(rows)).toEqual([
+      expect.objectContaining({ outflowId: 'out1', inflowId: 'inNear' }),
+    ]);
+    // Dismissed before assignment, not filtered after it: the rejected
+    // pairing does not keep `out1` claimed.
+    expect(findTransferPairCandidates(rows, TRANSFER_MATCH_WINDOW_DAYS, new Set([transferPairKey('out1', 'inNear')])))
+      .toEqual([expect.objectContaining({ outflowId: 'out1', inflowId: 'inFar', daysApart: 2 })]);
+  });
+
+  it('matches only exact amounts across a mixed ledger, whatever order rows arrive in', () => {
+    const rows = [
+      tx({ id: 'in-250', amount: -250, accountId: 'savings' }),
+      tx({ id: 'out-500', amount: 500, accountId: 'current' }),
+      tx({ id: 'in-499', amount: -499.99, accountId: 'savings' }),
+      tx({ id: 'out-250', amount: 250, accountId: 'current' }),
+      tx({ id: 'in-500', amount: -500, accountId: 'isa' }),
+    ];
+    const pairs = (input: TransferCandidateTransaction[]) =>
+      findTransferPairCandidates(input).map(c => [c.outflowId, c.inflowId]);
+
+    expect(pairs(rows)).toEqual([['out-250', 'in-250'], ['out-500', 'in-500']]);
+    expect(pairs([...rows].reverse())).toEqual(pairs(rows));
+  });
 });
 
 describe('findTransferCycles', () => {
@@ -241,5 +289,156 @@ describe('findTransferCycles', () => {
     const cycles = findTransferCycles(pairs);
     const usedIds = cycles.flatMap(c => c.pairs.map(p => p.outflowId));
     expect(new Set(usedIds).size).toBe(usedIds.length);
+  });
+});
+
+describe('findSingleLegTransferCandidates', () => {
+  const NO_EXCLUDED: ReadonlySet<string> = new Set();
+
+  it('returns an empty array for empty input', () => {
+    expect(findSingleLegTransferCandidates([], NO_EXCLUDED)).toEqual([]);
+  });
+
+  it('proposes a row on provider signal alone', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'PAYMENT', amount: 500, providerCategory: 'transfer' })],
+      NO_EXCLUDED,
+    );
+    expect(candidates).toEqual([
+      expect.objectContaining({ transactionId: 'out1', signals: ['provider_says_transfer'] }),
+    ]);
+  });
+
+  it('proposes a row on name signal alone', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'Transfer to ISA', amount: 500 })],
+      NO_EXCLUDED,
+    );
+    expect(candidates).toEqual([
+      expect.objectContaining({ transactionId: 'out1', signals: ['name_suggests_transfer'] }),
+    ]);
+  });
+
+  it('orders both signals provider then name when both are present', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'Transfer to ISA', amount: 500, providerCategory: 'transfer' })],
+      NO_EXCLUDED,
+    );
+    expect(candidates[0]?.signals).toEqual(['provider_says_transfer', 'name_suggests_transfer']);
+  });
+
+  it('does not propose a row with no signal', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'TESCO STORES', amount: 500 })],
+      NO_EXCLUDED,
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it('does not use the Savings category as a signal', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'TESCO STORES', amount: 500, category: 'Savings' })],
+      NO_EXCLUDED,
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it('skips a row whose id is in excludedIds', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'Transfer to ISA', amount: 500 })],
+      new Set(['out1']),
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it('skips a zero-amount row', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'Transfer to ISA', amount: 0 })],
+      NO_EXCLUDED,
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it('reports direction out for a positive amount and in for a negative amount, absolute and 2dp', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [
+        tx({ id: 'out1', name: 'Transfer out', amount: 250.5 }),
+        tx({ id: 'in1', name: 'Transfer in', amount: -250.5 }),
+      ],
+      NO_EXCLUDED,
+    );
+    // Same date, so the id tie-break puts 'in1' before 'out1'; that ordering
+    // is exercised on its own below, this test only cares about direction
+    // and amount.
+    expect(candidates).toEqual([
+      expect.objectContaining({ transactionId: 'in1', direction: 'in', amount: 250.5 }),
+      expect.objectContaining({ transactionId: 'out1', direction: 'out', amount: 250.5 }),
+    ]);
+  });
+
+  it('still proposes a row with a null accountId', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [tx({ id: 'out1', name: 'Transfer to ISA', amount: 500, accountId: null })],
+      NO_EXCLUDED,
+    );
+    expect(candidates).toEqual([
+      expect.objectContaining({ transactionId: 'out1', accountId: null }),
+    ]);
+  });
+
+  it('orders newest date first, ties broken by id ascending, unparseable dates last', () => {
+    const candidates = findSingleLegTransferCandidates(
+      [
+        tx({ id: 'z-old', name: 'Transfer', amount: 100, date: '2026-01-01' }),
+        tx({ id: 'b-new', name: 'Transfer', amount: 100, date: '2026-01-10' }),
+        tx({ id: 'a-new', name: 'Transfer', amount: 100, date: '2026-01-10' }),
+        tx({ id: 'bad-date', name: 'Transfer', amount: 100, date: '10/01/2026' }),
+      ],
+      NO_EXCLUDED,
+    );
+    expect(candidates.map(c => c.transactionId)).toEqual(['a-new', 'b-new', 'z-old', 'bad-date']);
+  });
+});
+
+describe('transferExcludedTransactionIds', () => {
+  const link = (overrides: Partial<ConfirmedTransferLink> = {}): ConfirmedTransferLink => ({
+    outflowTransactionId: 'out1',
+    inflowTransactionId: 'in1',
+    ...overrides,
+  });
+
+  it('returns an empty set for empty input', () => {
+    expect(transferExcludedTransactionIds([])).toEqual(new Set());
+  });
+
+  it('includes both legs of every confirmed link', () => {
+    expect(transferExcludedTransactionIds([link()])).toEqual(new Set(['out1', 'in1']));
+  });
+
+  it('includes a single leg verdicted internal', () => {
+    const singleLegs: { transactionId: string; verdict: SingleLegVerdict }[] = [
+      { transactionId: 'solo1', verdict: 'internal' },
+    ];
+    expect(transferExcludedTransactionIds([], singleLegs)).toEqual(new Set(['solo1']));
+  });
+
+  it('excludes nothing for a single leg verdicted external', () => {
+    const singleLegs: { transactionId: string; verdict: SingleLegVerdict }[] = [
+      { transactionId: 'solo1', verdict: 'external' },
+    ];
+    expect(transferExcludedTransactionIds([], singleLegs)).toEqual(new Set());
+  });
+
+  it('combines confirmed links and internal single legs, leaving external ones out', () => {
+    const singleLegs: { transactionId: string; verdict: SingleLegVerdict }[] = [
+      { transactionId: 'solo-internal', verdict: 'internal' },
+      { transactionId: 'solo-external', verdict: 'external' },
+    ];
+    expect(transferExcludedTransactionIds([link()], singleLegs))
+      .toEqual(new Set(['out1', 'in1', 'solo-internal']));
+  });
+
+  it('keeps the old behaviour when the second parameter is omitted', () => {
+    expect(transferExcludedTransactionIds([link()])).toEqual(new Set(['out1', 'in1']));
   });
 });

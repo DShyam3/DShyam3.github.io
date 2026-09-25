@@ -2,55 +2,25 @@
 
 .travel-layout {
   display: grid;
-  /* The sidebar is a fixed-width list; the globe takes whatever is left, and
-     its ResizeObserver grows it to fit. This block used to sit inside a
-     max-w-6xl wrapper, so on a wide monitor the globe stayed small while most
-     of the page was empty. */
-  grid-template-columns: 28.75rem minmax(0, 1fr);
+  grid-template-columns: minmax(16rem, 30%) minmax(0, 1fr);
   gap: 2rem;
-  /* AppShell owns the viewport now and hands this whatever the header and
-     footer leave, so the row just fills its parent. The globe sizes itself to
-     that rather than setting the height and pushing the footer off screen. */
   flex: 1;
   min-height: 0;
   align-items: stretch;
 }
 
-@media (max-width: 767px) {
-  .travel-layout {
-    grid-template-columns: 1fr;
-    /* Stacked on mobile, so let it grow and scroll normally. */
-    height: auto;
-  }
-
-  .travel-map-col {
-    order: 1;
-  }
-
-  .travel-sidebar-col {
-    order: 2;
-  }
-}
-
-/* A tablet held upright is too narrow for two columns: beside the 460px list
-   an iPad mini left the globe a 218px sliver, so the map drew as a thumbnail
-   in a tall empty card and its projection toggle was clipped. Here the map
-   takes a full-width row on top and the list fills what is left, still
-   scrolling inside itself -- the page does not scroll from md up. */
-@media (min-width: 768px) and (max-width: 1023px) {
+/* Stacked wherever the shell is not in workspace mode -- narrower than 1024px
+   or shorter than 600px (AppShell / responsive.css use the same query). The
+   page then shares the card's scroll and the map keeps an explicit slot. */
+@media not all and (min-width: 1024px) and (min-height: 600px) {
   .travel-layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: clamp(16rem, 36vh, 24rem) minmax(0, 1fr);
     gap: 1rem;
+    flex: none;
   }
 
-  .travel-map-col {
-    order: 1;
-  }
-
-  .travel-sidebar-col {
-    order: 2;
-  }
+  .travel-map-col { order: 1; }
+  .travel-sidebar-col { order: 2; }
 }
 
 /* ─── Left sidebar column (wrapper) ────────────────────────────────── */
@@ -114,11 +84,6 @@
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
-@media (max-width: 767px) {
-  .travel-sidebar {
-    max-height: 200px;
-  }
-}
 
 .travel-sidebar-empty {
   display: flex;
@@ -235,7 +200,7 @@
 }
 
 .travel-remove-btn {
-  opacity: 0;
+  opacity: 1;
   flex-shrink: 0;
   width: 16px;
   height: 16px;
@@ -283,7 +248,7 @@
 /* Stacked on mobile the column has no height of its own, so "fill the parent"
    resolves to nothing and the map disappeared entirely. Give the slot a
    viewport-relative height there instead; the map sizes itself inside it. */
-@media (max-width: 767px) {
+@media not all and (min-width: 1024px) and (min-height: 600px) {
   .travel-map-col > *:last-child {
     flex: none;
     height: min(80vw, 55vh);
@@ -554,7 +519,7 @@
 }
 
 .city-remove-btn {
-  opacity: 0;
+  opacity: 1;
   flex-shrink: 0;
   width: 18px;
   height: 18px;
@@ -588,4 +553,26 @@
   background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
   flex-shrink: 0;
+}
+
+@media not all and (min-width: 1024px) and (min-height: 600px) {
+  .travel-sidebar,
+  .city-panel-list {
+    overflow-y: visible;
+  }
+
+  .city-panel { height: auto; }
+
+  .travel-continent-header,
+  .city-panel-header { position: static; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .travel-remove-btn,
+  .city-remove-btn { opacity: 0; }
+
+  .travel-country-row:hover .travel-remove-btn,
+  .travel-country-row:focus-within .travel-remove-btn,
+  .city-list-row:hover .city-remove-btn,
+  .city-list-row:focus-within .city-remove-btn { opacity: 1; }
 }

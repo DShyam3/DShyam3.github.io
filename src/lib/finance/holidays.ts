@@ -9,6 +9,9 @@ import { isWeekend, toISODate } from './dates';
 
 export type LeaveType = 'holiday' | 'sick';
 
+/** Which half of a single day is taken: the morning or the afternoon. */
+export type HalfDay = 'am' | 'pm';
+
 export interface UserHoliday {
   id: string;
   startDate: string;
@@ -16,7 +19,17 @@ export interface UserHoliday {
   occasion: string;
   count: number;
   type?: LeaveType;
+  /** Set only for a half day; absent for a full day or a range. */
+  halfDay?: HalfDay;
 }
+
+/** What a half day of leave costs against the allowance. */
+export const HALF_DAY = 0.5;
+
+/** A half day is a single-date entry marked morning or afternoon. The database
+ *  also holds its count to `HALF_DAY`; a range is never a half day. */
+export const isHalfDay = (holiday: Pick<UserHoliday, 'startDate' | 'endDate' | 'halfDay'>): boolean =>
+  !!holiday.halfDay && holiday.startDate === holiday.endDate;
 
 /** Expands day shorthand into individual day numbers. "3 + 12-14" -> [3,12,13,14]. */
 export const parseDays = (datesStr: string): number[] => {
@@ -101,6 +114,16 @@ export const calculateWorkingDaysInRange = (
   return count;
 };
 
+export interface BookedDay {
+  day: number;
+  occasion: string;
+  type: LeaveType;
+  /** How much of the day is taken: 1, or `HALF_DAY` for a half day. */
+  fraction: number;
+  /** Which half, for a half day. */
+  halfDay?: HalfDay;
+}
+
 /** Which days of one month a set of holidays actually books off. Weekends and
  *  bank holidays inside a holiday range do not consume leave. */
 export const getBookedDaysForMonth = (
@@ -108,8 +131,8 @@ export const getBookedDaysForMonth = (
   year: number,
   monthIdx: number,
   bankHolidays: string[],
-): { day: number; occasion: string; type: LeaveType }[] => {
-  const booked: { day: number; occasion: string; type: LeaveType }[] = [];
+): BookedDay[] => {
+  const booked: BookedDay[] = [];
 
   for (const hol of holidays) {
     const start = new Date(hol.startDate);
@@ -117,11 +140,13 @@ export const getBookedDaysForMonth = (
     if (isNaN(start.getTime()) || isNaN(end.getTime())) continue;
 
     const leaveType: LeaveType = hol.type || 'holiday';
+    const halfDay = isHalfDay(hol) ? hol.halfDay : undefined;
+    const fraction = halfDay ? HALF_DAY : 1;
     const current = new Date(start);
     while (current <= end) {
       const inMonth = current.getFullYear() === year && current.getMonth() === monthIdx;
       if (inMonth && !isWeekend(current) && !bankHolidays.includes(toISODate(current))) {
-        booked.push({ day: current.getDate(), occasion: hol.occasion, type: leaveType });
+        booked.push({ day: current.getDate(), occasion: hol.occasion, type: leaveType, fraction, ...(halfDay ? { halfDay } : {}) });
       }
       current.setDate(current.getDate() + 1);
     }

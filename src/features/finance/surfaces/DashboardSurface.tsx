@@ -12,12 +12,14 @@ import { useNavigate } from 'react-router-dom';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
 import { useFinanceData } from '../FinanceDataContext';
+import type { MockTransaction } from '../finance-types';
 import { MONTH_NAMES, getBudgetItemSpent, getDueDateText, isDueThisMonth } from '../finance-defaults';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatGBP, getCategoryDefaultEmoji } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
+import { formatCooldownEnd } from '@/hooks/useCooldown';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Activity, ArrowUpRight, Check, CheckCircle2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
@@ -26,10 +28,12 @@ import { SurfaceHero } from '../components/SurfaceHero';
 import { Figure } from '../components/Figure';
 import { AlertList } from '../components/AlertList';
 import { WhatChangedCard } from '../components/WhatChangedCard';
+import { useSpendingLedger } from '../useSpendingLedger';
 import { useFinanceAlerts } from '../useFinanceAlerts';
 import { useTrueLayer } from '../useTrueLayer';
 import { pathForTab, type TabKey } from '../surfaces';
 import { deriveFinanceChangeSummary } from '@/lib/finance';
+import { paydayCountdown } from '../components/PaydaySummary';
 
 export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurringPaid: (id: string) => void }) {
   const { toast } = useToast();
@@ -46,9 +50,12 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     hasLoaded,
   } = useFinanceData();
 
+  // Figures sum this; the transaction list below still shows every row.
+  const { ledger, exclusionsUnreliable } = useSpendingLedger();
+
   const navigate = useNavigate();
   const alerts = useFinanceAlerts(new Date().toISOString().slice(0, 10));
-  const { trueLayerStatus, isSyncingTrueLayer, syncTrueLayer } = useTrueLayer(fetchSupabaseData);
+  const { trueLayerStatus, isSyncingTrueLayer, syncAvailableAt, syncTrueLayer } = useTrueLayer(fetchSupabaseData);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const {
     results, breakdownRates, nextPayday, currentMonth, daysInMonth, todayDateObj,
@@ -59,7 +66,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
   const getSpendingProgressData = () => {
     const prefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}-`;
-    const monthTx = mockTransactions.filter(tx => tx.date.startsWith(prefix));
+    const monthTx = ledger.filter(tx => tx.date.startsWith(prefix));
 
     const dailyAmounts: Record<number, number> = {};
     monthTx.forEach(tx => {
@@ -115,14 +122,33 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   const freePercent = totalBudget > 0 ? (Math.max(0, freeToSpend) / totalBudget) * 100 : 0;
 
 
+  // Same account match as the Transactions tab, so a filtered view here opens
+  // there showing the same rows.
+  const isInSelectedAccount = (tx: MockTransaction) =>
+    selectedAccountFilter === 'all'
+    || tx.bankAccountId === selectedAccountFilter
+    || tx.accountId === selectedAccountFilter;
+
   const displayedTransactions = (showAllTransactions
     ? mockTransactions
     : mockTransactions.filter(tx => !tx.isReviewed)
-  ).filter(tx => selectedAccountFilter === 'all' || tx.accountId === selectedAccountFilter);
+  ).filter(isInSelectedAccount);
 
-  const accountTransactionsCount = selectedAccountFilter === 'all'
-    ? mockTransactions.length
-    : mockTransactions.filter(tx => tx.accountId === selectedAccountFilter).length;
+  const accountTransactionsCount = mockTransactions.filter(isInSelectedAccount).length;
+
+  // Opens the Transactions tab on this list's view; TransactionsTab reads the
+  // params once and drops them.
+  const openTransactions = (txId?: string) => {
+    const params = new URLSearchParams();
+    if (txId) {
+      params.set('tx', txId);
+    } else {
+      if (!showAllTransactions) params.set('status', 'pending');
+      if (selectedAccountFilter !== 'all') params.set('account', selectedAccountFilter);
+    }
+    const query = params.toString();
+    navigate(query ? `${pathForTab('transactions')}?${query}` : pathForTab('transactions'));
+  };
 
   // Spent progress color bar
   const getProgressColor = (spent: number, budgeted: number) => {
@@ -135,8 +161,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
   const todayIso = `${todayDateObj.getFullYear()}-${String(todayDateObj.getMonth() + 1).padStart(2, '0')}-${String(todayDateObj.getDate()).padStart(2, '0')}`;
   const changeSummary = useMemo(
-    () => deriveFinanceChangeSummary(mockTransactions, todayIso),
-    [mockTransactions, todayIso],
+    () => deriveFinanceChangeSummary(ledger, todayIso),
+    [ledger, todayIso],
   );
 
 
@@ -190,7 +216,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
       for (let yr = startYear; yr <= currentYear; yr++) {
         // Transactions in this year
-        const yearSpend = mockTransactions
+        const yearSpend = ledger
           .filter(tx => tx.date.startsWith(`${yr}-`))
           .reduce((sum, tx) => sum + tx.amount, 0);
 
@@ -254,7 +280,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       const shortName = MONTH_NAMES[mo].slice(0, 3);
       
       const prefix = `${yr}-${String(mo + 1).padStart(2, '0')}-`;
-      const monthSpend = mockTransactions
+      const monthSpend = ledger
         .filter(tx => tx.date.startsWith(prefix))
         .reduce((sum, tx) => sum + tx.amount, 0);
 
@@ -601,7 +627,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             "font-mono px-2.5 py-0.5 rounded-md font-bold text-xs select-none",
             nextPayday.daysRemaining === 0 ? "bg-positive/10 text-positive" : "bg-muted/60 text-muted-foreground"
           )}>
-            {nextPayday.daysRemaining === 0 ? "Paid today!" : `${nextPayday.daysRemaining} days left`}
+            {paydayCountdown(nextPayday.daysRemaining)}
           </span>
         </div>
       </Card>
@@ -622,7 +648,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 text-primary" />
               <button
-                onClick={() => setActiveTab('transactions')}
+                onClick={() => openTransactions()}
                 className="hover:text-primary transition-colors flex items-center gap-1 text-left font-mono"
               >
                 Transactions <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
@@ -655,11 +681,15 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 variant="outline"
                 size="sm"
                 onClick={syncTrueLayer}
-                disabled={isSyncingTrueLayer}
+                disabled={isSyncingTrueLayer || syncAvailableAt !== null}
                 className="text-xs rounded-lg hover:bg-muted font-mono h-8 text-primary border-border/40 gap-1"
               >
                 <RefreshCw className={cn("h-3 w-3", isSyncingTrueLayer && "animate-spin")} />
-                {isSyncingTrueLayer ? "Syncing..." : ((trueLayerStatus?.connections?.length ?? 0) > 1 ? `Sync Banks (${trueLayerStatus!.connections!.length})` : "Sync Bank")}
+                {isSyncingTrueLayer
+                  ? "Syncing..."
+                  : syncAvailableAt !== null
+                    ? `Next sync ${formatCooldownEnd(syncAvailableAt)}`
+                    : ((trueLayerStatus?.connections?.length ?? 0) > 1 ? `Sync Banks (${trueLayerStatus!.connections!.length})` : "Sync Bank")}
               </Button>
             )}
             <Button
@@ -675,7 +705,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         <CardContent className="p-0 pt-4">
 
           {/* Unreviewed list with Exit Animation */}
-          <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+          <div className="space-y-2.5">
             <AnimatePresence mode="popLayout">
               {displayedTransactions.map(tx => (
                 <motion.div
@@ -688,17 +718,22 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     tx.isReviewed ? "opacity-60 bg-muted/10" : "bg-card/40 hover:bg-muted/20"
                   )}
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => openTransactions(tx.id)}
+                    title="Open in Transactions"
+                    className="group flex items-center gap-3 min-w-0 flex-1 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <span className="text-base shrink-0 p-1 rounded-md bg-muted/30">
                       {getCategoryDefaultEmoji(tx.category)}
                     </span>
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={cn("text-xs font-semibold block truncate text-foreground font-mono", tx.isReviewed && "line-through text-muted-foreground")}>
+                    <span className="block space-y-0.5 min-w-0">
+                      <span className="flex items-center gap-1.5 flex-wrap">
+                        <span className={cn("text-xs font-semibold block truncate text-foreground font-mono group-hover:underline underline-offset-2", tx.isReviewed && "line-through text-muted-foreground")}>
                           {tx.name}
                         </span>
                         {(() => {
-                          const linkedAccount = bankAccounts.find(acc => acc.id === tx.accountId);
+                          const linkedAccount = bankAccounts.find(acc => acc.id === (tx.bankAccountId || tx.accountId));
                           if (!linkedAccount) return null;
                           return (
                             <span 
@@ -714,14 +749,14 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                             </span>
                           );
                         })()}
-                      </div>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground font-mono">
+                      </span>
+                      <span className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground font-mono">
                         <span>{tx.date}</span>
                         <span>•</span>
                         <span className="uppercase text-xs tracking-wider font-semibold text-primary/70">{tx.category}</span>
-                      </div>
-                    </div>
-                  </div>
+                      </span>
+                    </span>
+                  </button>
                   <div className="flex items-center gap-3 self-end sm:self-center">
                     <span className={cn(
                       "text-xs font-bold font-mono tabular-nums",
@@ -831,6 +866,12 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 pt-4">
+          {exclusionsUnreliable && (
+            <p role="alert" className="mb-3 font-sans text-xs text-destructive">
+              Confirmed transfers could not load, so spending here counts money
+              moved between your own accounts.
+            </p>
+          )}
           {hasLoaded ? <AlertList alerts={alerts} /> : null}
         </CardContent>
       </Card>
@@ -849,7 +890,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
             Recurrings <ArrowUpRight className="h-3 w-3" />
           </button>
         </CardHeader>
-        <CardContent className="p-0 pt-4 space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+        <CardContent className="p-0 pt-4 space-y-2.5">
           {recurrings
             .filter(r => isDueThisMonth(r, currentMonth) && !r.isPaid)
             .sort((a, b) => a.dueDate - b.dueDate)

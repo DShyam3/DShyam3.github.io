@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { CountLabel } from '@/components/shared/CountLabel';
@@ -49,17 +49,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Plus,
   Bell,
-  CalendarDays,
   X,
   Search,
   RefreshCcw,
-  ArrowUpDown,
-  ArrowDownAZ,
   Tv,
   Film,
-  Clock,
   Eye,
   History,
   CheckCircle,
@@ -70,20 +65,19 @@ import {
   Trash2,
   Loader2,
   Newspaper,
+  Library,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/format-date';
+import { formatRelativeTime } from '@/lib/format-date';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import { formatCooldownEnd } from '@/hooks/useCooldown';
 import { Filter } from 'lucide-react';
+import { SyncHistoryIcon } from '@/components/shared/SyncHistoryIcon';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
 import { CardGrid } from '@/components/shared/CardGrid';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
-import { WeeklySchedule } from '@/features/watchlist/components/WeeklySchedule';
-import {
-  formatRuntime,
-  totalWatchedRuntime,
-} from '@/features/watchlist/watchlist-utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   PlatformLogo,
   hasPlatformLogo,
@@ -130,19 +124,6 @@ const ALL_GENRES = [
   'Western',
 ];
 
-/** "just now" / "12m ago" / "2h ago" / "3d ago", then a plain date. */
-function relativeTime(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(diffMs / 3600000);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(diffMs / 86400000);
-  if (days < 7) return `${days}d ago`;
-  return formatDate(iso);
-}
-
 const Watchlist = () => {
   const { isAdmin } = useAuth();
   const {
@@ -155,6 +136,7 @@ const Watchlist = () => {
     loading,
     syncing,
     syncProgress,
+    syncAvailableAt,
     lastSyncTime,
     lastAutoSyncTime,
     nextAutoSyncTime,
@@ -172,12 +154,8 @@ const Watchlist = () => {
   } = useWatchlist();
   const {
     addToSchedule,
-    removeFromSchedule,
     removeFromScheduleByWatchlistId,
-    updateScheduleDay,
-    getScheduleForDay,
     isInSchedule,
-    DAYS,
   } = useSchedule();
 
   // removeWatchlistItem alone leaves a dangling weekly_schedule row behind
@@ -198,8 +176,9 @@ const Watchlist = () => {
   const [selectedCategory, setSelectedCategory] =
     useState<(typeof CATEGORIES)[number]>('TV Shows');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(true);
-  const [showSchedule, setShowSchedule] = useState(false);
+  const [viewParams] = useSearchParams();
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
@@ -462,11 +441,6 @@ const Watchlist = () => {
     return counts;
   }, [categoryItems]);
 
-  // sum(runtime) where watched, across the whole list -- REHAUL_PLAN.md 8.C.
-  const watchedRuntimeMinutes = useMemo(
-    () => totalWatchedRuntime(watchlist),
-    [watchlist],
-  );
 
   const getPlatformCount = (platform: string) => platformCounts[platform] || 0;
   const getGenreCount = (genre: string) => genreCounts[genre] || 0;
@@ -634,105 +608,105 @@ const Watchlist = () => {
     return filteredWatchlist.slice(0, visibleCount);
   }, [filteredWatchlist, visibleCount]);
 
-  /* Handed to AppShell's toolbar slot, so it is pinned between the header and
-     the scroll area: the categories, the search and the filters stay put
-     while the wall scrolls under them.
+  const activeFilterCount = [selectedPlatform, selectedGenre, selectedStatus].filter(Boolean).length
+    + (selectedCategory === 'TV Shows' && !hideCompleted ? 1 : 0);
 
-     pt-2 and space-y-4 are the phone's rhythm; from md up
-     `.watchlist-toolbar` in src/index.css scales both with the viewport
-     height. That still matters, and matters more now -- pinned chrome comes
-     out of a fixed viewport, so every pixel spent here is a pixel the card
-     wall never gets back. */
   const toolbar = (
-    <div className="watchlist-toolbar px-4 md:px-0 pt-2 space-y-4">
-      <div className="watchlist-toolbar-top flex flex-wrap items-start gap-2 justify-between">
-        <div className="watchlist-categories flex flex-wrap items-center gap-2 md:gap-4">
-          {CATEGORIES.map((cat, index) => (
-            <div key={cat} className="flex items-center gap-2 md:gap-4">
-              <button
-                onClick={() => {
-                  setSelectedCategory(cat);
-                  setShowSchedule(false);
-                  setSelectedPlatform(null);
-                  setSelectedGenre(null);
-                  setSelectedStatus(null);
-                }}
-                className={cn(
-                  'nav-link relative py-1 flex items-center gap-1.5',
-                  selectedCategory === cat && 'nav-link-active',
-                )}
-              >
-                <span className="shrink-0">{getCategoryIcon(cat)}</span>
-                <DotMatrixText text={cat.toUpperCase()} size="xs" />
-                <DotMatrixText text={`(${categoryCounts[cat]})`} size="xs" />
-              </button>
-              {index < CATEGORIES.length - 1 && (
-                <span className="watchlist-category-sep text-muted-foreground/30 hidden md:inline">
-                  ·
-                </span>
+    <div className="watchlist-toolbar watchlist-library-toolbar space-y-2 py-2">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <nav aria-label="Watchlist" className="flex items-center gap-1">
+          <Button asChild variant="ghost" className="gap-2"><Link to="/watchlist"><Newspaper className="h-4 w-4" />News</Link></Button>
+          <Button asChild variant="secondary" className="gap-2"><Link to="/watchlist/library" aria-current="page"><Library className="h-4 w-4" />Library</Link></Button>
+        </nav>
+        <div className="flex items-center gap-1">
+        {isAdmin && selectedCategory === 'Favourites' && (
+          <div className="flex items-center gap-2">
+            <TmdbSearchDialog
+              open={favDialogOpen}
+              onOpenChange={setFavDialogOpen}
+              triggerLabel="Add"
+              title="Add to Favourites"
+              description="Search and add movies or TV shows to your favourites."
+              searchLabel="Search Movies & TV Shows"
+              placeholder="Type a movie or TV show name..."
+              query={favSearchQuery}
+              onQueryChange={setFavSearchQuery}
+              results={searchResults}
+              loading={searchLoading}
+              getPosterUrl={getPosterUrl}
+              resultKey={(r) => `${r.media_type}-${r.id}`}
+              isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
+              onSelect={handleAddFavourite}
+              renderStatus={(r) => (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'text-xs px-2 py-0.5 rounded font-medium bg-secondary text-muted-foreground',
+                    )}
+                  >
+                    {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
+                    Auto: {resolveFavouriteCategory(factsFor(r))}
+                  </span>
+                  {favAddedItems.has(`${r.media_type}-${r.id}`) && (
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                      Added
+                    </span>
+                  )}
+                </div>
               )}
-            </div>
-          ))}
-        </div>
-        <div className="watchlist-actions flex flex-col sm:flex-row sm:items-start gap-2 w-full sm:w-auto">
-          {/* Syncing is the cron's job. The manual trigger lives inside
-              this panel rather than on the toolbar, so the page does not
-              advertise a button nobody should normally need. */}
-          {isAdmin && (
-            <Button
-              variant={showSyncLog ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setShowSyncLog(!showSyncLog)}
-              className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
-              aria-label={syncing ? `Syncing ${syncProgress}%` : 'Sync'}
-            >
-              <History className={cn('h-4 w-4', syncing && 'animate-spin')} />
-              <DotMatrixText
-                text={syncing ? `SYNCING ${syncProgress}%` : 'SYNC'}
-                size="xs"
-                wrap={false}
-                className="watchlist-action-label"
-              />
-            </Button>
-          )}
-          <Button
-            variant={showSchedule ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setShowSchedule(!showSchedule)}
-            className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
-            aria-label="Weekly schedule"
-          >
-            <CalendarDays className="h-4 w-4" />
-            <DotMatrixText
-              text="WEEKLY SCHEDULE"
-              size="xs"
-              wrap={false}
-              className="watchlist-action-label"
             />
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 h-8 sm:h-9 flex-1 sm:flex-initial"
-          >
-            <Link to="/watchlist" aria-label="News">
-              <Newspaper className="h-4 w-4" />
-              <DotMatrixText
-                text="NEWS"
-                size="xs"
-                wrap={false}
-                className="watchlist-action-label"
-              />
-            </Link>
-          </Button>
-        </div>
-      </div>
+          </div>
+        )}
+        {isAdmin && selectedCategory !== 'Favourites' && (
+          <TmdbSearchDialog
+            open={open}
+            onOpenChange={setOpen}
+            triggerLabel="Add"
+            title="Add to Watchlist"
+            description="Search and add items to your watchlist."
+            searchLabel={`Search ${selectedCategory}`}
+            placeholder={`Type a ${selectedCategory.toLowerCase().slice(0, -1)} name...`}
+            query={title}
+            onQueryChange={setTitle}
+            results={searchResults}
+            loading={searchLoading}
+            getPosterUrl={getPosterUrl}
+            resultKey={(r) => String(r.id)}
+            searchDisabled={
+              selectedCategory === 'Upcoming' ||
+              selectedCategory === 'Currently Watching'
+            }
+            isDisabled={(r) =>
+              addedItems.has(r.id) || pendingResultIds.has(r.id)
+            }
+            onSelect={handleAddWatchlistItem}
+            renderStatus={(r) =>
+              pendingResultIds.has(r.id) ? (
+                <span className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Adding...
+                </span>
+              ) : addedItems.has(r.id) ? (
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  Item Added
+                </span>
+              ) : null
+            }
+          />
+        )}
 
-      {/* Sync Log Panel */}
-      {isAdmin && showSyncLog && (
-        <div className="sync-log-panel col-span-full w-full rounded-lg border border-border bg-card/50 backdrop-blur-sm px-3 py-2 space-y-2">
-          <div className="flex items-center justify-between">
+          {isAdmin && (
+            <Popover open={showSyncLog} onOpenChange={setShowSyncLog}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" className="gap-2" aria-label={syncing ? (syncProgress === null ? 'Syncing' : `Syncing ${syncProgress}%`) : 'Sync'}>
+                  <SyncHistoryIcon spinning={syncing} className="h-4 w-4" />
+                  <span>{syncing ? (syncProgress === null ? 'Syncing…' : `${syncProgress}%`) : 'Sync'}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" collisionPadding={12} className="flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-3 overflow-hidden" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Sync history">
+          <div className="flex shrink-0 items-center justify-between gap-2">
             <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
               <History className="h-3 w-3" />
               <DotMatrixText text="SYNC HISTORY" size="xs" />
@@ -741,11 +715,13 @@ const Watchlist = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => syncWatchlist('manual')}
-                disabled={syncing}
-                className="gap-1.5 relative overflow-hidden h-7"
+                onClick={() => syncWatchlist()}
+                // The server refuses a full sync inside its cooldown whatever
+                // the button says; disabling it only tells you before you ask.
+                disabled={syncing || syncAvailableAt !== null}
+                className="gap-1.5 relative overflow-hidden h-11"
               >
-                {syncing && (
+                {syncing && syncProgress !== null && (
                   <div
                     className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-[width] duration-300 ease-out"
                     style={{ width: `${syncProgress}%` }}
@@ -755,19 +731,23 @@ const Watchlist = () => {
                   <RefreshCcw
                     className={cn('h-3.5 w-3.5', syncing && 'animate-spin')}
                   />
-                  <DotMatrixText
-                    text={syncing ? `${syncProgress}%` : 'SYNC NOW'}
-                    size="xs"
-                    wrap={false}
-                  />
+                  <span>
+                    {syncing
+                      ? syncProgress === null ? 'Syncing…' : `${syncProgress}%`
+                      : syncAvailableAt !== null
+                        ? `Next sync ${formatCooldownEnd(syncAvailableAt)}`
+                        : 'Sync now'}
+                  </span>
                 </span>
               </Button>
-              {syncing && (
+              {/* Only favourite facts can be stopped; a library sync runs server-side. */}
+              {syncing && syncProgress !== null && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={cancelSync}
-                  className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                  className="h-11 w-11 px-2 text-muted-foreground hover:text-destructive"
+                  aria-label="Stop sync"
                   title="Stop sync"
                 >
                   <XCircle className="h-3.5 w-3.5" />
@@ -777,7 +757,7 @@ const Watchlist = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowSyncLog(false)}
-                className="h-5 w-5 p-0"
+                className="h-11 w-11 p-0" aria-label="Close sync history"
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -789,8 +769,7 @@ const Watchlist = () => {
             </p>
           ) : (
             <div
-              className="space-y-1.5 overflow-y-auto pr-0.5"
-              style={{ maxHeight: '180px' }}
+              className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1"
             >
               {displaySyncLog.map((entry) => {
                 const failureMatch = entry.error_message?.match(
@@ -800,12 +779,13 @@ const Watchlist = () => {
                   ? `${failureMatch[1]} failed`
                   : null;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={entry.id}
                     onClick={() => setSelectedSyncEntry(entry)}
                     title="Click to view sync run details"
                     className={cn(
-                      'flex items-center justify-between gap-2 text-xs py-1 px-1.5 rounded cursor-pointer transition-colors select-none',
+                      'flex w-full min-h-11 items-center justify-between gap-2 text-left text-xs py-2 px-1.5 rounded transition-colors',
                       entry.is_missed || entry.status === 'error'
                         ? 'bg-destructive/10 hover:bg-destructive/20 border border-destructive/20'
                         : entry.error_message
@@ -865,14 +845,14 @@ const Watchlist = () => {
                         minute: '2-digit',
                       })}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           )}
-          <div className="text-xs text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="shrink-0 text-xs text-muted-foreground border-t border-border/50 pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
             {lastSyncTime && (
-              <span>Last synced: {relativeTime(lastSyncTime)}</span>
+              <span>Last synced: {formatRelativeTime(lastSyncTime)}</span>
             )}
             {autoSyncEnabled && (
               <span className="flex items-center gap-1">
@@ -886,42 +866,38 @@ const Watchlist = () => {
               </span>
             )}
           </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
-      )}
-
-      {!showSchedule && selectedCategory !== 'Favourites' && (
-        <div className="space-y-4">
-          <div className="flex flex-col lg:flex-row gap-3">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder={`Search ${selectedCategory.toLowerCase()}...`}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-10"
-                />
-                {searchQuery && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 hover:bg-transparent"
-                    onClick={() => setSearchQuery('')}
-                  >
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Select value={selectedCategory} onValueChange={(value) => {
+          setSelectedCategory(value as (typeof CATEGORIES)[number]);
+          setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setSearchQuery('');
+        }}>
+          <SelectTrigger aria-label="Library category" className="h-11 w-[210px] shrink-0 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CATEGORIES.map(category => <SelectItem key={category} value={category}><span className="flex items-center gap-2">{getCategoryIcon(category)}{category} ({categoryCounts[category]})</span></SelectItem>)}
+          </SelectContent>
+        </Select>
+        {selectedCategory !== 'Favourites' && <>
+          <div className="relative min-w-[150px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label={`Search ${selectedCategory.toLowerCase()}`} placeholder="Search library…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="h-11 w-full pl-9 pr-10" />
+            {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => setSearchQuery('')}><X className="h-4 w-4" /></Button>}
+          </div>
+          <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <PopoverTrigger asChild><Button variant="outline" className="h-11 gap-2"><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}</Button></PopoverTrigger>
+            <PopoverContent align="end" collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain space-y-3" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Library filters">
+              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setHideCompleted(true); }}>Reset</Button></div>
               <Select
                 value={selectedPlatform || 'all'}
                 onValueChange={(v) =>
                   setSelectedPlatform(v === 'all' ? null : v)
                 }
               >
-                <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
+                <SelectTrigger aria-label="Platform" className="w-full h-11 text-sm">
                   <div className="flex items-center gap-2 truncate">
                     {!selectedPlatform && (
                       <Filter className="h-3 w-3 opacity-50" />
@@ -969,7 +945,7 @@ const Watchlist = () => {
                 value={selectedGenre || 'all'}
                 onValueChange={(v) => setSelectedGenre(v === 'all' ? null : v)}
               >
-                <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs">
+                <SelectTrigger aria-label="Genre" className="w-full h-11 text-sm">
                   <div className="flex items-center gap-2 truncate">
                     <Filter className="h-3 w-3 opacity-50" />
                     <SelectValue placeholder="Genre" />
@@ -998,7 +974,7 @@ const Watchlist = () => {
                       setSelectedStatus(v === 'all' ? null : v)
                     }
                   >
-                    <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs">
+                    <SelectTrigger aria-label="Status" className="w-full h-11 text-sm">
                       <div className="flex items-center gap-2 truncate">
                         <Filter className="h-3 w-3 opacity-50" />
                         <SelectValue placeholder="Status" />
@@ -1026,7 +1002,8 @@ const Watchlist = () => {
 
               {selectedCategory === 'TV Shows' && (
                 <Button
-                  variant={hideCompleted ? 'secondary' : 'outline'}
+                  variant={!hideCompleted ? 'secondary' : 'outline'}
+                  aria-pressed={!hideCompleted}
                   size="sm"
                   onClick={() => setHideCompleted(!hideCompleted)}
                   className={cn(
@@ -1036,192 +1013,32 @@ const Watchlist = () => {
                     hideCompleted && 'border border-border text-foreground',
                   )}
                 >
-                  {hideCompleted ? (
-                    <DotMatrixText text="SHOW ALL" size="xs" wrap={false} />
-                  ) : (
-                    <DotMatrixText
-                      text="HIDE COMPLETED"
-                      size="xs"
-                      wrap={false}
-                    />
-                  )}
+                  Include completed: {hideCompleted ? 'Off' : 'On'}
                 </Button>
               )}
 
-              {(selectedCategory === 'Movies' ||
-                selectedCategory === 'TV Shows') && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSortOrder(
-                      sortOrder === 'alphabetical' ? 'recent' : 'alphabetical',
-                    );
-                  }}
-                  className="h-9 px-3 text-xs whitespace-nowrap gap-1.5"
-                >
-                  {sortOrder === 'alphabetical' && (
-                    <>
-                      <ArrowDownAZ className="h-3.5 w-3.5" />
-                      <DotMatrixText text="A-Z" size="xs" wrap={false} />
-                    </>
-                  )}
-                  {sortOrder === 'recent' && (
-                    <>
-                      <Clock className="h-3.5 w-3.5" />
-                      <DotMatrixText text="RECENT" size="xs" />
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      <div className="watchlist-count flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <CountLabel
-            count={
-              loading
-                ? undefined
-                : selectedCategory === 'Favourites'
-                  ? favourites.length
-                  : filteredWatchlist.length
-            }
-            noun={
-              selectedCategory === 'Favourites'
-                ? 'favourites'
-                : selectedCategory.toLowerCase()
-            }
-          />
-          {!loading && watchedRuntimeMinutes > 0 && (
-            <span className="text-xs text-muted-foreground">
-              {formatRuntime(watchedRuntimeMinutes)} watched
-            </span>
-          )}
-        </div>
-        {isAdmin && selectedCategory === 'Favourites' && (
-          <div className="flex items-center gap-2">
-            {/*
-              Fills in original_language / origin_country / genre_ids on
-              favourites added before those columns existed, which is what
-              lets their section be derived rather than read from the string
-              the old add-flow froze in.
-            */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={syncFavouriteFacts}
-              disabled={syncing}
-              title="Fetch missing TMDB data so categories can be derived"
-            >
-              <RefreshCcw
-                className={cn('h-3.5 w-3.5 mr-1.5', syncing && 'animate-spin')}
-              />
-              Sync TMDB Data
-            </Button>
-            <TmdbSearchDialog
-              open={favDialogOpen}
-              onOpenChange={setFavDialogOpen}
-              triggerLabel="Add Favourite"
-              title="Add to Favourites"
-              description="Search and add movies or TV shows to your favourites."
-              searchLabel="Search Movies & TV Shows"
-              placeholder="Type a movie or TV show name..."
-              query={favSearchQuery}
-              onQueryChange={setFavSearchQuery}
-              results={searchResults}
-              loading={searchLoading}
-              getPosterUrl={getPosterUrl}
-              resultKey={(r) => `${r.media_type}-${r.id}`}
-              isDisabled={(r) => favAddedItems.has(`${r.media_type}-${r.id}`)}
-              onSelect={handleAddFavourite}
-              renderStatus={(r) => (
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      'text-xs px-2 py-0.5 rounded font-medium bg-secondary text-muted-foreground',
-                    )}
-                  >
-                    {r.media_type === 'movie' ? 'Movie' : 'TV Show'}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-muted-foreground border border-border">
-                    Auto: {resolveFavouriteCategory(factsFor(r))}
-                  </span>
-                  {favAddedItems.has(`${r.media_type}-${r.id}`) && (
-                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                      Added
-                    </span>
-                  )}
-                </div>
-              )}
-            />
-          </div>
-        )}
-        {isAdmin && selectedCategory !== 'Favourites' && (
-          <TmdbSearchDialog
-            open={open}
-            onOpenChange={setOpen}
-            triggerLabel="Add Item"
-            title="Add to Watchlist"
-            description="Search and add items to your watchlist."
-            searchLabel={`Search ${selectedCategory}`}
-            placeholder={`Type a ${selectedCategory.toLowerCase().slice(0, -1)} name...`}
-            query={title}
-            onQueryChange={setTitle}
-            results={searchResults}
-            loading={searchLoading}
-            getPosterUrl={getPosterUrl}
-            resultKey={(r) => String(r.id)}
-            searchDisabled={
-              selectedCategory === 'Upcoming' ||
-              selectedCategory === 'Currently Watching'
-            }
-            isDisabled={(r) =>
-              addedItems.has(r.id) || pendingResultIds.has(r.id)
-            }
-            onSelect={handleAddWatchlistItem}
-            renderStatus={(r) =>
-              pendingResultIds.has(r.id) ? (
-                <span className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Adding...
-                </span>
-              ) : addedItems.has(r.id) ? (
-                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                  Item Added
-                </span>
-              ) : null
-            }
-          />
-        )}
+            </PopoverContent>
+          </Popover>
+          {(selectedCategory === 'Movies' || selectedCategory === 'TV Shows') && <Select value={sortOrder} onValueChange={value => setSortOrder(value as 'alphabetical' | 'recent')}>
+            <SelectTrigger aria-label="Sort library" className="h-11 w-[168px] shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="alphabetical">Title: A–Z</SelectItem><SelectItem value="recent">Latest releases</SelectItem></SelectContent>
+          </Select>}
+        </>}
       </div>
     </div>
   );
 
+  if (viewParams.get('view') === 'schedule') return <Navigate to="/watchlist" replace />;
+
   return (
     <AppShell title="Watchlist" subtitle="What I'm watching" toolbar={toolbar}>
       <div>
-        {showSchedule ? (
-          <WeeklySchedule
-            DAYS={DAYS}
-            getScheduleForDay={getScheduleForDay}
-            removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
-            updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
-            watchlist={watchlist}
-            toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
-            isEpisodeWatched={isEpisodeWatched}
-            isSeasonWatched={isSeasonWatched}
-            getAutoStatus={getAutoStatus}
-            onRemoveWatchlist={
-              isAdmin ? removeWatchlistItemAndSchedule : undefined
-            }
-            addToSchedule={isAdmin ? addToSchedule : undefined}
-            isInSchedule={isInSchedule}
-            onMoveToFavourites={isAdmin ? handleOpenMoveDialog : undefined}
-          />
-        ) : selectedCategory === 'Favourites' ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 py-3">
+          <CountLabel count={loading ? undefined : selectedCategory === 'Favourites' ? favourites.length : filteredWatchlist.length} noun={selectedCategory.toLowerCase()} />
+          {isAdmin && selectedCategory === 'Favourites' && <Button variant="outline" size="sm" onClick={syncFavouriteFacts} disabled={syncing}><RefreshCcw className="mr-2 h-4 w-4" />Refresh favourite details</Button>}
+        </div>
+        {selectedCategory === 'Favourites' ? (
           <div className="px-4 md:px-0 py-6 space-y-8">
             {loading ? (
               <CardGrid>
@@ -1281,13 +1098,13 @@ const Watchlist = () => {
                                   )}
                                   {isAdmin && (
                                     <div
-                                      className="absolute top-2 right-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                      className="card-actions absolute top-2 right-2"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <Button
                                         variant="secondary"
                                         size="icon"
-                                        className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+                                        className="h-11 w-11 bg-background/80 backdrop-blur-sm"
                                         onClick={() =>
                                           askDelete({
                                             name: fav.title,
@@ -1341,13 +1158,13 @@ const Watchlist = () => {
                                   )}
                                   {isAdmin && (
                                     <div
-                                      className="absolute top-2 right-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                      className="card-actions absolute top-2 right-2"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <Button
                                         variant="secondary"
                                         size="icon"
-                                        className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+                                        className="h-11 w-11 bg-background/80 backdrop-blur-sm"
                                         onClick={() =>
                                           askDelete({
                                             name: fav.title,
@@ -1401,7 +1218,6 @@ const Watchlist = () => {
                     onRemove={
                       isAdmin ? removeWatchlistItemAndSchedule : undefined
                     }
-                    getCategoryIcon={getCategoryIcon}
                     toggleEpisodeWatched={
                       isAdmin ? toggleEpisodeWatched : undefined
                     }

@@ -7,11 +7,11 @@
 
 import { useFinanceData } from './FinanceDataContext';
 import { useFinanceTotals } from './useFinanceTotals';
-import { deriveAlerts, type FinanceAlert } from '@/lib/finance';
+import { deriveAlerts, rateInForce, type FinanceAlert } from '@/lib/finance';
 import { isDueThisMonth } from './finance-defaults';
 
 export function useFinanceAlerts(today: string): FinanceAlert[] {
-  const { recurrings, mockTransactions, goals, bankAccounts } = useFinanceData();
+  const { recurrings, mockTransactions, goals, bankAccounts, debts } = useFinanceData();
   const { hasBudget, totalBudget, totalSpent, currentMonth } = useFinanceTotals();
 
   const liquidAssets = bankAccounts
@@ -45,6 +45,19 @@ export function useFinanceAlerts(today: string): FinanceAlert[] {
         monthlyContribution: g.monthlyContribution ?? 0,
         targetDate: g.targetDate || '',
       })),
+      // The rate in force today, not the one the debt was opened at: a card
+      // whose promotional 0% has ended is charging its standard rate now.
+      debts: debts.map(d => ({
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        repaymentType: d.repaymentType,
+        balance: d.balance,
+        aprPercent: rateInForce(d.ratePeriods, d.interestRate, new Date(today)),
+      })),
+      creditCards: bankAccounts
+        .filter(a => a.type === 'credit')
+        .map(a => ({ id: a.id, name: a.name, balance: a.balance, creditLimit: a.creditLimit ?? null })),
     },
     today,
   );

@@ -163,16 +163,11 @@ needs a forward migration rather than an edit.
 |---|---|---|---|
 | Medium | `useWatchlistNews.ts`, `useUpNext.ts` | Every hook turns a failed query into "Nothing this week" | Return `error`; render a failure line |
 | Medium | `CountdownCard.tsx:96,111`, `WatchlistNews.tsx:120` | `text-[10px]`, below the 12px minimum | `text-xs` |
-| Medium | `FinanceDataContext.tsx:651` | `select('*')` on `finance_profiles` in the mount path | Explicit columns |
-| Medium | `FinanceDataContext.tsx:707` | A failed transfer-links fetch silently keeps stale links | Surface the figure as unreliable |
 | Low, applied | `20260912140000_watchlist_events.sql` | An admin can insert events directly; the trigger was meant to be the only writer | `SECURITY DEFINER` trigger; drop the insert policy and grant |
-| Low, applied | `20260912110000_finance_transfer_links.sql:83` | `GRANT ALL` to `authenticated` includes TRUNCATE | Revoke; grant the four DML verbs |
 | Low, applied | `20260912090000_watchlist_up_next.sql:103` | The view has no `REVOKE ALL ... FROM anon` before its grant | Revoke, then grant SELECT |
 | Low, applied | `20260912100000_watchlist_8c.sql:102` | The `pinned` comment claims enforcement that does not exist | Correct the comment |
 | Low | `watchlist_up_next` view | No season-0 filter, so a special can lead Watch Next | `season_number > 0`, in the same forward migration |
-| Low | `UpNextRail.tsx:87` | A link nested inside a button | Card as a `div` with sibling controls |
 | Low | `useWatchlistNews.ts:18` | UTC date string against local-midnight filters, off by a day 00:00–01:00 in BST | Build the date from local parts |
-| Low | `TransferReviewSection.tsx:47,55` | Whole-ledger pairing on every change; no dismiss; `provider_category` never written | Bound by date; add dismiss; write the category |
 | Low | `AuthContext.tsx:57` | One failed `is_admin` call on token refresh drops admin mid-session | Keep the last answer per user; add a timeout |
 | Low | `src/integrations/supabase/types.ts` | Hand-written blocks now stale; new tables untyped | Regenerate types; remove the casts |
 | Low | `merchant-logo-cache/index.ts:491` | Index row deleted even when its storage object was not; dead `MIN_OCCURRENCES` | Delete only removed rows; drop the constant |
@@ -181,14 +176,29 @@ needs a forward migration rather than an edit.
 | Low | `FEATURES.md:104` | Merchant logos claimed while `BRANDFETCH_CLIENT_ID` is unset in production | Set the secret, or qualify the line |
 | Low | `README.md`, `supabase/README.md` | Still describe `is_admin()` as an email literal and an `ADMIN_EMAIL` secret | Rewrite for `admin_users` |
 | Low | `.gemini/agents/*.md` | No `model:` line, so tiering does not apply to Gemini | Set verified model ids |
+| Low | `WatchlistNews.tsx` `UpdatesList` | Duplicate React keys (`status-tv_show-335`, `platform-movie-1419`, seen 2026-09-25), so rows can be dropped or repeated | Key by the event's own id, or dedupe the feed |
+
+### Layout containment — what is left
+
+The middle card landed: one framed scroller per route, toolbars that pin only
+where they fit, Travel's workspace mode, the income overview, and the nested
+caps released (`FEATURES.md`, `DESIGN_SYSTEM.md` responsive contract; the
+decisions are in `REHAUL_HISTORY.md`). Public routes were checked in the
+browser; Finance was not, because it needs a signed-in session.
+
+| Item | Why it is open |
+|---|---|
+| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only |
+| Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
+| Toolbars that wrap to many rows | Inspiration's filters take four rows (291px) at 768px, so the band unpins and scrolls away. A disclosure for secondary filters would let it pin |
+| Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
+| Dialog audit | Statement and investment imports and the EDC builder may still nest a `vh` cap inside `.dialog-body`; payslip and benefits dialogs are done |
+| Watchlist episode dialog | Deliberate split panes; audit their heights on short and narrow screens on their own |
+| Further consolidation | Where a finance hero repeats its first section's figure, keep one. Audit each pair; remove nothing without a home for every figure and action |
+| Home View All | Expands inline. A capped preview linking to Transactions is a product decision, not containment work |
+| Extreme-height fallback | A document-flow shell for very short windows or high zoom is not built. Build it only if a measured failure needs it |
 
 ### Unblocked, and the only implementation items outstanding
-
-**7.L guidance from data already held.** Statements like "you are carrying
-£2,400 at 24.9% while £3,000 sits in a current account paying nothing", or
-"utilisation is 68%, and under 30% is where the scoring bands step", are
-arithmetic over rows `lib/finance/credit.ts` and `lib/finance/debt.ts` already
-read. Same shape as the alerts engine, and it should reuse it.
 
 A **product catalogue is a different feature** and there is no free source for
 UK card terms — the comparison sites are affiliate networks under commercial
@@ -196,6 +206,19 @@ agreement, the issuers publish marketing pages. Structure it as 7.G structures
 bureau data: a `finance_card_products` table seeded by hand today, fed by a
 provider later, with the recommendation logic written against the table rather
 than against whatever fills it.
+
+**Open:** no account interest rates (AER) are stored; the 10% APR bound in the
+costly-debt alert stands in for what cash earns. Storing AER would let the rule
+compare debt against actual cash rates. Also: `finance_student_loan_rates.bank_rate_percent`
+is NULL in every seeded row.
+
+### Student loan — pending top-up and refund direction
+
+**Still unverified:** the 6-month landing lag and refund direction (added to
+balance, not deducted). Needs confirmation against owner's SLC 2026-27 adjustment
+when it lands. Consider whether the pending top-up should compound interest while
+awaiting landing (~2–3% lifetime understatement versus full-rate accrual, currently
+documented approximation).
 
 ### Blocked on a model key — any provider
 
@@ -232,7 +255,23 @@ extract in the browser.
 |---|---|
 | `rounded-xl` (126) vs `rounded-lg` (314) | Changes every card corner in the section. A look, not a cleanup |
 | Public demo profile | Decided in principle, never scoped. Changes what the anon role may read |
-| FCA framing for 7.L | Recommending specific financial products to UK consumers is a regulated activity. A private dashboard computing "this card would cost you less" for its own owner is fine; the same feature public is either FCA authorised or carefully framed as information rather than advice, with no steer toward a product. Only matters if this stops being private — but it shapes the feature, so decide before designing around it |
+| FCA framing | Recommending specific financial products to UK consumers is a regulated activity. Guidance built so far is phrased as information only (names debt rates, spare cash and utilisation, never steers); this row now matters only for a product catalogue or public profile feature |
+| Hosted multi-user vs self-host template | Every RLS policy is `is_admin()`; no policy uses `auth.uid()` and `finance_profiles.owner_user_id` is read by nothing. A hosted version means per-owner policies on every table, per-user TrueLayer and document isolation; a template needs none of that |
+| Live shared finance templates | The `is_default` rows are the owner's: 15 recurring templates (Netflix, Hulu, ASPCA…, each name stored twice) and 32 default budget items (Phone (O2), Sky, Crunchyroll…). They override the generic code defaults for new profiles and "reset to defaults". Replacing them is a live data change |
+
+### Public version (UK-only) — what is left
+
+The code no longer names the owner outside `src/config/site.json`
+(REHAUL_HISTORY.md, 2026-09-24). Still open:
+
+- Investment import reads only Trading 212 and Kraken CSVs; a column-mapped
+  importer would be a feature, not a fix.
+- `STUDENT_LOAN_DEFAULT_ASSUMPTIONS` in `student-loan.ts` holds dated figures
+  (RPI 4.1, base rate 3.75, threshold 52,885) used when no rates row exists.
+- README clone URL and admin email, SECURITY.md project ref. Applied
+  migrations `20260904130000` and `20260911090000` carry the owner email; a
+  fork needs its own `admin_users` seed step documented instead.
+- `BankAccountsSection.tsx` `providerLogoUris` is dead code.
 
 ### Deferred by choice
 
@@ -242,8 +281,7 @@ code).
 
 ### The order
 
-1. **7.L guidance**, which needs nothing but arithmetic.
-2. **A key**, then 7.6 and 7.9.
+1. **A key**, then 7.6 and 7.9.
 
 The ordering principle: data before features, and anything that silently
 produces wrong numbers before anything that produces new ones.
@@ -406,12 +444,6 @@ against the same countdown. A flight log is worth it only at volume.
 Phase 7 covered the ledger. These are presentation and review, and each is
 arithmetic over rows already held.
 
-- **Transfer detection — extend and complete** — exclusion currently applies to
-  Cash Flow only; extend to dashboard and budget spend figures. Write
-  `provider_category` in truelayer-sync instead of filing TRANSFER as Wants.
-  Detect single-leg transfers — money leaving one account with no matching pair
-- **Sankey cash flow** — income to categories. `d3-sankey` is open and the
-  layout is deterministic
 - **Categorisation review queue** — surface uncertain assignments for
   confirmation rather than assigning silently. This is the 7.P-compliant shape
   of the feature Copilot ships; straight auto-categorisation is not
@@ -425,7 +457,8 @@ arithmetic over rows already held.
 
 1. **Landscape backdrops for hero and countdown cards** — portrait posters with
    dark upper halves render nearly black. Store TMDB backdrops (`backdrop_path`)
-   in both browser and Deno sync, then use them behind the overlaid titles.
+   in the sync (`watchlist-cron-sync`) and the add flow, then use them behind
+   the overlaid titles.
 2. **Links dead-link check and auto-metadata**, the highest-value pair outside
    the watchlist, and the only unblocked item here.
 3. **8.D primitives**, when a second surface needs the countdown or change feed.

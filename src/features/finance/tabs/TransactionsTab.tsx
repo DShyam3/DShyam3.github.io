@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MockTransaction, BankAccount, Goal, BudgetCategory } from '@/features/finance/finance-types';
 import {
   Search,
@@ -61,6 +62,12 @@ import { StatementImportDialog } from '@/features/finance/components/StatementIm
 import { TransferReviewSection } from '@/features/finance/components/TransferReviewSection';
 import { resolveMerchant } from '@/lib/finance';
 
+/* Rows drawn at once. The whole ledger on screen was 18,000+ DOM nodes at
+   1,000 transactions, and opening anything over it -- the sync popover took
+   1.2s -- meant restyling all of them. Filters, search, select-all and the
+   review queue still run over every matching row; only drawing is paged. */
+const TRANSACTION_PAGE_SIZE = 100;
+
 interface TransactionsTabProps {
   transactions: MockTransaction[];
   onUpdateTransactions: (updated: MockTransaction[]) => void;
@@ -68,6 +75,8 @@ interface TransactionsTabProps {
   goals: Goal[];
   budgetCategories: BudgetCategory[];
   formatGBP: (num: number) => string;
+  /** Bank sync status control, owned by the page that holds the TrueLayer state. */
+  syncStatus?: React.ReactNode;
 }
 
 export const TransactionsTab: React.FC<TransactionsTabProps> = ({
@@ -77,6 +86,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   goals,
   budgetCategories,
   formatGBP,
+  syncStatus,
 }) => {
   // Navigation & UI States
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
@@ -84,9 +94,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   // One shared read for the whole list; rows look their merchant up in it.
   const merchantLogos = useMerchantLogos();
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>('all');
+  // Home links here with its view in the URL: `?status=pending&account=<id>`
+  // from the list header, `?tx=<id>` from a row. The filters are read once as
+  // initial state; the params are dropped below so a refresh after changing a
+  // filter does not put Home's view back.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>(() => {
+    const status = searchParams.get('status');
+    return status === 'pending' || status === 'reviewed' ? status : 'all';
+  });
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [accountFilter, setAccountFilter] = useState<string>('all');
+  const [accountFilter, setAccountFilter] = useState<string>(() => searchParams.get('account') ?? 'all');
   const [sortOrder, setSortOrder] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
 
@@ -107,6 +125,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const selectedTx = useMemo(() => {
     return transactions.find(t => t.id === selectedTxId) || null;
   }, [transactions, selectedTxId]);
+
+  // Rows are not loaded yet on a cold visit, so `tx` waits for the ledger
+  // before acting on it; the scroll effect below then brings the row into
+  // view. A link to a row that no longer exists selects nothing.
+  const linkedTxId = searchParams.get('tx');
+  useEffect(() => {
+    if (linkedTxId && transactions.length === 0) return;
+    if (linkedTxId && transactions.some(t => t.id === linkedTxId)) setSelectedTxId(linkedTxId);
+    if (!searchParams.toString()) return;
+    setSearchParams({}, { replace: true });
+  }, [linkedTxId, transactions, searchParams, setSearchParams]);
 
   // If selected transaction gets deleted/disappears, reset selection
   useEffect(() => {
@@ -209,6 +238,22 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     return result;
   }, [transactions, searchQuery, statusFilter, categoryFilter, accountFilter, sortOrder]);
 
+  const [visibleCount, setVisibleCount] = useState(TRANSACTION_PAGE_SIZE);
+  // A new filter or sort is a new list, so it starts from the top page again.
+  useEffect(() => {
+    setVisibleCount(TRANSACTION_PAGE_SIZE);
+  }, [searchQuery, statusFilter, categoryFilter, accountFilter, sortOrder]);
+
+  // The selected row is always drawn, however far down it is: the review
+  // keys walk past the page, and Home links straight to any transaction.
+  const selectedIndex = selectedTxId ? filteredTransactions.findIndex(tx => tx.id === selectedTxId) : -1;
+  const renderCount = Math.min(filteredTransactions.length, Math.max(visibleCount, selectedIndex + 1));
+  const hiddenCount = filteredTransactions.length - renderCount;
+  const visibleTransactions = useMemo(
+    () => filteredTransactions.slice(0, renderCount),
+    [filteredTransactions, renderCount],
+  );
+
   // Grouped transactions by date (only dates that are present after filtering)
   const groupedTransactions = useMemo(() => {
     const groups: { [key: string]: MockTransaction[] } = {};
@@ -217,7 +262,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    filteredTransactions.forEach(tx => {
+    visibleTransactions.forEach(tx => {
       let groupKey = tx.date;
       const txDateObj = new Date(tx.date);
 
@@ -247,7 +292,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     });
 
     return Object.entries(groups).map(([date, list]) => ({ date, list }));
-  }, [filteredTransactions]);
+  }, [visibleTransactions]);
 
   // Account details matching list
   const getAccountInfo = (accountId?: string) => {
@@ -539,12 +584,14 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 placeholder="Search description, category, tags..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono focus-visible:ring-primary/45"
+                className="pl-9 pr-9 h-9 bg-background/50 border-border/40 rounded-lg text-xs font-mono focus-visible:ring-primary/45"
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-2.5 hover:text-foreground text-muted-foreground"
+                  aria-label="Clear search"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center hover:text-foreground text-muted-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -553,10 +600,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
             {/* Toolbar Buttons */}
             <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+              {syncStatus}
               {/* Filter Popover */}
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80 font-mono">
+                  <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80 hover:text-foreground font-mono">
                     <Filter className="h-3.5 w-3.5" />
                     <span>Filter</span>
                     {(statusFilter !== 'all' || categoryFilter !== 'all' || accountFilter !== 'all') && (
@@ -631,7 +679,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               {/* Sort Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80 font-mono">
+                  <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80 hover:text-foreground font-mono">
                     <SlidersHorizontal className="h-3.5 w-3.5" />
                     <span>Sort</span>
                   </Button>
@@ -657,7 +705,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => setIsStatementImportOpen(true)}
-                className="h-9 rounded-lg border-border/40 bg-background/30 hover:bg-background/80 text-xs flex items-center gap-1.5 px-3 font-mono"
+                className="h-9 rounded-lg border-border/40 bg-background/30 hover:bg-background/80 hover:text-foreground text-xs flex items-center gap-1.5 px-3 font-mono"
               >
                 <FileUp className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Import</span>
@@ -673,7 +721,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </Button>
 
               {/* Export CSV */}
-              <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs bg-background/30 hover:bg-background/80 p-2.5 font-mono" onClick={handleExportCSV}>
+              <Button variant="outline" size="sm" className="h-9 border-border/40 rounded-lg text-xs bg-background/30 hover:bg-background/80 hover:text-foreground p-2.5 font-mono" onClick={handleExportCSV}>
                 <Download className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -776,7 +824,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         <TransferReviewSection />
 
         {/* LIST RENDER: Grouped by date */}
-        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-4 min-h-[400px] flex flex-col justify-start hover:border-border/80 transition-colors">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-4 flex flex-col justify-start hover:border-border/80 transition-colors">
           {groupedTransactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 my-auto">
               <div className="p-3 bg-muted/20 rounded-xl border border-border/30">
@@ -803,10 +851,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               </Button>
             </div>
           ) : (
-            /* The list scrolls inside its own pane rather than growing the
-               surface, so the detail panel beside it stays in view whatever
-               the transaction count (REHAUL_PLAN.md 7.C). */
-            <div ref={listRef} className="space-y-6 max-h-[calc(100vh-22rem)] overflow-y-auto pr-1">
+            /* Roomy, the list flows in the card's scroll beside a sticky
+               inspector; constrained, it keeps its own capped pane
+               (responsive.css, .tx-list-pane). */
+            <div ref={listRef} className="tx-list-pane space-y-6">
               {/* Select All Bar */}
               <div className="flex items-center px-4 py-1.5 border-b border-border/20 text-xs text-muted-foreground font-semibold">
                 <div className="flex items-center gap-3">
@@ -970,14 +1018,28 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   </div>
                 </div>
               ))}
+
+              {hiddenCount > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-3 border-t border-border/30 pt-3 text-xs font-mono text-muted-foreground">
+                  <span>Showing {renderCount} of {filteredTransactions.length}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-lg border-border/40 text-xs font-mono"
+                    onClick={() => setVisibleCount(renderCount + TRANSACTION_PAGE_SIZE)}
+                  >
+                    Show {Math.min(TRANSACTION_PAGE_SIZE, hiddenCount)} more
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
       {/* RIGHT SECTION: TRANSACTION DETAILS PANEL */}
-      <div className="flex flex-col space-y-4">
-        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-5 min-h-[500px] hover:border-border/80 transition-colors">
+      <div className="tx-inspector-pane flex flex-col space-y-4">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-5 hover:border-border/80 transition-colors">
           {selectedTx ? (
             <div className="space-y-6">
               {/* Detail Panel Header */}
@@ -1192,7 +1254,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   </span>
                 </div>
 
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                <div className="space-y-1.5">
                   {similarTransactionsInfo.list.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic py-1 font-mono">
                       No previous transactions found for this merchant.
@@ -1325,7 +1387,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     <Button
                       variant="outline"
                       className={cn(
-                        "h-9 justify-start text-left font-normal border-border/40 rounded-lg text-xs bg-background/50 hover:bg-background/80 w-full font-mono",
+                        "h-9 justify-start text-left font-normal border-border/40 rounded-lg text-xs bg-background/50 hover:bg-background/80 hover:text-foreground w-full font-mono",
                         !newTxDate && "text-muted-foreground"
                       )}
                     >

@@ -1,5 +1,5 @@
-import type { DebtObservation, LeaveType, RatePeriod, StudentLoanPlanKey } from '@/lib/finance';
-export type { DebtObservation, LeaveType, RatePeriod };
+import type { DebtObservation, HalfDay, LeaveType, RatePeriod, StudentLoanPlanKey } from '@/lib/finance';
+export type { DebtObservation, HalfDay, LeaveType, RatePeriod };
 
 export interface FinanceSettings {
   grossSalary: number;
@@ -41,6 +41,7 @@ export interface UserHoliday {
   occasion: string;
   count: number;
   type?: LeaveType; // 'holiday' | 'sick'
+  halfDay?: HalfDay; // 'am' | 'pm'; set only for a half day
 }
 
 export interface Goal {
@@ -66,6 +67,10 @@ export interface BankAccount {
   issuer: string;
   balance: number; // Positive for asset, negative for debt
   annualFee: number;
+  /** Cards only. Null when unknown -- such a card is left out of credit
+   *  utilisation rather than counted as fully used. Bank-synced cards take
+   *  it from the bank whenever the bank returns one. */
+  creditLimit?: number | null;
   useCase?: string;
   emoji?: string;
   color?: string;
@@ -133,6 +138,10 @@ export interface MockTransaction {
   /** Who the bank said was paid. Sync-written, never edited; see the
    *  `merchant` column comment in 20260907170000_transaction_merchant.sql. */
   merchant?: string;
+  /** The bank's own classification, lowercased (`transfer`, `purchase`...).
+   *  Sync-written, never edited or saved back; evidence for transfer
+   *  detection only. Absent for manual rows and rows synced before it existed. */
+  providerCategory?: string;
   category: string;
   amount: number;
   date: string;
@@ -255,8 +264,15 @@ export interface InvestmentActivity {
 export interface DebtDraw {
   id: string;
   date: string; // YYYY-MM-DD
-  amount: number;
+  amount: number; // always positive; `kind` gives the direction
   label?: string; // e.g. "Year 1 tuition"
+  /**
+   * Borrowing when absent. A refund is money the lender paid back to you, so
+   * it adds to the balance; a payment is one made outside payroll, so it
+   * takes from it. Kept in the same list because both are dated money
+   * movements on the debt, and absent means borrowing for every older row.
+   */
+  kind?: 'borrowing' | 'refund' | 'payment';
 }
 
 export interface Debt {
@@ -269,6 +285,7 @@ export interface Debt {
   interestRate: number; // Annual percentage rate
   minPayment: number; // Contractual monthly payment (amortising debts)
   startDate?: string; // When the debt was taken on (YYYY-MM-DD)
+  courseEndDate?: string; // Student loans: last day of study, which sets when repayment is first due
   payoffDate?: string; // Expected final payment (YYYY-MM-DD)
   // 'amortising' = fixed monthly payment (mortgage, car, personal loan).
   // 'income_contingent' = UK student loan: % of income above a threshold,

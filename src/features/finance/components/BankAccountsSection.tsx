@@ -12,33 +12,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BankAccount } from '@/features/finance/finance-types';
 import { formatGBP, getAccountDefaultColor, getAccountDefaultEmoji } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
+import { formatCooldownEnd } from '@/hooks/useCooldown';
+import { BankSyncStatus } from './BankSyncStatus';
 import { Activity, ArrowUpRight, Clock, CreditCard, Edit2, Landmark, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
 
 type ProviderLogoSize = 'account' | 'connection';
-
-const PROVIDER_NAMES: Record<string, string> = {
-  americanexpress: 'American Express',
-  amex: 'American Express',
-  hsbc: 'HSBC',
-  lloyds: 'Lloyds',
-  revolut: 'Revolut',
-  santander: 'Santander',
-  santanderpersonal: 'Santander',
-};
-
-const OFFICIAL_PROVIDER_LOGOS: Record<string, string> = {
-  americanexpress: 'https://www.aexp-static.com/cdaas/one/statics/axp-dls/5.10.0/package/dist/img/dls_logos/dls-logo-bluebox-solid.svg',
-  amex: 'https://www.aexp-static.com/cdaas/one/statics/axp-dls/5.10.0/package/dist/img/dls_logos/dls-logo-bluebox-solid.svg',
-  santander: 'https://www.santander.co.uk/themes/custom/santander_web18_2_0/logo.svg',
-  santanderpersonal: 'https://www.santander.co.uk/themes/custom/santander_web18_2_0/logo.svg',
-};
 
 function providerKey(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * TrueLayer's `provider_name` is either already a display name (has a space
+ * or an uppercase letter) or a bare provider id like `uk-ob-barclays`, which
+ * shows up until the next sync fills in the real display name.
+ */
 function providerDisplayName(name: string) {
-  return PROVIDER_NAMES[providerKey(name)] || name;
+  if (/[A-Z ]/.test(name)) return name;
+  const stripped = name.replace(/^(uk-ob-|uk-oauth-|ob-|oauth-)/, '');
+  return stripped
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map(word => word[0].toUpperCase() + word.slice(1))
+    .join(' ');
 }
 
 function ProviderFallback({ name, size }: { name: string; size: ProviderLogoSize }) {
@@ -51,21 +47,17 @@ function ProviderFallback({ name, size }: { name: string; size: ProviderLogoSize
 }
 
 function ProviderLogo({ name, uri, size = 'connection' }: { name: string; uri: string | null; size?: ProviderLogoSize }) {
-  const [failedUris, setFailedUris] = useState<string[]>([]);
+  const [failed, setFailed] = useState(false);
   const displayName = providerDisplayName(name);
   const shell = size === 'connection' ? 'h-10 w-10' : 'h-7 w-7';
-  const logoUris = [uri, OFFICIAL_PROVIDER_LOGOS[providerKey(name)]].filter(
-    (candidate): candidate is string => Boolean(candidate) && !failedUris.includes(candidate),
-  );
-  const logoUri = logoUris[0];
 
-  if (logoUri) {
+  if (uri && !failed) {
     return (
       <img
-        src={logoUri}
+        src={uri}
         alt={`${displayName} logo`}
         className={`${shell} rounded-lg object-contain bg-card border border-border/40 p-1 shrink-0`}
-        onError={() => setFailedUris(current => current.includes(logoUri) ? current : [...current, logoUri])}
+        onError={() => setFailed(true)}
       />
     );
   }
@@ -94,6 +86,7 @@ export default function BankAccountsSection() {
   const {
     trueLayerStatus,
     isSyncingTrueLayer,
+    syncAvailableAt,
     isConnectingTrueLayer,
     connectTrueLayer,
     disconnectTrueLayer,
@@ -105,6 +98,14 @@ export default function BankAccountsSection() {
       .filter(connection => Boolean(connection.provider_logo_uri))
       .map(connection => [providerKey(connection.provider_name), connection.provider_logo_uri]),
   );
+
+  /* Blank means the limit is unknown, which is not the same as £0: an unknown
+     limit leaves the card out of utilisation instead of counting it as maxed. */
+  const parseCreditLimit = (value: string): number | null => {
+    if (value.trim() === '') return null;
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+  };
 
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
@@ -301,14 +302,27 @@ export default function BankAccountsSection() {
                     Connect Another Bank
                   </Button>
 
+                  <div className="flex flex-wrap items-center gap-2">
+                  <BankSyncStatus
+                    status={trueLayerStatus}
+                    isSyncing={isSyncingTrueLayer}
+                    syncAvailableAt={syncAvailableAt}
+                    onSync={syncTrueLayer}
+                    className="h-8"
+                  />
                   <Button
                     onClick={syncTrueLayer}
-                    disabled={isSyncingTrueLayer}
+                    disabled={isSyncingTrueLayer || syncAvailableAt !== null}
                     className="rounded-lg bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-8 px-4 font-mono"
                   >
                     <RefreshCw className={cn("h-3.5 w-3.5", isSyncingTrueLayer && "animate-spin")} />
-                    {isSyncingTrueLayer ? "Syncing..." : "Sync All Banks"}
+                    {isSyncingTrueLayer
+                      ? "Syncing..."
+                      : syncAvailableAt !== null
+                        ? `Next sync ${formatCooldownEnd(syncAvailableAt)}`
+                        : "Sync All Banks"}
                   </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -419,6 +433,21 @@ export default function BankAccountsSection() {
                 className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
               />
             </div>
+            {newAccount.type === 'credit' && (
+              <div className="space-y-1">
+                <Label htmlFor="acc-limit" className="text-xs font-mono text-muted-foreground">Credit Limit (£)</Label>
+                <Input
+                  id="acc-limit"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Leave blank if unknown"
+                  value={newAccount.creditLimit ?? ''}
+                  onChange={(e) => setNewAccount({ ...newAccount, creditLimit: parseCreditLimit(e.target.value) })}
+                  className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                />
+              </div>
+            )}
             <div className="space-y-1">
               <Label htmlFor="acc-use" className="text-xs font-mono text-muted-foreground">Primary Use Case</Label>
               <Input
@@ -515,6 +544,21 @@ export default function BankAccountsSection() {
                   className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
                 />
               </div>
+              {activeAccount.type === 'credit' && (
+                <div className="space-y-1">
+                  <Label htmlFor="edit-acc-limit" className="text-xs font-mono text-muted-foreground">Credit Limit (£)</Label>
+                  <Input
+                    id="edit-acc-limit"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Leave blank if unknown"
+                    value={activeAccount.creditLimit ?? ''}
+                    onChange={(e) => setActiveAccount({ ...activeAccount, creditLimit: parseCreditLimit(e.target.value) })}
+                    className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono"
+                  />
+                </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="edit-acc-use" className="text-xs font-mono text-muted-foreground">Primary Use Case</Label>
                 <Input

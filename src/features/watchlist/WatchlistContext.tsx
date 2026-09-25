@@ -8,9 +8,12 @@ import React, {
   useRef,
   ReactNode,
 } from 'react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
+import { persistWatchedProgress } from './up-next-query';
 import { useToast } from '@/hooks/use-toast';
+import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
-import { buildMovieUpdates, buildShowUpdates } from './sync-logic';
 import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
 import {
   resolveFavouriteCategory,
@@ -21,15 +24,6 @@ import {
 /** A TMDB episode that survived the "has an air date" filter. */
 type AiredEpisode = TMDBEpisode & { air_date: string };
 
-/** One `tv_show_episodes` row on its way into an upsert. */
-interface EpisodeUpsert {
-  season_id: number;
-  episode_number: number;
-  title: string;
-  runtime?: number;
-  release_date: string;
-  watched: boolean;
-}
 const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -64,6 +58,37 @@ async function fetchTMDBProxy<T>(
   );
   if (error) throw error;
   return data as T;
+}
+
+/** What watchlist-cron-sync answers a finished run with. */
+interface ServerSyncResult {
+  itemsSynced: number;
+  itemsTotal: number;
+  failedTitles: string[];
+  changes: string[];
+  durationMs: number;
+  /** Stopped at the time ceiling; the titles after that point were not reached. */
+  truncated: boolean;
+  /** Seconds left on the full-sync cooldown; only a manual full sync sets it. */
+  retry_after?: number;
+}
+
+/**
+ * The status and JSON body of a non-2xx edge function response. invoke()
+ * reports one as a FunctionsHttpError whose `context` is the raw Response,
+ * so the server's own message has to be read out of it.
+ */
+async function readFunctionError(
+  error: unknown,
+): Promise<{ status?: number; error?: string; retry_after?: number }> {
+  if (!(error instanceof FunctionsHttpError)) return {};
+  const response = error.context as Response;
+  try {
+    const body = (await response.json()) as { error?: string; retry_after?: number };
+    return { status: response.status, ...body };
+  } catch {
+    return { status: response.status };
+  }
 }
 
 export interface Episode {
@@ -181,16 +206,19 @@ interface WatchlistContextType {
   favourites: FavouriteItem[];
   loading: boolean;
   syncing: boolean;
-  syncProgress: number;
+  /**
+   * Percent done while syncing favourite facts. Null while a library sync
+   * runs server-side, which reports nothing until it finishes.
+   */
+  syncProgress: number | null;
+  /** When the server's cooldown on a full sync ends; null when none is known. */
+  syncAvailableAt: number | null;
   lastSyncTime: string | null;
   lastAutoSyncTime: string | null;
   nextAutoSyncTime: string;
   syncLog: SyncLogEntry[];
   autoSyncEnabled: boolean;
-  syncWatchlist: (
-    type?: 'manual' | 'daily',
-    itemsOverride?: WatchlistItem[],
-  ) => Promise<void>;
+  syncWatchlist: () => Promise<void>;
   syncSingleItem: (id: string) => Promise<void>;
   cancelSync: () => void;
   addWatchlistItem: (
@@ -255,11 +283,13 @@ const getNextAutoSync = () => {
 };
 
 export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
+  const queryClient = useQueryClient();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [favourites, setFavourites] = useState<FavouriteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncProgress, setSyncProgress] = useState<number | null>(0);
+  const { until: syncAvailableAt, start: startSyncCooldown } = useCooldown('watchlist-sync');
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(
     new Set(),
   );
@@ -273,9 +303,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   // slow network + impatient user) can't insert the same item twice while
   // the multi-second TMDB season fetch is still in flight.
   const [pendingAddKeys, setPendingAddKeys] = useState<Set<string>>(new Set());
-  // Lets a full sync be stopped mid-flight. Checked between chunks rather
-  // than aborting in-flight requests, so "stop" takes effect after the
-  // current batch finishes rather than instantly.
+  // Lets a favourite-facts sync be stopped mid-flight. Checked between
+  // titles rather than aborting the request in flight, so "stop" takes
+  // effect after the current one finishes. A library sync runs server-side
+  // and cannot be stopped from here.
   const syncCancelRef = useRef(false);
   /** Shows whose full episode rows have been fetched, so we fetch once each. */
   const loadedShowsRef = useRef<Set<string>>(new Set());
@@ -309,15 +340,15 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           // Deliberately not `tv_show_episodes (*)`. Every mount of this page
           // was pulling all ~7,600 episode rows in full (~474 kB) purely to
           // render a grid of posters. The grid needs episode_number and
-          // watched and nothing else (~67 kB); titles, runtimes and air dates
-          // load per show in loadShowEpisodes when a detail dialog opens.
+          // watched, runtime for the watched total, and air dates for scheduling;
+          // episode titles load per show when a detail dialog opens.
           // As above: no `overview` (62 kB of tv_shows' 108 kB).
           .select(
             `
                     id, title, platform, genre, status, poster, release_date, tmdb_id,
                     tv_show_seasons (
                       id, season_number, release_date, watched,
-                      tv_show_episodes (id, episode_number, watched)
+                      tv_show_episodes (id, episode_number, watched, runtime, release_date)
                     )
                 `,
           )
@@ -398,6 +429,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                   // Filled in by loadShowEpisodes.
                   title: '',
                   watched: ep.watched,
+                  runtime: ep.runtime ?? undefined,
+                  release_date: ep.release_date ?? undefined,
                 })),
             })),
         }),
@@ -590,42 +623,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isAdmin]);
 
-  // Log a sync event to Supabase
-  const logSync = useCallback(
-    async (
-      syncType: 'manual' | 'daily',
-      status: 'success' | 'error',
-      itemsSynced: number,
-      durationMs: number,
-      errorMessage?: string,
-    ) => {
-      try {
-        await supabase.from('sync_log').insert({
-          sync_type: syncType,
-          status,
-          items_synced: itemsSynced,
-          duration_ms: durationMs,
-          error_message: errorMessage || null,
-        });
-        // Clean up old logs (keep last 50)
-        const { data: oldLogs } = await supabase.from('sync_log')
-          .select('id')
-          .order('synced_at', { ascending: false })
-          .range(50, 1000);
-        if (oldLogs && oldLogs.length > 0) {
-          await supabase.from('sync_log').delete().in(
-            'id',
-            oldLogs.map((l) => l.id),
-          );
-        }
-        await fetchSyncLog();
-      } catch (error) {
-        console.error('Error logging sync:', error);
-      }
-    },
-    [fetchSyncLog],
-  );
-
   useEffect(() => {
     const stored = localStorage.getItem('watched_episodes');
     if (stored) {
@@ -798,11 +795,19 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           if (showError) throw showError;
 
           let failedSeasonCount = 0;
+          let detailsFailed = false;
 
           if (item.tmdb_id) {
+            // The show row exists by now, so this must not reach the outer
+            // catch: that says "Failed to add" about a row that is there,
+            // never refetches it, and lets a retry insert it twice.
             const showDetails = await fetchTMDBProxy<TMDBDetails>(
               `tv/${item.tmdb_id}`,
-            );
+            ).catch((error) => {
+              console.error(`Failed to load "${item.title}" from TMDB:`, error);
+              detailsFailed = true;
+              return {} as TMDBDetails;
+            });
             const validSeasons = (showDetails.seasons || []).filter(
               // Skip Season 0 and seasons with no episodes
               (s) => s.season_number !== 0 && s.episode_count !== 0,
@@ -866,9 +871,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           toast({
             title: 'Success',
             description:
-              failedSeasonCount > 0
-                ? `TV Show added (${failedSeasonCount} season${failedSeasonCount > 1 ? 's' : ''} failed to load -- use Sync Updates to retry)`
-                : 'TV Show added',
+              detailsFailed
+                ? 'TV Show added (its seasons failed to load -- resync it to retry)'
+                : failedSeasonCount > 0
+                  ? `TV Show added (${failedSeasonCount} season${failedSeasonCount > 1 ? 's' : ''} failed to load -- resync it to retry)`
+                  : 'TV Show added',
           });
         } catch (error) {
           toast({
@@ -1010,17 +1017,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     seasonNumber: number,
     episodeNumber: number,
   ) => {
+    if (!isAdmin) return;
     const episodeKey = `${showId}-s${seasonNumber}-e${episodeNumber}`;
     const isCurrentlyWatched = watchedEpisodes.has(episodeKey);
     const nextWatched = !isCurrentlyWatched;
-
-    setWatchedEpisodes((prev) => {
-      const next = new Set(prev);
-      if (nextWatched) next.add(episodeKey);
-      else next.delete(episodeKey);
-      localStorage.setItem('watched_episodes', JSON.stringify([...next]));
-      return next;
-    });
 
     try {
       const show = watchlist.find((s) => s.id === showId);
@@ -1030,15 +1030,17 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       const episode = season?.episodes.find(
         (e) => e.episode_number === episodeNumber,
       );
-      if (episode?.id) {
-        await supabase.from('tv_show_episodes')
-          .update({
-            watched: nextWatched,
-          })
-          .eq('id', episode.id);
-      }
+      await persistWatchedProgress(queryClient, [episode?.id], nextWatched);
+      setWatchedEpisodes((prev) => {
+        const next = new Set(prev);
+        if (nextWatched) next.add(episodeKey);
+        else next.delete(episodeKey);
+        localStorage.setItem('watched_episodes', JSON.stringify([...next]));
+        return next;
+      });
     } catch (error) {
       console.error(error);
+      toast({ title: 'Error', description: 'Failed to update watched progress', variant: 'destructive' });
     }
   };
 
@@ -1057,429 +1059,84 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const toggleSeasonWatched = async (showId: string, seasonNumber: number) => {
+    if (!isAdmin) return;
     const show = watchlist.find((s) => s.id === showId);
     const season = show?.seasons?.find((s) => s.season_number === seasonNumber);
-    if (!season) return;
-
-    const allWatched = season.episodes.every((ep) =>
+    const episodes = season?.episodes ?? [];
+    const allWatched = episodes.every((ep) =>
       watchedEpisodes.has(`${showId}-s${seasonNumber}-e${ep.episode_number}`),
     );
     const nextWatched = !allWatched;
 
-    // Update local state in one batch
-    setWatchedEpisodes((prev) => {
-      const next = new Set(prev);
-      for (const ep of season.episodes) {
-        const key = `${showId}-s${seasonNumber}-e${ep.episode_number}`;
-        if (nextWatched) next.add(key);
-        else next.delete(key);
-      }
-      localStorage.setItem('watched_episodes', JSON.stringify([...next]));
-      return next;
-    });
-
-    // Update all episodes in DB
     try {
-      const episodeIds = season.episodes
-        .filter((ep) => ep.id)
-        .map((ep) => ep.id!);
-      if (episodeIds.length > 0) {
-        await supabase.from('tv_show_episodes')
-          .update({ watched: nextWatched })
-          .in('id', episodeIds);
-      }
+      await persistWatchedProgress(queryClient, episodes.map((ep) => ep.id), nextWatched);
+      setWatchedEpisodes((prev) => {
+        const next = new Set(prev);
+        for (const ep of episodes) {
+          const key = `${showId}-s${seasonNumber}-e${ep.episode_number}`;
+          if (nextWatched) next.add(key);
+          else next.delete(key);
+        }
+        localStorage.setItem('watched_episodes', JSON.stringify([...next]));
+        return next;
+      });
     } catch (error) {
       console.error('Error toggling season watched:', error);
+      toast({ title: 'Error', description: 'Failed to update watched progress', variant: 'destructive' });
     }
   };
 
-  // `itemsOverride` lets a single item be resynced through the exact same
-  // logic (progress tracking, change summary, failure handling) as a full
-  // sync, instead of duplicating ~250 lines of season/episode reconciliation
-  // for a "resync this one show" action.
-  const syncWatchlist = async (
-    type: 'manual' | 'daily' = 'manual',
-    itemsOverride?: WatchlistItem[],
-  ) => {
+  /**
+   * Runs the sync in the watchlist-cron-sync edge function -- the same code
+   * the nightly job runs -- for the whole library or for one title.
+   *
+   * It used to run here, in the browser, through tmdb-proxy. That proxy
+   * allows 60 requests a minute per IP and a library sync makes well over a
+   * thousand, so a manual sync failed most titles by construction. The
+   * function calls TMDB directly and enforces its own cooldown, which is
+   * what actually stops a repeated press from spending the calls again.
+   */
+  const runServerSync = async (target?: WatchlistItem) => {
     if (syncing) return; // Prevent concurrent syncs
-    syncCancelRef.current = false;
     setSyncing(true);
-    setSyncProgress(0);
-    const startTime = Date.now();
-    const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
-
-    let itemsSynced = 0;
-    // Individual item/season failures used to just be console.error'd and
-    // silently skipped -- the completion toast looked identical whether
-    // everything worked or half the shows failed. Track them so the user
-    // actually finds out. changesSummary is a lightweight "what happened"
-    // trail (status changes, new episodes) instead of just a bare count.
-    const failedTitles: string[] = [];
-    const changesSummary: string[] = [];
+    // No per-title progress comes back from a server run.
+    setSyncProgress(null);
     try {
-      const itemsToSync = itemsOverride ?? watchlist.filter((item) => item.tmdb_id);
-
-      // The list query does not fetch `overview`, so an item in memory has no
-      // description whether or not one is stored. Ask which rows are actually
-      // null before deciding to fill any in -- otherwise every sync would
-      // overwrite every stored summary with TMDB's. Two id-only queries.
-      const needsOverview = new Set<string>();
-      const [emptyMovies, emptyShows] = await Promise.all([
-        supabase.from('movies').select('id').is('overview', null),
-        supabase.from('tv_shows').select('id').is('overview', null),
-      ]);
-      (emptyMovies.data ?? []).forEach((row: { id: number }) =>
-        needsOverview.add(String(row.id)),
+      const { data, error } = await supabase.functions.invoke<ServerSyncResult>(
+        'watchlist-cron-sync',
+        { body: target ? { category: target.category, id: target.id } : {} },
       );
-      (emptyShows.data ?? []).forEach((row: { id: number }) =>
-        needsOverview.add(String(row.id)),
-      );
-      // Use smaller chunks for better progress tracking in background tabs
-      const chunkSize = 50;
-      let processedCount = 0;
-      let wasCancelled = false;
-      for (let i = 0; i < itemsToSync.length; i += chunkSize) {
-        if (syncCancelRef.current) {
-          wasCancelled = true;
-          break;
-        }
-        const chunk = itemsToSync.slice(i, i + chunkSize);
-        await Promise.all(
-          chunk.map(async (item) => {
-            try {
-              const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie';
-              const data = await fetchTMDBProxy<TMDBDetails>(
-                `${tmdbType}/${item.tmdb_id}`,
-                {
-                  append_to_response: 'watch/providers',
-                },
-              );
-              if (!data.id) return;
 
-              if (item.category === 'Movies') {
-                await supabase
-                  .from('movies')
-                  .update(
-                    buildMovieUpdates(
-                      item,
-                      data,
-                      TMDB_IMAGE_BASE_URL,
-                      needsOverview,
-                    ),
-                  )
-                  .eq('id', parseInt(item.id));
-              } else {
-                const tvUpdates = buildShowUpdates(
-                  item,
-                  data,
-                  TMDB_IMAGE_BASE_URL,
-                  needsOverview,
-                );
-                if (
-                  data.status &&
-                  item.series_status &&
-                  data.status !== item.series_status
-                ) {
-                  changesSummary.push(`${item.title}: status → ${data.status}`);
-                }
-                await supabase
-                  .from('tv_shows')
-                  .update(tvUpdates)
-                  .eq('id', parseInt(item.id));
-
-                // Season 0 Cleanup Logic
-                const tmdbSeason0 = data.seasons?.find(
-                  (s) => s.season_number === 0,
-                );
-                const localSeason0 = item.seasons?.find(
-                  (s) => s.season_number === 0,
-                );
-
-                if (localSeason0) {
-                  let shouldDelete = false;
-
-                  // Check 1: TMDB doesn't have Season 0 or it has 0 episodes
-                  if (!tmdbSeason0 || tmdbSeason0.episode_count === 0) {
-                    shouldDelete = true;
-                  }
-
-                  // Check 2: Season 0 release date matches any other season (duplicate)
-                  if (!shouldDelete && localSeason0.release_date) {
-                    const otherSeasons =
-                      item.seasons?.filter((s) => s.season_number !== 0) || [];
-                    const isDuplicate = otherSeasons.some(
-                      (s) =>
-                        s.release_date &&
-                        s.release_date === localSeason0.release_date,
-                    );
-                    if (isDuplicate) {
-                      shouldDelete = true;
-                    }
-                  }
-
-                  if (shouldDelete) {
-                    await supabase.from('tv_show_seasons')
-                      .delete()
-                      .eq('id', localSeason0.id);
-                  }
-                }
-
-                // Sync regular seasons (skip Season 0 and empty announced seasons)
-                if (data.seasons) {
-                  await Promise.all(
-                    data.seasons.map(async (s) => {
-                      if (s.season_number === 0) return;
-
-                      // Skip seasons that have been announced but have no episodes yet
-                      if (s.episode_count === 0) {
-                        // Only remove if the local season has no episodes and no watched data
-                        const localEmptySeason = item.seasons?.find(
-                          (ls) => ls.season_number === s.season_number,
-                        );
-                        if (
-                          localEmptySeason &&
-                          localEmptySeason.episodes.length === 0
-                        ) {
-                          await supabase.from('tv_show_seasons')
-                            .delete()
-                            .eq('id', localEmptySeason.id);
-                        }
-                        return; // Don't add this season
-                      }
-
-                      try {
-                        const { data: dbS, error: sErr } = await supabase.from('tv_show_seasons')
-                          .upsert(
-                            {
-                              tv_show_id: parseInt(item.id),
-                              season_number: s.season_number,
-                              release_date: s.air_date || null,
-                            },
-                            { onConflict: 'tv_show_id,season_number' },
-                          )
-                          .select()
-                          .single();
-                        if (sErr || !dbS) return;
-
-                        const now = new Date();
-                        now.setHours(0, 0, 0, 0);
-                        const seasonReleaseDate = s.air_date
-                          ? new Date(s.air_date)
-                          : null;
-                        const ninetyDaysAgo = new Date(now);
-                        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-                        const isShowCurrentlyAiring =
-                          data.status === 'Returning Series' ||
-                          data.status === 'In Production';
-                        const localSeason = item.seasons?.find(
-                          (ls) => ls.season_number === s.season_number,
-                        );
-                        const localEpisodeCount =
-                          localSeason?.episodes?.length || 0;
-                        const hasEpisodeCountChanged =
-                          localEpisodeCount !== s.episode_count;
-
-                        const shouldUpdateEpisodes =
-                          !seasonReleaseDate ||
-                          seasonReleaseDate >= ninetyDaysAgo ||
-                          isShowCurrentlyAiring ||
-                          hasEpisodeCountChanged;
-
-                        if (shouldUpdateEpisodes) {
-                          const sDetails = await fetchTMDBProxy<TMDBSeasonDetails>(
-                            `tv/${item.tmdb_id}/season/${s.season_number}`,
-                          );
-                          if (
-                            sDetails.episodes &&
-                            sDetails.episodes.length > 0
-                          ) {
-                            const validEpisodes = sDetails.episodes.filter(hasAirDate);
-
-                            if (validEpisodes.length > 0) {
-                              if (validEpisodes.length > localEpisodeCount) {
-                                changesSummary.push(
-                                  `${item.title}: +${validEpisodes.length - localEpisodeCount} new episode(s) (S${s.season_number})`,
-                                );
-                              }
-                              // Read existing watched states to preserve them during upsert
-                              const { data: existingEps } = await supabase.from('tv_show_episodes')
-                                .select('episode_number, watched')
-                                .eq('season_id', dbS.id);
-                              const watchedMap = new Map<number, boolean>(
-                                (existingEps || []).map((e) => [
-                                  e.episode_number,
-                                  e.watched ?? false,
-                                ]),
-                              );
-
-                              const eps = validEpisodes.map((v) => {
-                                const ep: EpisodeUpsert = {
-                                  season_id: dbS.id,
-                                  episode_number: v.episode_number,
-                                  title:
-                                    v.name || `Episode ${v.episode_number}`,
-                                  release_date: v.air_date,
-                                  // Preserve existing watched state
-                                  watched:
-                                    watchedMap.get(v.episode_number) ?? false,
-                                };
-                                if (v.runtime) ep.runtime = v.runtime;
-                                else if (data.episode_run_time?.[0])
-                                  ep.runtime = data.episode_run_time[0];
-                                return ep;
-                              });
-                              const { error: upsertError } = await supabase.from('tv_show_episodes').upsert(eps, {
-                                onConflict: 'season_id,episode_number',
-                              });
-                              if (upsertError)
-                                console.error(
-                                  `Episode upsert failed for ${item.title} S${s.season_number}:`,
-                                  upsertError,
-                                );
-
-                              const validEpisodeNumbers = validEpisodes.map(
-                                (v) => v.episode_number,
-                              );
-                              const { data: existingEpisodes } = await supabase.from('tv_show_episodes')
-                                .select('id, episode_number')
-                                .eq('season_id', dbS.id);
-
-                              if (existingEpisodes) {
-                                const episodesToDelete =
-                                  existingEpisodes.filter(
-                                    (e) =>
-                                      !validEpisodeNumbers.includes(
-                                        e.episode_number,
-                                      ),
-                                  );
-                                if (episodesToDelete.length > 0) {
-                                  await supabase.from('tv_show_episodes')
-                                    .delete()
-                                    .in(
-                                      'id',
-                                      episodesToDelete.map((e) => e.id),
-                                    );
-                                }
-                              }
-                            } else {
-                              // Only delete season if no local episodes have watched state
-                              const localS = item.seasons?.find(
-                                (ls) => ls.season_number === s.season_number,
-                              );
-                              const hasWatched = localS?.episodes.some(
-                                (ep) =>
-                                  watchedEpisodes.has(
-                                    `${item.id}-s${s.season_number}-e${ep.episode_number}`,
-                                  ),
-                              );
-                              if (!hasWatched) {
-                                await supabase.from('tv_show_seasons')
-                                  .delete()
-                                  .eq('id', dbS.id);
-                              }
-                            }
-                          } else {
-                            // Only delete season if no local episodes have watched state
-                            const localS = item.seasons?.find(
-                              (ls) => ls.season_number === s.season_number,
-                            );
-                            const hasWatched = localS?.episodes.some((ep) =>
-                              watchedEpisodes.has(
-                                `${item.id}-s${s.season_number}-e${ep.episode_number}`,
-                              ),
-                            );
-                            if (!hasWatched) {
-                              await supabase
-                                .from('tv_show_seasons')
-                                .delete()
-                                .eq('id', dbS.id);
-                            }
-                          }
-                        }
-                      } catch (e) {
-                        console.error(
-                          'Failed to sync season during syncWatchlist:',
-                          e,
-                        );
-                      }
-                    }),
-                  );
-
-                  // Clean up any local seasons that no longer exist in TMDB (except Season 0)
-                  const localSeasons =
-                    item.seasons?.filter((s) => s.season_number !== 0) || [];
-                  for (const localSeason of localSeasons) {
-                    const existsInTmdb = data.seasons.some(
-                      (ts) =>
-                        ts.season_number === localSeason.season_number,
-                    );
-                    if (!existsInTmdb) {
-                      // Don't delete seasons that have watched episodes
-                      const hasWatchedEps = localSeason.episodes.some(
-                        (ep) =>
-                          watchedEpisodes.has(
-                            `${item.id}-s${localSeason.season_number}-e${ep.episode_number}`,
-                          ),
-                      );
-                      if (!hasWatchedEps) {
-                        await supabase.from('tv_show_seasons')
-                          .delete()
-                          .eq('id', localSeason.id);
-                      }
-                    }
-                  }
-                }
-              }
-              itemsSynced++;
-            } catch (itemError) {
-              console.error(`Error syncing item ${item.title}:`, itemError);
-              failedTitles.push(item.title);
-            }
-            processedCount++;
-            setSyncProgress(
-              Math.round((processedCount / itemsToSync.length) * 100),
-            );
-          }),
-        );
+      if (error) {
+        const detail = await readFunctionError(error);
+        if (!target) startSyncCooldown(detail.retry_after);
+        toast({
+          title: detail.status === 429 ? 'Sync not run' : 'Error',
+          description: detail.error ?? 'Sync failed',
+          variant: 'destructive',
+        });
+        return;
       }
-      await fetchData();
-      const durationMs = Date.now() - startTime;
-      const syncTime = new Date().toISOString();
-      setLastSyncTime(syncTime);
-      localStorage.setItem('last_sync_time', syncTime);
-      await logSync(
-        type,
-        failedTitles.length > 0 ? 'error' : 'success',
-        itemsSynced,
-        durationMs,
-        wasCancelled
-          ? `Stopped by user after ${itemsSynced} item(s)${failedTitles.length > 0 ? `; ${failedTitles.length} failed` : ''}`
-          : failedTitles.length > 0
-            ? `${failedTitles.length} item(s) failed: ${failedTitles.join(', ')}`
-            : undefined,
-      );
+
+      if (!target) startSyncCooldown(data?.retry_after);
+      await Promise.all([fetchData(), fetchSyncLog()]);
       setNextAutoSyncTime(getNextAutoSync().toISOString());
-      if (type === 'daily') {
-        console.log(
-          `[Daily Sync] Completed at ${syncTime}. ${itemsSynced} items synced in ${(durationMs / 1000).toFixed(1)}s`,
-        );
-      }
 
-      const isSingleItemResync = !!itemsOverride && itemsOverride.length === 1;
+      const itemsSynced = data?.itemsSynced ?? 0;
+      const failedTitles = data?.failedTitles ?? [];
+      const changes = data?.changes ?? [];
+      const truncated = data?.truncated === true;
       const descriptionParts = [
-        wasCancelled
-          ? `Stopped after ${itemsSynced} item(s) synchronized`
-          : isSingleItemResync && itemsSynced > 0
-            ? `"${itemsOverride[0].title}" resynced`
-            : `${itemsSynced} items synchronized${type === 'daily' ? ' (scheduled)' : ''}`,
+        target && itemsSynced > 0
+          ? `"${target.title}" resynced`
+          : truncated
+            ? `Stopped at the time limit after ${itemsSynced} of ${data?.itemsTotal ?? '?'} items -- run again for the rest`
+            : `${itemsSynced} items synchronized`,
       ];
-      if (changesSummary.length > 0) {
-        const preview = changesSummary.slice(0, 3).join('; ');
+      if (changes.length > 0) {
+        const preview = changes.slice(0, 3).join('; ');
         descriptionParts.push(
-          changesSummary.length > 3
-            ? `${preview}; +${changesSummary.length - 3} more`
-            : preview,
+          changes.length > 3 ? `${preview}; +${changes.length - 3} more` : preview,
         );
       }
       if (failedTitles.length > 0) {
@@ -1490,36 +1147,22 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       }
 
       toast({
-        title: wasCancelled
-          ? 'Sync Stopped'
-          : type === 'daily'
-            ? 'Daily Sync Complete'
-            : 'Sync Complete',
+        title: truncated ? 'Sync Incomplete' : 'Sync Complete',
         description: descriptionParts.join(' — '),
-        variant: failedTitles.length > 0 ? 'destructive' : undefined,
-      });
-    } catch (error) {
-      const durationMs = Date.now() - startTime;
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      await logSync(type, 'error', itemsSynced, durationMs, errorMsg);
-      toast({
-        title: 'Error',
-        description: 'Sync failed',
-        variant: 'destructive',
+        variant: failedTitles.length > 0 || truncated ? 'destructive' : undefined,
       });
     } finally {
       setSyncing(false);
-      setTimeout(() => setSyncProgress(0), 1000);
+      setSyncProgress(0);
     }
   };
 
-  // Resync a single show/movie instead of the whole watchlist -- reuses
-  // syncWatchlist's itemsOverride so it gets the same progress/change/failure
-  // handling without duplicating the sync logic.
+  const syncWatchlist = () => runServerSync();
+
   const syncSingleItem = async (id: string) => {
     const item = watchlist.find((i) => i.id === id);
     if (!item || !item.tmdb_id) return;
-    await syncWatchlist('manual', [item]);
+    await runServerSync(item);
   };
 
   /**
@@ -1576,7 +1219,17 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         try {
           const details = await fetchTMDBProxy<TMDBDetails>(
             `${fav.media_type}/${fav.tmdb_id}`,
-          );
+          ).catch((error) => {
+            // TMDB no longer has this id. Empty facts retire the row; thrown,
+            // it would stay stale and head every batch after this one.
+            if (
+              error instanceof FunctionsHttpError &&
+              (error.context as Response).status === 404
+            ) {
+              return {} as TMDBDetails;
+            }
+            throw error;
+          });
           // The detail endpoints expand genres to objects; the derivation
           // wants ids, and TMDB never returns both shapes at once.
           const genreIds =
@@ -1631,7 +1284,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Stops a full sync between chunks (see syncCancelRef declaration above).
+  // Stops a favourite-facts sync between titles (see syncCancelRef above).
   const cancelSync = () => {
     syncCancelRef.current = true;
   };
@@ -1667,6 +1320,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       loading,
       syncing,
       syncProgress,
+      syncAvailableAt,
       lastSyncTime,
       lastAutoSyncTime,
       nextAutoSyncTime,
@@ -1696,6 +1350,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       loading,
       syncing,
       syncProgress,
+      syncAvailableAt,
       lastSyncTime,
       lastAutoSyncTime,
       nextAutoSyncTime,

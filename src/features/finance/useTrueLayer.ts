@@ -10,18 +10,37 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useCooldown } from '@/hooks/useCooldown';
 import type { TrueLayerStatus } from '@/features/finance/finance-types';
 import { rememberTrueLayerOAuthState } from './truelayer-oauth';
+import { BANK_SYNC_LOG_QUERY_KEY } from './useBankSyncLog';
+
+/** A refused call, carrying the server's `retry_after` when it sent one. */
+class TrueLayerCallError extends Error {
+  status: number;
+  retryAfter?: number;
+
+  constructor(message: string, status: number, retryAfter?: number) {
+    super(message);
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
 
 export function useTrueLayer(onSynced: () => void | Promise<void>) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // TrueLayer state
   const [trueLayerStatus, setTrueLayerStatus] = useState<TrueLayerStatus | null>(null);
 
   const [isSyncingTrueLayer, setIsSyncingTrueLayer] = useState(false);
+  // The server holds a cooldown between manual syncs; this is only so the
+  // button can say when the next one is allowed.
+  const { until: syncAvailableAt, start: startSyncCooldown } = useCooldown('truelayer-sync');
 
   const [isConnectingTrueLayer, setIsConnectingTrueLayer] = useState(false);
 
@@ -46,7 +65,11 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.error || `Server returned status ${response.status}`);
+      throw new TrueLayerCallError(
+        data.error || `Server returned status ${response.status}`,
+        response.status,
+        typeof data.retry_after === 'number' ? data.retry_after : undefined,
+      );
     }
     return data;
   };
@@ -136,10 +159,12 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
   };
 
   const syncTrueLayer = async () => {
+    if (isSyncingTrueLayer) return;
     setIsSyncingTrueLayer(true);
     try {
       const data = await callTrueLayerEdgeFunction('sync_transactions');
-      
+      startSyncCooldown(data.retry_after);
+
       const banksDesc = data.connections_synced > 1
         ? ` across ${data.connections_synced} banks`
         : '';
@@ -160,19 +185,26 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
       void refreshMerchantLogos();
     } catch (err) {
       console.error('Error syncing TrueLayer:', err);
+      const refused = err instanceof TrueLayerCallError && err.status === 429;
+      if (refused) startSyncCooldown(err.retryAfter);
       toast({
-        title: "Sync Failed",
+        title: refused ? "Sync Not Run" : "Sync Failed",
         description: (err instanceof Error ? err.message : '') || "Failed to synchronize transactions",
         variant: "destructive"
       });
     } finally {
       setIsSyncingTrueLayer(false);
+      // A run logs itself whether it succeeded or not; the connections'
+      // last-synced times move only when it did.
+      void queryClient.invalidateQueries({ queryKey: BANK_SYNC_LOG_QUERY_KEY });
+      void checkTrueLayerConnection();
     }
   };
 
   return {
     trueLayerStatus,
     isSyncingTrueLayer,
+    syncAvailableAt,
     isConnectingTrueLayer,
     setIsConnectingTrueLayer,
     checkTrueLayerConnection,

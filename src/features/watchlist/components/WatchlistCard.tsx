@@ -7,15 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Trash2, Calendar, Heart } from 'lucide-react';
+import { Trash2, Calendar, Heart, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
@@ -29,11 +22,12 @@ import { PlatformBadge } from './PlatformLogo';
 import { providerSearchUrl } from '@/features/watchlist/provider-links';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
+import { PosterCard } from './PosterCard';
+import { SmartScheduleDialog, scheduleReleaseDate } from './SmartScheduleDialog';
 
 interface WatchlistCardProps {
   item: WatchlistItem;
   onRemove?: (id: string) => void;
-  getCategoryIcon: (cat: string) => JSX.Element | null;
   toggleEpisodeWatched?: (
     showId: string,
     seasonNumber: number,
@@ -58,7 +52,6 @@ interface WatchlistCardProps {
 export const WatchlistCard = React.memo(function WatchlistCard({
   item,
   onRemove,
-  getCategoryIcon,
   toggleEpisodeWatched,
   toggleSeasonWatched,
   isEpisodeWatched,
@@ -72,37 +65,17 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   syncing,
 }: WatchlistCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
-  const [failedImage, setFailedImage] = useState<string | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [loadedImage, setLoadedImage] = useState<string | null>(null);
+  const cardRef = useRef<HTMLButtonElement>(null);
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<
-    | 'Monday'
-    | 'Tuesday'
-    | 'Wednesday'
-    | 'Thursday'
-    | 'Friday'
-    | 'Saturday'
-    | 'Sunday'
-  >('Monday');
-
-  const DAYS = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ] as const;
-
-  const handleAddToSchedule = () => {
+  const handleAddToSchedule = (day: ScheduleEntry['day'], date: string, mode: 'weekly' | 'date') => {
     if (addToSchedule) {
       addToSchedule({
         watchlistItemId: item.id,
-        day: selectedDay,
+        day,
+        scheduledDate: mode === 'date' ? date : undefined,
+        mode,
         title: item.title,
         category: item.category,
         image_url: item.image_url,
@@ -157,127 +130,13 @@ export const WatchlistCard = React.memo(function WatchlistCard({
 
   return (
     <>
-      <div
-        ref={cardRef}
-        role="button"
-        tabIndex={0}
-        aria-label={`${item.title} — open details`}
-        onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setDetailOpen(true); } }}
-        className="item-card group cursor-pointer"
-        onClick={() => setDetailOpen(true)}
-      >
-        <div className="aspect-[2/3] bg-muted relative overflow-hidden">
-          {item.image_url && item.image_url !== failedImage && loadedImage !== item.image_url && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground" role="status">{getCategoryIcon(item.category)}<span className="text-xs">Loading poster…</span></div>}
-          {item.image_url && item.image_url !== failedImage ? (
-            <img
-              src={item.image_url}
-              alt={item.title}
-              className={cn("w-full h-full object-contain relative", loadedImage !== item.image_url && "opacity-0")}
-              onLoad={() => setLoadedImage(item.image_url || null)}
-              onError={() => setFailedImage(item.image_url || null)}
-              loading="lazy"
-            />
-          ) : (
-            <div className="missing-art w-full h-full flex flex-col gap-3 p-4 text-center items-center justify-center">
-              {getCategoryIcon(item.category)}
-              <span className="text-xs font-medium line-clamp-3">{item.title}</span>
-              <span className="text-xs text-muted-foreground">No poster available</span>
-            </div>
-          )}
-
-          {/* Action buttons - top right on hover */}
-          <div
-            className="absolute top-2 right-2 flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {onMoveToFavourites && (
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMoveToFavourites(item);
-                }}
-                title="Move to Favourites"
-              >
-                <Heart className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {(addToSchedule || removeFromSchedule) && (
-              <Button
-                variant="secondary"
-                size="icon"
-                className={cn(
-                  'h-7 w-7 bg-background/80 backdrop-blur-sm',
-                  isInSchedule(item.id) && 'text-primary',
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isInSchedule(item.id)) {
-                    if (removeFromSchedule) {
-                      askDelete({
-                        name: item.title,
-                        title: 'Remove from schedule',
-                        confirmLabel: 'Remove',
-                        description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
-                        onConfirm: () => removeFromSchedule(item.id),
-                      });
-                    }
-                  } else {
-                    if (addToSchedule) setScheduleDialogOpen(true);
-                  }
-                }}
-              >
-                <Calendar className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {onRemove && (
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-7 w-7 bg-background/80 backdrop-blur-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteConfirmOpen(true);
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-          </div>
-
-          {/* Schedule indicator - visible when scheduled */}
-          {isInSchedule(item.id) && (
-            <div className="absolute top-2 left-2">
-              <Calendar className="h-4 w-4 text-primary drop-shadow-md" />
-            </div>
-          )}
-        </div>
-
-        <div className="card-body p-2.5">
-          {/* Two lines is the floor, not the ceiling: `min-h` keeps a
-              one-line title from pulling its card's badges up out of line
-              with its neighbours', while a long one is allowed a third line
-              rather than ending in an ellipsis. Only the rare long title
-              makes its row taller, which is the cheaper of the two. */}
-          <h3 className="card-title font-serif text-sm font-medium leading-tight min-h-[2.5rem]">
-            <span className="line-clamp-3" style={{ textWrap: 'balance' }}>
-              {displayTitle(item.title, item.year)}
-            </span>
-          </h3>
-
-          {/* Year and first genre. It wraps rather than truncating -- on a
-              narrow card `truncate` was cutting the genre to "Animat...". */}
-          <p className="card-sub text-xs text-muted-foreground mt-0.5 min-h-[1rem]">
-            {item.year}
-            {item.year && item.genres && item.genres.length > 0 && ' · '}
-            {item.genres?.[0]}
-          </p>
-
-          {/* Platform on the left, status and release date on the right, so the
-              card keeps its height whether or not a title has both. */}
-          <div className="card-meta flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-1.5 min-h-[22px]">
+      <PosterCard
+        cardRef={cardRef}
+        title={displayTitle(item.title, item.year)}
+        poster={item.image_url}
+        onOpen={() => setDetailOpen(true)}
+        subtitle={<>{item.year}{item.year && item.genres?.length ? ' · ' : ''}{item.genres?.[0]}</>}
+        meta={<>
             {watchUrl ? (
               <a
                 href={watchUrl}
@@ -324,11 +183,26 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                 </span>
               )
             )}
+        </>}
+        scheduled={isInSchedule(item.id)}
+        onSchedule={addToSchedule || removeFromSchedule ? () => {
+          if (isInSchedule(item.id) && removeFromSchedule) {
+            askDelete({ name: item.title, title: 'Remove from schedule', confirmLabel: 'Remove', description: 'The title stays in your library.', onConfirm: () => removeFromSchedule(item.id) });
+          } else if (addToSchedule) setScheduleDialogOpen(true);
+        } : undefined}
+        actions={onMoveToFavourites || onRemove ? (
+          <div className="absolute right-2 top-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="secondary" size="icon" className="h-11 w-11 bg-background/90" aria-label={`Actions for ${item.title}`}><MoreHorizontal className="h-5 w-5" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onMoveToFavourites && <DropdownMenuItem onSelect={() => onMoveToFavourites(item)}><Heart className="mr-2 h-4 w-4" />Move to favourites</DropdownMenuItem>}
+                {onRemove && <DropdownMenuItem className="text-destructive" onSelect={() => setDeleteConfirmOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Remove from library</DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </div>
-      </div>
+        ) : undefined}
+      />
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -366,56 +240,14 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-serif">
-              Add to Weekly Schedule
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Choose a day of the week to schedule watching this title.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Select which day you want to watch{' '}
-              <span className="font-medium">{item.title}</span>
-            </p>
-            <div className="space-y-2">
-              <Label>Day of the week</Label>
-              <Select
-                value={selectedDay}
-                onValueChange={(value) =>
-                  setSelectedDay(value as typeof selectedDay)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS.map((day) => (
-                    <SelectItem key={day} value={day}>
-                      {day}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setScheduleDialogOpen(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleAddToSchedule} className="flex-1">
-                Add to {selectedDay}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SmartScheduleDialog
+        open={scheduleDialogOpen}
+        onOpenChange={setScheduleDialogOpen}
+        title={item.title}
+        releaseDate={scheduleReleaseDate(item)}
+        defaultMode={item.category === 'TV Shows' ? 'weekly' : 'date'}
+        onAdd={handleAddToSchedule}
+      />
 
       <WatchlistDetailDialog
         open={detailOpen}

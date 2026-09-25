@@ -85,9 +85,9 @@ Server-side Deno functions, deployed independently of the frontend — **pushing
 
 | Function | Purpose | Required secrets | Callable by |
 |---|---|---|---|
-| `tmdb-proxy` | Proxies TMDB API calls so the TMDB key never reaches the browser. Endpoint allow-listed (only the shapes the app actually uses) to stop it being used as a free generic proxy. | `TMDB_API_KEY` | Public (needed for anonymous visitors browsing the Watchlist page), origin-restricted CORS |
-| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored, tab-bound, exact-redirect allow-listed and consumed before token exchange. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `ADMIN_EMAIL` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin user (JWT email check) or the service role for the scheduled sync |
-| `watchlist-cron-sync` | Server-side port of the Watchlist page's TV/movie sync logic (see below). Refreshes status, episodes, seasons, streaming platform from TMDB for every watchlist item. | `TMDB_API_KEY` (+ auto-injected Supabase vars) | Service role key only (called by pg_cron, not public) |
+| `tmdb-proxy` | Proxies TMDB API calls so the TMDB key never reaches the browser. Endpoint allow-listed (only the shapes the app actually uses) to stop it being used as a free generic proxy. Rate-limited to 60 requests a minute per IP in the `rate_limits` table; passes TMDB's status code through. | `TMDB_API_KEY` | Public (needed for anonymous visitors browsing the Watchlist page), origin-restricted CORS |
+| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored, tab-bound, exact-redirect allow-listed and consumed before token exchange. A manual sync is refused (429) within 15 minutes of the last one; linking a bank clears that. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `ADMIN_EMAIL` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin user (JWT email check) or the service role for the scheduled sync |
+| `watchlist-cron-sync` | The watchlist sync (see below). Refreshes status, episodes, seasons, streaming platform from TMDB for every watchlist item, or for one title when the body names `{ category, id }`. A manual full sync is refused (429) within 10 minutes of the last; single-title resyncs are capped at 20 a minute. | `TMDB_API_KEY` (+ auto-injected Supabase vars) | Service role key (pg_cron) or an admin session (the Sync buttons) |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically into every edge function's environment by the platform — never set those manually. Everything else needs:
 
@@ -98,9 +98,25 @@ supabase functions deploy truelayer-sync
 supabase functions deploy watchlist-cron-sync
 ```
 
-### Why there are two watchlist sync implementations
+### One watchlist sync, server-side
 
-`src/features/watchlist/WatchlistContext.tsx`'s `syncWatchlist` (browser) and `supabase/functions/watchlist-cron-sync/index.ts` (server) implement **the same logic twice**, deliberately — there's no module shared between the Vite/browser bundle and the Deno edge runtime. The browser version runs only when an admin presses **Sync Updates** on the Library page — there is no client-side auto-sync any more, and opening News or Library never starts one; the edge function version runs on a schedule regardless of whether anyone has the site open. **If you change the sync logic, change both.**
+`supabase/functions/watchlist-cron-sync/index.ts` is the only implementation. pg_cron calls it nightly; the Library page's **Sync now** and a detail card's resync call it with the admin's session through `WatchlistContext.tsx`'s `syncWatchlist` / `syncSingleItem`. Opening News or Library never starts one.
+
+The browser used to run its own copy through `tmdb-proxy`. At 60 requests a minute per IP against a library of well over a thousand titles, that copy failed most titles on every run, so it was removed. `getPlatform` in `src/features/watchlist/sync-logic.ts` is still mirrored in the function for the add flow; change both together.
+
+### Spam protection on the edge functions
+
+A disabled button stops a double click, not a second tab, a reload or a script, so every function that spends a third-party call enforces its own limit. All of them keep state in `rate_limits` (service-role only, no policies):
+
+| Function | Limit | Mechanism |
+|---|---|---|
+| `tmdb-proxy` | 60 a minute per IP | `check_rate_limit` fixed window |
+| `watchlist-cron-sync` full sync | one per 10 minutes | sliding cooldown, `_shared/cooldown.ts` |
+| `watchlist-cron-sync` single title | 20 a minute | `check_rate_limit` fixed window |
+| `truelayer-sync` `sync_transactions` | one per 15 minutes | sliding cooldown; cleared by `exchange_code` |
+| `merchant-logo-cache` | two runs per 5 minutes | `check_rate_limit` fixed window |
+
+The service-role callers (pg_cron) are exempt. A refused call answers 429 with `retry_after` in seconds, and the Sync buttons show when the next run is allowed.
 
 ### Scheduled sync (pg_cron)
 

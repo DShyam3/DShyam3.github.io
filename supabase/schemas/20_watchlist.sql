@@ -182,7 +182,10 @@ CREATE TABLE IF NOT EXISTS "public"."weekly_schedule" (
     "tv_show_id" integer,
     "day_of_week" "text" NOT NULL,
     "movie_id" bigint,
-    CONSTRAINT "weekly_schedule_day_of_week_check" CHECK (("day_of_week" = ANY (ARRAY['Sunday'::"text", 'Monday'::"text", 'Tuesday'::"text", 'Wednesday'::"text", 'Thursday'::"text", 'Friday'::"text", 'Saturday'::"text"])))
+    "scheduled_date" date,
+    "schedule_mode" "text" DEFAULT 'weekly'::"text" NOT NULL,
+    CONSTRAINT "weekly_schedule_day_of_week_check" CHECK (("day_of_week" = ANY (ARRAY['Sunday'::"text", 'Monday'::"text", 'Tuesday'::"text", 'Wednesday'::"text", 'Thursday'::"text", 'Friday'::"text", 'Saturday'::"text"]))),
+    CONSTRAINT "weekly_schedule_schedule_mode_check" CHECK (("schedule_mode" = ANY (ARRAY['weekly'::"text", 'date'::"text"])))
 );
 
 ALTER TABLE "public"."weekly_schedule" OWNER TO "postgres";
@@ -246,6 +249,10 @@ ALTER TABLE ONLY "public"."weekly_schedule"
 CREATE INDEX "idx_tv_shows_tmdb_id" ON "public"."tv_shows" USING "btree" ("tmdb_id");
 
 CREATE INDEX "idx_weekly_schedule_movie_id" ON "public"."weekly_schedule" USING "btree" ("movie_id");
+
+-- Date-mode rows are read by month-range queries in the calendar. Weekly rows
+-- remain keyed by their weekday and are not included in this partial index.
+CREATE INDEX "idx_weekly_schedule_scheduled_date" ON "public"."weekly_schedule" USING "btree" ("scheduled_date") WHERE ("schedule_mode" = 'date'::"text");
 
 -- Partial: the view below (and every "what's next" query) only ever reads
 -- unwatched rows, so there is no reason to index the rest.

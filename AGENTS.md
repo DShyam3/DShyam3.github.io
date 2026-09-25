@@ -169,10 +169,9 @@ The roster exists once per tool, because no two of them read the same format:
 | Gemini CLI | `.gemini/agents/*.md` | YAML frontmatter + markdown body | `model:` — a model id, verify it against the installed CLI |
 | Codex CLI | `.codex/agents/*.toml` | TOML, body in `developer_instructions` | `model_reasoning_effort = "low" \| "medium" \| "high"` |
 
-**Change one, change all three.** This is the same standing hazard as the two
-watchlist sync implementations in `README.md`, and it is accepted for the same
-reason: there is no format the three tools share, so the choice is duplication
-or only one of them working.
+**Change one, change all three.** This is a standing hazard, accepted because
+there is no format the three tools share, so the choice is duplication or only
+one of them working.
 
 Duplication is survivable here only because the bodies are thin. The substance
 lives in this file; an agent definition says which rules apply to it and what

@@ -3,35 +3,42 @@ import type React from 'react';
 /** Marks a backdrop that dismisses its layer on release. */
 export const DISMISS_OVERLAY_ATTR = 'data-dismiss-overlay';
 
-/**
- * Makes an overlay dismiss on the *release* of a tap or click, never the press.
- *
- * Radix closes a modal layer on `pointerdown` for a mouse. Dialogs here skip
- * their exit animation, so the overlay unmounts mid-click and the `click` that
- * follows lands on whatever sat underneath -- clicking outside a recipe card
- * closed it and opened the card behind. So the press is ignored (see
- * `ignoreOverlayPointerDown`) and the overlay closes from its own `click`,
- * which it still owns because it is still mounted.
- *
- * Touch needs one more step: iOS Safari only synthesises a click on elements
- * it treats as interactive, which a bare backdrop div is not, so a tap outside
- * did nothing on an iPad. `touchend` fires the click itself and cancels the
- * browser's own, so no ghost click reaches the page once the overlay is gone.
- *
- * Wrap the overlay in the primitive's `Close` and spread these props onto it.
- *
- * @param onTouchEnd any handler the caller passed through, run first
- */
+const touches = new WeakMap<HTMLElement, { id: number; x: number; y: number; moved: boolean }>();
+
+/** Dismiss only a tap that began and ended on the backdrop, never a drag. */
 export function dismissOnRelease<T extends HTMLElement>(
   onTouchEnd?: React.TouchEventHandler<T>,
-): { [DISMISS_OVERLAY_ATTR]: ''; onTouchEnd: React.TouchEventHandler<T> } {
+): {
+  [DISMISS_OVERLAY_ATTR]: '';
+  onTouchStart: React.TouchEventHandler<T>;
+  onTouchMove: React.TouchEventHandler<T>;
+  onTouchCancel: React.TouchEventHandler<T>;
+  onTouchEnd: React.TouchEventHandler<T>;
+} {
   return {
     [DISMISS_OVERLAY_ATTR]: '',
+    onTouchStart: (event) => {
+      touches.delete(event.currentTarget);
+      if (event.target !== event.currentTarget || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      touches.set(event.currentTarget, { id: touch.identifier, x: touch.clientX, y: touch.clientY, moved: false });
+    },
+    onTouchMove: (event) => {
+      const start = touches.get(event.currentTarget);
+      if (!start) return;
+      const touch = Array.from(event.touches).find(t => t.identifier === start.id);
+      if (!touch || event.touches.length !== 1 || Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 8) start.moved = true;
+    },
+    onTouchCancel: (event) => { touches.delete(event.currentTarget); },
     onTouchEnd: (event) => {
       onTouchEnd?.(event);
-      // A touch that started on the overlay itself, never a caller-handled one.
+      const start = touches.get(event.currentTarget);
+      touches.delete(event.currentTarget);
       if (event.defaultPrevented || event.target !== event.currentTarget) return;
+      // Also suppress the compatibility click after a swipe or multi-touch.
       event.preventDefault();
+      const end = Array.from(event.changedTouches).find(t => t.identifier === start?.id);
+      if (!start || start.moved || !end || event.touches.length || Math.hypot(end.clientX - start.x, end.clientY - start.y) > 8) return;
       event.currentTarget.click();
     },
   };

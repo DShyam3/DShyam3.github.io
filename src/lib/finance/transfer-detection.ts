@@ -10,6 +10,12 @@
  * This module only detects. It never links, tags or mutates a transaction --
  * a bank reference is not proof, so a person confirms every pair before it
  * is treated as a transfer (the same stance as `payslip-reconciliation.ts`).
+ *
+ * Not every transfer has both legs in the ledger -- money can leave for an
+ * account this app never sees. `findSingleLegTransferCandidates` proposes
+ * those unpaired rows too; a person still decides whether each one really
+ * left the owner's own pocket ('internal') or was real spending or income
+ * ('external'). Only 'internal' changes a figure.
  */
 
 /** Ledger amounts are positive for money spent and negative for money received. */
@@ -116,6 +122,12 @@ interface DatedTransaction extends TransferCandidateTransaction {
   timestamp: number;
 }
 
+/** Identity of one proposed pairing, as stored against a dismissal. */
+export const transferPairKey = (outflowId: string, inflowId: string): string =>
+  `${outflowId}>${inflowId}`;
+
+const NO_EXCLUDED_PAIRS: ReadonlySet<string> = new Set();
+
 /**
  * Finds pairs of rows that look like one leg of a transfer between two of
  * the owner's own accounts: an outflow on one account matched by an inflow
@@ -126,10 +138,16 @@ interface DatedTransaction extends TransferCandidateTransaction {
  * one returned pair; when several candidates compete for the same row, the
  * closest dated match wins, with a fully deterministic tie-break so the same
  * input always produces the same output.
+ *
+ * `excludedPairs` holds `transferPairKey`s a person has already rejected.
+ * They are dropped before the one-to-one assignment rather than after it, so
+ * a rejected pairing cannot keep claiming a row that has a real partner
+ * further away.
  */
 export const findTransferPairCandidates = (
   transactions: readonly TransferCandidateTransaction[],
   windowDays: number = TRANSFER_MATCH_WINDOW_DAYS,
+  excludedPairs: ReadonlySet<string> = NO_EXCLUDED_PAIRS,
 ): TransferPairCandidate[] => {
   const dated: DatedTransaction[] = [];
   for (const transaction of transactions) {
@@ -140,7 +158,20 @@ export const findTransferPairCandidates = (
   }
 
   const outflows = dated.filter(t => pence(t.amount) > 0);
-  const inflows = dated.filter(t => pence(t.amount) < 0);
+
+  /* Inflows indexed by the amount they would match. Only an exact amount can
+     pair, so comparing every outflow with every inflow was quadratic in the
+     ledger for no gain; this keeps the whole history in scope -- an old,
+     unconfirmed transfer still inflates the months it sits in -- at the cost
+     of one pass. */
+  const inflowsByPence = new Map<number, DatedTransaction[]>();
+  for (const transaction of dated) {
+    const amountPence = pence(transaction.amount);
+    if (amountPence >= 0) continue;
+    const bucket = inflowsByPence.get(-amountPence) ?? [];
+    bucket.push(transaction);
+    inflowsByPence.set(-amountPence, bucket);
+  }
 
   interface Scored {
     pair: TransferPairCandidate;
@@ -151,9 +182,9 @@ export const findTransferPairCandidates = (
   const scored: Scored[] = [];
   for (const outflow of outflows) {
     const outflowPence = pence(outflow.amount);
-    for (const inflow of inflows) {
+    for (const inflow of inflowsByPence.get(outflowPence) ?? []) {
       if (outflow.accountId === inflow.accountId) continue;
-      if (pence(inflow.amount) !== -outflowPence) continue;
+      if (excludedPairs.has(transferPairKey(outflow.id, inflow.id))) continue;
       const daysApart = Math.abs(outflow.timestamp - inflow.timestamp) / 86_400_000;
       if (daysApart > windowDays) continue;
 
@@ -304,6 +335,96 @@ export const findTransferCycles = (
   return cycles;
 };
 
+export type SingleLegSignal = 'provider_says_transfer' | 'name_suggests_transfer';
+
+export interface SingleLegTransferCandidate {
+  transactionId: string;
+  /** 'out' for money leaving (positive amount), 'in' for money arriving. */
+  direction: 'out' | 'in';
+  /** Absolute, 2dp. */
+  amount: number;
+  accountId: string | null;
+  /** YYYY-MM-DD, as given. */
+  date: string;
+  signals: SingleLegSignal[];
+}
+
+export type SingleLegVerdict = 'internal' | 'external';
+
+/** A person's verdict on one unpaired transfer-looking row, as stored. */
+export interface StoredSingleLegDecision {
+  id: string;
+  transactionId: string;
+  verdict: SingleLegVerdict;
+  decidedAt: string;
+}
+
+/*
+ * Deliberately excludes the 'Savings' category as a signal here. In
+ * `signalsFor` above it corroborates an already-matched pair; alone, on one
+ * row with no partner, a Savings budget line only says the owner chose to
+ * label their own spending that way -- it says nothing about which account,
+ * if any, the money actually went to. Using it here would flag ordinary
+ * categorised spending as a transfer candidate on category alone.
+ */
+const singleLegSignalsFor = (transaction: TransferCandidateTransaction): SingleLegSignal[] => {
+  const signals: SingleLegSignal[] = [];
+  if (transaction.providerCategory === 'transfer') signals.push('provider_says_transfer');
+  if (suggestsTransfer(transaction.name)) signals.push('name_suggests_transfer');
+  return signals;
+};
+
+/**
+ * Finds rows that look like one leg of a transfer with no matching leg
+ * anywhere in this ledger -- money moved to or from an account this app
+ * never sees. Unlike `findTransferPairCandidates`, there is no second row to
+ * corroborate the guess, so this only fires on direct evidence: the
+ * provider's own classification, or the row's name.
+ *
+ * `excludedIds` is the caller's job to build: both legs of every confirmed
+ * link, both legs of every currently proposed pair candidate (a row already
+ * explained by a pairing should not also be offered as unpaired), and every
+ * row that already carries a single-leg verdict. This function does not
+ * re-derive any of that -- it only skips what it is told to.
+ *
+ * A row with an unparseable date is still proposed; the date string is
+ * passed through as given so the caller can still decide, it just sorts
+ * last here for lack of anything to sort it by.
+ */
+export const findSingleLegTransferCandidates = (
+  transactions: readonly TransferCandidateTransaction[],
+  excludedIds: ReadonlySet<string>,
+): SingleLegTransferCandidate[] => {
+  const candidates: SingleLegTransferCandidate[] = [];
+  for (const transaction of transactions) {
+    if (excludedIds.has(transaction.id)) continue;
+    const amountPence = pence(transaction.amount);
+    if (amountPence === 0) continue;
+
+    const signals = singleLegSignalsFor(transaction);
+    if (signals.length === 0) continue;
+
+    candidates.push({
+      transactionId: transaction.id,
+      direction: amountPence > 0 ? 'out' : 'in',
+      amount: Math.abs(amountPence) / 100,
+      accountId: transaction.accountId,
+      date: transaction.date,
+      signals,
+    });
+  }
+
+  candidates.sort((left, right) => {
+    const leftValid = dateAtMidnightUtc(left.date) !== undefined;
+    const rightValid = dateAtMidnightUtc(right.date) !== undefined;
+    if (leftValid !== rightValid) return leftValid ? -1 : 1; // unparseable dates sort last
+    if (leftValid && left.date !== right.date) return left.date < right.date ? 1 : -1; // descending
+    return left.transactionId.localeCompare(right.transactionId);
+  });
+
+  return candidates;
+};
+
 /**
  * A pair a person has confirmed really is one internal movement.
  *
@@ -318,12 +439,19 @@ export interface ConfirmedTransferLink {
 }
 
 /**
- * Every transaction id that is one leg of a confirmed internal transfer.
+ * Every transaction id excluded from income and spending totals: both legs
+ * of every confirmed pair, plus every single-leg row a person has marked
+ * 'internal'.
  *
- * Income and spending totals exclude these. Both legs go: the money leaving
- * one account and arriving in another is a single movement between pockets
- * the owner already had, so counting either leg would overstate the month --
- * the outflow as spending it never did, the inflow as income it never earned.
+ * Income and spending totals exclude these. Both legs of a confirmed pair
+ * go: the money leaving one account and arriving in another is a single
+ * movement between pockets the owner already had, so counting either leg
+ * would overstate the month -- the outflow as spending it never did, the
+ * inflow as income it never earned. An 'internal' single leg is excluded for
+ * the same reason -- its other leg exists, just not in this ledger, so it is
+ * still a movement between the owner's own pockets, not spending or income.
+ * 'external' adds nothing: that verdict means the row really was spending or
+ * income, so it stays counted.
  *
  * The balances themselves are untouched. Moving £500 to savings really does
  * leave the current account £500 lighter; what it does not do is mean £500
@@ -331,11 +459,15 @@ export interface ConfirmedTransferLink {
  */
 export const transferExcludedTransactionIds = (
   links: readonly ConfirmedTransferLink[],
+  singleLegs: readonly { transactionId: string; verdict: SingleLegVerdict }[] = [],
 ): Set<string> => {
   const excluded = new Set<string>();
   for (const link of links) {
     excluded.add(link.outflowTransactionId);
     excluded.add(link.inflowTransactionId);
+  }
+  for (const singleLeg of singleLegs) {
+    if (singleLeg.verdict === 'internal') excluded.add(singleLeg.transactionId);
   }
   return excluded;
 };
@@ -344,4 +476,18 @@ export const transferExcludedTransactionIds = (
 export interface StoredTransferLink extends ConfirmedTransferLink {
   id: string;
   confirmedAt: string;
+}
+
+/**
+ * A pair a person has looked at and said is not a transfer.
+ *
+ * Changes no figure. Its only effect is that detection stops proposing the
+ * same pairing (`excludedPairs` above); either row can still pair with
+ * something else.
+ */
+export interface StoredTransferDismissal {
+  id: string;
+  outflowTransactionId: string;
+  inflowTransactionId: string;
+  dismissedAt: string;
 }

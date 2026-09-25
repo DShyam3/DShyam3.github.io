@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parsePayslipFilename, parsePayslipText, parsedFieldCount } from './payslip-parse';
+import {
+  parsePayslipFilename, parsePayslipText, parsePositionedPayslip, parsedFieldCount,
+  type PositionedLine,
+} from './payslip-parse';
 
 /**
  * Layouts, not real payslips. The figures are invented; what is being tested
@@ -168,19 +171,19 @@ describe('parsedFieldCount', () => {
 
 describe('parsePayslipFilename', () => {
   it('reads a year-month name, dating it to the first as a placeholder', () => {
-    expect(parsePayslipFilename('2026-06_Capgemini_Payslip.pdf')).toEqual({
+    expect(parsePayslipFilename('2026-06_Acme_Payslip.pdf')).toEqual({
       payDate: '2026-06-01',
-      employer: 'Capgemini',
+      employer: 'Acme',
     });
   });
 
   it('prefers a full date when the name carries one', () => {
-    expect(parsePayslipFilename('2026-06-28_Capgemini_Payslip.pdf').payDate).toBe('2026-06-28');
+    expect(parsePayslipFilename('2026-06-28_Acme_Payslip.pdf').payDate).toBe('2026-06-28');
   });
 
   it('keeps a multi-word employer together', () => {
     expect(parsePayslipFilename('2025-12_UCL_Payslip.pdf').employer).toBe('UCL');
-    expect(parsePayslipFilename('2022-07_Keysight_Payslip.pdf').employer).toBe('Keysight');
+    expect(parsePayslipFilename('2022-07_Northwind_Payslip.pdf').employer).toBe('Northwind');
   });
 
   it('drops the document-kind word rather than treating it as an employer', () => {
@@ -292,5 +295,316 @@ describe('parsePayslipText — a payslip that never says "net"', () => {
     // the payslip fell back to its filename and lost the day.
     expect(parsePayslipText('Payment Date 31-Dec-2025').payDate).toBe('2025-12-31');
     expect(parsePayslipText('Pay Day 28 August 2026').payDate).toBe('2026-08-28');
+  });
+});
+
+/**
+ * The vocabulary tests below cover a wider set of UK payslip label wording
+ * than any one archive uses. Every figure is invented; what is being checked
+ * is the wording and abbreviation UK payroll systems are seen to use, not a
+ * real export.
+ */
+
+describe('parsePayslipText — National Insurance vocabulary', () => {
+  it('reads a bare NI label', () => {
+    expect(parsePayslipText('NI 245.00').nationalInsurance).toBe(245);
+  });
+
+  it('reads the employee abbreviations Ees and EE', () => {
+    expect(parsePayslipText('Ees NI 245.00').nationalInsurance).toBe(245);
+    expect(parsePayslipText('EE NI 245.00').nationalInsurance).toBe(245);
+  });
+
+  it('reads NI with "Employee" written after it', () => {
+    expect(parsePayslipText('NI Employee 245.00').nationalInsurance).toBe(245);
+  });
+});
+
+describe('parsePayslipText — employer National Insurance is recognised, never claimed as the employee\'s', () => {
+  // Each line alone carries only the employer's figure, so the correct
+  // result is nothing at all -- claiming it under `nationalInsurance` would
+  // be silently handing the employee the employer's number.
+  it.each([
+    'Employer NI 300.00',
+    'Ers NI 300.00',
+    'Employer NIC 300.00',
+    'ER NIC 300.00',
+  ])('leaves %s unclaimed by any field', (line) => {
+    expect(parsePayslipText(line)).toEqual({});
+  });
+
+  it('keeps the employer\'s figure out of the employee\'s field on a combined line', () => {
+    // The dangerous shape: employer NI written first, on the same line as
+    // the employee's -- a bare `\bni\b` fallback would otherwise walk
+    // straight past "Employer" and claim the first figure it finds.
+    const parsed = parsePayslipText('Ers NIC 210.00 Ees NI 180.00');
+    expect(parsed.nationalInsurance).toBe(180);
+  });
+});
+
+describe('parsePayslipText — an Ees/Ers abbreviated layout', () => {
+  // Employer NIC deliberately precedes the employee's NI on one line, and
+  // employer pension precedes employee pension on another -- the shape that
+  // breaks a reader which claims the first NI/pension figure it meets.
+  const EES_ERS_LAYOUT = `
+Pay Day 15/07/2026
+Basic Pay              2,800.00
+PAYE Tax                 250.00
+Ers NIC 210.00 Ees NI 180.00
+Ers Pension 90.00 Ees Pension 140.00
+Stud Loan 45.00
+Gross Pay              2,800.00
+Net Payable            2,185.00
+`;
+  const parsed = parsePayslipText(EES_ERS_LAYOUT);
+
+  it('reads gross, tax and the pay date', () => {
+    expect(parsed.gross).toBe(2800);
+    expect(parsed.incomeTax).toBe(250);
+    expect(parsed.payDate).toBe('2026-07-15');
+  });
+
+  it('gives the employee\'s NI to nationalInsurance, not the employer\'s 210', () => {
+    expect(parsed.nationalInsurance).toBe(180);
+  });
+
+  it('keeps employer and employee pension apart under their Ers/Ees abbreviations', () => {
+    expect(parsed.pensionEmployer).toBe(90);
+    expect(parsed.pensionEmployee).toBe(140);
+  });
+
+  it('reads an abbreviated student loan line', () => {
+    expect(parsed.studentLoan).toBe(45);
+  });
+
+  it('reads "Net Payable" as net', () => {
+    // 2800 - 250 - 180 - 140 - 45 = 2185.
+    expect(parsed.net).toBe(2185);
+  });
+});
+
+describe('parsePayslipText — student loan vocabulary', () => {
+  it('reads the abbreviated "Stud Loan"', () => {
+    expect(parsePayslipText('Stud Loan 50.00').studentLoan).toBe(50);
+  });
+
+  it('reads a plan-numbered "SL Plan 2"', () => {
+    expect(parsePayslipText('SL Plan 2 50.00').studentLoan).toBe(50);
+  });
+
+  it('reads the postgraduate abbreviation "PG Loan"', () => {
+    expect(parsePayslipText('PG Loan 30.00').studentLoan).toBe(30);
+  });
+
+  it('does not claim a bare "SL" that names no plan, digit or bracket', () => {
+    // "SL" followed by an ordinary word is too short a token to claim on its
+    // own -- nothing else on the line matches either, so the whole line goes
+    // unclaimed rather than guessed.
+    expect(parsePayslipText('SL Payment 50.00')).toEqual({});
+  });
+
+  it('does not crash on a bare "SL" with nothing after it', () => {
+    expect(parsePayslipText('SL').studentLoan).toBeUndefined();
+  });
+});
+
+describe('parsePayslipText — a Total Pay gross and a Net Payable', () => {
+  it('reads "Total Pay" as gross', () => {
+    expect(parsePayslipText('Total Pay 3,000.00').gross).toBe(3000);
+  });
+
+  it('does not read "Total Payable" as gross', () => {
+    // "Payable" fails the word boundary straight after "pay", by design --
+    // the same boundary that lets "Net Payable" match "net pay" below.
+    expect(parsePayslipText('Total Payable 3,000.00').gross).toBeUndefined();
+  });
+
+  it('reads "Net Payable" as net', () => {
+    expect(parsePayslipText('Net Payable 2,000.00').net).toBe(2000);
+  });
+});
+
+describe('parsePayslipText — employer and employee pension abbreviations', () => {
+  it('reads Ers/ER as the employer\'s contribution', () => {
+    expect(parsePayslipText('Ers Pension 90.00').pensionEmployer).toBe(90);
+    expect(parsePayslipText('ER Pension 90.00').pensionEmployer).toBe(90);
+  });
+
+  it('reads Ees/EE as the employee\'s contribution', () => {
+    expect(parsePayslipText('Ees Pension 150.00').pensionEmployee).toBe(150);
+    expect(parsePayslipText('EE Pension 150.00').pensionEmployee).toBe(150);
+  });
+});
+
+describe('parsePayslipText — salary sacrifice into a scheme other than pension', () => {
+  it.each([
+    'Cycle to Work Salary Sacrifice -100.00',
+    'EV Salary Sacrifice -300.00',
+  ])('leaves %s unclaimed rather than recording it as pension', (line) => {
+    // There is no field in ParsedPayslip for a cycle-to-work or an EV
+    // sacrifice, so the earlier bug here was not "wrong number" but "wrong
+    // field": the same money landing in pensionEmployee, silently.
+    expect(parsePayslipText(line).pensionEmployee).toBeUndefined();
+  });
+
+  it('still records a sacrifice that names pension, alongside another word', () => {
+    expect(parsePayslipText('Pension Salary Sacrifice -200.00').pensionEmployee).toBe(200);
+  });
+
+  it('still records a bare sacrifice that names no scheme at all', () => {
+    expect(parsePayslipText('Salary Sacrifice -200.00').pensionEmployee).toBe(200);
+  });
+});
+
+// Invented figures. Other deductions are never derived: a gap between gross,
+// net and the named deductions is left for checkPayslip to report, because
+// the parser cannot tell a genuinely "other" deduction from a named one it
+// failed to label (REHAUL_PLAN.md 7.P; see the note in payslip-parse.ts).
+describe('parsePayslipText — no other-deductions plug', () => {
+  const unlabelled = (label: string, amount: string) => `
+Pay Day 10/03/2026
+Gross Pay          3,000.00
+PAYE Tax              500.00
+National Insurance    200.00
+${label}  ${amount}
+Total Deductions      ${(700 + Number(amount)).toFixed(2)}
+Net Pay              ${(2300 - Number(amount)).toFixed(2)}
+`;
+
+  it('leaves a student loan it cannot name unreconciled rather than calling it other', () => {
+    const parsed = parsePayslipText(unlabelled('SLC Repayment', '100.00'));
+    expect('otherDeductions' in parsed).toBe(false);
+    expect(parsed.studentLoan).toBeUndefined();
+  });
+
+  it('leaves a pension scheme it cannot name unreconciled rather than calling it other', () => {
+    const parsed = parsePayslipText(unlabelled('LGPS', '150.00'));
+    expect('otherDeductions' in parsed).toBe(false);
+    expect(parsed.pensionEmployee).toBeUndefined();
+  });
+
+  it('does not count a Total Deductions row as a recognised field', () => {
+    expect(parsedFieldCount(parsePayslipText('Total Deductions 825.00'))).toBe(0);
+  });
+});
+
+describe('parsePositionedPayslip — a pure column grid', () => {
+  // Every label and figure sit on separate rows, paired only by x-position,
+  // so the line-based pass alone finds nothing here. Invented figures.
+  const grid: PositionedLine[] = [
+    { y: 100, runs: [{ x: 0, text: 'Gross Pay' }, { x: 250, text: 'Total Deductions' }] },
+    { y: 90, runs: [{ x: 0, text: '3,000.00' }, { x: 250, text: '825.00' }] },
+    { y: 80, runs: [{ x: 0, text: 'PAYE Tax' }, { x: 120, text: 'National Insurance' }, { x: 260, text: 'Pension' }] },
+    { y: 70, runs: [{ x: 0, text: '500.00' }, { x: 120, text: '200.00' }, { x: 260, text: '100.00' }] },
+    { y: 60, runs: [{ x: 0, text: 'Net Pay' }] },
+    { y: 50, runs: [{ x: 0, text: '2,175.00' }] },
+  ];
+
+  it('fills gross, tax, NI, pension and net from the grid', () => {
+    const parsed = parsePositionedPayslip(grid);
+    expect(parsed.gross).toBe(3000);
+    expect(parsed.incomeTax).toBe(500);
+    expect(parsed.nationalInsurance).toBe(200);
+    expect(parsed.pensionEmployee).toBe(100);
+    expect(parsed.net).toBe(2175);
+  });
+
+  it('derives no other deductions from the grid either', () => {
+    const parsed = parsePositionedPayslip(grid) as Record<string, unknown>;
+    expect(parsed.otherDeductions).toBeUndefined();
+    expect(parsed.totalDeductions).toBeUndefined();
+  });
+
+  it('reads a sacrifice heading as a positive pension, and refuses a cycle scheme', () => {
+    const sacrifice: PositionedLine[] = [
+      { y: 100, runs: [{ x: 0, text: 'Taxable Pay' }, { x: 150, text: 'Salary Sacrifice' }] },
+      { y: 90, runs: [{ x: 0, text: '2,800.00' }, { x: 150, text: '-200.00' }] },
+    ];
+    const parsed = parsePositionedPayslip(sacrifice);
+    expect(parsed.pensionEmployee).toBe(200);
+    expect(parsed.gross).toBe(3000);
+
+    const cycle: PositionedLine[] = [
+      { y: 100, runs: [{ x: 0, text: 'Cycle Salary Sacrifice' }] },
+      { y: 90, runs: [{ x: 0, text: '-50.00' }] },
+    ];
+    expect(parsePositionedPayslip(cycle).pensionEmployee).toBeUndefined();
+  });
+});
+
+// Invented figures. Each of these misread under the first version of the
+// bare-NI and sacrifice rules; the multi-line cases put the wrong row first,
+// since first-writer-wins is what turned a stray match into a wrong figure.
+describe('parsePayslipText — "NI" that qualifies something else', () => {
+  it.each([
+    ['Earnings for NI 3,000.00\nNI 200.00'],
+    ["NI'able Pay 3,000.00\nNI 200.00"],
+    ['NI-able Pay 3,000.00\nNI 200.00'],
+    ['Subject to NI 3,000.00\nNI 200.00'],
+    ['NI Number AB123456C\nNI 200.00'],
+    ['NI Category A\nNI 200.00'],
+    ['NI Letter A\nNI 200.00'],
+    ['NI Code A\nNI 200.00'],
+    ['NI Table A\nNI 200.00'],
+  ])('takes the real NI row, not %j', text => {
+    expect(parsePayslipText(text).nationalInsurance).toBe(200);
+  });
+
+  it('reads past an NI number to the gross on the same line', () => {
+    const parsed = parsePayslipText('NI No: AB123456C Gross Pay 3,000.00');
+    expect(parsed.nationalInsurance).toBeUndefined();
+    expect(parsed.gross).toBe(3000);
+  });
+
+  it('does not take "Earnings for NI" as gross', () => {
+    expect(parsePayslipText('Earnings for NI 3,000.00\nGross Pay 3,200.00').gross).toBe(3200);
+  });
+});
+
+describe('parsePayslipText — employer rows written suffix-first or possessive', () => {
+  it.each([
+    ['NI Employer 300.00\nNI Employee 200.00'],
+    ["Employers' NI 300.00\nEmployee NI 200.00"],
+    ['NI (ER) 300.00\nNI (EE) 200.00'],
+    ['NI Ers 300.00\nNI Ees 200.00'],
+    ["Er's NI 300.00\nEe's NI 200.00"],
+  ])('keeps the employer NI out of the employee figure in %j', text => {
+    expect(parsePayslipText(text).nationalInsurance).toBe(200);
+  });
+
+  it.each([
+    ['Pension Employer 90.00'],
+    ["Employers' Pension 90.00"],
+    ['Pension (ER) 90.00'],
+  ])('reads %j as the employer pension', text => {
+    const parsed = parsePayslipText(text);
+    expect(parsed.pensionEmployer).toBe(90);
+    expect(parsed.pensionEmployee).toBeUndefined();
+  });
+
+  it('still reads "Pension Employee" as the employee pension', () => {
+    expect(parsePayslipText('Pension Employee 150.00').pensionEmployee).toBe(150);
+  });
+});
+
+describe('parsePayslipText — a sacrifice judged by its own label', () => {
+  it.each([
+    ['Holiday Pay 500.00 Salary Sacrifice -200.00'],
+    ['Car Allowance 300.00 Salary Sacrifice -200.00'],
+  ])('keeps the pension sacrifice beside another payment in %j', text => {
+    expect(parsePayslipText(text).pensionEmployee).toBe(200);
+  });
+
+  it('still refuses a sacrifice whose own label names another scheme', () => {
+    expect(parsePayslipText('Basic Pay 3,000.00 Cycle to Work Salary Sacrifice -100.00').pensionEmployee).toBeUndefined();
+  });
+});
+
+describe('parsePayslipText — P45 running totals', () => {
+  it.each([
+    ['Total Pay This Employment 25,000.00\nTotal Pay 3,000.00'],
+    ['Total Pay Previous Employment 25,000.00\nTotal Pay 3,000.00'],
+  ])('reads the period gross, not the employment total, from %j', text => {
+    expect(parsePayslipText(text).gross).toBe(3000);
   });
 });

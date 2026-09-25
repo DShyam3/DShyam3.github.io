@@ -3,7 +3,7 @@
  *
  * Both functions that need one used to carry their own copy:
  *
- *     const adminEmail = Deno.env.get('ADMIN_EMAIL') || 'd.shyam1256@gmail.com'
+ *     const adminEmail = Deno.env.get('ADMIN_EMAIL') || '<owner email>'
  *     if (user.email !== adminEmail) { ...403... }
  *
  * which made three separate statements of who an administrator is -- this, the

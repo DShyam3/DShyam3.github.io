@@ -15,13 +15,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Tv, Film, X, Clock, Calendar, ArrowRightLeft } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Tv, Film, Clock, Calendar, ArrowRightLeft, MoreHorizontal, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
+import { SmartScheduleDialog, scheduleReleaseDate } from './SmartScheduleDialog';
 
 interface ScheduleItemProps {
   scheduleItem: ScheduleEntry;
@@ -87,11 +89,13 @@ export function ScheduleItem({
     'Sunday',
   ] as const;
 
-  const handleAddToSchedule = () => {
+  const handleAddToSchedule = (day: ScheduleEntry['day'], date: string, mode: 'weekly' | 'date') => {
     if (addToSchedule) {
       addToSchedule({
         watchlistItemId: item.id,
-        day: selectedDay,
+        day,
+        scheduledDate: mode === 'date' ? date : undefined,
+        mode,
         title: item.title,
         category: item.category,
         image_url: item.image_url,
@@ -115,10 +119,10 @@ export function ScheduleItem({
   return (
     <>
       <div
-        className="group relative bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border rounded-md overflow-hidden transition-[background-color,border-color] duration-200 cursor-pointer"
+        className="schedule-card group relative bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border rounded-md overflow-hidden transition-[background-color,border-color] duration-200 cursor-pointer"
         onClick={() => setDetailOpen(true)}
       >
-        <div className="flex items-center p-1.5 gap-2">
+        <div className={cn('flex items-center p-1.5 gap-2', (updateScheduleDay || removeFromSchedule) && 'schedule-card-row')}>
           {item.image_url ? (
             <div className="h-10 w-8 flex-shrink-0 rounded overflow-hidden">
               <img
@@ -137,10 +141,13 @@ export function ScheduleItem({
             </div>
           )}
 
-          <div className="min-w-0 flex-1 pr-4">
-            <p className="text-xs font-medium truncate leading-tight">
+          <div className="schedule-card-text min-w-0 flex-1">
+            <p className="text-xs font-medium line-clamp-2 break-words leading-tight">
               {item.title}
             </p>
+            {scheduleItem.mode === 'date' && scheduleItem.scheduledDate && (
+              <p className="text-[10px] text-primary/80">{new Date(`${scheduleItem.scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+            )}
             <div className="flex items-center gap-1 mt-0.5">
               {item.category === 'TV Shows' ? (
                 <Tv className="h-2.5 w-2.5 text-muted-foreground" />
@@ -154,90 +161,53 @@ export function ScheduleItem({
               )}
             </div>
           </div>
-        </div>
 
-        <div className="absolute top-1/2 -translate-y-1/2 right-1 flex gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity z-10">
-          {updateScheduleDay && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 bg-background/90 backdrop-blur-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                openChangeDayDialog();
-              }}
-            >
-              <ArrowRightLeft className="h-2.5 w-2.5" />
-            </Button>
-          )}
-          {removeFromSchedule && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 bg-background/90 backdrop-blur-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                askDelete({
-                  name: item.title,
-                  title: 'Remove from schedule',
-                  confirmLabel: 'Remove',
-                  description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
-                  onConfirm: () => removeFromSchedule(scheduleItem.id),
-                });
-              }}
-            >
-              <X className="h-2.5 w-2.5" />
-            </Button>
+          {/* In the row rather than laid over the title. */}
+          {(updateScheduleDay || removeFromSchedule) && (
+            <div className="schedule-card-actions card-actions shrink-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Schedule actions for ${item.title}`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  {updateScheduleDay && (
+                    <DropdownMenuItem onSelect={openChangeDayDialog}>
+                      <ArrowRightLeft className="mr-2 h-4 w-4" />Change day
+                    </DropdownMenuItem>
+                  )}
+                  {removeFromSchedule && (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onSelect={() =>
+                        askDelete({
+                          name: item.title,
+                          title: 'Remove from schedule',
+                          confirmLabel: 'Remove',
+                          description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
+                          onConfirm: () => removeFromSchedule(scheduleItem.id),
+                        })
+                      }
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />Remove from schedule
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
       </div>
 
-      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Add to Weekly Schedule</DialogTitle>
-            <DialogDescription className="sr-only">
-              Choose a day of the week to schedule watching this title.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Select which day you want to watch{' '}
-              <span className="font-medium">{item.title}</span>
-            </p>
-            <div className="space-y-2">
-              <Label>Day of the week</Label>
-              <Select
-                value={selectedDay}
-                onValueChange={(value) => setSelectedDay(value as typeof selectedDay)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS.map((day) => (
-                    <SelectItem key={day} value={day}>
-                      {day}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setScheduleDialogOpen(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleAddToSchedule} className="flex-1">
-                Add to {selectedDay}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SmartScheduleDialog
+        open={scheduleDialogOpen}
+        onOpenChange={setScheduleDialogOpen}
+        title={item.title}
+        releaseDate={scheduleReleaseDate(item)}
+        defaultMode={item.category === 'TV Shows' ? 'weekly' : 'date'}
+        onAdd={handleAddToSchedule}
+      />
 
       <Dialog open={changeDayDialogOpen} onOpenChange={setChangeDayDialogOpen}>
         <DialogContent className="sm:max-w-md">

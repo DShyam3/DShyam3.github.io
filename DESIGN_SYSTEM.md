@@ -271,6 +271,7 @@ uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
 | Component | Treatment | Implementation |
 |---|---|---|
 | App canvas | Three broad colour washes on the theme foundation | `AppShell`, route-derived `data-section` |
+| Middle card | Quiet tint, fine border, 24px corners around each route's content; frameless below 768px | `AppShell`, `app-frame` |
 | Ordinary panel | Quiet tint, fine border, shallow shadow | `Card` / `surface-card` |
 | Focal panel | Stronger radial gradient with readable text | `ambient-card` or `Card` with `data-palette` |
 | Collection card | Consistent image ratio, tinted text area, modest hover lift | `item-card`, `card-body` |
@@ -307,6 +308,76 @@ Example using the existing primitives:
 Supported palettes are `sage`, `sky`, `lavender`, `peach` and `rose`. Ordinary
 panels inherit the route accent. Choose explicit accents by subject, not by
 an item's position in a list, so colours do not change whenever it is sorted.
+
+## Responsive layout contract
+
+Implemented in `src/theme/responsive.css`, `src/index.css`, `CardGrid` and
+`AppShell`. Layout responds to available CSS width and input capability across
+brands, in portrait and landscape.
+
+- Standard root type is `100%`, preserving the browser's preferred base size.
+  Shared content is capped at `100rem`, with `clamp(1rem, 2vw, 2rem)` gutters.
+- `CardGrid` uses width-driven, auto-fill columns: a `12.5rem` minimum and
+  `1.25rem` gap from 640px. Cards never shrink to fit a target number of rows
+  into the viewport height. Watchlist overrides the minimum to `11rem`,
+  `9.5rem` in short tablet/desktop windows, and `12.5rem` on large tall screens.
+  Narrow card bodies adapt through a container query.
+- The slim header and footer stay pinned. Each route's content sits in one
+  middle card (`main#main`, `app-frame`) that is its only vertical scroller:
+  framed from 768px, with a `clamp(1rem, 1.5vw, 1.5rem)` inset; frameless
+  below, with the page gutter as its inset. Nested vertical scrollers are
+  limited to deliberate sibling panes (Travel's list, the Transactions
+  inspector, Updates from 1280px, the holiday tracker from 1024px) and
+  temporary overlays. A capped list inside a scrolling page is not one; the
+  one exception left is the Transactions list below 1024×720, capped to the
+  measured card height until its inspector opens as a sheet.
+- Section toolbars open the card and never scroll on their own. From 768px
+  they pin as a frosted band while they take at most a quarter of the card's
+  height; otherwise they scroll with the content. `AppShell` measures this
+  and publishes `data-toolbar-pin`, `--toolbar-h` and `--frame-h` for sticky
+  panes and scroll padding, so no section subtracts a guessed chrome height
+  from `100vh`. Library keeps category, search and filter/sync popovers in a
+  compact toolbar; only the sync history list scrolls inside its popover.
+- Card actions appear on touch/coarse pointers; fine-pointer hover and keyboard
+  focus reveal them. Shared touch controls use a `2.75rem` minimum target.
+- Dialogs retain outer gutters and a bounded scrolling body, with the close
+  control outside that body. Series with seasons use an `85dvh` dialog from
+  640px: poster/information above an independently scrolling episode rail through
+  1279px, then three columns from 1280px. The outer body stays still; long
+  information has its own overflow area. Below 640px the outer body scrolls and
+  the episode rail is capped at `40dvh`. Episode names are always displayed,
+  with “Title unavailable” as fallback.
+- No control sits on top of text. The dialog close button is `2.75rem`, `0.5rem`
+  in from the corner, so text keeps `3.75rem` clear of the right edge until it
+  is below it: `DialogHeader`/`SheetHeader` carry `pr-10` inside the default
+  `p-6`, and a header that sets its own padding adds `pr-16`. The dialog body's
+  single column is `minmax(0, 1fr)`, so no child can widen it. Row actions sit
+  in the row's flow (a menu, a trailing button, a clear button with matching
+  input padding), not absolutely positioned over a title; card admin actions
+  sit below the card text rather than over the artwork.
+- Travel is a workspace (`AppShell layout="workspace"`): from 1024px wide and
+  600px tall the card stops scrolling, the map and list fill it, and the list
+  scrolls on its own. Narrower or shorter, it stacks in the card's scroll with
+  the map in a `min(80vw, 55vh)` slot. `Index.css` and `responsive.css` share
+  that query. Wide data tables retain local horizontal scroll.
+- Standard/Larger display is an explicit persisted menu preference. Larger uses
+  `125%` root type and a `12rem` card minimum, with visible card actions and
+  stronger focus-visible outlines. It retains native browser keyboard behavior.
+- News and Library share `PosterCard`: fixed poster ratio, a `2.9em` title row
+  clamped to two lines, a `1.4em` minimum subtitle row, and aligned metadata rows
+  of `1.5rem` and `1.25rem` with `gap-1`. The separate schedule footer uses a
+  44px minimum height and `py-2`. Full titles remain in the tooltip, accessible
+  label and details.
+  Your Week embeds compact plans in News and opens a week/month calendar dialog.
+  Month view uses seven `minmax(0,1fr)` columns from `md`, with compact buttons
+  whose accessible names include the full title, plan/suggestion, episode and
+  date; below `md` it uses an agenda. The dialog keeps its header and navigation
+  outside the vertically scrolling body, bounded to `85dvh`.
+  Updates scrolls on its own only from 1280px, where it is a column beside
+  Upcoming; stacked, it flows in the card.
+
+Validate both orientations, short landscape windows, large monitors and both
+reading sizes. Browser viewport checks do not replace physical device tests.
 
 ## Interaction, accessibility and performance
 
@@ -521,9 +592,13 @@ Suggested brief for a combined pass, once a first panel exists:
 ## Review checklist
 
 1. Check light and dark mode at phone, tablet and desktop widths, plus a short
-   landscape viewport. Confirm content scrolls without moving the app frame.
+   landscape viewport. Confirm the header, toolbar and footer stay visible while
+   the main content scrolls.
 2. Inspect real long titles, missing images, empty/loading states and error states.
 3. Exercise navigation, filters, search and dialogs by keyboard and touch.
+   At phone width, confirm nothing — close button, clear button, card
+   action — covers text, including long titles and headers with a right-hand
+   date or badge.
 4. Check text over the strongest gradients, selected controls and chart legends.
 5. Check reduced motion and reduced transparency, including the fallback when
    backdrop blur is unavailable.

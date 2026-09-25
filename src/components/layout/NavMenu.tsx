@@ -2,6 +2,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { DotMatrixIcon } from '@/components/dot-matrix/DotMatrixIcon';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
+import { useDisplayMode } from '@/contexts/DisplayModeContext';
+import { Button } from '@/components/ui/button';
+import { Type } from 'lucide-react';
 import { useSiteNavLinks } from './navLinks';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +28,7 @@ import { cn } from '@/lib/utils';
  * cluster, while the panel spans the full header width underneath it.
  */
 export function NavMenu({ className }: { className?: string }) {
+  const { largerDisplay, toggleDisplaySize } = useDisplayMode();
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const links = useSiteNavLinks();
@@ -145,7 +149,7 @@ export function NavMenu({ className }: { className?: string }) {
           className="grid grid-cols-2 gap-x-1 gap-y-0.5 sm:grid-cols-3 lg:grid-cols-4"
         >
           {links.map((link) => {
-            const active = location.pathname === link.to;
+            const active = location.pathname === link.to || (link.to !== '/' && location.pathname.startsWith(`${link.to}/`));
             return (
               <Link
                 key={link.to}
@@ -166,6 +170,13 @@ export function NavMenu({ className }: { className?: string }) {
             );
           })}
         </nav>
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t pt-3">
+          <Button variant={largerDisplay ? 'secondary' : 'outline'} onClick={toggleDisplaySize} aria-pressed={largerDisplay}>
+            <Type aria-hidden="true" />
+            Display size: {largerDisplay ? 'Larger' : 'Standard'}
+          </Button>
+          <p className="text-sm text-muted-foreground">Adjust text, cards and controls for comfortable viewing.</p>
+        </div>
       </div>
     </>
   );

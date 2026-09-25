@@ -61,12 +61,11 @@ jobs:
       # These are read at build time with no fallback, so a missing one is
       # baked into the bundle as `undefined` and ships a site where nothing
       # loads. This used to print "MISSING" and carry on regardless; it fails
-      # the deploy now. VITE_ADMIN_EMAIL is deliberately absent -- it has a
-      # default in AuthContext and is the one that can go without.
+      # the deploy now.
       - name: Verify Env
         run: |
           missing=""
-          for name in VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY VITE_TMDB_IMAGE_BASE_URL; do
+          for name in VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY VITE_TMDB_IMAGE_BASE_URL VITE_ADMIN_EMAIL; do
             if [ -z "${!name}" ]; then
               missing="$missing $name"
               echo "::error::$name is MISSING"

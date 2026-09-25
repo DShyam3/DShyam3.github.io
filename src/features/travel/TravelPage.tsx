@@ -256,7 +256,7 @@ const Travel = () => {
     const totalCitiesVisited = visitedCities.length;
 
     return (
-        <AppShell title="Travel" subtitle="Where I've been" scrollable={false}>
+        <AppShell title="Travel" subtitle="Where I've been" layout="workspace">
             <div className="flex-1 min-h-0 flex flex-col">
                 <div className="flex-1 min-h-0 flex flex-col px-4 md:px-0 py-4">
 

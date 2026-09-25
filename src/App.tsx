@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from 'next-themes';
+import { DisplayModeProvider } from '@/contexts/DisplayModeContext';
 import { OpeningSequence } from '@/components/layout/OpeningSequence';
 import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
 
@@ -145,13 +146,6 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* disableTransitionOnChange: the palettes are inverses, so any
-          crossfade between them passes through a mid-grey where text and
-          card meet at the same value and the page reads as blank for a
-          frame. Synchronising the durations does not help -- the midpoint
-          is where the contrast goes, not the timing. next-themes drops
-          every transition for the one frame the class flips, so the swap
-          is atomic. ThemeToggle animates its own arc around this. */}
       <ThemeProvider
         attribute="class"
         defaultTheme="dark"
@@ -167,6 +161,7 @@ const App = () => {
               both are the default behaviour in react-router 7, and the prop no
               longer exists. */}
           <BrowserRouter>
+            <DisplayModeProvider>
             <AppProviders>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
@@ -194,6 +189,7 @@ const App = () => {
               </Suspense>
               {showOpening && <OpeningSequence onComplete={handleOpeningComplete} />}
             </AppProviders>
+            </DisplayModeProvider>
           </BrowserRouter>
         </TooltipProvider>
       </ThemeProvider>

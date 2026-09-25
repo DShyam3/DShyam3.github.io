@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import { cn } from '@/lib/utils';
+
+/** The largest share of the middle card a pinned toolbar may take. */
+const PIN_MAX_SHARE = 0.25;
 
 interface AppShellProps {
   /** Omitted on the About page, which uses Header's own defaults. */
@@ -10,91 +12,94 @@ interface AppShellProps {
   subtitle?: string;
   children: ReactNode;
   /**
-   * False for pages that size themselves to the viewport and must never
-   * scroll -- Travel, whose globe fills the space it is given. Everything
-   * else scrolls its middle. Below md even these scroll, because the layout
-   * stacks there and no longer fits what the shell can give it.
+   * `content` (the default): the middle card is the one vertical scroller.
+   * `workspace`: where both width and height allow, the card stops scrolling
+   * and the page's own panes scroll instead -- Travel's map beside its list.
+   * Below that size a workspace falls back to content, so a stacked layout
+   * always has somewhere to scroll.
    */
-  scrollable?: boolean;
-  /** Rendered between the header and the scroll area, e.g. a filter bar. */
+  layout?: 'content' | 'workspace';
+  /**
+   * Section controls, e.g. a filter bar. They open the middle card and pin to
+   * its top where there is room for them; elsewhere they scroll away with it.
+   */
   toolbar?: ReactNode;
 }
 
 /**
- * The site's frame: header pinned to the top, footer pinned to the bottom,
- * and only the middle moving.
- *
- * Pages used to be `min-h-screen` with the header and footer inside the flow,
- * so both scrolled away and the site read as a long document rather than an
- * application. Here the shell owns the viewport and hands the page whatever
- * is left.
- *
- * A toolbar can sit outside the scroll area, so filters and counts stay put
- * while their results scroll underneath.
- *
- * The `<main>` element is the scroll container, which CardGrid measures
- * itself against to keep two rows of cards above the fold.
+ * The site's frame: header and footer stay put, and every route's content
+ * sits in one middle card between them that owns the scrolling.
  */
 export function AppShell({
   title,
   subtitle,
   children,
-  scrollable = true,
+  layout = 'content',
   toolbar,
 }: AppShellProps) {
   const { pathname } = useLocation();
   const section = pathname.split('/')[1] || 'about';
+  const mainRef = useRef<HTMLElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const hasToolbar = Boolean(toolbar);
+
+  // Whether the toolbar pins depends on how its controls wrap, which CSS
+  // cannot read: four rows of filters on a tablet would take a third of the
+  // card. Pin it only from 768px and only while it takes at most a quarter of
+  // the card, and publish both heights so sticky panes and scroll padding
+  // clear the band instead of guessing at it.
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    const toolbarEl = toolbarRef.current;
+    const wide = window.matchMedia?.('(min-width: 768px)');
+    const publish = () => {
+      const toolbarHeight = toolbarEl?.offsetHeight ?? 0;
+      const pinned = Boolean(toolbarEl && wide?.matches && toolbarHeight <= main.clientHeight * PIN_MAX_SHARE);
+      main.dataset.toolbarPin = pinned ? 'on' : 'off';
+      main.style.setProperty('--frame-h', `${main.clientHeight}px`);
+      main.style.setProperty('--toolbar-h', `${pinned ? toolbarHeight : 0}px`);
+    };
+    publish();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(publish);
+    observer.observe(main);
+    if (toolbarEl) observer.observe(toolbarEl);
+    return () => observer.disconnect();
+  }, [hasToolbar]);
 
   return (
-    // The shell is exactly one viewport tall at every width, and `clip` --
-    // not `hidden` -- is what keeps it that way. An `overflow: hidden` box is
-    // still a scroll container: nothing drags it, but anything that calls
-    // `scrollIntoView` on a descendant scrolls it, which is how the frame
-    // came adrift on a tablet with no scrollbar in sight. `clip` makes no
-    // scroll container at all, so there is nothing left to move.
-    //
-    // Phones were an ordinary scrolling document until now, back when the
-    // chrome was a header, a footer and a thirteen-link nav strip and left
-    // the grid a ~30px slot. The strip is a menu button today, so the chrome
-    // fits and the phone gets the same frame as everything else.
-    <div data-section={section} className="app-shell h-[100dvh] flex flex-col bg-background overflow-clip">
-      {/* Thirteen nav links sit before the content on every page, so a
-          keyboard user would otherwise tab through all of them on each one.
-          Off-screen until focused, which is the point: it is for the people
-          who will find it, not for everyone. */}
+    <div
+      data-section={section}
+      className="app-shell h-[100dvh] flex flex-col bg-background overflow-clip"
+    >
       <a
-        href="#main"
+        href="#content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:rounded focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:ring-2 focus:ring-foreground"
       >
         Skip to content
       </a>
 
-      <div className="shrink-0 wide-container">
+      <div className="shrink-0 wide-container relative z-40 bg-background">
         <Header title={title} subtitle={subtitle} />
-        {/* Wrapped so a short viewport has something to cap: a filter bar is
-            the one piece of chrome that can be taller than the content it
-            filters. See `.app-toolbar` in src/index.css. */}
-        {toolbar ? <div className="app-toolbar app-scroll">{toolbar}</div> : null}
       </div>
 
-      <main
-        id="main"
-        tabIndex={-1}
-        className={cn(
-          'app-scroll flex-1 min-h-0 wide-container',
-          // A page that sizes itself to the viewport still needs somewhere to
-          // put its overflow on a phone, where the slice is half the height
-          // and the layout stacks. It gets a scroller below md and its own
-          // fixed frame above it.
-          scrollable
-            ? 'overflow-y-auto'
-            : 'overflow-y-auto md:overflow-hidden md:flex md:flex-col',
-        )}
-      >
-        {children}
-      </main>
+      <div className="app-frame-slot flex-1 min-h-0 flex flex-col">
+        <main
+          ref={mainRef}
+          id="main"
+          tabIndex={-1}
+          data-layout={layout}
+          className="app-frame app-scroll flex-1 min-h-0 min-w-0 overflow-y-auto"
+        >
+          {toolbar ? <div ref={toolbarRef} className="app-toolbar">{toolbar}</div> : null}
+          {/* Skip to content lands here, past the section's own controls. */}
+          <span id="content" tabIndex={-1} className="block outline-none" />
+          {children}
+        </main>
+      </div>
 
-      <div className="shrink-0 wide-container">
+      <div className="shrink-0 wide-container relative z-30 bg-background">
         <Footer />
       </div>
     </div>

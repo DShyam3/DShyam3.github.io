@@ -17,6 +17,9 @@ export function AccountInspector({ account, transactions, bills, onEdit, onDelet
     <RecordInspector title={account.name} subtitle={`${account.issuer} · ${account.type}`} value={formatGBP(account.balance)} palette={account.type === 'credit' ? 'peach' : account.type === 'savings' ? 'sage' : 'sky'}>
       <dl className="grid grid-cols-2 gap-4 text-sm">
         <div><dt className="text-xs text-muted-foreground">Annual fee</dt><dd className="mt-1 tabular-nums">{formatGBP(account.annualFee)}</dd></div>
+        {account.type === 'credit' && (
+          <div><dt className="text-xs text-muted-foreground">Credit limit</dt><dd className="mt-1 tabular-nums">{account.creditLimit == null ? 'Not known' : formatGBP(account.creditLimit)}</dd></div>
+        )}
         <div><dt className="text-xs text-muted-foreground">Used for</dt><dd className="mt-1 break-words">{account.useCase || 'Not specified'}</dd></div>
       </dl>
       <section aria-label="Scheduled bills" className="space-y-3">

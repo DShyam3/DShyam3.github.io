@@ -7,6 +7,7 @@
  */
 
 export * from './alerts';
+export * from './cash-flow';
 export * from './change-summary';
 export * from './credit';
 export * from './dates';
@@ -28,5 +29,6 @@ export * from './review';
 export * from './scenario';
 export * from './spend-history';
 export * from './statement-import';
+export * from './student-loan';
 export * from './tools';
 export * from './transfers';

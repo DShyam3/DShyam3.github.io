@@ -52,25 +52,80 @@ const MAGNITUDE_FIELDS = new Set<Field>(['pensionEmployee', 'pensionEmployer']);
  * or "Employer Pension" is claimed by the bare "Pension" rule and the two are
  * swapped — which then makes net stop reconciling, silently, in the direction
  * that looks plausible.
+ *
+ * `field: null` marks a rule that recognises a label without owning any
+ * `ParsedPayslip` column, purely so the cursor walks past it — see the
+ * employer's NI rule below, which exists to deny its figure to the
+ * employee's.
+ *
+ * Order between two entries only matters when both would start matching at
+ * the same index (a tie); otherwise the earliest match anywhere in the line
+ * wins regardless of array position, which is what keeps "Employer NI" from
+ * needing to out-rank "NI" here at all — "Employer" simply starts earlier.
  */
-const RULES: { field: Field; pattern: RegExp }[] = [
-  { field: 'pensionEmployer', pattern: /\b(?:employer|company)('?s)?\s+pension|pension\s*\(?\s*(?:er|employer)\s*\)?/i },
-  // "Pension Salary Sacrifice" is the employee's contribution under another
-  // name, and it is tested before the gross rule so the word "salary" in it
-  // cannot be mistaken for pay.
-  { field: 'pensionEmployee', pattern: /\bsalary\s+sacr|\b(?:employee'?s?\s+)?pension\b|\bpension\s*\(?\s*(?:ee|employee)\s*\)?/i },
-  { field: 'studentLoan', pattern: /\bstudent\s+loan|\bpost\s*grad(?:uate)?\s+loan/i },
+const RULES: { field: Field | null; pattern: RegExp }[] = [
+  // Suffix and plural-possessive forms too -- "Pension Employer", "Pension
+  // (ER)", "Employers' Pension" -- or the bare "pension" rule below takes them
+  // as the employee's. A tie at the same index goes to this rule, being first.
+  { field: 'pensionEmployer', pattern: /\b(?:employer|company|ers|er)(?:'?s|s')?\s+pension\b|\bpension\s*\(?\s*(?:ers?|employer'?s?)\b\s*\)?/i },
+  // The bare "pension" fallback here also catches "Ees Pension" and "EE
+  // Pension": neither prefix is recognised, so the optional group simply
+  // fails to consume it and the match falls back to "Pension" on its own,
+  // which is still the earliest-available label on that line once the
+  // employer rule above has first refusal on "Ers"/"ER"/"Employer" prefixes.
+  { field: 'pensionEmployee', pattern: /\b(?:employee'?s?\s+)?pension\b|\bpension\s*\(?\s*(?:ee|employee)\s*\)?/i },
+  // `\bsalary\s+sacr` used to live in this same pattern, unconditionally. It
+  // is now appended per line by `parsePayslipText`, and only when the line
+  // does not name a non-pension sacrifice scheme — see
+  // `namesOtherSacrificeScheme`. A bare "pension" already handles "Pension
+  // Salary Sacrifice" without it, because "Pension" is the earlier label on
+  // that line regardless.
+  { field: 'studentLoan', pattern: /\bstudent\s+loan|\bstud\s+loan|\bpost\s*grad(?:uate)?\s+loan|\bpg\s+loan|\bsl\b\s*(?=plan\b|\(|\d)/i },
+  // Bare "SL" is gated on what follows it -- a plan reference, a digit, or an
+  // opening bracket -- because "SL" on its own is too short a token to claim
+  // unconditionally; a plain word spelled the same way elsewhere on a payslip
+  // would otherwise be read as a student loan deduction.
+  //
+  // Employer NI has no field of its own -- it is not owed by the employee --
+  // so this rule's only job is to consume "Employer NI"/"Ers NI"/"ER NIC"
+  // before the bare NI rule below can reach it. Tried without this: a bare
+  // `\bni\b` addition (needed for "NI 245.00") also matched inside "Employer
+  // NI 300.00", handing the employer's figure to the employee's field --
+  // wrong by nature, not by a rounding error, since both numbers look
+  // equally plausible on their own.
+  // Suffix forms as well ("NI Employer", "NI (ER)", "NI Ers") and the plural
+  // possessive "Employers' NI": the bare NI rule below matches those too, and
+  // with the employer's row first on the page it took the employer's figure.
+  { field: null, pattern: /\b(?:employer|ers|er)(?:'?s|s')?\s+nic?\b|\bnic?\s*\(?\s*(?:ers?|employer'?s?)\b\s*\)?/i },
   // `NI(category M)` is how at least one payroll system writes it, so the
   // bracketed form has to match mid-line rather than only at a word gap.
-  // "N.I" with stops is common, and was being missed entirely.
-  { field: 'nationalInsurance', pattern: /\bnational\s+insurance\b|\bn\.\s?i\.?(?=\W|$)|\bni\s*\(|\bni\s+contribution|\bemployee'?s?\s+ni\b|\bnic\b/i },
+  // "N.I" with stops is common, and was being missed entirely. The bare
+  // `\bni\b` at the end is a fallback for "NI 245.00", "Ees NI 245.00" and
+  // "NI Employee 245.00" alike -- once the employer rule above has had first
+  // refusal, any remaining "NI" on the line is the employee's by elimination.
+  // Except where "NI" qualifies something else. "NI'able Pay 3,000.00",
+  // "Earnings for NI" and "NI No: AB123456C" all put a pay figure or an
+  // identifier after it, and first-writer-wins then locked the real NI row
+  // out -- so the bare form refuses those neighbours on either side.
+  { field: 'nationalInsurance', pattern: /\bnational\s+insurance\b|\bn\.\s?i\.?(?=\W|$)|\bni\s*\(|\bni\s+contribution|\bemployee'?s?\s+ni\b|\bnic\b|(?<!\b(?:for|to)\s+)\bni\b(?!\s*(?:no\b|number|letter|cat(?:egory)?\b|code|table|'?-?\s*able|earnings|pay\b|gross))/i },
   // Likewise `Tax(code 1257L)`.
   // A bare "Tax" counts, since two-column layouts put it mid-line. It cannot
   // catch "Taxable", where the word boundary fails, and "Tax Code" is
   // harmless because the code that follows is not a money-shaped figure.
   { field: 'incomeTax', pattern: /\bpaye\b|\bincome\s+tax\b|\btax\s*\(|\btax\b/i },
+  // Tried and reverted: deriving `otherDeductions` as gross - net - the named
+  // deductions, "confirmed" against a stated Total Deductions. The check
+  // reduces to gross - net == total, which holds on almost any consistent
+  // payslip and cannot tell a genuinely other deduction from a named one this
+  // file failed to label: "SLC Repayment 100.00" became other deductions with
+  // no student loan, "LGPS 150.00" the same with no pension, and both then
+  // reconciled, so the warning that should have caught them went away. An
+  // unreconciled payslip that asks a person is the better failure.
   // "Total Amount Paid" is net on layouts that never use the word net.
-  { field: 'net', pattern: /\bnet\s+pay\b|\btake[-\s]?home\b|\bnet\s+total\b|\bamount\s+pay(?:able|ment)\b|\btotal\s+amount\s+paid\b/i },
+  // "Net Payable" needed the same optional suffix as "amount pay(able)"
+  // below, for the same reason: "\bnet\s+pay\b" requires a word boundary
+  // straight after "pay", which "Payable" never has.
+  { field: 'net', pattern: /\bnet\s+pay(?:able|ment)?\b|\btake[-\s]?home\b|\bnet\s+total\b|\bamount\s+pay(?:able|ment)\b|\btotal\s+amount\s+paid\b/i },
   { field: 'taxablePay', pattern: /\btaxable\s+pay\b|\btaxable\s+gross\b/i },
   // "Total Earnings" is the period figure on layouts that reserve "Gross pay"
   // for the running total. It is listed first so it wins when both appear.
@@ -82,8 +137,51 @@ const RULES: { field: Field; pattern: RegExp }[] = [
   // with that word. It read "Total Hours 1.25" on a leaving payslip as a
   // gross of £1.25, and no lookahead that excluded hours, units and days
   // would have been anything but a list of the layouts already seen.
-  { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b|\bearnings\b/i },
+  // "Total Pay" needed its own alternative rather than folding into
+  // "Total Payments?": the boundary after "pay" is what already keeps it off
+  // "Total Payable", so there was nothing to gain by trying to squeeze both
+  // into one alternative and something to lose in readability.
+  { field: 'gross', pattern: /\btotal\s+(?:earnings|gross|payments?|pay)\b|\bgross\s+(?:pay|earnings|total)\b|\bgross\b|\bearnings\b(?!\s+for\b)/i },
 ];
+
+/**
+ * Words naming a salary-sacrifice scheme other than pension.
+ *
+ * A payslip that sacrifices into a bike, a car or a gym membership prints
+ * the same "Salary Sacrifice" wording a pension contribution does. Claiming
+ * every one of them as pension is the same class of mistake as swapping
+ * employer and employee: net stops reconciling, plausibly, in a direction
+ * nobody checks.
+ */
+const OTHER_SACRIFICE_SCHEME = /\b(?:cycle|bike|car|vehicle|ev|electric|childcare|nursery|tech(?:nology)?|gym|holiday)\b/i;
+
+/**
+ * A salary-sacrifice row is the employee's pension only when it names
+ * pension, or names no scheme at all. When it names one of the schemes
+ * above and never says "pension", the figure is left unclaimed rather than
+ * guessed -- there is no field in `ParsedPayslip` for a cycle-to-work or an
+ * EV sacrifice, and inventing one to store a mis-typed pension figure would
+ * be the gap rule 4 exists to forbid.
+ */
+const namesOtherSacrificeScheme = (label: string): boolean =>
+  OTHER_SACRIFICE_SCHEME.test(label) && !/\bpension\b/i.test(label);
+
+/**
+ * The label a sacrifice match belongs to: from the end of the last figure
+ * before it, not from the start of the line. On a two-column line such as
+ * "Holiday Pay 500.00 Salary Sacrifice -200.00", testing the whole line read
+ * "Holiday" from the neighbouring payment and dropped a pension sacrifice.
+ */
+const labelBefore = (text: string): string =>
+  text.replace(/^.*-?£?\s?\d[\d,]*\.\d{1,2}/, '');
+
+/**
+ * "Salary Sacrifice" as the employee's pension, kept apart from the
+ * `pensionEmployee` rule above so a match can be refused when its label names
+ * a different scheme -- see `namesOtherSacrificeScheme`. Last in the walk, so
+ * "Pension Salary Sacrifice" is still claimed by the earlier "Pension".
+ */
+const SACRIFICE_RULE: { field: Field; pattern: RegExp } = { field: 'pensionEmployee', pattern: /\bsalary\s+sacr/i };
 
 const AMOUNTS = /-?£?\s?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|-?£?\s?\d+(?:\.\d{1,2})?/g;
 
@@ -125,7 +223,9 @@ const amountAfter = (line: string, from: number): number | null => {
  * These carry the same labels as the real rows and much larger numbers, so
  * mistaking one is not a small error — it is a year's pay entered as a month's.
  */
-const CUMULATIVE = /year\s*to\s*date|\bytd\b|\bcumulative\b|\bto\s*date\b|\btaxable\s+pay\s+to\b/i;
+// "This employment" and "previous employment" are the P45 figures for the
+// tax year so far; "Total Pay This Employment" otherwise reads as gross.
+const CUMULATIVE = /year\s*to\s*date|\bytd\b|\bcumulative\b|\bto\s*date\b|\btd\b|\btaxable\s+pay\s+to\b|\b(?:this|previous)\s+employment\b/i;
 
 /**
  * Note on running-totals blocks, which are the main hazard here.
@@ -182,6 +282,8 @@ const parseDate = (line: string): string | undefined => {
   return undefined;
 };
 
+const WALK_RULES = [...RULES, SACRIFICE_RULE];
+
 export function parsePayslipText(text: string): ParsedPayslip {
   const result: ParsedPayslip = {};
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -214,20 +316,29 @@ export function parsePayslipText(text: string): ParsedPayslip {
        states each figure once, and later mentions are totals or footnotes. */
     let cursor = 0;
     while (cursor < line.length) {
-      let chosen: { field: Field; end: number; at: number } | null = null;
-      for (const { field, pattern } of RULES) {
-        if (result[field] !== undefined) continue;
+      let chosen: { field: Field | null; end: number; at: number; sacrifice: boolean } | null = null;
+      for (const rule of WALK_RULES) {
+        const { field, pattern } = rule;
+        if (field !== null && result[field] !== undefined) continue;
         const match = pattern.exec(line.slice(cursor));
         pattern.lastIndex = 0;
         if (!match) continue;
         if (!chosen || match.index < chosen.at) {
-          chosen = { field, at: match.index, end: match.index + match[0].length };
+          chosen = { field, at: match.index, end: match.index + match[0].length, sacrifice: rule === SACRIFICE_RULE };
         }
       }
       if (!chosen) break;
-      const amount = amountAfter(line.slice(cursor), chosen.end);
-      if (amount !== null) {
-        result[chosen.field] = MAGNITUDE_FIELDS.has(chosen.field) ? Math.abs(amount) : amount;
+      // A sacrifice whose own label names another scheme is walked past
+      // unclaimed, like the employer's NI.
+      const refused = chosen.sacrifice
+        && namesOtherSacrificeScheme(labelBefore(line.slice(cursor, cursor + chosen.end)));
+      // `field: null` (the employer's NI) is recognised only to be denied to
+      // the employee's rule below it — nothing is ever stored for it.
+      if (chosen.field !== null && !refused) {
+        const amount = amountAfter(line.slice(cursor), chosen.end);
+        if (amount !== null) {
+          result[chosen.field] = MAGNITUDE_FIELDS.has(chosen.field) ? Math.abs(amount) : amount;
+        }
       }
       cursor += chosen.end;
     }
@@ -265,7 +376,7 @@ export const parsedFieldCount = (parsed: ParsedPayslip): number =>
  * What a filename gives away.
  *
  * A folder of payslips is almost always named to be sortable —
- * `2026-06_Capgemini_Payslip.pdf` — and that convention carries two of the
+ * `2026-06_Acme_Payslip.pdf` — and that convention carries two of the
  * fields the PDF text sometimes does not: which month it is, and who paid.
  *
  * Used only as a fallback. The document is the better authority when it
@@ -393,8 +504,12 @@ export function parsePositionedPayslip(lines: PositionedLine[]): ParsedPayslip {
         }
       }
 
-      const rule = RULES.find(r => r.pattern.test(run.text));
-      if (!rule || result[rule.field] !== undefined) continue;
+      // A `field: null` heading (the employer's NI) has nothing to fill --
+      // it is recognised only so the employee's rule cannot claim it either.
+      const rule = WALK_RULES.find(r => r.pattern.test(run.text));
+      if (!rule || rule.field === null || result[rule.field] !== undefined) continue;
+      if (rule === SACRIFICE_RULE && namesOtherSacrificeScheme(run.text)) continue;
+      const field = rule.field;
 
       for (let j = i + 1; j <= i + MAX_ROWS_BELOW && j < ordered.length; j++) {
         let best: { drift: number; value: number } | null = null;
@@ -406,12 +521,12 @@ export function parsePositionedPayslip(lines: PositionedLine[]): ParsedPayslip {
           if (!best || drift < best.drift) best = { drift, value };
         }
         if (best) {
-          result[rule.field] = best.value;
+          result[field] = MAGNITUDE_FIELDS.has(field) ? Math.abs(best.value) : best.value;
           break;
         }
       }
     }
   }
 
-  return result;
+  return withDerivedGross(result);
 }
