@@ -257,7 +257,33 @@ extract in the browser.
 | Public demo profile | Decided in principle, never scoped. Changes what the anon role may read |
 | FCA framing | Recommending specific financial products to UK consumers is a regulated activity. Guidance built so far is phrased as information only (names debt rates, spare cash and utilisation, never steers); this row now matters only for a product catalogue or public profile feature |
 | Hosted multi-user vs self-host template | Every RLS policy is `is_admin()`; no policy uses `auth.uid()` and `finance_profiles.owner_user_id` is read by nothing. A hosted version means per-owner policies on every table, per-user TrueLayer and document isolation; a template needs none of that |
-| Live shared finance templates | The `is_default` rows are the owner's: 15 recurring templates (Netflix, Hulu, ASPCA…, each name stored twice) and 32 default budget items (Phone (O2), Sky, Crunchyroll…). They override the generic code defaults for new profiles and "reset to defaults". Replacing them is a live data change |
+
+### Left-over from provider and save-safety work (2026-09-27)
+
+- **Drop `finance_seed_backup` table** — locked backup taken by the 2026-09-28 migrations: 67 shared template, item and category rows and 12 duplicate settings rows. No policies or client grants. Drop it once the owner confirms the cleanup and the settings dedupe look right in production.
+- **Latent shared-default takeover on other tables** — goals, goal contributions and settings keep shared `is_default` rows and are saved as whole collections (as are memberships, debts and credit scores); the row-scope trigger (`20260927192100`) covers only budget categories, budget items and recurring bills. Transactions and bank accounts refuse to write shared rows. Latent: both profiles own their rows in these tables today. Decide: extend the trigger, materialise per profile like the budget, or accept.
+- **Schema-file anon grants drift** — `supabase/schemas/40_finance.sql` declares `INSERT/UPDATE/DELETE/TRUNCATE` grants on `finance_budget_items`, `finance_categories`, `finance_recurring_bills`, `finance_templates` for the anon role, but live anon holds none (verified 2026-09-27). Not an exposure (RLS allows only what the policies grant), but the file disagrees with the live state. Clarify which is the source of truth and sync the other.
+- **`handleEditItem` in BudgetSurface** — pre-existing: drops `linkedAccountId` on save, unlike `handleAddItem`. Owner's call whether to preserve it.
+- **Preset provider names** — existing items like "Streaming (Netflix)" fold provider into the name (transactions match by name); the `provider` column is separate. Owner decided not to split existing names into the provider field. Existing and new items can diverge on this point.
+
+### Row-level save follow-ups (reviewer, 2026-09-29, none blocking)
+
+- **Review marks made in the ~800 ms before a same-profile refresh are sent but not shown until the next load.** The refresh waits for saves already sent, not for the pending coalesced one.
+- **`previous` outlives the stale-copy window.** A deliberate edit back to a row's pre-refresh value (un-marking a row another device marked reviewed) is dropped as stale, silently, until the next load. Fix: flush pending coalesced saves at load start and drop `previous`, or expire it after the first save that follows the load.
+- **After an update the stored row is the full local copy, not stored row + patch,** so a column dropped as stale is recorded as written; a later edit back to that value is not sent. Fix: remember `{ ...known.row, ...patch }` for updates.
+- **A timed-out key is unblocked by any successful load,** including one that started while the hung request was still pending; the late request can then land after a newer save. Fix: clear the key when the timed-out run itself settles.
+- **An id that already exists under this profile but is not in the stored map** (an insert whose response was lost; a statement imported in another tab) is skipped on every later edit with a "not saved" toast until reload. Fix: retry skipped ids as profile-scoped updates.
+- **The 30 s deadline covers a whole run**, so a large import sent as many 100-row requests on a slow link reports "timed out" though it completes. Fix: time each request.
+
+### Sync and profile switch interactions
+
+**A sync refresh started on one profile is dropped after a switch;** if the user switched to the self profile mid-sync it shows pre-sync rows until the next load. Async refresh cancellation is by profile; a prompt switch mid-refresh abandons the request, and a re-switch to the original profile does not restore it.
+
+**A table that fails to load on profile switch keeps the previous profile's rows visible.** Writes are blocked (collections marked incomplete), but the display is not cleared. User sees the old profile's data with editing disabled, which is confusing. The fix clears the table on a failed load, or renders an error state. Low priority — writes are safe, reading stale data is the symptom of a network failure, and error states are not yet defined for tables.
+
+### Shared default rows — editing without owning
+
+**Editing a transaction or bank account shown from shared default rows** (a profile with none of its own) is refused with a "Some changes not saved" message; the edit shows until the next load. Latent: no profile shows shared rows in these tables today. Decide: treat shared rows as read-only in the UI, or materialise them per profile as the budget does.
 
 ### Public version (UK-only) — what is left
 

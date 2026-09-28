@@ -54,6 +54,19 @@ export const EditRecurringDialog: React.FC<EditRecurringDialogProps> = ({
             />
           </div>
 
+          {/* Provider */}
+          <div className="space-y-1">
+            <Label htmlFor="edit-rec-provider" className="text-xs font-mono text-muted-foreground">Provider</Label>
+            <Input
+              id="edit-rec-provider"
+              placeholder="e.g. Octopus"
+              maxLength={60}
+              value={activeRecurring.provider || ''}
+              onChange={(e) => setActiveRecurring({ ...activeRecurring, provider: e.target.value })}
+              className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
+            />
+          </div>
+
           {/* Grid for Emoji and Tag */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1 col-span-1">

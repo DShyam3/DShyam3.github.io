@@ -335,6 +335,7 @@ export type Database = {
           linked_account_id: string | null
           name: string
           profile_id: string | null
+          provider: string | null
           spent: number
           updated_at: string
         }
@@ -349,6 +350,7 @@ export type Database = {
           linked_account_id?: string | null
           name: string
           profile_id?: string | null
+          provider?: string | null
           spent?: number
           updated_at?: string
         }
@@ -363,6 +365,7 @@ export type Database = {
           linked_account_id?: string | null
           name?: string
           profile_id?: string | null
+          provider?: string | null
           spent?: number
           updated_at?: string
         }
@@ -1308,6 +1311,7 @@ export type Database = {
           linked_budget_item_id: string | null
           name: string
           profile_id: string | null
+          provider: string | null
           tag: string | null
           updated_at: string
         }
@@ -1326,6 +1330,7 @@ export type Database = {
           linked_budget_item_id?: string | null
           name: string
           profile_id?: string | null
+          provider?: string | null
           tag?: string | null
           updated_at?: string
         }
@@ -1344,6 +1349,7 @@ export type Database = {
           linked_budget_item_id?: string | null
           name?: string
           profile_id?: string | null
+          provider?: string | null
           tag?: string | null
           updated_at?: string
         }

@@ -436,7 +436,8 @@ function FinanceView() {
             id: newItemId,
             name: newRecurring.name,
             budgeted: 0,
-            spent: 0
+            spent: 0,
+            provider: newRecurring.provider?.trim() || undefined
           };
           updatedBudget = updatedBudget.map(c => {
             if (c.id === targetCat.id) {
@@ -459,7 +460,8 @@ function FinanceView() {
       category: resolvedCategory,
       tag: resolvedTag,
       linkedBudgetItemId: finalLinkedBudgetItemId || undefined,
-      linkedAccountId: newRecurring.linkedAccountId || undefined
+      linkedAccountId: newRecurring.linkedAccountId || undefined,
+      provider: newRecurring.provider?.trim() || undefined
     } as RecurringBill;
 
     const updated = [...recurrings, created];
@@ -504,7 +506,11 @@ function FinanceView() {
       }
     }
 
-    const updated = recurrings.map(r => r.id === activeRecurring.id ? activeRecurring : r);
+    const normalizedRecurring: RecurringBill = {
+      ...activeRecurring,
+      provider: activeRecurring.provider?.trim() || undefined
+    };
+    const updated = recurrings.map(r => r.id === activeRecurring.id ? normalizedRecurring : r);
     setRecurrings(updated);
     saveDataToSupabase('recurrings', updated);
     setIsEditRecurringOpen(false);

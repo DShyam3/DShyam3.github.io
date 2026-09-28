@@ -190,8 +190,13 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       </span>
                       <div className="flex items-center gap-2 min-w-0">
                         {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
-                        <span className={cn("font-semibold text-xs truncate", bill.isPaid ? "line-through text-muted-foreground/50" : "text-foreground")}>
-                          {bill.name}
+                        <span className="flex items-baseline gap-1 min-w-0">
+                          <span className={cn("font-semibold text-xs truncate", bill.isPaid ? "line-through text-muted-foreground/50" : "text-foreground")}>
+                            {bill.name}
+                          </span>
+                          {bill.provider && (
+                            <span className="text-xs text-muted-foreground font-normal truncate max-w-[50%]">· {bill.provider}</span>
+                          )}
                         </span>
                         <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
                           {bill.frequency}
@@ -269,8 +274,13 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       </span>
                       <div className="flex items-center gap-2 min-w-0">
                         {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
-                        <span className="font-semibold text-xs text-foreground truncate">
-                          {bill.name}
+                        <span className="flex items-baseline gap-1 min-w-0">
+                          <span className="font-semibold text-xs text-foreground truncate">
+                            {bill.name}
+                          </span>
+                          {bill.provider && (
+                            <span className="text-xs text-muted-foreground font-normal truncate max-w-[50%]">· {bill.provider}</span>
+                          )}
                         </span>
                         <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
                           {bill.frequency}

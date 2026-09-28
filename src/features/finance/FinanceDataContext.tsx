@@ -17,14 +17,16 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import defaultPresets from '@/data/presets.json';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import type { Json } from '@/integrations/supabase/types';
+import type { Json, TablesInsert } from '@/integrations/supabase/types';
 import type { Payslip, PayslipLine, PayslipTransactionReconciliation, ProfileTransfer, StudentLoanRateRow } from '@/lib/finance';
 import type {
   SingleLegVerdict, StoredSingleLegDecision, StoredTransferDismissal, StoredTransferLink,
@@ -88,6 +90,17 @@ import {
   presetsToDefaultCategories,
 } from './finance-defaults';
 import { selectTaxConfigForDate } from './finance-calcs';
+import {
+  ALL_GUARDED_SAVE_KEYS,
+  inChunks,
+  latestOwnRow,
+  materialiseBudgetForProfile,
+  materialiseRecurringsForProfile,
+  planRowWrites,
+  rowsToWrite,
+  saveKeysBlockedBy,
+  type StoredRow,
+} from './save-safety';
 
 export type BreakdownRateMode = 'normal' | 'including_leave' | 'excluding_leave';
 import {
@@ -163,7 +176,6 @@ const PROFILE_SCOPED_SAVE_KEYS = new Set([
   'budget',
   'recurrings',
   'transactions',
-  'default_budget_categories',
 ]);
 
 const todayInLocalTimezone = () => {
@@ -384,6 +396,34 @@ function useProvideFinanceData() {
   }, [settings.taxYear, settings.ukRegion]);
 
   const [loadingDb, setLoadingDb] = useState(false);
+  // Per profile: collections whose rows on screen are not that profile's
+  // stored rows -- all of them until its load lands and while a switch to it
+  // is loading, then the ones whose load failed. A save replaces a stored
+  // collection with what is shown, so these are refused (save-safety.ts).
+  // Keyed by profile so a save captured before a switch, carrying the old
+  // profile's own list and id, is not refused because the new one is loading.
+  const blockedSaveKeysRef = useRef<Map<string, Set<string>>>(new Map());
+  const blockedSaveKeysFor = (id: string | null): ReadonlySet<string> =>
+    (id && blockedSaveKeysRef.current.get(id)) || ALL_GUARDED_SAVE_KEYS;
+  // Each load's number. A response from a load that is no longer the latest
+  // -- the switcher moved on while it was in flight -- is dropped.
+  const loadSeqRef = useRef(0);
+  // The profile whose rows are on screen. A refresh of the same profile (after
+  // a bank sync, an import) leaves its rows saveable; a switch does not.
+  const lastLoadedProfileRef = useRef<string | null>(null);
+  // For the tables the bank sync also writes: the row objects this page read
+  // from, or last wrote to, the database. An edit replaces the row it changes
+  // with a copy, so a save writes only rows missing from here (rowsToWrite).
+  const storedRowObjectsRef = useRef(new WeakSet<object>());
+  // The same rows by table and id, as last read or written, with their owner:
+  // a write sends only the columns an edit changed (planRowWrites).
+  const storedRowsRef = useRef(new Map<string, Map<string, StoredRow>>());
+  // The last save or delete queued per collection key; the next one waits for
+  // it, so two in flight cannot commit out of order or prune each other's rows.
+  const saveChainsRef = useRef(new Map<string, Promise<unknown>>());
+  // Collections whose save timed out: the request may still land, so later
+  // saves of that key are refused until the next load rather than raced.
+  const timedOutSaveKeysRef = useRef(new Set<string>());
   /**
    * False until the first fetch has come back.
    *
@@ -423,6 +463,14 @@ function useProvideFinanceData() {
   const [transferSingleLegs, setTransferSingleLegs] = useState<StoredSingleLegDecision[]>([]);
   const [transferSingleLegsFailed, setTransferSingleLegsFailed] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  // The selected profile, current as of the last render. A load started from
+  // an older closure -- a bank sync's refresh bound to the profile it began
+  // on -- is dropped once another profile is selected.
+  const currentProfileRef = useRef(profileId);
+  // Before passive effects, so the load the switch triggers already sees it.
+  useLayoutEffect(() => {
+    currentProfileRef.current = profileId;
+  }, [profileId]);
 
   /**
    * Both scoping helpers throw rather than fall back to an unfiltered query.
@@ -1239,8 +1287,17 @@ function useProvideFinanceData() {
     // context and called after a failed profile patch, so the precondition is
     // stated here rather than assumed of every caller.
     if (!profileId) return;
+    if (profileId !== currentProfileRef.current) return;
+    // Claimed before anything is awaited: from here a switch's saves are
+    // blocked and any older load is stale.
+    const loadSeq = ++loadSeqRef.current;
+    if (lastLoadedProfileRef.current !== profileId) {
+      blockedSaveKeysRef.current.set(profileId, new Set(ALL_GUARDED_SAVE_KEYS));
+    }
       setLoadingDb(true);
       try {
+        // Saves already sent land first, so the read below includes them.
+        await Promise.all(saveChainsRef.current.values());
         // course_end_date arrived in a later migration. Ask for it, and fall
         // back to the older column list against a database that has not had
         // it applied (42703: undefined column), so debts still load rather
@@ -1282,7 +1339,7 @@ function useProvideFinanceData() {
           budgetPresetsRes,
           selfProfileRes
         ] = await Promise.all([
-          scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types')),
+          scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, updated_at')),
           loadHolidays(),
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
           scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
@@ -1294,8 +1351,8 @@ function useProvideFinanceData() {
           scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
-          scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji')),
-          scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id')),
+          scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji, provider')),
+          scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id, provider')),
           scoped(supabase.from('finance_transactions').select('id, is_default, name, merchant, provider_category, category, amount, date, is_reviewed, account_id, bank_account_id, goal_id, notes, tags, is_recurring')),
           supabase.from('finance_tax_configs').select('id, is_default, effective_from, student_loan_thresholds, student_loan_rates, income_tax_bands, national_insurance_bands'),
           supabase.from('finance_recurring_templates').select('id, is_default, name, category, emoji, tag, default_amount, frequency, linked_budget_item_id, budget_category_name'),
@@ -1307,6 +1364,7 @@ function useProvideFinanceData() {
             .select(FINANCE_PROFILE_COLUMNS)
             .order('is_self', { ascending: false })
         ]);
+        if (loadSeq !== loadSeqRef.current || profileId !== currentProfileRef.current) return;
 
         // Refreshes the switcher. The active profile was already resolved by
         // `loadProfiles` before this load ran -- it has to have been, or the
@@ -1343,6 +1401,10 @@ function useProvideFinanceData() {
           ['holiday_defaults', holidayDefaultsRes],
           ['budget_presets', budgetPresetsRes]
         ] as const).filter(([, res]) => res.error);
+        // Applied once every collection is set, at the end of the load: if
+        // mapping throws first, nothing is unblocked over unset state.
+        const blockedAfterLoad = saveKeysBlockedBy(failedTables.map(([name]) => name));
+        let seedPresets = false;
 
         if (failedTables.length > 0) {
           console.error(
@@ -1356,7 +1418,7 @@ function useProvideFinanceData() {
           });
         }
 
-        const userSettings = settingsRes.data?.find(d => !d.is_default);
+        const userSettings = latestOwnRow(settingsRes.data ?? []);
         const defaultSettings = settingsRes.data?.find(d => d.is_default);
         const activeSettings = userSettings || defaultSettings;
 
@@ -1459,7 +1521,10 @@ function useProvideFinanceData() {
           emoji: a.emoji || undefined,
           color: a.color || undefined
         }));
-        if (!bankAccountsRes.error) setBankAccounts(mappedBankAccounts);
+        if (!bankAccountsRes.error) {
+          setBankAccounts(mappedBankAccounts);
+          rememberStoredRows('finance_bank_accounts', mappedBankAccounts, bankAccountRow, userAccounts.length > 0 ? profileId : null, true);
+        }
 
         const mappedInvestmentHoldings: InvestmentHolding[] = (investmentHoldingsRes.data ?? []).map(holding => ({
           id: holding.id,
@@ -1577,7 +1642,8 @@ function useProvideFinanceData() {
               budgeted: Number(item.budgeted) || 0,
               spent: Number(item.spent) || 0,
               linkedAccountId: item.linked_account_id || undefined,
-              emoji: item.emoji || undefined
+              emoji: item.emoji || undefined,
+              provider: item.provider || undefined
             }));
           return {
             id: cat.id,
@@ -1589,11 +1655,19 @@ function useProvideFinanceData() {
           };
         });
 
-        if (mappedBudgetCategories.length > 0) {
-          setBudgetCategories(sanitizeBudgetCategories(mergeMissingDefaultCategories(mappedBudgetCategories, DEFAULT_BUDGET_CATEGORIES)));
-        } else {
-          setBudgetCategories(prev => prev.length > 0 ? prev : sanitizeBudgetCategories(DEFAULT_BUDGET_CATEGORIES));
-        }
+        // Anything this profile does not own as a row -- the shared defaults,
+        // the code defaults merged in -- gets an id of its own before a save
+        // can reach it (save-safety.ts). Either table failing leaves the
+        // budget as it was: categories without their items would save as
+        // "delete every item".
+        const ownBudgetCatIds = new Set(userBudgetCats.length > 0 ? userBudgetCats.map(c => c.id) : []);
+        const loadedBudget = materialiseBudgetForProfile(
+          sanitizeBudgetCategories(mergeMissingDefaultCategories(mappedBudgetCategories, DEFAULT_BUDGET_CATEGORIES)),
+          ownBudgetCatIds,
+          profileId,
+        );
+        const budgetLoaded = !budgetCategoriesRes.error && !budgetItemsRes.error;
+        if (budgetLoaded) setBudgetCategories(loadedBudget);
 
         const userRecurrings = recurringBillsRes.data?.filter(d => !d.is_default) || [];
         const defaultRecurrings = recurringBillsRes.data?.filter(d => d.is_default) || [];
@@ -1611,9 +1685,17 @@ function useProvideFinanceData() {
           category: r.category || undefined,
           tag: r.tag || undefined,
           linkedBudgetItemId: r.linked_budget_item_id || undefined,
-          linkedAccountId: r.linked_account_id || undefined
+          linkedAccountId: r.linked_account_id || undefined,
+          provider: r.provider || undefined
         }));
-        if (!recurringBillsRes.error) setRecurrings(mappedRecurrings);
+        if (!recurringBillsRes.error) {
+          setRecurrings(materialiseRecurringsForProfile(
+            mappedRecurrings,
+            new Set(userRecurrings.map(r => r.id)),
+            profileId,
+            budgetLoaded ? loadedBudget : null,
+          ));
+        }
 
         const userTransactions = transactionsRes.data?.filter(d => !d.is_default) || [];
         const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
@@ -1635,7 +1717,10 @@ function useProvideFinanceData() {
           tags: t.tags || undefined,
           isRecurring: t.is_recurring || undefined
         }));
-        if (!transactionsRes.error) setMockTransactions(mappedTransactions);
+        if (!transactionsRes.error) {
+          setMockTransactions(mappedTransactions);
+          rememberStoredRows('finance_transactions', mappedTransactions, transactionRow, userTransactions.length > 0 ? profileId : null, true);
+        }
 
         const mapTaxConfig = (row: NonNullable<typeof taxConfigsRes.data>[number]): TaxConfig => ({
           effectiveFrom: row.effective_from,
@@ -1757,8 +1842,8 @@ function useProvideFinanceData() {
             };
             return merged;
           });
-        } else {
-          saveDataToSupabase('budget_presets', ALL_PRESETS_FALLBACK);
+        } else if (!budgetPresetsRes.error) {
+          seedPresets = true;
         }
 
         // Reconstruct databaseDefaults map
@@ -1936,11 +2021,22 @@ function useProvideFinanceData() {
         defaultsMap['budget_presets'] = presetsObj;
         setDatabaseDefaults(defaultsMap);
 
+        blockedSaveKeysRef.current.set(profileId, blockedAfterLoad);
+        timedOutSaveKeysRef.current.clear();
+        lastLoadedProfileRef.current = profileId;
+        if (seedPresets) saveDataToSupabase('budget_presets', ALL_PRESETS_FALLBACK);
       } catch (err) {
         console.error('Error fetching settings from Supabase:', err);
+        // Some collections may be half set: none is safe to save.
+        if (loadSeq === loadSeqRef.current) {
+          blockedSaveKeysRef.current.set(profileId, new Set(ALL_GUARDED_SAVE_KEYS));
+          lastLoadedProfileRef.current = null;
+        }
       } finally {
-        setLoadingDb(false);
-        setHasLoaded(true);
+        if (loadSeq === loadSeqRef.current) {
+          setLoadingDb(false);
+          setHasLoaded(true);
+        }
       }
   };
 
@@ -2019,9 +2115,239 @@ function useProvideFinanceData() {
     if (error) throw error;
   };
 
+  /*
+   * Rows as stored, one builder per table the sync also writes. The load
+   * records what it read through the same builder a write compares against,
+   * so only columns an edit changed differ.
+   */
+  const transactionRow = (t: MockTransaction) => ({
+    id: t.id,
+    is_default: false,
+    profile_id: profileId,
+    name: t.name,
+    // Round-tripped rather than left to the upsert's defaults: an
+    // omitted column would be fine on conflict but NULLs the row on
+    // an insert, which is how a synced merchant would quietly vanish.
+    merchant: t.merchant || null,
+    // provider_category is left out on purpose: only the sync writes
+    // it, an update leaves an omitted column alone, and a row this
+    // client inserts is manual, so NULL is the right value there.
+    category: t.category || null,
+    amount: t.amount,
+    date: t.date,
+    is_reviewed: t.isReviewed,
+    account_id: t.accountId || t.bankAccountId || null,
+    bank_account_id: t.bankAccountId || t.accountId || null,
+    goal_id: t.goalId || null,
+    notes: t.notes || null,
+    tags: t.tags || null,
+    is_recurring: t.isRecurring || false
+  }) satisfies TablesInsert<'finance_transactions'>;
+
+  const bankAccountRow = (a: BankAccount) => ({
+    id: a.id,
+    is_default: false,
+    profile_id: profileId,
+    name: a.name,
+    type: a.type,
+    issuer: a.issuer || null,
+    balance: a.balance,
+    annual_fee: a.annualFee,
+    credit_limit: a.creditLimit ?? null,
+    use_case: a.useCase || null,
+    emoji: a.emoji || null,
+    color: a.color || null
+  }) satisfies TablesInsert<'finance_bank_accounts'>;
+
+  type SyncedTable = 'finance_transactions' | 'finance_bank_accounts';
+
+  /**
+   * Records rows as read or written, owned by `owner` (null: shared). A load
+   * keeps the row it replaces as `previous`, so a copy made before the load
+   * does not write back what the load brought in (planRowWrites).
+   */
+  const rememberStoredRows = <T extends { id: string }>(
+    table: SyncedTable,
+    rows: readonly T[],
+    toRow: (row: T) => Record<string, unknown>,
+    owner: string | null,
+    fromLoad = false,
+  ) => {
+    const stored = storedRowsRef.current.get(table) ?? new Map<string, StoredRow>();
+    for (const row of rows) {
+      storedRowObjectsRef.current.add(row);
+      const previous = fromLoad ? stored.get(row.id)?.row : undefined;
+      stored.set(row.id, { profileId: owner, row: toRow(row), previous });
+    }
+    storedRowsRef.current.set(table, stored);
+  };
+
+  /**
+   * Writes the rows an edit replaced, in a collection the bank sync also
+   * writes. Never "make the table equal this list": the list may predate rows
+   * the sync added or changed since. Known rows get only their changed
+   * columns, by id and profile; new rows are inserted; deletes go through
+   * deleteFinanceRows, by id (planRowWrites).
+   */
+  const writeEditedRows = async <T extends { id: string }>(
+    table: SyncedTable,
+    rows: readonly T[],
+    toRow: (row: T) => Record<string, unknown>,
+  ) => {
+    if (!profileId) return;
+    const edited = rowsToWrite(rows, row => storedRowObjectsRef.current.has(row));
+    if (edited.length === 0) return;
+    const byId = new Map(edited.map(row => [row.id, row]));
+    const remember = (ids: Iterable<string>) => rememberStoredRows(
+      table,
+      [...ids].flatMap(id => byId.get(id) ?? []),
+      toRow,
+      profileId,
+    );
+    const { inserts, updates, notOwned } = planRowWrites(
+      edited.map(row => ({ id: row.id, row: toRow(row) })),
+      storedRowsRef.current.get(table) ?? new Map(),
+      profileId,
+    );
+    const skipped = [...notOwned];
+
+    // ON CONFLICT DO NOTHING: an id already taken -- another profile's row, a
+    // row a second tab added -- is reported rather than overwritten, and does
+    // not fail every later save with 23505. Rows are remembered per request,
+    // so a failure part-way does not re-send what already landed.
+    const insertRows = async (payloads: Record<string, unknown>[]) => {
+      for (const chunk of inChunks(payloads, 100)) {
+        const { data, error } = await supabase
+          .from<SyncedTable, never>(table)
+          .upsert(chunk as never, { onConflict: 'id', ignoreDuplicates: true })
+          .select('id');
+        if (error) throw error;
+        const written = new Set(((data ?? []) as { id: string }[]).map(row => row.id));
+        remember(written);
+        for (const payload of chunk) {
+          if (!written.has(payload.id as string)) skipped.push(payload.id as string);
+        }
+      }
+    };
+
+    await insertRows(inserts);
+    for (const { patch, ids } of updates) {
+      for (const chunk of inChunks(ids, 100)) {
+        const { data, error } = await supabase
+          .from<SyncedTable, never>(table)
+          .update(patch as never)
+          .eq('profile_id', profileId)
+          .in('id', chunk)
+          .select('id');
+        if (error) throw error;
+        const updated = new Set(((data ?? []) as { id: string }[]).map(row => row.id));
+        remember(updated);
+        // Matched nothing: the row is gone (deleted, then added again, or
+        // deleted in another tab). Insert it; an insert cannot overwrite.
+        const gone = chunk.filter(id => !updated.has(id));
+        if (gone.length > 0) await insertRows(gone.flatMap(id => byId.has(id) ? [toRow(byId.get(id)!)] : []));
+      }
+    }
+
+    if (skipped.length > 0) {
+      toast({
+        title: 'Some changes not saved',
+        description: `${skipped.length} row${skipped.length === 1 ? '' : 's'} belong to another profile or the shared defaults, or already exist.`,
+        variant: 'destructive',
+      });
+      // Not retried on every later save.
+      for (const id of skipped) {
+        const row = byId.get(id);
+        if (row) storedRowObjectsRef.current.add(row);
+      }
+    }
+  };
+
+  // A request that never settles would otherwise hold every later save of
+  // that collection behind it, silently.
+  const SAVE_TIMEOUT_MS = 30_000;
+
+  const enqueueSave = (key: string, run: () => Promise<boolean>): Promise<boolean> => {
+    const withDeadline = () => new Promise<boolean>(resolve => {
+      // After a timeout the late request may still land; racing it with a
+      // newer save could commit them out of order. Refuse until a reload.
+      if (timedOutSaveKeysRef.current.has(key)) {
+        toast({ title: 'Not saved', description: 'An earlier save of this data timed out. Reload before editing further.', variant: 'destructive' });
+        resolve(false);
+        return;
+      }
+      const timer = window.setTimeout(() => {
+        timedOutSaveKeysRef.current.add(key);
+        toast({ title: 'Save timed out', description: 'The connection did not answer. Reload before editing further.', variant: 'destructive' });
+        resolve(false);
+      }, SAVE_TIMEOUT_MS);
+      const settle = (ok: boolean) => {
+        window.clearTimeout(timer);
+        resolve(ok);
+      };
+      run().then(settle, () => settle(false));
+    });
+    const previous = saveChainsRef.current.get(key) ?? Promise.resolve(true);
+    const next = previous.then(withDeadline, withDeadline);
+    saveChainsRef.current.set(key, next);
+    return next;
+  };
+
+  const SAVE_KEY_OF: Record<SyncedTable, string> = {
+    finance_transactions: 'transactions',
+    finance_bank_accounts: 'accounts',
+  };
+
+  /**
+   * Deletes rows the user removed, by id, for this profile only. Queued behind
+   * the collection's saves so an earlier upsert of the same row cannot land
+   * after it and bring it back. Chunked: 3,700 ids in one filter made a URL
+   * of ~190 KB.
+   */
+  const deleteFinanceRows = (table: SyncedTable, ids: readonly string[]) =>
+    enqueueSave(SAVE_KEY_OF[table], async () => {
+      if (!isAdmin || !profileId || ids.length === 0) return false;
+      try {
+        for (const chunk of inChunks(ids, 100)) {
+          const { error } = await supabase
+            .from<SyncedTable, never>(table)
+            .delete()
+            .eq('profile_id', profileId)
+            .eq('is_default', false)
+            .in('id', chunk);
+          if (error) throw error;
+          // Forgotten, so the same id added again (a statement re-imported)
+          // is inserted rather than sent as an update that matches nothing.
+          for (const id of chunk) storedRowsRef.current.get(table)?.delete(id);
+        }
+        return true;
+      } catch (err) {
+        console.error(`Error deleting from ${table}:`, err);
+        toast({ title: 'Could not delete', description: 'Please try again.', variant: 'destructive' });
+        return false;
+      }
+    });
+
+  // Saves of one collection run one after another (saveChainsRef). Refused
+  // when asked for, not when their turn comes: a save requested while this
+  // profile's rows are not yet on screen carries the previous profile's list,
+  // and must not run once the load lands.
+  const saveDataToSupabase = (key: string, contentData: unknown): Promise<boolean> => {
+    if (!isAdmin) return Promise.resolve(false);
+    if (blockedSaveKeysFor(profileId).has(key)) {
+      toast({
+        title: 'Not saved',
+        description: 'This profile\'s data has not finished loading, so what is on screen may not be its own. Try again once it loads, or reload.',
+        variant: 'destructive',
+      });
+      return Promise.resolve(false);
+    }
+    return enqueueSave(key, () => runSave(key, contentData));
+  };
+
   // Each branch narrows `contentData` to the shape its key implies; the caller
   // passes whichever collection it just changed.
-  const saveDataToSupabase = async (key: string, contentData: unknown) => {
+  const runSave = async (key: string, contentData: unknown) => {
     if (!isAdmin) return false;
     // Every *ledger* row carries a profile_id, and the database enforces it
     // with a CHECK. Writing without one would fail per-statement and leave the
@@ -2046,11 +2372,6 @@ function useProvideFinanceData() {
     try {
       if (key === 'settings') {
         const settingsObj = contentData as FinanceSettings;
-        const { data: existingSettings } = await supabase
-          .from('finance_settings')
-          .select('id')
-          .eq('is_default', false)
-          .maybeSingle();
 
         const settingsRow = {
           is_default: false,
@@ -2076,16 +2397,32 @@ function useProvideFinanceData() {
           updated_at: new Date().toISOString()
         };
 
-        if (existingSettings?.id) {
-          await supabase.from('finance_settings').update(settingsRow).eq('id', existingSettings.id);
-        } else {
-          await supabase.from('finance_settings').insert(settingsRow);
-        }
+        // This profile's row, by the same rule the load reads it with. The
+        // lookup was once unscoped and `.maybeSingle()`: with two profiles it
+        // errored, came back empty, and every save inserted another row.
+        const writeSettingsRow = async () => {
+          const { data: ownSettingsRows, error: lookupError } = await supabase
+            .from('finance_settings')
+            .select('id, is_default, updated_at')
+            .eq('profile_id', profileId)
+            .eq('is_default', false);
+          if (lookupError) return lookupError;
+          const existingSettings = latestOwnRow(ownSettingsRows ?? []);
+          const { error } = existingSettings
+            ? await supabase.from('finance_settings').update(settingsRow).eq('id', existingSettings.id)
+            : await supabase.from('finance_settings').insert(settingsRow);
+          return error;
+        };
+        // Two saves racing on a profile with no row yet both insert; the
+        // one-per-profile index rejects the second (23505), which is retried
+        // and then finds the row to update.
+        let settingsError = await writeSettingsRow();
+        if (settingsError?.code === '23505') settingsError = await writeSettingsRow();
+        if (settingsError) throw settingsError;
 
         const holidaysList = Array.isArray(settingsObj.holidaysByUser)
           ? settingsObj.holidaysByUser
           : Object.values(settingsObj.holidaysByUser || {});
-        await pruneScoped('finance_user_holidays', holidaysList.map(h => h.id));
         if (holidaysList.length > 0) {
           const holidayRow = (h: UserHoliday) => ({
             id: h.id,
@@ -2104,15 +2441,18 @@ function useProvideFinanceData() {
             holidaysList.map(h => ({ ...holidayRow(h), half_day: h.halfDay ?? null })),
             { onConflict: 'id' },
           );
-          if (saved.error?.code === 'PGRST204') {
-            await supabase.from('finance_user_holidays').upsert(holidaysList.map(h => holidayRow(h)), { onConflict: 'id' });
-          }
+          const holidaysError = saved.error?.code === 'PGRST204'
+            ? (await supabase.from('finance_user_holidays').upsert(holidaysList.map(h => holidayRow(h)), { onConflict: 'id' })).error
+            : saved.error;
+          if (holidaysError) throw holidaysError;
         }
+        await pruneScoped('finance_user_holidays', holidaysList.map(h => h.id));
       } else if (key === 'goals') {
         const goalsList = contentData as Goal[];
-        await pruneScoped('finance_goals', goalsList.map(g => g.id));
+        // Upsert, then prune, throughout: a failed write must leave the
+        // stored rows alone.
         if (goalsList.length > 0) {
-          await supabase.from('finance_goals').upsert(goalsList.map(g => ({
+          const { error: goalsError } = await supabase.from('finance_goals').upsert(goalsList.map(g => ({
             id: g.id,
             is_default: false,
             profile_id: profileId,
@@ -2126,6 +2466,7 @@ function useProvideFinanceData() {
             status: g.status || 'active',
             emoji: g.emoji || null
           })), { onConflict: 'id' });
+          if (goalsError) throw goalsError;
           const contribs = goalsList.flatMap(g => (g.contributions || []).map(c => ({
             id: c.id,
             is_default: false,
@@ -2136,36 +2477,25 @@ function useProvideFinanceData() {
             note: c.note || null,
             bank_account_id: c.bankAccountId || null
           })));
-          await pruneScoped('finance_goal_contributions', goalsList.flatMap(g => (g.contributions || []).map(c => c.id)));
           if (contribs.length > 0) {
-            await supabase.from('finance_goal_contributions').upsert(contribs, { onConflict: 'id' });
+            const { error: contribsError } = await supabase.from('finance_goal_contributions').upsert(contribs, { onConflict: 'id' });
+            if (contribsError) throw contribsError;
           }
+          await pruneScoped('finance_goal_contributions', goalsList.flatMap(g => (g.contributions || []).map(c => c.id)));
         }
+        await pruneScoped('finance_goals', goalsList.map(g => g.id));
       } else if (key === 'accounts') {
         // `debts` is optional so the existing account/membership/score callers
         // don't all have to thread it through; fall back to current state.
         const accsObj = contentData as { bankAccounts: BankAccount[]; memberships: Membership[]; creditScores: CreditScores; debts?: Debt[] };
         const debtsToSave = accsObj.debts ?? debts;
-        await pruneScoped('finance_bank_accounts', (accsObj.bankAccounts || []).map(a => a.id));
-        if (accsObj.bankAccounts?.length > 0) {
-          await supabase.from('finance_bank_accounts').upsert(accsObj.bankAccounts.map(a => ({
-            id: a.id,
-            is_default: false,
-            profile_id: profileId,
-            name: a.name,
-            type: a.type,
-            issuer: a.issuer || null,
-            balance: a.balance,
-            annual_fee: a.annualFee,
-            credit_limit: a.creditLimit ?? null,
-            use_case: a.useCase || null,
-            emoji: a.emoji || null,
-            color: a.color || null
-          })), { onConflict: 'id' });
-        }
-        await pruneScoped('finance_memberships', (accsObj.memberships || []).map(m => m.id));
+        // Upsert, then prune, for each table: a failed write must leave the
+        // stored rows alone.
+        // The sync writes bank accounts too (balances, newly connected
+        // accounts), so only what changed here is written.
+        await writeEditedRows('finance_bank_accounts', accsObj.bankAccounts || [], bankAccountRow);
         if (accsObj.memberships?.length > 0) {
-          await supabase.from('finance_memberships').upsert(accsObj.memberships.map(m => ({
+          const { error: membershipsError } = await supabase.from('finance_memberships').upsert(accsObj.memberships.map(m => ({
             id: m.id,
             is_default: false,
             profile_id: profileId,
@@ -2175,10 +2505,11 @@ function useProvideFinanceData() {
             annual_fee: m.annualFee,
             use_case: m.useCase || null
           })), { onConflict: 'id' });
+          if (membershipsError) throw membershipsError;
         }
-        await pruneScoped('finance_debts', debtsToSave.map(d => d.id));
+        await pruneScoped('finance_memberships', (accsObj.memberships || []).map(m => m.id));
         if (debtsToSave.length > 0) {
-          await supabase.from('finance_debts').upsert(debtsToSave.map(d => ({
+          const { error: debtsError } = await supabase.from('finance_debts').upsert(debtsToSave.map(d => ({
             id: d.id,
             is_default: false,
             profile_id: profileId,
@@ -2204,15 +2535,16 @@ function useProvideFinanceData() {
             emoji: d.emoji || null,
             color: d.color || null
           })), { onConflict: 'id' });
+          if (debtsError) throw debtsError;
         }
+        await pruneScoped('finance_debts', debtsToSave.map(d => d.id));
         const scores = [
           ...(accsObj.creditScores?.experian || []).map(s => ({ ...s, bureau: 'experian' })),
           ...(accsObj.creditScores?.transunion || []).map(s => ({ ...s, bureau: 'transunion' })),
           ...(accsObj.creditScores?.equifax || []).map(s => ({ ...s, bureau: 'equifax' }))
         ];
-        await pruneScoped('finance_credit_scores', scores.map(s => s.id));
         if (scores.length > 0) {
-          await supabase.from('finance_credit_scores').upsert(scores.map(s => ({
+          const { error: scoresError } = await supabase.from('finance_credit_scores').upsert(scores.map(s => ({
             id: s.id,
             is_default: false,
             profile_id: profileId,
@@ -2221,7 +2553,9 @@ function useProvideFinanceData() {
             score: s.score,
             storage_path: s.storagePath || null,
           })), { onConflict: 'id' });
+          if (scoresError) throw scoresError;
         }
+        await pruneScoped('finance_credit_scores', scores.map(s => s.id));
       } else if (key === 'investments') {
         const holdings = contentData as InvestmentHolding[];
         // Upsert before pruning: if an edited position is invalid or the
@@ -2267,10 +2601,9 @@ function useProvideFinanceData() {
         }
       } else if (key === 'budget') {
         const budgetCats = contentData as BudgetCategory[];
-        await pruneScoped('finance_budget_items', budgetCats.flatMap(c => (c.items || []).map(i => i.id)), false);
-        await pruneScoped('finance_budget_categories', budgetCats.map(c => c.id), false);
+        // Upsert, then prune: a failed write must leave the stored rows alone.
         if (budgetCats.length > 0) {
-          await supabase.from('finance_budget_categories').upsert(budgetCats.map(c => ({
+          const { error: categoriesError } = await supabase.from('finance_budget_categories').upsert(budgetCats.map(c => ({
             id: c.id,
             is_default: false,
             profile_id: profileId,
@@ -2280,6 +2613,7 @@ function useProvideFinanceData() {
             group_type: c.group || null,
             emoji: c.emoji || null
           })), { onConflict: 'id' });
+          if (categoriesError) throw categoriesError;
           const items = budgetCats.flatMap(c => (c.items || []).map(i => ({
             id: i.id,
             is_default: false,
@@ -2290,17 +2624,21 @@ function useProvideFinanceData() {
             budgeted: i.budgeted,
             spent: i.spent,
             linked_account_id: i.linkedAccountId || null,
-            emoji: i.emoji || null
+            emoji: i.emoji || null,
+            provider: i.provider?.trim() || null
           })));
           if (items.length > 0) {
-            await supabase.from('finance_budget_items').upsert(items, { onConflict: 'id' });
+            const { error: itemsError } = await supabase.from('finance_budget_items').upsert(items, { onConflict: 'id' });
+            if (itemsError) throw itemsError;
           }
         }
+        await pruneScoped('finance_budget_items', budgetCats.flatMap(c => (c.items || []).map(i => i.id)), false);
+        await pruneScoped('finance_budget_categories', budgetCats.map(c => c.id), false);
       } else if (key === 'recurrings') {
         const recurringsList = contentData as RecurringBill[];
-        await pruneScoped('finance_recurring_bills', recurringsList.map(r => r.id));
+        // Upsert, then prune: a failed write must leave the stored rows alone.
         if (recurringsList.length > 0) {
-          await supabase.from('finance_recurring_bills').upsert(recurringsList.map(r => ({
+          const { error: recurringsError } = await supabase.from('finance_recurring_bills').upsert(recurringsList.map(r => ({
             id: r.id,
             is_default: false,
             profile_id: profileId,
@@ -2314,37 +2652,14 @@ function useProvideFinanceData() {
             category: r.category || null,
             tag: r.tag || null,
             linked_budget_item_id: r.linkedBudgetItemId || null,
-            linked_account_id: r.linkedAccountId || null
+            linked_account_id: r.linkedAccountId || null,
+            provider: r.provider?.trim() || null
           })), { onConflict: 'id' });
+          if (recurringsError) throw recurringsError;
         }
+        await pruneScoped('finance_recurring_bills', recurringsList.map(r => r.id));
       } else if (key === 'transactions') {
-        const txList = contentData as MockTransaction[];
-        await pruneScoped('finance_transactions', txList.map(t => t.id));
-        if (txList.length > 0) {
-          await supabase.from('finance_transactions').upsert(txList.map(t => ({
-            id: t.id,
-            is_default: false,
-            profile_id: profileId,
-            name: t.name,
-            // Round-tripped rather than left to the upsert's defaults: an
-            // omitted column would be fine on conflict but NULLs the row on
-            // an insert, which is how a synced merchant would quietly vanish.
-            merchant: t.merchant || null,
-            // provider_category is left out on purpose: only the sync writes
-            // it, an update leaves an omitted column alone, and a row this
-            // client inserts is manual, so NULL is the right value there.
-            category: t.category || null,
-            amount: t.amount,
-            date: t.date,
-            is_reviewed: t.isReviewed,
-            account_id: t.accountId || t.bankAccountId || null,
-            bank_account_id: t.bankAccountId || t.accountId || null,
-            goal_id: t.goalId || null,
-            notes: t.notes || null,
-            tags: t.tags || null,
-            is_recurring: t.isRecurring || false
-          })), { onConflict: 'id' });
-        }
+        await writeEditedRows('finance_transactions', contentData as MockTransaction[], transactionRow);
       } else if (key === 'tax_config') {
         const tcObj = contentData as TaxConfig;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(tcObj.effectiveFrom)) {
@@ -2414,37 +2729,6 @@ function useProvideFinanceData() {
         }));
         if (hdRows.length > 0) {
           await supabase.from('finance_holiday_defaults').insert(hdRows);
-        }
-      } else if (key === 'default_budget_categories') {
-        const defaultBudgetCats = contentData as BudgetCategory[];
-        await pruneScoped('finance_budget_items', defaultBudgetCats.flatMap(c => (c.items || []).map(i => i.id)), true);
-        await pruneScoped('finance_budget_categories', defaultBudgetCats.map(c => c.id), true);
-        if (defaultBudgetCats.length > 0) {
-          await supabase.from('finance_budget_categories').upsert(defaultBudgetCats.map(c => ({
-            id: c.id,
-            is_default: false,
-            profile_id: profileId,
-            is_template: true,
-            name: c.name,
-            budgeted: c.budgeted,
-            group_type: c.group || null,
-            emoji: c.emoji || null
-          })), { onConflict: 'id' });
-          const items = defaultBudgetCats.flatMap(c => (c.items || []).map(i => ({
-            id: i.id,
-            is_default: false,
-            profile_id: profileId,
-            is_template: true,
-            category_id: c.id,
-            name: i.name,
-            budgeted: i.budgeted,
-            spent: i.spent,
-            linked_account_id: i.linkedAccountId || null,
-            emoji: i.emoji || null
-          })));
-          if (items.length > 0) {
-            await supabase.from('finance_budget_items').upsert(items, { onConflict: 'id' });
-          }
         }
       } else if (key === 'budget_presets') {
         const presetsObj = contentData as Record<string, CategoryPreset[]>;
@@ -2538,6 +2822,7 @@ function useProvideFinanceData() {
     recurringTemplates,
     recurrings,
     saveDataToSupabase,
+    deleteFinanceRows,
     savingDb,
     selectedGoalId,
     setBankAccounts,

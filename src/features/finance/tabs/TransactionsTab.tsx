@@ -60,6 +60,7 @@ import { useMerchantLogos } from '@/features/finance/useMerchantLogos';
 import { MerchantAvatar } from '@/features/finance/components/MerchantAvatar';
 import { StatementImportDialog } from '@/features/finance/components/StatementImportDialog';
 import { TransferReviewSection } from '@/features/finance/components/TransferReviewSection';
+import { useFinanceData } from '@/features/finance/FinanceDataContext';
 import { resolveMerchant } from '@/lib/finance';
 
 /* Rows drawn at once. The whole ledger on screen was 18,000+ DOM nodes at
@@ -463,9 +464,20 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     };
   }, [transactions]);
 
+  // A save never deletes (the list may predate a sync), so a delete is sent
+  // by id as well as dropped from the list. If it fails, reload rather than
+  // leave rows that still exist missing from the screen.
+  const { deleteFinanceRows, fetchSupabaseData } = useFinanceData();
+  const deleteTransactions = (ids: string[]) => {
+    void deleteFinanceRows('finance_transactions', ids).then(ok => {
+      if (!ok) void fetchSupabaseData();
+    });
+  };
+
   const performDeleteSingle = (id: string) => {
     const updated = transactions.filter(tx => tx.id !== id);
     onUpdateTransactions(updated);
+    deleteTransactions([id]);
     if (selectedTxId === id) {
       setSelectedTxId(null);
     }
@@ -496,6 +508,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       onConfirm: () => {
         const updated = transactions.filter(tx => !selectedTxIds.has(tx.id));
         onUpdateTransactions(updated);
+        deleteTransactions([...selectedTxIds]);
         setSelectedTxIds(new Set());
       },
     });

@@ -79,6 +79,7 @@ export default function BankAccountsSection() {
     creditScores,
     memberships,
     saveDataToSupabase,
+    deleteFinanceRows,
     setBankAccounts,
     fetchSupabaseData,
   } = useFinanceData();
@@ -157,8 +158,13 @@ export default function BankAccountsSection() {
   const performDeleteAccount = (id: string) => {
     const updated = bankAccounts.filter(a => a.id !== id);
     setBankAccounts(updated);
-    saveDataToSupabase('accounts', { bankAccounts: updated, memberships, creditScores });
-    toast({ title: 'Account Deleted', description: 'Bank account removed.' });
+    // Saves never delete accounts (the list may predate a newly connected
+    // bank), so the removal is sent by id. On failure, reload rather than
+    // leave an account that still exists missing from the screen.
+    void deleteFinanceRows('finance_bank_accounts', [id]).then(ok => {
+      if (ok) toast({ title: 'Account Deleted', description: 'Bank account removed.' });
+      else void fetchSupabaseData();
+    });
   };
 
   const handleDeleteAccount = (id: string) =>

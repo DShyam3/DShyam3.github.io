@@ -10,6 +10,7 @@
 
 import defaultPresets from '@/data/presets.json';
 import { exactTaxYearOf } from '@/lib/finance/student-loan';
+import { unscopedId } from '@/features/finance/save-safety';
 import type {
   BankAccount,
   BudgetCategory,
@@ -131,7 +132,18 @@ export const createDefaultBudgetCategories = (): BudgetCategory[] => [
     budgeted: 0,
     group: 'wants',
     emoji: '🎬',
-    items: [],
+    items: [
+      { id: 'item_stream_netflix', name: 'Netflix', budgeted: 0, spent: 0 },
+      { id: 'item_stream_prime_video', name: 'Prime Video', budgeted: 0, spent: 0 },
+      { id: 'item_stream_disney_plus', name: 'Disney+', budgeted: 0, spent: 0 },
+      { id: 'item_stream_apple_tv_plus', name: 'Apple TV+', budgeted: 0, spent: 0 },
+      { id: 'item_stream_sky', name: 'Sky', budgeted: 0, spent: 0 },
+      { id: 'item_stream_now', name: 'NOW', budgeted: 0, spent: 0 },
+      { id: 'item_stream_paramount_plus', name: 'Paramount+', budgeted: 0, spent: 0 },
+      { id: 'item_stream_discovery_plus', name: 'Discovery+', budgeted: 0, spent: 0 },
+      { id: 'item_stream_youtube_premium', name: 'YouTube Premium', budgeted: 0, spent: 0 },
+      { id: 'item_stream_crunchyroll', name: 'Crunchyroll', budgeted: 0, spent: 0 },
+    ],
   },
   {
     id: 'transportation',
@@ -372,12 +384,20 @@ export const ALL_SAVINGS_IDS = SAVINGS_PRESETS.map(p => p.name.toLowerCase().rep
 
 export const DEFAULT_CATEGORY_TEMPLATES = presetsToDefaultCategories(DEFAULT_CATEGORY_PRESETS);
 
+/**
+ * Adds each default category the loaded budget lacks, by name or by id -- the
+ * id compared unscoped, so a profile's scoped copy of a default still counts
+ * after it is renamed. A merged category brings only the items whose names the
+ * budget does not already show: transactions are matched to items by name,
+ * so a second "Rent" would count one payment twice.
+ */
 export const mergeMissingDefaultCategories = (loaded: BudgetCategory[], defaults: BudgetCategory[]): BudgetCategory[] => {
   const merged = [...loaded];
+  const shownItemNames = new Set(loaded.flatMap(c => c.items.map(i => i.name.toLowerCase())));
   defaults.forEach(defCat => {
-    const exists = merged.some(c => c.name.toLowerCase() === defCat.name.toLowerCase() || c.id === defCat.id);
+    const exists = merged.some(c => c.name.toLowerCase() === defCat.name.toLowerCase() || unscopedId(c.id) === defCat.id);
     if (!exists) {
-      merged.push(defCat);
+      merged.push({ ...defCat, items: defCat.items.filter(i => !shownItemNames.has(i.name.toLowerCase())) });
     }
   });
   return merged;

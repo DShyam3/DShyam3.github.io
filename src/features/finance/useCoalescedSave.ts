@@ -6,9 +6,11 @@
  * without this that is one full upsert per keystroke.
  *
  * Local state is untouched -- the UI still updates on every press. Only the
- * trip to Supabase waits, which is safe here because these saves are
- * idempotent whole-collection upserts: the last one contains every earlier
- * one.
+ * trip to Supabase waits. Each list is built from the one before, so the last
+ * holds every earlier edit, and a save writes the rows an edit replaced.
+ * A refresh landing inside the window does not drop the pending list: its
+ * edits are still sent, and columns the refresh changed are left alone
+ * (planRowWrites). They show on screen again after the next load.
  */
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -20,7 +22,10 @@ export function useCoalescedSave<T>(save: (value: T) => void, delayMs = 800) {
   saveRef.current = save;
 
   const timer = useRef<number | null>(null);
-  const pending = useRef<{ value: T } | null>(null);
+  // The save is captured with the value. `saveRef` follows the latest render,
+  // so flushing through it after a profile switch would write one profile's
+  // rows under the other's id.
+  const pending = useRef<{ value: T; save: (value: T) => void } | null>(null);
 
   const flush = useCallback(() => {
     if (timer.current !== null) {
@@ -28,14 +33,14 @@ export function useCoalescedSave<T>(save: (value: T) => void, delayMs = 800) {
       timer.current = null;
     }
     if (pending.current) {
-      const { value } = pending.current;
+      const { value, save: pendingSave } = pending.current;
       pending.current = null;
-      saveRef.current(value);
+      pendingSave(value);
     }
   }, []);
 
   const schedule = useCallback((value: T) => {
-    pending.current = { value };
+    pending.current = { value, save: saveRef.current };
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(flush, delayMs);
   }, [delayMs, flush]);

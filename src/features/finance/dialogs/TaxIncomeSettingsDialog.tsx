@@ -30,6 +30,7 @@ import { useFinanceData } from '../FinanceDataContext';
 import { useFinanceTotals } from '../useFinanceTotals';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import {
   formatNumberInput,
   parseFormattedFloat,
@@ -75,8 +76,11 @@ export function TaxIncomeSettingsDialog({
     saveDataToSupabase,
     savingDb,
     setSavingDb,
-    fetchingHolidays
+    fetchingHolidays,
+    profileId,
+    fetchSupabaseData
   } = useFinanceData();
+  const { askDelete, deleteDialog } = useDeleteConfirm();
   const { results } = useFinanceTotals();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
@@ -246,7 +250,14 @@ export function TaxIncomeSettingsDialog({
     }
   };
 
-  const handleResetDefaults = async () => {
+  const handleResetDefaults = () => askDelete({
+    title: 'Reset settings to defaults?',
+    description: 'Tax and income settings and holidays for this profile, plus the shared tax rates, recurring templates, credit bureaus, holiday defaults and budget presets, go back to their defaults. Accounts, transactions, budget, bills and goals are not touched.',
+    confirmLabel: 'Reset',
+    onConfirm: performResetDefaults,
+  });
+
+  const performResetDefaults = async () => {
     const defaultSettings: FinanceSettings = databaseDefaults.settings || createDefaultFinanceSettings(ALL_SAVINGS_IDS);
     const defaultTaxConfig: TaxConfig = databaseDefaults.tax_config || createEmptyTaxConfig();
     const defaultRecurringTemplates = databaseDefaults.recurring_templates?.length
@@ -281,14 +292,25 @@ export function TaxIncomeSettingsDialog({
 
     if (isAdmin) {
       try {
-        const deleteTables = [
-          'finance_settings', 'finance_user_holidays', 'finance_goals', 'finance_goal_contributions',
-          'finance_bank_accounts', 'finance_memberships', 'finance_debts', 'finance_credit_scores',
-          'finance_budget_categories', 'finance_budget_items', 'finance_recurring_bills',
-          'finance_transactions', 'finance_tax_configs', 'finance_recurring_templates',
+        if (!profileId) throw new Error('No profile loaded');
+        // Only what this dialog edits. Settings and holidays are this
+        // profile's; the reference tables carry no profile_id and are shared.
+        // The ledger (accounts, transactions, budget, bills, goals) is never
+        // cleared from here: it used to be, for every profile, in one click.
+        const profileTables = ['finance_settings', 'finance_user_holidays'];
+        const referenceTables = [
+          'finance_tax_configs', 'finance_recurring_templates',
           'finance_credit_bureaus', 'finance_holiday_defaults', 'finance_budget_presets'
         ];
-        await Promise.all(deleteTables.map(t => supabase.from(t as 'finance_settings').delete().eq('is_default', false)));
+        const deleteResults = await Promise.all([
+          ...profileTables.map(t => supabase.from(t as 'finance_settings').delete().eq('is_default', false).eq('profile_id', profileId)),
+          ...referenceTables.map(t => supabase.from(t as 'finance_settings').delete().eq('is_default', false)),
+        ]);
+        const failed = deleteResults.find(r => r.error);
+        if (failed?.error) throw failed.error;
+        // Reload so nothing on screen still shows a deleted row, which the
+        // next save would otherwise write straight back.
+        await fetchSupabaseData();
         toast({ title: 'Reset successful', description: 'Database and local configurations reverted to defaults.' });
       } catch (err) {
         console.error('Failed to reset custom database records:', err);
@@ -300,6 +322,7 @@ export function TaxIncomeSettingsDialog({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="!flex !flex-col sm:rounded-xl border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none">
         <DialogHeader className="pl-4 pr-16 sm:pl-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
@@ -1136,5 +1159,7 @@ export function TaxIncomeSettingsDialog({
         </form>
       </DialogContent>
     </Dialog>
+    {deleteDialog}
+    </>
   );
 }

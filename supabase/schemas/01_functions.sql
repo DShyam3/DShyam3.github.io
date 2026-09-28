@@ -206,6 +206,52 @@ $$;
 
 ALTER FUNCTION "public"."log_watchlist_event"() OWNER TO "postgres";
 
+-- Guards finance_budget_categories, finance_budget_items, and
+-- finance_recurring_bills against a row silently changing owner. Those three
+-- tables share PRIMARY KEY (id) across every profile and the shared default
+-- rows (is_default = true, profile_id IS NULL); the client upserts on
+-- onConflict: 'id', and if that id already belongs to someone else's row --
+-- or a shared default -- ON CONFLICT DO UPDATE would otherwise move it to
+-- the saving profile and overwrite it. See
+-- 20260927192100_finance_row_scope_immutable.sql for the full reasoning,
+-- including why a composite key is not an option here.
+--
+-- Only finance_budget_categories and finance_budget_items carry is_template;
+-- finance_recurring_bills has no such column. Gating on TG_TABLE_NAME before
+-- touching NEW.is_template means that reference is never resolved when this
+-- fires on finance_recurring_bills -- the same pattern log_watchlist_event()
+-- above uses to guard NEW.status, which movies also lacks.
+--
+-- SECURITY INVOKER (the default, stated for clarity) and search_path = '':
+-- the function reads no table and calls no schema-qualified object beyond
+-- RAISE's own built-ins, which resolve through pg_catalog regardless of
+-- search_path.
+CREATE OR REPLACE FUNCTION "public"."finance_keep_row_scope"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY INVOKER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF NEW.profile_id IS DISTINCT FROM OLD.profile_id
+     OR NEW.is_default IS DISTINCT FROM OLD.is_default THEN
+    RAISE EXCEPTION '% % belongs to a different profile or the shared defaults; save it under a new id',
+        TG_TABLE_NAME, OLD.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF TG_TABLE_NAME IN ('finance_budget_categories', 'finance_budget_items') THEN
+    IF NEW.is_template IS DISTINCT FROM OLD.is_template THEN
+      RAISE EXCEPTION '% % belongs to a different profile or the shared defaults; save it under a new id',
+          TG_TABLE_NAME, OLD.id
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION "public"."finance_keep_row_scope"() OWNER TO "postgres";
+
 
 GRANT ALL ON FUNCTION "public"."is_admin"() TO "anon";
 
@@ -236,3 +282,15 @@ GRANT ALL ON FUNCTION "public"."log_watchlist_event"() TO "anon";
 GRANT ALL ON FUNCTION "public"."log_watchlist_event"() TO "authenticated";
 
 GRANT ALL ON FUNCTION "public"."log_watchlist_event"() TO "service_role";
+
+-- Not revoked: this project's other trigger functions above all keep the
+-- default EXECUTE grant to anon/authenticated/service_role rather than
+-- revoking it, matched here for consistency. It carries no exploitable
+-- surface either way: Postgres refuses to run a trigger function outside
+-- trigger context ("trigger functions can only be called as triggers"),
+-- before this body ever executes, for any caller.
+GRANT ALL ON FUNCTION "public"."finance_keep_row_scope"() TO "anon";
+
+GRANT ALL ON FUNCTION "public"."finance_keep_row_scope"() TO "authenticated";
+
+GRANT ALL ON FUNCTION "public"."finance_keep_row_scope"() TO "service_role";

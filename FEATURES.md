@@ -173,8 +173,12 @@ membership tables scroll horizontally within their panels.
 ### Spending
 
 Transactions, budget, recurrings and transfers. At 1024px or wider and 720px or taller, the list scrolls with the page and the details panel stays in view beside it, with its own scroll. Smaller, the list keeps its own pane above the details, capped to the measured card height. Budgets build from preset groups
-rather than a blank form. Merchants resolve to logos through a server-side
+rather than a blank form. Budget items and recurring bills can have an optional provider name (up to 60 characters), shown after the item name — for example, "Phone · O2". Merchants resolve to logos through a server-side
 cache. Confirmed transfers are left out of spending and income everywhere figures are shown: Home, Budget history and Cash Flow. Transaction lists still show them.
+
+When a data collection fails to load, saves are refused with a "Not saved" message instead of overwriting stored data. A profile's reset to defaults clears settings and holidays for the current profile, plus the shared reference tables (tax configurations, recurring templates, credit bureaus, holiday defaults, and budget presets); accounts, transactions, budget, bills and goals are not affected. Reset asks for confirmation before proceeding.
+
+Marking, categorising or editing a transaction or bank account saves only the rows you changed and only the columns you edited, scoped by profile. Deleting a transaction or account removes just that one by id, not a collection. This ensures that rows added by a bank sync — which writes in parallel — are never removed by a save from a tab loaded before the sync ran.
 
 Likely transfers between the owner's own accounts — including round trips — are
 proposed in Transactions. Each pair can be confirmed, dismissed as "Not a transfer",
@@ -197,7 +201,7 @@ and filter logic; the navigation is read once and cleared.
 
 **Goals** and a "what if" scenario engine for testing a change before making it.
 
-Budget and recurring defaults are generic UK: Home section covers Rent, Council Tax, Energy, Water, Internet, Phone; Transport covers Car Insurance, Fuel, Public Transport; Subscriptions starts empty. Payslip employer logos are matched from experience and education rows by whole-word slug, longest match wins.
+Budget and recurring defaults are generic UK: Home section covers Rent, Council Tax, Energy, Water, Internet, Phone; Transport covers Car Insurance, Fuel, Public Transport; Entertainment includes 10 streaming services (Netflix, Prime Video, Disney+, Apple TV+, Sky, NOW, Paramount+, Discovery+, YouTube Premium, Crunchyroll); Subscriptions starts empty. Payslip employer logos are matched from experience and education rows by whole-word slug, longest match wins.
 
 ### Wealth
 

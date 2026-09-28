@@ -74,7 +74,8 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
     spent: number | '';
     linkedAccountId: string;
     emoji: string;
-  }>({ name: '', budgeted: 0, spent: '', linkedAccountId: '', emoji: '' });
+    provider: string;
+  }>({ name: '', budgeted: 0, spent: '', linkedAccountId: '', emoji: '', provider: '' });
   /* One selection per open dialog, keyed by preset group, replacing fifteen
      near-identical useState pairs (one per category kind). Only one group is
      ever on screen, so `providerInput` likewise serves both the subscription
@@ -82,7 +83,7 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
   const [selectedPresets, setSelectedPresets] = useState<Record<string, string>>({});
   const [providerInput, setProviderInput] = useState('');
 
-  const [activeBudgetItem, setActiveBudgetItem] = useState<{ id: string, name: string, budgeted: number, spent: number, categoryId: string, linkedAccountId?: string, emoji?: string } | null>(null);
+  const [activeBudgetItem, setActiveBudgetItem] = useState<{ id: string, name: string, budgeted: number, spent: number, categoryId: string, linkedAccountId?: string, emoji?: string, provider?: string } | null>(null);
 
   // Seed the add-item dialog from whichever preset group claims the category.
   // Every group is reset on open, so a selection made under one category
@@ -99,6 +100,7 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
       spent: 0,
       linkedAccountId: '',
       emoji: picked?.emoji ?? '',
+      provider: '',
     });
   }, [isAddItemOpen, activeCategoryId, budgetCategories, settings]);
 
@@ -194,7 +196,8 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
       name: finalName,
       budgeted: 0,
       spent: newBudgetItem.spent === '' ? 0 : newBudgetItem.spent,
-      emoji: newBudgetItem.emoji
+      emoji: newBudgetItem.emoji,
+      provider: newBudgetItem.provider.trim() || undefined
     };
     const updated = budgetCategories.map(cat => {
       if (cat.id === activeCategoryId) {
@@ -208,7 +211,7 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
     setBudgetCategories(updated);
     saveDataToSupabase('budget', updated);
     setIsAddItemOpen(false);
-    setNewBudgetItem({ name: '', budgeted: 0, spent: '', linkedAccountId: '', emoji: '' });
+    setNewBudgetItem({ name: '', budgeted: 0, spent: '', linkedAccountId: '', emoji: '', provider: '' });
     toast({ title: 'Item Added', description: `Added "${item.name}" to budget.` });
   };
 
@@ -224,7 +227,8 @@ export default function BudgetSurface({ totalSpent }: { totalSpent: number }) {
             name: activeBudgetItem.name,
             budgeted: 0,
             spent: activeBudgetItem.spent,
-            emoji: activeBudgetItem.emoji || item.emoji
+            emoji: activeBudgetItem.emoji || item.emoji,
+            provider: activeBudgetItem.provider?.trim() || undefined
           } : item)
         };
       }
@@ -974,7 +978,12 @@ return (
                             ) : (
                               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
                             )}
-                            <span className="font-medium text-foreground/90 truncate">{item.name}</span>
+                            <span className="flex items-baseline gap-1 min-w-0">
+                              <span className="font-medium text-foreground/90 truncate">{item.name}</span>
+                              {item.provider && (
+                                <span className="text-muted-foreground truncate max-w-[50%]">· {item.provider}</span>
+                              )}
+                            </span>
 
                             {/* Item hover actions */}
                             <div className="flex gap-0.5 card-actions shrink-0 ml-1.5">
@@ -1219,6 +1228,22 @@ return (
               onNameChange={(val) => setNewBudgetItem({ ...newBudgetItem, name: val })}
             />
           </div>
+          {/* Subscriptions and loans ask for a provider inside the preset field
+              and fold it into the name, which must stay unique: transactions
+              are categorised by item name. One provider box, never two. */}
+          {!(targetGroup?.provider && selectedPresets[targetGroup.kind] !== 'custom') && (
+            <div className="space-y-1">
+              <Label htmlFor="item-new-provider">Provider</Label>
+              <Input
+                id="item-new-provider"
+                placeholder="e.g. O2"
+                maxLength={60}
+                value={newBudgetItem.provider}
+                onChange={(e) => setNewBudgetItem({ ...newBudgetItem, provider: e.target.value })}
+                className="rounded-xl h-10 border-primary/20 bg-background/50"
+              />
+            </div>
+          )}
           <div className="space-y-1">
             <Label htmlFor="item-new-spent">Currently Spent (£)</Label>
             <Input
@@ -1257,6 +1282,17 @@ return (
             onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, name: e.target.value })}
             className="rounded-xl h-10 border-primary/20 bg-background/50"
             required
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="edit-item-provider">Provider</Label>
+          <Input
+            id="edit-item-provider"
+            placeholder="e.g. O2"
+            maxLength={60}
+            value={activeBudgetItem.provider ?? ''}
+            onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, provider: e.target.value })}
+            className="rounded-xl h-10 border-primary/20 bg-background/50"
           />
         </div>
         <div className="space-y-1">

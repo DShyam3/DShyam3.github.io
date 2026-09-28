@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { resolveBudgetItemLink } from '@/features/finance/save-safety';
 
 export type NewRecurringState = Omit<RecurringBill, 'id' | 'amount'> & { amount: number | '' };
 
@@ -47,13 +48,17 @@ export const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
           category: template.category,
           emoji: template.emoji,
           tag: template.tag,
-          amount: template.defaultAmount,
+          // 0 means "no suggested amount": leave the box empty to be filled.
+          amount: template.defaultAmount || '',
           dueDate: 1,
           frequency: template.frequency,
           dueMonth: 1,
-          linkedBudgetItemId: template.linkedBudgetItemId || '',
+          // Templates link by template id; this profile may hold that item
+          // under its own scoped id.
+          linkedBudgetItemId: resolveBudgetItemLink(template.linkedBudgetItemId, budgetCategories) || '',
           linkedAccountId: '',
           isPaid: false,
+          provider: newRecurring.provider,
         });
       }
     }
@@ -97,6 +102,19 @@ export const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
               onChange={(e) => setNewRecurring({ ...newRecurring, name: e.target.value })}
               className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
               required
+            />
+          </div>
+
+          {/* Provider */}
+          <div className="space-y-1">
+            <Label htmlFor="rec-provider" className="text-xs font-mono text-muted-foreground">Provider</Label>
+            <Input
+              id="rec-provider"
+              placeholder="e.g. Octopus"
+              maxLength={60}
+              value={newRecurring.provider || ''}
+              onChange={(e) => setNewRecurring({ ...newRecurring, provider: e.target.value })}
+              className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
             />
           </div>
 

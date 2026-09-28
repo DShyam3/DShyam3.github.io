@@ -57,7 +57,7 @@ export function useFinanceTotals() {
   const allBudgetItems = budgetCategories.flatMap(cat =>
     (cat.items || []).filter(item => isItemActive(item, cat)).map(item => ({
       id: item.id,
-      label: `${cat.name} > ${item.name}`
+      label: `${cat.name} > ${item.name}${item.provider ? ` · ${item.provider}` : ''}`
     }))
   );
   const { totalAssets, totalLoanBalance, totalDebt, netWorth } = calculateNetWorth(bankAccounts, debts, investmentHoldings);

@@ -83,6 +83,7 @@ export function BudgetPresetField({
           <Input
             id={`${group.kind}-provider-input`}
             placeholder={group.provider.placeholder}
+            maxLength={60}
             value={provider}
             onChange={(e) => onProviderChange(e.target.value)}
             className={`${FIELD_CLASS} text-xs`}

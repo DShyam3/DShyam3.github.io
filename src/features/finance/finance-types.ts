@@ -92,6 +92,7 @@ export interface BudgetItem {
   spent: number;
   linkedAccountId?: string;
   emoji?: string;
+  provider?: string;
 }
 
 export interface BudgetCategory {
@@ -116,6 +117,7 @@ export interface RecurringBill {
   tag?: string; // e.g. RENT, SPOTIFY
   linkedBudgetItemId?: string;
   linkedAccountId?: string;
+  provider?: string;
 }
 
 export interface CreditScoreEntry {
