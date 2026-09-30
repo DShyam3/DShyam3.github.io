@@ -215,21 +215,27 @@ $$;
 
 ALTER FUNCTION "public"."log_watchlist_event"() OWNER TO "postgres";
 
--- Guards finance_budget_categories, finance_budget_items, and
--- finance_recurring_bills against a row silently changing owner. Those three
--- tables share PRIMARY KEY (id) across every profile and the shared default
--- rows (is_default = true, profile_id IS NULL); the client upserts on
--- onConflict: 'id', and if that id already belongs to someone else's row --
--- or a shared default -- ON CONFLICT DO UPDATE would otherwise move it to
--- the saving profile and overwrite it. See
--- 20260927192100_finance_row_scope_immutable.sql for the full reasoning,
+-- Guards the finance profile tables against a row silently changing owner:
+-- finance_budget_categories, finance_budget_items, finance_recurring_bills,
+-- finance_settings, finance_goals, finance_goal_contributions,
+-- finance_memberships, finance_debts, finance_credit_scores and
+-- finance_user_holidays (the triggers are declared in 40_finance.sql). Not
+-- attached to finance_transactions or finance_bank_accounts: the client only
+-- updates those by id and profile, never upserts them over an existing row.
+-- The guarded tables share PRIMARY KEY (id) across every profile and the
+-- shared default rows (is_default = true, profile_id IS NULL); an upsert on
+-- onConflict: 'id' whose id already belongs to someone else's row -- or a
+-- shared default -- would otherwise move it to the saving profile and
+-- overwrite it. See 20260927192100_finance_row_scope_immutable.sql and
+-- 20260930072505_finance_row_scope_more_tables.sql for the full reasoning,
 -- including why a composite key is not an option here.
 --
 -- Only finance_budget_categories and finance_budget_items carry is_template;
--- finance_recurring_bills has no such column. Gating on TG_TABLE_NAME before
--- touching NEW.is_template means that reference is never resolved when this
--- fires on finance_recurring_bills -- the same pattern log_watchlist_event()
--- above uses to guard NEW.status, which movies also lacks.
+-- the other tables have no such column. Gating on
+-- TG_TABLE_NAME before touching NEW.is_template means that reference is never
+-- resolved when this fires on any of them -- the same pattern
+-- log_watchlist_event() above uses to guard NEW.status, which movies also
+-- lacks.
 --
 -- SECURITY INVOKER (the default, stated for clarity) and search_path = '':
 -- the function reads no table and calls no schema-qualified object beyond

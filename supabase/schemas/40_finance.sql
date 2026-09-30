@@ -1434,45 +1434,14 @@ COMMENT ON TABLE "public"."finance_transfer_single_legs" IS
 COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
     'internal = excluded from income/spending totals like a confirmed transfer leg; external = real spending or income, changes no figure.';
 
--- Snapshot table for owner-approved seed-data cleanups (see
--- 20260927192000_finance_shared_template_cleanup.sql for the first use).
--- Deliberately no policies: RLS is enabled with nothing granting access, so
--- every role used from the app is denied outright -- readable only via the
--- SQL editor or service role. Dropped by a later migration once the owner
--- confirms a given cleanup is correct.
-
-CREATE TABLE IF NOT EXISTS "public"."finance_seed_backup" (
-    "id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "taken_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "reason" "text" NOT NULL,
-    "source_table" "text" NOT NULL,
-    "row_data" "jsonb" NOT NULL
-);
-
-ALTER TABLE "public"."finance_seed_backup" OWNER TO "postgres";
-
-ALTER TABLE "public"."finance_seed_backup" ENABLE ROW LEVEL SECURITY;
-
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon and authenticated hold no grant of any kind, and no policy is
--- defined either -- deny-all. ALTER DEFAULT PRIVILEGES hands every new table
--- ALL to anon and authenticated on creation, so this REVOKE is
--- load-bearing, not decorative.
-REVOKE ALL ON TABLE "public"."finance_seed_backup" FROM "anon", "authenticated";
-REVOKE ALL ON SEQUENCE "public"."finance_seed_backup_id_seq" FROM "anon", "authenticated";
-GRANT ALL ON TABLE "public"."finance_seed_backup" TO "service_role";
-
-COMMENT ON TABLE "public"."finance_seed_backup" IS
-    'Snapshots of rows about to be changed or deleted by an owner-approved seed-data cleanup, taken before the change so it can be restored by hand if needed. No policies on purpose: RLS is enabled with no policy defined, denying every role used from the app -- readable only via the SQL editor or service role. Dropped by a later migration once the owner confirms a given cleanup is correct.';
-
 -- Triggers live here rather than with the function in 01_functions.sql:
 -- schema files run in filename order, so the tables must exist first.
 --
--- Stops finance_budget_categories, finance_budget_items, and
--- finance_recurring_bills rows from silently changing owner through the
--- shared PRIMARY KEY (id) those tables use across every profile and the
--- shared default rows. See finance_keep_row_scope() (01_functions.sql) and
--- 20260927192100_finance_row_scope_immutable.sql for the full reasoning,
+-- Stops rows of the profile tables below from silently changing owner through
+-- the shared PRIMARY KEY (id) those tables use across every profile and the
+-- shared default rows. See finance_keep_row_scope() (01_functions.sql),
+-- 20260927192100_finance_row_scope_immutable.sql and
+-- 20260930072505_finance_row_scope_more_tables.sql for the full reasoning,
 -- including why a composite key is not an option here and how a genuine
 -- future re-home must disable this trigger around that one statement.
 --
@@ -1495,4 +1464,39 @@ CREATE TRIGGER "tr_finance_budget_items_keep_scope"
 DROP TRIGGER IF EXISTS "tr_finance_recurring_bills_keep_scope" ON "public"."finance_recurring_bills";
 CREATE TRIGGER "tr_finance_recurring_bills_keep_scope"
     BEFORE UPDATE ON "public"."finance_recurring_bills"
+    FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+DROP TRIGGER IF EXISTS "tr_finance_settings_keep_scope" ON "public"."finance_settings";
+CREATE TRIGGER "tr_finance_settings_keep_scope"
+    BEFORE UPDATE ON "public"."finance_settings"
+    FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+DROP TRIGGER IF EXISTS "tr_finance_goals_keep_scope" ON "public"."finance_goals";
+CREATE TRIGGER "tr_finance_goals_keep_scope"
+    BEFORE UPDATE ON "public"."finance_goals"
+    FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+DROP TRIGGER IF EXISTS "tr_finance_goal_contributions_keep_scope" ON "public"."finance_goal_contributions";
+CREATE TRIGGER "tr_finance_goal_contributions_keep_scope"
+    BEFORE UPDATE ON "public"."finance_goal_contributions"
+    FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+DROP TRIGGER IF EXISTS "tr_finance_memberships_keep_scope" ON "public"."finance_memberships";
+CREATE TRIGGER "tr_finance_memberships_keep_scope"
+    BEFORE UPDATE ON "public"."finance_memberships"
+    FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+DROP TRIGGER IF EXISTS "tr_finance_debts_keep_scope" ON "public"."finance_debts";
+CREATE TRIGGER "tr_finance_debts_keep_scope"
+    BEFORE UPDATE ON "public"."finance_debts"
+    FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+DROP TRIGGER IF EXISTS "tr_finance_credit_scores_keep_scope" ON "public"."finance_credit_scores";
+CREATE TRIGGER "tr_finance_credit_scores_keep_scope"
+    BEFORE UPDATE ON "public"."finance_credit_scores"
+    FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
+
+DROP TRIGGER IF EXISTS "tr_finance_user_holidays_keep_scope" ON "public"."finance_user_holidays";
+CREATE TRIGGER "tr_finance_user_holidays_keep_scope"
+    BEFORE UPDATE ON "public"."finance_user_holidays"
     FOR EACH ROW EXECUTE FUNCTION "public"."finance_keep_row_scope"();
