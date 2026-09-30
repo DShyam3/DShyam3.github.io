@@ -29,10 +29,11 @@ export function FilterBar<T extends CollectionRow, R>({
   setSearch,
 }: FilterBarProps<T, R>) {
   const showSearch = Boolean(config.searchFields?.length);
+  const visibleFacets = config.facets.filter((facet) => !facet.hiddenWhen?.(filters));
 
   // Photos and beliefs have neither facets nor search; render nothing rather
   // than an empty bordered strip.
-  if (!config.facets.length && !showSearch) return null;
+  if (!visibleFacets.length && !showSearch) return null;
 
   return (
     // items-start, not items-center: the search box lines up with the *first*
@@ -47,7 +48,7 @@ export function FilterBar<T extends CollectionRow, R>({
     // of a line, so spacing carries the separation instead.
     <div className="collection-filters flex flex-col md:flex-row md:flex-wrap md:items-start justify-between border-b border-border/50 px-4 md:px-0 gap-3 md:gap-4 py-3 md:py-2">
       <div className="flex flex-col flex-1 min-w-0 md:basis-96">
-        {config.facets.map((facet) => {
+        {visibleFacets.map((facet) => {
           const all = { key: ALL, label: 'All' };
           const options =
             facet.includeAll === false

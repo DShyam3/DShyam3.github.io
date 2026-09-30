@@ -4,8 +4,7 @@ import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { uploadPhoto } from '@/lib/storage';
 import { cn } from '@/lib/utils';
-import { EDC_SLOTS } from '@/features/inventory/edc/types';
-import { EdcToolbarButton, EdcShowcaseContainer } from '@/features/inventory/edc/EdcShowcase';
+import { EdcToolbarButton, EdcShowcase } from '@/features/inventory/edc/EdcShowcase';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface InventoryRow extends CollectionRow {
@@ -28,11 +27,11 @@ export interface InventoryRow extends CollectionRow {
 
 /**
  * Inventory always shows exactly one category -- there is no "everything"
- * view -- so the facet opts out of the All option and starts on tech.
+ * view -- so the facet opts out of the All option and starts on EDC.
  */
 const CATEGORIES = [
-  { key: 'tech', label: 'Tech' },
   { key: 'edc', label: 'EDC' },
+  { key: 'tech', label: 'Tech' },
   { key: 'homelab', label: 'HomeLab' },
   { key: 'wardrobe', label: 'Wardrobe' },
   { key: 'kitchen', label: 'Kitchen' },
@@ -282,7 +281,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       field: 'category',
       options: CATEGORIES,
       includeAll: false,
-      defaultValue: 'tech',
+      defaultValue: 'edc',
       // Each category is its own set of things, so picking one starts from
       // Owned rather than inheriting whatever the last category was showing.
       resetsOthers: true,
@@ -297,6 +296,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       // meant scrolling past everything owned to reach the wishlist.
       key: 'owned',
       field: 'is_wishlist',
+      hiddenWhen: (filters) => filters.category === 'edc',
       options: [
         { key: 'false', label: 'Owned' },
         { key: 'true', label: 'Wishlist' },
@@ -387,10 +387,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     dimmed: (item) => Boolean(item.is_wishlist),
     badge: (item) => {
       if (item.is_wishlist) return 'Wishlist';
-      if (item.is_edc) {
-        const slot = EDC_SLOTS.find((s) => s.key === item.edc_slot);
-        return slot ? `EDC · ${slot.shortLabel.toUpperCase()}` : 'EDC';
-      }
+      if (item.is_edc) return 'EDC';
       return undefined;
     },
   },
@@ -419,13 +416,6 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       ],
       defaultValue: 'false',
     },
-    {
-      name: 'edc_slot',
-      label: 'EDC Compartment',
-      type: 'select',
-      options: EDC_SLOTS.map((s) => ({ key: s.key, label: s.label })),
-      defaultValue: 'pockets',
-    },
     { name: 'price', label: 'Price', type: 'text', placeholder: '0.00' },
     { name: 'image', label: 'Image URL', type: 'image' },
     { name: 'link', label: 'Link', type: 'url' },
@@ -452,17 +442,14 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     return undefined;
   },
 
-  customView: ({ items, allItems, filters, isAdmin, updateItem, removeItem, search }) => {
+  customView: ({ items, allItems, filters, isAdmin }) => {
     if (filters.category === 'edc') {
       return (
-        <EdcShowcaseContainer
+        <EdcShowcase
           items={items as InventoryRow[]}
           allItems={allItems as InventoryRow[]}
           config={inventoryCollection}
           isAdmin={isAdmin}
-          updateItem={updateItem as (id: string, updates: Partial<InventoryRow>) => Promise<void>}
-          removeItem={removeItem}
-          search={search}
         />
       );
     }

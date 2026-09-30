@@ -54,6 +54,8 @@ export interface FacetDef<T> {
    * starts from Owned again.
    */
   resetsOthers?: boolean;
+  /** Hide this facet and ignore its value while these filters are active. */
+  hiddenWhen?: (filters: Record<string, string>) => boolean;
   /** Custom matcher for option values that don't directly match the field value */
   match?: (item: T, optionKey: string) => boolean;
 }

@@ -44,23 +44,23 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState(() => config.sortOptions?.[0]?.key ?? '');
 
-  const setFilter = useCallback(
-    (key: string, value: string) => {
-      const changed = config.facets.find((f) => f.key === key);
-      setFilters((prev) => {
-        const next = { ...prev, [key]: value };
-        // A facet marked resetsOthers switches to a different set of things
-        // rather than a different view of the same ones, so the other facets
-        // start over -- see FacetDef.resetsOthers.
-        if (changed?.resetsOthers) {
-          for (const facet of config.facets) {
-            if (facet.key !== key) next[facet.key] = defaultFor(facet);
-          }
+  const nextFiltersFor = useCallback(
+    (current: Record<string, string>, key: string, value: string) => {
+      const changed = config.facets.find((facet) => facet.key === key);
+      const next = { ...current, [key]: value };
+      if (changed?.resetsOthers) {
+        for (const facet of config.facets) {
+          if (facet.key !== key) next[facet.key] = defaultFor(facet);
         }
-        return next;
-      });
+      }
+      return next;
     },
     [config.facets],
+  );
+
+  const setFilter = useCallback(
+    (key: string, value: string) => setFilters((current) => nextFiltersFor(current, key, value)),
+    [nextFiltersFor],
   );
 
   /**
@@ -69,10 +69,10 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
    * ignored or every unselected option would read zero.
    */
   const applyFacets = useCallback(
-    (items: T[], exceptKey?: string) =>
+    (items: T[], exceptKey?: string, activeFilters = filters) =>
       config.facets.reduce((acc, facet) => {
-        const value = filters[facet.key];
-        if (facet.key === exceptKey || !value || value === ALL) return acc;
+        const value = activeFilters[facet.key];
+        if (facet.key === exceptKey || facet.hiddenWhen?.(activeFilters) || !value || value === ALL) return acc;
         if (facet.match) {
           return acc.filter((item) => facet.match!(item, value));
         }
@@ -135,14 +135,15 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
     (facetKey: string, optionKey: string) => {
       const facet = config.facets.find((f) => f.key === facetKey);
       if (!facet) return 0;
-      const pool = applyFacets(searched, facetKey);
+      const candidateFilters = nextFiltersFor(filters, facetKey, optionKey);
+      const pool = applyFacets(searched, facetKey, candidateFilters);
       if (optionKey === ALL) return pool.length;
       if (facet.match) {
         return pool.filter((item) => facet.match!(item, optionKey)).length;
       }
       return pool.filter((item) => String(item[facet.field]) === optionKey).length;
     },
-    [config.facets, searched, applyFacets],
+    [config.facets, searched, applyFacets, filters, nextFiltersFor],
   );
 
   return {
