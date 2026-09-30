@@ -1,6 +1,6 @@
 import { AppShell } from '@/components/layout/AppShell';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,12 +8,26 @@ import { useToast } from '@/hooks/use-toast';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Loader2, Lock } from 'lucide-react';
 
+// Where to go once signed in or out: the page the header link was clicked
+// on, carried in router state. Only an in-app path is accepted -- anything
+// else (a direct visit, a protocol-relative URL, /auth itself) falls back to
+// the home page.
+function returnPath(state: unknown): string {
+  const from = (state as { from?: unknown } | null)?.from;
+  if (typeof from !== 'string') return '/';
+  if (!from.startsWith('/') || from.startsWith('//')) return '/';
+  if (from === '/auth' || from.startsWith('/auth?') || from.startsWith('/auth#')) return '/';
+  return from;
+}
+
 const Auth = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, isAdmin, logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = returnPath(location.state);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +37,7 @@ const Auth = () => {
       const success = await login(password);
       if (success) {
         toast({ title: 'Welcome back, Admin.' });
-        navigate('/');
+        navigate(from, { replace: true });
       } else {
         toast({ 
           title: 'Access Denied', 
@@ -40,9 +54,16 @@ const Auth = () => {
   };
 
   const handleLogout = async () => {
-    await logout();
+    if (!(await logout())) {
+      toast({
+        title: 'Still signed in',
+        description: 'Could not reach the server to sign out. Check your connection and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
     toast({ title: 'Logged out successfully' });
-    navigate('/');
+    navigate(from, { replace: true });
   };
 
   return (
@@ -63,8 +84,8 @@ const Auth = () => {
               <div className="space-y-6 text-center">
                 <p className="text-sm font-medium text-primary">You are currently logged in as Admin.</p>
                 <div className="flex flex-col gap-3">
-                  <Button onClick={() => navigate('/')} className="rounded-xl h-12">
-                    Go to Home
+                  <Button onClick={() => navigate(from, { replace: true })} className="rounded-xl h-12">
+                    {from === '/' ? 'Go to Home' : 'Go back'}
                   </Button>
                   <Button variant="outline" onClick={handleLogout} className="rounded-xl h-12 border-primary/20">
                     Logout

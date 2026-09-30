@@ -6,7 +6,8 @@ interface AuthContextType {
     isAdmin: boolean;
     isAuthLoading: boolean;
     login: (password: string) => Promise<boolean>;
-    logout: () => Promise<void>;
+    /** False when the sign-out failed and the session is still stored. */
+    logout: () => Promise<boolean>;
     session: Session | null;
 }
 
@@ -22,6 +23,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // without this set signs in as no one rather than as the original owner.
 const LOGIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 
+// A hung `is_admin` call would otherwise hold every protected route on its
+// loading state until the browser gave up on the request.
+const ADMIN_CHECK_TIMEOUT_MS = 8000;
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -34,18 +39,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // could drift, showing admin controls to someone every write would
         // then be refused for. One source of truth, queried.
         let generation = 0;
+        // The last answer the database gave, and for whom. Every token
+        // refresh re-asks; one dropped request on a refresh used to take the
+        // admin controls away mid-session.
+        let lastAnswer: { userId: string; admin: boolean } | null = null;
 
         const resolveAdmin = async (session: Session | null) => {
             const current = ++generation;
-            if (!session) return { current, admin: false };
-            const { data, error } = await supabase.rpc('is_admin');
-            if (error) {
-                // Deny on failure. A network error is not a grant, and the
-                // database refuses the write regardless of what the UI shows.
-                console.error('Could not resolve admin status:', error.message);
+            if (!session) {
+                lastAnswer = null;
                 return { current, admin: false };
             }
-            return { current, admin: data === true };
+            const userId = session.user.id;
+            const { data, error } = await supabase
+                .rpc('is_admin')
+                .abortSignal(AbortSignal.timeout(ADMIN_CHECK_TIMEOUT_MS));
+            if (error) {
+                // A failure is not a grant. The same user keeps the answer
+                // they already had; anyone else is denied. Either way this
+                // only decides what renders -- the database refuses the write
+                // regardless of what the UI shows.
+                console.error('Could not resolve admin status:', error.message);
+                return { current, admin: lastAnswer?.userId === userId ? lastAnswer.admin : false };
+            }
+            lastAnswer = { userId, admin: data === true };
+            return { current, admin: lastAnswer.admin };
         };
 
         // INITIAL_SESSION resolves the saved session before protected routes
@@ -90,10 +108,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    const logout = useCallback(async () => {
-        await supabase.auth.signOut();
+    const logout = useCallback(async (): Promise<boolean> => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            // Offline, auth-js keeps the stored session when the server call
+            // fails (in every scope), so this device is still signed in. Say
+            // so, rather than hide the admin controls until the next token
+            // refresh or reload brings them back.
+            console.error('Sign-out failed:', error.message);
+            return false;
+        }
         setIsAdmin(false);
         setSession(null);
+        return true;
     }, []);
 
     const value = useMemo(

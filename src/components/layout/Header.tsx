@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { NavMenu } from './NavMenu';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -22,12 +22,17 @@ export function Header({
 }: HeaderProps) {
   const [socialOpen, setSocialOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const socialLinks = useMemo(() => SITE.socials, []);
 
-  // Secret admin link handler
+  // Secret admin link handler. Carries the current page along so signing
+  // in (or out) lands back where you were rather than on the home page.
   const handleTitleClick = () => {
-    navigate('/auth');
+    if (location.pathname === '/auth') return;
+    navigate('/auth', {
+      state: { from: `${location.pathname}${location.search}${location.hash}` },
+    });
   };
 
   return (
