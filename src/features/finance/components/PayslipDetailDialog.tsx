@@ -24,11 +24,11 @@ import {
   type ReconciliationTransaction,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, CheckCircle2, Download, Link2, Pencil, Unlink } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Link2, Pencil, Trash2, Unlink } from 'lucide-react';
 import { useState } from 'react';
 
 const Row = ({ label, value, tone }: { label: string; value: string; tone?: 'muted' | 'negative' }) => (
-  <div className="flex items-baseline justify-between gap-4 py-1.5">
+  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-1.5">
     <span className={cn('text-xs', tone === 'muted' ? 'text-muted-foreground' : 'text-foreground')}>{label}</span>
     <span className={cn('text-xs tabular-nums', tone === 'negative' ? 'text-destructive' : 'text-foreground')}>{value}</span>
   </div>
@@ -42,6 +42,7 @@ export function PayslipDetailDialog({
   candidates = [],
   onOpenChange,
   onEdit,
+  onDelete,
   onOpenPdf,
   onConfirmTransaction,
   onRemoveTransaction,
@@ -53,6 +54,7 @@ export function PayslipDetailDialog({
   candidates?: readonly PayslipTransactionCandidate[];
   onOpenChange: (open: boolean) => void;
   onEdit: (p: Payslip) => void;
+  onDelete: (p: Payslip) => void;
   onOpenPdf: (path: string) => void;
   onConfirmTransaction: (transactionId: string) => Promise<boolean>;
   onRemoveTransaction: () => Promise<boolean>;
@@ -86,14 +88,14 @@ export function PayslipDetailDialog({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-md p-6 font-mono">
-        <DialogHeader className="pr-12">
-          <div className="flex items-center gap-3">
+        <DialogHeader>
+          <div className="flex flex-wrap items-center gap-3">
             {logo && (
               <div className="h-11 w-11 shrink-0 flex items-center justify-center rounded-lg bg-white ring-1 ring-black/10 p-1.5">
                 <img src={logo} alt="" className="w-full h-full object-contain" />
               </div>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 basis-32">
               <DialogTitle className="text-sm font-semibold text-foreground">
                 {payslip.employer || 'Payslip'}
               </DialogTitle>
@@ -102,13 +104,13 @@ export function PayslipDetailDialog({
               </DialogDescription>
             </div>
             <div className="ml-auto text-right shrink-0">
-              <div className="text-[0.6875rem] uppercase tracking-wider text-muted-foreground">Take-home</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Take-home</div>
               <div className="text-base font-semibold text-foreground tabular-nums">{formatGBP(payslip.net)}</div>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="space-y-4 py-2">
           {hasLines ? (
             <>
               {payments.length > 0 && (
@@ -182,7 +184,7 @@ export function PayslipDetailDialog({
 
               {reconciliation && transaction ? (
                 <div className="mt-2 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1 basis-32">
                     <p className="flex items-center gap-1.5 text-xs text-foreground">
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-positive" aria-hidden="true" />
                       Confirmed incoming payment
@@ -209,7 +211,7 @@ export function PayslipDetailDialog({
                   </p>
                   {candidates.map(candidate => (
                     <div key={candidate.transactionId} className="flex items-center justify-between gap-3 rounded-md border border-border/30 px-2.5 py-2">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1 basis-32">
                         <p className="truncate text-xs text-foreground">{candidate.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(candidate.date)} · {formatGBP(Math.abs(candidate.amount))}
@@ -246,9 +248,13 @@ export function PayslipDetailDialog({
         </div>
 
         <DialogFooter className="pt-3 gap-2 sm:gap-0">
+          <Button variant="ghost" type="button" onClick={() => onDelete(payslip)}
+            className="rounded-lg text-xs h-8 gap-1.5 text-muted-foreground hover:text-destructive sm:mr-auto">
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </Button>
           {payslip.storagePath && (
             <Button variant="outline" type="button" onClick={() => onOpenPdf(payslip.storagePath!)}
-              className="rounded-lg text-xs h-8 gap-1.5 mr-auto">
+              className="rounded-lg text-xs h-8 gap-1.5">
               <Download className="h-3.5 w-3.5" /> Open PDF
             </Button>
           )}

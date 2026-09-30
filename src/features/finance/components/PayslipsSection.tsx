@@ -7,7 +7,7 @@
  * the record here stands without one.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useEducation, useExperience } from '@/hooks/useResume';
@@ -22,13 +22,14 @@ import {
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
+import { toISODate } from '@/lib/finance/dates';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileText, Link2, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { deleteFinanceDocument, signedDocumentUrl, uploadFinanceDocument } from '../finance-storage';
 import { extractPayslipFromPdf } from '../payslip-pdf';
 import { PayslipImportDialog } from './PayslipImportDialog';
 import { PayslipDetailDialog } from './PayslipDetailDialog';
 import { employerLogo } from '../employer-logo';
-import { parsedFieldCount, type ParsedPayslip } from '@/lib/finance';
+import { parsedFieldCount, parsePayslipFilename, type ParsedPayslip } from '@/lib/finance';
 import { useToast } from '@/hooks/use-toast';
 
 /** Every money field, as strings, because a half-typed number is not a number. */
@@ -38,20 +39,26 @@ type Draft = Record<
   string
 >;
 
-const EMPTY_DRAFT: Draft = {
-  payDate: new Date().toISOString().split('T')[0],
+/** A function rather than a constant, so a tab left open overnight defaults to today. */
+const emptyDraft = (): Draft => ({
+  payDate: toISODate(new Date()),
   employer: '', gross: '', incomeTax: '', nationalInsurance: '',
   pensionEmployee: '', pensionEmployer: '', studentLoan: '', otherDeductions: '', net: '',
-};
-
-/** Fills a blank field from the parser, leaving anything typed untouched. */
-const fill = (current: string, parsed: number | undefined): string =>
-  current.trim() !== '' || parsed === undefined ? current : String(parsed);
+});
 
 const num = (v: string): number => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : 0;
 };
+
+/**
+ * Fills a field from the parser, leaving anything typed untouched.
+ *
+ * Zero counts as untyped: a payslip archived before its figures were read is
+ * stored as zeroes, and reading its PDF afterwards has to be able to fill them.
+ */
+const fill = (current: string, parsed: number | undefined): string =>
+  parsed === undefined || num(current) !== 0 ? current : String(parsed);
 
 const draftFrom = (p: Payslip): Draft => ({
   payDate: p.payDate,
@@ -118,8 +125,8 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
     [experience, education],
   );
   const [isOpen, setIsOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [editing, setEditing] = useState<Payslip | null>(null);
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
   // The path already stored, and a file chosen but not yet uploaded. Upload
   // happens on save, so cancelling the dialog leaves no orphan in the bucket.
   const [storagePath, setStoragePath] = useState<string | undefined>();
@@ -128,6 +135,13 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   const [isReading, setIsReading] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [readCount, setReadCount] = useState<number | null>(null);
+  // The file whose read is in flight. A read that finishes after another file
+  // was chosen, or after the dialog closed, is dropped rather than applied.
+  const readingFile = useRef<File | null>(null);
+  // Whether the pay date is still a stand-in the document may replace: today's
+  // date on a new payslip, or the date on a row with no figures captured. Once
+  // someone types a date it is theirs.
+  const datePlaceholder = useRef(true);
 
   // Shown live in the dialog rather than after saving: a payslip that does not
   // reconcile is almost always a typo, and the moment to catch it is while the
@@ -228,33 +242,54 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   }, [payslips, currentTaxYear, modelledStudentLoanMonthly, thisYear.length]);
 
   const openNew = () => {
-    setEditingId(null);
-    setDraft(EMPTY_DRAFT);
+    setEditing(null);
+    setDraft(emptyDraft());
     setStoragePath(undefined);
-    setPendingFile(null);
+    void handleFile(null);
+    datePlaceholder.current = true;
     setIsOpen(true);
   };
 
   const openEdit = (p: Payslip) => {
-    setEditingId(p.id);
+    setEditing(p);
     setDraft(draftFrom(p));
     setStoragePath(p.storagePath);
-    setPendingFile(null);
+    void handleFile(null);
+    datePlaceholder.current = p.gross === 0 && p.net === 0;
     setIsOpen(true);
   };
 
   const handleSave = async () => {
-    if (!draft.payDate || isSaving) return;
+    // Not while the PDF is still being read: saving then stores the blank form,
+    // and the figures the read finds a moment later land in a closed dialog.
+    if (!draft.payDate || isSaving || isReading) return;
     setIsSaving(true);
+    let uploadedPath: string | undefined;
     try {
-      let path = storagePath;
       if (pendingFile && profileId) {
         // Uploaded here rather than on selection, so a cancelled dialog leaves
         // nothing behind in the bucket.
-        const uploaded = await uploadFinanceDocument(pendingFile, profileId);
-        path = uploaded.path;
+        uploadedPath = (await uploadFinanceDocument(pendingFile, profileId)).path;
       }
-      await savePayslip(asPayslip(draft, editingId ?? `payslip_${Date.now()}`, path));
+      const outcome = await savePayslip({
+        ...asPayslip(draft, editing?.id ?? `payslip_${Date.now()}`, uploadedPath ?? storagePath),
+        // Not on this form, so carried over rather than blanked. The line items
+        // describe the document they were read from, so a new one drops them.
+        notes: editing?.notes,
+        lines: uploadedPath ? undefined : editing?.lines,
+      });
+      if (outcome !== 'saved') {
+        // The failure has its own toast; the dialog stays open to retry. A
+        // file the row cannot point at is not left behind -- but a save that
+        // timed out may still commit, and a row pointing at a deleted file
+        // loses the document, where an orphaned file only costs storage.
+        if (uploadedPath && outcome === 'failed') await deleteFinanceDocument(uploadedPath);
+        return;
+      }
+      // Only once the row points at the new file, as the import does.
+      if (uploadedPath && editing?.storagePath && editing.storagePath !== uploadedPath) {
+        await deleteFinanceDocument(editing.storagePath);
+      }
       setIsOpen(false);
     } catch (err) {
       toast({
@@ -274,16 +309,25 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
    * should not overwrite a correction someone made because it disagreed.
    */
   const handleFile = async (file: File | null) => {
+    readingFile.current = file;
     setPendingFile(file);
     setReadCount(null);
+    setIsReading(false);
     if (!file || file.type !== 'application/pdf') return;
     setIsReading(true);
     try {
       const parsed = await extractPayslipFromPdf(file);
+      if (readingFile.current !== file) return;
+      // The document outranks the filename wherever it produced something,
+      // as in the import.
+      const fromName = parsePayslipFilename(file.name);
+      const payDate = parsed.payDate ?? fromName.payDate;
+      const employer = parsed.employer ?? fromName.employer;
       setReadCount(parsedFieldCount(parsed));
       setDraft(d => ({
         ...d,
-        payDate: d.payDate === EMPTY_DRAFT.payDate && parsed.payDate ? parsed.payDate : d.payDate,
+        payDate: datePlaceholder.current && payDate ? payDate : d.payDate,
+        employer: d.employer.trim() === '' && employer ? employer : d.employer,
         gross: fill(d.gross, parsed.gross),
         incomeTax: fill(d.incomeTax, parsed.incomeTax),
         nationalInsurance: fill(d.nationalInsurance, parsed.nationalInsurance),
@@ -293,6 +337,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         net: fill(d.net, parsed.net),
       }));
     } catch (err) {
+      if (readingFile.current !== file) return;
       // A PDF that cannot be read is not a failure worth blocking on: the
       // fields are still there to type into, and the file still archives.
       toast({
@@ -300,7 +345,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         description: err instanceof Error ? err.message : 'Type the figures in instead.',
       });
     } finally {
-      setIsReading(false);
+      if (readingFile.current === file) setIsReading(false);
     }
   };
 
@@ -310,15 +355,20 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
     else toast({ title: 'Could not open the document', variant: 'destructive' });
   };
 
-  const removePayslip = (p: Payslip) =>
+  /* Asked from the detail or edit dialog, which closes first: the
+     confirmation is its own dialog, and one modal over another traps focus. */
+  const removePayslip = (p: Payslip) => {
+    setDetail(null);
+    setIsOpen(false);
     askDelete({
       name: `payslip for ${formatDate(p.payDate)}`,
       onConfirm: async () => {
-        await deletePayslip(p.id);
-        // After the row, so a storage failure cannot strand the record.
-        if (p.storagePath) await deleteFinanceDocument(p.storagePath);
+        // The file only once the row is gone, so a failed delete leaves the
+        // payslip with its document rather than pointing at nothing.
+        if (await deletePayslip(p.id) && p.storagePath) await deleteFinanceDocument(p.storagePath);
       },
     });
+  };
 
   const set = (key: keyof Draft) => (value: string) => setDraft(d => ({ ...d, [key]: value }));
 
@@ -406,7 +456,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                 <button
                   type="button"
                   onClick={() => setCollapsed(c => ({ ...c, [group.key]: !c[group.key] }))}
-                  className="flex w-full items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 transition-colors text-left"
+                  className="flex w-full min-w-0 flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 transition-colors text-left"
                 >
                   {collapsed[group.key]
                     ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -416,11 +466,11 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                       <img src={group.logo} alt="" className="w-full h-full object-contain" />
                     </div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-foreground font-mono truncate">{group.title}</div>
-                    <div className="text-xs text-muted-foreground font-mono truncate">{group.subtitle}</div>
+                  <div className="min-w-0 flex-1 basis-32">
+                    <div className="text-xs font-semibold text-foreground font-mono [overflow-wrap:anywhere]">{group.title}</div>
+                    <div className="text-xs text-muted-foreground font-mono [overflow-wrap:anywhere]">{group.subtitle}</div>
                   </div>
-                  <div className="flex items-center gap-3 sm:gap-5 text-right shrink-0 font-mono">
+                  <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-5 text-right font-mono">
                     <div className="text-right">
                       <div className="text-xs font-semibold text-foreground tabular-nums">
                         {formatGBP(group.totals.gross)}
@@ -437,7 +487,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                 </button>
 
                 {!collapsed[group.key] && (
-                  <div className="grid gap-1.5 sm:grid-cols-2 pl-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2 pl-2">
                     {group.slips.map(p => {
                       const check = checkPayslip(p);
                       const captured = p.gross > 0 || p.net > 0;
@@ -448,11 +498,11 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                           key={p.id}
                           type="button"
                           onClick={() => setDetail(p)}
-                          className="flex items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 hover:border-border/80 transition-colors text-left"
+                          className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 hover:border-border/80 transition-colors text-left"
                         >
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 basis-32">
                             <div className="text-xs font-semibold text-foreground font-mono">{formatDate(p.payDate)}</div>
-                            <div className="text-xs text-muted-foreground font-mono truncate">
+                            <div className="text-xs text-muted-foreground font-mono [overflow-wrap:anywhere]">
                               {groupBy === 'employer'
                                 ? (captured ? `${formatGBP(p.gross)} gross` : 'figures not captured yet')
                                 : (
@@ -492,7 +542,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-md p-6 font-mono">
           <DialogHeader>
             <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground">
-              {editingId ? 'Edit payslip' : 'Add payslip'}
+              {editing ? 'Edit payslip' : 'Add payslip'}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Attach a payslip and its figures are read here, in this tab.
@@ -501,10 +551,10 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
           </DialogHeader>
 
           <div className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
               <div className="space-y-1">
                 <Label htmlFor="payslip-date" className="text-xs">Pay date</Label>
-                <Input id="payslip-date" type="date" value={draft.payDate} onChange={e => set('payDate')(e.target.value)} className="rounded-lg h-9 border-primary/20 bg-background/50 text-xs" required />
+                <Input id="payslip-date" type="date" value={draft.payDate} onChange={e => { datePlaceholder.current = false; set('payDate')(e.target.value); }} className="rounded-lg h-9 border-primary/20 bg-background/50 text-xs" required />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="payslip-employer" className="text-xs">Employer</Label>
@@ -512,7 +562,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
               {MONEY_FIELDS.map(({ key, label }) => (
                 <div key={key} className="space-y-1">
                   <Label htmlFor={`payslip-${key}`} className="text-xs">{label}</Label>
@@ -567,7 +617,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                   {pendingFile && (
                     <button
                       type="button"
-                      onClick={() => setPendingFile(null)}
+                      onClick={() => void handleFile(null)}
                       className="text-muted-foreground hover:text-destructive shrink-0"
                       aria-label="Clear the selected file"
                     >
@@ -581,9 +631,13 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
                   <Paperclip className="h-3 w-3 shrink-0" />
                   {isReading
                     ? 'Reading the figures…'
-                    : readCount !== null
-                      ? `Read ${readCount} of 7 figures — check them, then save.`
-                      : `${pendingFile.name} — uploaded when you save`}
+                    : readCount === 0
+                      ? 'No figures found in this PDF — type them in, then save.'
+                      : readCount !== null
+                        ? `Read ${readCount} of 7 figures — check them, then save.`
+                        : pendingFile.type === 'application/pdf'
+                          ? `${pendingFile.name} — uploaded when you save`
+                          : `${pendingFile.name} — images are archived, not read. Type the figures in.`}
                 </p>
               )}
             </div>
@@ -605,12 +659,23 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
           </div>
 
           <DialogFooter className="pt-3 gap-2 sm:gap-0">
+            {editing && (
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={isSaving}
+                onClick={() => removePayslip(editing)}
+                className="rounded-lg text-xs h-8 gap-1.5 text-muted-foreground hover:text-destructive sm:mr-auto"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </Button>
+            )}
             <Button variant="outline" type="button" onClick={() => setIsOpen(false)} className="rounded-lg text-xs h-8">Cancel</Button>
             {/* Saveable even when it does not reconcile: it is your payslip, and
                 a real one that disagrees with the arithmetic is exactly the
                 thing worth recording. */}
-            <Button type="button" disabled={isSaving} onClick={() => void handleSave()} className="rounded-lg bg-primary text-primary-foreground text-xs h-8">
-              {isSaving ? 'Saving…' : 'Save'}
+            <Button type="button" disabled={isSaving || isReading} onClick={() => void handleSave()} className="rounded-lg bg-primary text-primary-foreground text-xs h-8">
+              {isSaving ? 'Saving…' : isReading ? 'Reading…' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -624,6 +689,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         candidates={detail ? candidatesByPayslip.get(detail.id) : []}
         onOpenChange={open => { if (!open) setDetail(null); }}
         onEdit={p => { setDetail(null); openEdit(p); }}
+        onDelete={removePayslip}
         onOpenPdf={path => void openDocument(path)}
         onConfirmTransaction={transactionId => detail
           ? savePayslipReconciliation(detail.id, transactionId)
