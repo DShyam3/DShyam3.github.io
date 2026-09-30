@@ -768,7 +768,7 @@ return (
                   interval={0}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fontSize: 9, fill: 'currentColor', className: 'text-muted-foreground font-mono' }}
+                  tick={{ fontSize: 12, fill: 'currentColor', className: 'text-muted-foreground font-mono' }}
                 />
                 <YAxis hide />
                 <RechartsTooltip

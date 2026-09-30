@@ -146,7 +146,7 @@ export function ScheduleItem({
               {item.title}
             </p>
             {scheduleItem.mode === 'date' && scheduleItem.scheduledDate && (
-              <p className="text-[10px] text-primary/80">{new Date(`${scheduleItem.scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+              <p className="text-xs text-primary/80">{new Date(`${scheduleItem.scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
             )}
             <div className="flex items-center gap-1 mt-0.5">
               {item.category === 'TV Shows' ? (

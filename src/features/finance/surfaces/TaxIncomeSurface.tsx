@@ -814,7 +814,7 @@ export default function TaxIncomeSurface({
                                   <div className="space-y-0.5 min-w-0 pr-2 text-left">
                                     <div className="flex items-center gap-1.5">
                                       <span className={cn(
-                                        "text-[10px] uppercase font-mono font-semibold px-1 py-0.5 rounded border",
+                                        "text-xs uppercase font-mono font-semibold px-1 py-0.5 rounded border",
                                         isSick ? "bg-chart-4/15 text-chart-4 border-chart-4/30" : "bg-positive/15 text-positive border-positive/30"
                                       )}>
                                         {isSick ? '🤒 Sick Day' : '🌴 Holiday'}
@@ -878,7 +878,7 @@ export default function TaxIncomeSurface({
                                 type="button"
                                 onClick={() => setInlineType('holiday')}
                                 className={cn(
-                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors border",
+                                  "px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors border",
                                   inlineType === 'holiday'
                                     ? "bg-positive/20 text-positive border-positive/40 font-semibold shadow-xs"
                                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -890,7 +890,7 @@ export default function TaxIncomeSurface({
                                 type="button"
                                 onClick={() => setInlineType('sick')}
                                 className={cn(
-                                  "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors border",
+                                  "px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors border",
                                   inlineType === 'sick'
                                     ? "bg-chart-4/20 text-chart-4 border-chart-4/40 font-semibold shadow-xs"
                                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -955,7 +955,7 @@ export default function TaxIncomeSurface({
                                         title={half !== null && !inlineDayIsWorking ? 'Not a working day' : undefined}
                                         onClick={() => chooseInlineLength(half)}
                                         className={cn(
-                                          "px-2 py-0.5 rounded text-[11px] font-mono font-medium transition-colors border disabled:opacity-40 disabled:pointer-events-none",
+                                          "px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors border disabled:opacity-40 disabled:pointer-events-none",
                                           selected
                                             ? "bg-primary/15 text-foreground border-primary/40 font-semibold shadow-xs"
                                             : "border-transparent text-muted-foreground hover:text-foreground"

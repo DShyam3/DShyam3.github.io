@@ -281,7 +281,7 @@
   }
 
   .badge-new {
-    @apply text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded;
+    @apply text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded;
     background-color: hsl(var(--badge-new));
     color: hsl(var(--badge-new-foreground));
   }

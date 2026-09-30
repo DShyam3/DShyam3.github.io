@@ -180,26 +180,26 @@ export function StudentLoanTimeline({
               domain={['dataMin', 'dataMax']}
               ticks={ticks}
               tickFormatter={(t: number) => String(Math.round(t))}
-              tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+              tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
               tickFormatter={(v: number) => `£${Math.round(v / 1000)}k`}
-              tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+              tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
               tickLine={false}
               axisLine={false}
               width={48}
             />
             <ReferenceLine x={toT(`${courseEnd.slice(0, 7)}-01`)} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4"
-              label={{ value: 'Graduate', position: 'insideTopLeft', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+              label={{ value: 'Graduate', position: 'insideTopLeft', fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
             {todayIndex >= 0 && (
               <ReferenceLine x={toT(todayMonth)} stroke="hsl(var(--muted-foreground))" strokeDasharray="2 4"
-                label={{ value: 'Today', position: 'insideTopRight', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                label={{ value: 'Today', position: 'insideTopRight', fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
             )}
             {result.outcome !== 'horizon' && (
               <ReferenceLine x={endT} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4"
-                label={{ value: result.outcome === 'written_off' ? 'Written off' : 'Cleared', position: 'insideTopRight', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                label={{ value: result.outcome === 'written_off' ? 'Written off' : 'Cleared', position: 'insideTopRight', fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
             )}
             <Area type="monotone" dataKey="balance" name="Balance" stroke="hsl(var(--destructive))" strokeWidth={2} fill="url(#sl-balance)" isAnimationActive={false} />
             <Line type="monotone" dataKey="paid" name="Repaid" stroke="hsl(var(--positive))" strokeWidth={2} dot={false} isAnimationActive={false} />

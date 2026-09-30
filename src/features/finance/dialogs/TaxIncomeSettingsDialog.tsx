@@ -325,7 +325,7 @@ export function TaxIncomeSettingsDialog({
     <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="!flex !flex-col sm:rounded-xl border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none">
-        <DialogHeader className="pl-4 pr-16 sm:pl-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
+        <DialogHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
           <DialogTitle className="font-mono text-base font-bold tracking-tight text-foreground">Tax & Income Settings</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground font-mono">
             Salary, pension, tax code, and working day parameters.
@@ -707,7 +707,7 @@ export function TaxIncomeSettingsDialog({
                           className="h-9 rounded-lg font-mono text-xs border-border/40"
                           required
                         />
-                        <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        <p className="text-xs leading-relaxed text-muted-foreground">
                           Saving a new date creates a new rate set. Earlier pays and projections keep the rates that applied then.
                         </p>
                       </div>

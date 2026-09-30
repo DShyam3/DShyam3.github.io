@@ -515,13 +515,13 @@ export default function GoalsSurface() {
                     tickLine={false}
                     axisLine={false}
                     interval="preserveStartEnd"
-                    tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                    tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => `£${v}`}
-                    tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                    tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
                   />
                   <RechartsTooltip
                     formatter={(value: number) => [formatGBP(value), 'Saved']}
@@ -530,7 +530,7 @@ export default function GoalsSurface() {
                       backgroundColor: 'rgba(30, 30, 46, 0.9)',
                       borderColor: 'rgba(255, 255, 255, 0.1)',
                       borderRadius: '16px',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       color: 'hsl(var(--foreground))'
                     }}
                   />

@@ -803,7 +803,7 @@ const Watchlist = () => {
                       )}
                       <span
                         className={cn(
-                          'px-1 py-px rounded text-[10px] font-semibold tracking-wide flex-shrink-0',
+                          'px-1 py-px rounded text-xs font-semibold tracking-wide flex-shrink-0',
                           entry.is_missed || entry.status === 'error'
                             ? 'bg-destructive/20 text-destructive'
                             : entry.error_message
@@ -832,12 +832,12 @@ const Watchlist = () => {
                           : `${entry.items_synced} items · ${(entry.duration_ms / 1000).toFixed(1)}s`}
                       </span>
                       {failureCountBadge && !entry.is_missed && (
-                        <span className="text-[10px] px-1 py-px rounded bg-destructive/15 text-destructive font-medium flex-shrink-0">
+                        <span className="text-xs px-1 py-px rounded bg-destructive/15 text-destructive font-medium flex-shrink-0">
                           {failureCountBadge}
                         </span>
                       )}
                     </div>
-                    <span className="text-muted-foreground text-[11px] whitespace-nowrap flex-shrink-0">
+                    <span className="text-muted-foreground text-xs whitespace-nowrap flex-shrink-0">
                       {new Date(entry.synced_at).toLocaleString([], {
                         month: 'short',
                         day: 'numeric',

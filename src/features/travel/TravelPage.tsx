@@ -471,7 +471,7 @@ const Travel = () => {
                                                                         )}
                                                                         {cityCount > 0 && (
                                                                             <span style={{
-                                                                                fontSize: '0.65rem',
+                                                                                fontSize: '0.75rem',
                                                                                 color: 'hsl(var(--muted-foreground))',
                                                                                 fontFamily: 'var(--font-sans)',
                                                                                 flexShrink: 0,
@@ -534,7 +534,7 @@ const Travel = () => {
                                                                     <span className="travel-country-name">{country.country_name}</span>
                                                                     {cityCount > 0 && (
                                                                         <span style={{
-                                                                            fontSize: '0.65rem',
+                                                                            fontSize: '0.75rem',
                                                                             color: 'hsl(var(--muted-foreground))',
                                                                             fontFamily: 'var(--font-sans)',
                                                                             flexShrink: 0,

@@ -510,7 +510,7 @@ export default function CreditReportsSection() {
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
               <span>Log Credit Scores</span>
-              <span className="text-[10px] font-normal text-muted-foreground px-1.5 py-0.5 rounded-sm bg-muted/40 border border-border/30">
+              <span className="text-xs font-normal text-muted-foreground px-1.5 py-0.5 rounded-sm bg-muted/40 border border-border/30">
                 All 3 Bureaus
               </span>
             </DialogTitle>
@@ -537,13 +537,13 @@ export default function CreditReportsSection() {
               </div>
 
               <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                <span className="text-[10px] text-muted-foreground mr-1">Include:</span>
+                <span className="text-xs text-muted-foreground mr-1">Include:</span>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setAllInclusion(true)}
-                  className="h-6 px-2 text-[10px] rounded-md border-border/40 font-mono"
+                  className="h-6 px-2 text-xs rounded-md border-border/40 font-mono"
                 >
                   All (3)
                 </Button>
@@ -552,7 +552,7 @@ export default function CreditReportsSection() {
                   variant="outline"
                   size="sm"
                   onClick={() => setAllInclusion(false)}
-                  className="h-6 px-2 text-[10px] rounded-md border-border/40 font-mono"
+                  className="h-6 px-2 text-xs rounded-md border-border/40 font-mono"
                 >
                   None
                 </Button>
@@ -570,7 +570,7 @@ export default function CreditReportsSection() {
                 onChange={(event) => setReportFile(event.target.files?.[0] ?? null)}
                 className="h-8 cursor-pointer border-border/40 bg-background/50 text-xs font-mono file:mr-2 file:border-0 file:bg-transparent file:text-xs file:font-medium"
               />
-              <p className="text-[10px] leading-relaxed text-muted-foreground">
+              <p className="text-xs leading-relaxed text-muted-foreground">
                 Stored privately with this score. PDF, PNG and JPEG are checked by file signature before upload.
               </p>
             </div>
@@ -610,33 +610,33 @@ export default function CreditReportsSection() {
                         />
                         <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: bureau.color }} />
                         <span className="font-semibold text-foreground">{bureau.label}</span>
-                        <span className="text-[10px] text-muted-foreground">0–{bureau.maxScore}</span>
+                        <span className="text-xs text-muted-foreground">0–{bureau.maxScore}</span>
                       </label>
 
                       {/* Live Status Pill */}
                       <div>
                         {!draft.included ? (
-                          <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md font-mono">
+                          <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md font-mono">
                             Excluded
                           </span>
                         ) : draft.score === '' ? (
-                          <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md font-mono">
+                          <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md font-mono">
                             Empty
                           </span>
                         ) : draft.originalScore !== null && delta === 0 ? (
-                          <span className="text-[10px] text-muted-foreground bg-muted/50 border border-border/40 px-2 py-0.5 rounded-md font-mono font-medium">
+                          <span className="text-xs text-muted-foreground bg-muted/50 border border-border/40 px-2 py-0.5 rounded-md font-mono font-medium">
                             Unchanged
                           </span>
                         ) : draft.originalScore !== null && delta !== null && delta > 0 ? (
-                          <span className="text-[10px] text-positive bg-positive/10 border border-positive/30 px-2 py-0.5 rounded-md font-mono font-bold">
+                          <span className="text-xs text-positive bg-positive/10 border border-positive/30 px-2 py-0.5 rounded-md font-mono font-bold">
                             +{delta} pts ▴
                           </span>
                         ) : draft.originalScore !== null && delta !== null && delta < 0 ? (
-                          <span className="text-[10px] text-destructive bg-destructive/10 border border-destructive/30 px-2 py-0.5 rounded-md font-mono font-bold">
+                          <span className="text-xs text-destructive bg-destructive/10 border border-destructive/30 px-2 py-0.5 rounded-md font-mono font-bold">
                             {delta} pts ▾
                           </span>
                         ) : (
-                          <span className="text-[10px] text-primary bg-primary/10 border border-primary/30 px-2 py-0.5 rounded-md font-mono">
+                          <span className="text-xs text-primary bg-primary/10 border border-primary/30 px-2 py-0.5 rounded-md font-mono">
                             First score
                           </span>
                         )}
@@ -663,7 +663,7 @@ export default function CreditReportsSection() {
                                 },
                               }));
                             }}
-                            className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono tabular-nums pr-7"
+                            className="rounded-lg h-8 border border-border/40 bg-background/50 text-xs font-mono tabular-nums pr-14"
                             required={draft.included}
                           />
                           {draft.originalScore !== null && draft.score !== draft.originalScore && (
@@ -676,7 +676,7 @@ export default function CreditReportsSection() {
                                   [key]: { ...prev[key], score: draft.originalScore! },
                                 }));
                               }}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                              className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
                             >
                               <RotateCcw className="h-3 w-3" />
                             </button>
@@ -686,7 +686,7 @@ export default function CreditReportsSection() {
                         <div className="flex items-center justify-between sm:justify-start gap-2">
                           {rating ? (
                             <span
-                              className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold border"
+                              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold border"
                               style={{
                                 color: rating.color,
                                 borderColor: `${rating.color}40`,
@@ -696,10 +696,10 @@ export default function CreditReportsSection() {
                               {rating.text}
                             </span>
                           ) : (
-                            <span className="text-[11px] text-muted-foreground italic">Enter score</span>
+                            <span className="text-xs text-muted-foreground italic">Enter score</span>
                           )}
                           {draft.originalScore !== null && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               (Current: {draft.originalScore})
                             </span>
                           )}

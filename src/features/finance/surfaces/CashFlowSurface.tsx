@@ -284,21 +284,31 @@ const StackedCategoryBar = (props: StackedCategoryBarProps) => {
   );
 };
 
-// Custom tick to render "Now" label on current bucket
-const CashFlowXTick = (props: { x?: number; y?: number; payload?: { value: string; index: number } }) => {
-  const { x = 0, y = 0, payload } = props;
+// Custom tick to render "Now" label on current bucket. Every bucket keeps its
+// tick, but labels are thinned to what fits the axis at 12px: a long range
+// ("Jan '24" per month) overlapped even at the old 9px. Thinning counts from
+// the current month, so "Now" always has its label.
+const cfCurrentIndex = Math.max(0, cfMonthlyData.findIndex(m => m.isCurrent));
+const CashFlowXTick = (props: { x?: number; y?: number; width?: number; visibleTicksCount?: number; payload?: { value: string; index: number } }) => {
+  const { x = 0, y = 0, width = 0, visibleTicksCount = 1, payload } = props;
   if (!payload) return null;
   const dataPoint = cfMonthlyData[payload.index];
   const isCurr = dataPoint?.isCurrent;
+  // ~0.6em a character at 12px, plus a gap.
+  const labelWidth = String(payload.value).length * 7.5 + 8;
+  const step = width > 0 ? Math.max(1, Math.ceil((visibleTicksCount * labelWidth) / width)) : 1;
+  const labelled = (payload.index - cfCurrentIndex) % step === 0;
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={12} textAnchor="middle" fill="currentColor" opacity={dataPoint?.isFuture ? 0.25 : 0.5} fontSize={9}>
-        {payload.value}
-      </text>
+      {labelled && (
+        <text x={0} y={0} dy={12} textAnchor="middle" fill="currentColor" opacity={dataPoint?.isFuture ? 0.25 : 0.5} fontSize={12}>
+          {payload.value}
+        </text>
+      )}
       {isCurr && (
         <g>
-          <rect x={-14} y={18} width={28} height={14} rx={4} fill="hsl(var(--foreground))" opacity={0.9} />
-          <text x={0} y={28} textAnchor="middle" fill="hsl(var(--background))" fontSize={8} fontWeight={700}>Now</text>
+          <rect x={-17} y={18} width={34} height={17} rx={4} fill="hsl(var(--foreground))" opacity={0.9} />
+          <text x={0} y={31} textAnchor="middle" fill="hsl(var(--background))" fontSize={12} fontWeight={700}>Now</text>
         </g>
       )}
     </g>
@@ -353,7 +363,7 @@ const cfTooltipStyle = {
   backgroundColor: 'hsl(var(--popover))',
   borderColor: 'hsl(var(--border))',
   borderRadius: '1rem',
-  fontSize: '11px',
+  fontSize: '12px',
   padding: '8px 12px',
 };
 
@@ -447,7 +457,7 @@ return (
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `£${v >= 0 ? '' : '-'}${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}K` : Math.abs(v)}`}
-              tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+              tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
             />
             <RechartsTooltip
               cursor={false}
@@ -510,7 +520,7 @@ return (
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
-                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
               />
               <RechartsTooltip cursor={false} content={<CashFlowCategoryTooltip />} />
               <Bar dataKey="spend" shape={(props) => <StackedCategoryBar {...props} />} />
@@ -550,7 +560,7 @@ return (
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
-                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+                tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
               />
               <RechartsTooltip
                 cursor={false}

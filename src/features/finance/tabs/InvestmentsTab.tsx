@@ -550,7 +550,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                           borderColor: 'hsl(var(--border))',
                           color: 'hsl(var(--foreground))',
                           borderRadius: '8px',
-                          fontSize: '11px',
+                          fontSize: '12px',
                           fontFamily: 'monospace'
                         }}
                       />
@@ -764,13 +764,13 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   <XAxis
                     dataKey="year"
                     stroke="rgba(255,255,255,0.4)"
-                    fontSize={10}
+                    fontSize={12}
                     fontFamily="monospace"
                     dy={10}
                   />
                   <YAxis
                     stroke="rgba(255,255,255,0.4)"
-                    fontSize={9}
+                    fontSize={12}
                     fontFamily="monospace"
                     tickFormatter={(val) => `£${(val / 1000).toFixed(0)}k`}
                     dx={-5}
@@ -782,7 +782,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                       borderColor: 'hsl(var(--border))',
                       color: 'hsl(var(--popover-foreground))',
                       borderRadius: 'var(--radius)',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       fontFamily: 'monospace'
                     }}
                   />
@@ -791,7 +791,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     height={36}
                     iconSize={8}
                     iconType="circle"
-                    wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace' }}
+                    wrapperStyle={{ fontSize: '12px', fontFamily: 'monospace' }}
                   />
                   <Area
                     type="monotone"

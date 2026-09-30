@@ -93,7 +93,7 @@ export function CountdownCard({
         >
           {label}
         </p>
-        <p className={cn('mt-0.5 text-white/80', compact ? 'text-[10px]' : 'text-xs')}>
+        <p className="mt-0.5 text-xs text-white/80">
           {formatDate(date)}
         </p>
       </div>
@@ -105,12 +105,7 @@ export function CountdownCard({
           <span className={cn('font-sans font-bold tabular-nums', compact ? 'text-2xl' : 'text-4xl')}>
             {days}
           </span>
-          <span
-            className={cn(
-              'ml-1.5 uppercase tracking-wider text-white/80',
-              compact ? 'text-[10px]' : 'text-xs',
-            )}
-          >
+          <span className="ml-1.5 text-xs uppercase tracking-wider text-white/80">
             {unit}
           </span>
         </div>

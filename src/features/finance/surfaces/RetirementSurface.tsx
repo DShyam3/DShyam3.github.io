@@ -143,13 +143,13 @@ export default function RetirementSurface() {
               <XAxis
                 dataKey="year"
                 tickFormatter={(y: number) => String((Number(currentAge) || 0) + y)}
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
               />
               <YAxis
                 tickFormatter={(v: number) => `£${Math.round(v / 1000)}k`}
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
                 width={48}

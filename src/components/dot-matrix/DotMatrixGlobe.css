@@ -199,7 +199,7 @@
 }
 
 .globe-country-result-item .country-code {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     color: hsl(var(--muted-foreground));
     font-family: monospace;
     background: hsl(var(--muted));

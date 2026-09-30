@@ -116,7 +116,7 @@
 }
 
 .travel-continent-name {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -125,7 +125,7 @@
 }
 
 .travel-continent-stats {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: hsl(var(--muted-foreground) / 0.7);
   font-family: var(--font-sans);
@@ -305,7 +305,7 @@
   border: none;
   background: transparent;
   border-radius: 6px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   color: hsl(var(--muted-foreground));
@@ -403,7 +403,7 @@
 }
 
 .city-panel-city-count {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   color: hsl(var(--muted-foreground));
   font-family: var(--font-sans);
 }

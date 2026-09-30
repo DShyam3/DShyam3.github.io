@@ -450,18 +450,18 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               dataKey={dashboardSpendXAxisKey}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+              tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
             />
             <YAxis
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `£${v}`}
-              tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 9 }}
+              tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
             />
             <RechartsTooltip
               contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '1rem' }}
-              itemStyle={{ color: 'hsl(var(--foreground))', fontSize: '11px' }}
-              labelStyle={{ fontWeight: 'bold', fontSize: '11px' }}
+              itemStyle={{ color: 'hsl(var(--foreground))', fontSize: '12px' }}
+              labelStyle={{ fontWeight: 'bold', fontSize: '12px' }}
               formatter={(value) => [formatGBP(Number(value)), undefined]}
             />
             {/* Ideal Curve (grey dashed line) */}
