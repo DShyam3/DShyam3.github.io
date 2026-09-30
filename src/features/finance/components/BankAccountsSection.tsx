@@ -209,7 +209,7 @@ export default function BankAccountsSection() {
         const hasConnections = trueLayerStatus?.connected && connections.length > 0;
 
         return (
-          <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+          <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="space-y-0.5">
                 <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
@@ -370,7 +370,7 @@ export default function BankAccountsSection() {
 
       {/* DIALOG: Add Account */}
       <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm font-mono shadow-none">
           <DialogHeader>
             <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Bank Account</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-mono">Add a new personal bank account or credit card.</DialogDescription>
@@ -511,7 +511,7 @@ export default function BankAccountsSection() {
 
       {/* DIALOG: Edit Account */}
       <Dialog open={isEditAccountOpen} onOpenChange={setIsEditAccountOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm font-mono shadow-none">
           <DialogHeader>
             <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Account</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-mono">Update account metrics.</DialogDescription>

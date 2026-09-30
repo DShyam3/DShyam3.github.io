@@ -87,7 +87,7 @@ export function PayslipDetailDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-md p-6 font-mono">
+      <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-md p-6 font-mono">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-3">
             {logo && (

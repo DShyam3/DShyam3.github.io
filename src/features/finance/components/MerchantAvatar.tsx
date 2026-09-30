@@ -44,7 +44,7 @@ export function MerchantAvatar({
   const [imageFailed, setImageFailed] = useState(false);
 
   const base = cn(
-    'h-8 w-8 rounded-xl shrink-0 flex items-center justify-center overflow-hidden',
+    'h-8 w-8 rounded-lg shrink-0 flex items-center justify-center overflow-hidden',
     'font-bold text-xs uppercase shadow-sm border',
     className,
   );

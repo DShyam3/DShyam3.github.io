@@ -416,7 +416,7 @@ export default function TaxIncomeSurface({
     <div className="lg:col-span-8 flex flex-col gap-4">
 
       {/* Total Compensation Summary Card */}
-      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+      <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/30 pb-4">
           <div className="space-y-1">
             <span className="text-xs uppercase tracking-wider font-mono font-semibold text-muted-foreground">
@@ -467,7 +467,7 @@ export default function TaxIncomeSurface({
       </div>
 
       {/* Standard Rates Breakdown */}
-      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 sm:p-6 hover:border-border/80 transition-colors">
+      <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 sm:p-6 hover:border-border/80 transition-colors">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1 text-left min-w-0">
             <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
@@ -573,7 +573,7 @@ export default function TaxIncomeSurface({
     {/* Right Side: Combined leave balances and holiday tracker */}
     <div className="lg:col-span-4 flex flex-col gap-6">
 
-      <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+      <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
           <div className="min-w-0">
             <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-1.5">
@@ -1041,7 +1041,7 @@ export default function TaxIncomeSurface({
 
 </div>
 <Dialog open={isBenefitsDialogOpen} onOpenChange={setIsBenefitsDialogOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card p-6 max-w-lg w-full">
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card p-6 max-w-lg w-full">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
         <Gift className="w-4 h-4 text-primary" /> Manage Package Benefits & Perks
@@ -1100,7 +1100,7 @@ export default function TaxIncomeSurface({
       </div>
 
       {/* Add Custom Benefit Form */}
-      <div className="rounded-xl border border-border/30 bg-muted/10 p-4 space-y-3 font-mono">
+      <div className="rounded-lg border border-border/30 bg-muted/10 p-4 space-y-3 font-mono">
         <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5 text-primary" /> Add Benefit or Addition
         </h4>

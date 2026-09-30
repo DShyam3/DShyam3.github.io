@@ -294,7 +294,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
     <div className="space-y-6">
       {/* 1. KEY PERFORMANCE METRICS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+        <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
           <div className="space-y-2">
             <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
               Total Portfolio
@@ -314,7 +314,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
 
-        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+        <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
           <div className="space-y-2">
             <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
               Net Invested
@@ -328,7 +328,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
 
-        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+        <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
           <div className="space-y-2">
             <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
               Total Gain / Loss
@@ -345,7 +345,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
           </div>
         </Card>
 
-        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+        <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
           <div className="space-y-2">
             <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
               Rate of Return
@@ -366,7 +366,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       {/* 2. HOLDINGS LIST & PORTFOLIO ALLOCATION PIE CHART */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Holdings table */}
-        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 lg:col-span-2 flex flex-col justify-between hover:border-border/80 transition-colors">
+        <Card className="rounded-lg border border-border/40 bg-card/50 p-5 lg:col-span-2 flex flex-col justify-between hover:border-border/80 transition-colors">
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -398,7 +398,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
 
             {holdings.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-                <div className="bg-muted/20 p-4 rounded-xl border border-border/40">
+                <div className="bg-muted/20 p-4 rounded-lg border border-border/40">
                   <Coins className="h-8 w-8 text-muted-foreground/40 animate-pulse" />
                 </div>
                 <div className="space-y-1">
@@ -507,7 +507,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
         </Card>
 
         {/* Right Column: Asset Allocation (Option B: Treasury Donut) */}
-        <Card className="rounded-xl border border-border/40 bg-card/50 p-5 flex flex-col justify-between hover:border-border/80 transition-colors">
+        <Card className="rounded-lg border border-border/40 bg-card/50 p-5 flex flex-col justify-between hover:border-border/80 transition-colors">
           <div className="space-y-4 flex-1 flex flex-col justify-between">
             <div className="space-y-1">
               <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
@@ -638,7 +638,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
       </Card>
 
       {/* 3. FUTURE VALUE PROJECTION CALCULATOR */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <div className="space-y-6">
           <div className="space-y-1">
             <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
@@ -717,7 +717,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
               </div>
 
               {/* Calculator Summary Callout */}
-              <div className="bg-muted/20 rounded-xl p-4 border border-border/30 mt-4 space-y-2.5 text-xs font-mono">
+              <div className="bg-muted/20 rounded-lg p-4 border border-border/30 mt-4 space-y-2.5 text-xs font-mono">
                 <div className="flex items-center gap-1.5 uppercase font-semibold text-foreground text-xs tracking-wider">
                   <Info className="h-3.5 w-3.5 text-primary shrink-0" />
                   Projection Summary
@@ -828,7 +828,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
 
       {/* 4. ADD & EDIT HOLDING MODAL DIALOG */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card p-6 max-w-md w-full">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card p-6 max-w-md w-full">
           <form onSubmit={handleSubmit} className="space-y-4">
             <DialogHeader>
               <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">
@@ -848,7 +848,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   required
-                  className="rounded-xl border-border/50 bg-background/50 text-foreground"
+                  className="rounded-lg border-border/50 bg-background/50 text-foreground"
                 />
               </div>
 
@@ -860,7 +860,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     placeholder="e.g. VOO, AAPL, BTC"
                     value={formTicker}
                     onChange={(e) => setFormTicker(e.target.value)}
-                    className="rounded-xl border-border/50 bg-background/50 text-foreground uppercase"
+                    className="rounded-lg border-border/50 bg-background/50 text-foreground uppercase"
                   />
                 </div>
 
@@ -870,10 +870,10 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     value={formCategory}
                     onValueChange={(val) => setFormCategory(val as HoldingCategory)}
                   >
-                    <SelectTrigger className="rounded-xl border-border/50 bg-background/50 text-foreground">
+                    <SelectTrigger className="rounded-lg border-border/50 bg-background/50 text-foreground">
                       <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl bg-card border border-border/60">
+                    <SelectContent className="rounded-lg bg-card border border-border/60">
                       {HOLDING_CATEGORIES.map((cat) => (
                         <SelectItem key={cat} value={cat} className="text-xs focus:bg-muted">
                           {cat}
@@ -890,10 +890,10 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   value={formAccountId ?? UNLINKED_ACCOUNT}
                   onValueChange={(value) => setFormAccountId(value === UNLINKED_ACCOUNT ? undefined : value)}
                 >
-                  <SelectTrigger id="holding-account" className="rounded-xl border-border/50 bg-background/50 text-foreground">
+                  <SelectTrigger id="holding-account" className="rounded-lg border-border/50 bg-background/50 text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl bg-card border border-border/60">
+                  <SelectContent className="rounded-lg bg-card border border-border/60">
                     <SelectItem value={UNLINKED_ACCOUNT} className="text-xs focus:bg-muted">No linked account</SelectItem>
                     {investmentAccounts.map((account) => (
                       <SelectItem key={account.id} value={account.id} className="text-xs focus:bg-muted">
@@ -917,7 +917,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                   value={formShares === 0 ? '' : formShares}
                   onChange={(e) => setFormShares(Number(e.target.value))}
                   required
-                  className="rounded-xl border-border/50 bg-background/50 text-foreground font-mono"
+                  className="rounded-lg border-border/50 bg-background/50 text-foreground font-mono"
                 />
               </div>
 
@@ -932,7 +932,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     value={formAvgPrice === 0 ? '' : formAvgPrice}
                     onChange={(e) => setFormAvgPrice(Number(e.target.value))}
                     required
-                    className="rounded-xl border-border/50 bg-background/50 text-foreground font-mono"
+                    className="rounded-lg border-border/50 bg-background/50 text-foreground font-mono"
                   />
                 </div>
 
@@ -946,7 +946,7 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                     value={formCurrentPrice === 0 ? '' : formCurrentPrice}
                     onChange={(e) => setFormCurrentPrice(Number(e.target.value))}
                     required
-                    className="rounded-xl border-border/50 bg-background/50 text-foreground font-mono"
+                    className="rounded-lg border-border/50 bg-background/50 text-foreground font-mono"
                   />
                 </div>
               </div>
@@ -957,13 +957,13 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                 type="button"
                 variant="ghost"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-xl text-xs hover:bg-muted font-sans"
+                className="rounded-lg text-xs hover:bg-muted font-sans"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-sans"
+                className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-sans"
               >
                 {editingHolding ? 'Save Changes' : 'Add Asset'}
               </Button>

@@ -324,7 +324,7 @@ export function TaxIncomeSettingsDialog({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="!flex !flex-col sm:rounded-xl border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none">
+      <DialogContent className="!flex !flex-col sm:rounded-lg border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none">
         <DialogHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
           <DialogTitle className="font-mono text-base font-bold tracking-tight text-foreground">Tax & Income Settings</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground font-mono">

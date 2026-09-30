@@ -84,10 +84,10 @@ const Auth = () => {
               <div className="space-y-6 text-center">
                 <p className="text-sm font-medium text-primary">You are currently logged in as Admin.</p>
                 <div className="flex flex-col gap-3">
-                  <Button onClick={() => navigate(from, { replace: true })} className="rounded-xl h-12">
+                  <Button onClick={() => navigate(from, { replace: true })} className="rounded-lg h-12">
                     {from === '/' ? 'Go to Home' : 'Go back'}
                   </Button>
-                  <Button variant="outline" onClick={handleLogout} className="rounded-xl h-12 border-primary/20">
+                  <Button variant="outline" onClick={handleLogout} className="rounded-lg h-12 border-primary/20">
                     Logout
                   </Button>
                 </div>
@@ -109,13 +109,13 @@ const Auth = () => {
                     placeholder="Enter password..."
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 bg-background/50 border-primary/20 rounded-xl px-4 focus-visible:ring-primary/30"
+                    className="h-12 bg-background/50 border-primary/20 rounded-lg px-4 focus-visible:ring-primary/30"
                     autoFocus
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 transition-all duration-300 shadow-lg shadow-primary/20 group"
+                  className="w-full h-12 rounded-lg bg-primary hover:bg-primary/90 transition-all duration-300 shadow-lg shadow-primary/20 group"
                   disabled={loading}
                 >
                   {loading ? (

@@ -227,7 +227,7 @@ function UpdatesList({
       ) : (
         // Its own scroll only from xl, where it is a column beside Upcoming;
         // stacked, a capped list would be a scroller inside the page's.
-        <div className="watchlist-updates-scroll divide-y divide-border/50 rounded-xl border border-border/50 xl:max-h-[min(36rem,65dvh)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2" tabIndex={0} role="region" aria-label="Recent watchlist updates">
+        <div className="watchlist-updates-scroll divide-y divide-border/50 rounded-lg border border-border/50 xl:max-h-[min(36rem,65dvh)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2" tabIndex={0} role="region" aria-label="Recent watchlist updates">
           {rows.map((row) => (
             <UpdateRow
               key={row.key}

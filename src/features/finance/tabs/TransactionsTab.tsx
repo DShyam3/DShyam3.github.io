@@ -588,7 +588,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       {/* LEFT SECTION: TRANSACTIONS LIST */}
       <div className="lg:col-span-2 flex flex-col space-y-4">
         {/* TOOLBAR: Search, Filter, Sort, Batch Actions */}
-        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-4 space-y-3 hover:border-border/80 transition-colors">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-lg p-4 space-y-3 hover:border-border/80 transition-colors">
           <div className="flex flex-col sm:flex-row items-center gap-3">
             {/* Search */}
             <div className="relative w-full sm:flex-1">
@@ -625,7 +625,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-64 bg-card border border-border/60 rounded-xl p-4 shadow-xl space-y-4 z-50 font-mono">
+                <PopoverContent className="w-64 bg-card border border-border/60 rounded-lg p-4 shadow-xl space-y-4 z-50 font-mono">
                   <div className="space-y-1.5">
                     <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">Status</h4>
                     <Select value={statusFilter} onValueChange={(val: 'all' | 'pending' | 'reviewed') => setStatusFilter(val)}>
@@ -697,7 +697,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     <span>Sort</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border/60 rounded-xl z-50 font-mono">
+                <DropdownMenuContent align="end" className="bg-card border-border/60 rounded-lg z-50 font-mono">
                   <DropdownMenuItem className="text-xs cursor-pointer font-mono" onClick={() => setSortOrder('date-desc')}>
                     Newest Date
                   </DropdownMenuItem>
@@ -837,10 +837,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         <TransferReviewSection />
 
         {/* LIST RENDER: Grouped by date */}
-        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-4 flex flex-col justify-start hover:border-border/80 transition-colors">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-lg p-4 flex flex-col justify-start hover:border-border/80 transition-colors">
           {groupedTransactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 my-auto">
-              <div className="p-3 bg-muted/20 rounded-xl border border-border/30">
+              <div className="p-3 bg-muted/20 rounded-lg border border-border/30">
                 <AlertCircle className="h-7 w-7 text-muted-foreground/60" />
               </div>
               <div className="space-y-1">
@@ -1052,7 +1052,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       {/* RIGHT SECTION: TRANSACTION DETAILS PANEL */}
       <div className="tx-inspector-pane flex flex-col space-y-4">
-        <div className="surface-card bg-card/50 border border-border/40 rounded-xl p-5 hover:border-border/80 transition-colors">
+        <div className="surface-card bg-card/50 border border-border/40 rounded-lg p-5 hover:border-border/80 transition-colors">
           {selectedTx ? (
             <div className="space-y-6">
               {/* Detail Panel Header */}
@@ -1303,7 +1303,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="p-3 bg-muted/20 rounded-xl border border-border/30">
+              <div className="p-3 bg-muted/20 rounded-lg border border-border/30">
                 <FileText className="h-7 w-7 text-muted-foreground/50" />
               </div>
               <div className="space-y-1">
@@ -1328,7 +1328,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       {/* DIALOG: ADD TRANSACTION MANUALLY */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card font-mono max-w-md w-full">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card font-mono max-w-md w-full">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-foreground font-mono">Add New Transaction</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-mono">
@@ -1345,7 +1345,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   variant={newTxType === 'expense' ? 'default' : 'outline'}
                   onClick={() => setNewTxType('expense')}
                   className={cn(
-                    "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
+                    "h-9 rounded-lg text-xs font-semibold gap-1.5 transition-colors",
                     newTxType === 'expense'
                       ? "bg-destructive hover:bg-destructive text-white"
                       : "border-primary/15 text-muted-foreground hover:bg-primary/5"
@@ -1359,7 +1359,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   variant={newTxType === 'income' ? 'default' : 'outline'}
                   onClick={() => setNewTxType('income')}
                   className={cn(
-                    "h-9 rounded-xl text-xs font-semibold gap-1.5 transition-colors",
+                    "h-9 rounded-lg text-xs font-semibold gap-1.5 transition-colors",
                     newTxType === 'income'
                       ? "bg-positive hover:bg-positive text-white"
                       : "border-primary/15 text-muted-foreground hover:bg-primary/5"
@@ -1408,7 +1408,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       {newTxDate ? newTxDate.toLocaleDateString('en-GB') : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-card border-border/60 rounded-xl z-[60] font-mono" align="start">
+                  <PopoverContent className="w-auto p-0 bg-card border-border/60 rounded-lg z-[60] font-mono" align="start">
                     <Calendar
                       mode="single"
                       selected={newTxDate}

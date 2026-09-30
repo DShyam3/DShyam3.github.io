@@ -62,7 +62,7 @@ export function Header({
               <img
                 src={`${ASSETS_URL}/memoji.png`}
                 alt={`${SITE.name} memoji avatar`}
-                className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-secondary object-cover flex-shrink-0"
+                className="h-10 w-10 md:h-12 md:w-12 rounded-lg bg-secondary object-cover flex-shrink-0"
                 loading="eager"
               />
 

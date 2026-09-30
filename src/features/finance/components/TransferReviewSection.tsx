@@ -128,7 +128,7 @@ export function TransferReviewSection() {
   ) return null;
 
   return (
-    <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+    <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
       <div className="min-w-0">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground font-mono">Possible transfers</h3>
         <p className="text-xs text-muted-foreground font-mono mt-0.5">

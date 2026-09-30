@@ -395,7 +395,7 @@ return (
             <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", cfPeriodOpen && "rotate-180")} />
           </button>
           {cfPeriodOpen && (
-            <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[240px] bg-popover border border-border/60 rounded-xl shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150 font-mono">
+            <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[240px] bg-popover border border-border/60 rounded-lg shadow-xl p-1.5 animate-in fade-in slide-in-from-top-2 duration-150 font-mono">
               {CF_PERIOD_OPTIONS.map(opt => {
                 const isActive = cfPeriod === opt.key;
                 return (
@@ -424,7 +424,7 @@ return (
     </div>
 
     {/* ─── NET INCOME HERO CARD ─── */}
-    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+    <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
       <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
         <div className="space-y-1 font-mono">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Income</span>
@@ -490,7 +490,7 @@ return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
       {/* Spend Card */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
           <div className="space-y-1 font-mono">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spend</span>
@@ -530,7 +530,7 @@ return (
       </Card>
 
       {/* Income Card */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
           <div className="space-y-1 font-mono">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
@@ -590,7 +590,7 @@ return (
 
     {/* ─── METRIC SUMMARY ROW ─── */}
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avg Monthly Net</span>
         <span className={cn("text-xl font-bold font-mono block tabular-nums", avgMonthlyNet >= 0 ? "text-positive" : "text-destructive")}>
           {formatGBP(avgMonthlyNet)}
@@ -598,7 +598,7 @@ return (
         <span className="text-xs text-muted-foreground">across {elapsedMonths} month{elapsedMonths !== 1 ? 's' : ''}</span>
       </Card>
 
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Savings Rate</span>
         <span className={cn("text-xl font-bold font-mono block tabular-nums", savingsRate === null ? "text-muted-foreground" : savingsRate >= 20 ? "text-positive" : savingsRate >= 0 ? "text-chart-4" : "text-destructive")}>
           {savingsRate === null ? 'No income' : `${savingsRate.toFixed(1)}%`}
@@ -606,7 +606,7 @@ return (
         <span className="text-xs text-muted-foreground">of income kept in this period</span>
       </Card>
 
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring Burn</span>
         <span className={cn("text-xl font-bold font-mono block tabular-nums", recurringBurnRate <= 30 ? "text-positive" : recurringBurnRate <= 50 ? "text-chart-4" : "text-destructive")}>
           {recurringBurnRate.toFixed(1)}%
@@ -730,7 +730,7 @@ return (
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Categories</h4>
               <div className="space-y-2">
                 {overallCategories.map(cat => (
-                  <div key={cat.name} className="flex items-center justify-between text-xs p-2 rounded-xl bg-background/30 hover:bg-background/60 transition-colors">
+                  <div key={cat.name} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background/30 hover:bg-background/60 transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
                       <span className="text-base shrink-0">{cat.emoji}</span>

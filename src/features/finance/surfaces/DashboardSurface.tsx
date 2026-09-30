@@ -350,7 +350,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
     {/* Column 1 & 2: Spending Progress cumulative chart */}
-    <Card data-palette="sky" className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors lg:col-span-2 flex flex-col justify-between">
+    <Card data-palette="sky" className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors lg:col-span-2 flex flex-col justify-between">
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/30 pb-3">
           <div className="space-y-0.5">
@@ -494,7 +494,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     <div className="space-y-6 flex flex-col justify-between">
 
       {/* Combined Net & Spendable Card */}
-      <Card data-palette="sage" className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex-1 flex flex-col justify-between space-y-4 text-left">
+      <Card data-palette="sage" className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex-1 flex flex-col justify-between space-y-4 text-left">
         <div className="space-y-3.5">
           <div className="flex items-center justify-between border-b border-border/30 pb-3">
             <span className="text-xs uppercase tracking-wider font-mono font-semibold text-muted-foreground">Net & Budget</span>
@@ -586,7 +586,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </Card>
 
       {/* Net Assets, Debt & Net Cash Flow block */}
-      <Card data-palette="lavender" className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 text-left font-mono">
+      <Card data-palette="lavender" className="rounded-lg border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-1.5 text-left font-mono">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Worth</span>
         <Figure
           loading={!hasLoaded}
@@ -604,7 +604,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </Card>
 
       {/* Payday details card */}
-      <Card data-palette="peach" className="rounded-xl border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-3 text-left font-mono">
+      <Card data-palette="peach" className="rounded-lg border border-border/40 bg-card/50 p-4 hover:border-border/80 transition-colors space-y-3 text-left font-mono">
         <div className="flex items-center justify-between border-b border-border/30 pb-2">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Payday</span>
           <button
@@ -642,7 +642,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     {/* Left Side: Unreviewed Transaction Checklist (lg:col-span-8) */}
     <div className="lg:col-span-8 space-y-6">
 
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-1.5">
@@ -816,7 +816,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </Card>
 
       {/* Top Spending Categories gauge */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">Top Spending Categories</CardTitle>
@@ -859,7 +859,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
 
       {/* Derived from the current position on every render, so an alert is
           gone the moment its condition is. Nothing to dismiss or mark read. */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <CardHeader className="p-0 pb-4 border-b border-border/30">
           <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">
             Needs Attention
@@ -877,7 +877,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       </Card>
 
       {/* Next two weeks recurrings card */}
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">Upcoming Bills</CardTitle>
@@ -922,7 +922,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+      <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
         <CardHeader className="p-0 pb-4 border-b border-border/30 flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground">Goals</CardTitle>

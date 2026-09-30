@@ -315,7 +315,7 @@ export default function GoalsSurface() {
             key={goal.id}
             onClick={() => setSelectedGoalId(isActiveGoal ? null : goal.id)}
             className={cn(
-              "surface-card text-left p-5 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 font-mono",
+              "surface-card text-left p-5 rounded-lg border cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3 font-mono",
               isActiveGoal
                 ? "bg-card/90 border-border/80 shadow-sm"
                 : "bg-card/40 border-border/30 hover:border-border/60 hover:bg-card/60"
@@ -441,7 +441,7 @@ export default function GoalsSurface() {
         }
 
         return (
-          <Card className="bg-card/50 border border-border/40 rounded-xl p-5 space-y-6 hover:border-border/80 transition-colors">
+          <Card className="bg-card/50 border border-border/40 rounded-lg p-5 space-y-6 hover:border-border/80 transition-colors">
 
             {/* Title Block */}
             <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start border-b border-border/30 pb-4">
@@ -652,7 +652,7 @@ export default function GoalsSurface() {
 
 </div>
 <Dialog open={isAddGoalOpen} onOpenChange={setIsAddGoalOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono">
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm font-mono">
     <DialogHeader className="text-left">
       <DialogTitle className="font-mono text-base font-bold">Add Savings Goal</DialogTitle>
       <DialogDescription className="text-xs font-mono text-muted-foreground">Create a new milestone target and timeline.</DialogDescription>
@@ -744,7 +744,7 @@ export default function GoalsSurface() {
   </DialogContent>
 </Dialog>
 <Dialog open={isEditGoalOpen} onOpenChange={setIsEditGoalOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono">
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm font-mono">
     <DialogHeader className="text-left">
       <DialogTitle className="font-mono text-base font-bold">Edit Savings Goal</DialogTitle>
       <DialogDescription className="text-xs font-mono text-muted-foreground">Modify the details of your savings milestone.</DialogDescription>

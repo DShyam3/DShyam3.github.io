@@ -140,7 +140,7 @@ export function CashFlowSankey({ sankey, loading }: { sankey: CashFlowSankeyGrap
   const height = Math.max(240, Math.max(leftCount, rightCount) * ROW_HEIGHT + 32);
 
   return (
-    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4 font-mono">
+    <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4 font-mono">
       <div className="min-w-0">
         <h3 className="text-xs uppercase tracking-wider font-semibold text-foreground">Where it went</h3>
         <p className="text-xs text-muted-foreground mt-0.5">

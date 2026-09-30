@@ -156,7 +156,7 @@ export function PayslipImportDialog({ open, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-2xl p-6 font-mono">
+      <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-2xl p-6 font-mono">
         <DialogHeader>
           <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground">Import payslips</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">

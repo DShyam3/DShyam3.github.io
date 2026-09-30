@@ -91,7 +91,7 @@ export default function MembershipsSection() {
           </Button>
         </div>
 
-        <div className="surface-card min-w-0 overflow-x-auto bg-card/50 border border-border/40 rounded-xl p-4 sm:p-5 hover:border-border/80 transition-colors">
+        <div className="surface-card min-w-0 overflow-x-auto bg-card/50 border border-border/40 rounded-lg p-4 sm:p-5 hover:border-border/80 transition-colors">
           <table className="min-w-[640px] w-full text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/40 text-muted-foreground uppercase tracking-wider font-semibold">
@@ -148,7 +148,7 @@ export default function MembershipsSection() {
 
       {/* Add Membership Dialog */}
       <Dialog open={isAddMembershipOpen} onOpenChange={setIsAddMembershipOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm font-mono shadow-none">
           <DialogHeader>
             <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Reward Membership</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-mono">Add a new point, loyalty or reward system.</DialogDescription>
@@ -224,7 +224,7 @@ export default function MembershipsSection() {
 
       {/* Edit Membership Dialog */}
       <Dialog open={isEditMembershipOpen} onOpenChange={setIsEditMembershipOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm font-mono shadow-none">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm font-mono shadow-none">
           <DialogHeader>
             <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Reward Program</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-mono">Update loyalty account details.</DialogDescription>

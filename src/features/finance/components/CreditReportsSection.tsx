@@ -295,7 +295,7 @@ export default function CreditReportsSection() {
             const dotPos = polarToCartesian(80, 75, 54, scoreAngle);
 
             return (
-              <Card key={bureau.key} className="rounded-xl border border-border/40 bg-card/50 hover:border-border/80 transition-colors p-5 flex flex-col justify-between space-y-4 shadow-none">
+              <Card key={bureau.key} className="rounded-lg border border-border/40 bg-card/50 hover:border-border/80 transition-colors p-5 flex flex-col justify-between space-y-4 shadow-none">
                 {/* Bureau Card Header */}
                 <div className="flex items-center justify-between border-b border-border/30 pb-3">
                   <div className="space-y-0.5">
@@ -506,7 +506,7 @@ export default function CreditReportsSection() {
 
       {/* Log Credit Scores Dialog */}
       <Dialog open={isAddCreditScoreOpen} onOpenChange={setIsAddCreditScoreOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card sm:max-w-lg font-mono shadow-none p-5 sm:p-6 gap-3">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card sm:max-w-lg font-mono shadow-none p-5 sm:p-6 gap-3">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
               <span>Log Credit Scores</span>
@@ -588,7 +588,7 @@ export default function CreditReportsSection() {
                   <div
                     key={bureau.key}
                     className={cn(
-                      "rounded-xl border transition-colors p-3 space-y-2 font-mono text-xs",
+                      "rounded-lg border transition-colors p-3 space-y-2 font-mono text-xs",
                       draft.included
                         ? "border-border/60 bg-muted/15"
                         : "border-border/20 bg-muted/5 opacity-55"

@@ -53,7 +53,7 @@ export function WhatChangedCard({ summary, loading }: { summary: FinanceChangeSu
   ];
 
   return (
-    <Card data-palette="sage" className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
+    <Card data-palette="sage" className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors">
       <CardHeader className="flex-row items-start gap-2 space-y-0 border-b border-border/30 p-0 pb-4">
         <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0">

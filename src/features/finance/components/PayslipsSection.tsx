@@ -373,7 +373,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   const set = (key: keyof Draft) => (value: string) => setDraft(d => ({ ...d, [key]: value }));
 
   return (
-    <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+    <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground font-mono">Payslips</h3>
@@ -539,7 +539,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
       )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-md p-6 font-mono">
+        <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-md p-6 font-mono">
           <DialogHeader>
             <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground">
               {editing ? 'Edit payslip' : 'Add payslip'}

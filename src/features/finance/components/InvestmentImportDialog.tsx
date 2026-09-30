@@ -137,7 +137,7 @@ export function InvestmentImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border border-border/40 bg-card p-6 font-mono sm:rounded-xl">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border border-border/40 bg-card p-6 font-mono sm:rounded-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-foreground">
             <FileUp className="h-4 w-4 text-primary" /> Import investment CSV

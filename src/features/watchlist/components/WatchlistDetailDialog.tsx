@@ -133,7 +133,7 @@ export function WatchlistDetailDialog({
         onCloseAutoFocus={onCloseAutoFocus}
         className={cn(
           // Series details keep their episode rail separate from the information panel.
-          'max-h-[85dvh] overflow-hidden p-0 rounded-xl items-start',
+          'max-h-[85dvh] overflow-hidden p-0 rounded-lg items-start',
           // Wider dialog for TV shows with seasons
           hasSeasons ? 'watchlist-detail-with-seasons sm:max-w-3xl lg:max-w-4xl' : 'sm:max-w-2xl',
         )}
@@ -144,7 +144,7 @@ export function WatchlistDetailDialog({
         {/* Mobile Layout - stacked */}
         <div className="sm:hidden flex flex-col">
           {item.image_url && (
-            <div className="w-full max-h-[40vh] shrink-0 relative overflow-hidden rounded-t-xl bg-background flex justify-center">
+            <div className="w-full max-h-[40vh] shrink-0 relative overflow-hidden rounded-t-lg bg-background flex justify-center">
               <img
                 src={item.image_url}
                 alt={item.title}

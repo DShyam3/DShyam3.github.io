@@ -70,7 +70,7 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
   );
 
   const emptyMessage = (period: string) => (
-    <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+    <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
       <p>No plans or suggested releases {period}. Add a title from News or Library.</p>
       <Button asChild variant="link" className="mt-1 h-auto px-0"><Link to="/watchlist/library">Browse your library</Link></Button>
     </div>
@@ -86,7 +86,7 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
           const isToday = key === todayKey;
           if ((compact && !isToday || month) && dayEvents.length === 0) return null;
           return (
-            <div key={key} className={cn('grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-2 rounded-xl border p-3', !month && 'xl:block', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40')}>
+            <div key={key} className={cn('grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-2 rounded-lg border p-3', !month && 'xl:block', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40')}>
               <div className={cn('flex flex-col gap-1 text-sm', !month && 'xl:mb-2 xl:flex-row xl:flex-wrap xl:items-baseline xl:justify-between')}>
                 <span className="font-medium">{date.toLocaleDateString('en-GB', { weekday: 'short' })} {isToday && <span className="text-xs text-primary">Today</span>}</span>
                 <span className="text-xs text-muted-foreground">{date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>

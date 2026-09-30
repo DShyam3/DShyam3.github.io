@@ -386,7 +386,7 @@ return (
     </div>
 
     {/* Header Overview: Spent vs Total Budget gauge */}
-    <div className="surface-card rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col md:flex-row items-center justify-around gap-6 font-mono">
+    <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col md:flex-row items-center justify-around gap-6 font-mono">
 
       {/* Left: Total Spent */}
       <div className="text-center md:text-left space-y-1">
@@ -444,7 +444,7 @@ return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Left Column: Savings Allocation */}
-          <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col justify-between font-mono">
+          <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col justify-between font-mono">
             <div>
               <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Savings Allocation</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -573,7 +573,7 @@ return (
           </Card>
 
           {/* Right Column: Money Allocation Summary & Pie Chart */}
-          <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col justify-between font-mono">
+          <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors flex flex-col justify-between font-mono">
             <div>
               <h4 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground border-b border-border/30 pb-2 mb-4">Money Allocation</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -735,7 +735,7 @@ return (
     </div>
 
     {/* Copilot Money-style Key Metrics & Historical Monthly Trend */}
-    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-6 font-mono">
+    <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-6 font-mono">
       {exclusionsUnreliable && (
         <p role="alert" className="text-xs text-destructive">
           Confirmed transfers could not load, so this history counts money moved
@@ -776,7 +776,7 @@ return (
                     if (active && payload && payload.length) {
                       const data = payload[0].payload;
                       return (
-                        <div className="bg-popover/90 backdrop-blur-md border border-border/50 text-popover-foreground text-xs p-2.5 rounded-xl shadow-lg font-mono">
+                        <div className="bg-popover/90 backdrop-blur-md border border-border/50 text-popover-foreground text-xs p-2.5 rounded-lg shadow-lg font-mono">
                           <p className="font-sans font-semibold border-b border-border/30 pb-1 mb-1">{data.monthLabel}</p>
                           <p>Spent: <span className="font-bold text-primary">{formatGBP(data.spent)}</span></p>
                           <p className="text-xs text-muted-foreground">Budget Limit: {formatGBP(data.budget)}</p>
@@ -844,7 +844,7 @@ return (
     </Card>
 
     {/* Copilot-style Budget list */}
-    <Card className="rounded-xl border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors font-mono">
+    <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors font-mono">
       {/* Table Header */}
       <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono border-b border-border/20 pb-2 px-2">
         <span className="flex-1">Regular Categories</span>
@@ -882,7 +882,7 @@ return (
             return (
               <div key={category.id} className="py-2.5">
                 {/* Category Row */}
-                <div className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0 py-1.5 hover:bg-muted/5 rounded-xl px-2 transition-colors">
+                <div className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0 py-1.5 hover:bg-muted/5 rounded-lg px-2 transition-colors">
                   {/* Left: Collapse, badge count, name, hover actions */}
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <button
@@ -1043,7 +1043,7 @@ return (
     <>
       {content}
 <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Budget Category</DialogTitle>
       <DialogDescription className="text-xs text-muted-foreground font-mono">Create a new container category with a monthly budget limit.</DialogDescription>
@@ -1067,7 +1067,7 @@ return (
               setNewCategoryBudget('');
             }
           }}
-          className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+          className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
           defaultValue=""
         >
           <option value="">Start a new one from scratch</option>
@@ -1085,7 +1085,7 @@ return (
           placeholder="e.g. Travel & Transport"
           value={newCategoryName}
           onChange={(e) => setNewCategoryName(e.target.value)}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-10 border-primary/20 bg-background/50"
           required
         />
       </div>
@@ -1098,7 +1098,7 @@ return (
           placeholder="e.g. 500"
           value={newCategoryBudget}
           onChange={(e) => setNewCategoryBudget(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-10 border-primary/20 bg-background/50"
           required
         />
       </div>
@@ -1108,7 +1108,7 @@ return (
           id="cat-new-group"
           value={newCategoryGroup}
           onChange={(e) => setNewCategoryGroup(e.target.value as 'needs' | 'wants' | 'savings')}
-          className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-10 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
           <option value="needs">Needs</option>
           <option value="wants">Wants</option>
@@ -1122,18 +1122,18 @@ return (
           placeholder="e.g. 🍔 (Leave blank for default)"
           value={newCategoryEmoji}
           onChange={(e) => setNewCategoryEmoji(e.target.value)}
-          className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
+          className="rounded-lg h-10 border-primary/20 bg-background/50 text-center text-lg"
         />
       </div>
       <DialogFooter className="pt-4 gap-2 sm:gap-0">
-        <Button variant="outline" type="button" onClick={() => setIsAddCategoryOpen(false)} className="rounded-xl">Cancel</Button>
-        <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Category</Button>
+        <Button variant="outline" type="button" onClick={() => setIsAddCategoryOpen(false)} className="rounded-lg">Cancel</Button>
+        <Button type="submit" className="rounded-lg bg-primary text-primary-foreground">Save Category</Button>
       </DialogFooter>
     </form>
   </DialogContent>
 </Dialog>
 <Dialog open={isEditCategoryOpen} onOpenChange={setIsEditCategoryOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Budget Category</DialogTitle>
       <DialogDescription className="text-xs text-muted-foreground font-mono">Modify the name or limit for this budget category.</DialogDescription>
@@ -1145,7 +1145,7 @@ return (
           id="cat-edit-name"
           value={newCategoryName}
           onChange={(e) => setNewCategoryName(e.target.value)}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-10 border-primary/20 bg-background/50"
           required
         />
       </div>
@@ -1157,7 +1157,7 @@ return (
           step="0.01"
           value={newCategoryBudget}
           onChange={(e) => setNewCategoryBudget(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-          className="rounded-xl h-10 border-primary/20 bg-background/50"
+          className="rounded-lg h-10 border-primary/20 bg-background/50"
           required
         />
       </div>
@@ -1167,7 +1167,7 @@ return (
           id="cat-edit-group"
           value={newCategoryGroup}
           onChange={(e) => setNewCategoryGroup(e.target.value as 'needs' | 'wants' | 'savings')}
-          className="flex w-full rounded-xl border border-primary/20 bg-background/50 h-10 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-10 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
           <option value="needs">Needs</option>
           <option value="wants">Wants</option>
@@ -1181,18 +1181,18 @@ return (
           placeholder="e.g. 🍔"
           value={newCategoryEmoji}
           onChange={(e) => setNewCategoryEmoji(e.target.value)}
-          className="rounded-xl h-10 border-primary/20 bg-background/50 text-center text-lg"
+          className="rounded-lg h-10 border-primary/20 bg-background/50 text-center text-lg"
         />
       </div>
       <DialogFooter className="pt-4 gap-2 sm:gap-0">
-        <Button variant="outline" type="button" onClick={() => { setIsEditCategoryOpen(false); setActiveCategoryId(null); }} className="rounded-xl">Cancel</Button>
-        <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
+        <Button variant="outline" type="button" onClick={() => { setIsEditCategoryOpen(false); setActiveCategoryId(null); }} className="rounded-lg">Cancel</Button>
+        <Button type="submit" className="rounded-lg bg-primary text-primary-foreground">Save Changes</Button>
       </DialogFooter>
     </form>
   </DialogContent>
 </Dialog>
 <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Add Budget Item</DialogTitle>
       <DialogDescription className="text-xs text-muted-foreground font-mono">Add a new specific item inside the selected category.</DialogDescription>
@@ -1240,7 +1240,7 @@ return (
                 maxLength={60}
                 value={newBudgetItem.provider}
                 onChange={(e) => setNewBudgetItem({ ...newBudgetItem, provider: e.target.value })}
-                className="rounded-xl h-10 border-primary/20 bg-background/50"
+                className="rounded-lg h-10 border-primary/20 bg-background/50"
               />
             </div>
           )}
@@ -1253,13 +1253,13 @@ return (
               placeholder="e.g. 45"
               value={newBudgetItem.spent}
               onChange={(e) => setNewBudgetItem({ ...newBudgetItem, spent: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-              className="rounded-xl h-10 border-primary/20 bg-background/50"
+              className="rounded-lg h-10 border-primary/20 bg-background/50"
               required
             />
           </div>
           <DialogFooter className="pt-4 gap-2 sm:gap-0">
-            <Button variant="outline" type="button" onClick={() => setIsAddItemOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Item</Button>
+            <Button variant="outline" type="button" onClick={() => setIsAddItemOpen(false)} className="rounded-lg">Cancel</Button>
+            <Button type="submit" className="rounded-lg bg-primary text-primary-foreground">Save Item</Button>
           </DialogFooter>
         </form>
       );
@@ -1267,7 +1267,7 @@ return (
   </DialogContent>
 </Dialog>
 <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}>
-  <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-sm p-6 font-mono">
+  <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-sm p-6 font-mono">
     <DialogHeader>
       <DialogTitle className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">Edit Budget Item</DialogTitle>
       <DialogDescription className="text-xs text-muted-foreground font-mono">Modify values for this specific budget item.</DialogDescription>
@@ -1280,7 +1280,7 @@ return (
             id="edit-item-name"
             value={activeBudgetItem.name}
             onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, name: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-10 border-primary/20 bg-background/50"
             required
           />
         </div>
@@ -1292,7 +1292,7 @@ return (
             maxLength={60}
             value={activeBudgetItem.provider ?? ''}
             onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, provider: e.target.value })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-10 border-primary/20 bg-background/50"
           />
         </div>
         <div className="space-y-1">
@@ -1303,13 +1303,13 @@ return (
             step="0.01"
             value={activeBudgetItem.spent}
             onChange={(e) => setActiveBudgetItem({ ...activeBudgetItem, spent: parseFloat(e.target.value) || 0 })}
-            className="rounded-xl h-10 border-primary/20 bg-background/50"
+            className="rounded-lg h-10 border-primary/20 bg-background/50"
             required
           />
         </div>
         <DialogFooter className="pt-4 gap-2 sm:gap-0">
-          <Button variant="outline" type="button" onClick={() => setIsEditItemOpen(false)} className="rounded-xl">Cancel</Button>
-          <Button type="submit" className="rounded-xl bg-primary text-primary-foreground">Save Changes</Button>
+          <Button variant="outline" type="button" onClick={() => setIsEditItemOpen(false)} className="rounded-lg">Cancel</Button>
+          <Button type="submit" className="rounded-lg bg-primary text-primary-foreground">Save Changes</Button>
         </DialogFooter>
       </form>
     )}

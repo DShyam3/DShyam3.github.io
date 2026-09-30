@@ -116,7 +116,7 @@ export function ExperienceDialog({ open, onOpenChange, onSave, initialData }: Ex
             <Input type="number" value={formData.order} onChange={e => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })} />
           </div>
           <DialogFooter>
-            <Button type="submit" className="w-full rounded-xl">Save Changes</Button>
+            <Button type="submit" className="w-full rounded-lg">Save Changes</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -203,7 +203,7 @@ export function EducationDialog({ open, onOpenChange, onSave, initialData }: Edu
             <Input type="number" value={formData.order} onChange={e => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })} />
           </div>
           <DialogFooter>
-            <Button type="submit" className="w-full rounded-xl">Save Changes</Button>
+            <Button type="submit" className="w-full rounded-lg">Save Changes</Button>
           </DialogFooter>
         </form>
       </DialogContent>

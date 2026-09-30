@@ -66,7 +66,7 @@ export const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:rounded-xl border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="sm:rounded-lg border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader className="text-left">
           <DialogTitle className="font-mono text-lg font-bold">Add Recurring Bill</DialogTitle>
           <DialogDescription className="text-xs font-mono text-muted-foreground">

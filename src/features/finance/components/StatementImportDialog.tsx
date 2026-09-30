@@ -187,7 +187,7 @@ export function StatementImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="sm:rounded-xl border border-border/40 bg-card max-w-3xl p-6 font-mono">
+      <DialogContent className="sm:rounded-lg border border-border/40 bg-card max-w-3xl p-6 font-mono">
         <DialogHeader>
           <DialogTitle className="text-sm uppercase tracking-wider font-semibold text-foreground flex items-center gap-2">
             <FileUp className="h-4 w-4 text-primary" /> Import bank statement

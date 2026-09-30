@@ -129,7 +129,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
       </div>
 
       {trackedExceedsTotal && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-xs font-mono flex items-start gap-2.5">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-lg p-4 text-xs font-mono flex items-start gap-2.5">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <div>
             <p className="font-semibold mb-0.5">Over-allocated Schedule</p>
@@ -144,7 +144,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Sliders */}
         <div className="lg:col-span-5 flex flex-col gap-4">
-          <Card className="bg-card/50 border border-border/40 rounded-xl hover:border-border/80 transition-colors shadow-none">
+          <Card className="bg-card/50 border border-border/40 rounded-lg hover:border-border/80 transition-colors shadow-none">
             <CardHeader className="pb-4">
               <CardTitle className="text-xs font-mono uppercase tracking-wider font-semibold">Lifestyle Parameters</CardTitle>
               <CardDescription className="text-xs font-mono text-muted-foreground">
@@ -297,7 +297,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           </Card>
 
           {/* Linked settings card */}
-          <Card className="bg-card/40 border border-border/40 rounded-xl p-4 text-xs font-mono space-y-2.5 shadow-none">
+          <Card className="bg-card/40 border border-border/40 rounded-lg p-4 text-xs font-mono space-y-2.5 shadow-none">
             <div className="font-semibold text-foreground flex items-center gap-1.5">
               <span>💼</span> Inherited Work Profile
             </div>
@@ -323,7 +323,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
         {/* Right Column: Visualization & Table */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           {/* Visual Charts Card */}
-          <Card className="bg-card/50 border border-border/40 rounded-xl p-4 sm:p-6 space-y-6 hover:border-border/80 transition-colors shadow-none">
+          <Card className="bg-card/50 border border-border/40 rounded-lg p-4 sm:p-6 space-y-6 hover:border-border/80 transition-colors shadow-none">
             <div className="flex flex-col md:flex-row items-center justify-around gap-6">
               {/* Donut Chart */}
               <div className="w-44 h-44 flex items-center justify-center relative shrink-0">
@@ -375,7 +375,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
               {/* Top Highlights */}
               <div className="flex-1 space-y-4 w-full">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                  <div className="bg-card/40 border border-border/40 rounded-lg p-3.5 text-center space-y-1">
                     <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-1))]" /> Free Time
                     </span>
@@ -384,7 +384,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                     </span>
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">{pct_relaxing.toFixed(1)}% of year</span>
                   </div>
-                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                  <div className="bg-card/40 border border-border/40 rounded-lg p-3.5 text-center space-y-1">
                     <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-3))]" /> Sleep
                     </span>
@@ -393,7 +393,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                     </span>
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">{pct_sleep.toFixed(1)}% of year</span>
                   </div>
-                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                  <div className="bg-card/40 border border-border/40 rounded-lg p-3.5 text-center space-y-1">
                     <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-2))]" /> Work
                     </span>
@@ -402,7 +402,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
                     </span>
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">{pct_hours_work.toFixed(1)}% of year</span>
                   </div>
-                  <div className="bg-card/40 border border-border/40 rounded-xl p-3.5 text-center space-y-1">
+                  <div className="bg-card/40 border border-border/40 rounded-lg p-3.5 text-center space-y-1">
                     <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" /> Other Activities
                     </span>
@@ -470,7 +470,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
           </Card>
 
           {/* Detailed Statistics Table */}
-          <Card className="bg-card/50 border border-border/40 rounded-xl p-4 sm:p-6 hover:border-border/80 transition-colors shadow-none font-mono">
+          <Card className="bg-card/50 border border-border/40 rounded-lg p-4 sm:p-6 hover:border-border/80 transition-colors shadow-none font-mono">
             <h4 className="text-xs uppercase tracking-wider font-semibold text-foreground mb-4 flex items-center gap-1.5">
               Complete Time Metrics Breakdown
             </h4>

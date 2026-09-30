@@ -408,7 +408,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
           className="min-w-0 space-y-4 px-6 pb-1"
         >
           <fieldset disabled={saving || uploading} className="min-w-0 space-y-4">
-          {saveError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{saveError}</p>}
+          {saveError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{saveError}</p>}
           {mode === 'add' && config.externalSearch && (
             <ExternalSearchField
               search={config.externalSearch}

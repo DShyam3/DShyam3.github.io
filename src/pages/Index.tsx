@@ -215,7 +215,7 @@ const Index = () => {
                 {expLoading || eduLoading ? (
                   <div className="space-y-6">
                     {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-20 w-full rounded-xl" />
+                      <Skeleton key={i} className="h-20 w-full rounded-lg" />
                     ))}
                   </div>
                 ) : (
