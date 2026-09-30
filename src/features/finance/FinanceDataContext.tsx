@@ -33,18 +33,14 @@ import type {
 } from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { normalizeHolidays, type StudentLoanPlanKey } from '@/lib/finance';
+import { normalizeHolidays } from '@/lib/finance';
 import {
-  asAccountType,
   asBudgetGroup,
   asBureauKey,
-  asDebtType,
   asInvestmentCategory,
   asFrequency,
-  asHalfDay,
   asPensionType,
   asStudentLoanPlan,
-  asMembershipType,
   asPaydaySchedule,
   asUkRegion,
   fromJsonb,
@@ -60,9 +56,7 @@ import type {
   CategoryPreset,
   CreditScores,
   Debt,
-  DebtDraw,
   DebtObservation,
-  RatePeriod,
   FinanceSettings,
   Goal,
   InvestmentActivity,
@@ -92,17 +86,42 @@ import {
 import { selectTaxConfigForDate } from './finance-calcs';
 import {
   ALL_GUARDED_SAVE_KEYS,
-  differsFromSaved,
+  changedColumns,
   inChunks,
   latestOwnRow,
+  listGenerationOf,
   materialiseBudgetForProfile,
   materialiseRecurringsForProfile,
-  listPredatesLoad,
+  planRowDeletes,
   planRowWrites,
+  orderUpdates,
+  recordSeen,
   rowsToWrite,
   saveKeysBlockedBy,
+  scopeToProfile,
   type StoredRow,
 } from './save-safety';
+import {
+  bankAccountFromRow,
+  bankAccountRow,
+  contributionFromRow,
+  contributionRow,
+  contributionsOf,
+  creditScoreFromRow,
+  creditScoreRow,
+  debtFromRow,
+  debtRow,
+  goalFromRow,
+  goalRow,
+  holidayFromRow,
+  holidayRow,
+  membershipFromRow,
+  membershipRow,
+  scoresOf,
+  transactionFromRow,
+  transactionRow,
+  type ScoreOfBureau,
+} from './finance-rows';
 
 export type BreakdownRateMode = 'normal' | 'including_leave' | 'excluding_leave';
 export type PayslipSaveOutcome = 'saved' | 'failed' | 'unknown';
@@ -414,12 +433,16 @@ function useProvideFinanceData() {
   // The profile whose rows are on screen. A refresh of the same profile (after
   // a bank sync, an import) leaves its rows saveable; a switch does not.
   const lastLoadedProfileRef = useRef<string | null>(null);
-  // For the tables the bank sync also writes: the row objects this page read
-  // from, or last wrote to, the database, each with the number of the load
-  // it belongs to. An edit replaces the row it changes with a copy, so a save
-  // writes only rows missing from here (rowsToWrite); a list still holding an
-  // object from an earlier load was built before the latest one.
+  // For the tables saved row by row: the row objects this page read from, or
+  // last wrote to, the database, each with the number of the load it belongs
+  // to. An edit replaces the row it changes with a copy, so a save writes
+  // only rows missing from here (rowsToWrite).
   const storedRowObjectsRef = useRef(new WeakMap<object, number>());
+  // Every object a load put on screen, with its load: also nested rows (a
+  // goal's contributions, a bureau's scores) and rows shown from the shared
+  // defaults, which are not stored rows. A list still holding one from an
+  // earlier load was built before the latest one (listGenerationOf).
+  const loadedObjectsRef = useRef(new WeakMap<object, number>());
   // Per table and profile: how many loads have recorded its rows.
   const loadGenerationRef = useRef(new Map<string, number>());
   // The same rows by table and id, as last read or written, with their owner:
@@ -1193,6 +1216,12 @@ function useProvideFinanceData() {
   /* ---- Debt Observations (7.N) ------------------------------------------- */
   const addDebtObservation = async (observation: Omit<DebtObservation, 'id' | 'createdAt'>) => {
     if (!isAdmin || !profileId) return;
+    // A debt shown from the shared defaults is not yet a row of this
+    // profile's, and an observation's debt_id must name one: save the debts
+    // first, which inserts this profile's copies.
+    if (!storedRowsRef.current.get('finance_debts')?.has(observation.debtId)) {
+      if (!(await saveDataToSupabase('accounts', { debts }))) return;
+    }
     const id = 'dobs_' + Date.now();
     const created: DebtObservation = {
       ...observation,
@@ -1331,24 +1360,6 @@ function useProvideFinanceData() {
         // the read below includes them.
         for (const flush of beforeLoadFlushesRef.current) flush();
         await Promise.all(saveChainsRef.current.values());
-        // course_end_date arrived in a later migration. Ask for it, and fall
-        // back to the older column list against a database that has not had
-        // it applied (42703: undefined column), so debts still load rather
-        // than the whole query failing.
-        const debtColumns = 'id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color';
-        const loadDebts = async () => {
-          const withCourseEnd = await scoped(supabase.from('finance_debts').select(`${debtColumns}, course_end_date`));
-          if (withCourseEnd.error?.code !== '42703') return withCourseEnd;
-          return scoped(supabase.from('finance_debts').select(debtColumns));
-        };
-        // half_day likewise arrived later; without it leave loads as full days.
-        const holidayColumns = 'id, is_default, start_date, end_date, occasion, count, type';
-        const loadHolidays = async () => {
-          const withHalfDay = await scoped(supabase.from('finance_user_holidays').select(`${holidayColumns}, half_day`));
-          if (withHalfDay.error?.code !== '42703') return withHalfDay;
-          return scoped(supabase.from('finance_user_holidays').select(holidayColumns));
-        };
-
         const [
           settingsRes,
           userHolidaysRes,
@@ -1373,14 +1384,14 @@ function useProvideFinanceData() {
           selfProfileRes
         ] = await Promise.all([
           scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, updated_at')),
-          loadHolidays(),
+          scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count, type, half_day')),
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
           scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
           scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, credit_limit, use_case, emoji, color')),
           scopedByProfile(supabase.from('finance_investment_holdings').select('id, account_id, name, ticker, shares, avg_price, cost_basis_known, current_price, current_price_known, category')),
           scopedByProfile(supabase.from('finance_investment_activities').select('id, account_id, provider, activity_type, occurred_on, name, ticker, quantity, unit_price_gbp, source_reference').order('occurred_on', { ascending: false })),
           scoped(supabase.from('finance_memberships').select('id, is_default, name, type, status, annual_fee, use_case')),
-          loadDebts(),
+          scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, course_end_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color')),
           scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
@@ -1457,20 +1468,21 @@ function useProvideFinanceData() {
 
         const userHolidaysList = userHolidaysRes.data?.filter(d => !d.is_default) || [];
         const defaultHolidaysList = userHolidaysRes.data?.filter(d => d.is_default) || [];
-        const holidays = userHolidaysList.length > 0 ? userHolidaysList : defaultHolidaysList;
+        const holidaysOwned = userHolidaysList.length > 0;
+        const holidays = holidaysOwned ? userHolidaysList : defaultHolidaysList;
 
-        const mappedHolidays: UserHoliday[] = holidays.map(h => {
-          const halfDay = asHalfDay((h as { half_day?: string | null }).half_day);
-          return {
-            id: h.id,
-            startDate: h.start_date,
-            endDate: h.end_date,
-            occasion: h.occasion || '',
-            count: Number(h.count) || 0,
-            type: (h.type as 'holiday' | 'sick') || 'holiday',
-            ...(halfDay ? { halfDay } : {})
-          };
-        });
+        // Rows shown from the shared defaults get ids of this profile's own,
+        // so its first save copies them (scopeToProfile); the same for goals,
+        // memberships, debts and credit scores below.
+        const mappedHolidays: UserHoliday[] = scopeToProfile(holidays.map(h => holidayFromRow(h)), holidaysOwned, profileId);
+        if (!userHolidaysRes.error) {
+          rememberStoredRows('finance_user_holidays', holidaysOwned ? mappedHolidays : [], h => holidayRow(h, profileId), profileId, true);
+          markLoaded('finance_user_holidays', mappedHolidays);
+          // Set whether or not a settings row loaded: leave saved against a
+          // list this load did not put on screen would read as deleting every
+          // holiday it lacks.
+          setSettings(prev => ({ ...prev, holidaysByUser: mappedHolidays }));
+        }
 
         if (activeSettings) {
           const loadedSettings: FinanceSettings = {
@@ -1492,7 +1504,6 @@ function useProvideFinanceData() {
             paydayWeekday: activeSettings.payday_weekday !== null ? activeSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: activeSettings.active_savings_types ?? [],
-            holidaysByUser: mappedHolidays
           };
           setSettings(prev => ({
             ...prev,
@@ -1506,57 +1517,40 @@ function useProvideFinanceData() {
 
         const userGoals = goalsRes.data?.filter(d => !d.is_default) || [];
         const defaultGoals = goalsRes.data?.filter(d => d.is_default) || [];
-        const activeGoals = userGoals.length > 0 ? userGoals : defaultGoals;
+        const goalsOwned = userGoals.length > 0;
+        const activeGoals = goalsOwned ? userGoals : defaultGoals;
         const activeContributions = contributionsRes.data || [];
 
-        const mappedGoals: Goal[] = activeGoals.map(g => {
-          const goalContribs = activeContributions
+        const mappedGoals: Goal[] = scopeToProfile(activeGoals.map(g => goalFromRow(g, scopeToProfile(
+          activeContributions
             .filter(c => c.goal_id === g.id && c.is_default === g.is_default)
-            .map(c => ({
-              id: c.id,
-              amount: Number(c.amount) || 0,
-              date: c.date,
-              note: c.note || undefined,
-              bankAccountId: c.bank_account_id || undefined
-            }));
-          return {
-            id: g.id,
-            name: g.name,
-            targetAmount: Number(g.target_amount) || 0,
-            currentAmount: Number(g.current_amount) || 0,
-            targetDate: g.target_date || '',
-            isEmergencyFund: g.is_emergency_fund ?? false,
-            monthlyContribution: Number(g.monthly_contribution ?? 0),
-            startDate: g.start_date || undefined,
-            status: (g.status as 'active' | 'archived') || 'active',
-            emoji: g.emoji || undefined,
-            contributions: goalContribs
-          };
-        });
+            .map(c => contributionFromRow(c)),
+          goalsOwned,
+          profileId,
+        ))), goalsOwned, profileId);
+        // A transaction linked to a shared goal follows it to this profile's copy.
+        const goalIdFor = new Map(activeGoals.map((g, at) => [g.id, mappedGoals[at].id]));
         if (!goalsRes.error && !contributionsRes.error) {
           setGoals(mappedGoals);
           if (mappedGoals.length > 0) setSelectedGoalId(mappedGoals[0].id);
+          rememberStoredRows('finance_goals', goalsOwned ? mappedGoals : [], g => goalRow(g, profileId), profileId, true);
+          rememberStoredRows('finance_goal_contributions', goalsOwned ? contributionsOf(mappedGoals) : [], c => contributionRow(c, profileId), profileId, true);
+          markLoaded('finance_goals', mappedGoals);
+          markLoaded('finance_goal_contributions', mappedGoals.flatMap(g => g.contributions));
         }
 
         const userAccounts = bankAccountsRes.data?.filter(d => !d.is_default) || [];
         const defaultAccounts = bankAccountsRes.data?.filter(d => d.is_default) || [];
         const activeAccounts = userAccounts.length > 0 ? userAccounts : defaultAccounts;
 
-        const mappedBankAccounts: BankAccount[] = activeAccounts.map(a => ({
-          id: a.id,
-          name: a.name,
-          type: asAccountType(a.type),
-          issuer: a.issuer || '',
-          balance: Number(a.balance) || 0,
-          annualFee: Number(a.annual_fee) || 0,
-          creditLimit: a.credit_limit === null ? null : Number(a.credit_limit),
-          useCase: a.use_case || undefined,
-          emoji: a.emoji || undefined,
-          color: a.color || undefined
-        }));
+        // Shared bank accounts keep their ids: transactions, contributions,
+        // budget items and bills link to them, so a copy would orphan those
+        // links. They are stored as shared, and edits to them are refused.
+        const mappedBankAccounts: BankAccount[] = activeAccounts.map(a => bankAccountFromRow(a));
         if (!bankAccountsRes.error) {
           setBankAccounts(mappedBankAccounts);
-          rememberStoredRows('finance_bank_accounts', mappedBankAccounts, bankAccountRow, userAccounts.length > 0 ? profileId : null, true);
+          rememberStoredRows('finance_bank_accounts', mappedBankAccounts, a => bankAccountRow(a, profileId), userAccounts.length > 0 ? profileId : null, true);
+          markLoaded('finance_bank_accounts', mappedBankAccounts);
         }
 
         const mappedInvestmentHoldings: InvestmentHolding[] = (investmentHoldingsRes.data ?? []).map(holding => ({
@@ -1589,17 +1583,15 @@ function useProvideFinanceData() {
 
         const userMemberships = membershipsRes.data?.filter(d => !d.is_default) || [];
         const defaultMemberships = membershipsRes.data?.filter(d => d.is_default) || [];
-        const activeMemberships = userMemberships.length > 0 ? userMemberships : defaultMemberships;
+        const membershipsOwned = userMemberships.length > 0;
+        const activeMemberships = membershipsOwned ? userMemberships : defaultMemberships;
 
-        const mappedMemberships: Membership[] = activeMemberships.map(m => ({
-          id: m.id,
-          name: m.name,
-          type: asMembershipType(m.type),
-          status: m.status || '',
-          annualFee: Number(m.annual_fee) || 0,
-          useCase: m.use_case || undefined
-        }));
-        if (!membershipsRes.error) setMemberships(mappedMemberships);
+        const mappedMemberships: Membership[] = scopeToProfile(activeMemberships.map(m => membershipFromRow(m)), membershipsOwned, profileId);
+        if (!membershipsRes.error) {
+          setMemberships(mappedMemberships);
+          rememberStoredRows('finance_memberships', membershipsOwned ? mappedMemberships : [], m => membershipRow(m, profileId), profileId, true);
+          markLoaded('finance_memberships', mappedMemberships);
+        }
 
         const mappedObservations: DebtObservation[] = (debtObservationsRes.data || []).map(o => ({
           id: o.id,
@@ -1615,51 +1607,40 @@ function useProvideFinanceData() {
 
         const userDebts = debtsRes.data?.filter(d => !d.is_default) || [];
         const defaultDebts = debtsRes.data?.filter(d => d.is_default) || [];
-        const activeDebts = userDebts.length > 0 ? userDebts : defaultDebts;
+        const debtsOwned = userDebts.length > 0;
+        const activeDebts = debtsOwned ? userDebts : defaultDebts;
 
-        const mappedDebts: Debt[] = activeDebts.map(d => {
+        const mappedDebts: Debt[] = scopeToProfile(activeDebts.map(d => {
           const debtObs = mappedObservations.filter(o => o.debtId === d.id);
           const latestObs = debtObs.length > 0
             ? [...debtObs].sort((a, b) => (a.statementDate || a.observedOn).localeCompare(b.statementDate || b.observedOn)).pop()
             : undefined;
-
-          return {
-            id: d.id,
-            name: d.name,
-            type: asDebtType(d.type),
-            lender: d.lender || '',
-            originalAmount: Number(d.original_amount) || 0,
-            balance: latestObs ? latestObs.balance : (Number(d.balance) || 0),
-            interestRate: Number(d.interest_rate) || 0,
-            minPayment: Number(d.min_payment) || 0,
-            startDate: d.start_date || undefined,
-            // Absent when loaded through the pre-migration fallback above.
-            courseEndDate: (d as { course_end_date?: string | null }).course_end_date || undefined,
-            payoffDate: d.payoff_date || undefined,
-            repaymentType: (d.repayment_type as Debt['repaymentType']) || 'amortising',
-            studentLoanPlan: (d.student_loan_plan as StudentLoanPlanKey) || undefined,
-            writeOffYears: d.write_off_years ?? undefined,
-            draws: Array.isArray(d.draws) ? (d.draws as unknown as DebtDraw[]) : [],
-            ratePeriods: Array.isArray(d.rate_periods) ? (d.rate_periods as unknown as RatePeriod[]) : [],
-            finalPayment: Number(d.final_payment) || 0,
-            observations: debtObs,
-            notes: d.notes || undefined,
-            emoji: d.emoji || undefined,
-            color: d.color || undefined,
-          };
-        });
-        if (!debtsRes.error) setDebts(mappedDebts);
+          const debt = debtFromRow(d);
+          return { ...debt, balance: latestObs ? latestObs.balance : debt.balance, observations: debtObs };
+        }), debtsOwned, profileId);
+        if (!debtsRes.error) {
+          setDebts(mappedDebts);
+          rememberStoredRows('finance_debts', debtsOwned ? mappedDebts : [], d => debtRow(d, profileId), profileId, true);
+          markLoaded('finance_debts', mappedDebts);
+        }
 
         const userCreditScores = creditScoresRes.data?.filter(d => !d.is_default) || [];
         const defaultCreditScores = creditScoresRes.data?.filter(d => d.is_default) || [];
-        const activeCreditScores = userCreditScores.length > 0 ? userCreditScores : defaultCreditScores;
+        const scoresOwned = userCreditScores.length > 0;
+        const activeCreditScores = scoresOwned ? userCreditScores : defaultCreditScores;
 
+        const scoresFor = (bureau: string) =>
+          scopeToProfile(activeCreditScores.filter(s => s.bureau === bureau).map(s => creditScoreFromRow(s)), scoresOwned, profileId);
         const scoresObj: CreditScores = {
-          experian: activeCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score, storagePath: s.storage_path ?? undefined })),
-          transunion: activeCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score, storagePath: s.storage_path ?? undefined })),
-          equifax: activeCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score, storagePath: s.storage_path ?? undefined }))
+          experian: scoresFor('experian'),
+          transunion: scoresFor('transunion'),
+          equifax: scoresFor('equifax'),
         };
-        if (!creditScoresRes.error) setCreditScores(scoresObj);
+        if (!creditScoresRes.error) {
+          setCreditScores(scoresObj);
+          rememberStoredRows('finance_credit_scores', scoresOwned ? scoresOf(scoresObj) : [], sc => creditScoreRow(sc, profileId), profileId, true);
+          markLoaded('finance_credit_scores', scoresOf(scoresObj).map(sc => sc.score));
+        }
 
         const userBudgetCats = budgetCategoriesRes.data?.filter(d => !d.is_default && !d.is_template) || [];
         const defaultBudgetCats = budgetCategoriesRes.data?.filter(d => d.is_default && !d.is_template) || [];
@@ -1734,25 +1715,15 @@ function useProvideFinanceData() {
         const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
         const activeTransactions = userTransactions.length > 0 ? userTransactions : defaultTransactions;
 
-        const mappedTransactions: MockTransaction[] = activeTransactions.map(t => ({
-          id: t.id,
-          name: t.name,
-          merchant: t.merchant || undefined,
-          providerCategory: t.provider_category || undefined,
-          category: t.category || '',
-          amount: Number(t.amount) || 0,
-          date: t.date,
-          isReviewed: t.is_reviewed,
-          accountId: t.account_id || t.bank_account_id || undefined,
-          bankAccountId: t.bank_account_id || t.account_id || undefined,
-          goalId: t.goal_id || undefined,
-          notes: t.notes || undefined,
-          tags: t.tags || undefined,
-          isRecurring: t.is_recurring || undefined
-        }));
+        const mappedTransactions: MockTransaction[] = activeTransactions.map(t => {
+          const tx = transactionFromRow(t);
+          const goalId = tx.goalId && goalIdFor.get(tx.goalId);
+          return goalId && goalId !== tx.goalId ? { ...tx, goalId } : tx;
+        });
         if (!transactionsRes.error) {
           setMockTransactions(mappedTransactions);
-          rememberStoredRows('finance_transactions', mappedTransactions, transactionRow, userTransactions.length > 0 ? profileId : null, true);
+          rememberStoredRows('finance_transactions', mappedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
+          markLoaded('finance_transactions', mappedTransactions);
         }
 
         const mapTaxConfig = (row: NonNullable<typeof taxConfigsRes.data>[number]): TaxConfig => ({
@@ -1905,109 +1876,11 @@ function useProvideFinanceData() {
             paydayWeekday: defaultSettings.payday_weekday !== null ? defaultSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: defaultSettings.active_savings_types || [],
-            holidaysByUser: defaultHolidaysList.map(h => ({
-              id: h.id,
-              startDate: h.start_date,
-              endDate: h.end_date,
-              occasion: h.occasion || '',
-              count: Number(h.count) || 0
-            }))
+            // Ids of this profile's own, so a reset saves copies rather than
+            // writing (or deleting) against the shared rows.
+            holidaysByUser: scopeToProfile(defaultHolidaysList.map(h => holidayFromRow(h)), false, profileId),
           };
         }
-        defaultsMap['goals'] = defaultGoals.map(g => ({
-          id: g.id,
-          name: g.name,
-          targetAmount: Number(g.target_amount) || 0,
-          currentAmount: Number(g.current_amount) || 0,
-          targetDate: g.target_date || '',
-          isEmergencyFund: g.is_emergency_fund ?? false,
-          monthlyContribution: Number(g.monthly_contribution ?? 0),
-          startDate: g.start_date || undefined,
-          status: (g.status as 'active' | 'archived') || 'active',
-          emoji: g.emoji || undefined,
-          contributions: activeContributions
-            .filter(c => c.goal_id === g.id && c.is_default)
-            .map(c => ({
-              id: c.id,
-              amount: Number(c.amount) || 0,
-              date: c.date,
-              note: c.note || undefined,
-              bankAccountId: c.bank_account_id || undefined
-            }))
-        }));
-        defaultsMap['accounts'] = {
-          bankAccounts: defaultAccounts.map(a => ({
-            id: a.id,
-            name: a.name,
-            type: asAccountType(a.type),
-            issuer: a.issuer || '',
-            balance: Number(a.balance) || 0,
-            annualFee: Number(a.annual_fee) || 0,
-            creditLimit: a.credit_limit === null ? null : Number(a.credit_limit),
-            useCase: a.use_case || undefined,
-            emoji: a.emoji || undefined,
-            color: a.color || undefined
-          })),
-          memberships: defaultMemberships.map(m => ({
-            id: m.id,
-            name: m.name,
-            type: asMembershipType(m.type),
-            status: m.status || '',
-            annualFee: Number(m.annual_fee) || 0,
-            useCase: m.use_case || undefined
-          })),
-          creditScores: {
-            experian: defaultCreditScores.filter(s => s.bureau === 'experian').map(s => ({ id: s.id, date: s.date, score: s.score })),
-            transunion: defaultCreditScores.filter(s => s.bureau === 'transunion').map(s => ({ id: s.id, date: s.date, score: s.score })),
-            equifax: defaultCreditScores.filter(s => s.bureau === 'equifax').map(s => ({ id: s.id, date: s.date, score: s.score }))
-          }
-        };
-        defaultsMap['budget'] = defaultBudgetCats.map(cat => ({
-          id: cat.id,
-          name: cat.name,
-          budgeted: Number(cat.budgeted) || 0,
-          group: asBudgetGroup(cat.group_type),
-          emoji: cat.emoji || undefined,
-          items: budgetItems
-            .filter(item => item.category_id === cat.id && item.is_default && !item.is_template)
-            .map(item => ({
-              id: item.id,
-              name: item.name,
-              budgeted: Number(item.budgeted) || 0,
-              spent: Number(item.spent) || 0,
-              linkedAccountId: item.linked_account_id || undefined,
-              emoji: item.emoji || undefined
-            }))
-        }));
-        defaultsMap['recurrings'] = defaultRecurrings.map(r => ({
-          id: r.id,
-          name: r.name,
-          amount: Number(r.amount) || 0,
-          dueDate: r.due_date,
-          isPaid: r.is_paid,
-          frequency: asFrequency(r.frequency),
-          dueMonth: r.due_month || undefined,
-          emoji: r.emoji || undefined,
-          category: r.category || undefined,
-          tag: r.tag || undefined,
-          linkedBudgetItemId: r.linked_budget_item_id || undefined,
-          linkedAccountId: r.linked_account_id || undefined
-        }));
-        defaultsMap['transactions'] = defaultTransactions.map(t => ({
-          id: t.id,
-          name: t.name,
-          merchant: t.merchant || undefined,
-          category: t.category || '',
-          amount: Number(t.amount) || 0,
-          date: t.date,
-          isReviewed: t.is_reviewed,
-          accountId: t.account_id || t.bank_account_id || undefined,
-          bankAccountId: t.bank_account_id || t.account_id || undefined,
-          goalId: t.goal_id || undefined,
-          notes: t.notes || undefined,
-          tags: t.tags || undefined,
-          isRecurring: t.is_recurring || undefined
-        }));
         if (defaultTaxConfigs.length > 0) {
           try {
             defaultsMap['tax_config'] = selectTaxConfigForDate(defaultTaxConfigs, todayInLocalTimezone());
@@ -2095,19 +1968,13 @@ function useProvideFinanceData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, profileId]);
 
+  // Only tables still saved whole. A row-saved table (RowTable) is never
+  // pruned: a list may predate rows a sync or another device added.
   type ScopedFinanceTable =
-    | 'finance_bank_accounts'
     | 'finance_budget_categories'
     | 'finance_budget_items'
-    | 'finance_credit_scores'
-    | 'finance_debts'
     | 'finance_investment_holdings'
-    | 'finance_goal_contributions'
-    | 'finance_goals'
-    | 'finance_memberships'
-    | 'finance_recurring_bills'
-    | 'finance_transactions'
-    | 'finance_user_holidays';
+    | 'finance_recurring_bills';
 
   /**
    * Removes this profile's rows that are no longer in `keepIds`.
@@ -2147,60 +2014,28 @@ function useProvideFinanceData() {
     if (error) throw error;
   };
 
-  /*
-   * Rows as stored, one builder per table the sync also writes. The load
-   * records what it read through the same builder a write compares against,
-   * so only columns an edit changed differ.
-   */
-  const transactionRow = (t: MockTransaction) => ({
-    id: t.id,
-    is_default: false,
-    profile_id: profileId,
-    name: t.name,
-    // Round-tripped rather than left to the upsert's defaults: an
-    // omitted column would be fine on conflict but NULLs the row on
-    // an insert, which is how a synced merchant would quietly vanish.
-    merchant: t.merchant || null,
-    // provider_category is left out on purpose: only the sync writes
-    // it, an update leaves an omitted column alone, and a row this
-    // client inserts is manual, so NULL is the right value there.
-    category: t.category || null,
-    amount: t.amount,
-    date: t.date,
-    is_reviewed: t.isReviewed,
-    account_id: t.accountId || t.bankAccountId || null,
-    bank_account_id: t.bankAccountId || t.accountId || null,
-    goal_id: t.goalId || null,
-    notes: t.notes || null,
-    tags: t.tags || null,
-    is_recurring: t.isRecurring || false
-  }) satisfies TablesInsert<'finance_transactions'>;
-
-  const bankAccountRow = (a: BankAccount) => ({
-    id: a.id,
-    is_default: false,
-    profile_id: profileId,
-    name: a.name,
-    type: a.type,
-    issuer: a.issuer || null,
-    balance: a.balance,
-    annual_fee: a.annualFee,
-    credit_limit: a.creditLimit ?? null,
-    use_case: a.useCase || null,
-    emoji: a.emoji || null,
-    color: a.color || null
-  }) satisfies TablesInsert<'finance_bank_accounts'>;
-
-  type SyncedTable = 'finance_transactions' | 'finance_bank_accounts';
+  /** Tables saved row by row, never whole (save-safety.ts). */
+  type RowTable =
+    | 'finance_transactions' | 'finance_bank_accounts'
+    | 'finance_goals' | 'finance_goal_contributions'
+    | 'finance_memberships' | 'finance_debts' | 'finance_credit_scores'
+    | 'finance_user_holidays';
+  const ROW_TABLES: readonly RowTable[] = [
+    'finance_transactions', 'finance_bank_accounts',
+    'finance_goals', 'finance_goal_contributions',
+    'finance_memberships', 'finance_debts', 'finance_credit_scores',
+    'finance_user_holidays',
+  ];
 
   /**
    * Records rows as read or written, owned by `owner` (null: shared). A load
-   * starts a new generation and keeps the row it replaces as `previous`, so a
-   * list built before the load does not write back what it brought in
-   * (planRowWrites).
+   * starts a new generation, and every row keeps its copy per recent
+   * generation, so a list built before a load -- however many loads before --
+   * does not write back what a later load brought in (planRowWrites). A load
+   * also forgets the owner's rows it no longer returns.
    */
-  const rememberStoredRows = <T extends { id: string }>(
-    table: SyncedTable,
+  const rememberStoredRows = <T extends object>(
+    table: RowTable,
     rows: readonly T[],
     toRow: (row: T) => Record<string, unknown>,
     owner: string | null,
@@ -2210,70 +2045,120 @@ function useProvideFinanceData() {
     const generation = (loadGenerationRef.current.get(generationKey) ?? 0) + (fromLoad ? 1 : 0);
     loadGenerationRef.current.set(generationKey, generation);
     const stored = storedRowsRef.current.get(table) ?? new Map<string, StoredRow>();
+    const returned = new Set<string>();
     for (const row of rows) {
+      const asStored = toRow(row);
+      const id = asStored.id as string;
+      const known = stored.get(id);
+      returned.add(id);
       storedRowObjectsRef.current.set(row, generation);
-      const previous = fromLoad ? stored.get(row.id)?.row : undefined;
-      stored.set(row.id, { profileId: owner, row: toRow(row), previous });
+      stored.set(id, {
+        profileId: owner,
+        row: asStored,
+        firstSeen: known?.firstSeen ?? generation,
+        seen: recordSeen(known?.seen ?? [], generation, asStored),
+      });
+    }
+    if (fromLoad) {
+      for (const [id, known] of stored) {
+        if (known.profileId === profileId && !returned.has(id)) stored.delete(id);
+      }
     }
     storedRowsRef.current.set(table, stored);
   };
 
   /** Restarts the deadline of the save running for `table`'s key. */
-  const markSaveProgress = (table: SyncedTable) => saveProgressRef.current.get(SAVE_KEY_OF[table])?.();
+  const markSaveProgress = (table: RowTable) => saveProgressRef.current.get(SAVE_KEY_OF[table])?.();
+
+  const loadGenerationOf = (table: RowTable) => loadGenerationRef.current.get(`${table}:${profileId}`) ?? 0;
+
+  /** Records what a load of `table` put on screen, for listGenerationOf. */
+  const markLoaded = (table: RowTable, objects: readonly object[]) => {
+    const generation = loadGenerationOf(table);
+    for (const object of objects) loadedObjectsRef.current.set(object, generation);
+  };
 
   /**
-   * Writes the rows an edit replaced, in a collection the bank sync also
-   * writes. Never "make the table equal this list": the list may predate rows
-   * the sync added or changed since. Known rows get only their changed
-   * columns, by id and profile; new rows are inserted; deletes go through
-   * deleteFinanceRows, by id (planRowWrites).
+   * Writes a table saved row by row. Never "make the table equal this list":
+   * the list may predate rows a sync or another device added or changed
+   * since. Known rows get only their changed columns, by id and profile; new
+   * rows are inserted. `deleteMissing` deletes the rows the list was built
+   * from and no longer holds (planRowDeletes); otherwise deletes go through
+   * deleteFinanceRows, by id. `asLoaded` runs a stored row through the
+   * load's mapping, so a row found already saved is compared as the page
+   * would show it. `loadedAs` names the object a load produced for a row the
+   * list wraps (a contribution inside its goal). `releases` marks a patch
+   * that frees a unique slot, sent before patches that may take it.
    */
-  const loadGenerationOf = (table: SyncedTable) => loadGenerationRef.current.get(`${table}:${profileId}`) ?? 0;
-
-  const writeEditedRows = async <T extends { id: string }>(
-    table: SyncedTable,
+  const writeEditedRows = async <T extends object>(
+    table: RowTable,
     rows: readonly T[],
     toRow: (row: T) => Record<string, unknown>,
     requestedAtGeneration: number,
+    { deleteMissing = false, asLoaded, loadedAs, releases }: {
+      deleteMissing?: boolean;
+      asLoaded?: (saved: Record<string, unknown>) => Record<string, unknown>;
+      loadedAs?: (row: T) => object;
+      releases?: (patch: Record<string, unknown>) => boolean;
+    } = {},
   ) => {
     if (!profileId) return;
-    const edited = rowsToWrite(rows, row => storedRowObjectsRef.current.has(row));
-    if (edited.length === 0) return;
-    const byId = new Map(edited.map(row => [row.id, row]));
+    const owner = profileId;
     const stored = storedRowsRef.current.get(table) ?? new Map<string, StoredRow>();
+    storedRowsRef.current.set(table, stored);
     const generation = loadGenerationOf(table);
-    // Stale if it still holds an object from an earlier load, or if a load
-    // landed between asking for this save and its turn in the queue (a list
-    // of edited copies alone carries no load of its own).
-    const staleList = requestedAtGeneration < generation
-      || listPredatesLoad(rows, row => storedRowObjectsRef.current.get(row), generation);
+    // The load the list was built in: the oldest load any of its unedited
+    // rows came from, or when the save was asked for (a list of edited copies
+    // alone carries no load of its own).
+    const listGeneration = listGenerationOf(
+      rows,
+      row => loadedObjectsRef.current.get(loadedAs ? loadedAs(row) : row) ?? storedRowObjectsRef.current.get(row),
+      requestedAtGeneration,
+    );
+    const edited = rowsToWrite(rows, row => storedRowObjectsRef.current.has(row));
+    const deletes = deleteMissing
+      ? planRowDeletes(new Set(rows.map(row => toRow(row).id as string)), stored, owner, listGeneration)
+      : [];
+    if (edited.length === 0 && deletes.length === 0) return;
+    const byId = new Map(edited.map(row => [toRow(row).id as string, row]));
     const { inserts, updates, notOwned } = planRowWrites(
-      edited.map(row => ({ id: row.id, row: toRow(row) })),
+      [...byId].map(([id, row]) => ({ id, row: toRow(row) })),
       stored,
-      profileId,
-      staleList,
+      owner,
+      listGeneration,
+      generation,
     );
     const rejected = [...notOwned];
 
-    // Inserted or fully rewritten rows are stored whole.
-    const rememberWhole = (ids: Iterable<string>) => rememberStoredRows(
-      table,
-      [...ids].flatMap(id => byId.get(id) ?? []),
-      toRow,
-      profileId,
-    );
+    // A load that landed while this save ran has recorded newer rows than the
+    // ones sent here; what it recorded stands, and the next load settles it.
+    const stillCurrent = () => loadGenerationOf(table) === generation;
+    const record = (id: string, row: T | undefined, asStored: Record<string, unknown>) => {
+      const known = stored.get(id);
+      if (row) storedRowObjectsRef.current.set(row, generation);
+      stored.set(id, {
+        profileId: owner,
+        row: asStored,
+        firstSeen: known?.firstSeen ?? generation,
+        seen: recordSeen(known?.seen ?? [], generation, asStored),
+      });
+    };
+    // Inserted rows are stored whole.
+    const rememberWhole = (ids: Iterable<string>) => {
+      if (!stillCurrent()) return;
+      for (const id of ids) {
+        const row = byId.get(id);
+        if (row) record(id, row, toRow(row));
+      }
+    };
     // An updated row is stored as it was plus what was sent: a column left out
     // as stale still holds the database's value, so a later edit back to the
     // old value differs from it and is sent.
     const rememberPatched = (ids: Iterable<string>, patch: Record<string, unknown>) => {
+      if (!stillCurrent()) return;
       for (const id of ids) {
-        const row = byId.get(id);
         const known = stored.get(id);
-        if (!row || !known) continue;
-        storedRowObjectsRef.current.set(row, generation);
-        // `previous` kept: a list that is still stale must still not write
-        // back what the last load brought in.
-        stored.set(id, { profileId, row: { ...known.row, ...patch }, previous: known.previous });
+        if (known) record(id, byId.get(id), { ...known.row, ...patch });
       }
     };
 
@@ -2283,7 +2168,7 @@ function useProvideFinanceData() {
       const taken: string[] = [];
       for (const chunk of inChunks(payloads, 100)) {
         const { data, error } = await supabase
-          .from<SyncedTable, never>(table)
+          .from<RowTable, never>(table)
           .upsert(chunk as never, { onConflict: 'id', ignoreDuplicates: true })
           .select('id');
         if (error) throw error;
@@ -2300,19 +2185,19 @@ function useProvideFinanceData() {
     // An id that is already taken, found under this profile: a row this page
     // never read (a statement imported in another tab) or its own insert
     // whose answer was lost. NOT written: overwriting would undo whatever was
-    // decided on it elsewhere. Recorded with the page's own copy as the
-    // baseline, so a later edit sends only the columns the user changes --
-    // not every column where this copy and the saved row differ. Only ids not
-    // found under this profile belong to someone else.
+    // decided on it elsewhere. The saved row becomes the baseline, compared as
+    // the load would show it; where it differs from the page's copy, the page
+    // reloads to show what is saved. Only ids not found under this profile
+    // belong to someone else.
     let alreadyExisted = 0;
     const recordExisting = async (ids: string[]) => {
       const sample = byId.get(ids[0]);
       const columns = sample ? Object.keys(toRow(sample)).join(', ') : 'id';
       for (const chunk of inChunks(ids, 100)) {
         const { data, error } = await supabase
-          .from<SyncedTable, never>(table)
+          .from<RowTable, never>(table)
           .select(columns)
-          .eq('profile_id', profileId)
+          .eq('profile_id', owner)
           .in('id', chunk);
         if (error) throw error;
         markSaveProgress(table);
@@ -2324,21 +2209,32 @@ function useProvideFinanceData() {
             rejected.push(id);
             continue;
           }
-          const shown = toRow(row);
-          storedRowObjectsRef.current.set(row, generation);
-          stored.set(id, { profileId, row: shown });
-          if (differsFromSaved(saved, shown)) alreadyExisted += 1;
+          const baseline = asLoaded ? asLoaded(saved) : saved;
+          if (Object.keys(changedColumns(baseline, toRow(row))).length > 0) alreadyExisted += 1;
+          if (stillCurrent()) record(id, row, baseline);
         }
       }
     };
 
-    await recordExisting(await insertRows(inserts));
-    for (const { patch, ids } of updates) {
+    // Deletes, then updates, then inserts: whatever frees a unique slot (the
+    // one emergency-fund goal per profile) goes before whatever takes it.
+    for (const chunk of inChunks(deletes, 100)) {
+      const { error } = await supabase
+        .from<RowTable, never>(table)
+        .delete()
+        .eq('profile_id', owner)
+        .eq('is_default', false)
+        .in('id', chunk);
+      if (error) throw error;
+      markSaveProgress(table);
+      for (const id of chunk) stored.delete(id);
+    }
+    for (const { patch, ids } of releases ? orderUpdates(updates, releases) : updates) {
       for (const chunk of inChunks(ids, 100)) {
         const { data, error } = await supabase
-          .from<SyncedTable, never>(table)
+          .from<RowTable, never>(table)
           .update(patch as never)
-          .eq('profile_id', profileId)
+          .eq('profile_id', owner)
           .in('id', chunk)
           .select('id');
         if (error) throw error;
@@ -2353,12 +2249,15 @@ function useProvideFinanceData() {
         }
       }
     }
+    await recordExisting(await insertRows(inserts));
 
     if (alreadyExisted > 0) {
       toast({
         title: 'Already saved',
-        description: `${alreadyExisted} row${alreadyExisted === 1 ? ' was' : 's were'} already saved, possibly changed on another device, and ${alreadyExisted === 1 ? 'was' : 'were'} kept as saved. Reload to see ${alreadyExisted === 1 ? 'it' : 'them'}.`,
+        description: `${alreadyExisted} row${alreadyExisted === 1 ? ' was' : 's were'} already saved, possibly changed on another device, and ${alreadyExisted === 1 ? 'was' : 'were'} kept as saved. Reloading to show ${alreadyExisted === 1 ? 'it' : 'them'}.`,
       });
+      // After this save settles: the load waits for the save queue.
+      window.setTimeout(() => { void fetchSupabaseData(); }, 0);
     }
     if (rejected.length > 0) {
       toast({
@@ -2430,9 +2329,15 @@ function useProvideFinanceData() {
     return next;
   };
 
-  const SAVE_KEY_OF: Record<SyncedTable, string> = {
+  const SAVE_KEY_OF: Record<RowTable, string> = {
     finance_transactions: 'transactions',
     finance_bank_accounts: 'accounts',
+    finance_goals: 'goals',
+    finance_goal_contributions: 'goals',
+    finance_memberships: 'accounts',
+    finance_debts: 'accounts',
+    finance_credit_scores: 'accounts',
+    finance_user_holidays: 'settings',
   };
 
   /**
@@ -2441,13 +2346,13 @@ function useProvideFinanceData() {
    * after it and bring it back. Chunked: 3,700 ids in one filter made a URL
    * of ~190 KB.
    */
-  const deleteFinanceRows = (table: SyncedTable, ids: readonly string[]) =>
+  const deleteFinanceRows = (table: RowTable, ids: readonly string[]) =>
     enqueueSave(SAVE_KEY_OF[table], async () => {
       if (!isAdmin || !profileId || ids.length === 0) return false;
       try {
         for (const chunk of inChunks(ids, 100)) {
           const { error } = await supabase
-            .from<SyncedTable, never>(table)
+            .from<RowTable, never>(table)
             .delete()
             .eq('profile_id', profileId)
             .eq('is_default', false)
@@ -2475,18 +2380,16 @@ function useProvideFinanceData() {
   // when asked for, not when their turn comes: a save requested while this
   // profile's rows are not yet on screen carries the previous profile's list,
   // and must not run once the load lands.
-  /** The load each synced table's rows on screen come from, for a list built now. */
-  const currentLoadGenerations = (): Record<SyncedTable, number> => ({
-    finance_transactions: loadGenerationOf('finance_transactions'),
-    finance_bank_accounts: loadGenerationOf('finance_bank_accounts'),
-  });
+  /** The load each row-saved table's rows on screen come from, for a list built now. */
+  const currentLoadGenerations = (): Record<RowTable, number> =>
+    Object.fromEntries(ROW_TABLES.map(table => [table, loadGenerationOf(table)])) as Record<RowTable, number>;
 
   // `builtAt`: when a caller holds a list back before saving it (the review
   // queue's coalesced save), the loads it was built against, captured then.
   const saveDataToSupabase = (
     key: string,
     contentData: unknown,
-    builtAt?: Record<SyncedTable, number>,
+    builtAt?: Record<RowTable, number>,
   ): Promise<boolean> => {
     if (!isAdmin) return Promise.resolve(false);
     if (blockedSaveKeysFor(profileId).has(key)) {
@@ -2507,7 +2410,7 @@ function useProvideFinanceData() {
   const runSave = async (
     key: string,
     contentData: unknown,
-    requestedAt: Record<SyncedTable, number>,
+    requestedAt: Record<RowTable, number>,
   ) => {
     if (!isAdmin) return false;
     // Every *ledger* row carries a profile_id, and the database enforces it
@@ -2530,6 +2433,8 @@ function useProvideFinanceData() {
       });
       return false;
     }
+    // Set for every key that writes profile rows, by the check above.
+    const owner = profileId ?? '';
     try {
       if (key === 'settings') {
         const settingsObj = contentData as FinanceSettings;
@@ -2581,142 +2486,59 @@ function useProvideFinanceData() {
         if (settingsError?.code === '23505') settingsError = await writeSettingsRow();
         if (settingsError) throw settingsError;
 
-        const holidaysList = Array.isArray(settingsObj.holidaysByUser)
-          ? settingsObj.holidaysByUser
-          : Object.values(settingsObj.holidaysByUser || {});
-        if (holidaysList.length > 0) {
-          const holidayRow = (h: UserHoliday) => ({
-            id: h.id,
-            is_default: false,
-            profile_id: profileId,
-            start_date: h.startDate,
-            end_date: h.endDate,
-            occasion: h.occasion || null,
-            count: h.count,
-            type: h.type || 'holiday'
+        // Leave is saved only when passed as rows: settings saved without it,
+        // or in the legacy record form (no row ids), must not read as
+        // "delete every holiday".
+        if (Array.isArray(settingsObj.holidaysByUser)) {
+          await writeEditedRows('finance_user_holidays', settingsObj.holidaysByUser, h => holidayRow(h, owner), requestedAt.finance_user_holidays, {
+            deleteMissing: true,
+            asLoaded: saved => holidayRow(holidayFromRow(saved as never), owner),
           });
-          // half_day is always sent, so turning a half day back into a full
-          // one clears it. A database without the half_day migration rejects
-          // the column (PGRST204); save the rest rather than nothing.
-          const saved = await supabase.from('finance_user_holidays').upsert(
-            holidaysList.map(h => ({ ...holidayRow(h), half_day: h.halfDay ?? null })),
-            { onConflict: 'id' },
-          );
-          const holidaysError = saved.error?.code === 'PGRST204'
-            ? (await supabase.from('finance_user_holidays').upsert(holidaysList.map(h => holidayRow(h)), { onConflict: 'id' })).error
-            : saved.error;
-          if (holidaysError) throw holidaysError;
         }
-        await pruneScoped('finance_user_holidays', holidaysList.map(h => h.id));
       } else if (key === 'goals') {
         const goalsList = contentData as Goal[];
-        // Upsert, then prune, throughout: a failed write must leave the
-        // stored rows alone.
-        if (goalsList.length > 0) {
-          const { error: goalsError } = await supabase.from('finance_goals').upsert(goalsList.map(g => ({
-            id: g.id,
-            is_default: false,
-            profile_id: profileId,
-            name: g.name,
-            target_amount: g.targetAmount,
-            current_amount: g.currentAmount,
-            target_date: g.targetDate || null,
-            is_emergency_fund: g.isEmergencyFund ?? false,
-            monthly_contribution: g.monthlyContribution ?? 0,
-            start_date: g.startDate || null,
-            status: g.status || 'active',
-            emoji: g.emoji || null
-          })), { onConflict: 'id' });
-          if (goalsError) throw goalsError;
-          const contribs = goalsList.flatMap(g => (g.contributions || []).map(c => ({
-            id: c.id,
-            is_default: false,
-            profile_id: profileId,
-            goal_id: g.id,
-            amount: c.amount,
-            date: c.date,
-            note: c.note || null,
-            bank_account_id: c.bankAccountId || null
-          })));
-          if (contribs.length > 0) {
-            const { error: contribsError } = await supabase.from('finance_goal_contributions').upsert(contribs, { onConflict: 'id' });
-            if (contribsError) throw contribsError;
-          }
-          await pruneScoped('finance_goal_contributions', goalsList.flatMap(g => (g.contributions || []).map(c => c.id)));
-        }
-        await pruneScoped('finance_goals', goalsList.map(g => g.id));
+        // Goals first, so a new contribution's goal exists; a deleted goal
+        // takes its contributions with it (ON DELETE CASCADE).
+        await writeEditedRows('finance_goals', goalsList, g => goalRow(g, owner), requestedAt.finance_goals, {
+          deleteMissing: true,
+          asLoaded: saved => goalRow(goalFromRow(saved as never, []), owner),
+          // One emergency-fund goal per profile (a unique index): the goal
+          // giving it up is written before the goal taking it on.
+          releases: patch => patch.is_emergency_fund === false,
+        });
+        await writeEditedRows('finance_goal_contributions', contributionsOf(goalsList), c => contributionRow(c, owner), requestedAt.finance_goal_contributions, {
+          deleteMissing: true,
+          asLoaded: saved => contributionRow({ contribution: contributionFromRow(saved as never), goalId: saved.goal_id as string }, owner),
+          loadedAs: c => c.contribution,
+        });
       } else if (key === 'accounts') {
         // `debts` is optional so the existing account/membership/score callers
         // don't all have to thread it through; fall back to current state.
         const accsObj = contentData as { bankAccounts: BankAccount[]; memberships: Membership[]; creditScores: CreditScores; debts?: Debt[] };
-        const debtsToSave = accsObj.debts ?? debts;
-        // Upsert, then prune, for each table: a failed write must leave the
-        // stored rows alone.
-        // The sync writes bank accounts too (balances, newly connected
-        // accounts), so only what changed here is written.
-        await writeEditedRows('finance_bank_accounts', accsObj.bankAccounts || [], bankAccountRow, requestedAt.finance_bank_accounts);
-        if (accsObj.memberships?.length > 0) {
-          const { error: membershipsError } = await supabase.from('finance_memberships').upsert(accsObj.memberships.map(m => ({
-            id: m.id,
-            is_default: false,
-            profile_id: profileId,
-            name: m.name,
-            type: m.type,
-            status: m.status || null,
-            annual_fee: m.annualFee,
-            use_case: m.useCase || null
-          })), { onConflict: 'id' });
-          if (membershipsError) throw membershipsError;
+        // Each table row by row: the sync writes bank accounts too (balances,
+        // newly connected accounts), and another device can write any of
+        // them. A collection the caller did not pass is left alone rather
+        // than read as "delete every row".
+        await writeEditedRows('finance_bank_accounts', accsObj.bankAccounts || [], a => bankAccountRow(a, owner), requestedAt.finance_bank_accounts, {
+          asLoaded: saved => bankAccountRow(bankAccountFromRow(saved as never), owner),
+        });
+        if (accsObj.memberships) {
+          await writeEditedRows('finance_memberships', accsObj.memberships, m => membershipRow(m, owner), requestedAt.finance_memberships, {
+            deleteMissing: true,
+            asLoaded: saved => membershipRow(membershipFromRow(saved as never), owner),
+          });
         }
-        await pruneScoped('finance_memberships', (accsObj.memberships || []).map(m => m.id));
-        if (debtsToSave.length > 0) {
-          const { error: debtsError } = await supabase.from('finance_debts').upsert(debtsToSave.map(d => ({
-            id: d.id,
-            is_default: false,
-            profile_id: profileId,
-            name: d.name,
-            type: d.type,
-            lender: d.lender || null,
-            original_amount: d.originalAmount,
-            balance: d.balance,
-            interest_rate: d.interestRate,
-            min_payment: d.minPayment,
-            start_date: d.startDate || null,
-            // Sent only when set, so saving keeps working against a database
-            // that has not had the course_end_date migration applied yet.
-            ...(d.courseEndDate ? { course_end_date: d.courseEndDate } : {}),
-            payoff_date: d.payoffDate || null,
-            repayment_type: d.repaymentType || 'amortising',
-            student_loan_plan: d.studentLoanPlan || null,
-            write_off_years: d.writeOffYears ?? null,
-            draws: d.draws as unknown as Json,
-            rate_periods: (d.ratePeriods || []) as unknown as Json,
-            final_payment: d.finalPayment || 0,
-            notes: d.notes || null,
-            emoji: d.emoji || null,
-            color: d.color || null
-          })), { onConflict: 'id' });
-          if (debtsError) throw debtsError;
+        await writeEditedRows('finance_debts', accsObj.debts ?? debts, d => debtRow(d, owner), requestedAt.finance_debts, {
+          deleteMissing: true,
+          asLoaded: saved => debtRow(debtFromRow(saved as never), owner),
+        });
+        if (accsObj.creditScores) {
+          await writeEditedRows('finance_credit_scores', scoresOf(accsObj.creditScores), sc => creditScoreRow(sc, owner), requestedAt.finance_credit_scores, {
+            deleteMissing: true,
+            asLoaded: saved => creditScoreRow({ score: creditScoreFromRow(saved as never), bureau: saved.bureau as ScoreOfBureau['bureau'] }, owner),
+            loadedAs: sc => sc.score,
+          });
         }
-        await pruneScoped('finance_debts', debtsToSave.map(d => d.id));
-        const scores = [
-          ...(accsObj.creditScores?.experian || []).map(s => ({ ...s, bureau: 'experian' })),
-          ...(accsObj.creditScores?.transunion || []).map(s => ({ ...s, bureau: 'transunion' })),
-          ...(accsObj.creditScores?.equifax || []).map(s => ({ ...s, bureau: 'equifax' }))
-        ];
-        if (scores.length > 0) {
-          const { error: scoresError } = await supabase.from('finance_credit_scores').upsert(scores.map(s => ({
-            id: s.id,
-            is_default: false,
-            profile_id: profileId,
-            bureau: s.bureau,
-            date: s.date,
-            score: s.score,
-            storage_path: s.storagePath || null,
-          })), { onConflict: 'id' });
-          if (scoresError) throw scoresError;
-        }
-        await pruneScoped('finance_credit_scores', scores.map(s => s.id));
       } else if (key === 'investments') {
         const holdings = contentData as InvestmentHolding[];
         // Upsert before pruning: if an edited position is invalid or the
@@ -2820,7 +2642,9 @@ function useProvideFinanceData() {
         }
         await pruneScoped('finance_recurring_bills', recurringsList.map(r => r.id));
       } else if (key === 'transactions') {
-        await writeEditedRows('finance_transactions', contentData as MockTransaction[], transactionRow, requestedAt.finance_transactions);
+        await writeEditedRows('finance_transactions', contentData as MockTransaction[], t => transactionRow(t, owner), requestedAt.finance_transactions, {
+          asLoaded: saved => transactionRow(transactionFromRow(saved as never), owner),
+        });
       } else if (key === 'tax_config') {
         const tcObj = contentData as TaxConfig;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(tcObj.effectiveFrom)) {

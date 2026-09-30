@@ -12,10 +12,12 @@
  *   profile and by the shared default rows. A profile shown a shared default
  *   (`h1`) or a code default another profile has already saved (`item_rent`)
  *   took that row over on its first save: moved to itself and overwritten.
- * - The bank sync also writes transactions and bank accounts, so a list on
- *   screen can predate rows the server gained or changed. Those two are never
- *   saved whole: only edited rows, only their changed columns, and deletes
- *   only by id (`rowsToWrite`, `planRowWrites`).
+ * - The bank sync also writes transactions and bank accounts, and another
+ *   device can write anything, so a list on screen can predate rows the
+ *   server gained or changed. Those tables are never saved whole: only edited
+ *   rows, only their changed columns (`rowsToWrite`, `planRowWrites`), and a
+ *   delete only for a row the list was built from (`planRowDeletes`) or asked
+ *   for by id.
  */
 
 import type { BudgetCategory, RecurringBill } from '@/features/finance/finance-types';
@@ -90,6 +92,14 @@ export const materialiseBudgetForProfile = (
   });
 
 /**
+ * Rows a profile was shown from the shared defaults (it had none of its own),
+ * given ids of its own: its first save then inserts copies rather than taking
+ * the shared rows over. `owned` rows keep their ids.
+ */
+export const scopeToProfile = <T extends { id: string }>(rows: readonly T[], owned: boolean, profileId: string): T[] =>
+  owned ? [...rows] : rows.map(row => ({ ...row, id: profileScopedId(row.id, profileId) }));
+
+/**
  * Where a budget-item link written against template ids (a recurring
  * template's, or a bill saved before its item was scoped) points in
  * `categories`, which hold one profile's budget: the item itself when that id
@@ -148,15 +158,16 @@ export const latestOwnRow = <T extends { id: string; is_default: boolean; update
 };
 
 /**
- * The rows a save of a collection the bank sync also writes may send.
+ * The rows a save of a table saved row by row may send.
  *
  * The list on screen can predate the latest refresh: a coalesced save flushes
  * a list built before a sync landed, or an async handler saves a list it
  * captured before an await. So a save sends only rows an edit replaced --
  * edits copy the row they change, untouched rows keep the object read from
- * the database -- and never infers a delete from what the list lacks. A row
- * the list never contained is never written or deleted; rows the sync changed
- * are not written back from a stale copy. Deletes are explicit, by id.
+ * the database. A row the list never contained is never written; rows a
+ * load changed are not written back from a stale copy. A delete is either
+ * asked for by id or, for a whole list, limited to rows the list was built
+ * from (planRowDeletes).
  */
 export const rowsToWrite = <T extends object>(rows: readonly T[], isStored: (row: T) => boolean): T[] =>
   rows.filter(row => !isStored(row));
@@ -168,18 +179,44 @@ export const inChunks = <T,>(items: readonly T[], size: number): T[][] => {
   return runs;
 };
 
+/** The row as this page knew it in one load generation. */
+export interface SeenRow {
+  generation: number;
+  row: Record<string, unknown>;
+}
+
 /** A row as this page last read or wrote it, and the profile that owns it. */
 export interface StoredRow {
   /** Null for a shared default row, which no profile's save may change. */
   profileId: string | null;
   row: Record<string, unknown>;
+  /** The load generation the row was first recorded in. */
+  firstSeen: number;
   /**
-   * What the row held before the latest load replaced it. A list built before
-   * that load still carries these values in rows it edited; they are not
-   * edits (see `staleList` in planRowWrites).
+   * The row in each recent generation, oldest first: what that load read,
+   * with this page's own writes in that generation applied. A list built in
+   * generation g carries these values in rows it did not edit, so they are
+   * not edits (see planRowWrites).
    */
-  previous?: Record<string, unknown>;
+  seen: readonly SeenRow[];
 }
+
+/** How many generations of a row are kept for lists built that long ago. */
+export const SEEN_GENERATIONS_KEPT = 5;
+
+/** `seen` with `row` as generation `generation`'s copy, oldest first, capped. */
+export const recordSeen = (
+  seen: readonly SeenRow[],
+  generation: number,
+  row: Record<string, unknown>,
+): SeenRow[] =>
+  [...seen.filter(entry => entry.generation !== generation), { generation, row }]
+    .sort((a, b) => a.generation - b.generation)
+    .slice(-SEEN_GENERATIONS_KEPT);
+
+/** The row as a list built in `generation` saw it, when that is still kept. */
+export const rowAsOf = (known: StoredRow, generation: number): Record<string, unknown> | undefined =>
+  [...known.seen].reverse().find(entry => entry.generation <= generation)?.row;
 
 /** Columns a write never changes: identity and ownership. */
 const FIXED_COLUMNS = new Set(['id', 'profile_id', 'is_default']);
@@ -198,15 +235,19 @@ export const changedColumns = (
 };
 
 /**
- * How to write edited rows of a table the bank sync also writes.
+ * How to write edited rows of a table saved row by row.
  *
  * - A row this page has stored for this profile is updated with only the
  *   columns the edit changed, by id and profile: an update sent under
- *   another profile matches nothing. When `staleList` is set -- the list was
- *   built before the latest load -- a column still holding its pre-load
- *   value is left out too: it is the old copy, not an edit, and sending it
- *   would undo what the load (a bank sync) brought in. A list built after
- *   the load sends such a value, since then it is a deliberate edit back.
+ *   another profile matches nothing. When the list was built in an earlier
+ *   generation than the latest load (`listGeneration` < `latestGeneration`),
+ *   a column still holding the value the row had when the list was built is
+ *   left out too: it is the old copy, not an edit, and sending it would undo
+ *   what a later load (a bank sync, another device) brought in -- however
+ *   many loads ago the list was built. If that generation is no longer kept,
+ *   a column matching any kept copy is left out, since an edit cannot be
+ *   told from a copy. A list built from the latest load sends such a value,
+ *   since then it is a deliberate edit back.
  * - A row stored for another profile, or shared, is not written at all.
  * - A row never stored is inserted; an insert cannot overwrite a row.
  *
@@ -217,7 +258,8 @@ export const planRowWrites = (
   edited: readonly { id: string; row: Record<string, unknown> }[],
   stored: ReadonlyMap<string, StoredRow>,
   profileId: string,
-  staleList = false,
+  listGeneration = 0,
+  latestGeneration = listGeneration,
 ): {
   inserts: Record<string, unknown>[];
   updates: { patch: Record<string, unknown>; ids: string[] }[];
@@ -226,6 +268,7 @@ export const planRowWrites = (
   const inserts: Record<string, unknown>[] = [];
   const notOwned: string[] = [];
   const byPatch = new Map<string, { patch: Record<string, unknown>; ids: string[] }>();
+  const staleList = listGeneration < latestGeneration;
   for (const { id, row } of edited) {
     const known = stored.get(id);
     if (!known) {
@@ -234,9 +277,14 @@ export const planRowWrites = (
       notOwned.push(id);
     } else {
       const patch = changedColumns(known.row, row);
-      if (staleList && known.previous) {
+      if (staleList) {
+        const asBuilt = rowAsOf(known, listGeneration);
         for (const column of Object.keys(patch)) {
-          if (JSON.stringify(known.previous[column]) === JSON.stringify(row[column])) delete patch[column];
+          const value = JSON.stringify(row[column]);
+          const copied = asBuilt
+            ? JSON.stringify(asBuilt[column]) === value
+            : known.seen.some(entry => JSON.stringify(entry.row[column]) === value);
+          if (copied) delete patch[column];
         }
       }
       if (Object.keys(patch).length === 0) continue;
@@ -250,18 +298,45 @@ export const planRowWrites = (
 };
 
 /**
- * Whether a list was built before the latest load: it still holds a row
- * object an earlier load produced. `generationOf` gives the load a stored row
- * object came from; edited copies have none and do not count.
+ * Updates in the order they can be sent without tripping a unique index: a
+ * patch that frees a slot (`releases`) before one that may take it -- a goal
+ * giving up the emergency fund before the goal taking it on. Otherwise in
+ * list order. The save runs deletes, then these updates, then inserts, for
+ * the same reason: an insert never takes a slot a row still holds.
  */
-export const listPredatesLoad = <T extends object>(
+export const orderUpdates = <U extends { patch: Record<string, unknown> }>(
+  updates: readonly U[],
+  releases: (patch: Record<string, unknown>) => boolean,
+): U[] => [...updates.filter(u => releases(u.patch)), ...updates.filter(u => !releases(u.patch))];
+
+/**
+ * The rows a save of a whole list removed: stored for this profile, recorded
+ * no later than the list was built, and missing from it. A row that arrived
+ * after the list was built -- a load from another device's save -- was never
+ * in it, so its absence is not a delete. Shared rows are never deleted.
+ */
+export const planRowDeletes = (
+  listIds: ReadonlySet<string>,
+  stored: ReadonlyMap<string, StoredRow>,
+  profileId: string,
+  listGeneration: number,
+): string[] =>
+  [...stored.entries()]
+    .filter(([id, known]) => known.profileId === profileId && known.firstSeen <= listGeneration && !listIds.has(id))
+    .map(([id]) => id);
+
+/**
+ * The load generation a list was built in: the oldest load any row object it
+ * still holds came from, or when the save was asked for, whichever is older.
+ * `generationOf` gives the load an object came from -- a stored row, a nested
+ * row a list carries inside a wrapper, a row shown from the shared defaults;
+ * edited copies have none.
+ */
+export const listGenerationOf = <T extends object>(
   rows: readonly T[],
   generationOf: (row: T) => number | undefined,
-  latestGeneration: number,
-): boolean => rows.some(row => {
-  const generation = generationOf(row);
-  return generation !== undefined && generation < latestGeneration;
-});
+  requestedAt: number,
+): number => rows.reduce((oldest, row) => Math.min(oldest, generationOf(row) ?? oldest), requestedAt);
 
 /**
  * The fields an edit dialog changed, compared with the copy it opened on. A
@@ -274,31 +349,4 @@ export const editedFields = <T extends object>(base: T, edited: T): Partial<T> =
     if (JSON.stringify(edited[key]) !== JSON.stringify(base[key])) changed[key] = edited[key];
   }
   return changed;
-};
-
-/** Empty values the page shows the same way: '' , false and undefined read as null. */
-const shownAs = (value: unknown): unknown =>
-  value === '' || value === false || value === undefined ? null : value;
-
-/**
- * Whether a saved row looks different on the page from the page's own copy:
- * the "Already saved" count. Compared the way the page loads rows, not
- * column by column as stored: empty values read alike, and the bank sync
- * writes only `account_id` where the page mirrors it into `bank_account_id`
- * (the load takes whichever is set for both).
- */
-export const differsFromSaved = (
-  saved: Record<string, unknown>,
-  shown: Record<string, unknown>,
-): boolean => {
-  const asLoaded = { ...saved };
-  if ('account_id' in shown && 'bank_account_id' in shown) {
-    const account = saved.account_id || saved.bank_account_id || null;
-    const bankAccount = saved.bank_account_id || saved.account_id || null;
-    asLoaded.account_id = account;
-    asLoaded.bank_account_id = bankAccount;
-  }
-  return Object.keys(shown).some(column =>
-    JSON.stringify(shownAs(asLoaded[column])) !== JSON.stringify(shownAs(shown[column])),
-  );
 };

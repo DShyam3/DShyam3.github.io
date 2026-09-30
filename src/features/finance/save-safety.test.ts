@@ -2,18 +2,23 @@ import { describe, expect, it } from 'vitest';
 import {
   ALL_GUARDED_SAVE_KEYS,
   changedColumns,
-  differsFromSaved,
   editedFields,
   inChunks,
   latestOwnRow,
-  listPredatesLoad,
+  listGenerationOf,
+  planRowDeletes,
   planRowWrites,
+  orderUpdates,
+  recordSeen,
+  SEEN_GENERATIONS_KEPT,
+  scopeToProfile,
   materialiseBudgetForProfile,
   materialiseRecurringsForProfile,
   profileScopedId,
   rowsToWrite,
   resolveBudgetItemLink,
   saveKeysBlockedBy,
+  type StoredRow,
 } from './save-safety';
 import { DEFAULT_BUDGET_CATEGORIES, mergeMissingDefaultCategories } from './finance-defaults';
 import type { BudgetCategory, RecurringBill } from '@/features/finance/finance-types';
@@ -274,19 +279,24 @@ describe('inChunks', () => {
   });
 });
 
+/** A row stored for `profileId`, as each listed generation saw it. */
+const storedAs = (
+  profileId: string | null,
+  seen: [generation: number, row: Record<string, unknown>][],
+  firstSeen = seen[0]?.[0] ?? 1,
+): StoredRow => ({ profileId, row: seen[seen.length - 1][1], firstSeen, seen: seen.map(([generation, row]) => ({ generation, row })) });
+
 describe('planRowWrites', () => {
   const OWNER_ID = 'owner';
   const stored = new Map([
-    ['a', { profileId: OWNER_ID, row: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: false } }],
-    ['b', { profileId: OWNER_ID, row: { id: 'b', profile_id: OWNER_ID, amount: 5, is_reviewed: false } }],
-    ['theirs', { profileId: 'demo', row: { id: 'theirs', profile_id: 'demo', amount: 1, is_reviewed: false } }],
-    ['shared', { profileId: null, row: { id: 'shared', profile_id: null, amount: 0, is_reviewed: false } }],
+    ['a', storedAs(OWNER_ID, [[1, { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: false }]])],
+    ['b', storedAs(OWNER_ID, [[1, { id: 'b', profile_id: OWNER_ID, amount: 5, is_reviewed: false }]])],
+    ['theirs', storedAs('demo', [[1, { id: 'theirs', profile_id: 'demo', amount: 1, is_reviewed: false }]])],
+    ['shared', storedAs(null, [[1, { id: 'shared', profile_id: null, amount: 0, is_reviewed: false }]])],
   ]);
 
   it('sends only the columns an edit changed, so a stale copy leaves the sync\'s columns alone', () => {
-    // The sync has since changed a's amount on the server; the copy on screen
-    // still says 10, and the user marks it reviewed.
-    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: true } }], stored, OWNER_ID);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: true } }], stored, OWNER_ID, 1, 1);
     expect(plan.updates).toEqual([{ patch: { is_reviewed: true }, ids: ['a'] }]);
     expect(plan.inserts).toEqual([]);
   });
@@ -295,41 +305,64 @@ describe('planRowWrites', () => {
     // The tab loaded amount 10; a refresh then brought the sync's amount 12.
     // A copy made before the refresh (a pending save, an open edit dialog)
     // still says 10 and marks the row reviewed.
-    const refreshed = new Map([
-      ['a', {
-        profileId: OWNER_ID,
-        row: { id: 'a', profile_id: OWNER_ID, amount: 12, is_reviewed: false },
-        previous: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: false },
-      }],
-    ]);
-    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: true } }], refreshed, OWNER_ID, true);
+    const refreshed = new Map([['a', storedAs(OWNER_ID, [
+      [1, { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: false }],
+      [2, { id: 'a', profile_id: OWNER_ID, amount: 12, is_reviewed: false }],
+    ])]]);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: true } }], refreshed, OWNER_ID, 1, 2);
     expect(plan.updates).toEqual([{ patch: { is_reviewed: true }, ids: ['a'] }]);
+  });
+
+  it('a list two loads stale does not undo a sync the load in between brought in', () => {
+    // Load 1 read amount 10, load 2 the sync's 12, load 3 changed nothing.
+    // Comparing against one load back (load 2's 12) sent the stale 10.
+    const loads = new Map([['a', storedAs(OWNER_ID, [
+      [1, { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Food' }],
+      [2, { id: 'a', profile_id: OWNER_ID, amount: 12, category: 'Food' }],
+      [3, { id: 'a', profile_id: OWNER_ID, amount: 12, category: 'Food' }],
+    ])]]);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Bills' } }], loads, OWNER_ID, 1, 3);
+    expect(plan.updates).toEqual([{ patch: { category: 'Bills' }, ids: ['a'] }]);
+  });
+
+  it('a list older than any kept copy leaves out a column matching any of them', () => {
+    const loads = new Map([['a', storedAs(OWNER_ID, [
+      [5, { id: 'a', profile_id: OWNER_ID, amount: 10 }],
+      [6, { id: 'a', profile_id: OWNER_ID, amount: 12 }],
+    ])]]);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10 } }], loads, OWNER_ID, 2, 6);
+    expect(plan.updates).toEqual([]);
   });
 
   it('a list built after the refresh sends an edit back to the old value', () => {
     // Another device marked a reviewed; the refresh brought that in. The user
     // then un-marks it on this device, from the refreshed list.
-    const refreshed = new Map([
-      ['a', {
-        profileId: OWNER_ID,
-        row: { id: 'a', profile_id: OWNER_ID, is_reviewed: true },
-        previous: { id: 'a', profile_id: OWNER_ID, is_reviewed: false },
-      }],
-    ]);
-    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, is_reviewed: false } }], refreshed, OWNER_ID, false);
+    const refreshed = new Map([['a', storedAs(OWNER_ID, [
+      [1, { id: 'a', profile_id: OWNER_ID, is_reviewed: false }],
+      [2, { id: 'a', profile_id: OWNER_ID, is_reviewed: true }],
+    ])]]);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, is_reviewed: false } }], refreshed, OWNER_ID, 2, 2);
     expect(plan.updates).toEqual([{ patch: { is_reviewed: false }, ids: ['a'] }]);
   });
 
-  it('after a stale column is left out, a later edit back to that value is still sent', () => {
-    // The sync moved amount 10 -> 12. A stale list recategorises the row;
-    // amount is left out, and the stored row becomes stored + what was sent.
-    const known = { profileId: OWNER_ID, row: { id: 'a', profile_id: OWNER_ID, amount: 12, category: 'Food' }, previous: { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Food' } };
-    const first = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Bills' } }], new Map([['a', known]]), OWNER_ID, true);
-    expect(first.updates).toEqual([{ patch: { category: 'Bills' }, ids: ['a'] }]);
-    const afterWrite = { profileId: OWNER_ID, row: { ...known.row, ...first.updates[0].patch } };
-    // The user now deliberately sets the amount to 10.
-    const second = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Bills' } }], new Map([['a', afterWrite]]), OWNER_ID, false);
-    expect(second.updates).toEqual([{ patch: { amount: 10 }, ids: ['a'] }]);
+  it('a stale list sends the columns the user edited', () => {
+    const loads = new Map([['a', storedAs(OWNER_ID, [
+      [1, { id: 'a', profile_id: OWNER_ID, amount: 10, note: null }],
+      [2, { id: 'a', profile_id: OWNER_ID, amount: 12, note: null }],
+    ])]]);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 15, note: 'x' } }], loads, OWNER_ID, 1, 2);
+    expect(plan.updates).toEqual([{ patch: { amount: 15, note: 'x' }, ids: ['a'] }]);
+  });
+
+  it('a stale list whose edit matches what a later load brought sends nothing for that column', () => {
+    // Built at load 1 (amount 10), the user typed 12 -- which load 2 also
+    // brought. It already matches, so only the note is sent.
+    const loads = new Map([['a', storedAs(OWNER_ID, [
+      [1, { id: 'a', profile_id: OWNER_ID, amount: 10, note: null }],
+      [2, { id: 'a', profile_id: OWNER_ID, amount: 12, note: null }],
+    ])]]);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 12, note: 'x' } }], loads, OWNER_ID, 1, 2);
+    expect(plan.updates).toEqual([{ patch: { note: 'x' }, ids: ['a'] }]);
   });
 
   it('groups identical patches into one update', () => {
@@ -360,6 +393,66 @@ describe('planRowWrites', () => {
   });
 });
 
+describe('recordSeen', () => {
+  it('replaces the same generation\'s copy, keeps order, and caps what it keeps', () => {
+    let seen = recordSeen([], 1, { amount: 1 });
+    seen = recordSeen(seen, 1, { amount: 2 });
+    expect(seen).toEqual([{ generation: 1, row: { amount: 2 } }]);
+    for (let generation = 2; generation <= SEEN_GENERATIONS_KEPT + 3; generation += 1) {
+      seen = recordSeen(seen, generation, { amount: generation });
+    }
+    expect(seen).toHaveLength(SEEN_GENERATIONS_KEPT);
+    expect(seen.map(entry => entry.generation)).toEqual([4, 5, 6, 7, 8]);
+  });
+});
+
+describe('planRowDeletes', () => {
+  const OWNER_ID = 'owner';
+  const stored = new Map([
+    ['kept', storedAs(OWNER_ID, [[1, { id: 'kept' }]])],
+    ['removed', storedAs(OWNER_ID, [[1, { id: 'removed' }]])],
+    ['arrivedLater', storedAs(OWNER_ID, [[3, { id: 'arrivedLater' }]])],
+    ['theirs', storedAs('demo', [[1, { id: 'theirs' }]])],
+    ['shared', storedAs(null, [[1, { id: 'shared' }]])],
+  ]);
+
+  it('deletes only what the list was built from and no longer holds', () => {
+    expect(planRowDeletes(new Set(['kept']), stored, OWNER_ID, 2)).toEqual(['removed']);
+  });
+
+  it('deletes a row first recorded by the very load the list was built from', () => {
+    expect(planRowDeletes(new Set(['kept', 'removed']), stored, OWNER_ID, 3)).toEqual(['arrivedLater']);
+  });
+
+  it('never deletes a row that arrived after the list was built, or one it does not own', () => {
+    // Another device added `arrivedLater`; a list built at load 2 never held it.
+    const deletes = planRowDeletes(new Set<string>(), stored, OWNER_ID, 2);
+    expect(deletes).not.toContain('arrivedLater');
+    expect(deletes).not.toContain('theirs');
+    expect(deletes).not.toContain('shared');
+  });
+});
+
+describe('orderUpdates', () => {
+  it('sends a patch that frees a unique slot before one that may take it, else in list order', () => {
+    // Goal x takes the emergency fund from goal f, and x comes first in the list.
+    const updates = [
+      { patch: { is_emergency_fund: true }, ids: ['x'] },
+      { patch: { name: 'Renamed' }, ids: ['r'] },
+      { patch: { is_emergency_fund: false }, ids: ['f'] },
+    ];
+    expect(orderUpdates(updates, patch => patch.is_emergency_fund === false).map(u => u.ids[0])).toEqual(['f', 'x', 'r']);
+  });
+});
+
+describe('scopeToProfile', () => {
+  it('gives rows shown from the shared defaults ids of the profile\'s own, and leaves owned rows alone', () => {
+    const rows = [{ id: 'goal_1', name: 'Rainy day' }];
+    expect(scopeToProfile(rows, false, 'p1')).toEqual([{ id: profileScopedId('goal_1', 'p1'), name: 'Rainy day' }]);
+    expect(scopeToProfile(rows, true, 'p1')).toEqual(rows);
+  });
+});
+
 describe('changedColumns', () => {
   it('ignores identity and ownership, and compares arrays by value', () => {
     expect(changedColumns(
@@ -369,19 +462,19 @@ describe('changedColumns', () => {
   });
 });
 
-describe('listPredatesLoad', () => {
+describe('listGenerationOf', () => {
   const a = { id: 'a' };
   const b = { id: 'b' };
   const edited = { id: 'e' };
   const generations = new WeakMap<object, number>([[a, 1], [b, 2]]);
 
-  it('is true when the list still holds a row object from an earlier load', () => {
-    expect(listPredatesLoad([a, edited], row => generations.get(row), 2)).toBe(true);
+  it('is the oldest load a row object in the list came from', () => {
+    expect(listGenerationOf([a, b, edited], row => generations.get(row), 3)).toBe(1);
   });
 
-  it('is false for a list built from the latest load, and ignores edited copies', () => {
-    expect(listPredatesLoad([b, edited], row => generations.get(row), 2)).toBe(false);
-    expect(listPredatesLoad([edited], row => generations.get(row), 2)).toBe(false);
+  it('is when the save was asked for when the list holds nothing older, ignoring edited copies', () => {
+    expect(listGenerationOf([b, edited], row => generations.get(row), 2)).toBe(2);
+    expect(listGenerationOf([edited], row => generations.get(row), 2)).toBe(2);
   });
 });
 
@@ -397,27 +490,5 @@ describe('editedFields', () => {
   it('includes a field set back to null or changed to an equal-looking value of another type', () => {
     expect(editedFields({ limit: 500 as number | null }, { limit: null })).toEqual({ limit: null });
     expect(editedFields({ fee: 0 as number | string }, { fee: '0' })).toEqual({ fee: '0' });
-  });
-});
-
-describe('differsFromSaved', () => {
-  const shown = {
-    id: 't1', name: 'TESCO', merchant: null, category: null, amount: -12.5, date: '2026-09-20',
-    is_reviewed: false, account_id: 'acc', bank_account_id: 'acc', notes: null, tags: null, is_recurring: false,
-  };
-
-  it('a synced row that only differs in how it is stored does not count', () => {
-    // The sync writes account_id only and leaves is_recurring/merchant null.
-    const synced = { ...shown, bank_account_id: null, is_recurring: null, merchant: '' };
-    expect(differsFromSaved(synced, shown)).toBe(false);
-  });
-
-  it('a row reviewed or categorised elsewhere counts', () => {
-    expect(differsFromSaved({ ...shown, is_reviewed: true }, shown)).toBe(true);
-    expect(differsFromSaved({ ...shown, category: 'Groceries' }, shown)).toBe(true);
-  });
-
-  it('ignores columns the page does not show', () => {
-    expect(differsFromSaved({ ...shown, provider_category: 'FOOD', created_at: 'x' }, shown)).toBe(false);
   });
 });

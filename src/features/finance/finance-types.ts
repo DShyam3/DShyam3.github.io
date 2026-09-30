@@ -335,9 +335,4 @@ export interface DatabaseDefaults {
   default_budget_categories?: BudgetCategory[];
   budget_presets?: Record<string, CategoryPreset[]>;
   holiday_defaults?: Record<number, { count: number; dates: string; occasion: string }>;
-  goals?: Goal[];
-  accounts?: { bankAccounts?: BankAccount[]; memberships?: Membership[]; creditScores?: CreditScores };
-  budget?: BudgetCategory[];
-  recurrings?: RecurringBill[];
-  transactions?: MockTransaction[];
 }
