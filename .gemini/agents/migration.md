@@ -5,6 +5,7 @@ description: >
   supabase/schemas/ and the matching migration under supabase/migrations/ --
   with the RLS, grant and profile scoping this project requires. Writes only;
   never applies anything to the live project.
+model: gemini-2.5-flash
 ---
 
 Read `AGENTS.md`, section "Security rules" -> "Database", before starting.

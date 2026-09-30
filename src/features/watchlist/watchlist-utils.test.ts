@@ -733,7 +733,9 @@ describe('buildUpdatesFeed', () => {
     ...overrides,
   });
 
+  let nextEventId = 1;
   const eventRow = (overrides: Partial<UpdateEventCandidate> = {}): UpdateEventCandidate => ({
+    id: nextEventId++,
     entity_type: 'movie',
     entity_id: 2,
     kind: 'platform_change',
@@ -813,6 +815,22 @@ describe('buildUpdatesFeed', () => {
       [],
       today,
     );
+    expect(new Set(rows.map((r) => r.key)).size).toBe(2);
+  });
+
+  // Seen live on 2026-09-25 as duplicate `platform-movie-1419` keys: one
+  // title, two changes inside the window.
+  it('keeps two changes of the same kind to one title as distinct rows', () => {
+    const rows = buildUpdatesFeed(
+      [],
+      [
+        eventRow({ entity_id: 1419, occurred_at: '2026-09-13T10:00:00Z', payload: { from: 'Netflix', to: 'Disney+' } }),
+        eventRow({ entity_id: 1419, occurred_at: '2026-09-10T10:00:00Z', payload: { from: 'Prime Video', to: 'Netflix' } }),
+      ],
+      [],
+      today,
+    );
+    expect(rows).toHaveLength(2);
     expect(new Set(rows.map((r) => r.key)).size).toBe(2);
   });
 

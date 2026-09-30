@@ -617,6 +617,7 @@ export interface UpdatesFeedRow {
 /** The columns `buildUpdatesFeed`'s platform/status argument needs, a subset
  *  of `WatchlistEvent` in useWatchlistNews.ts. */
 export interface UpdateEventCandidate {
+    id: number;
     entity_type: 'tv_show' | 'movie';
     entity_id: number;
     kind: 'platform_change' | 'status_change';
@@ -655,9 +656,11 @@ const sortableInstant = (occurredAt: string): string =>
  * because a single row can be either kind depending on `event.kind`.
  *
  * A show can appear once per kind -- once as released and once as announced
- * is fine, two rows -- so `key` folds in both `kind` and `entityType`: a TV
- * show and a movie can share a numeric id, and `entityType` alone does not
- * distinguish a released row from an announced one for the same title.
+ * is fine, two rows -- so a grouped row's `key` folds in both `kind` and
+ * `entityType`: a TV show and a movie can share a numeric id, and
+ * `entityType` alone does not distinguish a released row from an announced
+ * one for the same title. Platform and status rows are not grouped -- a title
+ * can change platform twice in a month -- so they key by the event's own id.
  *
  * `today` is accepted rather than read internally for the same reason as
  * `selectUpNextRail`'s -- every date-aware function on this page takes the
@@ -692,7 +695,7 @@ export const buildUpdatesFeed = (
         const kind: 'platform' | 'status' =
             event.kind === 'platform_change' ? 'platform' : 'status';
         rows.push({
-            key: `${kind}-${event.entity_type}-${event.entity_id}`,
+            key: `${kind}-${event.id}`,
             kind,
             entityType: event.entity_type,
             entityId: event.entity_id,

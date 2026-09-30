@@ -5,6 +5,7 @@ description: >
   line, adds to FEATURES.md, adds to REHAUL_HISTORY.md only if a decision
   closed, rewrites STATE.md. Use at the end of a task once checks are green.
   Documentation only; never touches code.
+model: gemini-2.5-flash-lite
 ---
 
 Read `AGENTS.md`, section "Where a finished item goes". That is your job

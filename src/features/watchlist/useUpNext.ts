@@ -20,8 +20,8 @@ export interface UpNextRailItem extends UpNextItem {
   reason: UpNextReason;
 }
 
-/** A failed view fetch degrades to an empty rail. */
+/** A failed fetch sets `failed`; rows already cached from an earlier fetch stay. */
 export function useUpNext() {
   const { data, isPending, isError } = useQuery(upNextQueryOptions);
-  return { upNext: isError ? [] : data ?? [], loading: isPending };
+  return { upNext: data ?? [], loading: isPending, failed: isError };
 }

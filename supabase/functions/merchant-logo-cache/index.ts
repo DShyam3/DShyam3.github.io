@@ -16,9 +16,9 @@ import { corsOriginHeader } from '../_shared/site-origins.ts'
 // What DOES leave this server is a merchant name, sent to Brandfetch's search
 // endpoint to turn "tesco stores" into a domain. Two things bound it:
 //
-//   - only merchants seen MIN_OCCURRENCES times or more are ever looked up, so
-//     a one-off purchase -- the kind that actually says something about a
-//     person -- never leaves at all;
+//   - only merchants the directory already names are ever looked up, and that
+//     list is public brand names in our own source -- a person's name, or a
+//     one-off shop that says something about them, is never sent;
 //   - the *normalised slug* is sent, never the bank's raw description, so till
 //     references, store numbers and card fragments are stripped before the
 //     request is built rather than after.
@@ -185,21 +185,6 @@ function canonicalSlug(slug: string): string | null {
 const BRANDFETCH_SEARCH_HOST = 'api.brandfetch.io'
 const BRANDFETCH_CDN_HOST = 'cdn.brandfetch.io'
 const BRANDFETCH_HOSTS = new Set([BRANDFETCH_SEARCH_HOST, BRANDFETCH_CDN_HOST])
-
-/**
- * How often a merchant must appear before it is looked up.
- *
- * This used to be the privacy control, set at three so a one-off purchase
- * never left the server. It is not any more: only merchants the directory
- * already names are looked up at all, and that list is public brand names
- * sitting in our own source. Nothing personal can leave by construction, which
- * is a far better guarantee than a frequency threshold -- a transfer labelled
- * with a person's name recurs happily and sailed straight through the old one.
- *
- * So this is now only about not spending requests on nothing, and one sighting
- * of a brand we already know is reason enough.
- */
-const MIN_OCCURRENCES = 1
 
 /**
  * Brandfetch allows 200 requests per 5 minutes per IP, and edge functions
@@ -502,26 +487,44 @@ serve(async (req) => {
       .map(row => row as { slug: string; storage_path: string | null })
       .filter(row => !MERCHANT_CANONICAL.has(row.slug))
 
+    //
+    // An index row goes only once its object is gone. Deleting the row
+    // regardless would orphan the object: nothing else records the path, so
+    // no later run could find it to retry. A remove() without an error means
+    // every path is gone -- storage leaves an already-missing object out of
+    // its result rather than failing -- so only an error keeps rows back.
     let purged = 0
     if (stale.length > 0) {
       const paths = stale
         .map(row => row.storage_path)
         .filter((path): path is string => typeof path === 'string' && path.length > 0)
+      let removeFailed = false
       if (paths.length > 0) {
         const { error: removeError } = await supabaseAdmin.storage
           .from('merchant-logos')
           .remove(paths)
-        if (removeError) console.warn('Could not remove stale logos:', removeError.message)
+        if (removeError) {
+          console.warn('Could not remove stale logos:', removeError.message)
+          removeFailed = true
+        }
       }
 
-      const { error: deleteError } = await supabaseAdmin
-        .from('finance_merchant_logos')
-        .delete()
-        .in('slug', stale.map(row => row.slug))
-      if (deleteError) {
-        console.warn('Could not clear stale logo rows:', deleteError.message)
-      } else {
-        purged = stale.length
+      const clearable = stale
+        .filter(row => !removeFailed || !row.storage_path)
+        .map(row => row.slug)
+      if (clearable.length < stale.length) {
+        console.warn(`Kept ${stale.length - clearable.length} stale logo rows whose objects were not removed`)
+      }
+      if (clearable.length > 0) {
+        const { error: deleteError } = await supabaseAdmin
+          .from('finance_merchant_logos')
+          .delete()
+          .in('slug', clearable)
+        if (deleteError) {
+          console.warn('Could not clear stale logo rows:', deleteError.message)
+        } else {
+          purged = clearable.length
+        }
       }
     }
 
@@ -534,7 +537,7 @@ serve(async (req) => {
     }
 
     const eligible = [...occurrences.entries()]
-      .filter(([slug, count]) => count >= MIN_OCCURRENCES && !skip.has(slug))
+      .filter(([slug]) => !skip.has(slug))
       // Most-seen first, so a capped run spends its budget where the logo will
       // be looked at most.
       .sort((a, b) => b[1] - a[1])

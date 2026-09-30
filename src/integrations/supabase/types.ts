@@ -39,6 +39,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_users: {
+        Row: {
+          created_at: string
+          email: string
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       articles: {
         Row: {
           author: string | null
@@ -135,11 +156,6 @@ export type Database = {
         }
         Relationships: []
       }
-      // genre_ids, origin_country and original_language are hand-written ahead
-      // of the generator, which reads the live database and so cannot see
-      // 20260912120000_favourites_tmdb_facts.sql until it is applied.
-      // Regenerating after the migration lands reproduces them identically, at
-      // which point this comment can go.
       favourites: {
         Row: {
           category: string | null
@@ -221,9 +237,9 @@ export type Database = {
         Row: {
           annual_fee: number
           balance: number
-          credit_limit: number | null
           color: string | null
           created_at: string
+          credit_limit: number | null
           emoji: string | null
           id: string
           is_default: boolean
@@ -237,9 +253,9 @@ export type Database = {
         Insert: {
           annual_fee?: number
           balance?: number
-          credit_limit?: number | null
           color?: string | null
           created_at?: string
+          credit_limit?: number | null
           emoji?: string | null
           id: string
           is_default?: boolean
@@ -253,9 +269,9 @@ export type Database = {
         Update: {
           annual_fee?: number
           balance?: number
-          credit_limit?: number | null
           color?: string | null
           created_at?: string
+          credit_limit?: number | null
           emoji?: string | null
           id?: string
           is_default?: boolean
@@ -571,132 +587,6 @@ export type Database = {
           },
         ]
       }
-      finance_investment_holdings: {
-        Row: {
-          account_id: string | null
-          avg_price: number
-          category: string
-          cost_basis_known: boolean
-          created_at: string
-          current_price: number
-          current_price_known: boolean
-          id: string
-          name: string
-          profile_id: string
-          shares: number
-          ticker: string | null
-          updated_at: string
-        }
-        Insert: {
-          account_id?: string | null
-          avg_price: number
-          category: string
-          cost_basis_known?: boolean
-          created_at?: string
-          current_price: number
-          current_price_known?: boolean
-          id: string
-          name: string
-          profile_id: string
-          shares: number
-          ticker?: string | null
-          updated_at?: string
-        }
-        Update: {
-          account_id?: string | null
-          avg_price?: number
-          category?: string
-          cost_basis_known?: boolean
-          created_at?: string
-          current_price?: number
-          current_price_known?: boolean
-          id?: string
-          name?: string
-          profile_id?: string
-          shares?: number
-          ticker?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_investment_holdings_account_profile_fkey"
-            columns: ["account_id", "profile_id"]
-            isOneToOne: false
-            referencedRelation: "finance_bank_accounts"
-            referencedColumns: ["id", "profile_id"]
-          },
-          {
-            foreignKeyName: "finance_investment_holdings_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "finance_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      finance_investment_activities: {
-        Row: {
-          account_id: string
-          activity_type: string
-          created_at: string
-          id: string
-          name: string
-          occurred_on: string
-          profile_id: string
-          provider: string
-          quantity: number
-          source_reference: string
-          ticker: string | null
-          unit_price_gbp: number | null
-          updated_at: string
-        }
-        Insert: {
-          account_id: string
-          activity_type: string
-          created_at?: string
-          id: string
-          name: string
-          occurred_on: string
-          profile_id: string
-          provider: string
-          quantity: number
-          source_reference: string
-          ticker?: string | null
-          unit_price_gbp?: number | null
-          updated_at?: string
-        }
-        Update: {
-          account_id?: string
-          activity_type?: string
-          created_at?: string
-          id?: string
-          name?: string
-          occurred_on?: string
-          profile_id?: string
-          provider?: string
-          quantity?: number
-          source_reference?: string
-          ticker?: string | null
-          unit_price_gbp?: number | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "finance_investment_activities_account_profile_fkey"
-            columns: ["account_id", "profile_id"]
-            isOneToOne: false
-            referencedRelation: "finance_bank_accounts"
-            referencedColumns: ["id", "profile_id"]
-          },
-          {
-            foreignKeyName: "finance_investment_activities_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "finance_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       finance_debts: {
         Row: {
           balance: number
@@ -949,6 +839,132 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      finance_investment_activities: {
+        Row: {
+          account_id: string
+          activity_type: string
+          created_at: string
+          id: string
+          name: string
+          occurred_on: string
+          profile_id: string
+          provider: string
+          quantity: number
+          source_reference: string
+          ticker: string | null
+          unit_price_gbp: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          activity_type: string
+          created_at?: string
+          id: string
+          name: string
+          occurred_on: string
+          profile_id: string
+          provider: string
+          quantity: number
+          source_reference: string
+          ticker?: string | null
+          unit_price_gbp?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          activity_type?: string
+          created_at?: string
+          id?: string
+          name?: string
+          occurred_on?: string
+          profile_id?: string
+          provider?: string
+          quantity?: number
+          source_reference?: string
+          ticker?: string | null
+          unit_price_gbp?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_investment_activities_account_profile_fkey"
+            columns: ["account_id", "profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_bank_accounts"
+            referencedColumns: ["id", "profile_id"]
+          },
+          {
+            foreignKeyName: "finance_investment_activities_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_investment_holdings: {
+        Row: {
+          account_id: string | null
+          avg_price: number
+          category: string
+          cost_basis_known: boolean
+          created_at: string
+          current_price: number
+          current_price_known: boolean
+          id: string
+          name: string
+          profile_id: string
+          shares: number
+          ticker: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          avg_price: number
+          category: string
+          cost_basis_known?: boolean
+          created_at?: string
+          current_price: number
+          current_price_known?: boolean
+          id: string
+          name: string
+          profile_id: string
+          shares: number
+          ticker?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          avg_price?: number
+          category?: string
+          cost_basis_known?: boolean
+          created_at?: string
+          current_price?: number
+          current_price_known?: boolean
+          id?: string
+          name?: string
+          profile_id?: string
+          shares?: number
+          ticker?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_investment_holdings_account_profile_fkey"
+            columns: ["account_id", "profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_bank_accounts"
+            referencedColumns: ["id", "profile_id"]
+          },
+          {
+            foreignKeyName: "finance_investment_holdings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_memberships: {
         Row: {
@@ -1408,6 +1424,30 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_seed_backup: {
+        Row: {
+          id: number
+          reason: string
+          row_data: Json
+          source_table: string
+          taken_at: string
+        }
+        Insert: {
+          id?: never
+          reason: string
+          row_data: Json
+          source_table: string
+          taken_at?: string
+        }
+        Update: {
+          id?: never
+          reason?: string
+          row_data?: Json
+          source_table?: string
+          taken_at?: string
+        }
+        Relationships: []
+      }
       finance_settings: {
         Row: {
           active_savings_types: string[] | null
@@ -1700,6 +1740,146 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "finance_profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_transfer_dismissals: {
+        Row: {
+          created_at: string
+          dismissed_at: string
+          id: string
+          inflow_transaction_id: string
+          outflow_transaction_id: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          dismissed_at?: string
+          id: string
+          inflow_transaction_id: string
+          outflow_transaction_id: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          dismissed_at?: string
+          id?: string
+          inflow_transaction_id?: string
+          outflow_transaction_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_transfer_dismissals_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_transfer_dismissals_profile_inflow_fkey"
+            columns: ["profile_id", "inflow_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["profile_id", "id"]
+          },
+          {
+            foreignKeyName: "finance_transfer_dismissals_profile_outflow_fkey"
+            columns: ["profile_id", "outflow_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["profile_id", "id"]
+          },
+        ]
+      }
+      finance_transfer_links: {
+        Row: {
+          confirmed_at: string
+          created_at: string
+          id: string
+          inflow_transaction_id: string
+          outflow_transaction_id: string
+          profile_id: string
+        }
+        Insert: {
+          confirmed_at?: string
+          created_at?: string
+          id: string
+          inflow_transaction_id: string
+          outflow_transaction_id: string
+          profile_id: string
+        }
+        Update: {
+          confirmed_at?: string
+          created_at?: string
+          id?: string
+          inflow_transaction_id?: string
+          outflow_transaction_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_transfer_links_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_transfer_links_profile_inflow_fkey"
+            columns: ["profile_id", "inflow_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["profile_id", "id"]
+          },
+          {
+            foreignKeyName: "finance_transfer_links_profile_outflow_fkey"
+            columns: ["profile_id", "outflow_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["profile_id", "id"]
+          },
+        ]
+      }
+      finance_transfer_single_legs: {
+        Row: {
+          created_at: string
+          decided_at: string
+          id: string
+          profile_id: string
+          transaction_id: string
+          verdict: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string
+          id: string
+          profile_id: string
+          transaction_id: string
+          verdict: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string
+          id?: string
+          profile_id?: string
+          transaction_id?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_transfer_single_legs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_transfer_single_legs_profile_transaction_fkey"
+            columns: ["profile_id", "transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["profile_id", "id"]
           },
         ]
       }
@@ -2016,6 +2196,7 @@ export type Database = {
           genre: string | null
           id: number
           overview: string | null
+          pinned: boolean
           platform: string | null
           poster: string | null
           release_date: string | null
@@ -2023,11 +2204,13 @@ export type Database = {
           runtime: number | null
           title: string
           tmdb_id: number | null
+          trailer_key: string | null
         }
         Insert: {
           genre?: string | null
           id?: number
           overview?: string | null
+          pinned?: boolean
           platform?: string | null
           poster?: string | null
           release_date?: string | null
@@ -2035,11 +2218,13 @@ export type Database = {
           runtime?: number | null
           title: string
           tmdb_id?: number | null
+          trailer_key?: string | null
         }
         Update: {
           genre?: string | null
           id?: number
           overview?: string | null
+          pinned?: boolean
           platform?: string | null
           poster?: string | null
           release_date?: string | null
@@ -2047,6 +2232,7 @@ export type Database = {
           runtime?: number | null
           title?: string
           tmdb_id?: number | null
+          trailer_key?: string | null
         }
         Relationships: []
       }
@@ -2226,6 +2412,7 @@ export type Database = {
       }
       tv_show_episodes: {
         Row: {
+          created_at: string | null
           episode_number: number
           id: number
           release_date: string | null
@@ -2233,8 +2420,10 @@ export type Database = {
           season_id: number | null
           title: string | null
           watched: boolean | null
+          watched_at: string | null
         }
         Insert: {
+          created_at?: string | null
           episode_number: number
           id?: number
           release_date?: string | null
@@ -2242,8 +2431,10 @@ export type Database = {
           season_id?: number | null
           title?: string | null
           watched?: boolean | null
+          watched_at?: string | null
         }
         Update: {
+          created_at?: string | null
           episode_number?: number
           id?: number
           release_date?: string | null
@@ -2251,6 +2442,7 @@ export type Database = {
           season_id?: number | null
           title?: string | null
           watched?: boolean | null
+          watched_at?: string | null
         }
         Relationships: [
           {
@@ -2264,6 +2456,7 @@ export type Database = {
       }
       tv_show_seasons: {
         Row: {
+          created_at: string | null
           id: number
           release_date: string | null
           release_year: number | null
@@ -2272,6 +2465,7 @@ export type Database = {
           watched: boolean | null
         }
         Insert: {
+          created_at?: string | null
           id?: number
           release_date?: string | null
           release_year?: number | null
@@ -2280,6 +2474,7 @@ export type Database = {
           watched?: boolean | null
         }
         Update: {
+          created_at?: string | null
           id?: number
           release_date?: string | null
           release_year?: number | null
@@ -2302,34 +2497,40 @@ export type Database = {
           genre: string | null
           id: number
           overview: string | null
+          pinned: boolean
           platform: string
           poster: string | null
           release_date: string | null
           status: string | null
           title: string
           tmdb_id: number | null
+          trailer_key: string | null
         }
         Insert: {
           genre?: string | null
           id?: number
           overview?: string | null
+          pinned?: boolean
           platform: string
           poster?: string | null
           release_date?: string | null
           status?: string | null
           title: string
           tmdb_id?: number | null
+          trailer_key?: string | null
         }
         Update: {
           genre?: string | null
           id?: number
           overview?: string | null
+          pinned?: boolean
           platform?: string
           poster?: string | null
           release_date?: string | null
           status?: string | null
           title?: string
           tmdb_id?: number | null
+          trailer_key?: string | null
         }
         Relationships: []
       }
@@ -2390,29 +2591,56 @@ export type Database = {
         }
         Relationships: []
       }
+      watchlist_events: {
+        Row: {
+          entity_id: number
+          entity_type: string
+          id: number
+          kind: string
+          occurred_at: string
+          payload: Json
+        }
+        Insert: {
+          entity_id: number
+          entity_type: string
+          id?: never
+          kind: string
+          occurred_at?: string
+          payload?: Json
+        }
+        Update: {
+          entity_id?: number
+          entity_type?: string
+          id?: never
+          kind?: string
+          occurred_at?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       weekly_schedule: {
         Row: {
           day_of_week: string
           id: number
           movie_id: number | null
-          scheduled_date: string | null
           schedule_mode: string
+          scheduled_date: string | null
           tv_show_id: number | null
         }
         Insert: {
           day_of_week: string
           id?: number
           movie_id?: number | null
-          scheduled_date?: string | null
           schedule_mode?: string
+          scheduled_date?: string | null
           tv_show_id?: number | null
         }
         Update: {
           day_of_week?: string
           id?: number
           movie_id?: number | null
-          scheduled_date?: string | null
           schedule_mode?: string
+          scheduled_date?: string | null
           tv_show_id?: number | null
         }
         Relationships: [
@@ -2434,27 +2662,30 @@ export type Database = {
       }
     }
     Views: {
-      // Hand-written ahead of the generator, which reads the live database and
-      // so cannot see 20260912090000_watchlist_up_next.sql until it is applied.
-      // This matches what the generator emits for a view: Row only, no Insert
-      // or Update. Regenerating after the migration lands reproduces it
-      // identically, at which point this comment can go.
       watchlist_up_next: {
         Row: {
-          episode_number: number
+          episode_number: number | null
           episode_title: string | null
-          has_started: boolean
-          platform: string
+          has_started: boolean | null
+          platform: string | null
           poster: string | null
           release_date: string | null
           runtime: number | null
-          season_in_progress: boolean
-          season_number: number
-          state: string
-          title: string
-          tv_show_id: number
+          season_in_progress: boolean | null
+          season_number: number | null
+          state: string | null
+          title: string | null
+          tv_show_id: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tv_show_seasons_tv_show_id_fkey"
+            columns: ["tv_show_id"]
+            isOneToOne: false
+            referencedRelation: "tv_shows"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

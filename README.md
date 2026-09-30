@@ -47,7 +47,7 @@ Copy [`.env.example`](.env.example) to `.env` and replace only its placeholder v
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY` — the anon key. Meant to be public; RLS is what actually protects data, not this key.
 - `VITE_TMDB_IMAGE_BASE_URL` — just the TMDB image CDN base (`https://image.tmdb.org/t/p/w500`), not a secret.
-- `VITE_ADMIN_EMAIL` — the Supabase Auth account email treated as admin (`/auth` page login).
+- `VITE_ADMIN_EMAIL` — the Supabase Auth account the `/auth` password box signs in as. It grants nothing; admin rights come from `public.admin_users`.
 
 **Not needed / intentionally removed**: `VITE_TMDB_API_KEY`, `VITE_TMDB_BASE_URL`, `VITE_ADMIN_PASSWORD` used to exist here but were removed — the TMDB key is server-side only now (see Edge Functions below), and `VITE_ADMIN_PASSWORD` was dead, unused config that only ever risked shipping `"admin"` into the client bundle.
 
@@ -57,19 +57,18 @@ Copy [`.env.example`](.env.example) to `.env` and replace only its placeholder v
 
 The browser talks to Supabase directly via `@supabase/supabase-js` (`src/integrations/supabase/client.ts`) using the anon key. **Row Level Security is the actual authorization boundary** — every table has an `is_admin()`-gated policy. Content tables (books, links, articles, etc.) are publicly readable by design (it's a portfolio); finance and TrueLayer tables are admin-only for both read and write. The full policy set lives in `supabase/migrations/20260904130000_baseline.sql` and the migrations after it.
 
-> **The admin email is stored in two places, and they are not connected.**
-> `is_admin()` compares the caller's JWT email against a literal baked into the
-> function body:
+> **Who is an administrator is a table, not an email.** `is_admin()` checks
+> the caller's user id against `public.admin_users`:
 >
 > ```sql
-> SELECT auth.jwt() ->> 'email' = 'd.shyam1256@gmail.com';
+> SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE user_id = auth.uid());
 > ```
 >
-> `VITE_ADMIN_EMAIL` is a separate value that only decides whether the frontend
-> *renders* admin controls. Changing the env var does not change who the
-> database trusts — it gives you a UI full of buttons whose writes RLS
-> rejects. To change the admin, change both: the env var (and the repo secret)
-> **and** `is_admin()`, via a migration.
+> The edge functions ask the same function (`supabase/functions/_shared/require-admin.ts`),
+> so there is one rule. `VITE_ADMIN_EMAIL` is only the address the `/auth`
+> password box signs in as; it grants nothing. To add or remove an
+> administrator, insert or delete an `admin_users` row in the SQL editor, which
+> runs as `postgres`, the table owner -- no API session can write that table.
 
 Table-level `GRANT`s are a second, independent layer. Supabase's defaults hand
 `anon` full write privileges on every table in `public`; migration
@@ -86,13 +85,13 @@ Server-side Deno functions, deployed independently of the frontend — **pushing
 | Function | Purpose | Required secrets | Callable by |
 |---|---|---|---|
 | `tmdb-proxy` | Proxies TMDB API calls so the TMDB key never reaches the browser. Endpoint allow-listed (only the shapes the app actually uses) to stop it being used as a free generic proxy. Rate-limited to 60 requests a minute per IP in the `rate_limits` table; passes TMDB's status code through. | `TMDB_API_KEY` | Public (needed for anonymous visitors browsing the Watchlist page), origin-restricted CORS |
-| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored, tab-bound, exact-redirect allow-listed and consumed before token exchange. A manual sync is refused (429) within 15 minutes of the last one; linking a bank clears that. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET`, `ADMIN_EMAIL` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin user (JWT email check) or the service role for the scheduled sync |
+| `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored, tab-bound, exact-redirect allow-listed and consumed before token exchange. A manual sync is refused (429) within 15 minutes of the last one; linking a bank clears that. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin session (`is_admin()`) or the service role for the scheduled sync |
 | `watchlist-cron-sync` | The watchlist sync (see below). Refreshes status, episodes, seasons, streaming platform from TMDB for every watchlist item, or for one title when the body names `{ category, id }`. A manual full sync is refused (429) within 10 minutes of the last; single-title resyncs are capped at 20 a minute. | `TMDB_API_KEY` (+ auto-injected Supabase vars) | Service role key (pg_cron) or an admin session (the Sync buttons) |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically into every edge function's environment by the platform — never set those manually. Everything else needs:
 
 ```sh
-supabase secrets set TMDB_API_KEY=... TRUELAYER_CLIENT_ID=... TRUELAYER_CLIENT_SECRET=... ADMIN_EMAIL=...
+supabase secrets set TMDB_API_KEY=... TRUELAYER_CLIENT_ID=... TRUELAYER_CLIENT_SECRET=...
 supabase functions deploy tmdb-proxy
 supabase functions deploy truelayer-sync
 supabase functions deploy watchlist-cron-sync

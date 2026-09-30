@@ -6,6 +6,7 @@ description: >
   conversion across a named file set. Requires the brief to name the files and
   the pattern. Runs lint and typecheck before reporting. Refuses open-ended
   scope, new abstractions, and anything the brief did not name.
+model: gemini-2.5-flash
 ---
 
 Read `AGENTS.md` before starting. It is this project's rule file and binds you.

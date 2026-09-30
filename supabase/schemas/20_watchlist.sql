@@ -302,13 +302,13 @@ CREATE POLICY "Admin insert favourites" ON "public"."favourites" FOR INSERT TO "
 
 CREATE POLICY "Admin insert sync_log" ON "public"."sync_log" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
 
--- The trigger that writes this table (log_watchlist_event(), 01_functions.sql)
--- is not SECURITY DEFINER, so it inserts as whoever ran the UPDATE on
--- tv_shows/movies. The browser sync (WatchlistContext.tsx) runs as a signed-in
--- admin, so without this policy the admin's own sync would fail RLS on its
--- own trigger-driven insert. watchlist-cron-sync's nightly UPSERT uses the
--- service role and bypasses RLS entirely, so it needs no policy here.
-CREATE POLICY "Admin insert" ON "public"."watchlist_events" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+-- watchlist_events deliberately has no INSERT policy. Its only writer is the
+-- trigger function log_watchlist_event() (01_functions.sql), which is SECURITY
+-- DEFINER and so inserts as its owner, postgres, without the caller holding
+-- INSERT. That covers the browser sync (WatchlistContext.tsx, a signed-in
+-- admin) and watchlist-cron-sync's nightly UPSERT alike, since both cause the
+-- row by updating tv_shows/movies. No signed-in role can insert directly, admin
+-- included; service_role bypasses RLS and keeps its grant.
 
 CREATE POLICY "Admin read sync_log" ON "public"."sync_log" FOR SELECT TO "authenticated" USING ("public"."is_admin"());
 
@@ -337,9 +337,10 @@ CREATE POLICY "Public Read Access" ON "public"."tv_shows" FOR SELECT USING (true
 CREATE POLICY "Public Read Access" ON "public"."weekly_schedule" FOR SELECT USING (true);
 
 -- Public read, same as every sibling table above: this table holds show
--- names and platform names, nothing private. No UPDATE or DELETE policy
--- anywhere in this file for this table -- events are append-only, and
--- nothing should ever be able to rewrite history.
+-- names and platform names, nothing private. No INSERT, UPDATE or DELETE
+-- policy anywhere in this file for this table -- events are append-only,
+-- written only by the definer trigger, and nothing should ever be able to
+-- rewrite history.
 CREATE POLICY "Public Read Access" ON "public"."watchlist_events" FOR SELECT USING (true);
 
 ALTER TABLE "public"."favourites" ENABLE ROW LEVEL SECURITY;
@@ -394,6 +395,11 @@ CREATE OR REPLACE TRIGGER "tr_log_movie_watchlist_event" AFTER UPDATE ON "public
 -- view runs as its owner and reads straight past the RLS on the three
 -- underlying tables, turning a public-read surface into an admin-only-in-name
 -- one. Postgres 15.8 supports it; this must not ship without it.
+--
+-- Season 0 is TMDB's "Specials". It sorts ahead of season 1 under the
+-- DISTINCT ON ordering, so without `season_number > 0` a show with an unwatched
+-- special led Watch Next with it. A show whose only unwatched episodes are
+-- specials is therefore absent from the view; that is intended.
 CREATE OR REPLACE VIEW "public"."watchlist_up_next" WITH (security_invoker = true) AS
 SELECT DISTINCT ON (s.tv_show_id)
        s.tv_show_id,
@@ -436,6 +442,7 @@ FROM   "public"."tv_show_episodes" e
 JOIN   "public"."tv_show_seasons"  s  ON s.id = e.season_id
 JOIN   "public"."tv_shows"         sh ON sh.id = s.tv_show_id
 WHERE  e.watched = false
+  AND  s.season_number > 0
 ORDER  BY s.tv_show_id, s.season_number, e.episode_number;
 
 -- Grants
@@ -511,9 +518,15 @@ GRANT ALL ON SEQUENCE "public"."weekly_schedule_id_seq" TO "service_role";
 -- watchlist_up_next is a read composition of three already-public-read
 -- tables (see the "Public Read Access" policies above), so it is a public
 -- surface deliberately, not an oversight -- it carries no is_admin() gate.
-GRANT SELECT ON TABLE "public"."watchlist_up_next" TO "anon";
+--
+-- SELECT only: a newly created view inherits ALL from the default privileges
+-- (see "ALTER DEFAULT PRIVILEGES" in 90_privileges.sql), and pg_dump emits
+-- GRANT and never REVOKE, so without the REVOKE below anon and authenticated
+-- would hold INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES and TRIGGER on it
+-- as they did before 20260929202643.
+REVOKE ALL ON TABLE "public"."watchlist_up_next" FROM PUBLIC, "anon", "authenticated";
 
-GRANT SELECT ON TABLE "public"."watchlist_up_next" TO "authenticated";
+GRANT SELECT ON TABLE "public"."watchlist_up_next" TO "anon", "authenticated";
 
 -- watchlist_events grants: narrower than every other table in this file, on
 -- purpose. Default privileges on this project still hand ALL on a newly
@@ -526,29 +539,27 @@ GRANT SELECT ON TABLE "public"."watchlist_up_next" TO "authenticated";
 -- anon: SELECT only, same reasoning as every table above -- show names and
 -- platform names, nothing private.
 --
--- authenticated: SELECT + INSERT, not ALL. log_watchlist_event() is not
--- SECURITY DEFINER (deliberately -- see 01_functions.sql), so the browser
--- sync's trigger-driven INSERT runs as the authenticated admin who fired the
--- UPDATE, and needs the underlying table privilege to succeed -- the "Admin
--- insert" RLS policy above is a second, independent gate on top of this
--- grant, not a substitute for it. No UPDATE, DELETE or TRUNCATE grant:
--- this table is append-only, and revoking those at the grant layer (not just
--- relying on "no policy exists for them") means a future RLS mistake here
--- still cannot rewrite history. TRUNCATE in particular is never subject to
--- RLS at all, which is exactly the gap 20260912130000 closed for anon on the
--- other six tables -- here it is closed for authenticated too, because
--- nothing legitimate needs it.
+-- authenticated: SELECT only, same as anon (the signed-in admin reads the News
+-- feed through the "Public Read Access" policy, which has no TO clause).
+-- log_watchlist_event() is SECURITY DEFINER (see 01_functions.sql), so its
+-- INSERT runs as the function owner and the caller needs no INSERT here; that
+-- is what lets this grant and the INSERT policy both be absent. No INSERT,
+-- UPDATE, DELETE or TRUNCATE grant: this table is append-only, and revoking
+-- those at the grant layer (not just relying on "no policy exists for them")
+-- means a future RLS mistake here still cannot write or rewrite history.
+-- TRUNCATE in particular is never subject to RLS at all, which is exactly the
+-- gap 20260912130000 closed for anon on the other six tables -- here it is
+-- closed for authenticated too, because nothing legitimate needs it.
 --
--- service_role: ALL, matching every table above -- watchlist-cron-sync
--- authenticates with SUPABASE_SERVICE_ROLE_KEY and bypasses RLS, but its
--- trigger-driven INSERT still needs the underlying grant to succeed.
+-- service_role: ALL, matching every table above -- its bypass of RLS does not
+-- bypass the underlying grant.
 REVOKE ALL ON TABLE "public"."watchlist_events" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."watchlist_events" FROM "authenticated";
 
 GRANT SELECT ON TABLE "public"."watchlist_events" TO "anon";
 
-GRANT SELECT, INSERT ON TABLE "public"."watchlist_events" TO "authenticated";
+GRANT SELECT ON TABLE "public"."watchlist_events" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."watchlist_events" TO "service_role";
 
@@ -601,10 +612,10 @@ COMMENT ON COLUMN "public"."tv_show_seasons"."created_at" IS
     'When this row was inserted, for the season/episode announcements feed. Left null on every pre-migration row and never backfilled -- a fabricated announcement date reads exactly like a real one, and stamping the backfill would make the whole pre-existing library look announced at once. Null means "inserted before this was recorded", so a rolling window (created_at > now() - interval ''7 days'') excludes those rows on its own and is the correct way to read this column.';
 
 COMMENT ON COLUMN "public"."tv_shows"."pinned" IS
-    'Marks the single title the countdown widget shows next. At most one row should be true at a time, but that is enforced in WatchlistContext.tsx, not here -- a partial unique index would only relocate an invariant the UI already guarantees by construction (one toggle, one write).';
+    'Marks the title the countdown widget shows. Nothing in the app writes this column yet -- it is set by hand -- and nothing enforces that at most one row is true, here or in the client. The only reader, usePinnedTitle (src/features/watchlist/useWatchlistNews.ts), takes one pinned row from tv_shows and one from movies and prefers the show, so with several rows pinned an arbitrary show wins over any movie.';
 
 COMMENT ON COLUMN "public"."movies"."pinned" IS
-    'Marks the single title the countdown widget shows next. At most one row should be true at a time, but that is enforced in WatchlistContext.tsx, not here -- a partial unique index would only relocate an invariant the UI already guarantees by construction (one toggle, one write).';
+    'Marks the title the countdown widget shows. Nothing in the app writes this column yet -- it is set by hand -- and nothing enforces that at most one row is true, here or in the client. The only reader, usePinnedTitle (src/features/watchlist/useWatchlistNews.ts), takes one pinned row from tv_shows and one from movies and prefers the show, so with several rows pinned an arbitrary show wins over any movie.';
 
 COMMENT ON COLUMN "public"."tv_shows"."trailer_key" IS
     'A YouTube video key from TMDB''s videos append (e.g. "dQw4w9WgXcQ"), not a URL -- the player builds the embed URL client-side.';

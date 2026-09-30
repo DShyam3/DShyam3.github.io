@@ -4,9 +4,7 @@ description: >
   Read-only locator for this repo. Answers "where is X defined", "what calls Y",
   "which files touch Z". Consults the graphify knowledge graph before grepping.
   Returns a file:line table and nothing else. Never edits, never proposes a fix.
-# model: set to a fast/cheap model id available to your CLI (e.g. a Flash tier).
-# Verify the id against your installed version before enabling -- a wrong id
-# fails silently. Omitted means it inherits the parent model.
+model: gemini-2.5-flash-lite
 ---
 
 Locate. Report. Stop. Never edit. Never suggest a fix.

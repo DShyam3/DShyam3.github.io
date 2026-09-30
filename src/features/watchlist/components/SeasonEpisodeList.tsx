@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Season } from '@/features/watchlist/useWatchlist';
+import { daysUntil } from '@/features/watchlist/watchlist-utils';
 interface SeasonEpisodeListProps {
   seasons: Season[];
   showId: string;
@@ -165,7 +166,8 @@ export function SeasonEpisodeList({
               currentSeason.season_number,
               episode.episode_number,
             );
-            const released = !episode.release_date || new Date(`${episode.release_date}T23:59:59`).getTime() <= Date.now();
+            // Air day counts as released, matching the Up Next rail and News.
+            const released = (daysUntil(episode.release_date, new Date()) ?? 0) <= 0;
             const previousEpisodes = currentSeason.episodes.filter(
               (candidate) => candidate.episode_number < episode.episode_number,
             );
@@ -217,8 +219,8 @@ export function SeasonEpisodeList({
                         {episode.title || 'Title unavailable'}
                       </h4>
                       {watched && <span className="text-xs">✓</span>}
-                      {!released && <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Not released</span>}
-                      {nextUp && <span className="ml-auto rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary">Next up</span>}
+                      {!released && <span className="ml-auto text-xs font-medium uppercase tracking-wider text-muted-foreground">Not released</span>}
+                      {nextUp && <span className="ml-auto rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium uppercase tracking-wider text-primary">Next up</span>}
                     </div>
                   </div>
                   {episode.runtime && (

@@ -4,15 +4,18 @@ import { Button } from '@/components/ui/button';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import type { UpNextRailItem } from '@/features/watchlist/useUpNext';
 import { providerSearchUrl } from '@/features/watchlist/provider-links';
+import { SectionFailure } from './SectionFailure';
 
 interface UpNextRailProps {
   items: UpNextRailItem[];
   onSelect: (tvShowId: number) => void;
   plannedDays?: Record<string, string>;
+  /** The view could not be read: say so rather than hide the rail. */
+  failed?: boolean;
 }
 
 /** Details and provider links are separate controls, usable by touch or keyboard. */
-export function UpNextRail({ items, onSelect, plannedDays }: UpNextRailProps) {
+export function UpNextRail({ items, onSelect, plannedDays, failed }: UpNextRailProps) {
   const rail = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
   const measure = () => {
@@ -27,7 +30,15 @@ export function UpNextRail({ items, onSelect, plannedDays }: UpNextRailProps) {
     measure();
     return () => observer.disconnect();
   }, [items.length]);
-  if (!items.length) return null;
+  if (!items.length) {
+    if (!failed) return null;
+    return (
+      <section className="min-w-0 space-y-3">
+        <DotMatrixText text="WATCH NEXT" size="xs" />
+        <SectionFailure>Could not load what to watch next</SectionFailure>
+      </section>
+    );
+  }
   const scroll = (direction: number) => rail.current?.scrollBy({ left: direction * rail.current.clientWidth * .8, behavior: 'auto' });
   return (
     <section className="min-w-0 space-y-3">
@@ -38,6 +49,9 @@ export function UpNextRail({ items, onSelect, plannedDays }: UpNextRailProps) {
           <Button variant="outline" size="icon" aria-label="More watch next titles" disabled={!edges.right} onClick={() => scroll(1)}><ChevronRight /></Button>
         </div>}
       </div>
+      {/* Cached rows stay up; without this an episode just marked watched
+          would still lead the rail with no sign the list is old. */}
+      {failed && <SectionFailure>Could not refresh — showing the list from the last load</SectionFailure>}
       <div ref={rail} onScroll={measure} className="content-rail flex gap-4 overflow-x-auto p-1 pb-3" tabIndex={0} role="region" aria-label="Watch next titles, scroll horizontally for more">
         {items.map(item => {
           const url = providerSearchUrl(item.platform, item.title);

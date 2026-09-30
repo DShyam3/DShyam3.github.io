@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CARD_GRID } from '@/theme/layout';
 import { CountdownCard } from '@/components/shared/CountdownCard';
 import { UpNextRail } from '@/features/watchlist/components/UpNextRail';
+import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { PlatformBadge } from '@/features/watchlist/components/PlatformLogo';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
@@ -201,19 +202,28 @@ function UpdatesList({
   activeWindow,
   today,
   onSelect,
+  failed,
 }: {
   rows: UpdatesFeedRow[];
   activeWindow: UpdatesWindow;
   today: Date;
   onSelect: (ref: EntityRef) => void;
+  failed: boolean;
 }) {
   return (
     <section className="min-w-0 space-y-1">
       <DotMatrixText text="UPDATES" size="xs" />
+      {failed && (
+        <SectionFailure>
+          {rows.length === 0 ? 'Could not load updates' : 'Some updates could not load'}
+        </SectionFailure>
+      )}
       {rows.length === 0 ? (
+        !failed && (
         <p className="px-2 py-3 text-xs text-muted-foreground">
           {activeWindow === 'week' ? 'Nothing this week' : 'Nothing this month'}
         </p>
+        )
       ) : (
         // Its own scroll only from xl, where it is a column beside Upcoming;
         // stacked, a capped list would be a scroller inside the page's.
@@ -278,19 +288,28 @@ function UpcomingGrid({
   activeWindow,
   onSelect,
   scheduleFor,
+  failed,
 }: {
   items: UpcomingRow[];
   activeWindow: UpdatesWindow;
   onSelect: (ref: EntityRef) => void;
   scheduleFor?: (item: UpcomingRow) => React.ComponentProps<typeof NewsPosterCard>['schedule'];
+  failed: boolean;
 }) {
   return (
     <section className="min-w-0 space-y-3">
       <DotMatrixText text="UPCOMING" size="xs" />
+      {failed && (
+        <SectionFailure>
+          {items.length === 0 ? 'Could not load upcoming releases' : 'Some upcoming releases could not load'}
+        </SectionFailure>
+      )}
       {items.length === 0 ? (
+        !failed && (
         <p className="px-2 py-3 text-xs text-muted-foreground">
           {activeWindow === 'week' ? 'Nothing coming this week' : 'Nothing coming this month'}
         </p>
+        )
       ) : (
         <div className={cn(CARD_GRID, 'news-card-grid')}>
           {items.map((item) => (
@@ -377,22 +396,22 @@ const WatchlistNews = () => {
     };
   }, [addToSchedule, isAdmin, isInSchedule, removeFromScheduleByWatchlistId]);
 
-  const { pinned, loading: pinnedLoading } = usePinnedTitle();
+  const { pinned, loading: pinnedLoading, failed: pinnedFailed } = usePinnedTitle();
   const pinnedDays = pinned ? daysUntil(pinned.release_date, today) : null;
   const showCountdown = !!pinned && pinnedDays !== null && pinnedDays >= 0;
 
-  const { upNext } = useUpNext();
+  const { upNext, failed: upNextFailed } = useUpNext();
   const watchNextIds = new Set(upNext.map((item) => item.tv_show_id));
 
   // Out Now and Updates both fetch their widest window (30 days) once; the
   // page-level window filters client-side (filterRecentByWindow here,
   // filterUpdatesByWindow below), so switching it never refetches. The one
   // episode fetch serves both sections.
-  const { episodes: recentEpisodes, loading: recentLoading } = useRecentEpisodes(30);
-  const { movies: outNowMovies, loading: outNowMovieLoading } = useRecentMovies(30);
+  const { episodes: recentEpisodes, loading: recentLoading, failed: recentFailed } = useRecentEpisodes(30);
+  const { movies: outNowMovies, loading: outNowMovieLoading, failed: outNowMovieFailed } = useRecentMovies(30);
 
   const outNowPremiereCandidates = premieresOf(recentEpisodes);
-  const { episodesBySeason: premiereSeasonEpisodes, loading: premiereSeasonLoading } =
+  const { episodesBySeason: premiereSeasonEpisodes, loading: premiereSeasonLoading, failed: premiereSeasonFailed } =
     usePremiereSeasonEpisodes(
       outNowPremiereCandidates.map((ep) => ({
         tv_show_id: ep.tv_show_id,
@@ -400,6 +419,7 @@ const WatchlistNews = () => {
       })),
     );
   const outNowLoading = recentLoading || outNowMovieLoading || premiereSeasonLoading;
+  const outNowFailed = recentFailed || outNowMovieFailed || premiereSeasonFailed;
 
   // A premiere drops out of Out Now when its season is already finished (the
   // user is caught up -- see isSeasonFinished) or when the same show already
@@ -441,9 +461,10 @@ const WatchlistNews = () => {
     outNowItems.filter((item) => item.kind === 'premiere').map((item) => item.entityId),
   );
 
-  const { episodes: upcomingEpisodes, loading: upcomingTvLoading } = useUpcomingEpisodes();
-  const { movies: upcomingMovies, loading: upcomingMovieLoading } = useUpcomingMovies();
+  const { episodes: upcomingEpisodes, loading: upcomingTvLoading, failed: upcomingTvFailed } = useUpcomingEpisodes();
+  const { movies: upcomingMovies, loading: upcomingMovieLoading, failed: upcomingMovieFailed } = useUpcomingMovies();
   const upcomingLoading = upcomingTvLoading || upcomingMovieLoading;
+  const upcomingFailed = upcomingTvFailed || upcomingMovieFailed;
   const upcomingItems: UpcomingRow[] = [
     ...premieresOf(upcomingEpisodes).map((ep): UpcomingRow => {
       const days = daysUntil(ep.release_date, today) ?? 0;
@@ -481,7 +502,7 @@ const WatchlistNews = () => {
   // Updates fetches its widest window (30 days) once from every source; the
   // page-level window control filters client-side (filterUpdatesByWindow),
   // so switching it never refetches.
-  const { events, loading: eventsLoading } = useWatchlistEvents(30);
+  const { events, loading: eventsLoading, failed: eventsFailed } = useWatchlistEvents(30);
 
   // A show already shown in Watch Next or Out Now does not also get a
   // released-episode row here (priority Watch Next > Out Now > Updates).
@@ -491,11 +512,12 @@ const WatchlistNews = () => {
     (group) => !excludedFromUpdates.has(group.tv_show_id),
   );
 
-  const { announcements, firstSeenByShow, loading: announcementsLoading } =
+  const { announcements, firstSeenByShow, loading: announcementsLoading, failed: announcementsFailed } =
     useRecentAnnouncements(30);
   const announcementGroups = groupAnnouncementsByShow(announcements, firstSeenByShow, today);
 
   const updatesLoading = eventsLoading || recentLoading || announcementsLoading;
+  const updatesFailed = eventsFailed || recentFailed || announcementsFailed;
   const updatesFeed = filterUpdatesByWindow(
     buildUpdatesFeed(recentGroups, events, announcementGroups, today),
     newsWindow,
@@ -547,6 +569,7 @@ const WatchlistNews = () => {
         <UpNextRail
           items={upNext}
           onSelect={(tvShowId) => openDetail({ entityType: 'tv_show', entityId: tvShowId })}
+          failed={upNextFailed}
           plannedDays={Object.fromEntries(schedule.filter((entry) => entry.category === 'TV Shows').map((entry) => [entry.watchlistItemId, entry.mode === 'date' && entry.scheduledDate ? new Date(`${entry.scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : entry.day]))}
         />
 
@@ -564,9 +587,15 @@ const WatchlistNews = () => {
           isInSchedule={isInSchedule}
         />
 
-        {!outNowLoading && outNowItems.length > 0 && (
+        {!outNowLoading && (outNowItems.length > 0 || outNowFailed) && (
           <section className="min-w-0 space-y-3">
             <DotMatrixText text="OUT NOW" size="xs" />
+            {outNowFailed && (
+              <SectionFailure>
+                {outNowItems.length === 0 ? 'Could not load new releases' : 'Some new releases could not load'}
+              </SectionFailure>
+            )}
+            {outNowItems.length > 0 && (
             <div className={cn(CARD_GRID, 'news-card-grid', 'watchlist-news-full-width')}>
               {outNowItems.map((item) => (
                 <NewsPosterCard
@@ -589,6 +618,7 @@ const WatchlistNews = () => {
                 />
               ))}
             </div>
+            )}
           </section>
         )}
 
@@ -598,11 +628,19 @@ const WatchlistNews = () => {
           activeWindow={newsWindow}
           onSelect={openDetail}
           scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)}
+          failed={upcomingFailed}
           />
         )}
 
         {!updatesLoading && (
-          <UpdatesList rows={updatesFeed} activeWindow={newsWindow} today={today} onSelect={openDetail} />
+          <UpdatesList rows={updatesFeed} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />
+        )}
+
+        {!pinnedLoading && pinnedFailed && (
+          <section className="col-span-full min-w-0 space-y-3">
+            <DotMatrixText text="COUNTDOWN" size="xs" />
+            <SectionFailure>Could not load the countdown</SectionFailure>
+          </section>
         )}
 
         {!pinnedLoading && showCountdown && pinned && (

@@ -4,7 +4,7 @@ description: >
   Reviews a diff against this project's own rules rather than generic good
   practice. Use before a commit that touches finance, the database, or more
   than a couple of files. Reports findings only, never edits.
-# model: this one wants the strongest model available, not the cheapest.
+model: gemini-2.5-pro
 ---
 
 Read `AGENTS.md` in full. It is the checklist -- your value over a generic

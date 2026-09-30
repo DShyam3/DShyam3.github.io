@@ -89,14 +89,16 @@ statements afterwards.
 
 ### 4. Create the admin account
 
-The site has exactly one privileged user. `is_admin()` compares the caller's
-JWT email against a hardcoded address, so:
+`is_admin()` checks the caller's user id against `public.admin_users` (see
+`00_admin_users.sql`), and every policy and admin-only edge function asks it.
+So:
 
 1. Create the account in Supabase Auth (Authentication -> Users -> Add user).
-2. Check the address in `supabase/schemas/01_functions.sql` matches it, and
-   push the change if not.
-3. Set `VITE_ADMIN_EMAIL` to the same address -- the frontend uses it only to
-   decide what to render; the database decides what is *allowed*.
+2. In the SQL editor, which runs as `postgres`, the table owner, add it:
+   `INSERT INTO public.admin_users (user_id, email) SELECT id, email FROM auth.users WHERE email = '<address>';`
+   No API session can write `admin_users`, an administrator's included.
+3. Set `VITE_ADMIN_EMAIL` to the same address. It is only the account the
+   `/auth` password box signs in as; it grants nothing.
 
 Public signup should be off. A second account would be harmless today, since
 `is_admin()` gates every write, but there is no reason to allow one.
@@ -124,7 +126,7 @@ TrueLayer credentials for the bank sync).
 |---|---|
 | `VITE_SUPABASE_URL` | Project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | The anon key |
-| `VITE_ADMIN_EMAIL` | Which account the UI treats as admin |
+| `VITE_ADMIN_EMAIL` | Which account the `/auth` password box signs in as |
 | `VITE_TMDB_IMAGE_BASE_URL` | `https://image.tmdb.org/t/p/w500` |
 
 **Everything with a `VITE_` prefix is compiled into the bundle and readable by

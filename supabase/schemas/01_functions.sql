@@ -165,13 +165,22 @@ ALTER FUNCTION "public"."set_watched_at"() OWNER TO "postgres";
 -- set_watched_at's watched IS DISTINCT FROM check above -- it would swallow
 -- a real first-time value.
 --
--- Not SECURITY DEFINER: the two watchlist_events RLS policies (public
--- SELECT, admin-gated INSERT) are the actual gate on who can write history.
--- Running as the function owner would let this trigger write past a future
--- RLS mistake on the table it feeds.
+-- SECURITY DEFINER: this trigger is meant to be the only writer of
+-- watchlist_events. Running as its owner (postgres, which owns the table and
+-- is exempt from its RLS -- the table is never FORCE ROW LEVEL SECURITY) means
+-- the caller who fires it needs no INSERT privilege, and that is what lets
+-- the direct-insert path close: watchlist_events has no INSERT policy and no
+-- INSERT grant for anon or authenticated (20_watchlist.sql), so only this
+-- trigger and service_role can add a row. search_path is empty and every name
+-- in the body is schema-qualified, so no function planted in public -- a
+-- jsonb_build_object with narrower argument types would outrank pg_catalog's
+-- -- can run as postgres through it. EXECUTE is revoked from
+-- PUBLIC, anon and authenticated at the bottom of this file; firing a trigger
+-- does not check EXECUTE on its function (only CREATE TRIGGER does), so the
+-- revoke cannot stop the triggers on tv_shows and movies.
 CREATE OR REPLACE FUNCTION "public"."log_watchlist_event"() RETURNS "trigger"
-    LANGUAGE "plpgsql"
-    SET "search_path" TO 'public', 'pg_temp'
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
     AS $$
 DECLARE
   entity "text";
@@ -184,7 +193,7 @@ BEGIN
       entity,
       NEW.id,
       'platform_change',
-      jsonb_build_object('from', OLD.platform, 'to', NEW.platform)
+      pg_catalog.jsonb_build_object('from', OLD.platform, 'to', NEW.platform)
     );
   END IF;
 
@@ -195,7 +204,7 @@ BEGIN
         'tv_show',
         NEW.id,
         'status_change',
-        jsonb_build_object('from', OLD.status, 'to', NEW.status)
+        pg_catalog.jsonb_build_object('from', OLD.status, 'to', NEW.status)
       );
     END IF;
   END IF;
@@ -277,18 +286,25 @@ GRANT ALL ON FUNCTION "public"."set_watched_at"() TO "authenticated";
 
 GRANT ALL ON FUNCTION "public"."set_watched_at"() TO "service_role";
 
-GRANT ALL ON FUNCTION "public"."log_watchlist_event"() TO "anon";
+-- log_watchlist_event() is SECURITY DEFINER, so EXECUTE must not stay open to
+-- PUBLIC (the default) or to the two API roles that have it by explicit grant.
+-- Postgres already refuses to call a trigger function outside trigger context,
+-- so this is defence in depth rather than the only barrier. service_role keeps
+-- its grant.
+REVOKE EXECUTE ON FUNCTION "public"."log_watchlist_event"() FROM PUBLIC;
 
-GRANT ALL ON FUNCTION "public"."log_watchlist_event"() TO "authenticated";
+REVOKE EXECUTE ON FUNCTION "public"."log_watchlist_event"() FROM "anon";
+
+REVOKE EXECUTE ON FUNCTION "public"."log_watchlist_event"() FROM "authenticated";
 
 GRANT ALL ON FUNCTION "public"."log_watchlist_event"() TO "service_role";
 
--- Not revoked: this project's other trigger functions above all keep the
--- default EXECUTE grant to anon/authenticated/service_role rather than
--- revoking it, matched here for consistency. It carries no exploitable
--- surface either way: Postgres refuses to run a trigger function outside
--- trigger context ("trigger functions can only be called as triggers"),
--- before this body ever executes, for any caller.
+-- Not revoked: this project's other (SECURITY INVOKER) trigger functions
+-- above keep the default EXECUTE grant to anon/authenticated/service_role
+-- rather than revoking it, matched here for consistency. It carries no
+-- exploitable surface either way: Postgres refuses to run a trigger function
+-- outside trigger context ("trigger functions can only be called as
+-- triggers"), before this body ever executes, for any caller.
 GRANT ALL ON FUNCTION "public"."finance_keep_row_scope"() TO "anon";
 
 GRANT ALL ON FUNCTION "public"."finance_keep_row_scope"() TO "authenticated";

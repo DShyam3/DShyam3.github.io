@@ -170,7 +170,10 @@ export function useSchedule() {
   };
 
   const getScheduleForDay = (day: (typeof DAYS)[number]) => {
-    const monthKey = new Date().toISOString().slice(0, 7);
+    // Local month: the UTC one is still last month for the first hour of the
+    // 1st in BST.
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     return schedule.filter((item) =>
       item.mode !== 'date'
         ? item.day === day

@@ -4,6 +4,7 @@ description: >
   Writes or changes a pure calculation module under src/lib/finance/, with its
   paired test file. Use when a figure the app shows needs computing, changing or
   covering. Implements arithmetic; does not decide what the arithmetic should be.
+model: gemini-2.5-flash
 ---
 
 Read `AGENTS.md`, section "How AI is used in this project", before starting.
