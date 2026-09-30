@@ -152,32 +152,6 @@ condition that would reopen it.
 
 ## Part 2 — What is left
 
-### Review findings, 2026-09-14 — fix before the next feature
-
-`reviewer` ran over the work committed as `3841f031`, `d99817ac` and
-`ef50501e` and found no commit blocker. What it did find, most severe first.
-Rows marked *applied* sit in migrations already run on production, so each
-needs a forward migration rather than an edit.
-
-| Severity | Where | Problem | Fix |
-|---|---|---|---|
-| Medium | `useWatchlistNews.ts`, `useUpNext.ts` | Every hook turns a failed query into "Nothing this week" | Return `error`; render a failure line |
-| Medium | `CountdownCard.tsx:96,111`, `WatchlistNews.tsx:120` | `text-[10px]`, below the 12px minimum | `text-xs` |
-| Low, applied | `20260912140000_watchlist_events.sql` | An admin can insert events directly; the trigger was meant to be the only writer | `SECURITY DEFINER` trigger; drop the insert policy and grant |
-| Low, applied | `20260912090000_watchlist_up_next.sql:103` | The view has no `REVOKE ALL ... FROM anon` before its grant | Revoke, then grant SELECT |
-| Low, applied | `20260912100000_watchlist_8c.sql:102` | The `pinned` comment claims enforcement that does not exist | Correct the comment |
-| Low | `watchlist_up_next` view | No season-0 filter, so a special can lead Watch Next | `season_number > 0`, in the same forward migration |
-| Low | `useWatchlistNews.ts:18` | UTC date string against local-midnight filters, off by a day 00:00–01:00 in BST | Build the date from local parts |
-| Low | `AuthContext.tsx:57` | One failed `is_admin` call on token refresh drops admin mid-session | Keep the last answer per user; add a timeout |
-| Low | `src/integrations/supabase/types.ts` | Hand-written blocks now stale; new tables untyped | Regenerate types; remove the casts |
-| Low | `merchant-logo-cache/index.ts:491` | Index row deleted even when its storage object was not; dead `MIN_OCCURRENCES` | Delete only removed rows; drop the constant |
-| Low | `useWatchlistNews.ts:393,442` | Events for deleted titles render blank; announcements query uncapped | Filter missing titles; order and limit |
-| Low | `WatchlistNews.tsx:432,522` | Recent episodes fetched twice, for 7 and 30 days | Fetch 30, derive 7 |
-| Low | `FEATURES.md:104` | Merchant logos claimed while `BRANDFETCH_CLIENT_ID` is unset in production | Set the secret, or qualify the line |
-| Low | `README.md`, `supabase/README.md` | Still describe `is_admin()` as an email literal and an `ADMIN_EMAIL` secret | Rewrite for `admin_users` |
-| Low | `.gemini/agents/*.md` | No `model:` line, so tiering does not apply to Gemini | Set verified model ids |
-| Low | `WatchlistNews.tsx` `UpdatesList` | Duplicate React keys (`status-tv_show-335`, `platform-movie-1419`, seen 2026-09-25), so rows can be dropped or repeated | Key by the event's own id, or dedupe the feed |
-
 ### Layout containment — what is left
 
 The middle card landed: one framed scroller per route, toolbars that pin only
@@ -192,7 +166,7 @@ browser; Finance was not, because it needs a signed-in session.
 | Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
 | Toolbars that wrap to many rows | Inspiration's filters take four rows (291px) at 768px, so the band unpins and scrolls away. A disclosure for secondary filters would let it pin |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
-| Dialog audit | Statement and investment imports and the EDC builder may still nest a `vh` cap inside `.dialog-body`; payslip and benefits dialogs are done |
+| Dialog audit | Statement and investment imports may still nest a `vh` cap inside `.dialog-body` |
 | Watchlist episode dialog | Deliberate split panes; audit their heights on short and narrow screens on their own |
 | Further consolidation | Where a finance hero repeats its first section's figure, keep one. Audit each pair; remove nothing without a home for every figure and action |
 | Home View All | Expands inline. A capped preview linking to Transactions is a product decision, not containment work |
@@ -253,37 +227,28 @@ extract in the browser.
 
 | Question | Why it is stuck |
 |---|---|
-| `rounded-xl` (126) vs `rounded-lg` (314) | Changes every card corner in the section. A look, not a cleanup |
-| Public demo profile | Decided in principle, never scoped. Changes what the anon role may read |
 | FCA framing | Recommending specific financial products to UK consumers is a regulated activity. Guidance built so far is phrased as information only (names debt rates, spare cash and utilisation, never steers); this row now matters only for a product catalogue or public profile feature |
-| Hosted multi-user vs self-host template | Every RLS policy is `is_admin()`; no policy uses `auth.uid()` and `finance_profiles.owner_user_id` is read by nothing. A hosted version means per-owner policies on every table, per-user TrueLayer and document isolation; a template needs none of that |
 
 ### Left-over from provider and save-safety work (2026-09-27)
 
-- **Drop `finance_seed_backup` table** — locked backup taken by the 2026-09-28 migrations: 67 shared template, item and category rows and 12 duplicate settings rows. No policies or client grants. Drop it once the owner confirms the cleanup and the settings dedupe look right in production.
-- **Latent shared-default takeover on other tables** — goals, goal contributions and settings keep shared `is_default` rows and are saved as whole collections (as are memberships, debts and credit scores); the row-scope trigger (`20260927192100`) covers only budget categories, budget items and recurring bills. Transactions and bank accounts refuse to write shared rows. Latent: both profiles own their rows in these tables today. Decide: extend the trigger, materialise per profile like the budget, or accept.
+- **Shared default rows — transactions and bank accounts only** — Transactions and bank accounts refuse to write shared rows. Latent: no profile shows shared rows in these tables today. Decide: treat shared rows as read-only in the UI, or materialise them per profile as the budget does.
 - **Schema-file anon grants drift** — `supabase/schemas/40_finance.sql` declares `INSERT/UPDATE/DELETE/TRUNCATE` grants on `finance_budget_items`, `finance_categories`, `finance_recurring_bills`, `finance_templates` for the anon role, but live anon holds none (verified 2026-09-27). Not an exposure (RLS allows only what the policies grant), but the file disagrees with the live state. Clarify which is the source of truth and sync the other.
 - **`handleEditItem` in BudgetSurface** — pre-existing: drops `linkedAccountId` on save, unlike `handleAddItem`. Owner's call whether to preserve it.
 - **Preset provider names** — existing items like "Streaming (Netflix)" fold provider into the name (transactions match by name); the `provider` column is separate. Owner decided not to split existing names into the provider field. Existing and new items can diverge on this point.
 
-### Row-level save follow-ups (reviewer, 2026-09-29, none blocking)
+### Row-level save follow-ups (what is left)
 
-- **Review marks made in the ~800 ms before a same-profile refresh are sent but not shown until the next load.** The refresh waits for saves already sent, not for the pending coalesced one.
-- **`previous` outlives the stale-copy window.** A deliberate edit back to a row's pre-refresh value (un-marking a row another device marked reviewed) is dropped as stale, silently, until the next load. Fix: flush pending coalesced saves at load start and drop `previous`, or expire it after the first save that follows the load.
-- **After an update the stored row is the full local copy, not stored row + patch,** so a column dropped as stale is recorded as written; a later edit back to that value is not sent. Fix: remember `{ ...known.row, ...patch }` for updates.
-- **A timed-out key is unblocked by any successful load,** including one that started while the hung request was still pending; the late request can then land after a newer save. Fix: clear the key when the timed-out run itself settles.
-- **An id that already exists under this profile but is not in the stored map** (an insert whose response was lost; a statement imported in another tab) is skipped on every later edit with a "not saved" toast until reload. Fix: retry skipped ids as profile-scoped updates.
-- **The 30 s deadline covers a whole run**, so a large import sent as many 100-row requests on a slow link reports "timed out" though it completes. Fix: time each request.
+- **Four reference tables delete-then-insert.** `finance_recurring_templates`, `finance_credit_bureaus`, `finance_holiday_defaults` and `finance_budget_presets` insert rows with no `id`. A failed or aborted insert leaves no rows. Closing it means natural unique keys and a migration.
+- **`addDebtObservation`'s debt balance update is not queued through the accounts save key.** It updates synchronously; a timed-out balance update can leave the transaction unwritten while the debt is updated.
+- **`logout()` can report "Still signed in" when signOut errored after already removing the session.**
+- **The load waits on the deadline-wrapped save chain, not the raw request.** A request still running after its deadline can land after the load read, so the load gets old state that the save will overwrite.
+- **A timed-out delete in TransactionsTab / BankAccountsSection reloads immediately, inside the grace window, and shows the row again.**
+- **The sync still overwrites a category set mid-sync on a row that had none.**
+- **A token refresh on a dead link is not limited.** supabase-js refreshes through `/auth/v1/` before the request is made, so the 25 s limit never starts; a save key timed out meanwhile stays held until the refresh settles or the page reloads. Do not time out the refresh itself: aborting one the server already rotated can end the session.
 
 ### Sync and profile switch interactions
 
-**A sync refresh started on one profile is dropped after a switch;** if the user switched to the self profile mid-sync it shows pre-sync rows until the next load. Async refresh cancellation is by profile; a prompt switch mid-refresh abandons the request, and a re-switch to the original profile does not restore it.
-
 **A table that fails to load on profile switch keeps the previous profile's rows visible.** Writes are blocked (collections marked incomplete), but the display is not cleared. User sees the old profile's data with editing disabled, which is confusing. The fix clears the table on a failed load, or renders an error state. Low priority — writes are safe, reading stale data is the symptom of a network failure, and error states are not yet defined for tables.
-
-### Shared default rows — editing without owning
-
-**Editing a transaction or bank account shown from shared default rows** (a profile with none of its own) is refused with a "Some changes not saved" message; the edit shows until the next load. Latent: no profile shows shared rows in these tables today. Decide: treat shared rows as read-only in the UI, or materialise them per profile as the budget does.
 
 ### Public version (UK-only) — what is left
 
@@ -481,18 +446,12 @@ arithmetic over rows already held.
 
 ### 8.I Still to build (the order)
 
-1. **Landscape backdrops for hero and countdown cards** — portrait posters with
-   dark upper halves render nearly black. Store TMDB backdrops (`backdrop_path`)
-   in the sync (`watchlist-cron-sync`) and the add flow, then use them behind
-   the overlaid titles.
-2. **Links dead-link check and auto-metadata**, the highest-value pair outside
+1. **Links dead-link check and auto-metadata**, the highest-value pair outside
    the watchlist, and the only unblocked item here.
-3. **8.D primitives**, when a second surface needs the countdown or change feed.
+2. **8.D primitives**, when a second surface needs the countdown or change feed.
    Do not refactor the watchlist's implementation on spec; refactor when you
    have two callers.
-4. **Recipe JSON-LD import**, after the quantity shape is settled.
-- **Store a watched state for films.** `movies` has no `watched` column, so
-  the News page cannot hide finished films the way it hides finished shows.
+3. **Recipe JSON-LD import**, after the quantity shape is settled.
 
 The pin-setting UI and trailers depend on building the primitives in 8.D.
 Stalled-show detection depends on `watched_at` backfill (8.B) and seeing real
@@ -511,6 +470,10 @@ reporting history to a service whose own consent notice names 210 advertising
 partners. Neither clears the bar in Part 1 for what this site sends outward.
 What was worth taking from Trakt is its `last_activities` delta shape, and the
 `created_at` column in 8.B is that idea at a tenth of the cost.
+
+**Films get no watched state.** Owner decision, 2026-09-29. `movies` has no
+`watched` column. The News page keeps listing films after they have been
+watched, the same way it did before.
 
 ---
 ## Appendix — Verification commands

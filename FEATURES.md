@@ -65,12 +65,14 @@ proxy so the API key never reaches the browser.
   past week or month. The poster grid adds columns as space allows while keeping cards readable. Each card shows the 2:3 poster,
   the title, the release date (with "Season N ·" before it for a later season)
   and the platform mark. Out Now spans the full desktop content width. Watch Next follows: the next episode of any season
-  already under way, plus anything aired in the last 14 days. Its horizontal rail has scroll arrows and a visible scrollbar, with separate
+  already under way, plus anything aired in the last 14 days. Watch Next skips
+  specials (season 0); a show whose only unwatched episodes are specials does
+  not appear. Its horizontal rail has scroll arrows and a visible scrollbar, with separate
   title-detail buttons and provider links. Upcoming shows the same poster cards for season premieres and film
   releases in the coming week or month, nearest first, each with a small dated
   pill showing the days left ("3d", or "Today"). Upcoming and Updates sit in
   two columns beneath Watch Next. The pinned Countdown card uses an overlay
-  layout. An Updates list closes the page, covering the past week or
+  layout, showing the title's landscape backdrop where one is stored, else the poster. An Updates list closes the page, covering the past week or
   month: new episodes ("S1E23 · Emotion and Reason"), platform moves
   ("Netflix → Disney+") and status changes (Ended, Cancelled, In production,
   Returning), each with a poster, the title with the change beneath it, then
@@ -84,7 +86,12 @@ proxy so the API key never reaches the browser.
   release weekday, while films default to a one-off calendar date; either mode
   can be selected in the schedule dialog. Known episode release dates suggest the weekday; when no date is available, a day must be chosen. Episode rows keep names visible, mark
   the next unwatched released episode as "Next up", and disable episodes whose
-  release date has not arrived. Updates scrolls on its own only from 1280px, where it is a column beside Upcoming; narrower, it scrolls with the page content.
+  release date has not arrived. Updates scrolls on its own only from 1280px, where it is a column beside Upcoming; narrower, it scrolls with the page content. When a News section fails to load, it says "Could not load …" instead of
+  showing an empty "Nothing this week"; Watch Next keeps showing the rows it
+  last loaded. Announcements are ordered by recency, capped at 1,000 and marked
+  partial when capped. Events for titles that have been removed from the
+  library are not shown. "Today" and the schedule month follow the viewer's
+  local date.
 - **Library** — a searchable grid of every title, with season and episode
   lists and progress. Cards size to available width at every screen height.
   Platform, genre and status filters live in
@@ -147,9 +154,15 @@ At 1024px wide and 600px tall, the map sits beside the country list, which scrol
 
 ## Inventory and EDC
 
-The inventory collection covers technology, wardrobe and kitchen. On top of it,
-an EDC showcase presents curated everyday-carry sets as built loadouts rather
-than a flat list.
+Inventory opens on EDC: selected everyday-carry items from the inventory,
+grouped by category, including Tech, Jewellery and Toiletries. The showcase is
+read-only and shows all selected items without an Owned, Wishlist or All filter.
+Other inventory categories retain their ownership filters.
+
+Admins use Edit EDC to search all existing inventory items and filter by category,
+then add or remove items from EDC. Each selection saves automatically. The editor
+wraps long item names and brands on narrow screens and keeps focused controls
+fully visible.
 
 ---
 
@@ -178,7 +191,7 @@ cache. Confirmed transfers are left out of spending and income everywhere figure
 
 When a data collection fails to load, saves are refused with a "Not saved" message instead of overwriting stored data. A profile's reset to defaults clears settings and holidays for the current profile, plus the shared reference tables (tax configurations, recurring templates, credit bureaus, holiday defaults, and budget presets); accounts, transactions, budget, bills and goals are not affected. Reset asks for confirmation before proceeding.
 
-Marking, categorising or editing a transaction or bank account saves only the rows you changed and only the columns you edited, scoped by profile. Deleting a transaction or account removes just that one by id, not a collection. This ensures that rows added by a bank sync — which writes in parallel — are never removed by a save from a tab loaded before the sync ran.
+Marking, categorising or editing a transaction or bank account saves only the rows you changed and only the columns you edited, scoped by profile. Deleting a transaction or account removes just that one by id, not a collection. This ensures that rows added by a bank sync — which writes in parallel — are never removed by a save from a tab loaded before the sync ran. Goals, goal contributions, memberships, debts, credit scores and leave save only the rows and columns you changed. When another device loads an older page and edits it, your rows are not deleted or reverted. A bank sync keeps review marks and any category you set on an existing transaction.
 
 Likely transfers between the owner's own accounts — including round trips — are
 proposed in Transactions. Each pair can be confirmed, dismissed as "Not a transfer",
@@ -259,7 +272,10 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   period at a time via the switch, so it never scrolls sideways. Pension contributions
   show their type: Net pay arrangement, Salary sacrifice, or Relief at source
 - **Payslips** — stored with line items, viewable natively, extracted from PDF
-  in the browser. Tax-year totals and a model comparison for student loan. The
+  in the browser. A PDF attached in the add or edit form is read and parsed before
+  saving; the date, employer and any blank or zero fields are filled from the PDF
+  and employer logos matched from experience rows. Payslips can be deleted from the
+  detail or edit dialog. Tax-year totals and a model comparison for student loan. The
   full history shows in the page, without a scroll box of its own.
 - **Time spent** — income seen as hours rather than pounds. Its summary shows the
   gross package beside the year's take-home.
@@ -318,8 +334,11 @@ Every route's content sits in one "middle card" between the fixed header and foo
 
 Section controls (filter bars, Finance's two nav rows) sit inside the card at its top. From 768px they pin as a frosted band, but only while they take at most a quarter of the card's height. Otherwise they scroll away with the content.
 
-Toolbar controls have room for their full focus outlines. The Watchlist search
-field keeps its placeholder readable on narrow screens.
+Shared form controls keep keyboard focus outlines inside their edges. Long
+select and button labels wrap, and dialogs reserve a top strip for the close
+button. Finance form fields stack on narrow screens; payslip lists and details
+wrap long labels and values. The Watchlist search field keeps its placeholder
+readable on narrow screens.
 Long lists show in full and scroll with the card rather than in boxes of their
 own: payslip history, published student-loan rates (the table keeps its sideways
 scroll), a goal's contribution ledger, and the benefits and payslip dialogs. The

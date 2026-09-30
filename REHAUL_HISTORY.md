@@ -2402,3 +2402,113 @@ A save now sends only rows an edit replaced (edits copy the row they change; unt
 Rejected: diffing the list against a fingerprint map of stored rows. A same-profile refresh replaced the map, so a list built before the refresh read as "missing" the synced rows and deleted them, and read the sync's column changes as edits and reverted them.
 
 Left open: memberships, debts, credit scores and goals are still saved whole (no server-side writer); the row-scope trigger (`20260927192100`) covers only budget categories, items and bills.
+
+
+### EDC uses inventory as its source of truth — 2026-09-28
+
+EDC is one curated view of existing inventory rows, selected through `is_edc`.
+The editor searches the full inventory and changes membership; the showcase
+groups selected items by their inventory category. Separate compartment and
+picker modes were removed because choosing what to carry does not require a
+second inventory structure. EDC is the inventory landing view and has no
+ownership facet: that facet could hide selected items. Active loadouts with
+history remain future work.
+
+### Watchlist trigger — SECURITY DEFINER closes the direct-insert path — 2026-09-29
+
+**`log_watchlist_event()` is now SECURITY DEFINER, not SECURITY INVOKER.**
+
+The trigger is meant to be the only writer of `watchlist_events`. Originally it
+was INVOKER because the argument relied on RLS — `watchlist_events` carried an
+"Admin insert" policy and `authenticated` held INSERT. That is a direct-insert
+path: any admin in an authenticated session could write arbitrary rows into a
+table that should only the trigger can write. The `entity_id` column has no
+foreign key because the trigger is the integrity boundary, not the schema.
+
+As SECURITY DEFINER, the trigger writes as its owner (postgres), which owns the
+table and is exempt from RLS (the table does not carry `FORCE ROW LEVEL
+SECURITY`), so the caller no longer needs INSERT. The "Admin insert" policy and
+the `authenticated` INSERT grant were both dropped. `search_path` is pinned to
+empty with every name in the body schema-qualified, so no function planted in
+the public schema could run as postgres through the name resolution. EXECUTE is
+revoked from PUBLIC, anon and authenticated; firing a trigger does not check
+EXECUTE on its function (only `CREATE TRIGGER` does), so the revoke cannot stop
+the triggers on `tv_shows` and `movies`, and service_role keeps its default
+grant. The body is unchanged. Closure: migration `20260929202643`.
+
+### Films get no watched state — owner decision — 2026-09-29
+
+**`movies` has no `watched` column, and the News page keeps listing films after
+they have been watched.**
+
+The watchlist tracks which shows you are watching and what you should see next.
+Films are one-time events, and the owner decided there is no value in recording
+that you have watched them — you see them once and move on, and the listing is
+as much a history of what you have seen as forward guidance. Closing the Phase 8
+item `8.I #5` ("Store a watched state for films") means the column does not get
+added; the News page keeps showing films after watch without being able to
+filter them out the way it filters TV shows. Closure: moved from `8.I` to `8.J`
+in the plan.
+
+### Card corners — unified on `rounded-lg` — 2026-09-30
+
+**Every card and content container uses `rounded-lg` (14px), following the
+`--radius` token.**
+
+The corner radius is set by Tailwind's size classes. `rounded-lg` follows the
+site's `--radius` token at 14px, while `rounded-xl` was Tailwind's fixed 12px.
+The xl corners were actually smaller. Unifying on lg eliminates the choice and
+keeps all surfaces consistent. Affects 143 locations across the codebase.
+
+### Public direction — self-host template — 2026-09-30
+
+**The site stays single-user. The demo profile does not expose finance data to
+anonymous readers. Hosted multi-user is not pursued.**
+
+A public multi-user hosted version would require per-owner RLS policies on every
+finance table and profile-scoped document isolation. A self-host template
+requires none of that — the single-user RLS stays as-is (`is_admin()` on every
+table). Keeping the demo profile private (`no` on anon finance reads) settles
+both the "Public demo profile" decision and the "Hosted multi-user vs
+self-host" decision. If multi-user is revisited later, it becomes a question
+about adding an auth dimension, not about this site.
+
+### Shared default rows — copy per profile, plus DB trigger backstop — 2026-09-30
+
+**Goals, goal contributions, memberships, debts, credit scores and holidays
+are copied per profile on first save.**
+
+Each shared default row carries `profile_id` NULL and `is_default` true in the
+database. When an admin user edits one and saves, the save code finds or creates
+a profile-scoped copy (same data, NULL → `profile_id`, is_default: true → false)
+and saves edits to that copy instead. The database trigger (`finance_keep_row_scope`)
+also enforces the invariant: an insert with `(is_default AND profile_id IS NULL)
+OR (NOT is_default AND profile_id IS NOT NULL)` is kept; anything violating the
+invariant is rejected.
+
+**Transactions and bank accounts deliberately refuse edits to shared rows.**
+Five other tables have foreign keys to bank accounts by id, and copying would
+orphan the links. Shared bank rows stay read-only in the UI (latent today, no
+profile reads shared rows in these tables). If they need materialisation, it is
+a separate decision with a separate reason.
+
+### Whole-collection saves replaced by row-level saves — 2026-09-30
+
+**Goals, goal contributions, memberships, debts, credit scores and holidays are
+saved row by row.**
+
+Every save previously deleted the whole collection and re-inserted it. A sync
+running in parallel would write new rows; if a page was stale and loaded rows at
+time A but saved at time B (after sync had run), the save would delete the
+sync's rows. A row-level save deletes only rows that were in the list the save
+is built from, updates only rows the user edited, inserts only new rows the user
+added. Deletes are skipped if a sync has happened since the list was loaded.
+This means a list two loads stale no longer undoes a sync, and a list loaded
+before a sync runs through its entirety no longer sees its rows deleted after
+the sync completes. Closure: applied 2026-09-30 with fixes to shared default
+copy logic, stored row tracking, and deadline deadlock on save refusal.
+
+**Correction to an earlier entry (2026-09-27):** The `finance_seed_backup`
+table, taken as a locked backup before cleanup, held 79 shared `is_default` rows,
+not 47: 5 categories, 32 budget items, 30 recurring templates, 12 settings rows.
+The earlier entry understated the backup size.
