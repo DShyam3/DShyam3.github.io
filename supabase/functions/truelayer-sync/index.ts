@@ -1170,7 +1170,7 @@ serve(async (req) => {
 
       // Existing IDs remain unchanged: profile-transfer rows can reference
       // them. New rows receive a deterministic hash of account + provider ID.
-      const existingBySource = new Map<string, { id: string; is_reviewed: boolean; category: string | null }>()
+      const existingBySource = new Map<string, { id: string; category: string | null }>()
       const syncedAccountIds = Array.from(new Set(deduped.map(tx => tx.account_id)))
       const providerTransactionIds = Array.from(
         new Set(deduped.map(tx => tx.provider_transaction_id)),
@@ -1182,7 +1182,7 @@ serve(async (req) => {
       for (const batch of chunk(providerTransactionIds, 100)) {
         const { data, error } = await supabaseAdmin
           .from('finance_transactions')
-          .select('id, is_reviewed, category, account_id, provider_transaction_id')
+          .select('id, category, account_id, provider_transaction_id')
           .eq('profile_id', selfProfileId)
           .in('account_id', syncedAccountIds)
           .in('provider_transaction_id', batch)
@@ -1198,41 +1198,46 @@ serve(async (req) => {
           if (row.account_id && row.provider_transaction_id) {
             existingBySource.set(
               transactionSourceKey(row.account_id, row.provider_transaction_id),
-              { id: row.id, is_reviewed: row.is_reviewed, category: row.category },
+              { id: row.id, category: row.category },
             )
           }
         }
       }
 
+      // The owner's columns on a row that already exists -- its review mark,
+      // and its category once set -- are left out of the write instead of
+      // being sent back as read above: a mark made between that read and this
+      // write was overwritten. (Re-mapping the category on every sync also
+      // reverted re-categorisations made inside the overlap window.) Rows are
+      // batched by the columns they send (groupRowsByColumns). Left: a
+      // category set during the sync on a row that had none is overwritten.
       const txRows = await Promise.all(deduped.map(async tx => {
         const existing = existingBySource.get(
           transactionSourceKey(tx.account_id, tx.provider_transaction_id),
         )
-        return {
-          ...tx,
-          id: existing?.id ?? `tl_tx_${await sha256Hex(
-            transactionSourceKey(tx.account_id, tx.provider_transaction_id),
-          )}`,
-          profile_id: selfProfileId,
-          is_reviewed: existing?.is_reviewed ?? tx.is_reviewed,
-          // The category is the owner's once the row exists. Re-mapping it on
-          // every sync reverted any re-categorisation made inside the overlap
-          // window, which the next run re-reads.
-          category: existing?.category || tx.category,
-        }
+        const id = existing?.id ?? `tl_tx_${await sha256Hex(
+          transactionSourceKey(tx.account_id, tx.provider_transaction_id),
+        )}`
+        if (!existing) return { ...tx, id, profile_id: selfProfileId }
+        const { is_reviewed: _ownersMark, category, ...providerColumns } = tx
+        return existing.category
+          ? { ...providerColumns, id, profile_id: selfProfileId }
+          : { ...providerColumns, category, id, profile_id: selfProfileId }
       }))
 
-      for (const batch of chunk(txRows)) {
-        const { error } = await supabaseAdmin
-          .from('finance_transactions')
-          .upsert(batch, { onConflict: 'id' })
-        if (error) {
-          console.error('Failed to write synced transactions:', error)
-          await failRun('Could not write synced transactions')
-          return new Response(JSON.stringify({ error: 'Could not write synced transactions' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
+      for (const group of groupRowsByColumns(txRows)) {
+        for (const batch of chunk(group)) {
+          const { error } = await supabaseAdmin
+            .from('finance_transactions')
+            .upsert(batch, { onConflict: 'id' })
+          if (error) {
+            console.error('Failed to write synced transactions:', error)
+            await failRun('Could not write synced transactions')
+            return new Response(JSON.stringify({ error: 'Could not write synced transactions' }), {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
         }
       }
 

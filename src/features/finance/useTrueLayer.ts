@@ -6,10 +6,13 @@
  * a hook, either can hold its own without either owning the other.
  *
  * `onSynced` is how a caller refreshes the ledger afterwards -- the provider's
- * fetch, in practice -- rather than this hook reaching back into it.
+ * fetch, in practice -- rather than this hook reaching back into it. The
+ * latest one is called, not the one from when the sync started: that one is
+ * bound to the profile shown then, and after a switch mid-sync it refused to
+ * run, leaving the profile now shown on pre-sync rows.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +36,8 @@ class TrueLayerCallError extends Error {
 export function useTrueLayer(onSynced: () => void | Promise<void>) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const onSyncedRef = useRef(onSynced);
+  onSyncedRef.current = onSynced;
 
   // TrueLayer state
   const [trueLayerStatus, setTrueLayerStatus] = useState<TrueLayerStatus | null>(null);
@@ -181,7 +186,7 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
         });
       }
 
-      await onSynced();
+      await onSyncedRef.current();
       void refreshMerchantLogos();
     } catch (err) {
       console.error('Error syncing TrueLayer:', err);
