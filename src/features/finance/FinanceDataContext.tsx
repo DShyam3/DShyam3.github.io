@@ -24,8 +24,8 @@ import {
   type ReactNode,
 } from 'react';
 import defaultPresets from '@/data/presets.json';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { isRestTimeout } from '@/integrations/supabase/rest-timeout-fetch';
 import type { Json, TablesInsert } from '@/integrations/supabase/types';
 import type { Payslip, PayslipLine, PayslipTransactionReconciliation, ProfileTransfer, StudentLoanRateRow } from '@/lib/finance';
 import type {
@@ -92,10 +92,12 @@ import {
 import { selectTaxConfigForDate } from './finance-calcs';
 import {
   ALL_GUARDED_SAVE_KEYS,
+  differsFromSaved,
   inChunks,
   latestOwnRow,
   materialiseBudgetForProfile,
   materialiseRecurringsForProfile,
+  listPredatesLoad,
   planRowWrites,
   rowsToWrite,
   saveKeysBlockedBy,
@@ -103,6 +105,7 @@ import {
 } from './save-safety';
 
 export type BreakdownRateMode = 'normal' | 'including_leave' | 'excluding_leave';
+export type PayslipSaveOutcome = 'saved' | 'failed' | 'unknown';
 import {
   calculateWeekends,
   sanitizeBankAccounts,
@@ -412,18 +415,36 @@ function useProvideFinanceData() {
   // a bank sync, an import) leaves its rows saveable; a switch does not.
   const lastLoadedProfileRef = useRef<string | null>(null);
   // For the tables the bank sync also writes: the row objects this page read
-  // from, or last wrote to, the database. An edit replaces the row it changes
-  // with a copy, so a save writes only rows missing from here (rowsToWrite).
-  const storedRowObjectsRef = useRef(new WeakSet<object>());
+  // from, or last wrote to, the database, each with the number of the load
+  // it belongs to. An edit replaces the row it changes with a copy, so a save
+  // writes only rows missing from here (rowsToWrite); a list still holding an
+  // object from an earlier load was built before the latest one.
+  const storedRowObjectsRef = useRef(new WeakMap<object, number>());
+  // Per table and profile: how many loads have recorded its rows.
+  const loadGenerationRef = useRef(new Map<string, number>());
   // The same rows by table and id, as last read or written, with their owner:
   // a write sends only the columns an edit changed (planRowWrites).
   const storedRowsRef = useRef(new Map<string, Map<string, StoredRow>>());
   // The last save or delete queued per collection key; the next one waits for
   // it, so two in flight cannot commit out of order or prune each other's rows.
   const saveChainsRef = useRef(new Map<string, Promise<unknown>>());
+  // Saves a caller holds back before sending (the review queue's coalesced
+  // save). Sent before a load reads, so the load shows them instead of a copy
+  // that predates them -- and an edit built on that copy cannot send it back.
+  const beforeLoadFlushesRef = useRef(new Set<() => void>());
+  const registerBeforeLoadFlush = useCallback((flush: () => void) => {
+    beforeLoadFlushesRef.current.add(flush);
+    return () => { beforeLoadFlushesRef.current.delete(flush); };
+  }, []);
   // Collections whose save timed out: the request may still land, so later
-  // saves of that key are refused until the next load rather than raced.
+  // saves of that key are refused until it does, rather than raced.
   const timedOutSaveKeysRef = useRef(new Set<string>());
+  // Collections whose last run failed on a request abandoned for time, set by
+  // the run's own catch: its outcome is unknown, so the key is held a while.
+  const abortedSaveKeysRef = useRef(new Set<string>());
+  // The running save's deadline, per key: restarted after every request, so
+  // a long run that keeps answering is not called timed out.
+  const saveProgressRef = useRef(new Map<string, () => void>());
   /**
    * False until the first fetch has come back.
    *
@@ -780,18 +801,14 @@ function useProvideFinanceData() {
      `lib/finance/transfer-detection.ts` proposes the pairs; this table is
      only the confirmations, for the same reason the payslip table above is.
      An amount and a date agreeing is a coincidence often enough that acting
-     on it unasked would reclassify real income as internal movement.
-
-     Untyped client: `finance_transfer_links` is not in the generated types
-     yet -- same reason and same workaround as useWatchlistNews.ts, and it
-     goes when the types are regenerated. */
+     on it unasked would reclassify real income as internal movement. */
   const fetchTransferLinks = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) {
       setTransferLinks([]);
       setTransferLinksFailed(false);
       return;
     }
-    const { data, error } = await (supabase as unknown as SupabaseClient)
+    const { data, error } = await supabase
       .from('finance_transfer_links')
       .select('id, outflow_transaction_id, inflow_transaction_id, confirmed_at')
       .eq('profile_id', forProfile);
@@ -824,13 +841,13 @@ function useProvideFinanceData() {
 
   /* Pairs a person has said are not transfers. They change no figure -- only
      which pairs detection proposes -- so a failed read degrades to proposing
-     them again, and needs no flag. Untyped for the same reason as the links. */
+     them again, and needs no flag. */
   const fetchTransferDismissals = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) {
       setTransferDismissals([]);
       return;
     }
-    const { data, error } = await (supabase as unknown as SupabaseClient)
+    const { data, error } = await supabase
       .from('finance_transfer_dismissals')
       .select('id, outflow_transaction_id, inflow_transaction_id, dismissed_at')
       .eq('profile_id', forProfile);
@@ -856,8 +873,12 @@ function useProvideFinanceData() {
     void fetchTransferDismissals(profileId);
   }, [fetchTransferDismissals, profileId]);
 
-  const savePayslip = async (slip: Payslip) => {
-    if (!isAdmin || !profileId) return;
+  /**
+   * 'unknown' when the write was abandoned for time: it may still commit, so a
+   * caller must not delete a file the row may now point at.
+   */
+  const savePayslip = async (slip: Payslip): Promise<PayslipSaveOutcome> => {
+    if (!isAdmin || !profileId) return 'failed';
     // An import can create a fresh client ID for an existing employer/pay-date
     // row. Resolve its natural key first so correcting that row never changes
     // the primary key a confirmed bank-payment link refers to.
@@ -874,7 +895,7 @@ function useProvideFinanceData() {
         description: 'Please try again.',
         variant: 'destructive',
       });
-      return;
+      return 'failed';
     }
 
     const { error } = await supabase.from('finance_payslips').upsert({
@@ -898,18 +919,20 @@ function useProvideFinanceData() {
     // it and the primary-key upsert updates the row safely.
     }, { onConflict: 'id' });
     if (error) {
+      const unknown = isRestTimeout(error);
       toast({
         title: 'Could not save payslip',
-        description: 'Please try again.',
+        description: unknown ? 'The database did not answer in time. Reload before trying again.' : 'Please try again.',
         variant: 'destructive',
       });
-      return;
+      return unknown ? 'unknown' : 'failed';
     }
     await fetchPayslips(profileId);
+    return 'saved';
   };
 
-  const deletePayslip = async (id: string) => {
-    if (!isAdmin || !profileId) return;
+  const deletePayslip = async (id: string): Promise<boolean> => {
+    if (!isAdmin || !profileId) return false;
     const { error } = await supabase.from('finance_payslips').delete().eq('id', id).eq('profile_id', profileId);
     if (error) {
       toast({
@@ -917,11 +940,12 @@ function useProvideFinanceData() {
         description: 'Please try again.',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
     // The foreign key removes its confirmation too. Refresh both local views
     // so its old transaction is immediately eligible for another review.
     await Promise.all([fetchPayslips(profileId), fetchPayslipReconciliations(profileId)]);
+    return true;
   };
 
   const savePayslipReconciliation = async (payslipId: string, transactionId: string): Promise<boolean> => {
@@ -979,7 +1003,7 @@ function useProvideFinanceData() {
     /* onConflict names the composite unique index exactly. The single-column
        form is what broke the payslip confirm above with Postgres 42P10, after
        a later migration made that index profile-scoped. */
-    const { error } = await (supabase as unknown as SupabaseClient)
+    const { error } = await supabase
       .from('finance_transfer_links')
       .upsert({
         id: `transfer_link_${outflowTransactionId}_${inflowTransactionId}`,
@@ -1003,7 +1027,7 @@ function useProvideFinanceData() {
 
   const deleteTransferLink = async (id: string): Promise<boolean> => {
     if (!isAdmin || !profileId) return false;
-    const { error } = await (supabase as unknown as SupabaseClient)
+    const { error } = await supabase
       .from('finance_transfer_links')
       .delete()
       .eq('profile_id', profileId)
@@ -1027,7 +1051,7 @@ function useProvideFinanceData() {
   ): Promise<boolean> => {
     if (!isAdmin || !profileId) return false;
     // onConflict matches idx_finance_transfer_dismissals_profile_pair exactly.
-    const { error } = await (supabase as unknown as SupabaseClient)
+    const { error } = await supabase
       .from('finance_transfer_dismissals')
       .upsert({
         id: `transfer_dismissal_${outflowTransactionId}_${inflowTransactionId}`,
@@ -1049,15 +1073,14 @@ function useProvideFinanceData() {
     return true;
   };
 
-  /* Untyped for the same reason as the links. Cleared on failure rather than
-     kept, for the same reason too. */
+  /* Cleared on failure rather than kept, for the same reason as the links. */
   const fetchTransferSingleLegs = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) {
       setTransferSingleLegs([]);
       setTransferSingleLegsFailed(false);
       return;
     }
-    const { data, error } = await (supabase as unknown as SupabaseClient)
+    const { data, error } = await supabase
       .from('finance_transfer_single_legs')
       .select('id, transaction_id, verdict, decided_at')
       .eq('profile_id', forProfile);
@@ -1091,7 +1114,7 @@ function useProvideFinanceData() {
   ): Promise<boolean> => {
     if (!isAdmin || !profileId) return false;
     // onConflict matches idx_finance_transfer_single_legs_profile_transaction.
-    const { error } = await (supabase as unknown as SupabaseClient)
+    const { error } = await supabase
       .from('finance_transfer_single_legs')
       .upsert({
         id: `transfer_single_${transactionId}`,
@@ -1119,7 +1142,7 @@ function useProvideFinanceData() {
 
   const undoTransferSingleLeg = async (id: string): Promise<boolean> => {
     if (!isAdmin || !profileId) return false;
-    const { error } = await (supabase as unknown as SupabaseClient)
+    const { error } = await supabase
       .from('finance_transfer_single_legs')
       .delete()
       .eq('profile_id', profileId)
@@ -1139,7 +1162,7 @@ function useProvideFinanceData() {
 
   const restoreTransferPair = async (id: string): Promise<boolean> => {
     if (!isAdmin || !profileId) return false;
-    const { error } = await (supabase as unknown as SupabaseClient)
+    const { error } = await supabase
       .from('finance_transfer_dismissals')
       .delete()
       .eq('profile_id', profileId)
@@ -1208,10 +1231,14 @@ function useProvideFinanceData() {
       return;
     }
 
-    await supabase.from('finance_debts')
+    const { error: balanceError } = await supabase.from('finance_debts')
       .update({ balance: observation.balance })
       .eq('id', observation.debtId)
       .eq('profile_id', profileId);
+    if (balanceError) {
+      toast({ title: 'Balance not updated', description: 'The reading was saved, but the debt\'s stored balance was not updated. Reload to check.', variant: 'destructive' });
+      return;
+    }
 
     toast({ title: 'Balance Recorded', description: `Recorded balance of £${observation.balance}.` });
   };
@@ -1245,10 +1272,14 @@ function useProvideFinanceData() {
     }
 
     if (latestObs) {
-      await supabase.from('finance_debts')
+      const { error: balanceError } = await supabase.from('finance_debts')
         .update({ balance: latestObs.balance })
         .eq('id', debtId)
         .eq('profile_id', profileId);
+      if (balanceError) {
+        toast({ title: 'Balance not updated', description: 'The reading was deleted, but the debt\'s stored balance was not updated. Reload to check.', variant: 'destructive' });
+        return;
+      }
     }
     toast({ title: 'Observation Removed', description: 'Debt observation deleted.' });
   };
@@ -1296,7 +1327,9 @@ function useProvideFinanceData() {
     }
       setLoadingDb(true);
       try {
-        // Saves already sent land first, so the read below includes them.
+        // Saves held back are sent now, and saves already sent land first, so
+        // the read below includes them.
+        for (const flush of beforeLoadFlushesRef.current) flush();
         await Promise.all(saveChainsRef.current.values());
         // course_end_date arrived in a later migration. Ask for it, and fall
         // back to the older column list against a database that has not had
@@ -2022,7 +2055,6 @@ function useProvideFinanceData() {
         setDatabaseDefaults(defaultsMap);
 
         blockedSaveKeysRef.current.set(profileId, blockedAfterLoad);
-        timedOutSaveKeysRef.current.clear();
         lastLoadedProfileRef.current = profileId;
         if (seedPresets) saveDataToSupabase('budget_presets', ALL_PRESETS_FALLBACK);
       } catch (err) {
@@ -2163,8 +2195,9 @@ function useProvideFinanceData() {
 
   /**
    * Records rows as read or written, owned by `owner` (null: shared). A load
-   * keeps the row it replaces as `previous`, so a copy made before the load
-   * does not write back what the load brought in (planRowWrites).
+   * starts a new generation and keeps the row it replaces as `previous`, so a
+   * list built before the load does not write back what it brought in
+   * (planRowWrites).
    */
   const rememberStoredRows = <T extends { id: string }>(
     table: SyncedTable,
@@ -2173,14 +2206,20 @@ function useProvideFinanceData() {
     owner: string | null,
     fromLoad = false,
   ) => {
+    const generationKey = `${table}:${profileId}`;
+    const generation = (loadGenerationRef.current.get(generationKey) ?? 0) + (fromLoad ? 1 : 0);
+    loadGenerationRef.current.set(generationKey, generation);
     const stored = storedRowsRef.current.get(table) ?? new Map<string, StoredRow>();
     for (const row of rows) {
-      storedRowObjectsRef.current.add(row);
+      storedRowObjectsRef.current.set(row, generation);
       const previous = fromLoad ? stored.get(row.id)?.row : undefined;
       stored.set(row.id, { profileId: owner, row: toRow(row), previous });
     }
     storedRowsRef.current.set(table, stored);
   };
+
+  /** Restarts the deadline of the save running for `table`'s key. */
+  const markSaveProgress = (table: SyncedTable) => saveProgressRef.current.get(SAVE_KEY_OF[table])?.();
 
   /**
    * Writes the rows an edit replaced, in a collection the bank sync also
@@ -2189,48 +2228,111 @@ function useProvideFinanceData() {
    * columns, by id and profile; new rows are inserted; deletes go through
    * deleteFinanceRows, by id (planRowWrites).
    */
+  const loadGenerationOf = (table: SyncedTable) => loadGenerationRef.current.get(`${table}:${profileId}`) ?? 0;
+
   const writeEditedRows = async <T extends { id: string }>(
     table: SyncedTable,
     rows: readonly T[],
     toRow: (row: T) => Record<string, unknown>,
+    requestedAtGeneration: number,
   ) => {
     if (!profileId) return;
     const edited = rowsToWrite(rows, row => storedRowObjectsRef.current.has(row));
     if (edited.length === 0) return;
     const byId = new Map(edited.map(row => [row.id, row]));
-    const remember = (ids: Iterable<string>) => rememberStoredRows(
+    const stored = storedRowsRef.current.get(table) ?? new Map<string, StoredRow>();
+    const generation = loadGenerationOf(table);
+    // Stale if it still holds an object from an earlier load, or if a load
+    // landed between asking for this save and its turn in the queue (a list
+    // of edited copies alone carries no load of its own).
+    const staleList = requestedAtGeneration < generation
+      || listPredatesLoad(rows, row => storedRowObjectsRef.current.get(row), generation);
+    const { inserts, updates, notOwned } = planRowWrites(
+      edited.map(row => ({ id: row.id, row: toRow(row) })),
+      stored,
+      profileId,
+      staleList,
+    );
+    const rejected = [...notOwned];
+
+    // Inserted or fully rewritten rows are stored whole.
+    const rememberWhole = (ids: Iterable<string>) => rememberStoredRows(
       table,
       [...ids].flatMap(id => byId.get(id) ?? []),
       toRow,
       profileId,
     );
-    const { inserts, updates, notOwned } = planRowWrites(
-      edited.map(row => ({ id: row.id, row: toRow(row) })),
-      storedRowsRef.current.get(table) ?? new Map(),
-      profileId,
-    );
-    const skipped = [...notOwned];
+    // An updated row is stored as it was plus what was sent: a column left out
+    // as stale still holds the database's value, so a later edit back to the
+    // old value differs from it and is sent.
+    const rememberPatched = (ids: Iterable<string>, patch: Record<string, unknown>) => {
+      for (const id of ids) {
+        const row = byId.get(id);
+        const known = stored.get(id);
+        if (!row || !known) continue;
+        storedRowObjectsRef.current.set(row, generation);
+        // `previous` kept: a list that is still stale must still not write
+        // back what the last load brought in.
+        stored.set(id, { profileId, row: { ...known.row, ...patch }, previous: known.previous });
+      }
+    };
 
-    // ON CONFLICT DO NOTHING: an id already taken -- another profile's row, a
-    // row a second tab added -- is reported rather than overwritten, and does
-    // not fail every later save with 23505. Rows are remembered per request,
-    // so a failure part-way does not re-send what already landed.
+    // ON CONFLICT DO NOTHING: an insert never overwrites. Rows are remembered
+    // per request, so a failure part-way does not re-send what already landed.
     const insertRows = async (payloads: Record<string, unknown>[]) => {
+      const taken: string[] = [];
       for (const chunk of inChunks(payloads, 100)) {
         const { data, error } = await supabase
           .from<SyncedTable, never>(table)
           .upsert(chunk as never, { onConflict: 'id', ignoreDuplicates: true })
           .select('id');
         if (error) throw error;
+        markSaveProgress(table);
         const written = new Set(((data ?? []) as { id: string }[]).map(row => row.id));
-        remember(written);
+        rememberWhole(written);
         for (const payload of chunk) {
-          if (!written.has(payload.id as string)) skipped.push(payload.id as string);
+          if (!written.has(payload.id as string)) taken.push(payload.id as string);
+        }
+      }
+      return taken;
+    };
+
+    // An id that is already taken, found under this profile: a row this page
+    // never read (a statement imported in another tab) or its own insert
+    // whose answer was lost. NOT written: overwriting would undo whatever was
+    // decided on it elsewhere. Recorded with the page's own copy as the
+    // baseline, so a later edit sends only the columns the user changes --
+    // not every column where this copy and the saved row differ. Only ids not
+    // found under this profile belong to someone else.
+    let alreadyExisted = 0;
+    const recordExisting = async (ids: string[]) => {
+      const sample = byId.get(ids[0]);
+      const columns = sample ? Object.keys(toRow(sample)).join(', ') : 'id';
+      for (const chunk of inChunks(ids, 100)) {
+        const { data, error } = await supabase
+          .from<SyncedTable, never>(table)
+          .select(columns)
+          .eq('profile_id', profileId)
+          .in('id', chunk);
+        if (error) throw error;
+        markSaveProgress(table);
+        const found = new Map(((data ?? []) as Record<string, unknown>[]).map(row => [row.id as string, row]));
+        for (const id of chunk) {
+          const saved = found.get(id);
+          const row = byId.get(id);
+          if (!saved || !row) {
+            rejected.push(id);
+            continue;
+          }
+          const shown = toRow(row);
+          storedRowObjectsRef.current.set(row, generation);
+          stored.set(id, { profileId, row: shown });
+          if (differsFromSaved(saved, shown)) alreadyExisted += 1;
         }
       }
     };
 
-    await insertRows(inserts);
+    await recordExisting(await insertRows(inserts));
     for (const { patch, ids } of updates) {
       for (const chunk of inChunks(ids, 100)) {
         const { data, error } = await supabase
@@ -2240,25 +2342,34 @@ function useProvideFinanceData() {
           .in('id', chunk)
           .select('id');
         if (error) throw error;
+        markSaveProgress(table);
         const updated = new Set(((data ?? []) as { id: string }[]).map(row => row.id));
-        remember(updated);
+        rememberPatched(updated, patch);
         // Matched nothing: the row is gone (deleted, then added again, or
         // deleted in another tab). Insert it; an insert cannot overwrite.
         const gone = chunk.filter(id => !updated.has(id));
-        if (gone.length > 0) await insertRows(gone.flatMap(id => byId.has(id) ? [toRow(byId.get(id)!)] : []));
+        if (gone.length > 0) {
+          await recordExisting(await insertRows(gone.flatMap(id => byId.has(id) ? [toRow(byId.get(id)!)] : [])));
+        }
       }
     }
 
-    if (skipped.length > 0) {
+    if (alreadyExisted > 0) {
+      toast({
+        title: 'Already saved',
+        description: `${alreadyExisted} row${alreadyExisted === 1 ? ' was' : 's were'} already saved, possibly changed on another device, and ${alreadyExisted === 1 ? 'was' : 'were'} kept as saved. Reload to see ${alreadyExisted === 1 ? 'it' : 'them'}.`,
+      });
+    }
+    if (rejected.length > 0) {
       toast({
         title: 'Some changes not saved',
-        description: `${skipped.length} row${skipped.length === 1 ? '' : 's'} belong to another profile or the shared defaults, or already exist.`,
+        description: `${rejected.length} row${rejected.length === 1 ? '' : 's'} belong to another profile or the shared defaults.`,
         variant: 'destructive',
       });
       // Not retried on every later save.
-      for (const id of skipped) {
+      for (const id of rejected) {
         const row = byId.get(id);
-        if (row) storedRowObjectsRef.current.add(row);
+        if (row) storedRowObjectsRef.current.set(row, generation);
       }
     }
   };
@@ -2266,23 +2377,49 @@ function useProvideFinanceData() {
   // A request that never settles would otherwise hold every later save of
   // that collection behind it, silently.
   const SAVE_TIMEOUT_MS = 30_000;
+  // A database request aborted for time may still commit on the server: it
+  // runs for up to its pool wait plus the 8 s statement timeout after it
+  // arrives. A save that failed that way holds its key this long, so the next
+  // save cannot land first and be overwritten by it.
+  const ABORTED_WRITE_GRACE_MS = 30_000;
 
   const enqueueSave = (key: string, run: () => Promise<boolean>): Promise<boolean> => {
     const withDeadline = () => new Promise<boolean>(resolve => {
       // After a timeout the late request may still land; racing it with a
-      // newer save could commit them out of order. Refuse until a reload.
+      // newer save could commit them out of order. Refused until it settles.
       if (timedOutSaveKeysRef.current.has(key)) {
-        toast({ title: 'Not saved', description: 'An earlier save of this data timed out. Reload before editing further.', variant: 'destructive' });
+        toast({ title: 'Not saved', description: 'An earlier save of this data may still be landing. Try again in a minute, or reload.', variant: 'destructive' });
         resolve(false);
         return;
       }
-      const timer = window.setTimeout(() => {
-        timedOutSaveKeysRef.current.add(key);
-        toast({ title: 'Save timed out', description: 'The connection did not answer. Reload before editing further.', variant: 'destructive' });
-        resolve(false);
-      }, SAVE_TIMEOUT_MS);
+      let timedOut = false;
+      let timer = 0;
+      const arm = () => {
+        // Once timed out, a late request's progress must not restart it.
+        if (timedOut) return;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          timedOut = true;
+          timedOutSaveKeysRef.current.add(key);
+          toast({ title: 'Save timed out', description: 'The connection did not answer. Later edits to this data wait until it does.', variant: 'destructive' });
+          resolve(false);
+        }, SAVE_TIMEOUT_MS);
+      };
+      arm();
+      saveProgressRef.current.set(key, arm);
+      abortedSaveKeysRef.current.delete(key);
       const settle = (ok: boolean) => {
         window.clearTimeout(timer);
+        if (saveProgressRef.current.get(key) === arm) saveProgressRef.current.delete(key);
+        if (abortedSaveKeysRef.current.delete(key) && !ok) {
+          // Failed on its own request abandoned for time: the outcome is
+          // unknown until the server's own limits have passed.
+          timedOutSaveKeysRef.current.add(key);
+          window.setTimeout(() => timedOutSaveKeysRef.current.delete(key), ABORTED_WRITE_GRACE_MS);
+        } else if (timedOut) {
+          // The late request has landed (or failed): nothing is left to race.
+          timedOutSaveKeysRef.current.delete(key);
+        }
         resolve(ok);
       };
       run().then(settle, () => settle(false));
@@ -2316,6 +2453,7 @@ function useProvideFinanceData() {
             .eq('is_default', false)
             .in('id', chunk);
           if (error) throw error;
+          markSaveProgress(table);
           // Forgotten, so the same id added again (a statement re-imported)
           // is inserted rather than sent as an update that matches nothing.
           for (const id of chunk) storedRowsRef.current.get(table)?.delete(id);
@@ -2323,7 +2461,12 @@ function useProvideFinanceData() {
         return true;
       } catch (err) {
         console.error(`Error deleting from ${table}:`, err);
-        toast({ title: 'Could not delete', description: 'Please try again.', variant: 'destructive' });
+        if (isRestTimeout(err)) {
+          abortedSaveKeysRef.current.add(SAVE_KEY_OF[table]);
+          toast({ title: 'Could not delete', description: 'The database did not answer in time. Try again in a minute.', variant: 'destructive' });
+        } else {
+          toast({ title: 'Could not delete', description: 'Please try again.', variant: 'destructive' });
+        }
         return false;
       }
     });
@@ -2332,7 +2475,19 @@ function useProvideFinanceData() {
   // when asked for, not when their turn comes: a save requested while this
   // profile's rows are not yet on screen carries the previous profile's list,
   // and must not run once the load lands.
-  const saveDataToSupabase = (key: string, contentData: unknown): Promise<boolean> => {
+  /** The load each synced table's rows on screen come from, for a list built now. */
+  const currentLoadGenerations = (): Record<SyncedTable, number> => ({
+    finance_transactions: loadGenerationOf('finance_transactions'),
+    finance_bank_accounts: loadGenerationOf('finance_bank_accounts'),
+  });
+
+  // `builtAt`: when a caller holds a list back before saving it (the review
+  // queue's coalesced save), the loads it was built against, captured then.
+  const saveDataToSupabase = (
+    key: string,
+    contentData: unknown,
+    builtAt?: Record<SyncedTable, number>,
+  ): Promise<boolean> => {
     if (!isAdmin) return Promise.resolve(false);
     if (blockedSaveKeysFor(profileId).has(key)) {
       toast({
@@ -2342,12 +2497,18 @@ function useProvideFinanceData() {
       });
       return Promise.resolve(false);
     }
-    return enqueueSave(key, () => runSave(key, contentData));
+    // Which loads the list was built against, for writeEditedRows.
+    const requestedAt = builtAt ?? currentLoadGenerations();
+    return enqueueSave(key, () => runSave(key, contentData, requestedAt));
   };
 
   // Each branch narrows `contentData` to the shape its key implies; the caller
   // passes whichever collection it just changed.
-  const runSave = async (key: string, contentData: unknown) => {
+  const runSave = async (
+    key: string,
+    contentData: unknown,
+    requestedAt: Record<SyncedTable, number>,
+  ) => {
     if (!isAdmin) return false;
     // Every *ledger* row carries a profile_id, and the database enforces it
     // with a CHECK. Writing without one would fail per-statement and leave the
@@ -2493,7 +2654,7 @@ function useProvideFinanceData() {
         // stored rows alone.
         // The sync writes bank accounts too (balances, newly connected
         // accounts), so only what changed here is written.
-        await writeEditedRows('finance_bank_accounts', accsObj.bankAccounts || [], bankAccountRow);
+        await writeEditedRows('finance_bank_accounts', accsObj.bankAccounts || [], bankAccountRow, requestedAt.finance_bank_accounts);
         if (accsObj.memberships?.length > 0) {
           const { error: membershipsError } = await supabase.from('finance_memberships').upsert(accsObj.memberships.map(m => ({
             id: m.id,
@@ -2659,18 +2820,21 @@ function useProvideFinanceData() {
         }
         await pruneScoped('finance_recurring_bills', recurringsList.map(r => r.id));
       } else if (key === 'transactions') {
-        await writeEditedRows('finance_transactions', contentData as MockTransaction[], transactionRow);
+        await writeEditedRows('finance_transactions', contentData as MockTransaction[], transactionRow, requestedAt.finance_transactions);
       } else if (key === 'tax_config') {
         const tcObj = contentData as TaxConfig;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(tcObj.effectiveFrom)) {
           throw new Error('Tax rates need an effective date in YYYY-MM-DD format.');
         }
-        const { data: existingTc } = await supabase
+        const { data: existingTc, error: lookupError } = await supabase
           .from('finance_tax_configs')
           .select('id')
           .eq('is_default', false)
           .eq('effective_from', tcObj.effectiveFrom)
           .maybeSingle();
+        // A failed lookup is not "no row": inserting then would add a second
+        // config for the same date.
+        if (lookupError) throw lookupError;
 
         const tcRow = {
           is_default: false,
@@ -2682,16 +2846,16 @@ function useProvideFinanceData() {
           updated_at: new Date().toISOString()
         };
 
-        if (existingTc?.id) {
-          await supabase.from('finance_tax_configs').update(tcRow).eq('id', existingTc.id);
-        } else {
-          await supabase.from('finance_tax_configs').insert(tcRow);
-        }
+        const { error: tcError } = existingTc?.id
+          ? await supabase.from('finance_tax_configs').update(tcRow).eq('id', existingTc.id)
+          : await supabase.from('finance_tax_configs').insert(tcRow);
+        if (tcError) throw tcError;
       } else if (key === 'recurring_templates') {
         const templatesList = contentData as RecurringTemplate[];
-        await supabase.from('finance_recurring_templates').delete().eq('is_default', false);
+        const { error: clearError } = await supabase.from('finance_recurring_templates').delete().eq('is_default', false);
+        if (clearError) throw clearError;
         if (templatesList.length > 0) {
-          await supabase.from('finance_recurring_templates').insert(templatesList.map(t => ({
+          const { error: insertError } = await supabase.from('finance_recurring_templates').insert(templatesList.map(t => ({
             is_default: false,
             name: t.name,
             category: t.category,
@@ -2702,12 +2866,14 @@ function useProvideFinanceData() {
             linked_budget_item_id: t.linkedBudgetItemId || null,
             budget_category_name: t.budgetCategoryName || null
           })));
+          if (insertError) throw insertError;
         }
       } else if (key === 'credit_bureaus') {
         const bureausList = contentData as CreditBureauConfig[];
-        await supabase.from('finance_credit_bureaus').delete().eq('is_default', false);
+        const { error: clearError } = await supabase.from('finance_credit_bureaus').delete().eq('is_default', false);
+        if (clearError) throw clearError;
         if (bureausList.length > 0) {
-          await supabase.from('finance_credit_bureaus').insert(bureausList.map(b => ({
+          const { error: insertError } = await supabase.from('finance_credit_bureaus').insert(bureausList.map(b => ({
             is_default: false,
             key: b.key,
             label: b.label,
@@ -2716,10 +2882,12 @@ function useProvideFinanceData() {
             max_score: b.maxScore,
             gradient: b.gradient || null
           })));
+          if (insertError) throw insertError;
         }
       } else if (key === 'holiday_defaults') {
         const hdObj = contentData as Record<number, { count: number; dates: string; occasion: string }>;
-        await supabase.from('finance_holiday_defaults').delete().eq('is_default', false);
+        const { error: clearError } = await supabase.from('finance_holiday_defaults').delete().eq('is_default', false);
+        if (clearError) throw clearError;
         const hdRows = Object.entries(hdObj).map(([month, details]) => ({
           is_default: false,
           month_index: parseInt(month, 10),
@@ -2728,11 +2896,13 @@ function useProvideFinanceData() {
           occasion: details.occasion || null
         }));
         if (hdRows.length > 0) {
-          await supabase.from('finance_holiday_defaults').insert(hdRows);
+          const { error: insertError } = await supabase.from('finance_holiday_defaults').insert(hdRows);
+          if (insertError) throw insertError;
         }
       } else if (key === 'budget_presets') {
         const presetsObj = contentData as Record<string, CategoryPreset[]>;
-        await supabase.from('finance_budget_presets').delete().eq('is_default', false);
+        const { error: clearError } = await supabase.from('finance_budget_presets').delete().eq('is_default', false);
+        if (clearError) throw clearError;
         const presetRows = Object.entries(presetsObj).flatMap(([type, list]) =>
           (list || []).map(p => ({
             is_default: false,
@@ -2743,15 +2913,18 @@ function useProvideFinanceData() {
           }))
         );
         if (presetRows.length > 0) {
-          await supabase.from('finance_budget_presets').insert(presetRows);
+          const { error: insertError } = await supabase.from('finance_budget_presets').insert(presetRows);
+          if (insertError) throw insertError;
         }
       }
       return true;
     } catch (err) {
       console.error(`Error saving ${key} to Supabase:`, err);
+      const aborted = isRestTimeout(err);
+      if (aborted) abortedSaveKeysRef.current.add(key);
       toast({
         title: 'Could not save finance data',
-        description: 'Please try again.',
+        description: aborted ? 'The database did not answer in time. Try again in a minute.' : 'Please try again.',
         variant: 'destructive',
       });
       return false;
@@ -2822,6 +2995,8 @@ function useProvideFinanceData() {
     recurringTemplates,
     recurrings,
     saveDataToSupabase,
+    currentLoadGenerations,
+    registerBeforeLoadFlush,
     deleteFinanceRows,
     savingDb,
     selectedGoalId,

@@ -8,14 +8,20 @@
  * Local state is untouched -- the UI still updates on every press. Only the
  * trip to Supabase waits. Each list is built from the one before, so the last
  * holds every earlier edit, and a save writes the rows an edit replaced.
- * A refresh landing inside the window does not drop the pending list: its
- * edits are still sent, and columns the refresh changed are left alone
- * (planRowWrites). They show on screen again after the next load.
+ *
+ * `registerFlush` lets a load send the pending list before it reads. Without
+ * it a refresh inside the window replaced the rows on screen with copies that
+ * lacked the pending edits: the next mark was built on those, the pending
+ * list holding the earlier marks was thrown away unsent, and a later edit to
+ * a row could send its unmarked copy back.
  */
 
 import { useCallback, useEffect, useRef } from 'react';
 
-export function useCoalescedSave<T>(save: (value: T) => void, delayMs = 800) {
+export function useCoalescedSave<T>(
+  save: (value: T) => void,
+  { delayMs = 800, registerFlush }: { delayMs?: number; registerFlush?: (flush: () => void) => () => void } = {},
+) {
   // Held in a ref so a caller passing an inline arrow does not restart the
   // timer on every render.
   const saveRef = useRef(save);
@@ -44,6 +50,8 @@ export function useCoalescedSave<T>(save: (value: T) => void, delayMs = 800) {
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(flush, delayMs);
   }, [delayMs, flush]);
+
+  useEffect(() => registerFlush?.(flush), [registerFlush, flush]);
 
   useEffect(() => {
     // Leaving the page or the surface must not silently drop the last edit.

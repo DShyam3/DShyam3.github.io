@@ -128,11 +128,14 @@ export function PayslipImportDialog({ open, onOpenChange }: {
       const figures = !readAnything && existing ? existing : row.slip;
       try {
         const uploaded = await uploadFinanceDocument(row.file, profileId);
-        await savePayslip({ ...figures, id: existing?.id ?? row.slip.id, payDate: row.slip.payDate, employer: row.slip.employer, storagePath: uploaded.path });
-        // Only after the row points at the new file, so a failure between the
-        // two leaves the old document reachable rather than deleted.
-        if (existing?.storagePath && existing.storagePath !== uploaded.path) {
+        const outcome = await savePayslip({ ...figures, id: existing?.id ?? row.slip.id, payDate: row.slip.payDate, employer: row.slip.employer, storagePath: uploaded.path });
+        // Only once the row points at the new file, so a failed save leaves
+        // the old document reachable rather than deleted. A save that timed
+        // out may still commit, so neither file is removed then.
+        if (outcome === 'saved' && existing?.storagePath && existing.storagePath !== uploaded.path) {
           await deleteFinanceDocument(existing.storagePath);
+        } else if (outcome === 'failed') {
+          await deleteFinanceDocument(uploaded.path);
         }
       } catch {
         // The figures matter more than the archive. If the upload fails the

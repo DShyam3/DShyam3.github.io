@@ -83,6 +83,8 @@ function FinanceView() {
     recurringTemplates,
     recurrings,
     saveDataToSupabase,
+    currentLoadGenerations,
+    registerBeforeLoadFlush,
     setBankAccounts,
     setBudgetCategories,
     setInvestmentHoldings,
@@ -125,8 +127,11 @@ function FinanceView() {
   const { toast } = useToast();
   const { askDelete, deleteDialog } = useDeleteConfirm();
 
-  const saveTransactionsSoon = useCoalescedSave<MockTransaction[]>(
-    (updated) => saveDataToSupabase('transactions', updated),
+  // The loads a list was built against are taken when it is scheduled, not
+  // when it flushes: a refresh can land inside the coalesce window.
+  const saveTransactionsSoon = useCoalescedSave<{ list: MockTransaction[]; builtAt: ReturnType<typeof currentLoadGenerations> }>(
+    ({ list, builtAt }) => saveDataToSupabase('transactions', list, builtAt),
+    { registerFlush: registerBeforeLoadFlush },
   );
 
   // Connect/sync lives in a hook because both Home and Wealth offer it (7.2c-i).
@@ -895,7 +900,7 @@ function FinanceView() {
                 setMockTransactions(updated);
                 // Coalesced: the review queue runs on held keys, and each
                 // press rewrites the whole array.
-                saveTransactionsSoon(updated);
+                saveTransactionsSoon({ list: updated, builtAt: currentLoadGenerations() });
               }}
               bankAccounts={bankAccounts}
               goals={goals}

@@ -174,8 +174,9 @@ export interface StoredRow {
   profileId: string | null;
   row: Record<string, unknown>;
   /**
-   * What the row held before the latest load replaced it. A copy made before
-   * that load still carries these values; they are not edits.
+   * What the row held before the latest load replaced it. A list built before
+   * that load still carries these values in rows it edited; they are not
+   * edits (see `staleList` in planRowWrites).
    */
   previous?: Record<string, unknown>;
 }
@@ -200,10 +201,12 @@ export const changedColumns = (
  * How to write edited rows of a table the bank sync also writes.
  *
  * - A row this page has stored for this profile is updated with only the
- *   columns the edit changed, by id and profile: a copy that predates a sync
- *   -- including one made before a refresh brought the sync in -- does not
- *   write back the columns the sync changed, and an update sent under
- *   another profile matches nothing.
+ *   columns the edit changed, by id and profile: an update sent under
+ *   another profile matches nothing. When `staleList` is set -- the list was
+ *   built before the latest load -- a column still holding its pre-load
+ *   value is left out too: it is the old copy, not an edit, and sending it
+ *   would undo what the load (a bank sync) brought in. A list built after
+ *   the load sends such a value, since then it is a deliberate edit back.
  * - A row stored for another profile, or shared, is not written at all.
  * - A row never stored is inserted; an insert cannot overwrite a row.
  *
@@ -214,6 +217,7 @@ export const planRowWrites = (
   edited: readonly { id: string; row: Record<string, unknown> }[],
   stored: ReadonlyMap<string, StoredRow>,
   profileId: string,
+  staleList = false,
 ): {
   inserts: Record<string, unknown>[];
   updates: { patch: Record<string, unknown>; ids: string[] }[];
@@ -230,9 +234,7 @@ export const planRowWrites = (
       notOwned.push(id);
     } else {
       const patch = changedColumns(known.row, row);
-      // A column still holding the pre-refresh value is a stale copy, not an
-      // edit: writing it would undo what the refresh (a bank sync) changed.
-      if (known.previous) {
+      if (staleList && known.previous) {
         for (const column of Object.keys(patch)) {
           if (JSON.stringify(known.previous[column]) === JSON.stringify(row[column])) delete patch[column];
         }
@@ -245,4 +247,58 @@ export const planRowWrites = (
     }
   }
   return { inserts, updates: [...byPatch.values()], notOwned };
+};
+
+/**
+ * Whether a list was built before the latest load: it still holds a row
+ * object an earlier load produced. `generationOf` gives the load a stored row
+ * object came from; edited copies have none and do not count.
+ */
+export const listPredatesLoad = <T extends object>(
+  rows: readonly T[],
+  generationOf: (row: T) => number | undefined,
+  latestGeneration: number,
+): boolean => rows.some(row => {
+  const generation = generationOf(row);
+  return generation !== undefined && generation < latestGeneration;
+});
+
+/**
+ * The fields an edit dialog changed, compared with the copy it opened on. A
+ * save applies only these to the row as it is now, so a field the user did
+ * not touch cannot carry the dialog's old copy over a newer value.
+ */
+export const editedFields = <T extends object>(base: T, edited: T): Partial<T> => {
+  const changed: Partial<T> = {};
+  for (const key of Object.keys(edited) as (keyof T)[]) {
+    if (JSON.stringify(edited[key]) !== JSON.stringify(base[key])) changed[key] = edited[key];
+  }
+  return changed;
+};
+
+/** Empty values the page shows the same way: '' , false and undefined read as null. */
+const shownAs = (value: unknown): unknown =>
+  value === '' || value === false || value === undefined ? null : value;
+
+/**
+ * Whether a saved row looks different on the page from the page's own copy:
+ * the "Already saved" count. Compared the way the page loads rows, not
+ * column by column as stored: empty values read alike, and the bank sync
+ * writes only `account_id` where the page mirrors it into `bank_account_id`
+ * (the load takes whichever is set for both).
+ */
+export const differsFromSaved = (
+  saved: Record<string, unknown>,
+  shown: Record<string, unknown>,
+): boolean => {
+  const asLoaded = { ...saved };
+  if ('account_id' in shown && 'bank_account_id' in shown) {
+    const account = saved.account_id || saved.bank_account_id || null;
+    const bankAccount = saved.bank_account_id || saved.account_id || null;
+    asLoaded.account_id = account;
+    asLoaded.bank_account_id = bankAccount;
+  }
+  return Object.keys(shown).some(column =>
+    JSON.stringify(shownAs(asLoaded[column])) !== JSON.stringify(shownAs(shown[column])),
+  );
 };

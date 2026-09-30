@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useFinanceData } from '../FinanceDataContext';
+import { editedFields } from '../save-safety';
 import { useTrueLayer } from '../useTrueLayer';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -111,6 +112,8 @@ export default function BankAccountsSection() {
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
   const [activeAccount, setActiveAccount] = useState<BankAccount | null>(null);
+  // The account as the edit dialog opened on it; see handleEditAccount.
+  const [editBase, setEditBase] = useState<BankAccount | null>(null);
   const [newAccount, setNewAccount] = useState<Omit<BankAccount, 'id' | 'balance' | 'annualFee'> & { balance: number | ''; annualFee: number | ''; }>({
     name: '',
     type: 'checking',
@@ -147,7 +150,11 @@ export default function BankAccountsSection() {
   const handleEditAccount = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeAccount) return;
-    const updated = bankAccounts.map(a => a.id === activeAccount.id ? activeAccount : a);
+    // Only the fields changed in the dialog, applied to the account as it is
+    // now: the dialog's copy dates from when it opened, and a bank sync since
+    // may have moved the balance.
+    const changed = editBase ? editedFields(editBase, activeAccount) : activeAccount;
+    const updated = bankAccounts.map(a => a.id === activeAccount.id ? { ...a, ...changed } : a);
     setBankAccounts(updated);
     saveDataToSupabase('accounts', { bankAccounts: updated, memberships, creditScores });
     setIsEditAccountOpen(false);
@@ -190,7 +197,7 @@ export default function BankAccountsSection() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {bankAccounts.map(account => <AccountInspector key={account.id} account={account} transactions={mockTransactions} bills={recurrings}
-            onEdit={() => { setActiveAccount(account); setIsEditAccountOpen(true); }}
+            onEdit={() => { setActiveAccount(account); setEditBase(account); setIsEditAccountOpen(true); }}
             onDelete={() => handleDeleteAccount(account.id)} />)}
           {bankAccounts.length === 0 && <p className="surface-card rounded-3xl border p-6 text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">No accounts yet. Add an account to track balances and linked activity.</p>}
         </div>
@@ -246,19 +253,19 @@ export default function BankAccountsSection() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-xs text-foreground truncate">{providerName}</span>
                               {conn.backfill_complete && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-positive/10 text-positive border border-positive/20 font-mono">
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-positive/10 text-positive border border-positive/20 font-mono">
                                   Backfilled
                                 </span>
                               )}
                               {!conn.backfill_complete && conn.last_synced_at && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-mono">
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-mono">
                                   {conn.backfilled_from
                                     ? `Backfilling to ${new Date(conn.backfilled_from).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`
                                     : 'Backfilling history'}
                                 </span>
                               )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground font-mono mt-0.5">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-mono mt-0.5">
                               {conn.last_synced_at ? (
                                 <span>Synced: {new Date(conn.last_synced_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                               ) : (

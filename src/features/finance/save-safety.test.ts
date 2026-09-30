@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   ALL_GUARDED_SAVE_KEYS,
   changedColumns,
+  differsFromSaved,
+  editedFields,
   inChunks,
   latestOwnRow,
+  listPredatesLoad,
   planRowWrites,
   materialiseBudgetForProfile,
   materialiseRecurringsForProfile,
@@ -299,8 +302,34 @@ describe('planRowWrites', () => {
         previous: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: false },
       }],
     ]);
-    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: true } }], refreshed, OWNER_ID);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, is_reviewed: true } }], refreshed, OWNER_ID, true);
     expect(plan.updates).toEqual([{ patch: { is_reviewed: true }, ids: ['a'] }]);
+  });
+
+  it('a list built after the refresh sends an edit back to the old value', () => {
+    // Another device marked a reviewed; the refresh brought that in. The user
+    // then un-marks it on this device, from the refreshed list.
+    const refreshed = new Map([
+      ['a', {
+        profileId: OWNER_ID,
+        row: { id: 'a', profile_id: OWNER_ID, is_reviewed: true },
+        previous: { id: 'a', profile_id: OWNER_ID, is_reviewed: false },
+      }],
+    ]);
+    const plan = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, is_reviewed: false } }], refreshed, OWNER_ID, false);
+    expect(plan.updates).toEqual([{ patch: { is_reviewed: false }, ids: ['a'] }]);
+  });
+
+  it('after a stale column is left out, a later edit back to that value is still sent', () => {
+    // The sync moved amount 10 -> 12. A stale list recategorises the row;
+    // amount is left out, and the stored row becomes stored + what was sent.
+    const known = { profileId: OWNER_ID, row: { id: 'a', profile_id: OWNER_ID, amount: 12, category: 'Food' }, previous: { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Food' } };
+    const first = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Bills' } }], new Map([['a', known]]), OWNER_ID, true);
+    expect(first.updates).toEqual([{ patch: { category: 'Bills' }, ids: ['a'] }]);
+    const afterWrite = { profileId: OWNER_ID, row: { ...known.row, ...first.updates[0].patch } };
+    // The user now deliberately sets the amount to 10.
+    const second = planRowWrites([{ id: 'a', row: { id: 'a', profile_id: OWNER_ID, amount: 10, category: 'Bills' } }], new Map([['a', afterWrite]]), OWNER_ID, false);
+    expect(second.updates).toEqual([{ patch: { amount: 10 }, ids: ['a'] }]);
   });
 
   it('groups identical patches into one update', () => {
@@ -337,5 +366,58 @@ describe('changedColumns', () => {
       { id: 'a', profile_id: 'x', is_default: false, tags: ['one'], amount: 1 },
       { id: 'b', profile_id: 'y', is_default: true, tags: ['one'], amount: 2 },
     )).toEqual({ amount: 2 });
+  });
+});
+
+describe('listPredatesLoad', () => {
+  const a = { id: 'a' };
+  const b = { id: 'b' };
+  const edited = { id: 'e' };
+  const generations = new WeakMap<object, number>([[a, 1], [b, 2]]);
+
+  it('is true when the list still holds a row object from an earlier load', () => {
+    expect(listPredatesLoad([a, edited], row => generations.get(row), 2)).toBe(true);
+  });
+
+  it('is false for a list built from the latest load, and ignores edited copies', () => {
+    expect(listPredatesLoad([b, edited], row => generations.get(row), 2)).toBe(false);
+    expect(listPredatesLoad([edited], row => generations.get(row), 2)).toBe(false);
+  });
+});
+
+describe('editedFields', () => {
+  it('returns only the fields changed since the dialog opened', () => {
+    const opened = { id: 'x', name: 'Current', balance: 100, color: null as string | null };
+    const saved = { ...opened, name: 'Everyday' };
+    // The balance the dialog opened with is not sent, so a newer synced
+    // balance on the row survives the rename.
+    expect(editedFields(opened, saved)).toEqual({ name: 'Everyday' });
+  });
+
+  it('includes a field set back to null or changed to an equal-looking value of another type', () => {
+    expect(editedFields({ limit: 500 as number | null }, { limit: null })).toEqual({ limit: null });
+    expect(editedFields({ fee: 0 as number | string }, { fee: '0' })).toEqual({ fee: '0' });
+  });
+});
+
+describe('differsFromSaved', () => {
+  const shown = {
+    id: 't1', name: 'TESCO', merchant: null, category: null, amount: -12.5, date: '2026-09-20',
+    is_reviewed: false, account_id: 'acc', bank_account_id: 'acc', notes: null, tags: null, is_recurring: false,
+  };
+
+  it('a synced row that only differs in how it is stored does not count', () => {
+    // The sync writes account_id only and leaves is_recurring/merchant null.
+    const synced = { ...shown, bank_account_id: null, is_recurring: null, merchant: '' };
+    expect(differsFromSaved(synced, shown)).toBe(false);
+  });
+
+  it('a row reviewed or categorised elsewhere counts', () => {
+    expect(differsFromSaved({ ...shown, is_reviewed: true }, shown)).toBe(true);
+    expect(differsFromSaved({ ...shown, category: 'Groceries' }, shown)).toBe(true);
+  });
+
+  it('ignores columns the page does not show', () => {
+    expect(differsFromSaved({ ...shown, provider_category: 'FOOD', created_at: 'x' }, shown)).toBe(false);
   });
 });
