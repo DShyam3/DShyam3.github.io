@@ -123,6 +123,7 @@ export interface WatchlistItem {
   runtime?: number;
   genres?: string[];
   image_url?: string;
+  backdrop_url?: string;
   link?: string;
   created_at: string;
   streaming_platform?: string;
@@ -760,6 +761,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             platform: item.streaming_platform || 'Online',
             genre: item.genres?.join(', ') || null,
             poster: item.image_url || null,
+            backdrop: item.backdrop_url || null,
             overview: item.description || null,
             tmdb_id: item.tmdb_id || null,
             release_date: item.release_date || null,
@@ -784,6 +786,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               platform: item.streaming_platform || 'Online',
               genre: item.genres?.join(', ') || null,
               poster: item.image_url || null,
+              backdrop: item.backdrop_url || null,
               overview: item.description || null,
               tmdb_id: item.tmdb_id || null,
               release_date: item.release_date || null,

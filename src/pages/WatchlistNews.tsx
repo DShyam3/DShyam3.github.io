@@ -651,7 +651,7 @@ const WatchlistNews = () => {
               date={pinned.release_date!}
               days={pinnedDays!}
               srLabel={`${pinnedDays} day${pinnedDays === 1 ? '' : 's'} until ${pinned.title}`}
-              image={pinned.poster}
+              image={pinned.backdrop ?? pinned.poster}
               imageAlt={pinned.title}
               className="w-full sm:max-w-md"
             />

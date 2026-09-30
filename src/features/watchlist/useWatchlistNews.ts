@@ -33,6 +33,7 @@ export interface PinnedTitle {
   id: number;
   title: string;
   poster: string | null;
+  backdrop: string | null;
   /**
    * The date the Countdown card counts down to. For a movie this is its own
    * `release_date`. For a TV show it is the next upcoming episode's
@@ -59,13 +60,13 @@ export function usePinnedTitle() {
       const [showResult, movieResult] = await Promise.all([
         supabase
           .from('tv_shows')
-          .select('id, title, poster, release_date')
+          .select('id, title, poster, backdrop, release_date')
           .eq('pinned', true)
           .limit(1)
           .maybeSingle(),
         supabase
           .from('movies')
-          .select('id, title, poster, release_date')
+          .select('id, title, poster, backdrop, release_date')
           .eq('pinned', true)
           .limit(1)
           .maybeSingle(),
@@ -101,6 +102,7 @@ export function usePinnedTitle() {
         id: row.id,
         title: row.title,
         poster: row.poster,
+        backdrop: row.backdrop,
         release_date: releaseDate,
         media_type: mediaType,
       });

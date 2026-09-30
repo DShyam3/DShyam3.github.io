@@ -8,6 +8,7 @@ import type {
 import { getPlatform } from './sync-logic';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
+const TMDB_BACKDROP_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
 
 /** A search row, tagged with which endpoint it came back from. */
 export interface TMDBResult extends TMDBSearchItem {
@@ -74,6 +75,11 @@ export function useTMDB() {
         return `${TMDB_IMAGE_BASE_URL}${path}`;
     }, []);
 
+    const getBackdropUrl = useCallback((path: string | null) => {
+        if (!path) return null;
+        return `${TMDB_BACKDROP_BASE_URL}${path}`;
+    }, []);
+
     const getMovieDetails = useCallback(async (id: number, type: 'movie' | 'tv') => {
         setLoading(true);
         try {
@@ -88,6 +94,7 @@ export function useTMDB() {
                 title: data.title || data.name,
                 overview: data.overview,
                 poster: data.poster_path ? getPosterUrl(data.poster_path) : null,
+                backdrop: data.backdrop_path ? getBackdropUrl(data.backdrop_path) : null,
                 release_date: data.release_date || data.first_air_date || null,
                 release_year: data.release_date || data.first_air_date ? new Date(data.release_date || data.first_air_date).getFullYear() : null,
                 runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : null),
@@ -101,7 +108,7 @@ export function useTMDB() {
         } finally {
             setLoading(false);
         }
-    }, [fetchTMDB, getPosterUrl]);
+    }, [fetchTMDB, getPosterUrl, getBackdropUrl]);
 
     const searchMulti = useCallback(async (query: string) => {
         const trimmedQuery = query.trim();

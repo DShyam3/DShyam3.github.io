@@ -66,6 +66,7 @@ interface TMDBDetails {
   id?: number
   overview?: string
   poster_path?: string | null
+  backdrop_path?: string | null
   release_date?: string | null
   first_air_date?: string | null
   runtime?: number | null
@@ -87,6 +88,7 @@ interface MovieRow {
   title: string
   tmdb_id: number | null
   poster: string | null
+  backdrop: string | null
   overview: string | null
   genre: string | null
   release_year: number | null
@@ -107,6 +109,7 @@ interface ShowRow {
   title: string
   tmdb_id: number | null
   poster: string | null
+  backdrop: string | null
   overview: string | null
   genre: string | null
   status: string | null
@@ -128,6 +131,7 @@ interface SyncItem {
   category: 'Movies' | 'TV Shows'
   tmdb_id?: number
   image_url?: string
+  backdrop?: string
   description?: string
   genres: string[]
   year?: number
@@ -303,6 +307,7 @@ serve(async (req) => {
       category: 'Movies' as const,
       tmdb_id: m.tmdb_id || undefined,
       image_url: m.poster || undefined,
+      backdrop: m.backdrop || undefined,
       description: m.overview || undefined,
       genres: m.genre ? m.genre.split(',').map((g: string) => g.trim()) : [],
       year: m.release_year || undefined,
@@ -314,6 +319,7 @@ serve(async (req) => {
       category: 'TV Shows' as const,
       tmdb_id: s.tmdb_id || undefined,
       image_url: s.poster || undefined,
+      backdrop: s.backdrop || undefined,
       description: s.overview || undefined,
       genres: s.genre ? s.genre.split(',').map((g: string) => g.trim()) : [],
       series_status: s.status,
@@ -368,6 +374,7 @@ serve(async (req) => {
 
             const commonUpdates: Record<string, unknown> = {}
             if (!item.image_url && data.poster_path) commonUpdates.poster = `https://image.tmdb.org/t/p/w500${data.poster_path}`
+            if (!item.backdrop && data.backdrop_path) commonUpdates.backdrop = `https://image.tmdb.org/t/p/w1280${data.backdrop_path}`
             if (!item.description && data.overview) commonUpdates.overview = data.overview
             if (data.release_date || data.first_air_date) commonUpdates.release_date = data.release_date || data.first_air_date
             if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g) => g.name).join(', ')

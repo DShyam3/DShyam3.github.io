@@ -1424,30 +1424,6 @@ export type Database = {
         }
         Relationships: []
       }
-      finance_seed_backup: {
-        Row: {
-          id: number
-          reason: string
-          row_data: Json
-          source_table: string
-          taken_at: string
-        }
-        Insert: {
-          id?: never
-          reason: string
-          row_data: Json
-          source_table: string
-          taken_at?: string
-        }
-        Update: {
-          id?: never
-          reason?: string
-          row_data?: Json
-          source_table?: string
-          taken_at?: string
-        }
-        Relationships: []
-      }
       finance_settings: {
         Row: {
           active_savings_types: string[] | null
@@ -2193,6 +2169,7 @@ export type Database = {
       }
       movies: {
         Row: {
+          backdrop: string | null
           genre: string | null
           id: number
           overview: string | null
@@ -2207,6 +2184,7 @@ export type Database = {
           trailer_key: string | null
         }
         Insert: {
+          backdrop?: string | null
           genre?: string | null
           id?: number
           overview?: string | null
@@ -2221,6 +2199,7 @@ export type Database = {
           trailer_key?: string | null
         }
         Update: {
+          backdrop?: string | null
           genre?: string | null
           id?: number
           overview?: string | null
@@ -2494,6 +2473,7 @@ export type Database = {
       }
       tv_shows: {
         Row: {
+          backdrop: string | null
           genre: string | null
           id: number
           overview: string | null
@@ -2507,6 +2487,7 @@ export type Database = {
           trailer_key: string | null
         }
         Insert: {
+          backdrop?: string | null
           genre?: string | null
           id?: number
           overview?: string | null
@@ -2520,6 +2501,7 @@ export type Database = {
           trailer_key?: string | null
         }
         Update: {
+          backdrop?: string | null
           genre?: string | null
           id?: number
           overview?: string | null

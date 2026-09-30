@@ -66,6 +66,7 @@ export interface TMDBDetails {
   // needs a detail call before its origin is known.
   origin_country?: string[];
   poster_path?: string | null;
+  backdrop_path?: string | null;
   release_date?: string | null;
   first_air_date?: string | null;
   runtime?: number | null;
@@ -84,6 +85,7 @@ export interface TMDBSearchItem {
   release_date?: string;
   first_air_date?: string;
   poster_path: string | null;
+  backdrop_path?: string | null;
   overview: string;
   original_language?: string;
   // TV search only; absent from `search/movie`.

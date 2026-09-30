@@ -269,6 +269,7 @@ const Watchlist = () => {
           description: details.overview,
           year: details.release_year || undefined,
           image_url: details.poster || undefined,
+          backdrop_url: details.backdrop || undefined,
           runtime: details.runtime || undefined,
           genres: details.genres,
           tmdb_id: details.tmdb_id,

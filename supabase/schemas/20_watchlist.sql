@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "genre" "text",
     "release_year" integer,
     "poster" "text",
+    "backdrop" "text",
     "overview" "text",
     "release_date" "date",
     "tmdb_id" integer,
@@ -136,6 +137,7 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "genre" "text",
     "status" "text",
     "poster" "text",
+    "backdrop" "text",
     "overview" "text",
     "release_date" "date",
     "tmdb_id" integer,
@@ -622,6 +624,12 @@ COMMENT ON COLUMN "public"."tv_shows"."trailer_key" IS
 
 COMMENT ON COLUMN "public"."movies"."trailer_key" IS
     'A YouTube video key from TMDB''s videos append (e.g. "dQw4w9WgXcQ"), not a URL -- the player builds the embed URL client-side.';
+
+COMMENT ON COLUMN "public"."tv_shows"."backdrop" IS
+    'Full TMDB backdrop image URL at w1280 (e.g. https://image.tmdb.org/t/p/w1280/abc.jpg), the landscape counterpart of poster. Written by watchlist-cron-sync (only while still null) and the client add flow. Null until one of them fills it; never backfilled in SQL, because the value only exists in TMDB.';
+
+COMMENT ON COLUMN "public"."movies"."backdrop" IS
+    'Full TMDB backdrop image URL at w1280 (e.g. https://image.tmdb.org/t/p/w1280/abc.jpg), the landscape counterpart of poster. Written by watchlist-cron-sync (only while still null) and the client add flow. Null until one of them fills it; never backfilled in SQL, because the value only exists in TMDB.';
 
 COMMENT ON COLUMN "public"."favourites"."original_language" IS
     'TMDB''s original_language (ISO 639-1, e.g. "ko", "ja", "hi", "en"), for deriving the favourites grid''s category bucket from TMDB data instead of the frozen category string. Left null on every pre-migration row and never backfilled in SQL -- the value only exists in TMDB and is fetched by an admin-triggered client action; a fabricated value here reads exactly like a real one. Falls back to category when null.';
