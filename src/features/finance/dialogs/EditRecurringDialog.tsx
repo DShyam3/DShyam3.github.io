@@ -92,7 +92,7 @@ export const EditRecurringDialog: React.FC<EditRecurringDialogProps> = ({
           </div>
 
           {/* Grid for Amount, Frequency */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <div className="space-y-1">
               <Label htmlFor="edit-rec-amount" className="text-xs font-mono text-muted-foreground">Amount (£)</Label>
               <Input
@@ -126,7 +126,7 @@ export const EditRecurringDialog: React.FC<EditRecurringDialogProps> = ({
           </div>
 
           {/* Grid for Month & Day */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <div className="space-y-1">
               <Label htmlFor="edit-rec-day" className="text-xs font-mono text-muted-foreground">Due Day of Month (1-31)</Label>
               <Input

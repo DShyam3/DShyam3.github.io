@@ -348,9 +348,12 @@ brands, in portrait and landscape.
   the episode rail is capped at `40dvh`. Episode names are always displayed,
   with “Title unavailable” as fallback.
 - No control sits on top of text. The dialog close button is `2.75rem`, `0.5rem`
-  in from the corner, so text keeps `3.75rem` clear of the right edge until it
-  is below it: `DialogHeader`/`SheetHeader` carry `pr-10` inside the default
-  `p-6`, and a header that sets its own padding adds `pr-16`. The dialog body's
+  in from the corner, and `.glass-dialog` reserves a `3.75rem` top inset for it
+  outside the body's scroller, so headers need no right padding for it and
+  scrolled fields never pass under it. A dialog that scrolls as a whole (the
+  collection card detail) carries `dialog-flush` and drops the inset, since
+  its close button scrolls with it. `SheetHeader` keeps `pr-10`, since a sheet
+  has no inset. The dialog body's
   single column is `minmax(0, 1fr)`, so no child can widen it. Row actions sit
   in the row's flow (a menu, a trailing button, a clear button with matching
   input padding), not absolutely positioned over a title; card admin actions

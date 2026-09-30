@@ -129,10 +129,41 @@ footer.app-footer { padding-block: .75rem; }
 html[data-display="larger"] { font-size: 125%; }
 html[data-display="larger"] .card-grid { --card-min: 12rem; }
 html[data-display="larger"] :is(button, [role="combobox"], .nav-link) { min-height: 2.75rem; }
-html[data-display="larger"] :is(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: .18rem solid hsl(var(--ring)); outline-offset: .2rem;
-  box-shadow: 0 0 0 .35rem hsl(var(--background));
+/* Clear external utility rings even for pointer focus. Visible keyboard
+   focus stays inside controls, including at the edge of a scroller. */
+html :is(a, button, input, select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus {
+  --tw-ring-offset-shadow: 0 0 transparent;
+  --tw-ring-shadow: 0 0 transparent;
+  box-shadow: var(--tw-shadow, 0 0 transparent);
 }
+/* Background backing keeps the ring visible on filled buttons too. */
+html :is(a, button, input, select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 4px hsl(var(--background)), var(--tw-shadow, 0 0 transparent);
+}
+/* Text links and native choice controls have no padding for a wide backing. */
+html :is(a:not(.ui-button), input[type="checkbox"], input[type="radio"], [role="checkbox"], [role="switch"], [role="radio"]):focus-visible {
+  outline: 1px solid hsl(var(--ring));
+  outline-offset: -1px;
+  box-shadow: var(--tw-shadow, 0 0 transparent);
+}
+/* Larger display: a heavier outline, still drawn inside the control. */
+html[data-display="larger"] :is(a, button, input, select, textarea, :where([tabindex]:not([tabindex="-1"])), [role="combobox"]):focus-visible {
+  outline-width: 3px;
+  outline-offset: -5px;
+}
+html[data-display="larger"] :is(a:not(.ui-button), input[type="checkbox"], input[type="radio"], [role="checkbox"], [role="switch"], [role="radio"]):focus-visible {
+  outline-width: 2px;
+  outline-offset: -2px;
+}
+/* Native date controls have an intrinsic width in WebKit; let the field
+   shrink with its grid column instead of widening the dialog. */
+input:is([type="date"], [type="datetime-local"], [type="month"], [type="time"]) {
+  min-width: 0;
+  max-width: 100%;
+}
+input::-webkit-date-and-time-value { min-width: 0; }
 html[data-display="larger"] .card-actions,
 html[data-display="larger"] .travel-remove-btn,
 html[data-display="larger"] .city-remove-btn { opacity: 1; }
@@ -141,8 +172,14 @@ html[data-display="larger"] .city-remove-btn { opacity: 1; }
   .app-toolbar .dot-matrix-text-xs { font-size: .875rem; }
 }
 
-.glass-dialog { overflow: hidden; grid-template-rows: minmax(0, 1fr); }
-.dialog-body { align-self: stretch; overscroll-behavior: contain; scroll-padding-block: 1rem; }
+/* Keep the close control outside the content scrollport: scrolled fields
+   must never pass underneath its fixed hit target. */
+.glass-dialog { overflow: hidden; grid-template-rows: minmax(0, 1fr); padding-top: 3.75rem; }
+/* A dialog that scrolls as a whole takes its close control with it, so the
+   inset protects nothing there and would only leave a blank band above
+   full-bleed media. */
+.glass-dialog.dialog-flush { padding-top: 0; }
+.dialog-body { align-content: start; align-self: stretch; overscroll-behavior: contain; scroll-padding-block: 1rem; }
 /* Content that exactly fits still scrolled by half a pixel about half the
    time: fractional line heights meet a dialog centred at a fractional offset,
    and the rounding lands on the wrong side. A pixel of end padding, taken back
@@ -237,3 +274,6 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
      the season buttons below the close button rather than under it. */
   .watchlist-detail-with-seasons .watchlist-episode-rail [data-season-heading] { min-height: 2.25rem; }
 }
+
+/* A selected value may wrap even when a compact caller requests h-8/h-9. */
+.ui-select-trigger { height: max-content; min-height: 2.5rem; }

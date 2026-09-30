@@ -61,10 +61,8 @@ const DialogContent = React.forwardRef<
           861px inside a 343px dialog, running its header under the close
           button and off the edge. */}
       <div className="dialog-body min-h-0 overflow-y-auto grid grid-cols-[minmax(0,1fr)] gap-4">{children}</div>
-      {/* 2.75rem square, 0.5rem in from the corner, so text keeps 3.75rem
-          clear of the right edge until it is below the button. DialogHeader's
-          pr-10 does that inside the default p-6. A header that sets its own
-          padding (the p-0 dialogs) replaces pr-10, and needs pr-16 instead. */}
+      {/* The shared top inset reserves this close target outside the body
+          scroller, including when fields are scrolled to its upper edge. */}
       <DialogPrimitive.Close className="absolute right-2 top-2 h-11 w-11 flex items-center justify-center rounded-full bg-background/90 p-1.5 opacity-75 ring-offset-background transition-[opacity,background-color] hover:opacity-100 hover:bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none shadow-sm">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
@@ -75,12 +73,12 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 pr-10 text-center sm:text-left", className)} {...props} />
+  <div className={cn("flex min-w-0 flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+  <div className={cn("flex min-w-0 flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end", className)} {...props} />
 );
 DialogFooter.displayName = "DialogFooter";
 
@@ -90,7 +88,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn("min-w-0 [overflow-wrap:anywhere] text-lg font-semibold leading-none tracking-tight", className)}
     {...props}
   />
 ));
@@ -100,7 +98,7 @@ const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  <DialogPrimitive.Description ref={ref} className={cn("min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground", className)} {...props} />
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 

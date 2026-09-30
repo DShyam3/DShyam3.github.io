@@ -95,8 +95,8 @@ export function LoanMovements({ loan }: { loan: Debt }) {
         <p className="text-xs text-muted-foreground">None recorded. Payroll deductions come from your payslips and are not needed here.</p>
       )}
 
-      <form onSubmit={add} className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/40 p-4">
-        <div className="col-span-2 space-y-1.5">
+      <form onSubmit={add} className="grid grid-cols-1 gap-3 rounded-2xl bg-muted/40 p-4 sm:grid-cols-2 [&>*]:min-w-0">
+        <div className="col-span-full space-y-1.5">
           <Label htmlFor={`${id}-kind`} className="text-xs text-muted-foreground">What happened</Label>
           <Select value={kind} onValueChange={v => setKind(v as Movement)}>
             <SelectTrigger id={`${id}-kind`} className="h-10"><SelectValue /></SelectTrigger>
@@ -113,7 +113,7 @@ export function LoanMovements({ loan }: { loan: Debt }) {
           <Label htmlFor={`${id}-date`} className="text-xs text-muted-foreground">Date</Label>
           <Input id={`${id}-date`} type="date" required max={today} value={date} onChange={e => setDate(e.target.value)} className="h-10" />
         </div>
-        <div className="col-span-2 flex justify-end">
+        <div className="col-span-full flex justify-end">
           <Button type="submit">Add</Button>
         </div>
       </form>

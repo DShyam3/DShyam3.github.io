@@ -197,7 +197,7 @@ function ExternalSearchField<R>({
       </div>
 
       {showResults && results.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 max-h-72 overflow-y-auto rounded-md border bg-popover shadow-md">
+        <div className="relative w-full mt-1 max-h-72 overflow-y-auto rounded-md border bg-popover shadow-md">
           {results.map((result) => (
             <button
               key={spec.resultKey(result as R)}
@@ -391,13 +391,11 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       </DialogTrigger>
 
       {/*
-        The form is as long as the collection has fields, which on a tablet in
-        portrait is taller than the screen: the title ran off the top and Save
-        off the bottom, with nothing to scroll. So the dialog is capped at the
-        viewport, the fields scroll, and the title and buttons stay put.
+        The shared dialog body scrolls the entire form, including search results
+        and actions, so short viewports never trap a nested scrolling region.
       */}
-      <DialogContent className="sm:max-w-md p-0 max-h-[90dvh] flex flex-col overflow-hidden">
-        <DialogHeader className="pl-6 pr-16 pt-6 shrink-0">
+      <DialogContent className="sm:max-w-md p-0">
+        <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle className="font-serif text-xl">
             {mode === 'add' ? `Add New ${config.noun.singular}` : `Edit ${config.noun.singular}`}
           </DialogTitle>
@@ -407,9 +405,9 @@ export function EntityFormDialog<T extends CollectionRow, R>({
         <form
           id={`${mode}-${config.table}-form`}
           onSubmit={handleSubmit}
-          className="space-y-4 mt-4 flex-1 min-h-0 overflow-y-auto px-6 pb-1"
+          className="min-w-0 space-y-4 px-6 pb-1"
         >
-          <fieldset disabled={saving || uploading} className="space-y-4">
+          <fieldset disabled={saving || uploading} className="min-w-0 space-y-4">
           {saveError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{saveError}</p>}
           {mode === 'add' && config.externalSearch && (
             <ExternalSearchField
@@ -532,10 +530,8 @@ export function EntityFormDialog<T extends CollectionRow, R>({
           </fieldset>
         </form>
 
-        {/* Outside the scrolling form rather than sticky inside it: a sticky
-            row needs an opaque fill to hide the fields beneath, and that fill
-            showed as a dark slab against the dialog's translucent gradient. */}
-        <div className="flex gap-3 px-6 pt-4 pb-6 shrink-0">
+        {/* Actions follow the fields in the shared dialog scroller. */}
+        <div className="flex flex-wrap gap-3 px-6 pb-6">
           <Button
             type="button"
             variant="outline"

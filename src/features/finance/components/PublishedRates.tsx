@@ -132,14 +132,14 @@ export function PublishedRates() {
         <p className="text-xs text-muted-foreground">None stored, so every month uses the assumptions above.</p>
       )}
 
-      <form onSubmit={submit} className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/40 p-4 sm:grid-cols-3">
+      <form onSubmit={submit} className="grid grid-cols-1 gap-3 rounded-2xl bg-muted/40 p-4 sm:grid-cols-3 [&>*]:min-w-0">
         {field('from', 'From', from, setFrom, { type: 'date', inputMode: undefined, required: true })}
         {field('rpi', 'RPI (%)', rpi, setRpi, { required: true })}
         {field('cap', 'Cap (%)', cap, setCap, { placeholder: 'None' })}
         {field('lower', 'Plan 2 threshold (£)', lower, setLower)}
         {field('upper', 'Plan 2 full rate from (£)', upper, setUpper)}
         {field('bank', 'Bank Rate (%)', bank, setBank)}
-        <div className="col-span-2 flex justify-end sm:col-span-3">
+        <div className="col-span-full flex justify-end">
           <Button type="submit" disabled={saving}>Add rates</Button>
         </div>
       </form>

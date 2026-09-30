@@ -58,7 +58,7 @@ export function CardDetailDialog({
 }: CardDetailDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-2xl h-fit max-h-[85svh] overflow-x-hidden overflow-y-auto p-0 gap-0">
+      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="dialog-flush sm:max-w-2xl h-fit max-h-[85svh] overflow-x-hidden overflow-y-auto p-0 gap-0">
         {/* Radix wires `aria-describedby` from this, and warns when a dialog
             has none: a screen reader was announcing the title and then going
             silent about what the dialog is. It is `sr-only` rather than

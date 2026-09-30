@@ -83,7 +83,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl p-0 overflow-hidden bg-card border-border flex flex-col max-h-[85vh]">
         {/* Header */}
-        <DialogHeader className="p-4 pr-16 border-b border-border/60 bg-secondary/20">
+        <DialogHeader className="p-4 border-b border-border/60 bg-secondary/20">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span
@@ -130,7 +130,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 flex flex-col justify-between">
-              <span className="text-[11px] text-muted-foreground uppercase font-medium">Result</span>
+              <span className="text-xs text-muted-foreground uppercase font-medium">Result</span>
               <div className="flex items-center gap-1.5 mt-1">
                 {entry.is_missed || entry.status === 'error' ? (
                   <>
@@ -154,7 +154,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
             </div>
 
             <div className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 flex flex-col justify-between">
-              <span className="text-[11px] text-muted-foreground uppercase font-medium flex items-center gap-1">
+              <span className="text-xs text-muted-foreground uppercase font-medium flex items-center gap-1">
                 <Layers className="h-3 w-3" />
                 Synced
               </span>
@@ -164,7 +164,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
             </div>
 
             <div className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 flex flex-col justify-between">
-              <span className="text-[11px] text-muted-foreground uppercase font-medium flex items-center gap-1">
+              <span className="text-xs text-muted-foreground uppercase font-medium flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 Duration
               </span>
@@ -231,7 +231,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
           {entry.error_message && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase">
+                <span className="text-xs font-medium text-muted-foreground uppercase">
                   {parsedErrors ? 'Raw Error Message' : 'Error Details'}
                 </span>
                 <Button
@@ -256,7 +256,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
             <div className="rounded-lg border border-border/60 bg-secondary/10 p-4 text-center">
               <CheckCircle className="h-8 w-8 text-muted-foreground/60 mx-auto mb-2" />
               <p className="text-xs font-semibold text-foreground">All items synchronized cleanly</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 No title timeouts, platform query errors, or network anomalies occurred during this run.
               </p>
             </div>

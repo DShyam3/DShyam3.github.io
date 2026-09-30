@@ -309,11 +309,11 @@ export function DebtFormDialog({
                 ))}
               </ul>
             )}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1.4fr_auto]">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]">
               <Input type="date" aria-label="Borrowing date" value={draw.date} onChange={e => setDraw({ ...draw, date: e.target.value })} className="h-10" />
               <Input inputMode="decimal" aria-label="Borrowing amount" placeholder="Amount (£)" value={draw.amount} onChange={e => setDraw({ ...draw, amount: e.target.value })} className="h-10 tabular-nums" />
-              <Input aria-label="Borrowing label" placeholder={kind === 'student' ? 'e.g. Year 1 tuition' : 'Label'} value={draw.label} onChange={e => setDraw({ ...draw, label: e.target.value })} className="col-span-2 h-10 sm:col-span-1" />
-              <Button type="button" variant="outline" onClick={addDraw} className="col-span-2 h-10 sm:col-span-1">Add</Button>
+              <Input aria-label="Borrowing label" placeholder={kind === 'student' ? 'e.g. Year 1 tuition' : 'Label'} value={draw.label} onChange={e => setDraw({ ...draw, label: e.target.value })} className="h-10" />
+              <Button type="button" variant="outline" onClick={addDraw} className="h-10">Add</Button>
             </div>
           </fieldset>
 

@@ -25,15 +25,16 @@ export function SearchBar({
         value={query}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'pl-8 bg-secondary/30 md:bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-[border-color,background-color] duration-200 h-9 text-sm',
-          query ? 'pr-8' : 'pr-2.5',
+          'pl-8 bg-secondary/30 md:bg-secondary/50 border-transparent focus:border-border focus:bg-card transition-[border-color,background-color] duration-200 min-h-11 text-sm',
+          query ? 'pr-12' : 'pr-2.5',
         )}
       />
       {query && (
         <Button
           variant="ghost"
           size="icon"
-          className="absolute right-0.5 top-1/2 -translate-y-1/2 h-7 w-7 hover:bg-transparent"
+          className="absolute right-0 top-1/2 -translate-y-1/2 h-11 w-11 hover:bg-transparent"
+          aria-label="Clear search"
           onClick={() => onChange('')}
         >
           <X className="w-3.5 h-3.5 text-muted-foreground" />

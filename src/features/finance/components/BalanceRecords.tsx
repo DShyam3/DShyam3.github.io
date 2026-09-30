@@ -123,7 +123,7 @@ export function BalanceRecords({
         <p className="text-xs text-muted-foreground">None yet. Add the balance your lender shows so projections start from a real figure.</p>
       )}
 
-      <form onSubmit={submit} className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/40 p-4">
+      <form onSubmit={submit} className="grid grid-cols-1 gap-3 rounded-2xl bg-muted/40 p-4 sm:grid-cols-2 [&>*]:min-w-0">
         <div className="space-y-1.5">
           <Label htmlFor={`${id}-balance`} className="text-xs text-muted-foreground">Balance (£)</Label>
           <Input id={`${id}-balance`} inputMode="decimal" required value={balance} onChange={e => setBalance(e.target.value)} className="h-10 tabular-nums" />
@@ -148,14 +148,14 @@ export function BalanceRecords({
           <Input id={`${id}-note`} value={note} onChange={e => setNote(e.target.value)} className="h-10" />
         </div>
         {gap !== undefined && expected !== undefined && (
-          <p className="col-span-2 text-xs text-muted-foreground" aria-live="polite">
+          <p className="col-span-full text-xs text-muted-foreground" aria-live="polite">
             Expected about <span className="tabular-nums text-foreground">{formatGBP(expected)}</span> on that date
             {Math.abs(gap) < 1
               ? ', so this matches.'
               : <>, so this is <span className="tabular-nums text-foreground">{formatGBP(Math.abs(gap))}</span> {gap > 0 ? 'higher' : 'lower'}. A refund, a payment or interest timing usually explains it.</>}
           </p>
         )}
-        <div className="col-span-2 flex flex-wrap items-center justify-between gap-3">
+        <div className="col-span-full flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">{hint}</p>
           <Button type="submit" disabled={saving}>Record balance</Button>
         </div>
