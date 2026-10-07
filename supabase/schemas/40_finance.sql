@@ -227,13 +227,26 @@ CREATE TABLE IF NOT EXISTS "public"."finance_recurring_bills" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     -- Free-text name of who supplies this bill, distinct from its own name:
     -- item "Phone", provider "O2".
-    "provider" "text"
+    "provider" "text",
+    "status" "text" DEFAULT 'active'::"text" NOT NULL,
+    "detection_key" "text",
+    "last_paid_date" date,
+    CONSTRAINT "finance_recurring_bills_status_check" CHECK ("status" IN ('active', 'inactive', 'dismissed'))
 );
 
 ALTER TABLE "public"."finance_recurring_bills" OWNER TO "postgres";
 
 COMMENT ON COLUMN "public"."finance_recurring_bills"."provider" IS
     'Free-text name of who supplies this bill (e.g. item "Phone", provider "O2"). Nullable; no length CHECK -- the client caps input.';
+
+COMMENT ON COLUMN "public"."finance_recurring_bills"."status" IS
+    'User review outcome: active commitments, inactive commitments, or dismissed recurring-payment suggestions.';
+
+COMMENT ON COLUMN "public"."finance_recurring_bills"."detection_key" IS
+    'Deterministic merchant and account key used to associate a reviewed recurring payment with future bank-record suggestions.';
+
+COMMENT ON COLUMN "public"."finance_recurring_bills"."last_paid_date" IS
+    'Last payment date confirmed by the user; nullable when no payment has been confirmed.';
 
 CREATE TABLE IF NOT EXISTS "public"."finance_recurring_templates" (
     "id" "text" DEFAULT ("gen_random_uuid"())::"text" NOT NULL,
@@ -827,7 +840,7 @@ GRANT ALL ON TABLE "public"."finance_memberships" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_memberships" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_recurring_bills" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_recurring_bills" FROM "anon";
 
 GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "authenticated";
 
@@ -893,8 +906,9 @@ GRANT ALL ON TABLE "public"."finance_user_holidays" TO "service_role";
 -- or the differ will try to hand `anon` back its SELECT on every finance table
 -- (including finance_truelayer_connection, which holds live bank tokens).
 --
--- The inconsistency is real and preserved: finance_debts has every anon
--- privilege revoked, the rest only SELECT. See S-10 in REHAUL_PLAN.md.
+-- Legacy tables below retain the SELECT-only revoke unless ALL privileges
+-- are explicitly revoked elsewhere (including recurring bills above).
+-- Remaining grant drift is tracked in S-10 in REHAUL_PLAN.md.
 
 REVOKE SELECT ON TABLE
   "public"."finance_bank_accounts",

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { findPayslipTransactionCandidates, type ReconciliationTransaction } from './payslip-reconciliation';
+import {
+  findPayslipTransactionCandidates,
+  unambiguousPayslipMatches,
+  type PayslipTransactionCandidate,
+  type ReconciliationTransaction,
+} from './payslip-reconciliation';
 import type { Payslip } from './payslip';
 
 const payslip = (overrides: Partial<Payslip> = {}): Payslip => ({
@@ -43,12 +48,26 @@ describe('findPayslipTransactionCandidates', () => {
     expect(candidates[0]?.daysApart).toBe(2);
   });
 
+  it('finds a payment made early anywhere in the pay month', () => {
+    const candidates = findPayslipTransactionCandidates(
+      payslip({ payDate: '2025-12-31' }),
+      [transaction({ date: '2025-12-23' }), transaction({ id: 'start-of-month', date: '2025-12-01' })],
+    );
+
+    expect(candidates.map(candidate => [candidate.transactionId, candidate.daysApart])).toEqual([
+      ['salary', 8], ['start-of-month', 30],
+    ]);
+  });
+
   it('never proposes outgoing, differently valued, stale, or malformed transactions', () => {
     const candidates = findPayslipTransactionCandidates(payslip(), [
       transaction({ id: 'outgoing', amount: 2300 }),
       transaction({ id: 'wrong-amount', amount: -2299.99 }),
-      transaction({ id: 'too-old', date: '2026-08-22' }),
+      transaction({ id: 'previous-month', date: '2026-07-28' }),
+      transaction({ id: 'next-month', date: '2026-09-03' }),
       transaction({ id: 'bad-date', date: '28/08/2026' }),
+      transaction({ id: 'timestamp-in-pay-month', date: '2026-08-28T00:00:00Z' }),
+      transaction({ id: 'impossible-day-in-pay-month', date: '2026-08-32' }),
     ]);
 
     expect(candidates).toEqual([]);
@@ -68,5 +87,49 @@ describe('findPayslipTransactionCandidates', () => {
 
   it('does not make a candidate for an empty or non-positive take-home amount', () => {
     expect(findPayslipTransactionCandidates(payslip({ net: 0 }), [transaction({ amount: 0 })])).toEqual([]);
+  });
+});
+
+describe('unambiguousPayslipMatches', () => {
+  const candidate = (
+    payslipId: string,
+    transactionId: string,
+    daysApart = 0,
+  ): PayslipTransactionCandidate => ({
+    payslipId, transactionId, daysApart, date: '2023-01-27', name: 'KEYSIGHT', amount: -1331.36, employerMentioned: true,
+  });
+
+  it('offers each unlinked payslip whose only candidate landed on the pay date', () => {
+    const matches = unambiguousPayslipMatches(new Map([
+      ['jan', [candidate('jan', 'tx-jan')]],
+      ['feb', [candidate('feb', 'tx-feb')]],
+    ]), new Set());
+
+    expect(matches).toEqual([
+      { payslipId: 'jan', transactionId: 'tx-jan' },
+      { payslipId: 'feb', transactionId: 'tx-feb' },
+    ]);
+  });
+
+  it('leaves linked, early, contested and multi-candidate payslips for review one at a time', () => {
+    const matches = unambiguousPayslipMatches(new Map([
+      ['linked', [candidate('linked', 'tx-linked')]],
+      ['early', [candidate('early', 'tx-early', 3)]],
+      ['two-candidates', [candidate('two-candidates', 'tx-a'), candidate('two-candidates', 'tx-b')]],
+      ['shared-1', [candidate('shared-1', 'tx-shared')]],
+      ['shared-2', [candidate('shared-2', 'tx-shared')]],
+      ['none', []],
+    ]), new Set(['linked']));
+
+    expect(matches).toEqual([]);
+  });
+
+  it('does not count a linked payslip as a rival for the same transaction', () => {
+    const matches = unambiguousPayslipMatches(new Map([
+      ['linked', [candidate('linked', 'tx-shared')]],
+      ['open', [candidate('open', 'tx-shared')]],
+    ]), new Set(['linked']));
+
+    expect(matches).toEqual([{ payslipId: 'open', transactionId: 'tx-shared' }]);
   });
 });

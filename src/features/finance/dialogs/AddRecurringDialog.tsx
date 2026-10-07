@@ -11,6 +11,7 @@ export type NewRecurringState = Omit<RecurringBill, 'id' | 'amount'> & { amount:
 
 interface AddRecurringDialogProps {
   isOpen: boolean;
+  busy?: boolean;
   onOpenChange: (open: boolean) => void;
   newRecurring: NewRecurringState;
   setNewRecurring: React.Dispatch<React.SetStateAction<NewRecurringState>>;
@@ -26,6 +27,7 @@ interface AddRecurringDialogProps {
 
 export const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
   isOpen,
+  busy = false,
   onOpenChange,
   newRecurring,
   setNewRecurring,
@@ -59,25 +61,30 @@ export const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
           linkedAccountId: '',
           isPaid: false,
           provider: newRecurring.provider,
+          status: newRecurring.status,
+          detectionKey: newRecurring.detectionKey,
+          lastPaidDate: newRecurring.lastPaidDate,
         });
       }
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!busy) onOpenChange(open); }}>
       <DialogContent className="sm:rounded-lg border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader className="text-left">
-          <DialogTitle className="font-mono text-lg font-bold">Add Recurring Bill</DialogTitle>
+          <DialogTitle className="font-mono text-lg font-bold">{newRecurring.detectionKey ? 'Confirm recurring payment' : 'Add Recurring Bill'}</DialogTitle>
           <DialogDescription className="text-xs font-mono text-muted-foreground">
-            Add a subscription, membership, or regular bill to your recurring schedule.
+            {newRecurring.detectionKey
+              ? 'Check whether this payment is still active, confirm when you last paid it, and verify the amount and schedule before saving.'
+              : 'Add a subscription, membership, or regular bill to your recurring schedule.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSave} className="space-y-3.5 pt-2 font-mono">
           {/* Template Selector */}
           <div className="space-y-1">
             <Label htmlFor="rec-template" className="text-xs font-mono text-muted-foreground">Preset Template</Label>
-            <Select value={addRecTemplate} onValueChange={handleTemplateSelect}>
+            <Select value={addRecTemplate} onValueChange={handleTemplateSelect} disabled={!!newRecurring.detectionKey}>
               <SelectTrigger id="rec-template" className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono">
                 <SelectValue placeholder="Custom (Start from scratch)" />
               </SelectTrigger>
@@ -103,6 +110,32 @@ export const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
               className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
               required
             />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+            <div className="space-y-1">
+              <Label htmlFor="rec-status" className="text-xs font-mono text-muted-foreground">Still active?</Label>
+              <Select value={newRecurring.status || 'active'} onValueChange={(value) => setNewRecurring({ ...newRecurring, status: value as RecurringBill['status'] })}>
+                <SelectTrigger id="rec-status" className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-lg border-border/40 font-mono">
+                  <SelectItem value="active" className="text-xs">Active</SelectItem>
+                  <SelectItem value="inactive" className="text-xs">Inactive / stopped</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rec-last-paid" className="text-xs font-mono text-muted-foreground">Last paid (confirm date)</Label>
+              <Input
+                id="rec-last-paid"
+                type="date"
+                max={new Date().toLocaleDateString('en-CA')}
+                value={newRecurring.lastPaidDate || ''}
+                onChange={(event) => setNewRecurring({ ...newRecurring, lastPaidDate: event.target.value || undefined })}
+                className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
+              />
+            </div>
           </div>
 
           {/* Provider */}
@@ -277,8 +310,8 @@ export const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
           </div>
 
           <DialogFooter className="pt-3 gap-2 sm:gap-0">
-            <Button variant="outline" type="button" onClick={() => onOpenChange(false)} className="rounded-lg h-8 px-3 text-xs font-mono">Cancel</Button>
-            <Button type="submit" className="rounded-lg h-8 px-3 bg-primary text-primary-foreground text-xs font-mono">Save Bill</Button>
+            <Button variant="outline" type="button" disabled={busy} onClick={() => onOpenChange(false)} className="rounded-lg h-8 px-3 text-xs font-mono">Cancel</Button>
+            <Button type="submit" disabled={busy} className="rounded-lg h-8 px-3 bg-primary text-primary-foreground text-xs font-mono">{newRecurring.detectionKey ? 'Confirm recurring payment' : 'Save Bill'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

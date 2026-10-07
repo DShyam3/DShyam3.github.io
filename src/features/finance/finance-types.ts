@@ -105,6 +105,12 @@ export interface BudgetCategory {
 }
 
 export interface RecurringBill {
+  /** Missing status on legacy defaults means active. */
+  status?: 'active' | 'inactive' | 'dismissed';
+  /** Stable merchant/account identity from transaction detection. */
+  detectionKey?: string;
+  /** Owner-confirmed last payment; separate from bank evidence and isPaid. */
+  lastPaidDate?: string;
   id: string;
   name: string;
   amount: number;

@@ -207,7 +207,7 @@ export function PayslipDetailDialog({
               ) : candidates.length > 0 ? (
                 <div className="mt-2 space-y-2">
                   <p className="text-xs text-muted-foreground">
-                    Exact take-home matches within five days. Confirm the one your bank received.
+                    Exact take-home matches from the pay month. Confirm the one your bank received.
                   </p>
                   {candidates.map(candidate => (
                     <div key={candidate.transactionId} className="flex items-center justify-between gap-3 rounded-md border border-border/30 px-2.5 py-2">
@@ -232,7 +232,7 @@ export function PayslipDetailDialog({
                 </div>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  No exact incoming take-home payment was found within five days of this pay date.
+                  No exact incoming take-home payment was found in this pay date's month, or within five days of it.
                 </p>
               )}
             </section>

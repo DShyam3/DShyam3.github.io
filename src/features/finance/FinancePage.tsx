@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
+import { format } from 'date-fns';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppShell } from '@/components/layout/AppShell';
@@ -31,14 +32,19 @@ const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
 const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
 import { consumeTrueLayerOAuthState } from './truelayer-oauth';
+import { useSpendingLedger } from './useSpendingLedger';
+import { detectRecurringPayments, candidateMatchesBill, recurringPaymentEvidence, isRecurringPaidForPeriod, type RecurringCandidate } from '@/lib/finance/recurring-detection';
 import { useFinanceTotals } from './useFinanceTotals';
 import { PaydaySummary, paydayCountdown } from './components/PaydaySummary';
 import { SurfaceHero } from './components/SurfaceHero';
 import { ProfileAvatar } from './components/ProfileAvatar';
 import { NetWorthTrend } from './components/NetWorthTrend';
+import { FinanceSectionBoundary, FinanceSectionLoading } from './components/FinanceSectionBoundary';
+import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import type {
   BudgetItem,
+  BudgetCategory,
   InvestmentActivity,
   InvestmentHolding,
   MockTransaction,
@@ -70,18 +76,20 @@ function FinanceView() {
   const {
     bankAccounts,
     budgetCategories,
-    creditScores,
     fetchSupabaseData,
     goals,
     investmentActivities,
     investmentHoldings,
     loadingDb,
     hasLoaded,
-    memberships,
     mockTransactions,
     profileId,
+    profileLoadState,
+    profileLoadError,
+    retryProfiles,
     recurringTemplates,
-    recurrings,
+    allRecurrings: recurrings,
+    recurringDataReady,
     saveDataToSupabase,
     currentLoadGenerations,
     registerBeforeLoadFlush,
@@ -170,6 +178,76 @@ function FinanceView() {
     linkedBudgetItemId: '',
     linkedAccountId: ''
   });
+
+  const [recurringBusy, setRecurringBusy] = useState(false);
+  const recurringSaveLock = useRef(false);
+  const recurringProfile = useRef(profileId);
+  recurringProfile.current = profileId;
+  const { ledger, exclusionsUnreliable } = useSpendingLedger();
+  const todayISO = format(new Date(), 'yyyy-MM-dd');
+  const detectedRecurrings = useMemo(
+    () => recurringDataReady && !exclusionsUnreliable ? detectRecurringPayments(ledger, todayISO) : [],
+    [ledger, todayISO, recurringDataReady, exclusionsUnreliable],
+  );
+  const recurringCandidates = detectedRecurrings.filter(c => !recurrings.some(b => candidateMatchesBill(c, b)));
+  const paymentEvidence = new Map((recurringDataReady && !exclusionsUnreliable ? recurrings : []).flatMap(bill => {
+    const payment = recurringPaymentEvidence(ledger, bill, todayISO);
+    return payment ? [[bill.id, payment] as const] : [];
+  }));
+  useEffect(() => {
+    setIsAddRecurringOpen(false);
+    setIsEditRecurringOpen(false);
+    setActiveRecurring(null);
+  }, [profileId]);
+
+  const draftFromCandidate = (candidate: RecurringCandidate): Omit<RecurringBill, 'id'> => ({
+    name: candidate.name,
+    amount: candidate.amount,
+    frequency: candidate.frequency,
+    dueDate: Number(candidate.lastPaidDate.slice(8, 10)),
+    dueMonth: Number(candidate.lastPaidDate.slice(5, 7)),
+    linkedAccountId: candidate.accountId,
+    detectionKey: candidate.key,
+    lastPaidDate: candidate.lastPaidDate,
+    status: 'active',
+    isPaid: false,
+  });
+  const reviewRecurringCandidate = (candidate: RecurringCandidate) => {
+    setNewRecurring(draftFromCandidate(candidate));
+    setAddRecTemplate('scratch');
+    setIsAddRecurringOpen(true);
+  };
+
+  // A review records an obligation, never another debit against a bank balance.
+  const persistRecurringReview = async (updated: RecurringBill[], budget?: BudgetCategory[]): Promise<boolean> => {
+    if (recurringSaveLock.current) return false;
+    if (!recurringDataReady) {
+      toast({ title: 'Not saved', description: 'Recurring bills and transactions must finish loading before saving. Try reloading if the load failed.', variant: 'destructive' });
+      return false;
+    }
+    recurringSaveLock.current = true;
+    setRecurringBusy(true);
+    const owner = profileId;
+    try {
+      if (budget) {
+        if (!(await saveDataToSupabase('budget', budget)) || recurringProfile.current !== owner) return false;
+        setBudgetCategories(budget);
+      }
+      const saved = await saveDataToSupabase('recurrings', updated);
+      if (!saved || recurringProfile.current !== owner) return false;
+      setRecurrings(updated);
+      return true;
+    } finally {
+      recurringSaveLock.current = false;
+      setRecurringBusy(false);
+    }
+  };
+  const dismissRecurringCandidate = async (candidate: RecurringCandidate) => {
+    if (recurrings.some(b => candidateMatchesBill(candidate, b))) return;
+    await persistRecurringReview([...recurrings, {
+      ...draftFromCandidate(candidate), id: crypto.randomUUID(), status: 'dismissed', lastPaidDate: undefined,
+    }]);
+  };
 
   const [thisMonthCollapsed, setThisMonthCollapsed] = useState(false);
   const [futureCollapsed, setFutureCollapsed] = useState(false);
@@ -413,11 +491,14 @@ function FinanceView() {
   // HANDLERS: RECURRINGS CRUD
   // ==========================================
 
-  const handleAddRecurring = (e: React.FormEvent) => {
+  const handleAddRecurring = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRecurring.name || newRecurring.amount === '' || newRecurring.amount <= 0) return;
+    if (recurringSaveLock.current || !newRecurring.name.trim() || newRecurring.amount === '' || !Number.isFinite(newRecurring.amount) || newRecurring.amount <= 0) return;
+    if (newRecurring.lastPaidDate && newRecurring.lastPaidDate > todayISO) return;
+    if (newRecurring.detectionKey && recurrings.some(b => b.detectionKey === newRecurring.detectionKey)) return;
 
     let updatedBudget = [...budgetCategories];
+    let budgetChanged = false;
     let finalLinkedBudgetItemId = newRecurring.linkedBudgetItemId;
 
     const template = autoCategorizeRecurring(newRecurring.name);
@@ -425,7 +506,7 @@ function FinanceView() {
     const resolvedCategory = newRecurring.category || template?.category || 'Subscriptions';
     const resolvedTag = newRecurring.tag || template?.tag || newRecurring.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-    if (finalLinkedBudgetItemId === 'create' || (!finalLinkedBudgetItemId && newRecurring.name)) {
+    if ((!newRecurring.status || newRecurring.status === 'active') && (finalLinkedBudgetItemId === 'create' || (!finalLinkedBudgetItemId && newRecurring.name))) {
       const targetCatName = template?.budgetCategoryName || template?.category || 'Subscriptions';
       const targetCatId = targetCatName.toLowerCase();
       const targetCat = updatedBudget.find(
@@ -451,8 +532,7 @@ function FinanceView() {
             return c;
           });
           finalLinkedBudgetItemId = newItemId;
-          setBudgetCategories(updatedBudget);
-          saveDataToSupabase('budget', updatedBudget);
+          budgetChanged = true;
         }
       }
     }
@@ -460,7 +540,9 @@ function FinanceView() {
     const created: RecurringBill = {
       ...newRecurring,
       amount: newRecurring.amount,
-      id: 'rec_' + Date.now(),
+      dueMonth: newRecurring.dueMonth || 1,
+      isPaid: isRecurringPaidForPeriod({ ...newRecurring, amount: newRecurring.amount, id: '' }, todayISO),
+      id: crypto.randomUUID(),
       emoji: resolvedEmoji,
       category: resolvedCategory,
       tag: resolvedTag,
@@ -470,8 +552,7 @@ function FinanceView() {
     } as RecurringBill;
 
     const updated = [...recurrings, created];
-    setRecurrings(updated);
-    saveDataToSupabase('recurrings', updated);
+    if (!(await persistRecurringReview(updated, budgetChanged ? updatedBudget : undefined))) return;
     setIsAddRecurringOpen(false);
     setNewRecurring({
       name: '',
@@ -489,101 +570,42 @@ function FinanceView() {
     toast({ title: 'Recurring Added', description: `Successfully added recurring bill "${created.name}".` });
   };
 
-  const handleEditRecurring = (e: React.FormEvent) => {
+  const handleEditRecurring = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeRecurring) return;
-
-    // Balance reconciliation if amount or linked account changed
-    let updatedAccounts = [...bankAccounts];
-    const oldBill = recurrings.find(r => r.id === activeRecurring.id);
-    if (oldBill && oldBill.isPaid) {
-      // Revert old payment
-      if (oldBill.linkedAccountId) {
-        updatedAccounts = updatedAccounts.map(acc =>
-          acc.id === oldBill.linkedAccountId ? { ...acc, balance: acc.balance + oldBill.amount } : acc
-        );
-      }
-      // Apply new payment
-      if (activeRecurring.linkedAccountId && activeRecurring.isPaid) {
-        updatedAccounts = updatedAccounts.map(acc =>
-          acc.id === activeRecurring.linkedAccountId ? { ...acc, balance: acc.balance - activeRecurring.amount } : acc
-        );
-      }
-    }
-
+    if (!activeRecurring || !activeRecurring.name.trim() || !Number.isFinite(activeRecurring.amount) || activeRecurring.amount <= 0) return;
+    if (activeRecurring.lastPaidDate && activeRecurring.lastPaidDate > todayISO) return;
+    const previous = recurrings.find(bill => bill.id === activeRecurring.id);
     const normalizedRecurring: RecurringBill = {
       ...activeRecurring,
-      provider: activeRecurring.provider?.trim() || undefined
+      dueMonth: activeRecurring.dueMonth || 1,
+      isPaid: activeRecurring.lastPaidDate !== previous?.lastPaidDate ? isRecurringPaidForPeriod(activeRecurring, todayISO) : activeRecurring.isPaid,
+      provider: activeRecurring.provider?.trim() || undefined,
     };
-    const updated = recurrings.map(r => r.id === activeRecurring.id ? normalizedRecurring : r);
-    setRecurrings(updated);
-    saveDataToSupabase('recurrings', updated);
+    if (!(await persistRecurringReview(recurrings.map(r => r.id === activeRecurring.id ? normalizedRecurring : r)))) return;
     setIsEditRecurringOpen(false);
     setActiveRecurring(null);
-    if (updatedAccounts !== bankAccounts) {
-      setBankAccounts(updatedAccounts);
-      saveDataToSupabase('accounts', { bankAccounts: updatedAccounts, memberships, creditScores });
-    }
     toast({ title: 'Recurring Bill Updated', description: 'Bill details saved.' });
   };
 
-  const performDeleteRecurring = (id: string) => {
-    let updatedAccounts = [...bankAccounts];
-    const bill = recurrings.find(r => r.id === id);
-    if (bill && bill.isPaid && bill.linkedAccountId) {
-      const accId = bill.linkedAccountId;
-      const amt = bill.amount;
-      updatedAccounts = updatedAccounts.map(acc => {
-        if (acc.id === accId) {
-          return { ...acc, balance: acc.balance + amt };
-        }
-        return acc;
-      });
+  const performDeleteRecurring = async (id: string) => {
+    if (await persistRecurringReview(recurrings.filter(r => r.id !== id))) {
+      toast({ title: 'Recurring Bill Deleted', description: 'Recurring bill removed.' });
     }
-    const updated = recurrings.filter(r => r.id !== id);
-    setRecurrings(updated);
-    saveDataToSupabase('recurrings', updated);
-    if (updatedAccounts !== bankAccounts) {
-      setBankAccounts(updatedAccounts);
-      saveDataToSupabase('accounts', { bankAccounts: updatedAccounts, memberships, creditScores });
-    }
-    toast({ title: 'Recurring Bill Deleted', description: 'Recurring bill removed.' });
   };
 
   const handleDeleteRecurring = (id: string) =>
     askDelete({
       name: recurrings.find(r => r.id === id)?.name,
-      onConfirm: () => performDeleteRecurring(id),
+      onConfirm: () => { void performDeleteRecurring(id); },
     });
 
   const toggleRecurringPaid = (id: string) => {
-    let updatedAccounts = [...bankAccounts];
-    const updated = recurrings.map(r => {
-      if (r.id === id) {
-        const nextPaid = !r.isPaid;
-        if (r.linkedAccountId) {
-          const accId = r.linkedAccountId;
-          const amt = r.amount;
-          updatedAccounts = updatedAccounts.map(acc => {
-            if (acc.id === accId) {
-              return {
-                ...acc,
-                balance: acc.balance + (nextPaid ? -amt : amt)
-              };
-            }
-            return acc;
-          });
-        }
-        return { ...r, isPaid: nextPaid };
-      }
-      return r;
-    });
-    setRecurrings(updated);
-    saveDataToSupabase('recurrings', updated);
-    if (updatedAccounts !== bankAccounts) {
-      setBankAccounts(updatedAccounts);
-      saveDataToSupabase('accounts', { bankAccounts: updatedAccounts, memberships, creditScores });
-    }
+    void persistRecurringReview(recurrings.map(r => r.id === id ? {
+      ...r,
+      isPaid: !r.isPaid,
+      // Bank evidence stays separate. Clearing a monthly check does not erase history.
+      lastPaidDate: !r.isPaid ? todayISO : r.lastPaidDate,
+    } : r));
   };
   // ==========================================
   // HANDLERS: HOLIDAY TRACKER (TAX & INCOME TAB)
@@ -820,9 +842,17 @@ function FinanceView() {
             fallback is deliberately bare: the shell, nav and footer are
             already painted, so only the middle is waiting. */}
         <div className="flex flex-col py-6 sm:py-8 w-full min-w-0">
+          {!profileId ? (
+            <div role={profileLoadState === 'error' ? 'alert' : 'status'} className="py-16 text-center text-sm font-sans space-y-3">
+              <p className="font-semibold">{profileLoadState === 'error' ? 'Finance could not load' : 'Loading finance profiles…'}</p>
+              {profileLoadError && <p className="text-muted-foreground">{profileLoadError}</p>}
+              {profileLoadState === 'error' && <Button variant="outline" onClick={() => { void retryProfiles(); }}>Try again</Button>}
+            </div>
+          ) : <>
           {showsSurfaceHero(activeTab) ? surfaceHero : null}
 
-          <Suspense fallback={<div className="py-16 text-center text-sm text-muted-foreground font-sans">Loading…</div>}>
+          <FinanceSectionBoundary key={activeTab}>
+          <Suspense fallback={<FinanceSectionLoading />}>
           {/* ==========================================
               TAB 1: DASHBOARD
               ========================================== */}
@@ -875,9 +905,16 @@ function FinanceView() {
           {activeTab === 'recurrings' && (
             <RecurringsTab
               recurrings={recurrings}
+              candidates={recurringCandidates}
+              onReviewCandidate={reviewRecurringCandidate}
+              onDismissCandidate={dismissRecurringCandidate}
+              busy={recurringBusy || !recurringDataReady}
+              paymentEvidence={paymentEvidence}
+              detectionUnavailable={!recurringDataReady || exclusionsUnreliable}
               currentMonth={currentMonth}
               formatGBP={formatGBP}
               onOpenAddModal={() => {
+                setNewRecurring({ name: '', amount: '', frequency: 'monthly', dueDate: 1, dueMonth: 1, isPaid: false, status: 'active' });
                 setIsAddRecurringOpen(true);
                 setAddRecTemplate("scratch");
               }}
@@ -946,6 +983,8 @@ function FinanceView() {
           )}
 
           </Suspense>
+          </FinanceSectionBoundary>
+          </>}
         </div>
       </AppShell>
 
@@ -962,6 +1001,7 @@ function FinanceView() {
 
       {/* DIALOG: Add Recurring Bill */}
       <AddRecurringDialog
+        busy={recurringBusy}
         isOpen={isAddRecurringOpen}
         onOpenChange={setIsAddRecurringOpen}
         newRecurring={newRecurring}
@@ -978,6 +1018,7 @@ function FinanceView() {
 
       {/* DIALOG: Edit Recurring Bill */}
       <EditRecurringDialog
+        busy={recurringBusy}
         isOpen={isEditRecurringOpen}
         onOpenChange={setIsEditRecurringOpen}
         activeRecurring={activeRecurring}

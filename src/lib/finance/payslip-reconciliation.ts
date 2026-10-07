@@ -29,6 +29,7 @@ export interface PayslipTransactionCandidate {
   employerMentioned: boolean;
 }
 
+/** Grace either side of the pay date, for a payment posted in a neighbouring month. */
 export const PAYSLIP_MATCH_WINDOW_DAYS = 5;
 
 const pence = (amount: number): number => Math.round(amount * 100);
@@ -47,6 +48,9 @@ const dateAtMidnightUtc = (value: string): number | undefined => {
   return timestamp;
 };
 
+/** Both dates are validated as YYYY-MM-DD before this is reached, so the prefix is the month. */
+const sameMonth = (left: string, right: string): boolean => left.slice(0, 7) === right.slice(0, 7);
+
 const employerTokens = (employer: string | undefined): string[] =>
   (employer ?? '')
     .toLocaleLowerCase()
@@ -62,8 +66,11 @@ const mentionsEmployer = (payslip: Payslip, transaction: ReconciliationTransacti
  * Finds the small set of exact, incoming take-home payments worth reviewing.
  *
  * An amount is compared as pence rather than floating point. The date window
- * allows for weekend and bank-processing delays; it is not a guess at which
- * transaction is correct. Results are ordered deterministically for the UI.
+ * is the pay date's calendar month, because employers pay early -- in December
+ * especially -- by more than any fixed few days. A short grace either side
+ * still catches a payment posted across a month boundary. The window is not a
+ * guess at which transaction is correct; results are ordered deterministically
+ * for the UI, nearest first.
  */
 export const findPayslipTransactionCandidates = (
   payslip: Payslip,
@@ -76,12 +83,11 @@ export const findPayslipTransactionCandidates = (
   return transactions
     .flatMap(transaction => {
       const transactionDate = dateAtMidnightUtc(transaction.date);
-      const daysApart = transactionDate === undefined
-        ? Number.POSITIVE_INFINITY
-        : Math.abs(transactionDate - payDate) / 86_400_000;
+      if (transactionDate === undefined) return [];
+      const daysApart = Math.abs(transactionDate - payDate) / 86_400_000;
       if (
         pence(transaction.amount) !== -takeHomePence
-        || daysApart > PAYSLIP_MATCH_WINDOW_DAYS
+        || (daysApart > PAYSLIP_MATCH_WINDOW_DAYS && !sameMonth(transaction.date, payslip.payDate))
       ) return [];
 
       return [{
@@ -100,4 +106,34 @@ export const findPayslipTransactionCandidates = (
       || left.date.localeCompare(right.date)
       || left.transactionId.localeCompare(right.transactionId)
     ));
+};
+
+export interface PayslipTransactionLink {
+  payslipId: string;
+  transactionId: string;
+}
+
+/**
+ * The matches clear enough to confirm together: an unlinked payslip with
+ * exactly one candidate, paid on the pay date itself, whose transaction is
+ * offered to no other unlinked payslip. Anything less certain stays for
+ * one-at-a-time review. This only narrows the list -- a person still presses
+ * the button, and nothing is linked on load.
+ */
+export const unambiguousPayslipMatches = (
+  candidatesByPayslip: ReadonlyMap<string, readonly PayslipTransactionCandidate[]>,
+  linkedPayslipIds: ReadonlySet<string>,
+): PayslipTransactionLink[] => {
+  const unlinked = [...candidatesByPayslip].filter(([payslipId]) => !linkedPayslipIds.has(payslipId));
+  const offers = new Map<string, number>();
+  for (const [, candidates] of unlinked) {
+    for (const { transactionId } of candidates) offers.set(transactionId, (offers.get(transactionId) ?? 0) + 1);
+  }
+
+  return unlinked.flatMap(([payslipId, candidates]) => {
+    const [only] = candidates;
+    return candidates.length === 1 && only.daysApart === 0 && offers.get(only.transactionId) === 1
+      ? [{ payslipId, transactionId: only.transactionId }]
+      : [];
+  });
 };

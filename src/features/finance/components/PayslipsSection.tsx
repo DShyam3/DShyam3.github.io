@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
-  checkPayslip, compareToModel, findPayslipTransactionCandidates, studentLoanPaidInTaxYear,
+  checkPayslip, compareToModel, findPayslipTransactionCandidates, studentLoanPaidInTaxYear, unambiguousPayslipMatches,
   sumPayslips, taxYearOf, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
@@ -108,6 +108,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
     savePayslip,
     deletePayslip,
     savePayslipReconciliation,
+    savePayslipReconciliations,
     deletePayslipReconciliation,
     profileId,
   } = useFinanceData();
@@ -185,6 +186,19 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
       findPayslipTransactionCandidates(payslip, availableTransactions),
     ]));
   }, [linkedTransactionIds, mockTransactions, payslips]);
+  const clearMatches = useMemo(
+    () => unambiguousPayslipMatches(candidatesByPayslip, new Set(reconciliationsByPayslip.keys())),
+    [candidatesByPayslip, reconciliationsByPayslip],
+  );
+  const [isConfirmingMatches, setIsConfirmingMatches] = useState(false);
+  const confirmClearMatches = async () => {
+    setIsConfirmingMatches(true);
+    try {
+      await savePayslipReconciliations(clearMatches);
+    } finally {
+      setIsConfirmingMatches(false);
+    }
+  };
 
   /* Two ways of asking the same question. By employer answers "what did that
      job pay me"; by tax year answers "what did I earn that year", which is
@@ -402,6 +416,26 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
         </p>
       ) : (
         <>
+          {clearMatches.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2">
+              <p className="flex min-w-0 flex-1 basis-48 items-start gap-1.5 text-xs text-muted-foreground font-mono">
+                <Link2 className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden="true" />
+                {clearMatches.length === 1
+                  ? '1 payslip has exactly one bank payment for its take-home, on the pay date itself.'
+                  : `${clearMatches.length} payslips each have exactly one bank payment for their take-home, on the pay date itself.`}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isConfirmingMatches}
+                onClick={() => void confirmClearMatches()}
+                className="h-8 shrink-0 rounded-lg text-xs font-mono"
+              >
+                {clearMatches.length === 1 ? 'Confirm it' : `Confirm all ${clearMatches.length}`}
+              </Button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               ['Earned', formatGBP(summary.gross)],

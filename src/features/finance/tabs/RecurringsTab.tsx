@@ -3,9 +3,17 @@ import { RecurringBill } from '@/features/finance/finance-types';
 import { Check, Plus, Edit2, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import type { RecurringCandidate } from '@/lib/finance/recurring-detection';
 
 interface RecurringsTabProps {
   recurrings: RecurringBill[];
+  candidates: RecurringCandidate[];
+  onReviewCandidate: (candidate: RecurringCandidate) => void;
+  onDismissCandidate: (candidate: RecurringCandidate) => void;
+  busy?: boolean;
+  detectionUnavailable?: boolean;
+  paymentEvidence?: ReadonlyMap<string, { date: string; amount: number }>;
   currentMonth: number;
   formatGBP: (num: number) => string;
   onOpenAddModal: () => void;
@@ -34,6 +42,12 @@ const getDueDateText = (bill: RecurringBill, currentMonth: number, displayMonth?
 
 export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   recurrings,
+  candidates,
+  onReviewCandidate,
+  onDismissCandidate,
+  busy = false,
+  detectionUnavailable = false,
+  paymentEvidence,
   currentMonth,
   formatGBP,
   onOpenAddModal,
@@ -41,11 +55,9 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   onEditRecurring,
   onDeleteRecurring,
 }) => {
-  const getTagColor = (_category: string | undefined) => {
-    return 'bg-muted/30 text-muted-foreground border border-border/30';
-  };
-
-  const thisMonthBills = recurrings.filter(r => isDueThisMonth(r, currentMonth));
+  const activeBills = recurrings.filter(bill => !bill.status || bill.status === 'active');
+  const inactiveBills = recurrings.filter(bill => bill.status === 'inactive' || bill.status === 'dismissed');
+  const thisMonthBills = activeBills.filter(r => isDueThisMonth(r, currentMonth));
   const todayDay = new Date().getDate();
   const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
 
@@ -54,7 +66,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   }
 
   const futureBills: DisplayBill[] = [];
-  recurrings.forEach(r => {
+  activeBills.forEach(r => {
     const isDueThis = isDueThisMonth(r, currentMonth);
     if (!isDueThis) {
       futureBills.push({
@@ -101,7 +113,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
 
   const recurringPieData = recurringCategoryData.length > 0
     ? recurringCategoryData
-    : [{ name: 'No bills', value: 1, color: 'rgba(255,255,255,0.1)' }];
+    : [{ name: 'No bills', value: 1, color: 'hsl(var(--muted))' }];
 
   return (
     <div className="space-y-6">
@@ -110,14 +122,50 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
         <h3 className="text-sm uppercase tracking-wider font-mono font-semibold text-foreground">
           Recurrings
         </h3>
-        <button
-          onClick={onOpenAddModal}
-          className="h-7 w-7 rounded-lg border border-border/40 bg-muted/20 hover:bg-muted/50 flex items-center justify-center text-foreground transition-colors"
-          title="Add Recurring Bill"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        <Button variant="outline" size="sm" onClick={onOpenAddModal} disabled={busy} className="text-xs font-mono">
+          <Plus className="h-4 w-4 mr-2" /> Add manually
+        </Button>
       </div>
+
+      <section className="surface-card bg-card/50 border border-border/40 rounded-lg p-4 space-y-3">
+        <h4 className="text-sm font-semibold font-mono">Suggested recurring payments ({candidates.length})</h4>
+        <p className="text-xs text-muted-foreground">
+          Detected from repeated payments in your imported bank records. Confirm each suggestion before it joins your schedule.
+          A payment last seen in records does not prove the subscription is still active.
+        </p>
+        {detectionUnavailable ? (
+          <p className="text-xs text-muted-foreground">Suggestions are unavailable until transactions and transfer checks finish loading.</p>
+        ) : candidates.length === 0 && (
+          <p className="text-xs text-muted-foreground">No new recurring payments detected. Import more bank records or add a payment manually.</p>
+        )}
+        {!detectionUnavailable && candidates.map(candidate => (
+          <div key={candidate.key} className="border-t border-border/40 pt-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-1 min-w-0">
+                <p className="text-sm font-semibold break-words">{candidate.name}</p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {formatGBP(candidate.amount)} · {candidate.frequency} · Last seen: {candidate.lastPaidDate}
+                </p>
+                {candidate.stale && <p className="text-xs text-muted-foreground">May have stopped</p>}
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" className="text-xs" disabled={busy} onClick={() => onReviewCandidate(candidate)}>Review</Button>
+                <Button size="sm" variant="outline" className="text-xs" disabled={busy} onClick={() => onDismissCandidate(candidate)}>Not recurring</Button>
+              </div>
+            </div>
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer">Payment history ({candidate.payments.length})</summary>
+              <ul className="mt-2 space-y-1">
+                {candidate.payments.map(payment => (
+                  <li key={payment.id} className="flex flex-wrap justify-between gap-2 font-mono">
+                    <span>{payment.date} · {payment.name}</span><span>{formatGBP(Math.abs(payment.amount))}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        ))}
+      </section>
 
       <div className="space-y-8">
         {/* Progress Card */}
@@ -163,6 +211,25 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
           </div>
         </div>
 
+        {inactiveBills.length > 0 && (
+          <section className="surface-card bg-card/50 rounded-lg border border-border/40 p-4 space-y-3">
+            <h4 className="text-sm font-semibold font-mono">Inactive / dismissed ({inactiveBills.length})</h4>
+            <p className="text-xs text-muted-foreground">Excluded from your recurring schedule. Edit an entry to make it active again.</p>
+            {inactiveBills.map(bill => (
+              <div key={bill.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+                <div className="text-xs space-y-1">
+                  <p className="font-semibold">{bill.name} · {bill.status === 'dismissed' ? 'Not recurring' : 'Inactive'}</p>
+                  {bill.lastPaidDate && <p className="text-muted-foreground">Last paid (confirmed): {bill.lastPaidDate}</p>}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="text-xs" disabled={busy} onClick={() => onEditRecurring(bill)}>Edit / restore</Button>
+                  <Button size="sm" variant="outline" className="text-xs text-destructive" disabled={busy} onClick={() => onDeleteRecurring(bill.id)}>Delete</Button>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+
         {/* Grouped Lists */}
         <div className="space-y-8">
           {/* Section 1: Due This Month */}
@@ -188,25 +255,34 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-xs">
                         {dueDateText}
                       </span>
-                      <div className="flex items-center gap-2 min-w-0">
-                        {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
-                        <span className="flex items-baseline gap-1 min-w-0">
-                          <span className={cn("font-semibold text-xs truncate", bill.isPaid ? "line-through text-muted-foreground/50" : "text-foreground")}>
-                            {bill.name}
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
+                          <span className="flex items-baseline gap-1 min-w-0">
+                            <span className={cn("font-semibold text-xs truncate", bill.isPaid ? "line-through text-muted-foreground/50" : "text-foreground")}>
+                              {bill.name}
+                            </span>
+                            {bill.provider && (
+                              <span className="text-xs text-muted-foreground font-normal truncate max-w-[50%]">· {bill.provider}</span>
+                            )}
                           </span>
-                          {bill.provider && (
-                            <span className="text-xs text-muted-foreground font-normal truncate max-w-[50%]">· {bill.provider}</span>
-                          )}
-                        </span>
-                        <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
-                          {bill.frequency}
-                        </span>
+                          <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
+                            {bill.frequency}
+                          </span>
+                        </div>
+                        {bill.lastPaidDate && <p className="text-xs text-muted-foreground">Last paid (confirmed): {bill.lastPaidDate}</p>}
+                        {paymentEvidence?.has(bill.id) && (
+                          <p className="text-xs text-muted-foreground">
+                            Last seen in records: {paymentEvidence.get(bill.id)!.date} · {formatGBP(paymentEvidence.get(bill.id)!.amount)}
+                          </p>
+                        )}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3 shrink-0 justify-between sm:justify-end sm:ml-auto">
                       <div className="flex items-center gap-0.5 card-actions transition-opacity mr-2">
                         <button
+                          disabled={busy}
                           onClick={() => onEditRecurring(bill)}
                           className="text-muted-foreground hover:text-foreground p-1 transition-colors"
                           title="Edit"
@@ -214,6 +290,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                           <Edit2 className="h-3 w-3" />
                         </button>
                         <button
+                          disabled={busy}
                           onClick={() => onDeleteRecurring(bill.id)}
                           className="text-destructive hover:text-destructive p-1 transition-colors"
                           title="Delete"
@@ -232,6 +309,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       </span>
 
                       <button
+                        disabled={busy}
                         onClick={() => onTogglePaid(bill.id)}
                         className={cn(
                           "w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0",
@@ -272,25 +350,34 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       <span className="shrink-0 w-16 text-muted-foreground/60 font-mono text-xs">
                         {dueDateText}
                       </span>
-                      <div className="flex items-center gap-2 min-w-0">
-                        {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
-                        <span className="flex items-baseline gap-1 min-w-0">
-                          <span className="font-semibold text-xs text-foreground truncate">
-                            {bill.name}
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {bill.emoji && <span className="shrink-0 text-sm">{bill.emoji}</span>}
+                          <span className="flex items-baseline gap-1 min-w-0">
+                            <span className="font-semibold text-xs text-foreground truncate">
+                              {bill.name}
+                            </span>
+                            {bill.provider && (
+                              <span className="text-xs text-muted-foreground font-normal truncate max-w-[50%]">· {bill.provider}</span>
+                            )}
                           </span>
-                          {bill.provider && (
-                            <span className="text-xs text-muted-foreground font-normal truncate max-w-[50%]">· {bill.provider}</span>
-                          )}
-                        </span>
-                        <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
-                          {bill.frequency}
-                        </span>
+                          <span className="text-xs text-muted-foreground/50 lowercase font-normal shrink-0">
+                            {bill.frequency}
+                          </span>
+                        </div>
+                        {bill.lastPaidDate && <p className="text-xs text-muted-foreground">Last paid (confirmed): {bill.lastPaidDate}</p>}
+                        {paymentEvidence?.has(bill.id) && (
+                          <p className="text-xs text-muted-foreground">
+                            Last seen in records: {paymentEvidence.get(bill.id)!.date} · {formatGBP(paymentEvidence.get(bill.id)!.amount)}
+                          </p>
+                        )}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3 shrink-0 justify-between sm:justify-end sm:ml-auto">
                       <div className="flex items-center gap-0.5 card-actions transition-opacity mr-2">
                         <button
+                          disabled={busy}
                           onClick={() => onEditRecurring(bill)}
                           className="text-muted-foreground hover:text-foreground p-1 transition-colors"
                           title="Edit"
@@ -298,6 +385,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                           <Edit2 className="h-3 w-3" />
                         </button>
                         <button
+                          disabled={busy}
                           onClick={() => onDeleteRecurring(bill.id)}
                           className="text-destructive hover:text-destructive p-1 transition-colors"
                           title="Delete"

@@ -23,11 +23,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { isActiveRecurring, isRecurringPaidForPeriod } from '@/lib/finance/recurring-detection';
 import defaultPresets from '@/data/presets.json';
 import { supabase } from '@/integrations/supabase/client';
+import { readProfilesWithRetry } from './profile-load';
 import { isRestTimeout } from '@/integrations/supabase/rest-timeout-fetch';
+import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { Json, TablesInsert } from '@/integrations/supabase/types';
-import type { Payslip, PayslipLine, PayslipTransactionReconciliation, ProfileTransfer, StudentLoanRateRow } from '@/lib/finance';
+import type { Payslip, PayslipLine, PayslipTransactionLink, PayslipTransactionReconciliation, ProfileTransfer, StudentLoanRateRow } from '@/lib/finance';
 import type {
   SingleLegVerdict, StoredSingleLegDecision, StoredTransferDismissal, StoredTransferLink,
 } from '@/lib/finance/transfer-detection';
@@ -210,7 +213,8 @@ const todayInLocalTimezone = () => {
 /** All the state and the two Supabase functions. Kept as a hook so the context
  *  value's type is inferred from it rather than hand-maintained. */
 function useProvideFinanceData() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, session } = useAuth();
+  const authUserId = session?.user.id ?? null;
   const { toast } = useToast();
 
   const [presets, setPresets] = useState(ALL_PRESETS_FALLBACK);
@@ -491,6 +495,11 @@ function useProvideFinanceData() {
     { capturedOn: string; netWorth: number; assets: number; liabilities: number }[]
   >([]);
   const [profiles, setProfiles] = useState<FinanceProfile[]>([]);
+  const [profileLoadState, setProfileLoadState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
+  const profileLoadSeqRef = useRef(0);
+  const profileLoadControllerRef = useRef<AbortController | null>(null);
+  const profileAuthRef = useRef<string | null>(null);
   // Movements between tracked profiles. Fetched for either side, because a
   // transfer belongs to both ledgers and the switcher may be on either.
   const [transfers, setTransfers] = useState<ProfileTransfer[]>([]);
@@ -576,30 +585,63 @@ function useProvideFinanceData() {
    * an administrator.
    */
   const loadProfiles = useCallback(async (): Promise<string | null> => {
-    const { data, error } = await supabase
-      .from('finance_profiles')
-      .select(FINANCE_PROFILE_COLUMNS)
-      .order('is_self', { ascending: false });
-
-    if (error) {
-      console.error('Could not load finance profiles:', error.message);
-      toast({
-        title: 'Could not load profiles',
-        description: 'Finance data cannot be shown until a profile resolves.',
-        variant: 'destructive',
-      });
+    if (!isAdmin || !authUserId || profileAuthRef.current !== authUserId) return null;
+    const sequence = ++profileLoadSeqRef.current;
+    profileLoadControllerRef.current?.abort();
+    const controller = new AbortController();
+    profileLoadControllerRef.current = controller;
+    setProfileLoadState('loading');
+    setProfileLoadError(null);
+    try {
+      const { data, error } = await readProfilesWithRetry(
+        signal => supabase.from('finance_profiles').select(FINANCE_PROFILE_COLUMNS)
+          .order('is_self', { ascending: false }).abortSignal(signal),
+        controller.signal,
+      );
+      if (sequence !== profileLoadSeqRef.current || controller.signal.aborted) return null;
+      if (error) throw error;
+      const loaded = (data ?? []).map(toFinanceProfile);
+      if (loaded.length === 0) {
+        setProfileLoadState('error');
+        setProfileLoadError('No finance profile was found. Try again or check profile setup.');
+        return null;
+      }
+      const selected = loaded.find(profile => profile.id === currentProfileRef.current);
+      const resolved = selected?.id ?? loaded.find(profile => profile.isSelf)?.id ?? loaded[0].id;
+      setProfiles(loaded);
+      setProfileId(resolved);
+      setProfileLoadState('ready');
+      return resolved;
+    } catch (error) {
+      if (sequence !== profileLoadSeqRef.current || controller.signal.aborted) return null;
+      console.error('Could not load finance profiles:', error);
+      setProfileLoadState('error');
+      setProfileLoadError('Finance profiles did not load. Check your connection and try again.');
       return null;
+    } finally {
+      if (sequence === profileLoadSeqRef.current) profileLoadControllerRef.current = null;
     }
+  }, [isAdmin, authUserId]);
 
-    const loaded = (data ?? []).map(toFinanceProfile);
-    setProfiles(loaded);
-
-    // Written by the 7.1 migration, so at least the self profile is present
-    // unless someone has deleted it.
-    const resolved = loaded.find(p => p.isSelf)?.id ?? loaded[0]?.id ?? null;
-    setProfileId(current => current ?? resolved);
-    return resolved;
-  }, [toast]);
+  // Invalidate before passive ledger effects can run with another user's ID.
+  useLayoutEffect(() => {
+    profileAuthRef.current = isAdmin ? authUserId : null;
+    currentProfileRef.current = null;
+    setProfileId(null);
+    setProfiles([]);
+    setProfileLoadState('idle');
+    setProfileLoadError(null);
+    setHasLoaded(false);
+    setLoadingDb(false);
+    return () => {
+      profileAuthRef.current = null;
+      profileLoadSeqRef.current += 1;
+      profileLoadControllerRef.current?.abort();
+      profileLoadControllerRef.current = null;
+      loadSeqRef.current += 1;
+      currentProfileRef.current = null;
+    };
+  }, [isAdmin, authUserId]);
 
   /**
    * Writes one profile's own fields. Separate from saveDataToSupabase, which
@@ -971,32 +1013,37 @@ function useProvideFinanceData() {
     return true;
   };
 
-  const savePayslipReconciliation = async (payslipId: string, transactionId: string): Promise<boolean> => {
-    if (!isAdmin || !profileId) return false;
+  const savePayslipReconciliations = async (links: readonly PayslipTransactionLink[]): Promise<boolean> => {
+    if (!isAdmin || !profileId || links.length === 0) return false;
+    const confirmedAt = new Date().toISOString();
+    /* A plain insert, not an upsert: every payslip offered here is believed
+       unlinked. A conflict means another tab or device linked the payslip or
+       the transaction first, so it fails and the refetch below shows that
+       link, rather than overwriting one a person confirmed. */
     const { error } = await supabase
       .from('finance_payslip_transaction_reconciliations')
-      .upsert({
+      .insert(links.map(link => ({
         profile_id: profileId,
-        payslip_id: payslipId,
-        transaction_id: transactionId,
-        confirmed_at: new Date().toISOString(),
-        /* The unique index is profile-scoped -- migration 20260910054857
-           replaced the single-column one this used to name. Conflicting on
-           `payslip_id` alone matches no index and PostgREST rejects the whole
-           upsert with 42P10. */
-      }, { onConflict: 'profile_id,payslip_id' });
+        payslip_id: link.payslipId,
+        transaction_id: link.transactionId,
+        confirmed_at: confirmedAt,
+      })));
     if (error) {
+      await fetchPayslipReconciliations(profileId);
       toast({
-        title: 'Could not link bank payment',
+        title: links.length === 1 ? 'Could not link bank payment' : 'Could not link bank payments',
         description: 'Please try again.',
         variant: 'destructive',
       });
       return false;
     }
     await fetchPayslipReconciliations(profileId);
-    toast({ title: 'Bank payment linked' });
+    toast({ title: links.length === 1 ? 'Bank payment linked' : `${links.length} bank payments linked` });
     return true;
   };
+
+  const savePayslipReconciliation = (payslipId: string, transactionId: string): Promise<boolean> =>
+    savePayslipReconciliations([{ payslipId, transactionId }]);
 
   const deletePayslipReconciliation = async (payslipId: string): Promise<boolean> => {
     if (!isAdmin || !profileId) return false;
@@ -1396,8 +1443,12 @@ function useProvideFinanceData() {
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji, provider')),
-          scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id, provider')),
-          scoped(supabase.from('finance_transactions').select('id, is_default, name, merchant, provider_category, category, amount, date, is_reviewed, account_id, bank_account_id, goal_id, notes, tags, is_recurring')),
+          scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id, provider, status, detection_key, last_paid_date')),
+          // The ledger outgrows one response (max_rows), so it is read in pages.
+          selectAllPages((from, to) => scoped(supabase.from('finance_transactions').select('id, is_default, name, merchant, provider_category, category, amount, date, is_reviewed, account_id, bank_account_id, goal_id, notes, tags, is_recurring', { count: 'exact' }))
+            .order('date', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to), row => row.id),
           supabase.from('finance_tax_configs').select('id, is_default, effective_from, student_loan_thresholds, student_loan_rates, income_tax_bands, national_insurance_bands'),
           supabase.from('finance_recurring_templates').select('id, is_default, name, category, emoji, tag, default_amount, frequency, linked_budget_item_id, budget_category_name'),
           supabase.from('finance_credit_bureaus').select('id, is_default, key, label, emoji, color, max_score, gradient'),
@@ -1700,7 +1751,10 @@ function useProvideFinanceData() {
           tag: r.tag || undefined,
           linkedBudgetItemId: r.linked_budget_item_id || undefined,
           linkedAccountId: r.linked_account_id || undefined,
-          provider: r.provider || undefined
+          provider: r.provider || undefined,
+          status: r.status === 'inactive' || r.status === 'dismissed' ? r.status : 'active',
+          detectionKey: r.detection_key || undefined,
+          lastPaidDate: r.last_paid_date || undefined
         }));
         if (!recurringBillsRes.error) {
           setRecurrings(materialiseRecurringsForProfile(
@@ -1948,10 +2002,9 @@ function useProvideFinanceData() {
   // Step one: resolve the profile. Nothing profile-scoped may be read until
   // this lands, so it is a separate effect rather than part of the load.
   useEffect(() => {
-    if (!isAdmin || profileId) return;
+    if (!isAdmin || !authUserId) return;
     void loadProfiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, profileId]);
+  }, [isAdmin, authUserId, loadProfiles]);
 
   // Step two: the ledger, always scoped.
   //
@@ -2636,7 +2689,10 @@ function useProvideFinanceData() {
             tag: r.tag || null,
             linked_budget_item_id: r.linkedBudgetItemId || null,
             linked_account_id: r.linkedAccountId || null,
-            provider: r.provider?.trim() || null
+            provider: r.provider?.trim() || null,
+            status: r.status || 'active',
+            detection_key: r.detectionKey || null,
+            last_paid_date: r.lastPaidDate || null
           })), { onConflict: 'id' });
           if (recurringsError) throw recurringsError;
         }
@@ -2755,6 +2811,12 @@ function useProvideFinanceData() {
     }
   };
 
+  const recurringToday = todayInLocalTimezone();
+  const visibleRecurrings = recurrings.map(bill => ({
+    ...bill,
+    isPaid: bill.isPaid && (!bill.lastPaidDate || isRecurringPaidForPeriod(bill, recurringToday)),
+  }));
+
   const value = {
     transfers,
     saveTransfer,
@@ -2767,6 +2829,7 @@ function useProvideFinanceData() {
     deletePayslip,
     payslipReconciliations,
     savePayslipReconciliation,
+    savePayslipReconciliations,
     deletePayslipReconciliation,
     transferLinks,
     // Either half of what decides a transfer exclusion failed to load, so
@@ -2783,6 +2846,9 @@ function useProvideFinanceData() {
     updateProfile,
     netWorthHistory,
     profiles,
+    profileLoadState,
+    profileLoadError,
+    retryProfiles: loadProfiles,
     setProfiles,
     fetchingHolidays,
     setFetchingHolidays,
@@ -2817,7 +2883,10 @@ function useProvideFinanceData() {
     presets,
     profileId,
     recurringTemplates,
-    recurrings,
+    // Consumers calculate obligations from active bills; CRUD keeps every review.
+    recurrings: visibleRecurrings.filter(isActiveRecurring),
+    allRecurrings: visibleRecurrings,
+    recurringDataReady: hasLoaded && !loadingDb && !blockedSaveKeysFor(profileId).has('recurrings') && !blockedSaveKeysFor(profileId).has('transactions'),
     saveDataToSupabase,
     currentLoadGenerations,
     registerBeforeLoadFlush,

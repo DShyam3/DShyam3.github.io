@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 interface EditRecurringDialogProps {
   isOpen: boolean;
+  busy?: boolean;
   onOpenChange: (open: boolean) => void;
   activeRecurring: RecurringBill | null;
   setActiveRecurring: React.Dispatch<React.SetStateAction<RecurringBill | null>>;
@@ -20,6 +21,7 @@ interface EditRecurringDialogProps {
 
 export const EditRecurringDialog: React.FC<EditRecurringDialogProps> = ({
   isOpen,
+  busy = false,
   onOpenChange,
   activeRecurring,
   setActiveRecurring,
@@ -32,7 +34,7 @@ export const EditRecurringDialog: React.FC<EditRecurringDialogProps> = ({
   if (!activeRecurring) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!busy) onOpenChange(open); }}>
       <DialogContent className="sm:rounded-lg border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader className="text-left">
           <DialogTitle className="font-mono text-lg font-bold">Edit Recurring Bill</DialogTitle>
@@ -52,6 +54,33 @@ export const EditRecurringDialog: React.FC<EditRecurringDialogProps> = ({
               className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
               required
             />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+            <div className="space-y-1">
+              <Label htmlFor="edit-rec-status" className="text-xs font-mono text-muted-foreground">Still active?</Label>
+              <Select value={activeRecurring.status || 'active'} onValueChange={(value) => setActiveRecurring({ ...activeRecurring, status: value as RecurringBill['status'] })}>
+                <SelectTrigger id="edit-rec-status" className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-lg border-border/40 font-mono">
+                  <SelectItem value="active" className="text-xs">Active</SelectItem>
+                  <SelectItem value="inactive" className="text-xs">Inactive / stopped</SelectItem>
+                  {activeRecurring.detectionKey && <SelectItem value="dismissed" className="text-xs">Not recurring</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-rec-last-paid" className="text-xs font-mono text-muted-foreground">Last paid (confirm date)</Label>
+              <Input
+                id="edit-rec-last-paid"
+                type="date"
+                max={new Date().toLocaleDateString('en-CA')}
+                value={activeRecurring.lastPaidDate || ''}
+                onChange={(event) => setActiveRecurring({ ...activeRecurring, lastPaidDate: event.target.value || undefined })}
+                className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
+              />
+            </div>
           </div>
 
           {/* Provider */}
@@ -225,8 +254,8 @@ export const EditRecurringDialog: React.FC<EditRecurringDialogProps> = ({
           </div>
 
           <DialogFooter className="pt-3 gap-2 sm:gap-0">
-            <Button variant="outline" type="button" onClick={() => onOpenChange(false)} className="rounded-lg h-8 px-3 text-xs font-mono">Cancel</Button>
-            <Button type="submit" className="rounded-lg h-8 px-3 bg-primary text-primary-foreground text-xs font-mono">Update Bill</Button>
+            <Button variant="outline" type="button" disabled={busy} onClick={() => onOpenChange(false)} className="rounded-lg h-8 px-3 text-xs font-mono">Cancel</Button>
+            <Button type="submit" disabled={busy} className="rounded-lg h-8 px-3 bg-primary text-primary-foreground text-xs font-mono">Update Bill</Button>
           </DialogFooter>
         </form>
       </DialogContent>
