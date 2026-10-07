@@ -136,9 +136,9 @@ a constraint name — so the surviving constraint satisfies them.
 
 Fix: project only the columns the view needs; fetch the episode tree lazily when a show's detail dialog opens.
 
-**P-6 — No pagination anywhere.** — *Deliberately not built. Measured: the largest collection is 143 rows / 79 kB, the watchlist's heaviest query is 894 ms cold, and a server-side limit with no "load more" would silently hide items. Revisit when a table passes ~1,000 rows.*
+**P-6 — No pagination anywhere.** — *Closed. Deliberately not built while the largest collection was 143 rows / 79 kB, the watchlist's heaviest query was 894 ms cold, and a server-side limit with no "load more" would silently hide items. Revisited 2026-10-06 when finance_transactions passed 3,770 rows: pagination built for the ledger only in `src/integrations/supabase/select-all-pages.ts`. Loads pages ordered by (date, id) with count 'exact'; read is retried once on failure, returns failure never truncation. Other tables stay single reads.*
 
-Watchlist has a client-side `visibleCount = 48`, but the network fetch is unbounded. Every collection loads its full table. Fine today, unbounded by design.
+Outcome: FinanceDataContext.tsx transaction load now uses `select-all-pages.ts`. Since 2026-10-07 the watchlist's library-sized reads do too; see 7.P2 for which reads and why the rest stay single. Other finance reads (transfers, net worth, investment activities, merchant logos) are under 300 rows; revisit if they near 1,000.
 
 **P-7 — `useSupabaseTable` has a silent fallback that re-runs the query.** — *RESOLVED. The fallback is gone; sort columns are declared per collection, so a bad one now fails loudly.*
 
@@ -2512,3 +2512,48 @@ copy logic, stored row tracking, and deadline deadlock on save refusal.
 table, taken as a locked backup before cleanup, held 79 shared `is_default` rows,
 not 47: 5 categories, 32 budget items, 30 recurring templates, 12 settings rows.
 The earlier entry understated the backup size.
+
+### Payslip matching window — calendar month plus five-day grace — 2026-10-06
+
+**`findPayslipTransactionCandidates` now accepts exact-amount incoming payments
+from the payslip's calendar month or within five days either side.**
+
+The ±5-day window originally matched most payslips. December early pay broke the
+pattern: Capgemini and UCL both paid 2025-12-31 payslips on 22–23 December
+(8–9 days early). The calendar month window captures the rule that employers
+generally pay within their own month, with the five-day grace allowing for
+month boundaries. Closure: `findPayslipTransactionCandidates` in
+`src/lib/finance/payslip-reconciliation.ts`.
+
+### Watchlist nightly sync sharded across three parts — 2026-10-06
+
+**watchlist-cron-sync edge function now accepts shard/shards POST body keys;
+pg_cron jobs post three calls at 06:00, 06:10, 06:20 UTC; sync_log gained
+nullable shard and shard_count columns (CHECK both null or coherent).**
+
+The function ran ~1.7–2.0 s for the whole library (~1,180 titles), hitting
+the 2 s edge-function CPU limit and being killed (reason CPUTime) on 29 Sep
+and 2, 4, 5 Oct before writing its sync_log row. The history panel showed "MISSED
+— No execution recorded" although pg_cron had fired. Splitting the run into
+three parts via ID sharding (id % 3) cuts the TMDB work per invocation to a
+third; every part still reads the whole library, so the per-part CPU is
+unmeasured until the first three-part night. The decision
+prioritised per-part log rows over one row per day because a part killed for
+CPU writes nothing, hiding behind its siblings; the history panel now labels
+rows "part n/3" and counts a day complete only when every part logged (or a
+whole-library row exists from the Sync button). The oldest day fetched is not
+part-checked because the 20-row load can cut it mid-day. The function rejects
+any body key outside category/id/shard/shards or an unparseable body (400 error),
+preventing a typo from becoming a full run. Closure: `watchlist-cron-sync`
+edge function, migration 20261006090000, `src/features/watchlist/sync-logic.ts`
+
+#### 7.P2 Watchlist pagination — 2026-10-07
+
+**The decision:** reads whose row count grows with the library, with no date window or explicit cap, are paged; windowed and capped reads stay single.
+
+Pagination was first built for the ledger (finance_transactions, 3,770 rows, ordered by date+id with count 'exact'). This decision closes whether to apply the same pattern to watchlist queries. `movies` was 889 rows, read in one request ordered by title: about 110 rows from silently losing the end of the alphabet. Pagination is cheap on plain tables. Seven reads now page: `movies`, `tv_shows` and `favourites` in the library load; upcoming episodes, upcoming movies, every season of the shows behind recent announcements, and premiere-season episodes for a set of shows. Deliberately kept single: date-windowed reads (recent episodes 86 rows, recent movies, watchlist_events 82), the two announcement reads (already capped at 1,000 with a failed flag), `.limit(1)` reads, weekly_schedule (1 row), and the `watchlist_up_next` view (268 rows, one per show; count 'exact' would compute it twice per load). Closure: `src/features/watchlist/WatchlistContext.tsx`, `src/features/watchlist/useWatchlistNews.ts`, shared `src/integrations/supabase/select-all-pages.ts` (EPISODE_EMBED gained `id`). Proven live 2026-10-07 by curl: an unpaged premiere read over six real shows returned 1,000 of 1,254 rows; the paged read's count honoured the `!inner` filter (0-999/1254, 1000-1253/1254).
+and `SyncDetailDialog.tsx`.
+
+### Recurring suggestions require human review — 2026-10-07
+
+Repeated bank payments establish a pattern, not an ongoing commitment. Detection therefore runs deterministically over merchant/account groups and proposes candidates for review; only the user confirms active status and the last-paid date. The latest ledger evidence remains separate from that confirmation, and inactive or dismissed entries remain restorable without contributing to recurring totals. Recurring CRUD and paid checks no longer debit or credit bank balances: the ledger already records those movements. This closes the distinction between evidence, a reviewed commitment and an actual bank payment. Implementation is local and uncommitted; migration `20261006220926_finance_recurring_review.sql` is written but unapplied, and live persistence remains unverified.

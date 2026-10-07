@@ -96,7 +96,7 @@ proxy so the API key never reaches the browser.
   lists and progress. Cards size to available width at every screen height.
   Platform, genre and status filters live in
   a compact Filters popover. Episode
-  names appear for watched and unwatched episodes, with a fallback when unavailable. The header shows TV time watched across the library using known runtimes of episodes marked watched, loaded independently of opening details.
+  names appear for watched and unwatched episodes, with a fallback when unavailable. The header shows TV time watched across the library using known runtimes of episodes marked watched, loaded independently of opening details. The library and news pages load every title however large the library grows; a read that cannot be completed shows as failed rather than as a shorter list.
 - **Your Week** — part of News, showing today's plans and days with plans or
   suggested releases. Expand calendar offers week and month views with previous,
   next and current-period controls. Weekly TV plans place one unwatched episode
@@ -138,12 +138,14 @@ reachable. The first unwatched regular season opens by default.
 
 **Sync:**
 
-Watchlist sync runs server-side, covering the entire library in about a
-minute. Manual full-library syncs are limited to one per 10 minutes; syncing a
-single title is limited to 20 per minute. Bank transaction syncs are limited to
-one per 15 minutes. Sync buttons on the Watchlist, Dashboard and Bank Accounts
-pages show "Next sync HH:MM" during the cooldown window and are disabled until
-the next sync is allowed.
+Watchlist sync runs server-side every night in three parts, ten minutes apart
+from 06:00 UTC, each covering a third of the library; the sync-history panel
+labels each part and flags a part that logged nothing as missed. Manual
+full-library syncs are limited to one per 10 minutes; syncing a single title is
+limited to 20 per minute. Bank transaction syncs are limited to one per 15
+minutes. Sync buttons on the Watchlist,
+Dashboard and Bank Accounts pages show "Next sync HH:MM" during the cooldown
+window and are disabled until the next sync is allowed.
 
 ## Travel
 
@@ -189,6 +191,10 @@ Transactions, budget, recurrings and transfers. At 1024px or wider and 720px or 
 rather than a blank form. Budget items and recurring bills can have an optional provider name (up to 60 characters), shown after the item name — for example, "Phone · O2". Merchants resolve to logos through a server-side
 cache. Confirmed transfers are left out of spending and income everywhere figures are shown: Home, Budget history and Cash Flow. Transaction lists still show them.
 
+Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, monthly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
+
+A quick failure loading finance profiles is retried automatically twice; if it still fails, or the database does not answer within 15 seconds, a persistent error offers “Try again”. A finance section that fails to display, or takes more than 15 seconds to load, offers “Reload page”.
+
 When a data collection fails to load, saves are refused with a "Not saved" message instead of overwriting stored data. A profile's reset to defaults clears settings and holidays for the current profile, plus the shared reference tables (tax configurations, recurring templates, credit bureaus, holiday defaults, and budget presets); accounts, transactions, budget, bills and goals are not affected. Reset asks for confirmation before proceeding.
 
 Marking, categorising or editing a transaction or bank account saves only the rows you changed and only the columns you edited, scoped by profile. Deleting a transaction or account removes just that one by id, not a collection. This ensures that rows added by a bank sync — which writes in parallel — are never removed by a save from a tab loaded before the sync ran. Goals, goal contributions, memberships, debts, credit scores and leave save only the rows and columns you changed. When another device loads an older page and edits it, your rows are not deleted or reverted. A bank sync keeps review marks and any category you set on an existing transaction.
@@ -200,7 +206,7 @@ on bank-synced rows. Possible transfers also lists one-sided transfers — a row
 
 Bank-synced transfers are labelled "Transfers" rather than a spending category, and a category you change on a synced transaction stays changed after the next sync.
 
-The transaction list shows 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown.
+The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown.
 
 Home's transaction list links to the Transactions tab: clicking a row's name opens
 that transaction with the row selected and scrolled into view. The list's
@@ -318,7 +324,10 @@ Four routes, in decreasing order of automation:
    itself; a payslip that does not add up is shown as not adding up
 
 Reconciliation between a payslip and a bank transaction is user-confirmed,
-one-to-one, penny-exact and limited to a five-day window.
+one-to-one, and penny-exact. Bank payment candidates come from the pay month
+and within five days either side of it, to account for early or late payment
+around calendar boundaries. When a payslip has exactly one matching bank payment
+for its take-home on the pay date itself, a button confirms all such matches at once.
 
 ---
 

@@ -1,42 +1,51 @@
 # State
 
-**Updated:** 2026-09-30 · **Branch:** `feat/watchlist-news-finance-transfers` · **HEAD:** `e4ebf8ec` (= `origin/main`, deployed) · working tree clean
+**Updated:** 2026-10-07 · **Branch:** `feat/watchlist-news-finance-transfers` · **HEAD:** `5d216580` (= `origin/main`, deployed 2026-09-30) · **UNCOMMITTED changes**
 
-## Deployed 2026-09-30
+## In the tree, uncommitted
 
-- **Site:** main@e4ebf8ec, Pages run 36748852458 (earlier today 687bdb3c, run 36680428360). Contains the watchlist review fixes, auth, finance REST timeout and row-save hardening, payslips, EDC, 12px text, responsive dialogs, rounded-lg corners, and:
-  - 91e98584 `fix(sync)`: the sync keeps review marks and set categories; the refresh follows a profile switch.
-  - 10acd9ff `fix(finance)`: goals, contributions, memberships, debts, scores and holidays save row by row; shared defaults are copied per profile.
-  - 8c8973e8 `chore(db)` and 12d37df0 `feat(watchlist)` (backdrops).
-- **Edge functions:** truelayer-sync v45 (verify_jwt stays false) and watchlist-cron-sync v11.
-- **Migrations applied live:** 20260930070325 (drop finance_seed_backup), 070326 (backdrop column), 072505 (keep_scope triggers, 10 tables in total).
-- **Live check, signed out, /watchlist:** 18 `/rest/v1` requests, all 200, including the pinned selects that ask for `backdrop`.
-- **Backdrops:** 0 of 1,178 rows filled so far. They fill from the `watchlist-daily-sync` cron (06:00 UTC), first run 2026-10-01; there is a 100 s cap per run, so it may take several runs.
-- **Countdown:** no title is `pinned`, so the countdown (and its backdrop) is hidden. The pin UI is not built (8.D).
+**Finance loading recovery:** profile reads have a 15-second deadline including token wait, abort/late-response guards and auth cleanup; empty/error results show persistent Try again. Quick failures now auto-retry twice (1 s, 3 s); deadline misses do not. Slow/failed page sections offer Reload page. Auto-retry not reviewed by reviewer. The 7 Oct incident was a client-side network stall in Chrome (edge logs: the profile request never reached Supabase; DB answered every request that arrived, max 1.6 s).
 
-**Decisions closed today (owner approved 2026-09-30):**
-- Corners: unify on rounded-lg (14px, token-based, not 12px Tailwind)
-- Public direction: self-host template; demo stays private
-- Shared defaults: copy per profile + DB trigger; transactions/bank accounts stay read-only
-- Whole-collection saves → row-level saves for six tables
+**Recurring review:** deterministic merchant/account detection, payment evidence, active/inactive/dismissed review, confirmed last-paid dates, manual add/edit/restore. Inactive entries leave totals; recurring edits and paid checks do not change bank balances. Migration `20261006220926_finance_recurring_review.sql` adds review fields and revokes anon grants; applied live 2026-10-07 via `supabase db push` (version matches local file); 11 existing bills active; admin select of the new columns verified by SQL; frontend still uncommitted and undeployed, and the deployed site ignores `status` until it ships. Reviewer completed; save-overlap, annual due-month, busy-button and early-payment findings fixed. Final fixes are checked but not re-reviewed; monthly/quarterly/annual paid status allows payments up to seven days early.
 
-**Also done 2026-09-30:** Supabase secret OTHER_SECRET unset (no references). No blank payslip row exists live (only September payslip is 2026-09-30, complete); nothing deleted.
+**Payslip reconciliation:** matches exact payments within the pay month or five days either side. Confirm all handles unambiguous exact pay-date matches; live SQL finds all 13 Keysight payslips eligible. Reviewer-found offset drift, max_rows, retry, upsert race and date issues fixed, not re-reviewed.
 
-**NOT verified:** Opus reviewer's blocker and four risks on 10acd9ff fixed with tests but NOT re-reviewed. Finance saves (goals, debts, holidays, scores, memberships, emergency fund toggle, course end date); 12px charts; row-save screen. Signed in. Mid-July transaction marks: 10 of ~400 marked (sync race fixed in 91e98584, deployed).
+**Finance ledger pagination:** `select-all-pages.ts` pages transactions (3,770 rows) by date/id with exact count; P-6 closed. `supabase/config.toml` commented.
 
-## Last green checks — 2026-09-30
+**Watchlist nightly sync:** three calls at 06:00/06:10/06:20 UTC each sync one third. Function v12 deployed; migration `20261006090000` applied live, cron jobs and shard columns verified. Frontend, shared types and schema changes remain uncommitted; part labels await deployment.
+
+**Watchlist pagination:** library-sized movie/TV/favourite and news/season/episode reads use the shared pager (history 7.P2). Windowed/capped reads and `watchlist_up_next` remain single. WatchlistContext carries both sync and pagination hunks: commit together or split by hunk.
+
+## Checks
 
 | Check | Date | Result |
 |---|---|---|
-| Lint / typecheck / typecheck:functions / build | 2026-09-30 | 0e/0w, all pass |
-| Vitest 47 files 906 tests | 2026-09-30 | pass |
-| ship-check | 2026-09-30 | 92/100 Beta; zero critical |
+| Lint | 2026-10-07 | Pass, 0 errors / 0 warnings |
+| Typecheck / typecheck:functions / build | 2026-10-07 | Pass |
+| Full Vitest suite | 2026-10-07 | 50 files / 971 tests pass; focused recurring suite 33 pass |
+| graphify update | 2026-10-07 | Rerun after profile-load retry |
+| ship-check | 2026-10-07 | 90/100, Beta only; 19 findings, 0 critical / 7 high; rerun completed |
 
-## Next
+## In progress / next
 
-1. Owner checks signed in: Finance saves, 12px charts, row-save screen, marks
-2. Confirm mid-July marks in production
-3. After 2026-10-01 06:00 UTC: backdrop count climbing; pin a title to see the countdown.
-4. Remaining plan items from REHAUL_PLAN.md Part 2
+1. Owner: verify signed-in recurring load/save/reload, review, dismissal, restore and manual entries against the live DB (migration applied 2026-10-07).
+2. Re-review remaining finance/watchlist changes before commit; preserve overlapping hunks. Commit, push and deploy remain outstanding.
+3. Owner: verify authenticated profile load/retry, full ledger load, Confirm all 13, finance saves, charts and row-save signed in.
+4. Verify first three-part watchlist night (7 Oct): sync_log shards 0/1/2 and cpu_time_used. Check backdrop count rising; pinned-title countdown remains unbuilt (8.D).
+5. Remaining REHAUL_PLAN Part 2, including upcoming bills calendar and subscription price-rise/unused audit.
 
-**Still open:** Four reference tables (delete-then-insert), addDebtObservation not queued, logout race, load deadline blocking, timed-out delete in grace window, sync overwrites mid-set category, token refresh not limited, failed profile-switch load.
+## Blockers / open risks
+
+**Recurring deployment:** Live save/browser QA not performed. The schema is now live ahead of the code; the deployed site shows inactive/dismissed bills as ordinary bills until the code is deployed, so ship the code soon. Payslip/ledger files share recurring types: splitting them alone fails typecheck; coordinate schema and code deployment.
+
+**Carried finance risks:** four reference tables delete-then-insert; addDebtObservation not queued; logout race; load deadline; timed-out delete in grace window; sync mid-set category race; unlimited token refresh; failed profile-switch load. Ship-check rerun completed; findings remain unresolved.
+
+**Pagination:** other finance collections under 300 rows remain unpaged; truncated transfers would silently miscount. `watchlist_up_next` is single (268 rows). Cold-load failure toast remains misleading.
+
+## Unverified
+
+**Loading recovery:** isolated browser component checks passed: 15-second slow fallback, simulated render error and reload restart. Auto-retry unit-tested; not browser-tested signed in. Real authenticated profile load/retry remains unverified. Probes: configured DB gateway 146ms, permission response 42501 in 471ms, local dashboard module 5ms; no reproduction of sustained timeout.
+
+**Finance:** 3,770-row signed-in load, Confirm all, recurring persistence, 12px charts and row-save. Goals/debts/holidays/scores/memberships/emergency-toggle/course-end saves remain unverified. Capgemini/UCL December early-pay matching verified locally; live rows existed at 21:55 UTC. OceanInfinity 2026-06-30 unmatched, not investigated.
+
+**Watchlist:** anonymous local/live-DB browser showed 889 movies and 296 TV shows; news offset/limit requests had no errors. Multi-page (>1,000 rows) proven by curl only. Diff not reviewed. Each cron part still parses the full library before filtering; CPU remains unmeasured. Mid-July marks: 10 of ~400; deployed sync-race fix `91e98584` unconfirmed in production.
