@@ -17,8 +17,10 @@ enabled = true
 port = 54321
 schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
-# The site reads whole tables (a few hundred rows at most). This cap exists so
-# an unbounded query cannot become an unbounded response.
+# The cap exists so an unbounded query cannot become an unbounded response.
+# Tables bigger than this (finance_transactions) are read in pages by
+# src/integrations/supabase/select-all-pages.ts, whose PAGE_ROWS must not
+# exceed it. Keep it matching the hosted project's setting.
 max_rows = 1000
 
 [db]

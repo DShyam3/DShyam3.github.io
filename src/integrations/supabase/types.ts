@@ -1313,6 +1313,9 @@ export type Database = {
       }
       finance_recurring_bills: {
         Row: {
+          status: string
+          detection_key: string | null
+          last_paid_date: string | null
           amount: number
           category: string | null
           created_at: string
@@ -1332,6 +1335,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          status?: string
+          detection_key?: string | null
+          last_paid_date?: string | null
           amount?: number
           category?: string | null
           created_at?: string
@@ -1351,6 +1357,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          status?: string
+          detection_key?: string | null
+          last_paid_date?: string | null
           amount?: number
           category?: string | null
           created_at?: string
@@ -2335,6 +2344,8 @@ export type Database = {
           error_message: string | null
           id: number
           items_synced: number | null
+          shard: number | null
+          shard_count: number | null
           status: string
           sync_type: string
           synced_at: string
@@ -2344,6 +2355,8 @@ export type Database = {
           error_message?: string | null
           id?: number
           items_synced?: number | null
+          shard?: number | null
+          shard_count?: number | null
           status?: string
           sync_type?: string
           synced_at?: string
@@ -2353,6 +2366,8 @@ export type Database = {
           error_message?: string | null
           id?: number
           items_synced?: number | null
+          shard?: number | null
+          shard_count?: number | null
           status?: string
           sync_type?: string
           synced_at?: string
