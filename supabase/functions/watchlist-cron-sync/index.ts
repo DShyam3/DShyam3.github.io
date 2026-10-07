@@ -4,9 +4,10 @@ import { requireAdmin } from '../_shared/require-admin.ts'
 import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/cooldown.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
 
-// The one watchlist sync. pg_cron calls it nightly with the service role key
-// (see the scheduling migrations); the Watchlist page's Sync buttons call it
-// with the admin's own session.
+// The one watchlist sync. pg_cron calls it nightly with the service role key,
+// in parts a few minutes apart (see parseShard and the scheduling
+// migrations); the Watchlist page's Sync buttons call it with the admin's own
+// session, for the whole library or one title.
 //
 // The browser used to run its own copy of this loop through tmdb-proxy. That
 // proxy allows 60 requests a minute per IP and a full sync makes well over a
@@ -36,6 +37,28 @@ function parseItemTarget(body: unknown): { category: 'Movies' | 'TV Shows'; id: 
   const numericId = typeof id === 'string' ? Number(id) : id
   if ((category !== 'Movies' && category !== 'TV Shows') || !Number.isSafeInteger(numericId)) return 'invalid'
   return { category, id: numericId as number }
+}
+
+/** Every key a request body may carry; see the body check in the handler. */
+const KNOWN_BODY_KEYS = new Set(['category', 'id', 'shard', 'shards'])
+
+/**
+ * Which part of the library a scheduled run covers, null for all of it, or
+ * 'invalid'. pg_cron splits the nightly run into parts a few minutes apart:
+ * the whole library in one request used up to the platform's 2s CPU budget,
+ * and a request killed for CPU dies without writing its sync_log row. A part
+ * takes every title whose id is congruent to `shard` modulo `shards`.
+ */
+function parseShard(body: unknown): { index: number; count: number } | null | 'invalid' {
+  if (!body || typeof body !== 'object') return null
+  const { shard, shards } = body as { shard?: unknown; shards?: unknown }
+  if (shard === undefined && shards === undefined) return null
+  if (
+    !Number.isSafeInteger(shard) || !Number.isSafeInteger(shards) ||
+    (shards as number) < 1 || (shards as number) > 10 ||
+    (shard as number) < 0 || (shard as number) >= (shards as number)
+  ) return 'invalid'
+  return { index: shard as number, count: shards as number }
 }
 
 // Mirror of src/features/watchlist/tmdb-types.ts. Deno cannot import from
@@ -244,15 +267,34 @@ serve(async (req) => {
   }
 
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
-  const body = await req.json().catch(() => ({}))
+  // No body at all is a whole-library run. A body that does not parse to an
+  // object, or names a key nothing reads, is malformed rather than read as
+  // one: a misspelt part in a cron body would otherwise run the whole library
+  // nightly -- the run that outgrew the CPU limit -- and log it as complete.
+  const rawBody = await req.text()
+  let body: unknown = {}
+  let bodyMalformed = false
+  if (rawBody.trim()) {
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      bodyMalformed = true
+    }
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) bodyMalformed = true
+  else if (Object.keys(body).some((key) => !KNOWN_BODY_KEYS.has(key))) bodyMalformed = true
   const target = parseItemTarget(body)
-  if (target === 'invalid') {
+  const shard = parseShard(body)
+  // A part of the library and a single title are different requests; a body
+  // naming both is malformed rather than one or the other.
+  if (bodyMalformed || target === 'invalid' || shard === 'invalid' || (target && shard)) {
     return new Response(JSON.stringify({ error: 'Invalid sync target' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
   const syncType = isServiceRole ? 'auto' : 'manual'
+  const runLabel = shard ? `${syncType} ${shard.index + 1}/${shard.count}` : syncType
   const holdsCooldown = !isServiceRole && !target
 
   // The schedule is trusted; a person pressing a button is rate-limited here
@@ -345,7 +387,9 @@ serve(async (req) => {
       })
     })
 
-    const itemsToSync = [...movies, ...shows].filter((item) => item.tmdb_id)
+    const itemsToSync = [...movies, ...shows].filter(
+      (item) => item.tmdb_id && (!shard || Number(item.id) % shard.count === shard.index),
+    )
 
     // Parallel within a chunk. The ceiling is checked between chunks, and a
     // chunk can take up to ~30s when calls time out, so it sits 50s under the
@@ -359,7 +403,7 @@ serve(async (req) => {
     for (let i = 0; i < itemsToSync.length; i += chunkSize) {
       if (Date.now() - startTime > MAX_EXECUTION_TIME_MS) {
         console.warn(
-          `[Sync ${syncType}] Reached ${MAX_EXECUTION_TIME_MS / 1000}s ceiling (${((Date.now() - startTime) / 1000).toFixed(1)}s). Stopping early at ${itemsSynced}/${itemsToSync.length} items to record sync log.`
+          `[Sync ${runLabel}] Reached ${MAX_EXECUTION_TIME_MS / 1000}s ceiling (${((Date.now() - startTime) / 1000).toFixed(1)}s). Stopping early at ${itemsSynced}/${itemsToSync.length} items to record sync log.`
         )
         hitCeiling = true
         break
@@ -526,8 +570,11 @@ serve(async (req) => {
     }
 
     const durationMs = Date.now() - startTime
-    await supabaseAdmin.from('sync_log').insert({
+    const { error: logError } = await supabaseAdmin.from('sync_log').insert({
       sync_type: syncType,
+      // Only a part sends these, so a whole-library row still writes against
+      // a sync_log that predates the columns.
+      ...(shard && { shard: shard.index, shard_count: shard.count }),
       status: failedTitles.length > 0 || hitCeiling ? 'error' : 'success',
       items_synced: itemsSynced,
       duration_ms: durationMs,
@@ -537,19 +584,23 @@ serve(async (req) => {
           ? `${failedTitles.length} item(s) failed: ${failedTitles.join(', ')}`
           : null,
     })
+    // A run that cannot log looks, in the history panel, like one that never
+    // ran; say why in the function log at least.
+    if (logError) console.error(`[Sync ${runLabel}] sync_log insert failed:`, logError.message)
     // Keep the last 50 log rows
     const { data: oldLogs } = await supabaseAdmin.from('sync_log').select('id').order('synced_at', { ascending: false }).range(50, 1000)
     if (oldLogs && oldLogs.length > 0) {
       await supabaseAdmin.from('sync_log').delete().in('id', oldLogs.map((l: { id: number }) => l.id))
     }
 
-    console.log(`[Sync ${syncType}] Completed. ${itemsSynced}/${itemsToSync.length} synced in ${(durationMs / 1000).toFixed(1)}s. ${failedTitles.length} failed.`)
+    console.log(`[Sync ${runLabel}] Completed. ${itemsSynced}/${itemsToSync.length} synced in ${(durationMs / 1000).toFixed(1)}s. ${failedTitles.length} failed.`)
 
     return new Response(
       JSON.stringify({
         success: true,
         itemsSynced,
         itemsTotal: itemsToSync.length,
+        shard: shard ?? undefined,
         failedTitles,
         changes,
         durationMs,
@@ -570,14 +621,16 @@ serve(async (req) => {
     if (holdsCooldown && !loopStarted) await releaseCooldown(supabaseAdmin, FULL_SYNC_COOLDOWN_KEY)
     const durationMs = Date.now() - startTime
     const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-    await supabaseAdmin.from('sync_log').insert({
+    const { error: logError } = await supabaseAdmin.from('sync_log').insert({
       sync_type: syncType,
+      ...(shard && { shard: shard.index, shard_count: shard.count }),
       status: 'error',
       items_synced: itemsSynced,
       duration_ms: durationMs,
       error_message: errorMsg,
     })
-    console.error(`[Sync ${syncType}] Failed:`, error)
+    if (logError) console.error(`[Sync ${runLabel}] sync_log insert failed:`, logError.message)
+    console.error(`[Sync ${runLabel}] Failed:`, error)
     // The detail is in sync_log and the function log; the caller gets the
     // generic message, since it can carry a query or an upstream URL.
     return new Response(JSON.stringify({ error: 'Sync failed' }), {

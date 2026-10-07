@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { Json } from '@/integrations/supabase/types';
 import {
   computeFirstSeenAt,
@@ -152,8 +153,12 @@ function mapEpisodeRow(row): WatchlistNewsEpisode {
   };
 }
 
+// A read whose rows grow with the library rather than with a date window
+// goes through selectAllPages: the Data API stops at 1,000 rows without
+// saying so, and a truncated list reads exactly like a complete one. Each
+// paged read orders by `id` last, which is also what `id` is selected for.
 const EPISODE_EMBED =
-  'episode_number, title, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform))';
+  'id, episode_number, title, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform))';
 
 /** Episodes aired in the last 30 days, newest first, watched or not. */
 export function useRecentEpisodes(windowDays = 30) {
@@ -203,11 +208,13 @@ export function useUpcomingEpisodes() {
     try {
       const today = new Date();
 
-      const { data, error } = await supabase
+      const { data, error } = await selectAllPages((from, to) => supabase
         .from('tv_show_episodes')
-        .select(EPISODE_EMBED)
+        .select(EPISODE_EMBED, { count: 'exact' })
         .gt('release_date', toDateStr(today))
-        .order('release_date', { ascending: true });
+        .order('release_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to), (row) => String(row.id));
 
       if (error) throw error;
       setEpisodes((data || []).map(mapEpisodeRow));
@@ -296,11 +303,13 @@ export function useUpcomingMovies() {
     try {
       const today = new Date();
 
-      const { data, error } = await supabase
+      const { data, error } = await selectAllPages((from, to) => supabase
         .from('movies')
-        .select(MOVIE_SELECT)
+        .select(MOVIE_SELECT, { count: 'exact' })
         .gt('release_date', toDateStr(today))
-        .order('release_date', { ascending: true });
+        .order('release_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to), (row) => String(row.id));
 
       if (error) throw error;
       setMovies((data || []).map(mapMovieRow));
@@ -531,7 +540,12 @@ export function useRecentAnnouncements(windowDays = ANNOUNCEMENT_WINDOW_DAYS) {
       const showIds = Array.from(new Set(candidates.map((item) => item.tv_show_id)));
 
       const allSeasonsResult = showIds.length
-        ? await supabase.from('tv_show_seasons').select('tv_show_id, created_at').in('tv_show_id', showIds)
+        ? await selectAllPages((from, to) => supabase
+          .from('tv_show_seasons')
+          .select('id, tv_show_id, created_at', { count: 'exact' })
+          .in('tv_show_id', showIds)
+          .order('id', { ascending: true })
+          .range(from, to), (row) => String(row.id))
         : { data: [], error: null };
 
       if (allSeasonsResult.error) throw allSeasonsResult.error;
@@ -604,10 +618,12 @@ export function usePremiereSeasonEpisodes(seasons: PremiereSeasonKey[]) {
     );
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await selectAllPages((from, to) => supabase
         .from('tv_show_episodes')
-        .select('release_date, watched, tv_show_seasons!inner(season_number, tv_show_id)')
-        .in('tv_show_seasons.tv_show_id', showIds);
+        .select('id, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id)', { count: 'exact' })
+        .in('tv_show_seasons.tv_show_id', showIds)
+        .order('id', { ascending: true })
+        .range(from, to), (row) => String(row.id));
 
       if (error) throw error;
 

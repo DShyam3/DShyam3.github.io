@@ -21,7 +21,13 @@ import {
   Check,
   Calendar,
 } from 'lucide-react';
-import type { DisplaySyncLogEntry } from '@/features/watchlist/sync-logic';
+import {
+  formatSyncPart,
+  NIGHTLY_SYNC_HOUR_UTC,
+  type DisplaySyncLogEntry,
+} from '@/features/watchlist/sync-logic';
+
+const nightlyStart = `${String(NIGHTLY_SYNC_HOUR_UTC).padStart(2, '0')}:00`;
 
 interface SyncDetailDialogProps {
   entry: DisplaySyncLogEntry | null;
@@ -103,6 +109,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
                     : entry.sync_type === 'daily'
                       ? 'DAILY SYNC'
                       : 'MANUAL SYNC'}
+                {formatSyncPart(entry) && ` · ${formatSyncPart(entry)?.toUpperCase()}`}
               </span>
               <DialogTitle className="text-sm font-semibold tracking-wide flex items-center gap-1.5">
                 <DotMatrixText text="SYNC RUN DETAILS" size="xs" />
@@ -181,8 +188,11 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
               <div>
                 <p className="font-semibold">No scheduled cron execution was recorded.</p>
                 <p className="text-destructive/80 mt-0.5">
-                  The scheduled 06:00 UTC daily background sync did not log a run for this calendar day.
-                  This may occur if the database was restarting, migrating, or if outbound network requests were blocked.
+                  {formatSyncPart(entry)
+                    ? `The nightly background sync runs in ${entry.shard_count} parts from ${nightlyStart} UTC, and ${formatSyncPart(entry)} did not log a run for this calendar day.`
+                    : `The scheduled ${nightlyStart} UTC daily background sync did not log a run for this calendar day.`}{' '}
+                  A run the edge runtime stops for exceeding its CPU limit ends without writing its log row;
+                  a database restart or blocked outbound requests have the same effect.
                 </p>
               </div>
             </div>

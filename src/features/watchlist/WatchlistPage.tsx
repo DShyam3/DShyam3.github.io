@@ -26,6 +26,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import {
   buildDisplaySyncLog,
+  formatSyncPart,
   type DisplaySyncLogEntry,
 } from '@/features/watchlist/sync-logic';
 import { SyncDetailDialog } from '@/features/watchlist/components/SyncDetailDialog';
@@ -831,6 +832,7 @@ const Watchlist = () => {
                         {entry.is_missed
                           ? 'No execution recorded'
                           : `${entry.items_synced} items · ${(entry.duration_ms / 1000).toFixed(1)}s`}
+                        {formatSyncPart(entry) && ` · ${formatSyncPart(entry)}`}
                       </span>
                       {failureCountBadge && !entry.is_missed && (
                         <span className="text-xs px-1 py-px rounded bg-destructive/15 text-destructive font-medium flex-shrink-0">

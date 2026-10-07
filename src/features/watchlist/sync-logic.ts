@@ -56,13 +56,44 @@ export interface DisplaySyncLogEntry {
   items_synced: number;
   duration_ms: number;
   error_message?: string | null;
+  /** Which part of the library a scheduled run covered; null for all of it. */
+  shard?: number | null;
+  shard_count?: number | null;
   is_missed?: boolean;
 }
+
+/** "part 2/3" for a run that covered one part of the library, else null. */
+export function formatSyncPart(entry: {
+  shard?: number | null;
+  shard_count?: number | null;
+}): string | null {
+  return entry.shard != null && entry.shard_count != null
+    ? `part ${entry.shard + 1}/${entry.shard_count}`
+    : null;
+}
+
+function utcDayKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+/**
+ * When the nightly sync runs: part 0 at this hour, each later part this many
+ * minutes after the one before. The cron jobs that actually fire are in
+ * supabase/migrations/20261006090000_watchlist_sync_shards.sql -- change both
+ * together.
+ */
+export const NIGHTLY_SYNC_HOUR_UTC = 6;
+export const NIGHTLY_SYNC_PART_SPACING_MINUTES = 10;
 
 /**
  * Given the raw sync log from Supabase, detects any missing scheduled daily
  * sync runs between the oldest entry (or up to maxDaysBack) and now.
  * Also ensures all entries are sorted descending by date and surfaces partial failures.
+ *
+ * The nightly run is split into parts. A part the edge runtime kills for CPU
+ * writes no row, so a day counts as run only when every part of its split
+ * logged -- one row per day would hide a lost part behind the others. Rows
+ * without a part are whole-library runs, and complete their day alone.
  */
 export function buildDisplaySyncLog(
   entries: {
@@ -73,10 +104,13 @@ export function buildDisplaySyncLog(
     items_synced: number;
     duration_ms: number;
     error_message?: string | null;
+    shard?: number | null;
+    shard_count?: number | null;
   }[],
   now: Date = new Date(),
-  scheduledHourUtc: number = 6,
+  scheduledHourUtc: number = NIGHTLY_SYNC_HOUR_UTC,
   maxDaysBack: number = 30,
+  partSpacingMinutes: number = NIGHTLY_SYNC_PART_SPACING_MINUTES,
 ): DisplaySyncLogEntry[] {
   if (entries.length === 0) return [];
 
@@ -87,18 +121,33 @@ export function buildDisplaySyncLog(
     is_missed: false,
   }));
 
-  // Track dates (YYYY-MM-DD in UTC) that had a scheduled sync ('auto' or 'daily')
-  const autoSyncDays = new Set<string>();
+  // Per UTC day, what the scheduled ('auto' or 'daily') rows cover: the whole
+  // library, or which parts of each split. Splits are kept apart so that, on
+  // a day the part count changes, parts of 2 cannot pass for parts of 3.
+  type Split = { parts: Set<number>; latest: number };
+  const scheduledDays = new Map<string, { whole: boolean; splits: Map<number, Split> }>();
   entries.forEach((e) => {
-    if (e.sync_type === 'auto' || e.sync_type === 'daily') {
-      const d = new Date(e.synced_at);
-      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-      autoSyncDays.add(key);
+    if (e.sync_type !== 'auto' && e.sync_type !== 'daily') return;
+    const at = new Date(e.synced_at).getTime();
+    const key = utcDayKey(new Date(at));
+    const day = scheduledDays.get(key) ?? { whole: false, splits: new Map<number, Split>() };
+    if (e.shard == null || e.shard_count == null) {
+      day.whole = true;
+    } else {
+      const split = day.splits.get(e.shard_count) ?? { parts: new Set<number>(), latest: 0 };
+      split.parts.add(e.shard);
+      split.latest = Math.max(split.latest, at);
+      day.splits.set(e.shard_count, split);
     }
+    scheduledDays.set(key, day);
   });
 
   const timestamps = entries.map((e) => new Date(e.synced_at).getTime());
   const oldestTime = Math.min(...timestamps);
+  // The log arrives as the newest N rows, so the cut can fall between the
+  // parts of the oldest day shown. Parts missing there may just be older
+  // than the window.
+  const oldestKey = utcDayKey(new Date(oldestTime));
   const earliestAllowed = new Date(now.getTime() - maxDaysBack * 24 * 60 * 60 * 1000);
 
   const startCursor = new Date(Math.max(oldestTime, earliestAllowed.getTime()));
@@ -107,19 +156,23 @@ export function buildDisplaySyncLog(
   const todayCursor = new Date(now);
   todayCursor.setUTCHours(0, 0, 0, 0);
 
-  const todayHourUtc = now.getUTCHours();
+  const spacingMs = partSpacingMinutes * 60 * 1000;
   const cursor = new Date(startCursor);
 
   while (cursor <= todayCursor) {
-    const isToday = cursor.getTime() === todayCursor.getTime();
-    const shouldCheck = !isToday || todayHourUtc >= scheduledHourUtc;
+    const key = utcDayKey(cursor);
+    const day = scheduledDays.get(key);
+    const scheduledAt = new Date(cursor);
+    scheduledAt.setUTCHours(scheduledHourUtc, 0, 0, 0);
+    // A run is late once the next slot would have started. Only today can
+    // fall short of that.
+    const isDue = (slot: number) => now.getTime() >= slot + spacingMs;
 
-    if (shouldCheck) {
-      const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`;
-      if (!autoSyncDays.has(key)) {
+    if (!day) {
+      if (isDue(scheduledAt.getTime())) {
         result.push({
           id: `missed-${key}`,
-          synced_at: `${key}T${String(scheduledHourUtc).padStart(2, '0')}:00:00.000Z`,
+          synced_at: scheduledAt.toISOString(),
           sync_type: 'auto',
           status: 'error',
           items_synced: 0,
@@ -127,6 +180,30 @@ export function buildDisplaySyncLog(
           error_message: 'Missed scheduled run — no execution logged',
           is_missed: true,
         });
+      }
+    } else if (!day.whole && key !== oldestKey) {
+      const splits = [...day.splits.entries()];
+      const complete = splits.some(([count, split]) => split.parts.size >= count);
+      if (!complete) {
+        // The split the day's latest part belongs to is the one in force.
+        const [partCount, split] = splits.reduce((a, b) => (b[1].latest > a[1].latest ? b : a));
+        for (let part = 0; part < partCount; part++) {
+          if (split.parts.has(part)) continue;
+          const partAt = scheduledAt.getTime() + part * spacingMs;
+          if (!isDue(partAt)) continue;
+          result.push({
+            id: `missed-${key}-${part}`,
+            synced_at: new Date(partAt).toISOString(),
+            sync_type: 'auto',
+            status: 'error',
+            items_synced: 0,
+            duration_ms: 0,
+            error_message: `Missed scheduled run — part ${part + 1} of ${partCount} logged nothing`,
+            shard: part,
+            shard_count: partCount,
+            is_missed: true,
+          });
+        }
       }
     }
     cursor.setUTCDate(cursor.getUTCDate() + 1);
@@ -136,4 +213,3 @@ export function buildDisplaySyncLog(
     (a, b) => new Date(b.synced_at).getTime() - new Date(a.synced_at).getTime(),
   );
 }
-

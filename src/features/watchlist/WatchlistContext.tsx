@@ -14,6 +14,7 @@ import { persistWatchedProgress } from './up-next-query';
 import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
+import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
 import {
   resolveFavouriteCategory,
@@ -26,6 +27,7 @@ type AiredEpisode = TMDBEpisode & { air_date: string };
 
 const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
+import { NIGHTLY_SYNC_HOUR_UTC } from './sync-logic';
 
 // Returns a referentially-stable function that always calls the latest
 // version of `fn`. Used so the context value below doesn't hand out a new
@@ -200,6 +202,9 @@ interface SyncLogEntry {
   items_synced: number;
   error_message?: string;
   duration_ms: number;
+  /** The part of the library a nightly run covered; null for all of it. */
+  shard?: number | null;
+  shard_count?: number | null;
 }
 
 interface WatchlistContextType {
@@ -258,25 +263,21 @@ const WatchlistContext = createContext<WatchlistContextType | undefined>(
 );
 
 /**
- * The pg_cron job is scheduled `0 6 * * *`, which pg_cron evaluates in UTC.
- * This has to match, or the countdown shown to the user is wrong -- it used
- * to compute 6 AM *local*, so through British Summer Time the page promised
- * 06:00 while the sync actually landed at 07:00.
- */
-const AUTO_SYNC_UTC_HOUR = 6;
-
-/**
  * How many favourites one facts sync will fetch. tmdb-proxy allows 60
  * requests a minute; a loop with no cap would trip that and start failing
  * mid-run, so the run stops short and asks to be run again.
  */
 const FAVOURITE_FACTS_BATCH = 50;
 
-/** The next time the server-side cron will run, as a Date. */
+/**
+ * The next time the server-side cron will start, as a Date. pg_cron reads
+ * its schedule in UTC, so this does too -- computed as local time it would
+ * promise 06:00 through British Summer Time while the sync landed at 07:00.
+ */
 const getNextAutoSync = () => {
   const now = new Date();
   const target = new Date(now);
-  target.setUTCHours(AUTO_SYNC_UTC_HOUR, 0, 0, 0);
+  target.setUTCHours(NIGHTLY_SYNC_HOUR_UTC, 0, 0, 0);
   if (now >= target) {
     target.setUTCDate(target.getUTCDate() + 1);
   }
@@ -326,17 +327,23 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     loadedShowsRef.current.clear();
     loadedDescriptionsRef.current.clear();
     try {
+      // Each read is paged: the Data API stops at 1,000 rows without saying
+      // so, and a single title-ordered read would drop the end of the
+      // alphabet first. `id` breaks title ties so pages never overlap.
       const [moviesResult, showsResult, favouritesResult] = await Promise.all([
         // Every column except `overview`. Plot summaries are 218 kB of the
         // movies table's 357 kB and are only read by the detail dialog, so
         // they load per item in loadItemDescription instead.
-        supabase
+        selectAllPages((from, to) => supabase
           .from('movies')
           .select(
             'id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime',
+            { count: 'exact' },
           )
-          .order('title', { ascending: true }),
-        supabase
+          .order('title', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to), (movie) => String(movie.id)),
+        selectAllPages((from, to) => supabase
           .from('tv_shows')
           // Deliberately not `tv_show_episodes (*)`. Every mount of this page
           // was pulling all ~7,600 episode rows in full (~474 kB) purely to
@@ -352,9 +359,17 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       tv_show_episodes (id, episode_number, watched, runtime, release_date)
                     )
                 `,
+            { count: 'exact' },
           )
-          .order('title', { ascending: true }),
-        supabase.from('favourites').select('*').order('title', { ascending: true }),
+          .order('title', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to), (show) => String(show.id)),
+        selectAllPages((from, to) => supabase
+          .from('favourites')
+          .select('*', { count: 'exact' })
+          .order('title', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to), (favourite) => String(favourite.id)),
       ]);
 
       if (moviesResult.error) throw moviesResult.error;

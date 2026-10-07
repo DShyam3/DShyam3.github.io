@@ -63,7 +63,19 @@ CREATE TABLE IF NOT EXISTS "public"."sync_log" (
     "status" "text" DEFAULT 'success'::"text" NOT NULL,
     "items_synced" integer DEFAULT 0,
     "error_message" "text",
-    "duration_ms" integer DEFAULT 0
+    "duration_ms" integer DEFAULT 0,
+    "shard" smallint,
+    "shard_count" smallint,
+    CONSTRAINT "sync_log_shard_check" CHECK (
+        ("shard" IS NULL AND "shard_count" IS NULL)
+        OR (
+            "shard" IS NOT NULL
+            AND "shard_count" IS NOT NULL
+            AND "shard_count" BETWEEN 1 AND 10
+            AND "shard" >= 0
+            AND "shard" < "shard_count"
+        )
+    )
 );
 
 ALTER TABLE "public"."sync_log" OWNER TO "postgres";
@@ -603,6 +615,12 @@ FROM "anon";
 -- 20260904111858) and 20260905160000 revoked anon's grants without handing
 -- SELECT back. No anon privilege on it at all.
 REVOKE ALL ON TABLE "public"."sync_log" FROM "anon";
+
+COMMENT ON COLUMN "public"."sync_log"."shard" IS
+    '0-based index of the part of the library this run covered (rows with id % shard_count = shard). Null together with shard_count for a whole-library run: the manual Sync button, and every row written before the nightly sync was split.';
+
+COMMENT ON COLUMN "public"."sync_log"."shard_count" IS
+    'How many parts the library was split into for this run (1 to 10). Null together with shard for a whole-library run. Three nightly rows with shard 0, 1 and 2 and shard_count 3 make a complete day; a missing one is a part that never logged.';
 
 COMMENT ON COLUMN "public"."tv_show_episodes"."watched_at" IS
     'When the episode was actually watched. Left null on every pre-migration row and never backfilled to now() -- a fabricated watch timestamp reads exactly like a real one. Every consumer must treat null as "watched, date unknown" and exclude it from anything time-bucketed (stalled-show detection, watch history, year in review).';
