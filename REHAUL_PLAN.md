@@ -239,9 +239,12 @@ So the gate is *a* key, not a particular vendor's:
   the site build that carries it (an undeployed function makes each admin
   page load log one failed preflight), set a key, then a signed-in pass over
   the three target questions on a live model. That first call also settles
-  the one unverified wire detail: the Anthropic row sends
-  `fallbacks: "default"` under `anthropic-beta: server-side-fallback-2026-07-01`;
-  if the API refuses either, every call fails as a generic 502.
+  the unverified wire names: the Anthropic row sends `fallbacks: "default"`
+  under `anthropic-beta: server-side-fallback-2026-07-01` (if the API refuses
+  either, every call fails as a generic 502), and the function lets a
+  `fallback` block back in when a reply carrying one is echoed (if the API
+  names it otherwise, the question after a fallback is refused; the function
+  log names the refused type).
 
   **Open, the owner's call:** goal names and spending-category names are
   sent. They are the owner's own labels and the answers need them, but the

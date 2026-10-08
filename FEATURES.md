@@ -16,6 +16,7 @@ end, at the database rather than in the UI.
 | Travel | Countries and cities visited |
 | Inventory | Gear, wardrobe, kitchen — plus EDC showcase |
 | Finance | Private income, tax, spending and wealth dashboard |
+| Ask the site | Admin-only chat over finance, inventory and the watchlist |
 
 ---
 
@@ -165,6 +166,10 @@ Admins use Edit EDC to search all existing inventory items and filter by categor
 then add or remove items from EDC. Each selection saves automatically. The editor
 wraps long item names and brands on narrow screens and keeps focused controls
 fully visible.
+
+A build list's parts show as a table, each with its price. The Total adds the
+priced parts up when they are all in one currency. With mixed currencies, or no
+priced part, the item's own price is shown as the Total instead, if it has one.
 
 ---
 
@@ -330,6 +335,42 @@ one-to-one, and penny-exact. Bank payment candidates come from the pay month
 and within five days either side of it, to account for early or late payment
 around calendar boundaries. When a payslip has exactly one matching bank payment
 for its take-home on the pay date itself, a button confirms all such matches at once.
+
+---
+
+## Site assistant
+
+An "Ask the site" chat for the owner. It appears only for a signed-in
+administrator, and only when the `assistant` Edge Function holds a model key.
+Otherwise no control is shown.
+
+It opens from an ASK control in the header from 768px wide, and from an "Ask the
+site" button in the menu panel below that. The panel names the model answering.
+Enter sends a question; Shift+Enter starts a new line.
+
+The assistant reads and never changes anything. Its tools:
+
+- **Finance** — the position (what is left to spend this month, income, net
+  worth, debts, days to payday), a what-if spend scenario, alerts, goals, and
+  cash flow for a month or a range of months: income, spending, net, monthly
+  averages and spending by category. Confirmed transfers are left out, as on
+  Home. Finance questions are answered only while the Finance page is open and
+  fully loaded; anywhere else the assistant asks you to open Finance.
+- **Inventory** — a search by words, category or both. Owned and wishlist items
+  are totalled apart. A PC or other build shows its parts and their total. The
+  everyday carry is the items flagged EDC.
+- **Watchlist** — films, season premieres (counted once, on the premiere) and
+  episodes releasing between two dates, optionally narrowed to a title.
+
+Answers are plain text. An answer that read from a tool ends with a line naming
+what it was read from, such as "From Cash flow". Before the first question the
+panel offers three starters: "What is in my PC?", "What comes out this year?"
+and "How much did I make last month?"
+
+The conversation is held in memory only. Sign-out clears it, and so does Clear.
+When it grows long, the next question starts a fresh conversation and the panel
+says so. An answer that is cut off, stops short, comes back empty or is
+rate-limited shows a notice in place of an answer.
 
 ---
 
