@@ -19,7 +19,7 @@
 
 import type { ToolSchema } from '../assistant/protocol';
 import type { FinanceAlert } from './alerts';
-import { monthlyCashFlow, summariseCashFlow, type CashFlowTransaction } from './cash-flow';
+import { completeRecordedMonths, monthlyCashFlow, summariseCashFlow, type CashFlowTransaction } from './cash-flow';
 import { runSpendScenario, type ScenarioResult, type ScenarioState } from './scenario';
 
 export interface FinancialPosition {
@@ -87,6 +87,18 @@ export interface CashFlowMonthTotals {
   net: number;
 }
 
+export interface CashFlowAverages {
+  /** How many months were averaged, and which. */
+  months: number;
+  from: string;
+  through: string;
+  income: number;
+  spend: number;
+  net: number;
+  /** Averaged months with no ledger row at all: possibly unrecorded, counted as zero. */
+  emptyMonths: string[];
+}
+
 export interface CashFlowToolResult {
   from: string;
   through: string;
@@ -95,11 +107,13 @@ export interface CashFlowToolResult {
   income: number;
   spend: number;
   net: number;
-  /** Months in the range that have started, which the averages divide by. */
-  elapsedMonths: number;
-  avgMonthlyIncome: number;
-  avgMonthlySpend: number;
-  avgMonthlyNet: number;
+  /**
+   * Monthly averages over the range's complete, recorded months only
+   * (`completeRecordedMonths`): not the month in progress, not the ledger's
+   * own partial first month, not months before it. Null when the range holds
+   * no such month.
+   */
+  averages: CashFlowAverages | null;
   /** Spending by category across the range, largest first. */
   categories: { name: string; amount: number }[];
   /** Present when the range spans more than one month. */
@@ -173,8 +187,10 @@ export const TOOL_SCHEMAS = [
       + 'net, monthly averages and spending by category, from the ledger with internal transfers '
       + 'removed. Use for "how much did I make/spend last month", "this year" or "on average". For a '
       + 'range, pass `through`; totals and averages are worked out for you, so never add or divide '
-      + 'yourself. ledgerStartsMonth says where records begin. Totals only: it never lists '
-      + 'individual transactions.',
+      + 'yourself. ledgerStartsMonth says where records begin: a month before it is unrecorded, not '
+      + 'zero. Averages cover only complete months of records and say which; quote that span, and '
+      + 'name any emptyMonths, which may be unrecorded. Totals only: it never lists individual '
+      + 'transactions.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -312,6 +328,9 @@ const cashFlow = (
 
   const months = monthlyCashFlow(context.transactions, from, throughRaw, context.currentMonth);
   const summary = summariseCashFlow(months);
+  const recorded = completeRecordedMonths(months, context.transactions);
+  const averaged = recorded.months;
+  const averageSummary = averaged.length > 0 ? summariseCashFlow(averaged) : null;
 
   return {
     tool: 'get_cash_flow',
@@ -322,32 +341,28 @@ const cashFlow = (
       income: summary.income,
       spend: summary.spend,
       net: summary.net,
-      elapsedMonths: summary.months,
-      avgMonthlyIncome: summary.avgMonthlyIncome,
-      avgMonthlySpend: summary.avgMonthlySpend,
-      avgMonthlyNet: summary.avgMonthlyNet,
+      averages: averageSummary
+        ? {
+            months: averaged.length,
+            from: averaged[0].key,
+            through: averaged[averaged.length - 1].key,
+            income: averageSummary.avgMonthlyIncome,
+            spend: averageSummary.avgMonthlySpend,
+            net: averageSummary.avgMonthlyNet,
+            emptyMonths: recorded.emptyMonths,
+          }
+        : null,
       categories: summary.categories.map(c => ({ name: c.name, amount: c.amount })),
       ...(span > 1
         ? { months: months.map(m => ({ month: m.key, income: m.income, spend: m.spend, net: m.net })) }
         : {}),
       savingsRatePercent: summary.savingsRatePercent,
       transfersMayBeIncluded: context.exclusionsUnreliable,
-      ledgerStartsMonth: firstLedgerMonth(context.transactions),
+      ledgerStartsMonth: recorded.firstMonth,
     },
   };
 };
 
-const ROW_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-\d{2}$/;
-
-const firstLedgerMonth = (transactions: readonly CashFlowTransaction[]): string | null => {
-  let first: string | null = null;
-  for (const tx of transactions) {
-    if (!ROW_DATE_RE.test(tx.date)) continue;
-    const month = tx.date.slice(0, 7);
-    if (first === null || month < first) first = month;
-  }
-  return first;
-};
 
 /**
  * Runs one tool call. Unknown names and bad arguments come back as an error

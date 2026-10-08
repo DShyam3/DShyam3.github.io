@@ -336,6 +336,59 @@ export function summariseCashFlow(months: readonly CashFlowMonth[]): CashFlowSum
   };
 }
 
+export interface RecordedMonths {
+  /** The month of the ledger's first row, or null for an empty ledger. */
+  firstMonth: string | null;
+  /**
+   * The month the ledger's records start in full, or null for an empty
+   * ledger: the first row's month when that row is dated the 1st, otherwise
+   * the month after, since a ledger that starts on the 28th has only a few
+   * days of that month.
+   */
+  firstFullMonth: string | null;
+  /** The months to average over: complete (not current, not future) and from `firstFullMonth`. */
+  months: CashFlowMonth[];
+  /**
+   * Those of `months` with no ledger row at all. A gap in the records is as
+   * likely as a quiet month -- a statement never imported -- so they are
+   * counted, and named, rather than silently dropped or silently zero.
+   */
+  emptyMonths: string[];
+}
+
+/**
+ * Which of a `monthlyCashFlow` range's months an average should divide by.
+ *
+ * `summariseCashFlow` divides by every started month, the one in progress
+ * and months before any record included, which reads as a lower average
+ * than anyone spent. This names the months that are whole and recorded.
+ * The Cash Flow surface still uses the wider divisor (REHAUL_PLAN 7.6).
+ */
+export function completeRecordedMonths(
+  months: readonly CashFlowMonth[],
+  transactions: readonly CashFlowTransaction[],
+): RecordedMonths {
+  let firstDate: string | undefined;
+  const monthsWithRows = new Set<string>();
+  for (const tx of transactions) {
+    const monthKey = monthKeyOfDate(tx.date);
+    if (!monthKey) continue;
+    monthsWithRows.add(monthKey);
+    if (firstDate === undefined || tx.date < firstDate) firstDate = tx.date;
+  }
+  if (firstDate === undefined) return { firstMonth: null, firstFullMonth: null, months: [], emptyMonths: [] };
+
+  const firstMonth = parseMonthKey(firstDate.slice(0, 7)) as MonthKey;
+  const firstFullMonth = formatMonthKey(firstDate.endsWith('-01') ? firstMonth : nextMonthKey(firstMonth));
+  const recorded = months.filter(m => !m.isCurrent && !m.isFuture && m.key >= firstFullMonth);
+  return {
+    firstMonth: formatMonthKey(firstMonth),
+    firstFullMonth,
+    months: recorded,
+    emptyMonths: recorded.filter(m => !monthsWithRows.has(m.key)).map(m => m.key),
+  };
+}
+
 interface InternalNode {
   id: string;
   label: string;

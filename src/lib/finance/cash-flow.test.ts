@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cashFlowSankey,
+  completeRecordedMonths,
   monthlyCashFlow,
   summariseCashFlow,
   type CashFlowMonth,
@@ -409,5 +410,46 @@ describe('cashFlowSankey', () => {
 
     expect(sankey.nodes.filter(n => n.kind === 'category')).toEqual([]);
     expect(sankey.nodes.find(n => n.id === 'kept')).toEqual({ id: 'kept', label: 'Kept', kind: 'kept', amount: 50 });
+  });
+});
+
+describe('completeRecordedMonths', () => {
+  const tx = (id: string, date: string, amount: number) => ({ id, date, name: '', amount, accountId: null });
+
+  it('starts the month after a ledger that begins mid-month', () => {
+    const rows = [tx('a', '2026-08-28', 150), tx('b', '2026-09-10', 1500)];
+    const months = monthlyCashFlow(rows, '2026-08', '2026-10', '2026-10');
+    const recorded = completeRecordedMonths(months, rows);
+    expect(recorded.firstMonth).toBe('2026-08');
+    expect(recorded.firstFullMonth).toBe('2026-09');
+    // August has three days of records and October is in progress.
+    expect(recorded.months.map(m => m.key)).toEqual(['2026-09']);
+    expect(summariseCashFlow(recorded.months).avgMonthlySpend).toBe(1500);
+  });
+
+  it('keeps the first month when the ledger starts on the 1st', () => {
+    const rows = [tx('a', '2026-08-01', 100), tx('b', '2026-09-02', 200)];
+    const recorded = completeRecordedMonths(monthlyCashFlow(rows, '2026-08', '2026-09', '2026-10'), rows);
+    expect(recorded.months.map(m => m.key)).toEqual(['2026-08', '2026-09']);
+  });
+
+  it('counts a month with no rows, and names it', () => {
+    const rows = [tx('a', '2026-07-01', 100), tx('b', '2026-09-03', 300)];
+    const recorded = completeRecordedMonths(monthlyCashFlow(rows, '2026-07', '2026-09', '2026-10'), rows);
+    expect(recorded.months.map(m => m.key)).toEqual(['2026-07', '2026-08', '2026-09']);
+    expect(recorded.emptyMonths).toEqual(['2026-08']);
+  });
+
+  it('names nothing to average for an empty ledger, or a range before it', () => {
+    expect(completeRecordedMonths(monthlyCashFlow([], '2026-01', '2026-03', '2026-10'), [])).toEqual({
+      firstMonth: null, firstFullMonth: null, months: [], emptyMonths: [],
+    });
+    const rows = [tx('a', '2026-08-01', 100)];
+    expect(completeRecordedMonths(monthlyCashFlow(rows, '2026-01', '2026-03', '2026-10'), rows).months).toEqual([]);
+  });
+
+  it('ignores rows whose date is not on the calendar', () => {
+    const rows = [tx('bad', '2026-02-30', 1), tx('a', '2026-08-01', 100)];
+    expect(completeRecordedMonths(monthlyCashFlow(rows, '2026-08', '2026-08', '2026-10'), rows).firstFullMonth).toBe('2026-08');
   });
 });

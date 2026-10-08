@@ -84,7 +84,10 @@ header.app-header { padding-block: .75rem; }
 .app-header .dot-matrix-text-sm { font-size: 1.15rem; }
 .app-header .dot-matrix-text-xs { font-size: .95rem; }
 .header-page-title { max-width: 25rem; }
-.header-page-title .dot-matrix-text { white-space: normal; overflow-wrap: anywhere; }
+/* Between words only. `anywhere` split "Inspiration" into "Inspiratio" / "n"
+   on a 360px phone; `break-word` still breaks a word wider than the whole
+   row, but never lets the title squeeze below its longest word (Header). */
+.header-page-title .dot-matrix-text { white-space: normal; overflow-wrap: break-word; }
 /* Keep footer labels and clock readable together, including short screens. */
 footer.app-footer { padding-block: .75rem; }
 .app-footer .dot-matrix-text-xs { font-size: 1.125rem; }

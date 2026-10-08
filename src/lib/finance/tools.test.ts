@@ -120,10 +120,7 @@ describe('executeTool', () => {
         income: 3000,
         spend: 1100,
         net: 1900,
-        elapsedMonths: 1,
-        avgMonthlyIncome: 3000,
-        avgMonthlySpend: 1100,
-        avgMonthlyNet: 1900,
+        averages: { months: 1, from: '2026-09', through: '2026-09', income: 3000, spend: 1100, net: 1900, emptyMonths: [] },
         categories: [{ name: 'Rent', amount: 900 }, { name: 'Groceries', amount: 200 }],
         savingsRatePercent: 63.3,
         transfersMayBeIncluded: false,
@@ -140,9 +137,49 @@ describe('executeTool', () => {
     expect(r.data.complete).toBe(false);
     expect(r.data.months?.map(m => m.month)).toEqual(['2026-08', '2026-09', '2026-10']);
     expect(r.data.months?.[2]).toEqual({ month: '2026-10', income: 0, spend: 40, net: -40 });
-    // Averages over the three started months, so the model never divides.
-    expect(r.data.elapsedMonths).toBe(3);
-    expect(r.data.avgMonthlySpend).toBe(696.67);
+    // The ledger starts on 10 August and October is in progress, so only
+    // September is a whole month of records, and the averages say so.
+    expect(r.data.averages).toEqual({
+      months: 1, from: '2026-09', through: '2026-09', income: 3000, spend: 1100, net: 1900, emptyMonths: [],
+    });
+  });
+
+  it('averages from the first full month of records, not from the start of the range', () => {
+    const fromFirst: FinanceToolContext = {
+      ...context,
+      cashFlow: {
+        ...context.cashFlow,
+        transactions: [
+          { id: 's', date: '2026-08-01', name: '', amount: 10, category: 'Groceries', accountId: null },
+          ...context.cashFlow.transactions,
+        ],
+      },
+    };
+    const r = executeTool('get_cash_flow', { month: '2026-01', through: '2026-10' }, fromFirst);
+    if (!('data' in r) || r.tool !== 'get_cash_flow') throw new Error('expected data');
+    expect(r.data.averages).toMatchObject({ months: 2, from: '2026-08', through: '2026-09', spend: 1030 });
+    // The totals still cover the whole range, the current month included.
+    expect(r.data.spend).toBe(2100);
+  });
+
+  it('names an averaged month that has no rows at all', () => {
+    const gappy: FinanceToolContext = {
+      ...context,
+      cashFlow: {
+        ...context.cashFlow,
+        transactions: [
+          { id: 'j', date: '2026-07-01', name: '', amount: 500, category: 'Rent', accountId: null },
+          ...context.cashFlow.transactions.filter(t => !t.date.startsWith('2026-08')),
+        ],
+      },
+    };
+    const r = executeTool('get_cash_flow', { month: '2026-07', through: '2026-09' }, gappy);
+    expect(r).toMatchObject({ data: { averages: { months: 3, emptyMonths: ['2026-08'] } } });
+  });
+
+  it('gives no averages when the range holds no complete, recorded month', () => {
+    expect(executeTool('get_cash_flow', { month: '2026-10' }, context)).toMatchObject({ data: { averages: null } });
+    expect(executeTool('get_cash_flow', { month: '2025-01', through: '2025-12' }, context)).toMatchObject({ data: { averages: null } });
   });
 
   it('says where the ledger starts, so an early month reads as unrecorded', () => {
