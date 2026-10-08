@@ -1,49 +1,46 @@
 # State
 
-**Updated:** 2026-10-07 · **Branch:** `feat/watchlist-news-finance-transfers` · **HEAD:** `48e70a23` (= `origin/main`, deployed 2026-10-07) · working tree clean
+**Updated:** 2026-10-08 · **Branch:** `feat/watchlist-news-finance-transfers` · **HEAD:** `55269ec5` (= `origin/main`, deployed 2026-10-08) · working tree clean
 
-## Deployed 2026-10-07
+## Deployed
 
-Commits `056afb97`, `e9a72a7a`, `531561f0`, `48e70a23` on top of `5d216580`. GitHub Pages run 37683893291 succeeded; the live bundle `assets/index-CmNo0FGg.js` matches the local build. Live DB has migrations `20261006090000` and `20261006220926` applied (versions match local files); edge function `watchlist-cron-sync` v12 is deployed. Schema and frontend match in production.
+Deployed 2026-10-08: commits `c081b08a` (recurring Paid decided by the period a payment covers; recurring payment evidence memoised) and `55269ec5` (nightly watchlist sync pages its library reads), on top of `0d04bd24`. Pages run 37739685661 succeeded; the live site serves `assets/index-DiJpx0Of.js`, identical to the local build.
 
-**Finance loading recovery:** profile reads have a 15-second deadline including token wait, with abort/late-response guards and auth cleanup; empty/error results show a persistent Try again. Quick failures auto-retry twice (1 s, 3 s); deadline misses do not. Slow or failed page sections offer Reload page. The 7 Oct incident was a client-side network stall in Chrome (edge logs: the profile request never reached Supabase; DB answered every request that arrived, max 1.6 s).
+Live DB: migration `20261008090000_finance_recurring_paid_period.sql` applied with `supabase db push` (version matches the local file). It adds nullable `finance_recurring_bills.paid_for_due_date` (date), no backfill, anon grants still 0. All 11 live bills have no `last_paid_date`, so no row lost early credit. Edge function `watchlist-cron-sync` is v13 (verify_jwt true); read errors now reach sync_log.
 
-**Recurring review:** deterministic merchant/account detection, payment evidence, active/inactive/dismissed review, confirmed last-paid dates, manual add/edit/restore. Inactive entries leave totals; recurring edits and paid checks do not change bank balances. Migration `20261006220926_finance_recurring_review.sql` adds review fields and revokes anon grants; 11 existing bills active; admin select of the new columns verified by SQL. Monthly/quarterly/annual paid status allows payments up to seven days early.
+Still live from 2026-10-07 (commits `056afb97`, `e9a72a7a`, `531561f0`, `48e70a23`; Pages run 37683893291; migrations `20261006090000` and `20261006220926`): finance loading recovery, recurring review, payslip reconciliation, ledger pagination (3,770 rows; P-6 closed), watchlist nightly sync in three parts, watchlist pagination. The 7 Oct incident was a client-side network stall in Chrome: edge logs show the profile request never reached Supabase.
 
-**Payslip reconciliation:** matches exact payments within the pay month or five days either side. Confirm all handles unambiguous exact pay-date matches; live SQL finds all 13 Keysight payslips eligible. Reviewer-found offset drift, max_rows, retry, upsert race and date issues fixed.
-
-**Finance ledger pagination:** `select-all-pages.ts` pages transactions (3,770 rows) by date/id with exact count; P-6 closed. `supabase/config.toml` commented.
-
-**Watchlist nightly sync:** three calls at 06:00/06:10/06:20 UTC each sync one third; cron jobs and shard columns verified live.
-
-**Watchlist pagination:** library-sized movie/TV/favourite and news/season/episode reads use the shared pager (history 7.P2). Windowed/capped reads and `watchlist_up_next` remain single.
+**Recurring review:** merchant/account detection, payment evidence, active/inactive/dismissed review, confirmed last-paid dates, manual add/edit/restore. Inactive entries leave totals. Paid is now per covered period: `paid_for_due_date` records which period's due date a tick covers.
 
 ## Checks
 
 | Check | Date | Result |
 |---|---|---|
-| Lint | 2026-10-07 | Pass, 0 errors / 0 warnings |
-| Typecheck / typecheck:functions / build | 2026-10-07 | Pass |
-| Full Vitest suite | 2026-10-07 | 50 files / 971 tests pass; focused recurring suite 33 pass |
-| Reviewer (Opus) | 2026-10-07 | Whole diff before commit: ship, no blockers |
-| graphify update | 2026-10-07 | Rerun after profile-load retry |
-| ship-check | 2026-10-07 | 90/100, Beta only; 19 findings, 0 critical / 7 high; unchanged |
+| Lint | 2026-10-08 | Pass, 0 errors / 0 warnings |
+| Typecheck | 2026-10-08 | Pass |
+| typecheck:functions | 2026-10-08 | Pass; Deno tests 19 pass |
+| Vitest | 2026-10-08 | 50 files / 995 tests pass |
+| Build | 2026-10-08 | Pass |
+| Reviewer (Opus) | 2026-10-08 | Paid-period and cron-paging diff. One blocker, fixed as proposed: editing only a bill's schedule overwrote the owner's Paid tick. Fix not re-reviewed |
+| ship-check | 2026-10-07 | 90/100, Beta only; 19 findings, 0 critical / 7 high. Not rerun since 2026-10-08 |
+| graphify update | 2026-10-07 | Not rerun since 2026-10-08 |
 
 ## In progress / next
 
-1. Owner: verify signed-in recurring load/save/reload, review, dismissal, restore and manual entries against the live DB (migration applied 2026-10-07; code deployed 2026-10-07).
-2. Owner: verify authenticated profile load/retry, full ledger load, Confirm all 13, finance saves, charts and row-save signed in.
-3. Owner: verify the next three-part watchlist nights: sync_log rows at 06:00/06:10/06:20 UTC for shards 0/1/2, and `cpu_time_used`. Check backdrop count rising; pinned-title countdown remains unbuilt (8.D).
-4. Remaining REHAUL_PLAN Part 2, including upcoming bills calendar and subscription price-rise/unused audit.
+1. Owner: verify the 2026-10-09 watchlist parts on v13 at 06:00, 06:10 and 06:20 UTC: sync_log success for shards 0/1/2, no 'Unknown error'.
+2. Owner: verify signed-in recurring load/save/reload, review, dismissal, restore and manual entries against the live DB.
+3. Owner: tick and untick a recurring bill signed in; confirm Paid moves with the period.
+4. Owner: verify authenticated profile load/retry, full ledger load, Confirm all 13, finance saves, charts and row-save signed in.
+5. Remaining REHAUL_PLAN Part 2, including upcoming bills calendar and subscription price-rise/unused audit. Pinned-title countdown unbuilt (8.D); backdrop count not yet checked.
 
 ## Blockers / open risks
 
-**Recurring deployment:** Live save/browser QA not performed.
+**Recurring Paid and pagers:**
+- (a) An early payment for the next period can't be recorded from the UI. A tick always covers the current period when it is unpaid, and the checkbox shows Paid when it is paid, so a bill paid early for October shows Unpaid from its due date until re-ticked. A schedule edit also drops early credit: the covered period is recomputed from the payment date.
+- (b) 5 live monthly bills have `is_paid` true with no `last_paid_date`. The older display rule (`!lastPaidDate` means trust the tick) shows them Paid every month until re-ticked. This predates the change and is unchanged.
+- (c) The src and Deno pagers are duplicated and must change together: `src/integrations/supabase/select-all-pages.ts`, `supabase/functions/_shared/select-all-pages.ts`.
 
-**Reviewer risks (non-blocking, whole-diff review 2026-10-07):**
-1. `FinancePage.tsx:193` `paymentEvidence` recomputed every render (including each keystroke in recurring dialogs) over the full ledger; needs useMemo and recurrings-tab gating.
-2. `recurring-detection.ts:64-67` monthly early window: a late payment for last month can mark this month Paid (e.g. due 3rd, paid 28 Sep shows October paid). Needs an explicit period field.
-3. `watchlist-cron-sync/index.ts:336-391` each part reads and maps the whole library (unpaged, `select('*')`, all seasons/episodes) before the `id % shards` filter: fixed cost paid 3×, CPU under the 2 s limit unconfirmed, and these reads would silently stop at the 1,000-row cap.
+**Watchlist cron:** reads are paged, so there is no silent stop at 1,000 rows. Each part still reads the whole library before the in-memory `id % shards` filter, because PostgREST has no modulo filter. CPU per part is unmeasured; read `cpu_time_used` on the 2026-10-09 parts.
 
 **Carried finance risks:** four reference tables delete-then-insert; addDebtObservation not queued; logout race; load deadline; timed-out delete in grace window; sync mid-set category race; unlimited token refresh; failed profile-switch load. Ship-check findings remain unresolved.
 
@@ -51,10 +48,10 @@ Commits `056afb97`, `e9a72a7a`, `531561f0`, `48e70a23` on top of `5d216580`. Git
 
 ## Unverified
 
-**Signed-in browser checks:** all still unverified.
+**Signed-in browser checks:** all still unverified: recurring Paid, tick/untick and schedule edit; recurring persistence; the cron v13 run (first night 2026-10-09, not yet observed).
 
-**Loading recovery:** isolated browser component checks passed: 15-second slow fallback, simulated render error and reload restart. Auto-retry unit-tested; not browser-tested signed in. Real authenticated profile load/retry remains unverified. Probes: configured DB gateway 146ms, permission response 42501 in 471ms, local dashboard module 5ms; no reproduction of sustained timeout.
+**Loading recovery:** isolated browser checks passed (15-second slow fallback, simulated render error, reload restart). Auto-retry is unit-tested, not browser-tested signed in; real authenticated profile load/retry remains unverified. Probes: configured DB gateway 146ms, permission response 42501 in 471ms, local dashboard module 5ms; no reproduction of sustained timeout.
 
-**Finance:** 3,770-row signed-in load, Confirm all, recurring persistence, 12px charts and row-save. Goals/debts/holidays/scores/memberships/emergency-toggle/course-end saves remain unverified. Capgemini/UCL December early-pay matching verified locally; live rows existed at 21:55 UTC. OceanInfinity 2026-06-30 unmatched, not investigated.
+**Finance:** 3,770-row signed-in load, Confirm all, 12px charts and row-save. Goals/debts/holidays/scores/memberships/emergency-toggle/course-end saves remain unverified. Capgemini/UCL December early-pay matching verified locally; live rows existed at 21:55 UTC. OceanInfinity 2026-06-30 unmatched, not investigated.
 
-**Watchlist:** anonymous local/live-DB browser showed 889 movies and 296 TV shows; news offset/limit requests had no errors. Multi-page (>1,000 rows) proven by curl only. Each cron part still parses the full library before filtering; CPU remains unmeasured. Mid-July marks: 10 of ~400; deployed sync-race fix `91e98584` unconfirmed in production.
+**Watchlist:** anonymous local/live-DB browser showed 889 movies and 296 TV shows; news offset/limit requests had no errors. Multi-page (>1,000 rows) proven by curl only. The 7 Oct three-part night is verified in sync_log (shards 0/1/2 success, 393/397/394 items, 17–22 s each). Mid-July marks: 10 of ~400; deployed sync-race fix `91e98584` unconfirmed in production.
