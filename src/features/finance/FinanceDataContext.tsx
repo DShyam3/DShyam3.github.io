@@ -1443,7 +1443,7 @@ function useProvideFinanceData() {
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji, provider')),
-          scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id, provider, status, detection_key, last_paid_date')),
+          scoped(supabase.from('finance_recurring_bills').select('id, is_default, name, amount, due_date, is_paid, frequency, due_month, emoji, category, tag, linked_budget_item_id, linked_account_id, provider, status, detection_key, last_paid_date, paid_for_due_date')),
           // The ledger outgrows one response (max_rows), so it is read in pages.
           selectAllPages((from, to) => scoped(supabase.from('finance_transactions').select('id, is_default, name, merchant, provider_category, category, amount, date, is_reviewed, account_id, bank_account_id, goal_id, notes, tags, is_recurring', { count: 'exact' }))
             .order('date', { ascending: true })
@@ -1754,7 +1754,8 @@ function useProvideFinanceData() {
           provider: r.provider || undefined,
           status: r.status === 'inactive' || r.status === 'dismissed' ? r.status : 'active',
           detectionKey: r.detection_key || undefined,
-          lastPaidDate: r.last_paid_date || undefined
+          lastPaidDate: r.last_paid_date || undefined,
+          paidForDueDate: r.paid_for_due_date || undefined
         }));
         if (!recurringBillsRes.error) {
           setRecurrings(materialiseRecurringsForProfile(
@@ -2692,7 +2693,8 @@ function useProvideFinanceData() {
             provider: r.provider?.trim() || null,
             status: r.status || 'active',
             detection_key: r.detectionKey || null,
-            last_paid_date: r.lastPaidDate || null
+            last_paid_date: r.lastPaidDate || null,
+            paid_for_due_date: r.paidForDueDate || null
           })), { onConflict: 'id' });
           if (recurringsError) throw recurringsError;
         }

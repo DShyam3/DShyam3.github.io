@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS "public"."finance_recurring_bills" (
     "status" "text" DEFAULT 'active'::"text" NOT NULL,
     "detection_key" "text",
     "last_paid_date" date,
+    "paid_for_due_date" date,
     CONSTRAINT "finance_recurring_bills_status_check" CHECK ("status" IN ('active', 'inactive', 'dismissed'))
 );
 
@@ -247,6 +248,9 @@ COMMENT ON COLUMN "public"."finance_recurring_bills"."detection_key" IS
 
 COMMENT ON COLUMN "public"."finance_recurring_bills"."last_paid_date" IS
     'Last payment date confirmed by the user; nullable when no payment has been confirmed.';
+
+COMMENT ON COLUMN "public"."finance_recurring_bills"."paid_for_due_date" IS
+    'Scheduled due date of the period the confirmed payment covers; decides Paid for monthly, quarterly and annual bills. Null for rows confirmed before this column existed.';
 
 CREATE TABLE IF NOT EXISTS "public"."finance_recurring_templates" (
     "id" "text" DEFAULT ("gen_random_uuid"())::"text" NOT NULL,

@@ -111,6 +111,12 @@ export interface RecurringBill {
   detectionKey?: string;
   /** Owner-confirmed last payment; separate from bank evidence and isPaid. */
   lastPaidDate?: string;
+  /**
+   * The scheduled due date (YYYY-MM-DD) of the period the confirmed payment
+   * covers; decides Paid for monthly, quarterly and annual bills. Missing on
+   * rows confirmed before it existed.
+   */
+  paidForDueDate?: string;
   id: string;
   name: string;
   amount: number;

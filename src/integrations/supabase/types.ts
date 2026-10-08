@@ -1316,6 +1316,7 @@ export type Database = {
           status: string
           detection_key: string | null
           last_paid_date: string | null
+          paid_for_due_date: string | null
           amount: number
           category: string | null
           created_at: string
@@ -1338,6 +1339,7 @@ export type Database = {
           status?: string
           detection_key?: string | null
           last_paid_date?: string | null
+          paid_for_due_date?: string | null
           amount?: number
           category?: string | null
           created_at?: string
@@ -1360,6 +1362,7 @@ export type Database = {
           status?: string
           detection_key?: string | null
           last_paid_date?: string | null
+          paid_for_due_date?: string | null
           amount?: number
           category?: string | null
           created_at?: string
