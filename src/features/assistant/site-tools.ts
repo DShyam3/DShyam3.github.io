@@ -31,6 +31,8 @@ export interface SiteToolReaders {
   inventory: () => Promise<readonly InventoryToolRow[]>;
   releases: (args: ReleaseArgs) => Promise<readonly ReleaseReadRow[]>;
   today: () => Date;
+  /** True when the question was asked on the Finance page, where "open Finance" would be no help. */
+  onFinancePage: boolean;
 }
 
 /**
@@ -41,10 +43,15 @@ export interface SiteToolReaders {
 export const FINANCE_NOT_LOADED =
   'Finance data is only loaded on the Finance page. Ask the owner to open Finance and ask again.';
 
+/** On the Finance page itself: the data is held back until every table has read cleanly. */
+export const FINANCE_NOT_READY =
+  'Finance data is still loading, or part of it failed to load. Ask again once the Finance page has '
+  + 'finished loading; if it showed a load error, reload the page first.';
+
 export async function runSiteTool(call: LlmToolCall, readers: SiteToolReaders): Promise<unknown> {
   if (FINANCE_TOOL_NAMES.has(call.name)) {
     const finance = readers.finance();
-    if (!finance) return { tool: call.name, error: FINANCE_NOT_LOADED };
+    if (!finance) return { tool: call.name, error: readers.onFinancePage ? FINANCE_NOT_READY : FINANCE_NOT_LOADED };
     return executeFinanceTool(call.name, call.args, finance);
   }
 

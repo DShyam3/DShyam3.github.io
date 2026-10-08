@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FinanceToolContext } from '@/lib/finance/tools';
-import { FINANCE_NOT_LOADED, frameQuestion, runSiteTool, SITE_TOOL_SCHEMAS, SYSTEM_PROMPT, type SiteToolReaders } from './site-tools';
+import { FINANCE_NOT_LOADED, FINANCE_NOT_READY, frameQuestion, runSiteTool, SITE_TOOL_SCHEMAS, SYSTEM_PROMPT, type SiteToolReaders } from './site-tools';
 
 const finance: FinanceToolContext = {
   position: {
@@ -18,6 +18,7 @@ const readers = (overrides: Partial<SiteToolReaders> = {}): SiteToolReaders => (
   inventory: async () => [],
   releases: async () => [],
   today: () => new Date(2026, 9, 8),
+  onFinancePage: false,
   ...overrides,
 });
 
@@ -42,6 +43,13 @@ describe('runSiteTool', () => {
     expect(await runSiteTool(call('get_cash_flow', { month: '2026-09' }), readers({ finance: () => null }))).toEqual({
       tool: 'get_cash_flow',
       error: FINANCE_NOT_LOADED,
+    });
+  });
+
+  it('on the Finance page, says the data is loading rather than to open Finance', async () => {
+    expect(await runSiteTool(call('get_position'), readers({ finance: () => null, onFinancePage: true }))).toEqual({
+      tool: 'get_position',
+      error: FINANCE_NOT_READY,
     });
   });
 

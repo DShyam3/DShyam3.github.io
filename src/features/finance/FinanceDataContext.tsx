@@ -2889,6 +2889,10 @@ function useProvideFinanceData() {
     recurrings: visibleRecurrings.filter(isActiveRecurring),
     allRecurrings: visibleRecurrings,
     recurringDataReady: hasLoaded && !loadingDb && !blockedSaveKeysFor(profileId).has('recurrings') && !blockedSaveKeysFor(profileId).has('transactions'),
+    // Every table of the last load read cleanly: nothing blocked, nothing in
+    // flight. Read-only; the site assistant waits for it before answering
+    // from these rows (FinanceAssistantSource).
+    financeDataReady: hasLoaded && !loadingDb && blockedSaveKeysFor(profileId).size === 0,
     saveDataToSupabase,
     currentLoadGenerations,
     registerBeforeLoadFlush,

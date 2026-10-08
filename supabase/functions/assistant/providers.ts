@@ -141,6 +141,12 @@ const anthropicContentOk = (content: unknown): boolean => {
     && (block.type !== 'tool_result' || typeof block.content === 'string'))
 }
 
+/** The distinct block types in some content, for a log line. Short strings only. */
+const blockTypes = (content: unknown): string =>
+  Array.isArray(content)
+    ? [...new Set(content.map((b) => (isObject(b) && typeof b.type === 'string' ? b.type.slice(0, 40) : typeof b)))].join(',')
+    : typeof content
+
 /** OpenAI-compatible content is a string, or null beside tool calls. No parts array: a part can be an image URL. */
 const openaiMessageOk = (message: Json): boolean => {
   if (!(typeof message.content === 'string' || (message.content === null && message.role === 'assistant'))) return false
@@ -206,8 +212,11 @@ export function buildUpstreamBody(
     if (system !== undefined && (typeof system !== 'string' || system.length > LIMITS.maxSystemChars)) {
       return { error: 'system malformed' }
     }
-    if (!messages.every((m) => anthropicContentOk((m as Json).content))) {
-      return { error: 'a message carries a block type that is not allowed' }
+    const refused = messages.find((m) => !anthropicContentOk((m as Json).content))
+    if (refused) {
+      // The type only -- never the content -- so the log names what to allow
+      // if a provider starts sending a block this list does not know.
+      return { error: `a message carries a block type that is not allowed: ${blockTypes((refused as Json).content)}` }
     }
     return {
       body: {

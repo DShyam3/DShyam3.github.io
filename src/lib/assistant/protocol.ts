@@ -160,15 +160,26 @@ export function userMessage(text: string): Json {
  * Anthropic's content goes back exactly as it came, thinking blocks included:
  * a thinking block is valid only while everything before it is unchanged, so
  * this history is only ever appended to. The OpenAI shape is rebuilt from the
- * three fields the chat format defines, because vendors add their own -- and
- * at least one rejects its own reasoning field when it is sent back.
+ * fields the chat format defines, tool calls included, because vendors add
+ * their own -- an `index`, a reasoning field one of them rejects when it is
+ * sent back -- and some leave out the `type` the format requires.
  */
 export function assistantMessage(protocol: LlmProtocol, raw: unknown): Json {
   if (protocol === 'anthropic') {
     return { role: 'assistant', content: asObject(raw).content ?? [] };
   }
   const message = asObject(asObject(asArray(asObject(raw).choices)[0]).message);
-  const toolCalls = asArray(message.tool_calls);
+  const toolCalls = asArray(message.tool_calls).map(asObject).map(call => {
+    const fn = asObject(call.function);
+    return {
+      id: String(call.id ?? ''),
+      type: 'function',
+      function: {
+        name: String(fn.name ?? ''),
+        arguments: typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments ?? {}),
+      },
+    };
+  });
   return {
     role: 'assistant',
     content: typeof message.content === 'string' ? message.content : toolCalls.length > 0 ? null : '',

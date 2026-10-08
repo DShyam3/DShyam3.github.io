@@ -112,6 +112,8 @@ Deno.test('server tools and URL-sourced content are refused', () => {
     messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url: 'http://169.254.169.254/' } }] }],
   })
   assert('error' in image, 'accepted an image block')
+  // The log line names the refused type, and nothing of its content.
+  assert('error' in image && image.error.endsWith(': image') && !image.error.includes('169.254'), 'error does not name the type alone')
   const imageResult = buildUpstreamBody(anthropic, 'm', {
     messages: [{ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: [{ type: 'image' }] }] }],
   })

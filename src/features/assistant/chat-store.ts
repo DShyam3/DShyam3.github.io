@@ -92,12 +92,13 @@ const SOURCE_LABELS: Record<string, string> = {
  */
 const MAX_REPLY_TOKENS = 8192;
 
-const READERS: SiteToolReaders = {
+const readersFor = (page: string): SiteToolReaders => ({
   finance: readFinanceToolContext,
   inventory: readInventoryRows,
   releases: readReleaseRows,
   today: () => new Date(),
-};
+  onFinancePage: page === '/finance' || page.startsWith('/finance/'),
+});
 
 /** Asks one question. Ignored while another is in flight. */
 export async function askQuestion(provider: AssistantProvider, question: string, page: string): Promise<void> {
@@ -107,6 +108,7 @@ export async function askQuestion(provider: AssistantProvider, question: string,
 
   update({ entries: [...state.entries, entry('user', text)], pending: true });
   const historyBefore = state.history;
+  const readers = readersFor(page);
   const asked = generation;
   // Every write below goes through this, so a reset mid-question wins.
   const settle = (next: Partial<ChatState>) => {
@@ -126,7 +128,7 @@ export async function askQuestion(provider: AssistantProvider, question: string,
         financeLoaded: readFinanceToolContext() !== null,
       }),
       send: body => sendAssistantRequest(provider.id, body),
-      runTool: call => runSiteTool(call, READERS),
+      runTool: call => runSiteTool(call, readers),
       maxTokens: MAX_REPLY_TOKENS,
     });
     const sources = [...new Set(result.toolsUsed.map(name => SOURCE_LABELS[name] ?? name))];

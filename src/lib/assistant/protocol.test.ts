@@ -155,7 +155,9 @@ describe('toolResultMessages', () => {
 
   it('echoes the message then one tool message each, for openai', () => {
     const toolCalls = [{ id: 'x1', type: 'function', function: { name: 'get_position', arguments: '{}' } }];
-    const assistant = { choices: [{ message: { role: 'assistant', content: null, tool_calls: toolCalls } }] };
+    // A vendor's extras (`index`) and a missing `type` are rebuilt away.
+    const returned = [{ index: 0, id: 'x1', function: { name: 'get_position', arguments: '{}' } }];
+    const assistant = { choices: [{ message: { role: 'assistant', content: null, tool_calls: returned } }] };
     const msgs = toolResultMessages('openai', assistant, [
       { call, output: { netWorth: 10 } },
     ]) as Array<Record<string, unknown>>;
