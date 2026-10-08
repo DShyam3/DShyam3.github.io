@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { requireAdmin } from '../_shared/require-admin.ts'
 import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/cooldown.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
+import { selectAllPages } from '../_shared/select-all-pages.ts'
 
 // The one watchlist sync. pg_cron calls it nightly with the service role key,
 // in parts a few minutes apart (see parseShard and the scheduling
@@ -327,21 +328,40 @@ serve(async (req) => {
 
   try {
     // --- Fetch current state ---
-    // Selects '*', unlike WatchlistContext's fetchData, which drops `overview`
-    // to keep the browser payload small. Here there is no payload to save,
-    // and having the real overview in hand is what makes the
-    // `!item.description` check below correct.
-    // A single-title resync reads only that title's row and skips the other
-    // table outright.
-    const moviesQuery = supabaseAdmin.from('movies').select('*')
-    const showsQuery = supabaseAdmin.from('tv_shows').select('*, tv_show_seasons (*, tv_show_episodes (*))')
+    // Names exactly the columns read below. `overview` stays in the lists,
+    // unlike WatchlistContext's fetchData, which drops it to keep the browser
+    // payload small: here there is no payload to save, and having the real
+    // overview in hand is what makes the `!item.description` check below
+    // correct.
+    // A whole-library read pages through the table: one plain select stops at
+    // the Data API's 1,000-row max_rows without saying so, and the rest of the
+    // library would go unsynced under a green log row. Paging is on the
+    // top-level rows; seasons and episodes stay embedded. A single-title
+    // resync reads only that title's row and skips the other table outright.
+    const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, release_year'
+    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, status, tv_show_seasons (id, season_number, release_date, tv_show_episodes (episode_number, watched))'
     const none = { data: [], error: null }
     const [moviesResult, showsResult] = await Promise.all([
-      !target ? moviesQuery : target.category === 'Movies' ? moviesQuery.eq('id', target.id) : none,
-      !target ? showsQuery : target.category === 'TV Shows' ? showsQuery.eq('id', target.id) : none,
+      !target
+        ? selectAllPages<MovieRow>(
+          (from, to) => supabaseAdmin.from('movies').select(MOVIE_COLUMNS, { count: 'exact' }).order('id').range(from, to),
+          (row) => String(row.id),
+        )
+        : target.category === 'Movies'
+          ? supabaseAdmin.from('movies').select(MOVIE_COLUMNS).eq('id', target.id)
+          : none,
+      !target
+        ? selectAllPages<ShowRow>(
+          (from, to) => supabaseAdmin.from('tv_shows').select(SHOW_COLUMNS, { count: 'exact' }).order('id').range(from, to),
+          (row) => String(row.id),
+        )
+        : target.category === 'TV Shows'
+          ? supabaseAdmin.from('tv_shows').select(SHOW_COLUMNS).eq('id', target.id)
+          : none,
     ])
-    if (moviesResult.error) throw moviesResult.error
-    if (showsResult.error) throw showsResult.error
+    // Read errors are plain objects; as an Error their message reaches sync_log.
+    if (moviesResult.error) throw new Error(moviesResult.error.message)
+    if (showsResult.error) throw new Error(showsResult.error.message)
 
     const movies: SyncItem[] = ((moviesResult.data || []) as MovieRow[]).map((m) => ({
       id: String(m.id),
