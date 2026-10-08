@@ -200,9 +200,9 @@ The assistant is provider-agnostic by construction. There are not N vendor
 integrations to write; there are two wire protocols and a list. Almost every
 vendor speaks OpenAI's `/chat/completions` shape (Moonshot/Kimi, DeepSeek,
 Mistral, Groq, xAI, Together, OpenRouter, anything local behind Ollama or
-vLLM), and Anthropic speaks its own. `lib/finance/llm.ts` translates both;
-adding a provider is a registry row — id, protocol, base URL, model, which
-secret holds the key — and never an edit to that file.
+vLLM), and Anthropic speaks its own. `lib/assistant/protocol.ts` translates
+both; adding a provider is a registry row — id, protocol, base URL, model,
+which secret holds the key — and never an edit to that file.
 
 The registry stays server-side. A client that could name a URL rather than an
 id would be an SSRF hole with a friendly name; it names an id, and the Edge
@@ -211,10 +211,49 @@ Function resolves it.
 So the gate is *a* key, not a particular vendor's:
 `supabase secrets set <PROVIDER>_API_KEY=...`.
 
-- **7.6 assistant** — schemas, executor, context and protocol translation are
-  all written. What is missing is the Edge Function and a key.
-- **7.9 embeddings** — a third-party call, so hybrid retrieval needs an
-  embedding key or a self-hosted model. Embed extracted records, per Part 1.
+- **7.6 assistant — site-wide, decided 2026-10-08.** One chat for the whole
+  site, not a finance box: the questions worth asking ("what is in my PC",
+  "what comes out this year", "how much did I make last month") cross
+  features. The shape that keeps Part 1 intact:
+  - **Admin-only.** The launcher renders only for an administrator, and only
+    when the function reports a provider with a key, so without a key the
+    site is unchanged.
+  - **Read-only tools.** No write tool: a model's mistake stays a wrong
+    sentence rather than a lost row.
+  - **Tools run in the browser, as pure functions over rows already read,**
+    each with a paired test and an allowlisted projection. The arithmetic
+    stays in the one tested implementation instead of a Deno mirror.
+  - **The Edge Function is a thin key-holding proxy:** JWT and `is_admin()`
+    first, a server-side provider registry, the body rebuilt and capped, a
+    per-user rate limit that fails closed, generic errors.
+  - **Finance answers only on the Finance page.** Its data lives in a
+    provider with twenty-odd reads and its save paths; the page hands over
+    the context it already computes instead of the panel mounting a second
+    copy. Lifting that limit means a read-only finance loader, not a second
+    provider.
+  - **Append-only history, constant system prompt.** A model's thinking is
+    bound to an unchanged prefix, so the per-question date and page ride on
+    the question, and a full history restarts rather than being trimmed.
+
+  Built in the tree, not deployed. Left: deploy `assistant` no later than
+  the site build that carries it (an undeployed function makes each admin
+  page load log one failed preflight), set a key, then a signed-in pass over
+  the three target questions on a live model. That first call also settles
+  the one unverified wire detail: the Anthropic row sends
+  `fallbacks: "default"` under `anthropic-beta: server-side-fallback-2026-07-01`;
+  if the API refuses either, every call fails as a generic 502.
+
+  **Open, the owner's call:** goal names and spending-category names are
+  sent. They are the owner's own labels and the answers need them, but the
+  never-sent list says no third party's name, and a goal called "Mum's 60th"
+  is one. Confirm that as a deliberate exception, or switch both to neutral
+  labels. Debt and card names are already withheld.
+- **7.9 embeddings — not needed for 7.6 v1.** The target questions are
+  structured lookups over columns (a month's totals, a date range, a text
+  match on a few hundred items), which a query answers exactly. Retrieval is
+  worth building only when a question needs meaning over free text that no
+  column holds; it still needs an embedding key or a self-hosted model, and
+  embeds extracted records, per Part 1.
 - **7.K tax news** — tax *rates* are data and shipped; tax *news* is content,
   needs a source and a model, and must not be conflated with the ledger.
 
@@ -272,7 +311,7 @@ code).
 
 ### The order
 
-1. **A key**, then 7.6 and 7.9.
+1. **A key and a deploy** for 7.6; 7.9 only once a question needs it.
 
 The ordering principle: data before features, and anything that silently
 produces wrong numbers before anything that produces new ones.

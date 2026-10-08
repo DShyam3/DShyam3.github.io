@@ -5,6 +5,7 @@ import {
   computeFirstSeenAt,
   daysUntil,
   displayTitle,
+  filterByDayRange,
   filterRecentByWindow,
   filterUpcomingByWindow,
   filterUpdatesByWindow,
@@ -901,6 +902,26 @@ describe('filterUpdatesByWindow', () => {
     expect(
       filterUpdatesByWindow([row({ occurredAt: '2026-09-14T22:00:00Z' })], 'week', today),
     ).toHaveLength(1);
+  });
+});
+
+describe('filterByDayRange', () => {
+  const today = new Date('2026-09-14T00:00:00Z');
+  const row = (date: string | null) => ({ date });
+
+  it('counts both ends of an arbitrary span, today included', () => {
+    const rows = [row('2026-09-13'), row('2026-09-14'), row('2026-12-31'), row('2027-01-01')];
+    expect(filterByDayRange(rows, 0, daysUntil('2026-12-31', today)!, today).map(r => r.date))
+      .toEqual(['2026-09-14', '2026-12-31']);
+  });
+
+  it('reaches into the past with a negative start', () => {
+    expect(filterByDayRange([row('2026-09-01'), row('2026-08-31')], -13, 0, today).map(r => r.date))
+      .toEqual(['2026-09-01']);
+  });
+
+  it('drops null and unparseable dates', () => {
+    expect(filterByDayRange([row(null), row('soon')], -1000, 1000, today)).toHaveLength(0);
   });
 });
 

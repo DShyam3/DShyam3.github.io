@@ -41,6 +41,18 @@ export interface AdminCheckFailure {
 export async function requireAdmin(
   userClient: SupabaseClient,
 ): Promise<AdminCheckFailure | null> {
+  const result = await requireAdminUser(userClient)
+  return 'userId' in result ? null : result
+}
+
+/**
+ * The same check, returning the administrator's user id on success -- for a
+ * function that keys something per user, such as a rate limit, and would
+ * otherwise have to ask for the user a second time.
+ */
+export async function requireAdminUser(
+  userClient: SupabaseClient,
+): Promise<{ userId: string } | AdminCheckFailure> {
   const { data: { user }, error: userError } = await userClient.auth.getUser()
   if (userError || !user) {
     return { status: 401, error: 'Unauthorized' }
@@ -56,5 +68,5 @@ export async function requireAdmin(
     return { status: 403, error: 'Forbidden: Access restricted to administrator' }
   }
 
-  return null
+  return { userId: user.id }
 }

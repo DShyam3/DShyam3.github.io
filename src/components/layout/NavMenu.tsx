@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { DotMatrixIcon } from '@/components/dot-matrix/DotMatrixIcon';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -7,6 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Type } from 'lucide-react';
 import { useSiteNavLinks } from './navLinks';
 import { cn } from '@/lib/utils';
+
+/** What a control placed inside the menu panel needs from the menu. */
+export interface MenuControls {
+  /** Closes the panel, for a control that opens something of its own. */
+  close: () => void;
+  /** The menu's own button, where focus belongs once that something closes. */
+  trigger: () => HTMLElement | null;
+}
 
 /**
  * The site nav, at every width.
@@ -27,7 +35,14 @@ import { cn } from '@/lib/utils';
  * against `header.app-header` -- the button sits in the header's right-hand
  * cluster, while the panel spans the full header width underneath it.
  */
-export function NavMenu({ className }: { className?: string }) {
+export function NavMenu({
+  className,
+  action,
+}: {
+  className?: string;
+  /** An extra control for the panel's action row, beside Display size. */
+  action?: (menu: MenuControls) => ReactNode;
+}) {
   const { largerDisplay, toggleDisplaySize } = useDisplayMode();
   const [open, setOpen] = useState(false);
   const location = useLocation();
@@ -171,6 +186,7 @@ export function NavMenu({ className }: { className?: string }) {
           })}
         </nav>
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t pt-3">
+          {action?.({ close: () => setOpen(false), trigger: () => buttonRef.current })}
           <Button variant={largerDisplay ? 'secondary' : 'outline'} onClick={toggleDisplaySize} aria-pressed={largerDisplay}>
             <Type aria-hidden="true" />
             Display size: {largerDisplay ? 'Larger' : 'Standard'}

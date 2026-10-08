@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { AssistantLauncher } from '@/features/assistant/AssistantLauncher';
 
 /** The largest share of the middle card a pinned toolbar may take. */
 const PIN_MAX_SHARE = 0.25;
@@ -81,7 +82,13 @@ export function AppShell({
       </a>
 
       <div className="shrink-0 wide-container relative z-40 bg-background">
-        <Header title={title} subtitle={subtitle} />
+        {/* Renders nothing unless an administrator is signed in and the
+            assistant has a model key; see AssistantLauncher. */}
+        <Header
+          title={title}
+          subtitle={subtitle}
+          action={(placement, menu) => <AssistantLauncher placement={placement} menu={menu} />}
+        />
       </div>
 
       <div className="app-frame-slot flex-1 min-h-0 flex flex-col">

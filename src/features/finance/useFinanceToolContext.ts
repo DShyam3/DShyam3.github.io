@@ -7,11 +7,13 @@
  * widening this object deliberately rather than by accident.
  */
 
+import { useMemo } from 'react';
 import { useFinanceData } from './FinanceDataContext';
 import { useFinanceTotals } from './useFinanceTotals';
 import { useScenarioState } from './useScenarioState';
 import { useFinanceAlerts } from './useFinanceAlerts';
-import { monthsToTarget, type FinanceToolContext } from '@/lib/finance';
+import { useSpendingLedger } from './useSpendingLedger';
+import { monthsToTarget, toISODate, type CashFlowTransaction, type FinanceToolContext } from '@/lib/finance';
 
 export function useFinanceToolContext(): FinanceToolContext {
   const { goals } = useFinanceData();
@@ -21,6 +23,23 @@ export function useFinanceToolContext(): FinanceToolContext {
   } = useFinanceTotals();
   const { state } = useScenarioState();
   const alerts = useFinanceAlerts(new Date().toISOString().slice(0, 10));
+  // The same ledger Home and Cash Flow sum, so confirmed transfers drop out
+  // exactly where they do on screen.
+  const { ledger, exclusionsUnreliable } = useSpendingLedger();
+
+  // Names, payers and accounts are left behind here rather than at the tool:
+  // a row that never enters the context cannot leave through any tool.
+  const cashFlowRows = useMemo(
+    (): CashFlowTransaction[] => ledger.map(tx => ({
+      id: tx.id,
+      date: tx.date,
+      name: '',
+      amount: tx.amount,
+      category: tx.category,
+      accountId: null,
+    })),
+    [ledger],
+  );
 
   return {
     position: {
@@ -32,7 +51,7 @@ export function useFinanceToolContext(): FinanceToolContext {
       netWorth,
       totalAssets,
       totalDebt,
-      daysUntilPayday: nextPayday?.daysRemaining ?? 0,
+      daysUntilPayday: nextPayday?.daysRemaining ?? null,
       daysRemainingInMonth,
     },
     scenario: state,
@@ -48,5 +67,10 @@ export function useFinanceToolContext(): FinanceToolContext {
         isEmergencyFund: g.isEmergencyFund ?? false,
         monthsToTarget: monthsToTarget(g.targetAmount, g.currentAmount, g.monthlyContribution ?? 0),
       })),
+    cashFlow: {
+      transactions: cashFlowRows,
+      currentMonth: toISODate(new Date()).slice(0, 7),
+      exclusionsUnreliable,
+    },
   };
 }

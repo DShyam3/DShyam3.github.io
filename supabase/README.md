@@ -229,15 +229,16 @@ npx supabase functions deploy <name>
 | `truelayer-sync` | Open-banking pull for Finance | Verifies JWT + `is_admin()`, or service role |
 | `merchant-logo-cache` | Caches merchant logos into the `merchant-logos` bucket | Verifies JWT + `is_admin()` |
 | `watchlist-cron-sync` | The watchlist sync, nightly and from the Sync buttons | Verifies JWT + `is_admin()`, or service role |
+| `assistant` | Holds the model key for the site assistant and proxies one call at a time | Verifies JWT + `is_admin()` |
 
-All four read a shared `SITE_ORIGIN` secret for their CORS allowlist (and
+All five read a shared `SITE_ORIGIN` secret for their CORS allowlist (and
 `truelayer-sync` also for its OAuth redirect allowlist) -- see
 `_shared/site-origins.ts`. Set it once, before the first deploy of any of
 them:
 
 | Secret | Purpose | Used by |
 |---|---|---|
-| `SITE_ORIGIN` | The deployed site's own origin, e.g. `https://dshyam3.github.io` | `tmdb-proxy`, `truelayer-sync`, `merchant-logo-cache`, `watchlist-cron-sync` |
+| `SITE_ORIGIN` | The deployed site's own origin, e.g. `https://dshyam3.github.io` | `tmdb-proxy`, `truelayer-sync`, `merchant-logo-cache`, `watchlist-cron-sync`, `assistant` |
 
 ```bash
 npx supabase secrets set SITE_ORIGIN=https://dshyam3.github.io
@@ -246,8 +247,8 @@ npx supabase secrets set SITE_ORIGIN=https://dshyam3.github.io
 Left unset, `corsAllowOrigin` fails closed: every production browser's request
 is refused, and only the local dev origins still work.
 
-`merchant-logo-cache` is the only function that fetches from hosts outside our
-own infrastructure, and it talks to exactly two — `api.brandfetch.io` and
+`merchant-logo-cache` fetches from hosts outside our own infrastructure
+(the only other one is `assistant`, below), and it talks to exactly two — `api.brandfetch.io` and
 `cdn.brandfetch.io`. See the SSRF note in `SECURITY.md`. It needs one secret:
 
 ```bash
@@ -267,6 +268,26 @@ call. Every run also deletes cached logos whose slug the directory no longer
 names, reported as `purged`. `{"refresh": true}` re-tries merchants previously
 recorded as having no findable logo; do not put that on a schedule, since it
 re-walks every miss.
+
+`assistant` is the other function that reaches outside hosts: only the
+endpoint of a provider row in `assistant/providers.ts`, never one a request
+names. It needs one model key, named by that row (`ANTHROPIC_API_KEY`, `MOONSHOT_API_KEY`,
+`DEEPSEEK_API_KEY` or `MISTRAL_API_KEY`). The first row with its key set is
+the one the site uses. With none set, the function answers an empty provider
+list and the site shows no assistant at all.
+
+```bash
+npx supabase secrets set ANTHROPIC_API_KEY=<key>
+npx supabase functions deploy assistant
+```
+
+A row's model can be changed without a code edit:
+`ASSISTANT_MODEL_<ID>=<model>` (for example `ASSISTANT_MODEL_DEEPSEEK`).
+
+Deploy it no later than the site build that carries the assistant. The
+browser asks it once per administrator session which providers have a key;
+undeployed, that preflight 404s and logs a CORS error in the console. Deployed
+with no key, it answers an empty list and nothing is logged.
 
 The cron job `watchlist-daily-sync` calls `watchlist-cron-sync` at 06:00 daily.
 It reads a vault secret named `service_role_key`, which must exist on any fresh

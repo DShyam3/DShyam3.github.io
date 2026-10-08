@@ -17,12 +17,59 @@ const context: FinanceToolContext = {
     monthlyContribution: 300, isEmergencyFund: false, monthsToTarget: 8,
   }],
   alerts: [{ code: 'no_budget', severity: 'info' }],
+  cashFlow: {
+    currentMonth: '2026-10',
+    exclusionsUnreliable: false,
+    transactions: [
+      // Built the way useFinanceToolContext builds them: no names, no accounts.
+      { id: 't1', date: '2026-09-25', name: '', amount: -3000, category: 'Salary', accountId: null },
+      { id: 't2', date: '2026-09-03', name: '', amount: 120.5, category: 'Groceries', accountId: null },
+      { id: 't3', date: '2026-09-14', name: '', amount: 79.5, category: 'Groceries', accountId: null },
+      { id: 't4', date: '2026-09-20', name: '', amount: 900, category: 'Rent', accountId: null },
+      { id: 't5', date: '2026-08-25', name: '', amount: -3000, category: 'Salary', accountId: null },
+      { id: 't6', date: '2026-08-10', name: '', amount: 950, category: 'Rent', accountId: null },
+      { id: 't7', date: '2026-10-02', name: '', amount: 40, category: 'Groceries', accountId: null },
+    ],
+  },
 };
 
 describe('executeTool', () => {
   it('returns the position without touching it', () => {
     const r = executeTool('get_position', {}, context);
     expect(r).toEqual({ tool: 'get_position', data: context.position });
+  });
+
+  it('sends only the fields it lists, whatever else the context carries', () => {
+    const widened = {
+      ...context,
+      position: { ...context.position, accountNumber: '12345678' },
+      goals: [{ ...context.goals[0], notes: 'private' }],
+    } as unknown as FinanceToolContext;
+    const position = executeTool('get_position', {}, widened);
+    expect('data' in position && position.data).not.toHaveProperty('accountNumber');
+    const goals = executeTool('get_goals', {}, widened);
+    expect('data' in goals && goals.tool === 'get_goals' && goals.data[0]).not.toHaveProperty('notes');
+  });
+
+  it('drops the account names two alert codes carry', () => {
+    const r = executeTool('get_alerts', {}, {
+      ...context,
+      alerts: [
+        {
+          code: 'costly_debt_beside_cash', severity: 'warning', spareCash: 500, costlyDebtTotal: 2000,
+          coverable: 500, annualInterestCovered: 110, highestAprDebtName: 'Amex 1234',
+          highestAprPercent: 22.9, aprThresholdPercent: 10,
+        },
+        {
+          code: 'credit_utilisation_high', severity: 'warning', utilisationPercent: 60, totalOwed: 3000,
+          totalLimit: 5000, thresholdPercent: 30, highestCardName: 'Card 9876', highestCardPercent: 80,
+        },
+      ],
+    });
+    const sent = JSON.stringify(r);
+    expect(sent).not.toContain('Amex');
+    expect(sent).not.toContain('9876');
+    expect(sent).toContain('22.9');
   });
 
   it('returns goals', () => {
@@ -62,6 +109,86 @@ describe('executeTool', () => {
     expect(executeTool('run_spend_scenario', { amount: -5 }, context)).toHaveProperty('error');
   });
 
+  it('sums one month of cash flow, by category, with no row listed', () => {
+    const r = executeTool('get_cash_flow', { month: '2026-09' }, context);
+    expect(r).toEqual({
+      tool: 'get_cash_flow',
+      data: {
+        from: '2026-09',
+        through: '2026-09',
+        complete: true,
+        income: 3000,
+        spend: 1100,
+        net: 1900,
+        elapsedMonths: 1,
+        avgMonthlyIncome: 3000,
+        avgMonthlySpend: 1100,
+        avgMonthlyNet: 1900,
+        categories: [{ name: 'Rent', amount: 900 }, { name: 'Groceries', amount: 200 }],
+        savingsRatePercent: 63.3,
+        transfersMayBeIncluded: false,
+        ledgerStartsMonth: '2026-08',
+      },
+    });
+  });
+
+  it('sums a range itself, so the model never adds months up', () => {
+    const r = executeTool('get_cash_flow', { month: '2026-08', through: '2026-10' }, context);
+    if (!('data' in r) || r.tool !== 'get_cash_flow') throw new Error('expected data');
+    expect(r.data.income).toBe(6000);
+    expect(r.data.spend).toBe(2090);
+    expect(r.data.complete).toBe(false);
+    expect(r.data.months?.map(m => m.month)).toEqual(['2026-08', '2026-09', '2026-10']);
+    expect(r.data.months?.[2]).toEqual({ month: '2026-10', income: 0, spend: 40, net: -40 });
+    // Averages over the three started months, so the model never divides.
+    expect(r.data.elapsedMonths).toBe(3);
+    expect(r.data.avgMonthlySpend).toBe(696.67);
+  });
+
+  it('says where the ledger starts, so an early month reads as unrecorded', () => {
+    const r = executeTool('get_cash_flow', { month: '2025-01' }, context);
+    expect(r).toMatchObject({ data: { income: 0, spend: 0, ledgerStartsMonth: '2026-08' } });
+  });
+
+  it('counts nothing for a future month and marks it incomplete', () => {
+    const r = executeTool('get_cash_flow', { month: '2026-12' }, context);
+    expect(r).toMatchObject({ data: { income: 0, spend: 0, complete: false } });
+  });
+
+  it('says when transfers may be counted', () => {
+    const r = executeTool('get_cash_flow', { month: '2026-09' }, {
+      ...context,
+      cashFlow: { ...context.cashFlow, exclusionsUnreliable: true },
+    });
+    expect(r).toMatchObject({ data: { transfersMayBeIncluded: true } });
+  });
+
+  it('never sends a transaction name, even when the rows carry one', () => {
+    const named: FinanceToolContext = {
+      ...context,
+      cashFlow: {
+        ...context.cashFlow,
+        transactions: [
+          { id: 'n1', date: '2026-09-25', name: 'ACME PAYROLL', payer: 'Jane Smith', amount: -100, category: 'Salary', accountId: 'acc-1' },
+        ],
+      },
+    };
+    const sent = JSON.stringify(executeTool('get_cash_flow', { month: '2026-09' }, named));
+    expect(sent).not.toContain('ACME');
+    expect(sent).not.toContain('Jane');
+    expect(sent).not.toContain('acc-1');
+  });
+
+  it('rejects a malformed or backwards range rather than guessing', () => {
+    expect(executeTool('get_cash_flow', {}, context)).toHaveProperty('error');
+    expect(executeTool('get_cash_flow', { month: '2026-13' }, context)).toHaveProperty('error');
+    expect(executeTool('get_cash_flow', { month: 'September' }, context)).toHaveProperty('error');
+    expect(executeTool('get_cash_flow', { month: '2026-09', through: '2026-08' }, context)).toMatchObject({
+      error: 'through must not be before month',
+    });
+    expect(executeTool('get_cash_flow', { month: '2010-01', through: '2026-09' }, context)).toHaveProperty('error');
+  });
+
   it('errors rather than throwing on an unknown tool', () => {
     expect(executeTool('delete_everything', {}, context)).toMatchObject({
       error: 'unknown tool: delete_everything',
@@ -79,7 +206,7 @@ describe('executeTool', () => {
 describe('TOOL_SCHEMAS', () => {
   it('describes every tool executeTool implements', () => {
     const named = TOOL_SCHEMAS.map(t => t.name).sort();
-    expect(named).toEqual(['get_alerts', 'get_goals', 'get_position', 'run_spend_scenario']);
+    expect(named).toEqual(['get_alerts', 'get_cash_flow', 'get_goals', 'get_position', 'run_spend_scenario']);
   });
 
   it('gives every tool a description, which is what stops it being misused', () => {

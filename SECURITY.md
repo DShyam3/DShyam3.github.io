@@ -74,18 +74,20 @@ attack surface of this site is Supabase, and it was audited separately
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
   Content tables are anonymous-read, `is_admin()`-write.
 - **Edge functions**: browser calls to `truelayer-sync`,
-  `merchant-logo-cache` and `watchlist-cron-sync` verify the JWT and then call
+  `merchant-logo-cache`, `watchlist-cron-sync` and `assistant` verify the JWT and then call
   `public.is_admin()` through the caller's own token
   (`_shared/require-admin.ts`), so a function and an RLS policy cannot
   disagree about who is an administrator; `truelayer-sync` and
   `watchlist-cron-sync` also accept the service role, for their
   Vault-authenticated scheduled runs. `tmdb-proxy` is deliberately public but
   restricted to an endpoint allowlist so it cannot be used as a generic TMDB
-  proxy. All four use an origin allowlist for CORS.
+  proxy. All five use an origin allowlist for CORS.
 - **Rate limits**: every function that spends a third-party call limits it
   server-side in the service-role-only `rate_limits` table -- `tmdb-proxy`
   per IP, the admin-triggered syncs by a cooldown between runs
-  (`_shared/cooldown.ts`), `merchant-logo-cache` per five minutes. Scheduled
+  (`_shared/cooldown.ts`), `merchant-logo-cache` per five minutes, and
+  `assistant` per administrator (40 model calls per ten minutes, failing
+  closed, because it spends a paid key). Scheduled
   runs are exempt; a refused call answers 429 with `retry_after`. See
   README.md, *Spam protection on the edge functions*.
 - **TrueLayer OAuth (deploy migration and function together)**: the callback
@@ -93,7 +95,15 @@ attack surface of this site is Supabase, and it was audited separately
   SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI
   and finance profile. The browser verifies its tab-scoped copy first; the
   function atomically consumes the matching state before exchanging a code.
-- **Outbound fetches (SSRF)**: `merchant-logo-cache` is the only function that
+- **Outbound fetches (SSRF)**: `assistant` reaches only the endpoint of a
+  provider row in `assistant/providers.ts`. The browser names a row by id, a
+  row answers only when its key is set, and redirects are refused. The body's
+  top-level fields and its tools are rebuilt rather than forwarded, so no
+  server-side tool (web search, fetch) can be switched on, and message content
+  is limited to text, tool calls, tool results and thinking -- no image or
+  document block, whose source could hand the provider a URL to fetch. Its
+  tools run in the browser; the function reads no table but `rate_limits`.
+  `merchant-logo-cache` is the other function that
   requests anything from a host we do not run, and it talks to exactly two:
   `api.brandfetch.io` and `cdn.brandfetch.io`. No URL, host or path is ever
   read from the request body, so it cannot be steered. The domain that brand

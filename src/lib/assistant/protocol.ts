@@ -12,14 +12,30 @@
  * So adding a provider is a row in a registry -- id, protocol, base URL,
  * model, which secret holds its key -- and never an edit here. This file
  * handles only the translation the two protocols need, and it is pure: no
- * fetch, no keys, no environment. The registry itself lives server-side,
- * because a client that could name a URL rather than an id would be an SSRF
- * hole with a friendly name.
+ * fetch, no keys, no environment. The registry itself lives server-side, in
+ * `supabase/functions/assistant`, because a client that could name a URL
+ * rather than an id would be an SSRF hole with a friendly name.
+ *
+ * It knows nothing about which tools exist. The caller hands in the schemas,
+ * so finance, inventory and the watchlist each keep their own beside the data
+ * they read, and this file does not grow a line when a tool is added.
  */
 
-import { TOOL_SCHEMAS } from './tools';
-
 export type LlmProtocol = 'openai' | 'anthropic';
+
+/**
+ * One tool as the model sees it, in Anthropic's envelope. OpenAI-compatible
+ * providers get the same JSON Schema rewrapped by `toolsForProtocol`.
+ */
+export interface ToolSchema {
+  name: string;
+  description: string;
+  input_schema: {
+    type: 'object';
+    properties: Readonly<Record<string, unknown>>;
+    required: readonly string[];
+  };
+}
 
 /** One tool the model asked to run. */
 export interface LlmToolCall {
@@ -35,6 +51,12 @@ export interface LlmReply {
   toolCalls: LlmToolCall[];
   /** True when the model wants tool results before continuing. */
   wantsTools: boolean;
+  /**
+   * True when the turn did not finish: a refusal, or the output cap reached.
+   * Its text may stop mid-figure, and a tool call in it has no result, so the
+   * turn should be neither shown as an answer nor kept in the history.
+   */
+  incomplete: boolean;
 }
 
 /**
@@ -43,10 +65,10 @@ export interface LlmReply {
  * The JSON Schema body is identical either way; only the envelope differs,
  * which is the whole reason this is a rename rather than an integration.
  */
-export function toolsForProtocol(protocol: LlmProtocol): unknown[] {
-  // TOOL_SCHEMAS is already Anthropic's shape, so this protocol needs no work.
-  if (protocol === 'anthropic') return [...TOOL_SCHEMAS];
-  return TOOL_SCHEMAS.map(tool => ({
+export function toolsForProtocol(protocol: LlmProtocol, tools: readonly ToolSchema[]): unknown[] {
+  // ToolSchema is already Anthropic's shape, so this protocol needs no work.
+  if (protocol === 'anthropic') return [...tools];
+  return tools.map(tool => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -90,6 +112,11 @@ export function parseReply(protocol: LlmProtocol, body: unknown): LlmReply {
       .filter(b => b.type === 'text' && typeof b.text === 'string')
       .map(b => b.text as string)
       .join('');
+    // A refusal or a hit output cap can cut a tool call off mid-input, and a
+    // truncated input often still parses. Neither turn's tools are run.
+    if (root.stop_reason === 'refusal' || root.stop_reason === 'max_tokens') {
+      return { text, toolCalls: [], wantsTools: false, incomplete: true };
+    }
     const toolCalls = blocks
       .filter(b => b.type === 'tool_use')
       .map(b => ({
@@ -97,10 +124,17 @@ export function parseReply(protocol: LlmProtocol, body: unknown): LlmReply {
         name: String(b.name ?? ''),
         args: parseArgs(b.input),
       }));
-    return { text, toolCalls, wantsTools: root.stop_reason === 'tool_use' || toolCalls.length > 0 };
+    return { text, toolCalls, wantsTools: root.stop_reason === 'tool_use' || toolCalls.length > 0, incomplete: false };
   }
 
-  const message = asObject(asObject(asArray(root.choices)[0]).message);
+  const choice = asObject(asArray(root.choices)[0]);
+  const message = asObject(choice.message);
+  const content = typeof message.content === 'string' ? message.content : '';
+  // The same rule for the OpenAI shape: arguments cut off by the length cap
+  // are not run.
+  if (choice.finish_reason === 'length' || choice.finish_reason === 'content_filter') {
+    return { text: content, toolCalls: [], wantsTools: false, incomplete: true };
+  }
   const toolCalls = asArray(message.tool_calls).map(asObject).map(call => {
     const fn = asObject(call.function);
     return {
@@ -109,17 +143,42 @@ export function parseReply(protocol: LlmProtocol, body: unknown): LlmReply {
       args: parseArgs(fn.arguments),
     };
   });
+  return { text: content, toolCalls, wantsTools: toolCalls.length > 0, incomplete: false };
+}
+
+/** A user turn. Plain text content is the same shape on both protocols. */
+export function userMessage(text: string): Json {
+  return { role: 'user', content: text };
+}
+
+/**
+ * The model's own turn, echoed back into the history. A reply that called a
+ * tool must be echoed before its results, or the result refers to a call the
+ * conversation has no record of; a reply that only answered is echoed so the
+ * next question has it as context.
+ *
+ * Anthropic's content goes back exactly as it came, thinking blocks included:
+ * a thinking block is valid only while everything before it is unchanged, so
+ * this history is only ever appended to. The OpenAI shape is rebuilt from the
+ * three fields the chat format defines, because vendors add their own -- and
+ * at least one rejects its own reasoning field when it is sent back.
+ */
+export function assistantMessage(protocol: LlmProtocol, raw: unknown): Json {
+  if (protocol === 'anthropic') {
+    return { role: 'assistant', content: asObject(raw).content ?? [] };
+  }
+  const message = asObject(asObject(asArray(asObject(raw).choices)[0]).message);
+  const toolCalls = asArray(message.tool_calls);
   return {
-    text: typeof message.content === 'string' ? message.content : '',
-    toolCalls,
-    wantsTools: toolCalls.length > 0,
+    role: 'assistant',
+    content: typeof message.content === 'string' ? message.content : toolCalls.length > 0 ? null : '',
+    ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
   };
 }
 
 /**
  * The messages to append after running a tool: the model's own turn, then the
- * results. Both protocols need the assistant turn echoed back, or the result
- * refers to a call the conversation has no record of.
+ * results.
  */
 export function toolResultMessages(
   protocol: LlmProtocol,
@@ -128,7 +187,7 @@ export function toolResultMessages(
 ): unknown[] {
   if (protocol === 'anthropic') {
     return [
-      { role: 'assistant', content: asObject(assistantRaw).content ?? [] },
+      assistantMessage(protocol, assistantRaw),
       {
         role: 'user',
         content: results.map(({ call, output }) => ({
@@ -140,9 +199,8 @@ export function toolResultMessages(
     ];
   }
 
-  const message = asObject(asObject(asArray(asObject(assistantRaw).choices)[0]).message);
   return [
-    message,
+    assistantMessage(protocol, assistantRaw),
     ...results.map(({ call, output }) => ({
       role: 'tool',
       tool_call_id: call.id,
@@ -158,17 +216,18 @@ export function buildRequest(
   model: string,
   system: string,
   messages: unknown[],
+  tools: readonly ToolSchema[],
   maxTokens = 1024,
 ): Json {
   if (protocol === 'anthropic') {
-    return { model, system, messages, tools: toolsForProtocol(protocol), max_tokens: maxTokens };
+    return { model, system, messages, tools: toolsForProtocol(protocol, tools), max_tokens: maxTokens };
   }
   // OpenAI-compatible carries the system prompt as the first message instead
   // of as its own field.
   return {
     model,
     messages: [{ role: 'system', content: system }, ...messages],
-    tools: toolsForProtocol(protocol),
+    tools: toolsForProtocol(protocol, tools),
     max_tokens: maxTokens,
   };
 }

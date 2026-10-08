@@ -777,13 +777,25 @@ export const filterUpcomingByWindow = <T extends UpcomingWindowCandidate>(
     rows: T[],
     window: UpdatesWindow,
     today: Date,
-): T[] => {
-    const windowDays = UPDATES_WINDOW_DAYS[window];
-    return rows.filter((row) => {
+): T[] => filterByDayRange(rows, 0, UPDATES_WINDOW_DAYS[window], today);
+
+/**
+ * The rule both window filters share, for any span of days: keeps a row when
+ * `daysUntil(row.date, today)` falls between `fromDays` and `toDays`, both
+ * ends counting. Negative is past, zero is today. A null or unparseable date
+ * is dropped. The assistant's `get_releases` asks it for an arbitrary range,
+ * so "what comes out this year" uses the same boundary as the Upcoming tab.
+ */
+export const filterByDayRange = <T extends UpcomingWindowCandidate>(
+    rows: T[],
+    fromDays: number,
+    toDays: number,
+    today: Date,
+): T[] =>
+    rows.filter((row) => {
         const age = daysUntil(row.date, today);
-        return age !== null && age >= 0 && age <= windowDays;
+        return age !== null && age >= fromDays && age <= toDays;
     });
-};
 
 /**
  * Keeps only the rows released within the selected window, counting back from
@@ -797,10 +809,4 @@ export const filterRecentByWindow = <T extends UpcomingWindowCandidate>(
     rows: T[],
     window: UpdatesWindow,
     today: Date,
-): T[] => {
-    const windowDays = UPDATES_WINDOW_DAYS[window];
-    return rows.filter((row) => {
-        const age = daysUntil(row.date, today);
-        return age !== null && age <= 0 && age >= -windowDays;
-    });
-};
+): T[] => filterByDayRange(rows, -UPDATES_WINDOW_DAYS[window], 0, today);

@@ -251,7 +251,7 @@ sections 7.P, 7.Q and 7.F.
   and sort numbers, card numbers, addresses, employer references, payroll
   numbers, dates of birth, any third party's name.
 - **Providers are registry rows, not integrations.** There are two wire
-  protocols -- OpenAI-compatible and Anthropic -- and `src/lib/finance/llm.ts`
+  protocols -- OpenAI-compatible and Anthropic -- and `src/lib/assistant/protocol.ts`
   translates both. Adding a vendor is a row: id, protocol, base URL, model,
   which secret holds the key. The registry stays server-side; a client that
   could name a URL rather than an id would be an SSRF hole.

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { NavMenu } from './NavMenu';
+import { NavMenu, type MenuControls } from './NavMenu';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixIcon } from '@/components/dot-matrix/DotMatrixIcon';
 import { socialIcons } from '@/components/icons/SocialIcons';
@@ -14,11 +14,20 @@ import { SITE } from '@/config/site';
 interface HeaderProps {
   title?: string;
   subtitle?: string;
+  /**
+   * An extra control, rendered twice: in the header's control cluster
+   * (`'header'`) and in the menu panel's action row (`'menu'`). The control
+   * shows itself in one place per width -- the cluster has no room for
+   * another control below 768px -- and renders nothing when it has nothing
+   * to offer, so it adds no box and no gap. AppShell passes the assistant's.
+   */
+  action?: (placement: 'header' | 'menu', menu?: MenuControls) => ReactNode;
 }
 
 export function Header({
   title = SITE.siteTitle,
   subtitle = SITE.tagline,
+  action,
 }: HeaderProps) {
   const [socialOpen, setSocialOpen] = useState(false);
   const navigate = useNavigate();
@@ -172,7 +181,8 @@ export function Header({
                 as a control cluster pinned to the right edge instead of one
                 label adrift in the whitespace. */}
             <div className="flex flex-shrink-0 items-center gap-2 md:gap-4">
-              <NavMenu />
+              {action?.('header')}
+              <NavMenu action={action ? (menu) => action('menu', menu) : undefined} />
               <ThemeToggle />
             </div>
           </div>

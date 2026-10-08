@@ -24,7 +24,7 @@ const toDateStr = (date: Date) => {
 
 // PostgREST returns a `!inner` embed on a to-one foreign key as a single
 // object; this also accepts the array form so a mapper never has to care.
-function unwrapEmbed(value) {
+export function unwrapEmbed(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 

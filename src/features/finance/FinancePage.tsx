@@ -18,6 +18,8 @@ import {
   type TabKey,
 } from './surfaces';
 import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
+import { FinanceAssistantSource } from './FinanceAssistantSource';
+import { useAssistantProvider } from '@/features/assistant/useAssistantProvider';
 import { useCoalescedSave } from './useCoalescedSave';
 const CashFlowSurface = lazy(() => import('./surfaces/CashFlowSurface'));
 const GoalsSurface = lazy(() => import('./surfaces/GoalsSurface'));
@@ -132,6 +134,9 @@ function FinanceView() {
   };
 
   const { isAdmin, isAuthLoading } = useAuth();
+  // The site assistant reads finance from this page's own context rather than
+  // loading it again; this hands it over, and only when there is an assistant.
+  const assistantProvider = useAssistantProvider(isAdmin);
   const { toast } = useToast();
   const { askDelete, deleteDialog } = useDeleteConfirm();
 
@@ -860,6 +865,7 @@ function FinanceView() {
 
   return (
     <>
+      {assistantProvider && <FinanceAssistantSource />}
       <AppShell
         title="Finance"
         subtitle="Income & tax"
