@@ -353,9 +353,12 @@ The assistant reads and never changes anything. Its tools:
 - **Finance** — the position (what is left to spend this month, income, net
   worth, debts, days to payday), a what-if spend scenario, alerts, goals, and
   cash flow for a month or a range of months: income, spending, net, monthly
-  averages and spending by category. Confirmed transfers are left out, as on
-  Home. Finance questions are answered only while the Finance page is open and
-  fully loaded; anywhere else the assistant asks you to open Finance.
+  averages and spending by category. Averages cover only complete months of
+  records, and any averaged month with no records is named. Totals that reach
+  into a partly recorded month, or the month in progress, are flagged as
+  partial. Confirmed transfers are left out, as on Home. Finance questions are
+  answered only while the Finance page is open and fully loaded; anywhere else
+  the assistant asks you to open Finance.
 - **Inventory** — a search by words, category or both. Owned and wishlist items
   are totalled apart. A PC or other build shows its parts and their total. The
   everyday carry is the items flagged EDC.
@@ -383,6 +386,8 @@ The moon rises smoothly into place without overshooting. Reduced-motion
 preferences skip the animation.
 
 Every route's content sits in one "middle card" between the fixed header and footer. The card is the page's only vertical scroller. From 768px wide it has a fine border, 24px corners and a quiet tint. Below 768px there is no frame and the ordinary page gutter is the inset.
+
+Below 700px wide a long page title wraps between words. If a word cannot fit beside the menu and theme controls, those controls move to a line of their own. While the social links are open below 390px wide, the name and role step aside so the icons never cover them.
 
 Section controls (filter bars, Finance's two nav rows) sit inside the card at its top. From 768px they pin as a frosted band, but only while they take at most a quarter of the card's height. Otherwise they scroll away with the content.
 

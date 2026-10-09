@@ -251,6 +251,25 @@ So the gate is *a* key, not a particular vendor's:
   never-sent list says no third party's name, and a goal called "Mum's 60th"
   is one. Confirm that as a deliberate exception, or switch both to neutral
   labels. Debt and card names are already withheld.
+
+  **Open, the owner's call:** the Cash Flow page's monthly average. The
+  assistant's `get_cash_flow` averages only complete months of records
+  (`completeRecordedMonths` in `src/lib/finance/cash-flow.ts`), but
+  `src/features/finance/surfaces/CashFlowSurface.tsx` still divides by every
+  started month ("across N months"), including the month in progress and the
+  months before the ledger starts, so the page and the assistant can give
+  different averages for the same range. Dividing by partial or unrecorded
+  months understates the average. Either the page adopts
+  `completeRecordedMonths`, labelling its span and any empty months, or it
+  keeps the wider divisor with a stated reason.
+
+  **Open, the owner's call:** the phone header's height at 320px. It is
+  184–226px tall at 320px wide on a 568px-tall screen (129–185px from 360px up),
+  measured in Chrome emulation on 2026-10-09; real phones are unmeasured. One
+  option is dropping the role line below 360px. The role renders only in the
+  header (`SITE.role` in `src/components/layout/Header.tsx`), so the cut would
+  touch no other surface. Also optional: rename /auth's title. "Authentication"
+  is the only page title that drops the controls to their own line at 375–390px.
 - **7.9 embeddings — not needed for 7.6 v1.** The target questions are
   structured lookups over columns (a month's totals, a date range, a text
   match on a few hundred items), which a query answers exactly. Retrieval is
