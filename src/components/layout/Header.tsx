@@ -79,7 +79,17 @@ export function Header({
                 loading="eager"
               />
 
-              <div className="flex flex-col items-start gap-0.5 leading-none">
+              {/* Steps aside while the social links are open on a narrow
+                  phone, as the page title does on a tablet. Below 390px the
+                  three icons leave the name less room than its longest word,
+                  and they painted over it; the avatar alone still says whose
+                  site this is, and the name returns when they close. */}
+              <div
+                className={cn(
+                  'flex flex-col items-start gap-0.5 leading-none',
+                  socialOpen && 'max-[389px]:hidden',
+                )}
+              >
                 <DotMatrixText
                   text={SITE.name.toUpperCase()}
                   size="md"
@@ -165,26 +175,35 @@ export function Header({
                 not the width for it once the social links open: identity,
                 three icons, title and controls come to ~850px, and the title
                 ran into the icons. It steps aside while they are open. */}
+            {/* Two boxes on purpose. The outer one takes the row's free width
+                below 700px, so the title can wrap and the controls can drop;
+                the inner one is only as wide as the words, and only it opens
+                the sign-in page. One box doing both made every stray tap on
+                blank header space -- up to 212px of it -- open /auth. */}
             <div
               className={cn(
-                'header-page-title min-w-0 max-[699px]:min-w-min max-[699px]:flex-1 text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity',
+                'header-page-title min-w-0 max-[699px]:min-w-min max-[699px]:flex-1 text-left md:text-right',
                 socialOpen && 'md:max-lg:hidden',
               )}
-              onClick={handleTitleClick}
             >
-              <div>
-                <DotMatrixText
-                  text={title.toUpperCase()}
-                  size="sm"
-                  className="text-foreground justify-start md:justify-end"
-                />
-              </div>
-              <div>
-                <DotMatrixText
-                  text={subtitle.toUpperCase()}
-                  size="xs"
-                  className="text-muted-foreground justify-start md:justify-end mt-1"
-                />
+              <div
+                className="w-fit max-w-full cursor-pointer select-none active:opacity-70 transition-opacity md:ml-auto"
+                onClick={handleTitleClick}
+              >
+                <div>
+                  <DotMatrixText
+                    text={title.toUpperCase()}
+                    size="sm"
+                    className="text-foreground justify-start md:justify-end"
+                  />
+                </div>
+                <div>
+                  <DotMatrixText
+                    text={subtitle.toUpperCase()}
+                    size="xs"
+                    className="text-muted-foreground justify-start md:justify-end mt-1"
+                  />
+                </div>
               </div>
             </div>
             {/* After the title rather than before it. On its own between the

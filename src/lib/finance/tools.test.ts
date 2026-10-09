@@ -120,6 +120,7 @@ describe('executeTool', () => {
         income: 3000,
         spend: 1100,
         net: 1900,
+        recordsCompleteFrom: '2026-09',
         averages: { months: 1, from: '2026-09', through: '2026-09', income: 3000, spend: 1100, net: 1900, emptyMonths: [] },
         categories: [{ name: 'Rent', amount: 900 }, { name: 'Groceries', amount: 200 }],
         savingsRatePercent: 63.3,
@@ -160,6 +161,21 @@ describe('executeTool', () => {
     expect(r.data.averages).toMatchObject({ months: 2, from: '2026-08', through: '2026-09', spend: 1030 });
     // The totals still cover the whole range, the current month included.
     expect(r.data.spend).toBe(2100);
+  });
+
+  it('marks the ledger\'s partial first month incomplete, and says where full records start', () => {
+    // The fixture's ledger starts on 10 August.
+    const r = executeTool('get_cash_flow', { month: '2026-08' }, context);
+    expect(r).toMatchObject({
+      data: { spend: 950, complete: false, recordsCompleteFrom: '2026-09', ledgerStartsMonth: '2026-08', averages: null },
+    });
+  });
+
+  it('is never complete over an empty ledger', () => {
+    const empty = { ...context, cashFlow: { ...context.cashFlow, transactions: [] } };
+    expect(executeTool('get_cash_flow', { month: '2026-09' }, empty)).toMatchObject({
+      data: { complete: false, recordsCompleteFrom: null, ledgerStartsMonth: null },
+    });
   });
 
   it('names an averaged month that has no rows at all', () => {

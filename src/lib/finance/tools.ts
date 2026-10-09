@@ -102,8 +102,14 @@ export interface CashFlowAverages {
 export interface CashFlowToolResult {
   from: string;
   through: string;
-  /** False for a month still in progress, so its totals are partial. */
+  /**
+   * False when any month in the range is still in progress, or falls before
+   * `recordsCompleteFrom` -- the ledger's own first month is usually partial
+   * -- so its totals are not the whole of what moved.
+   */
   complete: boolean;
+  /** The first month the ledger records in full, or null for an empty ledger. */
+  recordsCompleteFrom: string | null;
   income: number;
   spend: number;
   net: number;
@@ -188,7 +194,9 @@ export const TOOL_SCHEMAS = [
       + 'removed. Use for "how much did I make/spend last month", "this year" or "on average". For a '
       + 'range, pass `through`; totals and averages are worked out for you, so never add or divide '
       + 'yourself. ledgerStartsMonth says where records begin: a month before it is unrecorded, not '
-      + 'zero. Averages cover only complete months of records and say which; quote that span, and '
+      + 'zero, and months before recordsCompleteFrom are only partly recorded; when complete is '
+      + 'false, say the totals are partial. Averages cover only complete months of records and say '
+      + 'which; quote that span, and '
       + 'name any emptyMonths, which may be unrecorded. Totals only: it never lists individual '
       + 'transactions.',
     input_schema: {
@@ -337,7 +345,9 @@ const cashFlow = (
     data: {
       from,
       through: throughRaw,
-      complete: months.every(m => !m.isCurrent && !m.isFuture),
+      complete: recorded.firstFullMonth !== null
+        && months.every(m => !m.isCurrent && !m.isFuture && m.key >= (recorded.firstFullMonth as string)),
+      recordsCompleteFrom: recorded.firstFullMonth,
       income: summary.income,
       spend: summary.spend,
       net: summary.net,
