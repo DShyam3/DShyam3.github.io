@@ -662,9 +662,12 @@
 
 @media (min-width: 1280px) and (min-height: 700px) {
   .about-card-switcher, .about-compact-portrait { display: none; }
+  /* The top row fits the bio, so About me reads whole; Experience takes what
+     is left and scrolls. The 65% cap keeps a long bio from squeezing
+     Experience out: past it, the bio scrolls instead. */
   .about-grid {
     grid-template-columns: minmax(0, 200px) minmax(0, 1.15fr) minmax(0, .8fr);
-    grid-template-rows: minmax(0, .9fr) minmax(0, 1.1fr);
+    grid-template-rows: fit-content(65%) minmax(0, 1fr);
     gap: 1rem;
   }
   .about-grid > .about-portrait { display: flex; grid-area: 1 / 1; min-height: 0; }
