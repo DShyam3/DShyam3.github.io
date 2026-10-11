@@ -26,12 +26,16 @@ dots are circles that fuse as weight increases, so the look is reached for with
 weight rather than font-size. A dot-matrix globe and clock sit beside it.
 
 Experience and education appear as one timeline, newest first, roles and degrees
-interleaved by start date. Both are editable in place when signed in as admin,
+interleaved by start date. Entries fill two compact, content-sized columns from left to right when the
+card is wide enough, and one column in narrower cards. Both are editable in place when signed in as admin,
 skeleton-loaded otherwise. The CV uploads to private storage and downloads
 through a short-lived signed URL. Admins get a second add button for education.
 
-On a tablet held upright, the timeline spans the full width. The projects card
-sits below it, filling the row entirely.
+About stays within the page frame; biography, experience and projects scroll
+inside their cards. Large screens show portrait and biography above the timeline,
+with projects alongside. Smaller or shorter screens offer About, Experience and
+Projects buttons to select one full-size card. Scroll regions support keyboard
+focus, and short screens scroll the whole selected card to keep controls reachable.
 
 ## Collections
 
@@ -61,18 +65,16 @@ proxy so the API key never reaches the browser.
 
 - **News** — the default view. A segmented pill at the top switches between
   this week and this month, with the selected option filled. Out Now shows a
-  grid of portrait poster cards for season premieres and film releases from the
-  past week or month. The poster grid adds columns as space allows while keeping cards readable. Each card shows the 2:3 poster,
+  list of compact poster-and-text rows for season premieres and film releases
+  from the past week or month. Each row shows a small poster,
   the title, the release date (with "Season N ·" before it for a later season)
-  and the platform mark. Out Now spans the full desktop content width. Watch Next follows: the next episode of any season
+  and the platform mark. Watch Next shows: the next episode of any season
   already under way, plus anything aired in the last 14 days. Watch Next skips
   specials (season 0); a show whose only unwatched episodes are specials does
-  not appear. Its horizontal rail has scroll arrows and a visible scrollbar, with separate
-  title-detail buttons and provider links. Upcoming shows the same poster cards for season premieres and film
+  not appear. Its vertical rows have separate title-detail buttons and provider links. Upcoming shows the same compact rows for season premieres and film
   releases in the coming week or month, nearest first, each with a small dated
-  pill showing the days left ("3d", or "Today"). Upcoming and Updates sit in
-  two columns beneath Watch Next. The pinned Countdown card uses an overlay
-  layout, showing the title's landscape backdrop where one is stored, else the poster. An Updates list closes the page, covering the past week or
+  pill showing the days left ("3d", or "Today"). The pinned Countdown card sits inside Upcoming and uses an overlay
+  layout, showing the title's landscape backdrop where one is stored, else the poster. The Updates column covers the past week or
   month: new episodes ("S1E23 · Emotion and Reason"), platform moves
   ("Netflix → Disney+") and status changes (Ended, Cancelled, In production,
   Returning), each with a poster, the title with the change beneath it, then
@@ -84,9 +86,9 @@ proxy so the API key never reaches the browser.
   cards, always show an explicit Add to schedule or Scheduled · remove action.
   Admins can schedule a film or show from News, Library and detail cards using the shared Smart scheduling dialog. TV shows default to a weekly schedule on their
   release weekday, while films default to a one-off calendar date; either mode
-  can be selected in the schedule dialog. Known episode release dates suggest the weekday; when no date is available, a day must be chosen. Episode rows keep names visible, mark
+ can be selected in the schedule dialog. Known episode release dates suggest the weekday; when no date is available, a day must be chosen. Episode rows keep names visible, mark
   the next unwatched released episode as "Next up", and disable episodes whose
-  release date has not arrived. Updates scrolls on its own only from 1280px, where it is a column beside Upcoming; narrower, it scrolls with the page content. When a News section fails to load, it says "Could not load …" instead of
+ release date has not arrived. News keeps its page frame and middle workspace fixed. On large, tall screens, Watch Next, Your Week, Out Now, Upcoming and Updates form five independently scrolling columns. Smaller or shorter screens use a selector to show one column. Headings stay visible except in short windows. Calendar days place their date above their content, with an expandable explanation. Empty Watch Next and Out Now sections remain visible. When a News section fails to load, it says "Could not load …" instead of
   showing an empty "Nothing this week"; Watch Next keeps showing the rows it
   last loaded. Announcements are ordered by recency, capped at 1,000 and marked
   partial when capped. Events for titles that have been removed from the
@@ -107,14 +109,20 @@ proxy so the API key never reaches the browser.
   One-off plans appear on their saved date. Dated season premieres and films
   already in the library appear as suggestions until an admin adds them through
   Smart scheduling. Cards open title details; admins can manage saved plans.
+  Suggested releases have a Decline action in the agenda and expanded calendar.
+  Declined releases stay hidden in this browser across reloads, including when
+  their release date changes; another season remains a separate suggestion.
+  Restore declined suggestions brings them all back. These choices do not sync
+  across devices, and a failed save displays an error.
   Month view uses a seven-column grid on wider screens and an agenda on narrow
   screens. The calendar header and controls stay visible while its body scrolls.
   The former Schedule view opens News.
 
 Library has a compact category picker, search field, Filters popover and text-only
 sort choices. Sync opens a popover whose history list scrolls independently.
-News and Library share compact poster cards with aligned title, subtitle, platform
-and status rows, plus a separate scheduling action. Titles show up to two lines;
+Library uses compact poster cards with aligned title, subtitle, platform and
+status rows. News release rows place text beside small posters. Both keep
+scheduling actions separate from title details. Titles show up to two lines;
 the full title is available in the tooltip, accessible label and details.
 News details support scheduling and episode watched-state controls for admins.
 
@@ -123,10 +131,14 @@ the saved progress. Watched marks change only after the save succeeds. If a save
 fails, an error toast appears and the existing watched marks stay unchanged.
 
 Details place episodes below the poster and information on tablets, with a
-third column on wider screens. The episode list scrolls independently while
-the season picker, season details and poster/show information stay fixed above.
-Unusually long information has its own scroll area. The close control stays
-reachable. The first unwatched regular season opens by default.
+third column on wider screens. On tablets, information stays fixed above the
+episode area; the season picker and season details scroll with the episodes.
+On wider screens, the episode list scrolls independently below the
+season controls, and the close control shares the episode heading row without
+an empty strip above the content. TV details show a short synopsis preview;
+Read synopsis opens the full text separately. Tablet and desktop details place
+Delete in the header and ask for confirmation. The close control stays reachable.
+The first unwatched regular season opens by default.
 
 **Both views:**
 

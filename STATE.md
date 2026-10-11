@@ -1,6 +1,6 @@
 # State
 
-**Updated:** 2026-10-08 · **Branch:** `feat/watchlist-news-finance-transfers` · **HEAD:** `55269ec5` (= `origin/main`, deployed 2026-10-08) · working tree clean
+**Updated:** 2026-10-11 · **Branch:** detached candidate · **HEAD:** `8a4a4cff` (`origin/main` base) · About/Watchlist release prepared locally in `/tmp/watchlist-ui-publish`; not yet pushed or deployed
 
 ## Deployed
 
@@ -16,16 +16,15 @@ Still live from 2026-10-07 (commits `056afb97`, `e9a72a7a`, `531561f0`, `48e70a2
 
 | Check | Date | Result |
 |---|---|---|
-| Lint | 2026-10-08 | Pass, 0 errors / 0 warnings |
-| Typecheck | 2026-10-08 | Pass |
-| typecheck:functions | 2026-10-08 | Pass; Deno tests 19 pass |
-| Vitest | 2026-10-08 | 50 files / 995 tests pass |
-| Build | 2026-10-08 | Pass |
-| Reviewer (Opus) | 2026-10-08 | Paid-period and cron-paging diff. One blocker, fixed as proposed: editing only a bill's schedule overwrote the owner's Paid tick. Fix not re-reviewed |
-| ship-check | 2026-10-07 | 90/100, Beta only; 19 findings, 0 critical / 7 high. Not rerun since 2026-10-08 |
-| graphify update | 2026-10-07 | Not rerun since 2026-10-08 |
+| Lint, typecheck, typecheck:functions, build | 2026-10-11 | Candidate passes; lint 0 errors / 0 warnings |
+| Calendar tests | 2026-10-11 | 12 tests pass |
+| ship-check | 2026-10-11 | 90/100 Beta; 19 findings, 0 critical / 7 high; Semgrep and OSV available, scan completed |
+| Review | 2026-10-11 | Short-height tablet finding fixed; follow-up review blocked by usage limit |
+| Browser | 2026-10-11 | New checks blocked by URL policy; actual iPad touch and decline/reload remain unverified |
 
 ## In progress / next
+
+Validated release: isolated About and Watchlist UI only. About uses contained cards and responsive experience columns; News uses independently scrolling columns and compact rows, with browser-local decline/restore. TV details keep information fixed, scroll episodes, and open full synopsis separately. Short tablet windows hide poster, genres, status and synopsis preview while retaining Read synopsis. No new finance, header or Travel changes are included; those local changes remain in the original workspace.
 
 1. Owner: verify the 2026-10-09 watchlist parts on v13 at 06:00, 06:10 and 06:20 UTC: sync_log success for shards 0/1/2, no 'Unknown error'.
 2. Owner: verify signed-in recurring load/save/reload, review, dismissal, restore and manual entries against the live DB.

@@ -14,6 +14,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { cn } from '@/lib/utils';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+const DECLINED_RELEASES_KEY = 'watchlist:declined-releases:v1';
 type ScheduleActions = Pick<ComponentProps<typeof ScheduleItem>, 'removeFromSchedule' | 'updateScheduleDay' | 'toggleEpisodeWatched' | 'isEpisodeWatched' | 'isSeasonWatched' | 'getAutoStatus' | 'addToSchedule' | 'isInSchedule'>;
 
 interface YourWeekProps extends ScheduleActions {
@@ -28,10 +29,28 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [scheduleEvent, setScheduleEvent] = useState<CalendarEvent | null>(null);
+  const [declined, setDeclined] = useState<string[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(DECLINED_RELEASES_KEY) ?? '[]');
+      return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string' && id.startsWith('suggestion:')) : [];
+    } catch { return []; }
+  });
+  const [declineError, setDeclineError] = useState('');
+  const saveDeclined = (ids: string[]) => {
+    try {
+      localStorage.setItem(DECLINED_RELEASES_KEY, JSON.stringify(ids));
+      setDeclined(ids);
+      setDeclineError('');
+    } catch {
+      setDeclineError('Could not save your choice. Allow browser storage and try again.');
+    }
+  };
+  const declineRelease = (event: CalendarEvent) => saveDeclined([...new Set([...declined, event.id])]);
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const today = new Date();
   const todayKey = calendarDateKey(today);
-  const events = buildCalendarEvents(schedule, watchlist, actions.isEpisodeWatched, today);
+  const events = buildCalendarEvents(schedule, watchlist, actions.isEpisodeWatched, today)
+    .filter((event) => event.kind === 'plan' || !declined.includes(event.id));
   const selectedItem = selectedEvent && (watchlist.find((item) => item.id === selectedEvent.item.id && item.category === selectedEvent.item.category) ?? selectedEvent.item);
 
   const datesFrom = (start: Date, count: number) => Array.from({ length: count }, (_, index) => {
@@ -62,6 +81,7 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
           <p className="text-xs text-muted-foreground">Suggested release</p>
           <Button variant="ghost" className="h-auto w-full justify-start whitespace-normal px-0 py-1 text-left text-xs" onClick={() => setSelectedEvent(event)}>{event.item.title}</Button>
           {actions.addToSchedule && <Button variant="link" size="sm" className="h-auto whitespace-normal px-0 py-1 text-xs" onClick={() => setScheduleEvent(event)}>Add to schedule</Button>}
+          <Button variant="ghost" size="sm" className="ml-1 text-xs" aria-label={`Decline suggested release: ${event.item.title}, ${event.label}`} onClick={() => declineRelease(event)}>Decline</Button>
         </div>
       )}
       <p className="px-1.5 text-xs text-muted-foreground">{event.kind === 'plan' ? 'Planned · ' : ''}{event.label}</p>
@@ -79,15 +99,15 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
   const renderAgenda = (dates: Date[], compact = false, month = false) => {
     if (!dates.some((date) => events.some((event) => event.date === calendarDateKey(date)))) return emptyMessage(month ? 'this month' : 'this week');
     return (
-      <div className={cn('grid grid-cols-1 gap-2', !month && 'xl:grid-cols-7 xl:gap-3')}>
+      <div className={cn('news-agenda grid grid-cols-1 gap-2', !compact && !month && 'xl:grid-cols-7 xl:gap-3')}>
         {dates.map((date) => {
           const key = calendarDateKey(date);
           const dayEvents = events.filter((event) => event.date === key);
           const isToday = key === todayKey;
           if ((compact && !isToday || month) && dayEvents.length === 0) return null;
           return (
-            <div key={key} className={cn('grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-2 rounded-lg border p-3', !month && 'xl:block', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40')}>
-              <div className={cn('flex flex-col gap-1 text-sm', !month && 'xl:mb-2 xl:flex-row xl:flex-wrap xl:items-baseline xl:justify-between')}>
+            <div key={key} className={cn('grid min-w-0 gap-2 rounded-lg border p-3', compact ? 'grid-cols-1' : 'grid-cols-[6rem_minmax(0,1fr)]', !compact && !month && 'xl:block', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40')}>
+              <div className={cn('flex gap-1 text-sm', compact ? 'flex-row justify-between' : 'flex-col', !compact && !month && 'xl:mb-2 xl:flex-row xl:flex-wrap xl:items-baseline xl:justify-between')}>
                 <span className="font-medium">{date.toLocaleDateString('en-GB', { weekday: 'short' })} {isToday && <span className="text-xs text-primary">Today</span>}</span>
                 <span className="text-xs text-muted-foreground">{date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
               </div>
@@ -107,12 +127,18 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
     : new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7));
 
   return (
-    <section id="your-week" className="col-span-full min-w-0 scroll-mt-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <section id="your-week" className="news-pane news-pane-your-week col-span-full min-w-0 scroll-mt-4 space-y-3" tabIndex={0} role="region" aria-label="Your week calendar">
+      <div className="news-pane-heading flex flex-wrap items-center justify-between gap-2">
         <DotMatrixText text="YOUR WEEK" size="xs" />
         <Button variant="outline" size="sm" onClick={() => { setAnchor(new Date()); setView('week'); setExpanded(true); }}><CalendarDays className="h-4 w-4" />Expand calendar</Button>
       </div>
-      <p className="text-xs text-muted-foreground">Your watching plans and suggested releases. Future weekly entries plan one episode per week and adjust with watched progress. Unknown release dates are not guessed.</p>
+      <details className="text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Plans and suggested releases</summary>
+        <p className="mt-2">Your watching plans and suggested releases. Future weekly entries plan one episode per week and adjust with watched progress. Unknown release dates are not guessed.</p>
+        <p className="mt-2">Declined suggestions are remembered in this browser.</p>
+      </details>
+      {declined.length > 0 && <Button variant="link" size="sm" className="h-auto whitespace-normal px-0 text-xs" onClick={() => saveDeclined([])}>Restore declined suggestions ({declined.length})</Button>}
+      {declineError && <p role="alert" className="text-xs text-destructive">{declineError}</p>}
       {loading ? <p role="status" className="text-sm text-muted-foreground">Loading your schedule…</p> : renderAgenda(datesFrom(calendarWeekStart(today), 7), true)}
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-[min(96vw,100rem)]">
@@ -145,10 +171,13 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
                         <div key={key} className={cn('min-h-24 min-w-0 space-y-1 rounded-lg border p-2', key === todayKey ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40', !inMonth(date) && 'bg-muted/30')}>
                           <p className={cn('text-xs', !inMonth(date) && 'text-muted-foreground')}><time dateTime={key}>{date.getDate()}</time>{key === todayKey && <span className="ml-1 text-primary">Today</span>}</p>
                           {events.filter((event) => event.date === key).map((event) => (
-                            <Button key={event.id} variant="ghost" className={cn('h-auto w-full flex-col items-start gap-1 rounded-md px-1 py-2 text-left whitespace-normal', event.kind === 'suggestion' && 'border border-dashed border-border', event.unreleased && 'opacity-60')} aria-label={`${event.item.title}, ${event.kind === 'plan' ? 'planned' : 'suggested release'}, ${event.label}, ${key}`} onClick={() => setSelectedEvent(event)}>
+                            <div key={event.id}>
+                            <Button variant="ghost" className={cn('h-auto w-full flex-col items-start gap-1 rounded-md px-1 py-2 text-left whitespace-normal', event.kind === 'suggestion' && 'border border-dashed border-border', event.unreleased && 'opacity-60')} aria-label={`${event.item.title}, ${event.kind === 'plan' ? 'planned' : 'suggested release'}, ${event.label}, ${key}`} onClick={() => setSelectedEvent(event)}>
                               <span className="line-clamp-2 w-full break-words text-xs font-medium" title={event.item.title}>{event.item.title}</span>
                               <span className="line-clamp-2 text-xs text-muted-foreground" title={event.label}>{event.kind === 'plan' ? 'Planned' : 'Suggested'} · {event.label}</span>
                             </Button>
+                            {event.kind === 'suggestion' && <Button variant="ghost" size="sm" className="text-xs" aria-label={`Decline suggested release: ${event.item.title}, ${event.label}`} onClick={() => declineRelease(event)}>Decline</Button>}
+                            </div>
                           ))}
                         </div>
                       );

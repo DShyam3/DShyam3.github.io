@@ -476,6 +476,14 @@ What was worth taking from Trakt is its `last_activities` delta shape, and the
 watched, the same way it did before.
 
 ---
+## Library card-contained scrolling
+
+Keep the Library page within the viewport, with search and category controls
+fixed above a card-contained results scroller. Use compact controls on small
+screens. Verify portrait and landscape sizes, short viewports, keyboard access
+to the end of results, and no document or main-frame overflow. This remains
+unimplemented.
+
 ## Appendix — Verification commands
 
 ```bash

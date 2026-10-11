@@ -576,3 +576,111 @@
   .city-list-row:hover .city-remove-btn,
   .city-list-row:focus-within .city-remove-btn { opacity: 1; }
 }
+
+/* About owns its scroll panes at every size; the frame never scrolls. */
+[data-section="about"] .app-frame {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.about-workspace,
+.about-grid-slot,
+.about-grid {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.about-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  padding-block: .75rem;
+  overflow: hidden;
+}
+
+.about-grid-slot { display: flex; }
+.about-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.about-card-switcher { display: flex; flex-shrink: 0; gap: .25rem; }
+.about-card-switcher > button { flex: 1; min-width: 0; min-height: 2.75rem; padding-inline: .5rem; }
+
+.about-grid > .about-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  grid-area: 1 / 1;
+  align-self: stretch;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  overflow: hidden;
+}
+
+.about-pane > :not(.about-card-scroll) { flex-shrink: 0; }
+.about-card-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: .25rem;
+}
+.about-card-scroll:focus-visible,
+.about-projects:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: -2px; }
+.about-grid > .about-projects { overflow-y: auto; overscroll-behavior: contain; justify-content: safe center; }
+.about-experience-heading { max-height: 45%; overflow-y: auto; }
+.about-grid > .about-portrait { display: none; }
+.about-compact-portrait { float: right; width: clamp(5rem, 24vw, 9rem); height: auto; margin: 0 0 1rem 1rem; border-radius: 1rem; }
+
+@media not all and (min-width: 1280px) and (min-height: 700px) {
+  .about-workspace:not([data-active-card="intro"]) .about-intro,
+  .about-workspace:not([data-active-card="experience"]) .about-experience,
+  .about-workspace:not([data-active-card="projects"]) .about-projects { display: none; }
+}
+
+@media (min-width: 1280px) and (min-height: 700px) {
+  .about-card-switcher, .about-compact-portrait { display: none; }
+  .about-grid {
+    grid-template-columns: minmax(0, 200px) minmax(0, 1.15fr) minmax(0, .8fr);
+    grid-template-rows: minmax(0, .9fr) minmax(0, 1.1fr);
+    gap: 1rem;
+  }
+  .about-grid > .about-portrait { display: flex; grid-area: 1 / 1; min-height: 0; }
+  .about-grid > .about-intro { grid-area: 1 / 2; }
+  .about-grid > .about-experience { grid-area: 2 / 1 / 3 / 3; }
+  .about-grid > .about-projects { grid-area: 1 / 3 / 3 / 4; }
+}
+
+@media (max-width: 600px) {
+  .about-pane .about-timeline-row { display: grid; grid-template-columns: 4rem minmax(0, 1fr); }
+  .about-timeline-row .card-actions { grid-column: 2; margin-left: 0; }
+}
+
+/* A short landscape window cannot spare a pinned heading plus controls.
+   Scroll the whole selected card so its reading area remains useful. */
+@media (max-height: 600px) {
+  .about-grid > .about-pane { overflow-y: auto; overscroll-behavior: contain; }
+  .about-pane .about-card-scroll { flex: none; overflow: visible; }
+  .about-experience-heading { max-height: none; overflow: visible; }
+}
+
+/* Use the card's width, not the viewport: the desktop timeline shares a row
+   with Projects, while the compact view gives it the entire frame. */
+.about-experience { container-type: inline-size; }
+.about-timeline-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
+  gap: 1.5rem;
+}
+.about-timeline-entry { min-width: 0; padding-bottom: 1rem; }
+.about-timeline-loading { grid-column: 1 / -1; }
+
+@container (min-width: 34rem) {
+  .about-timeline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .about-pane .about-timeline-row { display: grid; grid-template-columns: 4rem minmax(0, 1fr); }
+  .about-timeline-row .card-actions { grid-column: 2; margin-left: 0; }
+}

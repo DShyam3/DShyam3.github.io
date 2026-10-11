@@ -2557,3 +2557,13 @@ and `SyncDetailDialog.tsx`.
 ### Recurring suggestions require human review — 2026-10-07
 
 Repeated bank payments establish a pattern, not an ongoing commitment. Detection therefore runs deterministically over merchant/account groups and proposes candidates for review; only the user confirms active status and the last-paid date. The latest ledger evidence remains separate from that confirmation, and inactive or dismissed entries remain restorable without contributing to recurring totals. Recurring CRUD and paid checks no longer debit or credit bank balances: the ledger already records those movements. This closes the distinction between evidence, a reviewed commitment and an actual bank payment. Implementation is local and uncommitted; migration `20261006220926_finance_recurring_review.sql` is written but unapplied, and live persistence remains unverified.
+
+### About viewport composition — 2026-10-08
+
+About keeps scrolling inside cards. A simultaneous multi-card composition needs
+both width and height, so it is reserved for viewports at least 1280 × 700.
+Smaller or shorter viewports select one card with a section switcher, preserving
+reading space instead of shrinking every pane. At heights of 600px or less,
+the selected card scrolls as a whole so its heading and controls cannot crowd
+out its content. This closes the responsive composition decision for About;
+Library remains planned.

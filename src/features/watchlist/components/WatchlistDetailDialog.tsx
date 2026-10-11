@@ -14,6 +14,7 @@ import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
 import { displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
+import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -61,6 +62,8 @@ export function WatchlistDetailDialog({
   syncing,
 }: WatchlistDetailDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const { askDelete, deleteDialog } = useDeleteConfirm();
   const { loadShowEpisodes, loadItemDescription } = useWatchlist();
 
   // The grid only loads episode numbers and watched flags; episode titles,
@@ -372,7 +375,7 @@ export function WatchlistDetailDialog({
                     {item.year && <span>• {item.year}</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 mr-6">
+                <div className="flex flex-wrap items-center gap-1 mr-6">
                   {onSchedule && (
                     <Button
                       variant={isScheduled ? 'secondary' : 'ghost'}
@@ -408,6 +411,13 @@ export function WatchlistDetailDialog({
                       <Heart className="h-4 w-4" />
                     </Button>
                   )}
+                  {onDelete && (
+                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      aria-label={`Delete ${item.title}`} title="Delete title"
+                      onClick={() => askDelete({ name: item.title, onConfirm: onDelete })}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                   {onResync && (
                     <Button
                       variant="ghost"
@@ -427,7 +437,7 @@ export function WatchlistDetailDialog({
 
             {/* Genre pills */}
             {item.genres && item.genres.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
+              <div className="watchlist-detail-genres flex flex-wrap gap-1.5 mt-3">
                 {item.genres.map((genre, idx) => (
                   <span
                     key={idx}
@@ -473,7 +483,12 @@ export function WatchlistDetailDialog({
               )}
             </div>
 
-            {item.description && <DetailDescription text={item.description} />}
+            {item.description && (
+              <div className="watchlist-detail-summary">
+                <DetailDescription text={item.description} className={hasSeasons ? 'line-clamp-3' : undefined} />
+                {hasSeasons && <Button variant="link" size="sm" className="h-auto px-0 py-1 text-xs" onClick={() => setSummaryOpen(true)}>Read synopsis</Button>}
+              </div>
+            )}
 
             {!isTVShow && item.runtime && (
               <RuntimeRow
@@ -484,45 +499,12 @@ export function WatchlistDetailDialog({
             )}
 
             {isTVShow && item.series_status && (
-              <div className="mt-4">
+              <div className="watchlist-detail-series-status mt-4">
                 <SeriesStatusPill status={item.series_status} className="px-3 py-1" />
               </div>
             )}
 
-            {/* Delete button - pushed to bottom */}
-            {onDelete && (
-              <div className="mt-auto pt-5 flex justify-end">
-                {isDeleting ? (
-                  <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={onDelete}
-                      className="gap-1.5"
-                    >
-                      Confirm Delete
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsDeleting(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsDeleting(true)}
-                    className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </Button>
-                )}
-              </div>
-            )}
+
           </div>
 
           {/* Right: Seasons (TV Shows only) */}
@@ -540,6 +522,15 @@ export function WatchlistDetailDialog({
           )}
         </div>
       </DialogContent>
+      {deleteDialog}
+      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{item.title} — Synopsis</DialogTitle>
+            <DialogDescription>{item.description}</DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

@@ -26,6 +26,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
+  const [activeCard, setActiveCard] = useState('intro');
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [cvUrl, setCvUrl] = useState<string>('');
@@ -77,34 +78,19 @@ const Index = () => {
   };
 
   return (
-    <AppShell>
-      <div className="selection:bg-primary/30">
-        <div className="flex flex-col px-4 md:px-0 xl:px-8 py-8 xl:py-6 max-w-full mx-auto w-full">
+    <AppShell layout="workspace">
+      <div className="about-workspace selection:bg-primary/30" data-active-card={activeCard}>
+        <div className="about-card-switcher" role="group" aria-label="About sections">
+          {[['intro', 'About'], ['experience', 'Experience'], ['projects', 'Projects']].map(([id, label]) => (
+            <Button key={id} variant={activeCard === id ? 'secondary' : 'ghost'}
+              aria-pressed={activeCard === id} aria-controls={`about-${id}`}
+              onClick={() => setActiveCard(id)}>{label}</Button>
+          ))}
+        </div>
+        <div className="about-grid-slot">
           {/* Bento Grid Layout */}
-          <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[240px_minmax(0,1.15fr)_minmax(0,1fr)] gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
-            {/* Profile Image (Mobile Only) */}
-            <div className="portrait-card flex md:hidden bg-primary/5 border hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative shrink-0 w-fit mx-auto">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
-              <img
-                src={`${ASSETS_URL}/selfie.webp`}
-                alt="Me"
-                width={1952}
-                height={2252}
-                // Spread, and lowercase. React 18 does not recognise the
-                // camelCase `fetchPriority` -- that landed in 19 -- so it
-                // reached the DOM as an unknown attribute and warned on
-                // every render. The DOM attribute is lowercase, but
-                // @types/react only declares the camelCase prop, so the
-                // spelling the browser wants has to go in as a spread.
-                {...{ fetchpriority: 'high' }}
-                className="max-w-[240px] w-full h-auto object-contain relative z-10 group-hover:scale-105 transition-transform duration-700 ease-out no-outline"
-                onError={(e) => {
-                  e.currentTarget.src = `${ASSETS_URL}/memoji.png`;
-                }}
-              />
-            </div>
-
-            <div data-palette="sage" className="ambient-card about-intro xl:col-start-2 xl:row-start-1 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+          <div className="about-grid">
+            <div id="about-intro" role="region" aria-label="About me" data-palette="sage" className="about-pane ambient-card about-intro bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="mb-6 w-full overflow-hidden">
                 <DotMatrixText
                   text="ABOUT ME"
@@ -112,7 +98,9 @@ const Index = () => {
                   className="text-foreground tracking-widest pl-1"
                 />
               </div>
-              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+              <div className="about-card-scroll app-scroll space-y-4 text-sm leading-relaxed text-muted-foreground" tabIndex={0} role="region" aria-label="Biography">
+                <img className="about-compact-portrait" src={`${ASSETS_URL}/selfie.webp`} alt="Dhyan Shyam" width={1952} height={2252}
+                  onError={(e) => { e.currentTarget.src = `${ASSETS_URL}/memoji.png`; }} />
                 <p>
                   {siteContent.about_me_1 || SITE.about[0]}
                 </p>
@@ -123,7 +111,7 @@ const Index = () => {
             </div>
 
             {/* Profile Image (Desktop Only) */}
-            <div className="portrait-card xl:col-start-1 xl:row-start-1 hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto xl:w-full xl:mx-0" style={{ boxShadow: 'var(--shadow-border)' }}>
+            <div className="about-portrait portrait-card xl:col-start-1 xl:row-start-1 hidden md:flex bg-primary/5 hover:border-primary/50 border-primary/20 rounded-[2rem] p-0 flex-col items-center justify-center group overflow-hidden relative transition-[border-color] duration-500 shrink-0 w-fit mx-auto xl:w-full xl:mx-0" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
               <img
                 src={`${ASSETS_URL}/selfie.webp`}
@@ -144,14 +132,10 @@ const Index = () => {
               />
             </div>
 
-            {/* Experience and education, one timeline: every role and degree
-                by start date, newest first (see buildResumeTimeline). Two
-                columns: it spans the row and projects spans the row under it.
-                Three columns: it takes columns 1-2 of row 2, under the
-                portrait and About Me, with projects at the top of column 3. */}
-            <div data-palette="sky" className="ambient-card md:col-span-2 xl:col-start-1 xl:row-start-2 bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
-              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-2 mb-4 w-full overflow-hidden">
-                <div className="w-full lg:w-auto lg:shrink-0">
+            {/* The combined experience and education timeline scrolls inside its card. */}
+            <div id="about-experience" role="region" aria-label="Experience and education" data-palette="sky" className="about-pane about-experience ambient-card bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 transition-[background-color] duration-200 hover:bg-card/50" style={{ boxShadow: 'var(--shadow-border)' }}>
+              <div className="about-experience-heading flex flex-wrap items-center justify-between gap-2 mb-4 w-full">
+                <div className="min-w-0">
                   <DotMatrixText
                     text="EXPERIENCE"
                     size="sm"
@@ -194,6 +178,7 @@ const Index = () => {
                         icon={uploadingCv ? Loader2 : Upload}
                         iconClassName={uploadingCv ? 'animate-spin' : undefined}
                         label="Upload CV"
+                        aria-label="Upload CV"
                         labelClassName="hidden lg:inline-flex"
                         className="rounded-full border-primary/20 hover:bg-primary hover:text-primary-foreground hover:border-transparent shrink-0"
                         onClick={() => cvInputRef.current?.click()}
@@ -211,9 +196,9 @@ const Index = () => {
                 </div>
               </div>
               <div className="border-b border-border/50 mb-6"></div>
-              <div className="space-y-0">
+              <div className="about-timeline-grid about-card-scroll app-scroll" tabIndex={0} role="region" aria-label="Experience timeline">
                 {expLoading || eduLoading ? (
-                  <div className="space-y-6">
+                  <div className="about-timeline-loading space-y-6">
                     {[...Array(3)].map((_, i) => (
                       <Skeleton key={i} className="h-20 w-full rounded-lg" />
                     ))}
@@ -222,8 +207,8 @@ const Index = () => {
                   timeline.map((entry) => {
                     const org = entry.kind === 'experience' ? entry.item.company : entry.item.school;
                     return (
-                      <div key={`${entry.kind}-${entry.item.id}`} className="group/item border-b border-border/40 last:border-0 pb-6 mb-6 last:pb-0 last:mb-0">
-                        <div className="relative flex items-start gap-4">
+                      <div key={`${entry.kind}-${entry.item.id}`} className="about-timeline-entry group/item border-b border-border/40">
+                        <div className="about-timeline-row relative flex items-start gap-4">
                           <div className="w-16 h-16 shrink-0 relative flex items-center justify-center mt-1 bg-white ring-1 ring-black/10 rounded-md p-1.5 group-hover/item:scale-105 transition-transform overflow-hidden">
                             <img
                               src={entry.item.logo_url}
@@ -307,9 +292,8 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Projects Portfolio. Two columns: the full row under the
-                timeline. Three columns: a content-sized card in column 3. */}
-            <div data-palette="peach" className="ambient-card md:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-start-1 self-start bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group" style={{ boxShadow: 'var(--shadow-border)' }}>
+            {/* Projects remains a separate, bounded card. */}
+            <div id="about-projects" tabIndex={0} role="region" aria-label="Projects portfolio" data-palette="peach" className="about-pane about-projects app-scroll ambient-card bg-card/40 backdrop-blur-sm rounded-[2rem] p-8 xl:p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group" style={{ boxShadow: 'var(--shadow-border)' }}>
               <div className="bg-background/50 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform duration-500">
                 <FolderGit2 className="w-8 h-8 text-primary/70" />
               </div>

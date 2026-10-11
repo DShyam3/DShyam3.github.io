@@ -92,9 +92,17 @@ aligned grid. A large card answers the main question; smaller cards support it.
 - On narrow screens, stack in reading order: summary, supporting information,
   then actions or detailed records.
 
-The About page now uses portrait, introduction and education across the first
-row at desktop widths of 1280px and above. Experience and projects occupy the
-second row. It uses two columns on tablets and one on phones.
+About uses a fixed-height workspace with card-contained scrolling. At widths
+of at least 1280px and heights of at least 700px, portrait and introduction sit
+above the combined experience/education timeline; projects span both rows on
+the right. Below either threshold, an About / Experience / Projects button
+group selects one card, with the portrait inside the introduction. At heights
+of 600px or less, the whole selected card scrolls so headings and controls
+cannot consume the available content space. Scroll regions are keyboard
+focusable; narrow timeline admin actions sit below their text. The experience
+card is an inline-size query container: entries use two equal columns at a card
+content width of 34rem or more, otherwise one. Newest-first order runs across
+each row, with scrolling contained in the existing card.
 
 ### Soft minimalism
 
@@ -366,7 +374,7 @@ brands, in portrait and landscape.
 - Standard/Larger display is an explicit persisted menu preference. Larger uses
   `125%` root type and a `12rem` card minimum, with visible card actions and
   stronger focus-visible outlines. It retains native browser keyboard behavior.
-- News and Library share `PosterCard`: fixed poster ratio, a `2.9em` title row
+- Library uses `PosterCard`: fixed poster ratio, a `2.9em` title row
   clamped to two lines, a `1.4em` minimum subtitle row, and aligned metadata rows
   of `1.5rem` and `1.25rem` with `gap-1`. The separate schedule footer uses a
   44px minimum height and `py-2`. Full titles remain in the tooltip, accessible
@@ -376,8 +384,15 @@ brands, in portrait and landscape.
   whose accessible names include the full title, plan/suggestion, episode and
   date; below `md` it uses an agenda. The dialog keeps its header and navigation
   outside the vertically scrolling body, bounded to `85dvh`.
-  Updates scrolls on its own only from 1280px, where it is a column beside
-  Upcoming; stacked, it flows in the card.
+  News uses a fixed middle workspace: five equal, independently scrolling
+  columns at widths of at least 1280px and heights of at least 600px, ordered
+  Watch Next, Your Week, Out Now, Upcoming, Updates. Elsewhere, a compact
+  selector shows one column. The workspace itself never scrolls. Headings
+  are sticky except at heights of 600px or less. Upcoming contains Countdown.
+  Out Now and Upcoming use 56px poster-and-text rows with separate schedule
+  actions and missing-art fallbacks. Watch Next uses vertical rows without
+  rail arrows. Compact calendar days place dates above content; explanatory
+  text lives in a details disclosure.
 
 Validate both orientations, short landscape windows, large monitors and both
 reading sizes. Browser viewport checks do not replace physical device tests.
