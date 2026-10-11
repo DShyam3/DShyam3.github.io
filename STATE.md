@@ -1,6 +1,6 @@
 # State
 
-**Updated:** 2026-10-11 · **Branch:** detached candidate · **HEAD:** `8a4a4cff` (`origin/main` base) · About/Watchlist release prepared locally in `/tmp/watchlist-ui-publish`; not yet pushed or deployed
+**Updated:** 2026-10-11 · **Branch:** detached candidate · **HEAD:** `ea9dc192` · About/Watchlist code pushed to `origin/main`; Pages run `38125207856` in progress, deployment pending
 
 ## Deployed
 
