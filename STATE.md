@@ -1,8 +1,10 @@
 # State
 
-**Updated:** 2026-10-11 · **Branch:** detached candidate · **HEAD:** `ea9dc192` · About/Watchlist code pushed to `origin/main`; Pages run `38125207856` in progress, deployment pending
+**Updated:** 2026-10-11 · **Branch:** detached candidate · **HEAD:** `679b033d` · About/Watchlist code pushed to `origin/main`; Pages run `38125207856` succeeded; UI release deployed
 
 ## Deployed
+
+Deployed 2026-10-11: About/Watchlist release `ea9dc192`, Pages run `38125207856` succeeded (lint, typecheck, functions, tests, build and deploy green). Main also contains docs handoff `679b033d` (skip CI). Interactive browser verification remains open.
 
 Deployed 2026-10-08: commits `c081b08a` (recurring Paid decided by the period a payment covers; recurring payment evidence memoised) and `55269ec5` (nightly watchlist sync pages its library reads), on top of `0d04bd24`. Pages run 37739685661 succeeded; the live site serves `assets/index-DiJpx0Of.js`, identical to the local build.
 
