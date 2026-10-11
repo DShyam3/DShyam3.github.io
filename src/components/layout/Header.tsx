@@ -39,7 +39,10 @@ export function Header({
     // `relative` is what NavMenu's panel hangs off: it spans the header's
     // full width from the bottom edge, so it has to resolve against the
     // header rather than the right-hand cluster the button sits in.
-    <header className="app-header relative pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50">
+    <header
+      className="app-header relative pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50"
+      data-socials-open={socialOpen || undefined}
+    >
       <div className="px-4 md:px-0">
         {/* One row: identity on the left, page title and controls on the
             right. The nav strip that used to sit underneath is now the menu
@@ -66,7 +69,7 @@ export function Header({
                 loading="eager"
               />
 
-              <div className="flex flex-col items-start gap-0.5 leading-none">
+              <div className="header-identity-text flex flex-col items-start gap-0.5 leading-none">
                 <DotMatrixText
                   text={SITE.name.toUpperCase()}
                   size="md"
@@ -80,12 +83,12 @@ export function Header({
               </div>
             </div>
 
-            <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
+            <div className="relative flex items-center flex-shrink-0">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-11 w-11 order-2 md:order-1 flex-shrink-0"
+                className="h-11 w-11 flex-shrink-0"
                 onClick={() => setSocialOpen((v) => !v)}
                 aria-label={socialOpen ? "Close social links" : "Open social links"}
                 aria-expanded={socialOpen}
@@ -100,13 +103,16 @@ export function Header({
                 </div>
               </Button>
 
-              {/* Social links - appear horizontally to the side */}
+              {/* Social links, laid over the row rather than in it, so
+                  opening them reflows nothing. On a phone they open leftward
+                  from the button over the name; in the one-row header they
+                  open rightward, over the page title until lg. The neighbour
+                  they cover fades out (responsive.css). */}
               <div
                 className={cn(
-                  'flex items-center gap-1 md:gap-2 overflow-hidden transition-[max-width,opacity,margin] duration-200 order-1 md:order-2 justify-end md:justify-start',
-                  socialOpen
-                    ? 'max-w-[200px] opacity-100 mr-1 md:mr-0'
-                    : 'max-w-0 opacity-0 mr-0',
+                  'absolute top-1/2 -translate-y-1/2 right-full mr-1 min-[700px]:right-auto min-[700px]:left-full min-[700px]:mr-0 min-[700px]:ml-2 md:ml-3',
+                  'flex items-center gap-1 md:gap-2 overflow-hidden transition-[max-width,opacity] duration-200 justify-end min-[700px]:justify-start',
+                  socialOpen ? 'max-w-[10rem] opacity-100' : 'max-w-0 opacity-0',
                 )}
               >
                 {socialLinks.map(({ label, href, icon }) => {
@@ -136,15 +142,8 @@ export function Header({
               with the leftover width trailing off the end. From md the row is
               only as wide as its contents and the property does nothing. */}
           <div className="flex items-center justify-between gap-3 md:gap-4">
-            {/* A tablet held upright (768-1023px) has the one-row header but
-                not the width for it once the social links open: identity,
-                three icons, title and controls come to ~850px, and the title
-                ran into the icons. It steps aside while they are open. */}
             <div
-              className={cn(
-                'header-page-title min-w-0 text-left md:text-right cursor-pointer select-none active:opacity-70 transition-opacity',
-                socialOpen && 'md:max-lg:hidden',
-              )}
+              className="header-page-title min-w-0 text-left md:text-right cursor-pointer select-none active:opacity-70"
               onClick={handleTitleClick}
             >
               <div>

@@ -85,6 +85,19 @@ header.app-header { padding-block: .75rem; }
 .app-header .dot-matrix-text-xs { font-size: .95rem; }
 .header-page-title { max-width: 25rem; }
 .header-page-title .dot-matrix-text { white-space: normal; overflow-wrap: anywhere; }
+/* Open social links are laid over the header, covering a neighbour that
+   fades out: the name on a phone, where they share its row, and the page
+   title in the one-row header until lg, which has no width for identity,
+   three links and the title at once. Only opacity changes here, so nothing
+   reflows while the links slide out. */
+.header-identity-text,
+.header-page-title { transition: opacity .15s, visibility .15s; }
+@media (max-width: 699.98px) {
+  .app-header[data-socials-open] .header-identity-text { opacity: 0; visibility: hidden; }
+}
+@media (min-width: 700px) and (max-width: 1023.98px) {
+  .app-header[data-socials-open] .header-page-title { opacity: 0; visibility: hidden; }
+}
 /* Keep footer labels and clock readable together, including short screens. */
 footer.app-footer { padding-block: .75rem; }
 .app-footer .dot-matrix-text-xs { font-size: 1.125rem; }
