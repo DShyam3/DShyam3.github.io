@@ -543,7 +543,28 @@
   color: hsl(var(--destructive));
 }
 
-/* ─── UN membership marker on a country row ─────────────────────────── */
+/* ─── UN membership and city count columns on a country row ─────────── */
+
+/* Both slots render on every row, empty or not, so each column keeps its
+   x-position down the list. */
+.travel-un-col {
+  flex-shrink: 0;
+  width: 1.75rem;
+  display: flex;
+  justify-content: center;
+}
+
+.travel-city-col {
+  flex-shrink: 0;
+  width: 2.25rem;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--muted-foreground));
+}
 
 .travel-un-badge {
   font-size: 0.75rem;
