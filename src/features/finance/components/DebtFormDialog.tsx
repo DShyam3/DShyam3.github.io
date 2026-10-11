@@ -141,8 +141,10 @@ export function DebtFormDialog({
       return;
     }
     const balance = num(form.balance);
-    const original = drawTotal > 0 ? drawTotal : (form.originalAmount ? num(form.originalAmount) : balance);
     const isStudent = kind === 'student';
+    // A student loan's "You borrowed" shows this figure as entered, so a blank
+    // field stays blank rather than borrowing today's balance.
+    const original = drawTotal > 0 ? drawTotal : (form.originalAmount ? num(form.originalAmount) : isStudent ? 0 : balance);
 
     const saved: Debt = {
       // Spread first so fields this form does not show (observations, rate

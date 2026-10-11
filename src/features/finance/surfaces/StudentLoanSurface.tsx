@@ -36,6 +36,8 @@ import {
   inferCourseEnd,
   reconcileStudentLoanWithPayslips,
   simulateStudentLoan,
+  studentLoanBorrowed,
+  studentLoanBorrowedGap,
   studentLoanMonthlyRepayment,
   toISODate,
   type StudentLoanAssumptions,
@@ -246,6 +248,18 @@ export default function StudentLoanSurface() {
 
   const monthlyNow = studentLoanMonthlyRepayment(salaryNow, planRules(minePlan).threshold, planRules(minePlan).repaymentRate);
   const mineLoan = mode === 'mine' ? loan : null;
+  const balanceNow = mode === 'mine' && todayRow ? todayRow.balance : loan?.balance ?? 0;
+  const borrowed = loan ? studentLoanBorrowed(loan) : null;
+  const borrowedNote = (() => {
+    if (!borrowed || borrowed.source === 'none') return 'Not recorded. Add what you borrowed in Edit';
+    const span = borrowed.source === 'entered'
+      ? 'As entered in Edit'
+      : borrowed.count === 1 || !borrowed.first || !borrowed.last
+        ? `Paid out ${monthYear(borrowed.first ?? today)}`
+        : `${borrowed.count} payments, ${monthYear(borrowed.first)} to ${monthYear(borrowed.last)}`;
+    const gap = studentLoanBorrowedGap(balanceNow, borrowed);
+    return gap ? `${span}. The balance is ${formatGBP(gap.amount)} ${gap.direction}` : span;
+  })();
 
   // The rate the rules give today, against the rate stored on the loan.
   const mineRate = rateNow(minePlan, mineCourseEnd, incomeNow);
@@ -283,7 +297,7 @@ export default function StudentLoanSurface() {
     <SurfaceHero
       loading={!hasLoaded}
       label="Student loan balance"
-      value={formatGBP(mode === 'mine' && todayRow ? todayRow.balance : mineLoan.balance)}
+      value={formatGBP(balanceNow)}
       detail={live
         ? `What SLC should show at the end of ${monthYear(today)}: ${formatGBP(live.statementBalance)} on ${live.statementDate}, plus interest at the rate SLC charges during the year${live.payslipsCount > 0 ? `, less ${formatGBP(live.payslipDeductionsTotal)} from ${live.payslipsCount} payslips` : ''}.${pendingNow >= 1 ? ` About ${formatGBP(pendingNow)} more lands around ${landsOn}, once HMRC confirms this year's income.` : ''}`
         : 'As entered. Add the balance from your online account below to anchor it.'}
@@ -505,7 +519,14 @@ export default function StudentLoanSurface() {
               </div>
             </div>
 
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">You borrowed</dt>
+                <dd className="mt-1 text-xl font-semibold tabular-nums">
+                  {borrowed && borrowed.source !== 'none' ? formatGBP(borrowed.total) : '—'}
+                </dd>
+                <dd className="text-xs text-muted-foreground">{borrowedNote}</dd>
+              </div>
               <div className="min-w-0">
                 <dt className="text-xs text-muted-foreground">Interest now</dt>
                 <dd className="mt-1 text-xl font-semibold tabular-nums">

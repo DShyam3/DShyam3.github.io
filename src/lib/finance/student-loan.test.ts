@@ -9,10 +9,13 @@ import {
   normaliseRatePercent,
   rateRowInForce,
   simulateStudentLoan,
+  studentLoanBorrowed,
+  studentLoanBorrowedGap,
   studentLoanInterestRate,
   studentLoanMonthlyRepayment,
   STUDENT_LOAN_DEFAULT_ASSUMPTIONS,
   type StudentLoanAssumptions,
+  type StudentLoanBorrowed,
   type StudentLoanDraw,
   type StudentLoanRateRow,
 } from './student-loan';
@@ -1321,5 +1324,131 @@ describe('balanceOnMonth', () => {
   it('is undefined outside the grid', () => {
     expect(balanceOnMonth(result, '1990-01-01')).toBeUndefined();
     expect(balanceOnMonth(result, '2999-01-01')).toBeUndefined();
+  });
+});
+
+describe('studentLoanBorrowed', () => {
+  it('sums recorded borrowing and reports its span', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 1,
+      draws: [
+        { date: '2021-01-10', amount: 4000.1 },
+        { date: '2020-09-20', amount: 5000, kind: 'borrowing' },
+        { date: '2022-04-30', amount: 3000 },
+      ],
+    })).toEqual({ total: 12000.1, source: 'draws', count: 3, first: '2020-09-20', last: '2022-04-30' });
+  });
+
+  it('leaves out refunds and payments outside payroll', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2020-09-20', amount: 5000 },
+        { date: '2024-05-01', amount: 300, kind: 'refund' },
+        { date: '2024-06-01', amount: 1000, kind: 'payment' },
+      ],
+    });
+    expect(r.total).toBe(5000);
+    expect(r.count).toBe(1);
+    expect(r.last).toBe('2020-09-20');
+  });
+
+  it('leaves a zero, negative or non-finite amount out of the total, count and span', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2020-09-20', amount: 5000 },
+        { date: '2019-01-05', amount: -200 },
+        { date: '2020-11-20', amount: Number.NaN },
+        { date: '2018-03-01', amount: 0 },
+        { date: '2023-12-31', amount: Number.POSITIVE_INFINITY },
+      ],
+    });
+    expect(r).toEqual({ total: 5000, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20' });
+  });
+
+  it('falls back to the typed amount when every borrowing row is invalid', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 27000,
+      draws: [
+        { date: '2020-09-20', amount: -200 },
+        { date: '2020-10-20', amount: Number.NaN },
+        { date: '2020-11-20', amount: 0 },
+        { date: '2020-12-20', amount: Number.POSITIVE_INFINITY },
+      ],
+    })).toEqual({ total: 27000, source: 'entered', count: 0 });
+  });
+
+  it('is unknown when every borrowing row is invalid and no amount was typed', () => {
+    expect(studentLoanBorrowed({
+      draws: [
+        { date: '2020-09-20', amount: -200 },
+        { date: '2020-10-20', amount: Number.NaN },
+      ],
+    })).toEqual({ total: 0, source: 'none', count: 0 });
+  });
+
+  it('falls back to the typed amount when no borrowing is recorded', () => {
+    expect(studentLoanBorrowed({ originalAmount: 27000, draws: [{ date: '2024-05-01', amount: 300, kind: 'refund' }] }))
+      .toEqual({ total: 27000, source: 'entered', count: 0 });
+  });
+
+  it('is unknown with neither', () => {
+    expect(studentLoanBorrowed({})).toEqual({ total: 0, source: 'none', count: 0 });
+    expect(studentLoanBorrowed({ originalAmount: 0, draws: [] })).toEqual({ total: 0, source: 'none', count: 0 });
+    expect(studentLoanBorrowed({ originalAmount: Number.NaN })).toEqual({ total: 0, source: 'none', count: 0 });
+  });
+});
+
+describe('studentLoanBorrowedGap', () => {
+  const draws = (total: number): StudentLoanBorrowed => ({
+    total, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20',
+  });
+  const entered = (total: number): StudentLoanBorrowed => ({ total, source: 'entered', count: 0 });
+  const none: StudentLoanBorrowed = { total: 0, source: 'none', count: 0 };
+
+  it('reports a balance above what was borrowed as more', () => {
+    expect(studentLoanBorrowedGap(30000, draws(27000))).toEqual({ amount: 3000, direction: 'more' });
+  });
+
+  it('reports a balance below what was borrowed as less', () => {
+    expect(studentLoanBorrowedGap(20000, draws(27000))).toEqual({ amount: 7000, direction: 'less' });
+  });
+
+  it('measures against a typed figure the same as recorded borrowing', () => {
+    expect(studentLoanBorrowedGap(30000, entered(27000))).toEqual({ amount: 3000, direction: 'more' });
+  });
+
+  it('is null when the balance equals what was borrowed', () => {
+    expect(studentLoanBorrowedGap(27000, draws(27000))).toBeNull();
+  });
+
+  it('is null when the gap is under a pound, either way', () => {
+    expect(studentLoanBorrowedGap(27000.6, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(26999.4, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(27000.994, draws(27000))).toBeNull();
+  });
+
+  it('is returned from exactly £1, either way', () => {
+    expect(studentLoanBorrowedGap(27001, draws(27000))).toEqual({ amount: 1, direction: 'more' });
+    expect(studentLoanBorrowedGap(26999, draws(27000))).toEqual({ amount: 1, direction: 'less' });
+  });
+
+  it('rounds the gap to pence before comparing with £1', () => {
+    // 0.996 rounds up to 1.00, so it clears the threshold.
+    expect(studentLoanBorrowedGap(27000.996, draws(27000))).toEqual({ amount: 1, direction: 'more' });
+    expect(studentLoanBorrowedGap(27001.234, draws(27000))).toEqual({ amount: 1.23, direction: 'more' });
+  });
+
+  it('is null when nothing was borrowed on record', () => {
+    expect(studentLoanBorrowedGap(30000, none)).toBeNull();
+  });
+
+  it('is null when the balance or the borrowed total is not finite', () => {
+    expect(studentLoanBorrowedGap(Number.NaN, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(Number.POSITIVE_INFINITY, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(30000, draws(Number.NaN))).toBeNull();
+  });
+
+  it('reports a zero balance as less than what was borrowed', () => {
+    expect(studentLoanBorrowedGap(0, draws(27000))).toEqual({ amount: 27000, direction: 'less' });
   });
 });
