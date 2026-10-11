@@ -4,7 +4,9 @@ import { Check, Plus, Edit2, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import type { RecurringCandidate } from '@/lib/finance/recurring-detection';
+import { format, parseISO } from 'date-fns';
+import { earlyPaymentTarget, type RecurringCandidate } from '@/lib/finance/recurring-detection';
+import { BillsCalendar } from '@/features/finance/components/BillsCalendar';
 
 interface RecurringsTabProps {
   recurrings: RecurringBill[];
@@ -18,6 +20,7 @@ interface RecurringsTabProps {
   formatGBP: (num: number) => string;
   onOpenAddModal: () => void;
   onTogglePaid: (id: string) => void;
+  onPayEarly?: (id: string) => void;
   onEditRecurring: (bill: RecurringBill) => void;
   onDeleteRecurring: (id: string) => void;
 }
@@ -40,6 +43,21 @@ const getDueDateText = (bill: RecurringBill, currentMonth: number, displayMonth?
   return `${dayStr} ${monthStr}`;
 };
 
+const EarlyPaymentButton: React.FC<{ target: string; disabled: boolean; onPay: () => void }> = ({ target, disabled, onPay }) => {
+  const date = format(parseISO(target), 'd MMM');
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onPay}
+      className="inline-flex h-6 items-center whitespace-nowrap px-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      title={`Record today's payment as the ${date} payment, paid early`}
+    >
+      Paid {date} early
+    </button>
+  );
+};
+
 export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   recurrings,
   candidates,
@@ -52,6 +70,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   formatGBP,
   onOpenAddModal,
   onTogglePaid,
+  onPayEarly,
   onEditRecurring,
   onDeleteRecurring,
 }) => {
@@ -59,6 +78,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   const inactiveBills = recurrings.filter(bill => bill.status === 'inactive' || bill.status === 'dismissed');
   const thisMonthBills = activeBills.filter(r => isDueThisMonth(r, currentMonth));
   const todayDay = new Date().getDate();
+  const today = format(new Date(), 'yyyy-MM-dd');
   const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
 
   interface DisplayBill extends RecurringBill {
@@ -82,6 +102,8 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
       }
     }
   });
+
+  const thisMonthIds = new Set(thisMonthBills.map(r => r.id));
 
   const totalAmount = thisMonthBills.reduce((sum, r) => sum + r.amount, 0);
   const paidAmount = thisMonthBills.filter(r => r.isPaid).reduce((sum, r) => sum + r.amount, 0);
@@ -211,6 +233,11 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
           </div>
         </div>
 
+        <section className="surface-card bg-card/50 rounded-lg border border-border/40 p-4 space-y-3">
+          <h4 className="text-sm font-semibold font-mono">Calendar</h4>
+          <BillsCalendar recurrings={recurrings} paymentEvidence={paymentEvidence} formatGBP={formatGBP} />
+        </section>
+
         {inactiveBills.length > 0 && (
           <section className="surface-card bg-card/50 rounded-lg border border-border/40 p-4 space-y-3">
             <h4 className="text-sm font-semibold font-mono">Inactive / dismissed ({inactiveBills.length})</h4>
@@ -246,6 +273,10 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
             <div className="surface-card bg-card/50 rounded-lg border border-border/40 p-4 space-y-1 hover:border-border/80 transition-colors">
               {thisMonthBills.map(bill => {
                 const dueDateText = getDueDateText(bill, currentMonth);
+                const earlyTarget = onPayEarly ? earlyPaymentTarget(bill, today) : undefined;
+                const earlyButton = onPayEarly && earlyTarget
+                  ? <EarlyPaymentButton target={earlyTarget} disabled={busy} onPay={() => onPayEarly(bill.id)} />
+                  : null;
                 return (
                   <div
                     key={bill.id}
@@ -276,6 +307,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                             Last seen in records: {paymentEvidence.get(bill.id)!.date} · {formatGBP(paymentEvidence.get(bill.id)!.amount)}
                           </p>
                         )}
+                        {earlyButton && <div className="sm:hidden">{earlyButton}</div>}
                       </div>
                     </div>
 
@@ -307,6 +339,8 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       <span className={cn("font-mono font-bold text-xs w-20 text-right", bill.isPaid ? "text-muted-foreground/50 line-through" : "text-foreground")}>
                         {formatGBP(bill.amount)}
                       </span>
+
+                      {earlyButton && <div className="hidden sm:block">{earlyButton}</div>}
 
                       <button
                         disabled={busy}
@@ -341,6 +375,11 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
             <div className="surface-card bg-card/50 rounded-lg border border-border/40 p-4 space-y-1 hover:border-border/80 transition-colors">
               {futureBills.map(bill => {
                 const dueDateText = getDueDateText(bill, currentMonth, bill.displayMonth);
+                // A bill in both lists keeps its button in Due this month only.
+                const earlyTarget = onPayEarly && !thisMonthIds.has(bill.id) ? earlyPaymentTarget(bill, today) : undefined;
+                const earlyButton = onPayEarly && earlyTarget
+                  ? <EarlyPaymentButton target={earlyTarget} disabled={busy} onPay={() => onPayEarly(bill.id)} />
+                  : null;
                 return (
                   <div
                     key={bill.id}
@@ -371,6 +410,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                             Last seen in records: {paymentEvidence.get(bill.id)!.date} · {formatGBP(paymentEvidence.get(bill.id)!.amount)}
                           </p>
                         )}
+                        {earlyButton && <div className="sm:hidden">{earlyButton}</div>}
                       </div>
                     </div>
 
@@ -402,6 +442,8 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                       <span className="font-mono font-bold text-xs text-foreground w-20 text-right">
                         {formatGBP(bill.amount)}
                       </span>
+
+                      {earlyButton && <div className="hidden sm:block">{earlyButton}</div>}
 
                       <div className="w-5" />
                     </div>

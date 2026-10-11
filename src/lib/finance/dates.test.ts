@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDaysInMonth, getStartDayOfWeek, isWeekend, toISODate } from './dates';
+import { epochDay, getDaysInMonth, getStartDayOfWeek, isoOfEpochDay, isWeekend, toISODate } from './dates';
 
 describe('toISODate', () => {
   it('formats in local time, not UTC', () => {
@@ -45,5 +45,55 @@ describe('getStartDayOfWeek', () => {
   it('maps Sunday to 6 rather than 0', () => {
     // 1 June 2025 was a Sunday.
     expect(getStartDayOfWeek(2025, 5)).toBe(6);
+  });
+});
+
+describe('epochDay', () => {
+  it('counts days from 1970-01-01', () => {
+    expect(epochDay('1970-01-01')).toBe(0);
+    expect(epochDay('1970-01-02')).toBe(1);
+    expect(epochDay('1969-12-31')).toBe(-1);
+    expect(epochDay('2026-10-09')).toBe(20_735);
+  });
+
+  it('counts calendar days across the clocks changing, not elapsed hours', () => {
+    // The UK clocks went forward on 29 Mar 2026 and back on 25 Oct 2026.
+    expect((epochDay('2026-03-30') ?? NaN) - (epochDay('2026-03-28') ?? NaN)).toBe(2);
+    expect((epochDay('2026-10-30') ?? NaN) - (epochDay('2026-10-24') ?? NaN)).toBe(6);
+  });
+
+  it('knows month lengths, leap years and the year boundary', () => {
+    expect((epochDay('2028-03-01') ?? NaN) - (epochDay('2028-02-28') ?? NaN)).toBe(2);
+    expect((epochDay('2026-03-01') ?? NaN) - (epochDay('2026-02-28') ?? NaN)).toBe(1);
+    expect((epochDay('2100-03-01') ?? NaN) - (epochDay('2100-02-28') ?? NaN)).toBe(1);
+    expect((epochDay('2027-01-01') ?? NaN) - (epochDay('2026-12-31') ?? NaN)).toBe(1);
+  });
+
+  it('accepts the first and last supported years', () => {
+    expect(epochDay('0000-01-01')).toBe(-719_528);
+    expect(epochDay('9999-12-31')).toBe(2_932_896);
+  });
+
+  it('is undefined for dates that do not exist and for anything not in YYYY-MM-DD form', () => {
+    for (const bad of ['', 'bad', '2026-02-30', '2026-13-01', '2026-00-10', '2026-04-31', '2026-9-3', '2026-10-09T00:00:00Z', ' 2026-10-09', '2027-02-29']) {
+      expect(epochDay(bad)).toBeUndefined();
+    }
+    expect(epochDay('2028-02-29')).toBeDefined();
+  });
+});
+
+describe('isoOfEpochDay', () => {
+  it('is the inverse of epochDay', () => {
+    for (const iso of ['1970-01-01', '1969-12-31', '2026-03-29', '2026-10-25', '2028-02-29', '2026-12-31', '0050-06-15', '9999-12-31']) {
+      expect(isoOfEpochDay(epochDay(iso) ?? NaN)).toBe(iso);
+    }
+  });
+
+  it('steps a day at a time through the clock changes and month ends', () => {
+    expect(isoOfEpochDay((epochDay('2026-03-28') ?? NaN) + 2)).toBe('2026-03-30');
+    expect(isoOfEpochDay((epochDay('2026-10-24') ?? NaN) + 2)).toBe('2026-10-26');
+    expect(isoOfEpochDay((epochDay('2026-02-28') ?? NaN) + 1)).toBe('2026-03-01');
+    expect(isoOfEpochDay((epochDay('2028-02-28') ?? NaN) + 1)).toBe('2028-02-29');
+    expect(isoOfEpochDay((epochDay('2026-12-31') ?? NaN) + 1)).toBe('2027-01-01');
   });
 });

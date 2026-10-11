@@ -16,7 +16,7 @@
 export const SURFACES = [
   { key: 'home', label: 'Home', tabs: ['dashboard'] },
   { key: 'spending', label: 'Spending', tabs: ['transactions', 'budget', 'recurrings', 'transfers'] },
-  { key: 'plan', label: 'Plan', tabs: ['cash-flow', 'goals', 'scenarios'] },
+  { key: 'plan', label: 'Plan', tabs: ['cash-flow', 'forecast', 'goals', 'scenarios'] },
   { key: 'wealth', label: 'Wealth', tabs: ['accounts', 'debts', 'student-loan', 'investments', 'retirement'] },
   { key: 'income', label: 'Income', tabs: ['tax-income', 'time-spent'] },
 ] as const;
@@ -32,6 +32,7 @@ export const TAB_LABELS: Record<TabKey, string> = {
   recurrings: 'Recurrings',
   transfers: 'Transfers',
   'cash-flow': 'Cash Flow',
+  forecast: 'Forecast',
   goals: 'Goals',
   scenarios: 'What if',
   accounts: 'Accounts',

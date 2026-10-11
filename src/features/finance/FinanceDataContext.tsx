@@ -676,11 +676,13 @@ function useProvideFinanceData() {
 
   const fetchTransfers = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) return;
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_profile_transfers')
-      .select('id, from_profile_id, to_profile_id, from_transaction_id, to_transaction_id, amount, date, note')
+      .select('id, from_profile_id, to_profile_id, from_transaction_id, to_transaction_id, amount, date, note', { count: 'exact' })
       .or(`from_profile_id.eq.${forProfile},to_profile_id.eq.${forProfile}`)
-      .order('date', { ascending: false });
+      .order('date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('transfers unavailable', error.message);
       return;
@@ -732,11 +734,13 @@ function useProvideFinanceData() {
       setPayslips([]);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_payslips')
-      .select('id, pay_date, employer, gross, income_tax, national_insurance, pension_employee, pension_employer, student_loan, other_deductions, net, storage_path, notes, lines')
+      .select('id, pay_date, employer, gross, income_tax, national_insurance, pension_employee, pension_employer, student_loan, other_deductions, net, storage_path, notes, lines', { count: 'exact' })
       .eq('profile_id', forProfile)
-      .order('pay_date', { ascending: false });
+      .order('pay_date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('payslips unavailable', error.message);
       return;
@@ -836,10 +840,13 @@ function useProvideFinanceData() {
       setPayslipReconciliations([]);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_payslip_transaction_reconciliations')
-      .select('id, payslip_id, transaction_id, confirmed_at')
-      .eq('profile_id', forProfile);
+      .select('id, payslip_id, transaction_id, confirmed_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('confirmed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('payslip reconciliations unavailable');
       return;
@@ -873,10 +880,13 @@ function useProvideFinanceData() {
       setTransferLinksFailed(false);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_transfer_links')
-      .select('id, outflow_transaction_id, inflow_transaction_id, confirmed_at')
-      .eq('profile_id', forProfile);
+      .select('id, outflow_transaction_id, inflow_transaction_id, confirmed_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('confirmed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     /* Cleared rather than kept: the links held may belong to the profile the
        switcher just left, and a stale exclusion is invisible where a missing
        one is flagged. */
@@ -912,10 +922,13 @@ function useProvideFinanceData() {
       setTransferDismissals([]);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_transfer_dismissals')
-      .select('id, outflow_transaction_id, inflow_transaction_id, dismissed_at')
-      .eq('profile_id', forProfile);
+      .select('id, outflow_transaction_id, inflow_transaction_id, dismissed_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('dismissed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('transfer dismissals unavailable');
       setTransferDismissals([]);
@@ -1150,10 +1163,13 @@ function useProvideFinanceData() {
       setTransferSingleLegsFailed(false);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_transfer_single_legs')
-      .select('id, transaction_id, verdict, decided_at')
-      .eq('profile_id', forProfile);
+      .select('id, transaction_id, verdict, decided_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('decided_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('single-leg transfer decisions unavailable');
       setTransferSingleLegs([]);
@@ -1362,11 +1378,15 @@ function useProvideFinanceData() {
 
   const fetchNetWorthHistory = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) return;
-    const { data, error } = await supabase
+    // Keyed by day: the column list carries no id, and a profile has one
+    // snapshot per day (idx_finance_net_worth_snapshots_day).
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_net_worth_snapshots')
-      .select('captured_on, net_worth, assets, liabilities')
+      .select('captured_on, net_worth, assets, liabilities', { count: 'exact' })
       .eq('profile_id', forProfile)
-      .order('captured_on', { ascending: true });
+      .order('captured_on', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.captured_on);
     if (error) {
       // A missing series is not worth a toast: every other figure on the page
       // is current state and still correct without it.
@@ -1433,13 +1453,22 @@ function useProvideFinanceData() {
           scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, updated_at')),
           scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count, type, half_day')),
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
-          scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
+          selectAllPages((from, to) => scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id', { count: 'exact' }))
+            .order('date', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to), row => row.id),
           scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, credit_limit, use_case, emoji, color')),
           scopedByProfile(supabase.from('finance_investment_holdings').select('id, account_id, name, ticker, shares, avg_price, cost_basis_known, current_price, current_price_known, category')),
-          scopedByProfile(supabase.from('finance_investment_activities').select('id, account_id, provider, activity_type, occurred_on, name, ticker, quantity, unit_price_gbp, source_reference').order('occurred_on', { ascending: false })),
+          selectAllPages((from, to) => scopedByProfile(supabase.from('finance_investment_activities').select('id, account_id, provider, activity_type, occurred_on, name, ticker, quantity, unit_price_gbp, source_reference', { count: 'exact' }))
+            .order('occurred_on', { ascending: false })
+            .order('id', { ascending: true })
+            .range(from, to), row => row.id),
           scoped(supabase.from('finance_memberships').select('id, is_default, name, type, status, annual_fee, use_case')),
           scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, course_end_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color')),
-          scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
+          selectAllPages((from, to) => scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at', { count: 'exact' }))
+            .order('observed_on', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to), row => row.id),
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji, provider')),
@@ -2816,7 +2845,7 @@ function useProvideFinanceData() {
   const recurringToday = todayInLocalTimezone();
   const visibleRecurrings = recurrings.map(bill => ({
     ...bill,
-    isPaid: bill.isPaid && (!bill.lastPaidDate || isRecurringPaidForPeriod(bill, recurringToday)),
+    isPaid: bill.isPaid && isRecurringPaidForPeriod(bill, recurringToday),
   }));
 
   const value = {
