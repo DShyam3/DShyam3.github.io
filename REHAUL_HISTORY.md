@@ -2568,6 +2568,99 @@ the selected card scrolls as a whole so its heading and controls cannot crowd
 out its content. This closes the responsive composition decision for About;
 Library remains planned.
 
+### Bills calendar and balance forecast share one schedule — 2026-10-09
+
+**The decisions:** the forecast starts from checking accounts only, lists overdue
+unconfirmed bills rather than subtracting them, and lets one bank payment settle
+exactly one due date, whatever range is on screen.
+
+Checking accounts only, because bills and pay move through them. A savings or
+card balance would need a transfer or a repayment the forecast does not model,
+so bills paid from another account are listed, not counted.
+
+An overdue bill that is not confirmed is usually a payment the app could not
+match, not a missed one. The money has probably already left the balance, so
+subtracting the bill again would count it twice.
+
+A payment settles the one due date whose window holds it. The window opens up to
+seven days before that date (three for a weekly bill) and closes where the next
+one's opens. The rule depends only on the bill, its coverage and the payment,
+never on the range shown, so the calendar and the forecast agree. Known limit: a
+payment for a missed date that lands within a week of the next date reads as the
+next date paid early, so the missed date shows as not confirmed. Settling the
+older date instead would double-count every bill debited a day early while the
+previous period is unticked, which is the common case.
+
+Pay counts as landed if a non-transfer credit of at least half a payday's share
+reached a checking account from five days before the coming payday up to today.
+This errs low: weekly pay arriving two or more days late can leave one pay out
+of the forecast, but a pay is never counted twice.
+
+Next-payday details now come from `nextPayday` and `paydaysBetween` in
+`lib/finance/payday.ts`, the same functions the forecast uses, so the two cannot
+disagree about a payday. `calculateActualPayday` is deleted.
+
+Closure: `src/lib/finance/bill-schedule.ts`, `balance-forecast.ts`, `payday.ts`;
+`src/features/finance/finance-calcs.ts`.
+
+### Recurring Paid follows the covered period; early payment is explicit — 2026-10-10
+
+**The decisions:** for monthly, quarterly and annual bills, the period a payment
+covers is the single source of truth for Paid. The stored tick can only hide Paid,
+never show it: a row is shown Paid when the tick is on and the covered period
+includes today's.
+
+- **The old trust-the-tick rule is gone.** A bill with a ticked row and no payment
+  date used to show Paid every month. Five live bills were in that state (Rent,
+  Gym Membership and Octopus Energy on the owner's profile, two on Demo). They now
+  show Unpaid until ticked once, because a tick alone cannot say which period it paid.
+- **A tick never gives early credit; only the explicit early button does.** A tick
+  covers the period containing today. Early credit through a tick could only come
+  from an inconsistent untick state, and it would claim a payment that was not made.
+  The "Paid {date} early" button appears from seven days before the next due date,
+  and only while the current period is covered.
+- **An untick hands back exactly one period, counted from coverage** rather than
+  from the stored field alone, so rows confirmed before `paid_for_due_date` existed
+  hand back the same way. Unticking an early payment leaves the current period Paid.
+- **Edits map coverage, they do not re-derive it from the tick.** A due-day or month
+  change maps the covered period as it is onto the new schedule. A last-paid date
+  correction earns against the coverage before that payment, decided by whether the
+  coverage includes the old payment (judged from stored dates), not by the shown
+  tick, which changes as periods roll over. A frequency change moves the payment back
+  one period when the new period is longer or the old coverage did not include its
+  payment, so a monthly payment never becomes a whole annual period and an untick
+  never comes back.
+- **Only lists that grow over time are paged.** A read capped at 1,000 rows returns
+  a shorter list with no error, so transfers and matches would miscount silently.
+  Paged now, through `selectAllPages`: transfer links, transfer dismissals,
+  one-sided transfers, transfers between profiles, payslips and their bank matches,
+  net-worth snapshots, goal contributions, investment activity and debt observations.
+  Settings-sized lists stay single reads. This supersedes the 2026-10-06 note in
+  pagination (P-6) that the other finance reads were under 300 rows.
+
+**Known limits:** a weekly untick leaves coverage at `lastPaidDate`, so the calendar
+can still show that week paid (no weekly bills are live). Changing frequency on a
+bill marked unpaid leaves it Unpaid.
+
+Closure: `src/lib/finance/recurring-detection.ts` (`tickRecurring`, `untickRecurring`,
+`payRecurringEarly`, `coverageAfterEdit`, `isRecurringPaidForPeriod`);
+`src/features/finance/FinancePage.tsx`, `FinanceDataContext.tsx`, `tabs/RecurringsTab.tsx`;
+`src/integrations/supabase/select-all-pages.ts`. Reviewed by Opus in three passes, all
+findings fixed. Not checked signed in in a browser, and not deployed.
+
+### Deploy record — 2026-10-07 and 2026-10-08
+
+Deployed 2026-10-07: `056afb97`, `e9a72a7a`, `531561f0`, `48e70a23`, with migrations
+`20261006090000` and `20261006220926`. Live: finance loading recovery, recurring
+review, payslip reconciliation, ledger and watchlist pagination, the three-part
+nightly sync. The 7 Oct incident was a client-side network stall in Chrome: edge
+logs show the profile request never reached Supabase.
+
+Deployed 2026-10-08: `c081b08a` and `55269ec5` on `0d04bd24`, Pages run
+37739685661. Live DB: migration `20261008090000_finance_recurring_paid_period.sql`
+(nullable `paid_for_due_date`, no backfill, anon grants 0). All 11 live bills lack
+`last_paid_date`, so no early credit was lost. `watchlist-cron-sync` is v13.
+
 ### Compact collection controls — 2026-10-20
 
 Collections use the Watchlist Library’s compact toolbar pattern: the primary

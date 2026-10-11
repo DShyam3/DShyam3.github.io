@@ -31,10 +31,12 @@ card is wide enough, and one column in narrower cards. Both are editable in plac
 skeleton-loaded otherwise. The CV uploads to private storage and downloads
 through a short-lived signed URL. Admins get a second add button for education.
 
-About stays within the page frame; biography, experience and projects scroll
-inside their cards. Large screens show portrait and biography above the timeline,
-with projects alongside. Smaller or shorter screens offer About, Experience and
-Projects buttons to select one full-size card. Scroll regions support keyboard
+About stays within the page frame; experience and projects scroll inside their
+cards. Large screens show portrait and biography above the timeline, with
+projects alongside; the biography shows in full unless it would need more than
+about two-thirds of the height, and the timeline takes the rest. Smaller or shorter screens offer About, Experience and
+Projects buttons to select one full-size card, where the biography scrolls only
+if it cannot fit. Scroll regions support keyboard
 focus, and short screens scroll the whole selected card to keep controls reachable.
 
 ## Collections
@@ -196,7 +198,7 @@ wishlist item, with the message "Wishlist items cannot be in your EDC".
 
 ## Finance
 
-Admin-only. Five routed surfaces, fifteen sections — each one linkable, each
+Admin-only. Five routed surfaces, sixteen sections — each one linkable, each
 one a real URL with a working back button.
 
 ### Home
@@ -219,7 +221,13 @@ cache. Confirmed transfers are left out of spending and income everywhere figure
 
 Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, monthly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
 
-Paid is decided per period: a month, quarter or year, labelled by the bill's due date. Marking a monthly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. Marking the bill unpaid returns that period to unpaid. Editing a bill's schedule keeps its tick. Weekly bills count as paid for a payment made in the last seven days, today included.
+Paid is decided per period: a month, quarter or year, labelled by the bill's due date. A bill shows Paid only when a recorded payment covers the current period, so a bill ticked before any payment date was recorded shows Unpaid until it is ticked again. Marking a monthly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. A tick never covers the next period. Marking the bill unpaid returns that period to unpaid. Weekly bills count as paid for a payment made in the last seven days, today included.
+
+From seven days before a bill's next due date, a bill that is paid for the current period shows a "Paid 1 Nov early" button in its row, in both Due this month and Future / Scheduled. It records today's payment against that next period. Marking the bill unpaid then hands back only that early payment, so the current period stays Paid.
+
+Editing a bill keeps the period its payment covers. Changing the due day or month keeps that period, including an early payment, and keeps the bill's tick. Correcting the last-paid date works out the covered period again from the corrected date, and Paid is decided again from it. Changing the frequency never stretches a payment over a longer period, and never brings back a payment that was marked unpaid.
+
+The Recurrings section has a calendar of bills: a month grid from the current month to eleven months ahead. Days with bills are marked, and selecting one filters the list below to that day. Each bill shows one of four statuses, written out as well as marked: Paid, when that period is confirmed paid; Seen in bank, when a matching bank payment settles it, counted from up to a week before its due date (three days for a weekly bill); Not confirmed, for a past date with neither; or Due. The summary reads the scheduled total and the amount still to pay, labelled as a forecast. Bills that cannot be placed on a date are named beneath the calendar.
 
 A quick failure loading finance profiles is retried automatically twice; if it still fails, or the database does not answer within 15 seconds, a persistent error offers “Try again”. A finance section that fails to display, or takes more than 15 seconds to load, offers “Reload page”.
 
@@ -234,7 +242,7 @@ on bank-synced rows. Possible transfers also lists one-sided transfers — a row
 
 Bank-synced transfers are labelled "Transfers" rather than a spending category, and a category you change on a synced transaction stays changed after the next sync.
 
-The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown.
+The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown. Transfer links, transfer dismissals, one-sided transfers, transfers between profiles, payslips and their bank matches, net-worth history, goal contributions, investment activity and debt balance records also load in full, however many there are.
 
 Home's transaction list links to the Transactions tab: clicking a row's name opens
 that transaction with the row selected and scrolled into view. The list's
@@ -245,6 +253,8 @@ and filter logic; the navigation is read once and cleared.
 ### Plan
 
 **Cash flow** — income, spending and net come only from recorded transactions, with confirmed transfers left out; recurring bills are not added on top. The detail drawers list each year in the chosen period with that year's total and monthly average. "Where it went" shows the period's income flowing into spending categories (top five payers and top eight categories, the rest grouped as "Other"), with what was kept or drawn from balances; below tablet width it shows as a table, and on wider screens the table is one click away.
+
+**Forecast** — the projected balance of the checking accounts for each of the next 60 days. It starts from their balances today, takes off each active bill not yet paid or seen in the bank, and adds modelled take-home on each payday. It shows the lowest point, the first day below zero and the balance in 60 days, with a chart and a list of pay and bills by date. Day-to-day spending is not included. Bills paid from another account, and past bills not confirmed, are listed rather than subtracted. Pay that has already arrived a few days before payday is not counted twice. If take-home pay cannot be modelled, the forecast says pay is not included. A warning appears when transfers fail to load, because bills may then not match their bank payments.
 
 **Goals** and a "what if" scenario engine for testing a change before making it.
 
@@ -273,7 +283,9 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   much is pending. Income by tax year is derived from payslips and sets each
   year's Plan 2 rate. Two views: your loan showing balance from latest SLC
   statement, accrued interest, and payslip deductions replacing modelled ones up
-  to the latest payslip; and a simulator for any loan with course details.
+  to the latest payslip, plus how much you borrowed (summed from recorded
+  borrowing, or the amount entered when none is recorded) and how far the current
+  balance sits above or below it; and a simulator for any loan with course details.
   Month-by-month timeline with a scrubber and play control, showing balance,
   interest rate, monthly payment and repaid-so-far. Totals: total repaid,
   written off, peak balance, interest added. Refunds and payments made outside
@@ -370,6 +382,8 @@ rise from the right and set to the left over 700ms. Supported browsers crossfade
 the page between palettes over 350ms; other browsers switch the palette immediately.
 The moon rises smoothly into place without overshooting. Reduced-motion
 preferences skip the animation.
+
+The header's "+" button opens social links beside it. From 700px they open to its right; between 700 and 1023px the page title fades out to make room. Below 700px they open to its left and the name fades out instead.
 
 Every route's content sits in one "middle card" between the fixed header and footer. The card is the page's only vertical scroller. From 768px wide it has a fine border, 24px corners and a quiet tint. Below 768px there is no frame and the ordinary page gutter is the inset.
 

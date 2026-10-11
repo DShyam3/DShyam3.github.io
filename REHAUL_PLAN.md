@@ -444,11 +444,59 @@ arithmetic over rows already held.
 - **Categorisation review queue** — surface uncertain assignments for
   confirmation rather than assigning silently. This is the 7.P-compliant shape
   of the feature Copilot ships; straight auto-categorisation is not
-- **Upcoming bills calendar** — recurrings rendered forward
 - **Subscription audit** — price risen, or unused for N months
 - **Merchant drilldown** — spend per merchant per year, off the existing
   merchant resolution
 - **Safe to spend**, **net worth milestones**, **year in review** via 8.D
+
+**Gaps against Copilot and Treasury.** Four more, from comparing the two
+products' feature sets. Unlike the list above, not all are arithmetic over rows
+already held: three need a table or column, and one needs a data source.
+
+- **Category rules** — "merchant X is always Y", optionally with a rename,
+  applied to future rows. Rules over rows, so 7.P holds: no model assigns
+  anything. The natural entry point is the review queue above — confirming a
+  suggestion offers "always for this merchant", which writes the rule. Needs a
+  profile-scoped `finance_category_rules` table and migration. A rule never
+  overrides a category you set by hand; the sync already keeps one, and a rule
+  must not be what breaks that. *Decide:* write the category at ingest, or
+  derive it at read time (yours, else the first matching rule, else the
+  bank's). Read time keeps one source of truth and needs no `truelayer-sync`
+  change. Either way, show how many rows a new rule would change before it
+  applies
+- **Transaction splitting** — one bank row across several categories (a shop
+  that is half groceries, half household). Child rows
+  `finance_transaction_splits(transaction_id, category, amount)` that sum to
+  the parent to the penny, enforced on save and covered by tests. Every figure
+  that reads a category — Home, Budget history, Cash Flow, merchant drilldown —
+  reads the splits when present, so this is calculation work across those
+  modules before it is UI. Bank sync upserts the parent and never touches its
+  splits; settled-only ingest (7.M) keeps the parent amount still under them.
+  *Decide:* whether a split line can itself be a transfer
+- **Budget rollover** — per budget item, unspent money carries into next month.
+  Derive it from history rather than storing a running balance, for the same
+  reason debt balances are anchored rather than floating: a month's rollover is
+  the sum of budget minus spent since the item's rollover start. Needs a flag
+  and a start month. *Decide:* whether overspend carries too, and whether it
+  resets at the tax year or never
+- **Investment prices, benchmark and allocation** — holdings carry import cost
+  only, and the importer never invents a price; that rule stays. Needs a price
+  source behind an Edge Function (key server-side, fixed URLs, never one the
+  client names) writing a dated `finance_prices(symbol, date, close, currency,
+  source)` cache, so a missing price shows as missing rather than guessed.
+  Kraken's public market data covers crypto; equities and funds need a
+  provider whose terms allow personal use — not chosen. Performance against a
+  benchmark and allocation by account and holding are then arithmetic over
+  holdings × prices, converted to GBP. Allocation by asset class or sector
+  needs per-holding metadata nothing supplies today
+
+Order within these: category rules go with the review queue; splitting,
+rollover and prices stand alone. Splitting touches the most figures, so it
+wants a `reviewer` pass before it lands.
+
+**Forecast follow-ups** — day-to-day spending is not modelled; overdraft limits
+are not stored, so "below zero" is the warning; the forecast totals all current
+accounts rather than per account.
 
 ### 8.I Still to build (the order)
 
