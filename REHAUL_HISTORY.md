@@ -2577,4 +2577,8 @@ in a horizontally scrolling strip. The existing measured pin rule still lets
 the band scroll away when it would consume too much of the card frame.
 The earlier local browser check on 2026-10-13 measured Inspiration’s toolbar at
 142px at 768×1024, replacing the four-row, 291px layout recorded in the plan.
-The isolated release is in the working tree; it is not yet committed or deployed.
+The isolated release merged through PR #2 on 2026-10-20 (code `fe83fe54`,
+merge `799d8358`). Both CI runs pass;
+[Pages run 39380259371](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39380259371)
+succeeded. The live Inventory page shows the compact toolbar and 13 EDC items
+with brands and no wishlist item. Live authenticated writes remain unverified.

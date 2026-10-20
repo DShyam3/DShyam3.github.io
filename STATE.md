@@ -1,13 +1,17 @@
 # State
 
-**Updated:** 2026-10-20 · **Branch:** `codex/edc-toolbar-release` · **HEAD:** `9ae9dfeb`
+**Updated:** 2026-10-20 · **Branch:** `codex/edc-toolbar-release` · **Deployed code:** `799d8358`
 
-## In progress
+## Deployed
 
-Isolated EDC, collection toolbar and detail-dialog release is in the working tree,
-uncommitted, unpushed and not deployed. It starts from `origin/main` at `9ae9dfeb`;
-unrelated finance, Travel and About work from the original checkout is excluded.
-The latest original review fixes are included. Final release review and fresh checks pass. The original checkout is owned by another session.
+EDC, collection toolbar and detail-dialog release merged through
+[PR #2](https://github.com/DShyam3/DShyam3.github.io/pull/2) on 2026-10-20.
+Code commit `fe83fe54`; merge `799d8358`. This checkout is fast-forwarded to the merge.
+CI runs `39379992780` and `39379997629` pass.
+[Pages run 39380259371](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39380259371)
+succeeded; merge `799d8358` is deployed and the live Inventory page is verified.
+Unrelated finance, Travel and About work from the original checkout is excluded;
+that checkout is owned by another session.
 
 Migration `20261013100000_inventory_wishlist_not_edc` is applied locally and LIVE.
 Live verification found zero wishlist/EDC conflicts and a validated constraint.
@@ -27,13 +31,13 @@ The UI excludes wishlist items from EDC and rejects adding them through item edi
 | Browser, original checkout | 2026-10-19 | 390×844: no horizontal overflow, 13 EDC items, brand visible; 768×600 dark/light detail: 552px max, keyboard scroll, stationary image |
 | Browser, isolated release | 2026-10-19–20 | Signed-in local fixture: owned EDC persists overnight; wishlist excluded from picker and refused by edit form; Tech default Filters has no active count |
 | Review | 2026-10-20 | Isolated diff rereview: no blockers |
+| Live browser | 2026-10-20 | Inventory: compact dropdown/search toolbar, 13 EDC items, brands visible, no wishlist item |
 
 ## Next
 
-1. Commit the verified isolated batch, open PR and deploy.
-2. Verify live authenticated EDC writes and persistence after deployment.
-3. Verify physical devices, Larger mode and 200% zoom; continue the remaining dialog audit.
-4. Resume REHAUL_PLAN priorities separately; Library contained scrolling remains unbuilt.
+1. Verify live authenticated EDC writes and persistence.
+2. Verify physical devices, Larger mode and 200% zoom; continue the remaining dialog audit.
+3. Resume REHAUL_PLAN priorities separately; Library contained scrolling remains unbuilt.
 
 ## Blockers / open risks
 
@@ -47,3 +51,4 @@ The UI excludes wishlist items from EDC and rejects adding them through item edi
 - Other finance collections remain unpaged; duplicated src/Deno pagers must change together.
 - Declarative grants reconciliation remains open. No unrelated finance fixes are shipped by this release.
 - Main ancestry discrepancy is resolved: local main was stale; `ea9dc192` and `9ae9dfeb` are in `origin/main`.
+- CI maintenance: pinned Node 20 Actions face Node 24 enforcement; `ubuntu-latest` moves to 26. These deprecation notices are not lint failures.
