@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { edcCategoryLabel } from './categories';
+import { edcCategoryLabel, isInEdc } from './categories';
 import type { InventoryRow } from '@/collections/inventory';
 
 interface EdcBuilderDialogProps {
@@ -23,9 +23,12 @@ export function EdcBuilderDialog({ open, onOpenChange, onCloseAutoFocus, allItem
   const [search, setSearch] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const pending = useRef(false);
-  const categories = [...new Set(allItems.map(edcCategoryLabel))].sort();
+  // Wishlist items are not owned, so they cannot be chosen. One already
+  // flagged as EDC stays listed, as Remove only, so it can be cleared.
+  const candidates = allItems.filter((item) => !item.is_wishlist || item.is_edc);
+  const categories = [...new Set(candidates.map(edcCategoryLabel))].sort();
   const query = search.trim().toLowerCase();
-  const filteredItems = allItems.filter((item) =>
+  const filteredItems = candidates.filter((item) =>
     (category === 'all' || edcCategoryLabel(item) === category)
     && (!query || [item.name, item.brand, edcCategoryLabel(item), item.subcategory]
       .some((value) => value?.toLowerCase().includes(query))),
@@ -55,7 +58,7 @@ export function EdcBuilderDialog({ open, onOpenChange, onCloseAutoFocus, allItem
       <DialogContent className="max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>Edit EDC</DialogTitle>
-          <DialogDescription>Choose your everyday carry from your inventory. Changes save automatically.</DialogDescription>
+          <DialogDescription>Choose your everyday carry from what you own. Changes save automatically.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="min-w-0 space-y-2 text-sm">
@@ -75,20 +78,20 @@ export function EdcBuilderDialog({ open, onOpenChange, onCloseAutoFocus, allItem
         </div>
         {filteredItems.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            {allItems.length === 0 ? 'Your inventory is empty. Add inventory items before choosing your EDC.' : 'No inventory items match. Try another search or category.'}
+            {candidates.length === 0 ? 'Nothing owned yet. Add owned items to your inventory before choosing your EDC.' : 'No inventory items match. Try another search or category.'}
           </p>
         ) : (
           <ul className="space-y-2">
             {filteredItems.map((item) => (
-              <li key={item.id} className={cn('flex items-center gap-3 rounded-lg border p-3', item.is_edc ? 'border-primary bg-primary/5' : 'border-border')}>
+              <li key={item.id} className={cn('flex items-center gap-3 rounded-lg border p-3', isInEdc(item) ? 'border-primary bg-primary/5' : 'border-border')}>
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted p-1">
                   {item.image ? <img src={item.image} alt="" loading="lazy" className="h-full w-full object-contain" /> : <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="break-words text-sm font-medium">{item.name}</p>
                   <p className="break-words text-xs text-muted-foreground">{[item.brand, edcCategoryLabel(item)].filter(Boolean).join(' · ')}</p>
-                  {item.is_wishlist && <p className="text-xs text-muted-foreground">Wishlist</p>}
-                  {item.is_edc && <p className="text-xs text-primary">In EDC</p>}
+                  {item.is_wishlist && <p className="text-xs text-muted-foreground">Wishlist · not shown in EDC</p>}
+                  {isInEdc(item) && <p className="text-xs text-primary">In EDC</p>}
                 </div>
                 <Button size="sm" variant={item.is_edc ? 'secondary' : 'outline'} disabled={savingId !== null} aria-pressed={Boolean(item.is_edc)} aria-label={`${item.is_edc ? 'Remove' : 'Add'} ${item.name} ${item.is_edc ? 'from' : 'to'} EDC`} onClick={() => void toggleEdc(item)}>
                   {item.is_edc ? <Check className="h-4 w-4" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}

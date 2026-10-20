@@ -319,7 +319,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       return;
     }
 
-    const invalid = config.validate?.(values);
+    const invalid = config.validate?.(values, item);
     if (invalid) {
       setErrors(invalid);
       return;

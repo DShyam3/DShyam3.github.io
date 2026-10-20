@@ -45,14 +45,24 @@ hook. A collection is defined end to end in a single file under
 `src/collections/`, and `registry.ts` is the one place that answers "what does
 this site list?" without opening the router.
 
-Each gets faceted filtering, search, and admin-only add/edit/remove. Adding a
-tenth collection is a file, a registry line, a route and a schema file — not a
-new implementation of the same idea.
+Each collection has a title pill, item count and admin actions in the same
+compact toolbar as the Watchlist Library. Categories use a dropdown with counts;
+search fills the available space and has a clear button. Additional filters
+open from Filters, and collections with multiple sort orders have a sort
+dropdown. Search and filters appear where the collection supports them. Admins
+can add, edit and remove items; Inventory’s EDC view keeps its Edit EDC action.
 
 Media cards show the category badge on the artwork, truncating rather than overlaying text. Admin edit and delete buttons sit in a row beneath the card text, shown on hover or focus with a mouse and always on touch.
 
 Search and filter controls wrap into available space. Cards keep readable widths
 as the number of columns changes.
+
+Collection and EDC detail dialogs grow with the screen and their content, up to
+896px wide. On screens at least 640px wide, the image stays stationary beside
+the details; the details scroll independently only when they exceed the
+available height. Images fit the available space, and the details pane
+supports keyboard focus and scrolling. On phones, the image and details stack
+in one scrolling dialog.
 
 Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac.
 
@@ -171,12 +181,16 @@ At 1024px wide and 600px tall, the map sits beside the country list, which scrol
 Inventory opens on EDC: selected everyday-carry items from the inventory,
 grouped by category, including Tech, Jewellery and Toiletries. The showcase is
 read-only and shows all selected items without an Owned, Wishlist or All filter.
-Other inventory categories retain their ownership filters.
+Wishlist items never appear in the EDC view or its category filter, even when
+flagged for EDC. Other inventory categories retain their ownership filters.
 
-Admins use Edit EDC to search all existing inventory items and filter by category,
-then add or remove items from EDC. Each selection saves automatically. The editor
-wraps long item names and brands on narrow screens and keeps focused controls
-fully visible.
+Admins use Edit EDC to search owned inventory items and filter by category,
+then add or remove items from EDC. A wishlist item still flagged for EDC is
+listed as "Wishlist · not shown in EDC" with Remove only, and leaves the list
+once removed. Each selection saves automatically. The editor wraps long item
+names and brands on narrow screens and keeps focused controls fully visible.
+The item edit form refuses Include in Everyday Carry (EDC) set to Yes on a
+wishlist item, with the message "Wishlist items cannot be in your EDC".
 
 ---
 
@@ -390,11 +404,13 @@ credit cards align in one row.
 The menu offers persistent Standard and Larger display sizes. Larger increases
 text and controls while retaining ordinary browser keyboard navigation.
 
-Dialogs maintain rounded corners and a gutter at all screen widths. Tapping or
-clicking the backdrop of a dialog closes it without activating anything behind
-it. Dragging across the backdrop does not dismiss it. Dialog and sheet headers
-keep titles and text clear of the close button; on phones, a date beside a
-title moves beneath it, as in sync run details.
+Dialogs maintain rounded corners and a gutter at all screen widths. A dialog
+body that scrolls shows a thin scrollbar, which on dialogs with the default
+padding sits in the right padding, clear of the content. Tapping or clicking
+the backdrop of a dialog closes it without activating anything behind it.
+Dragging across the backdrop does not dismiss it. Dialog and sheet headers keep
+titles and text clear of the close button; on phones, a date beside a title
+moves beneath it, as in sync run details.
 
 ---
 

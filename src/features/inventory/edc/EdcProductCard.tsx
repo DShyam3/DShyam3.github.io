@@ -31,7 +31,6 @@ export function EdcProductCard({ item, config }: EdcProductCardProps) {
         <div className="w-full space-y-1 p-3">
           <h3 className="text-sm font-medium">{item.name}</h3>
           {item.brand && <p className="text-xs text-muted-foreground">{item.brand}</p>}
-          {item.is_wishlist && <span className="inline-block rounded bg-muted px-2 py-1 text-xs text-muted-foreground">Wishlist</span>}
         </div>
       </button>
       <CardDetailDialog

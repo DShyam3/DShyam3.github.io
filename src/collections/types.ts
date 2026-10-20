@@ -26,6 +26,8 @@ export interface FacetDef<T> {
   key: string;
   /** Column this facet filters on. Compared as a string, so booleans work. */
   field: keyof T & string;
+  /** Name shown on the control. Defaults to the key, capitalised. */
+  label?: string;
   /**
    * Options in display order. `all` is prepended automatically and means "no
    * filter", unless `includeAll` is false.
@@ -275,8 +277,12 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     values: FormValues,
   ) => Partial<FormValues> | null;
 
-  /** Validate on submit. Return a message keyed by field, or null if valid. */
-  validate?: (values: FormValues) => Record<string, string> | null;
+  /**
+   * Validate on submit. Return a message keyed by field, or null if valid.
+   * `item` is the row being edited, for rules that depend on a column the
+   * form does not show; it is undefined when adding.
+   */
+  validate?: (values: FormValues, item?: T) => Record<string, string> | null;
 
   /** Custom view to replace the standard grid (e.g. EDC showcase) when active. Return null to render standard grid. */
   customView?: (context: CollectionViewContext<T>) => ReactNode | null;
