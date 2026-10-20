@@ -2567,3 +2567,14 @@ reading space instead of shrinking every pane. At heights of 600px or less,
 the selected card scrolls as a whole so its heading and controls cannot crowd
 out its content. This closes the responsive composition decision for About;
 Library remains planned.
+
+### Compact collection controls — 2026-10-20
+
+Collections use the Watchlist Library’s compact toolbar pattern: the primary
+category remains visible as a dropdown, while secondary facets open from
+Filters. This closes the tall wrapping-toolbar decision without hiding options
+in a horizontally scrolling strip. The existing measured pin rule still lets
+the band scroll away when it would consume too much of the card frame.
+The earlier local browser check on 2026-10-13 measured Inspiration’s toolbar at
+142px at 768×1024, replacing the four-row, 291px layout recorded in the plan.
+The isolated release is in the working tree; it is not yet committed or deployed.

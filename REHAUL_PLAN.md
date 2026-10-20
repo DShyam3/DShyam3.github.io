@@ -164,7 +164,6 @@ browser; Finance was not, because it needs a signed-in session.
 |---|---|
 | Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only |
 | Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
-| Toolbars that wrap to many rows | Inspiration's filters take four rows (291px) at 768px, so the band unpins and scrolls away. A disclosure for secondary filters would let it pin |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
 | Dialog audit | Statement and investment imports may still nest a `vh` cap inside `.dialog-body` |
 | Watchlist episode dialog | Deliberate split panes; audit their heights on short and narrow screens on their own |

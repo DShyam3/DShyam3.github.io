@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_items" (
     "specs" "text",
     "is_edc" boolean DEFAULT false,
     "edc_slot" "text" DEFAULT 'pockets'::"text",
-    "edc_order" integer DEFAULT 0
+    "edc_order" integer DEFAULT 0,
+    -- A wishlist item is not owned, so it cannot be carried.
+    CONSTRAINT "inventory_items_wishlist_not_edc" CHECK (NOT (COALESCE("is_wishlist", false) AND COALESCE("is_edc", false)))
 );
 
 ALTER TABLE "public"."inventory_items" OWNER TO "postgres";

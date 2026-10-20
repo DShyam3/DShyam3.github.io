@@ -1,7 +1,9 @@
 import type { CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
-import { Button } from '@/components/ui/button';
+import { Library, Plus } from 'lucide-react';
+import { ActionButton } from '@/components/shared/ActionButton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { CardGrid } from '@/components/shared/CardGrid';
@@ -44,6 +46,7 @@ export function CollectionPage<T extends CollectionRow, R>({
   } = useCollection(config);
 
   const layout = CARD_LAYOUT[config.card.variant];
+  const CollectionIcon = config.card.fallbackIcon ?? Library;
 
   const activeSort = sortOptions.find((o) => o.key === sortKey);
   const showSortToggle =
@@ -94,45 +97,19 @@ export function CollectionPage<T extends CollectionRow, R>({
       title={config.title}
       subtitle={config.subtitle}
       toolbar={
-        <>
-          <FilterBar
-            config={config}
-            filters={filters}
-            setFilter={setFilter}
-            countFor={countFor}
-            search={search}
-            setSearch={setSearch}
-          />
-
-          {/* Two groups that stay on one line each. On a phone there is not
-              room for both, so the row wraps between them rather than
-              squeezing the sort label onto two lines. */}
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 md:px-0 py-3">
-            <div className="flex items-center gap-3 sm:gap-4">
+        <div className="collection-toolbar space-y-2 py-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <h2 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground">
+                <CollectionIcon className="h-4 w-4 shrink-0" />
+                {config.title}
+              </h2>
               <CountLabel
                 count={loading ? undefined : count}
                 noun={noun.toLowerCase()}
               />
-              {showSortToggle && !customViewContent && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const next =
-                      sortOptions[
-                        (sortOptions.findIndex((o) => o.key === sortKey) + 1) %
-                          sortOptions.length
-                      ];
-                    setSortKey(next.key);
-                  }}
-                  className="h-8 px-2.5 text-xs whitespace-nowrap gap-1.5"
-                >
-                  {activeSort?.icon && <activeSort.icon className="h-3.5 w-3.5" />}
-                  <DotMatrixText text={(activeSort?.label ?? '').toUpperCase()} size="xs" />
-                </Button>
-              )}
             </div>
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
               {config.summary?.(items, isAdmin)}
               {customToolbarContent !== undefined ? (
                 customToolbarContent
@@ -142,12 +119,38 @@ export function CollectionPage<T extends CollectionRow, R>({
                     mode="add"
                     config={config}
                     onSubmit={(values) => addItem(values)}
+                    trigger={<ActionButton icon={Plus} label="Add" aria-label={`Add ${config.noun.singular}`} />}
                   />
                 )
               )}
             </div>
           </div>
-        </>
+          <FilterBar
+            config={config}
+            filters={filters}
+            setFilter={setFilter}
+            countFor={countFor}
+            search={search}
+            setSearch={setSearch}
+            sortControl={showSortToggle && !customViewContent ? (
+              <Select value={sortKey} onValueChange={setSortKey}>
+                <SelectTrigger aria-label={`Sort ${config.noun.plural.toLowerCase()}`} className="h-11 w-[168px] max-w-full shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortOptions.filter((option) => !option.hiddenWhen?.(filters)).map((option) => (
+                    <SelectItem key={option.key} value={option.key}>
+                      <span className="flex items-center gap-2">
+                        {option.icon && <option.icon className="h-4 w-4" />}
+                        {option.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : undefined}
+          />
+        </div>
       }
     >
       {customViewContent ?? (

@@ -4,7 +4,7 @@ import { CardGrid } from '@/components/shared/CardGrid';
 import { Button } from '@/components/ui/button';
 import { EdcProductCard } from './EdcProductCard';
 import { EdcBuilderDialog } from './EdcBuilderDialog';
-import { edcCategoryLabel } from './categories';
+import { edcCategoryLabel, isInEdc } from './categories';
 import type { InventoryRow } from '@/collections/inventory';
 import type { CollectionConfig } from '@/collections/types';
 
@@ -16,9 +16,9 @@ interface EdcShowcaseProps {
 }
 
 export function EdcShowcase({ items, allItems, config, isAdmin }: EdcShowcaseProps) {
-  const selectedItems = allItems.filter((item) => item.is_edc);
+  const selectedItems = allItems.filter(isInEdc);
   const groups = new Map<string, InventoryRow[]>();
-  for (const item of items.filter((item) => item.is_edc)) {
+  for (const item of items.filter(isInEdc)) {
     const label = edcCategoryLabel(item);
     const group = groups.get(label) ?? [];
     group.push(item);
