@@ -1,19 +1,23 @@
 # State
 
-**Updated:** 2026-10-22 · **Branch:** `codex/readiness-followup` · **HEAD at handoff:** `8c8ae10a`
+**Updated:** 2026-10-22 · **Branch:** `codex/readiness-followup` · **Deployed code:** `1395077f`
 
-## In progress
+## Deployed maintenance
 
-Dependency maintenance is LOCAL, UNCOMMITTED and NOT SHIPPED. The saved lockfile
-updates brace-expansion to 1.1.21 / 2.1.7 and source-map-js to 1.2.2.
-Vite 8.2.4 and Vitest 5.0.3 are installed and validated alongside those updates.
-All local checks pass; commit, PR, CI and deployment remain pending.
-Review found only the stale handoff status, corrected here.
-The original checkout is owned by another session; unrelated changes are excluded.
+Dependency maintenance merged through
+[PR #3](https://github.com/DShyam3/DShyam3.github.io/pull/3) on 2026-10-22:
+code `34a1609c`, merge `1395077f`. This checkout is fast-forwarded to the merge.
+Updates include brace-expansion 1.1.21 / 2.1.7, source-map-js 1.2.2,
+Vite 8.2.4 and Vitest 5.0.3. Local checks and CI runs `39765507979` /
+`39765514277` pass.
+[Pages run 39765814791](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39765814791)
+succeeded on 2026-10-22; merge `1395077f` is deployed.
+Review found only stale handoff status, corrected here. The original checkout
+is owned by another session; unrelated changes are excluded.
 
-## Deployed
+## Prior EDC release
 
-EDC, compact collection controls and detail dialogs remain deployed at `799d8358`
+EDC, compact collection controls and detail dialogs shipped at `799d8358`
 through [PR #2](https://github.com/DShyam3/DShyam3.github.io/pull/2).
 [Pages run 39380259371](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39380259371)
 succeeded on 2026-10-20. Live Inventory shows 13 EDC items, brands and no wishlist item.
@@ -30,16 +34,15 @@ verification found zero conflicts and a validated constraint. Local rollback tes
 | ship-check | 2026-10-22 | 95/100 Beta; 12 findings: 2 high, 6 medium, 2 low, 2 info |
 | Larger-mode browser | 2026-10-20 | Wallet detail fits 640×400 and 375×844 without horizontal overflow |
 | EDC local browser | 2026-10-19–20 | Owned selection persists; wishlist excluded from picker and rejected by edit form |
-| Live browser / deployment | 2026-10-20 | Prior EDC release verified; maintenance not deployed |
+| Deployment | 2026-10-22 | Dependency maintenance Pages run succeeds; prior EDC live browser verification remains dated 2026-10-20 |
 
 ## Next
 
-1. Commit the validated dependency patch, open PR, then verify CI and deployment.
-2. Recheck the residual braces advisory: no upstream patch was available as of 2026-10-20.
-3. Review scanner N+1 findings and the selector-parser medium finding. Locator found mostly
+1. Recheck the residual braces advisory: no upstream patch was available as of 2026-10-20.
+2. Review scanner N+1 findings and the selector-parser medium finding. Locator found mostly
    batched/paged finance queries; Watchlist per-season/per-favourite reads remain. None is fixed here.
-4. Verify live authenticated EDC writes, physical devices and true 200% zoom; continue dialog audit.
-5. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
+3. Verify live authenticated EDC writes, physical devices and true 200% zoom; continue dialog audit.
+4. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
 
 ## Blockers / open risks
 
