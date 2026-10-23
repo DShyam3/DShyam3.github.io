@@ -1,26 +1,27 @@
 # State
 
-**Updated:** 2026-10-23 · **Branch:** `codex/readiness-triage` · **Deployed code:** `1395077f`
+**Updated:** 2026-10-23 · **Branch:** `codex/readiness-triage` · **Deployed code:** `8f6078e8`
 
-## In progress
+## Deployed cleanup
 
-Readiness cleanup is LOCAL, UNCOMMITTED and NOT SHIPPED. It removes unused
+Readiness cleanup merged via [PR #4](https://github.com/DShyam3/DShyam3.github.io/pull/4):
+code `035a27fa`, merge `8f6078e8`. It removes unused
 `@tailwindcss/typography` and its selector parser 6.0.10 from the package and both locks.
 `SECURITY.md` records residual dependency exposure and N+1 source triage without
 suppressions. Query runtime is unchanged. Source review is complete; workload
 measurement remains. The reviewer’s finance-pagination correction is in SECURITY.md.
-The original checkout is owned by another session; unrelated changes are excluded.
+CI runs `39994923791` / `39994932585` pass (2026-10-23).
+[Pages run 39995094919](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39995094919)
+succeeds on 2026-10-23; cleanup merge `8f6078e8` is deployed.
 
-## Deployed
+## Previous releases
 
 Dependency updates shipped through [PR #3](https://github.com/DShyam3/DShyam3.github.io/pull/3)
-at `1395077f`: brace-expansion 1.1.21 / 2.1.7, source-map-js 1.2.2,
-Vite 8.2.4 and Vitest 5.0.3. [Pages run 39765814791](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39765814791)
-succeeded on 2026-10-22. The new cleanup is not included in that deployment.
-EDC controls/dialogs shipped through PR #2 at `799d8358`; live Inventory was verified
-on 2026-10-20 with 13 EDC items, brands and no wishlist item.
-Migration `20261013100000_inventory_wishlist_not_edc` is applied locally and LIVE;
-verification found zero conflicts and a validated constraint. Local rollback tests pass.
+at `1395077f`: brace-expansion 1.1.21 / 2.1.7, source-map-js 1.2.2, Vite 8.2.4 and Vitest 5.0.3. [Pages run 39765814791](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39765814791)
+succeeded on 2026-10-22; that dependency release precedes the deployed cleanup.
+EDC controls/dialogs shipped through PR #2 at `799d8358`; live Inventory verification
+on 2026-10-20 found 13 EDC items, brands and no wishlist item.
+Migration `20261013100000_inventory_wishlist_not_edc` is applied locally and LIVE: zero conflicts, validated constraint; local rollback tests pass.
 
 ## Checks
 
@@ -36,13 +37,12 @@ verification found zero conflicts and a validated constraint. Local rollback tes
 
 ## Next
 
-1. Commit cleanup, open PR, verify CI and deploy.
-2. Measure Watchlist and finance workloads before changing query behaviour. Source triage finds
+1. Measure Watchlist and finance workloads before changing query behaviour. Source triage finds
    mostly batched/paged finance queries; Watchlist per-season/per-favourite reads remain.
-3. Follow up selector-parser 6.1.4. Upstream withdrew braces GHSA-vfj7-8cjw-p6xm on
+2. Follow up selector-parser 6.1.4. Upstream withdrew braces GHSA-vfj7-8cjw-p6xm on
    2026-10-23 as not practically exploitable; its high finding disappeared without a package change.
-4. Verify live authenticated EDC writes, physical devices and true 200% zoom; continue dialog audit.
-5. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
+3. Verify live authenticated EDC writes, physical devices and true 200% zoom; continue dialog audit.
+4. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
 
 ## Blockers / open risks
 
