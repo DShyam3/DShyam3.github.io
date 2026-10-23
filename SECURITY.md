@@ -192,3 +192,41 @@ Project ref is `yvtiybyuifkiwyrnjebe`, so each link below is
   Infrastructure. The project goes offline for the upgrade and the window
   scales with database size, so pick a quiet moment. Read replicas would block
   it; this project has none.
+
+## Readiness scan triage (2026-10-23)
+
+The scan remains unsuppressed. These findings have different exposure and follow-up
+requirements; a successful build does not mean the advisories are fixed.
+
+### Remaining build-tool dependencies
+
+- `braces@3.0.3` arrives through Tailwind's watch/glob tools and the TypeScript
+  ESLint tooling. The [upstream advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+  was withdrawn on 2026-10-23 as not practically exploitable. The package is
+  unchanged; disappearance from the refreshed scan is an advisory withdrawal,
+  not a code fix. Tailwind's inputs remain repository-defined globs, and no
+  application or Edge Function import was found.
+- `postcss-selector-parser@6.1.4` is used by Tailwind and postcss-nested. The
+  [upstream advisory](https://github.com/advisories/GHSA-rj75-hqrm-r3gf) fixes the
+  issue in 7.1.6 and distinguishes untrusted request-time selector parsing from
+  ordinary builds of trusted sources. This site's PostCSS pipeline processes
+  repository CSS; no runtime import was found. A compatible parent upgrade or
+  separately validated major migration remains open. Do not force a major
+  transitive override solely to improve a scanner score.
+- The unused `@tailwindcss/typography` dependency has been removed, along with its
+  separate parser 6.0.10 copy. It was not registered in the Tailwind plugin list.
+
+### Potential N+1 queries
+
+The scanner's four-file finding is reviewed, not resolved or suppressed:
+
+| Location | Observed behaviour | Follow-up |
+| --- | --- | --- |
+| `FinanceDataContext.tsx` | Transaction reads paginate; other finance collections still use single responses. Inserts, ID lookups and deletes batch at 100. Updates group identical patches, then batch IDs. Distinct patches can still require individual requests. | Measure large saves before changing ordering or profile scoping. |
+| `TaxIncomeSettingsDialog.tsx` | Reset performs seven fixed table deletes in parallel. | Request count does not grow with row count; reset atomicity is a separate risk. |
+| `TransactionsTab.tsx` | Flagged deletes include local Set operations; bulk edits pass rows to the context's batching. | No per-row request established at these call sites. |
+| `WatchlistContext.tsx` | Initial reads paginate. Show imports fetch/insert per season with batched episodes. Favourite-facts sync makes sequential TMDB and update requests, capped at 50, with cancellation between items. | Measure import/sync latency and concurrency; preserve partial-failure and cancellation behaviour when batching. |
+
+No latency benchmark or live workload measurement was performed for this review.
+These source findings do not close the outstanding Watchlist cron CPU or finance
+save/race verification tasks in the plan.
