@@ -110,10 +110,14 @@ attack surface of this site is Supabase, and it was audited separately
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
   resolved once server-side instead and served from the `merchant-logos`
-  bucket. That bucket is public — a supermarket's logo is public — and holds
-  nothing user-specific: object keys are brand slugs, never a profile or
-  transaction id. Writes to it are `is_admin()`; the same is true of its index
-  table `finance_merchant_logos`, which is public-read by design.
+  bucket. That bucket is public — a supermarket's logo is public — and its
+  object keys are brand slugs, never a profile or transaction id. Writes to it
+  are `is_admin()`; the same is true of its index table
+  `finance_merchant_logos`, which anon can read (`SELECT` only, migration
+  `20261024140000`). The set is not free of personal data, though: only
+  brands found in the ledger are cached, so the slugs, and the index's
+  `resolved_at`, say which brands the owner pays. Anon can read the index and
+  list the bucket; whether to close both is open.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant
@@ -142,7 +146,9 @@ attack surface of this site is Supabase, and it was audited separately
   content, watchlist and travel tables and grants back only `SELECT`. Finance
   migrations revoke every `anon` grant from `finance_*` tables; the OAuth
   state table is deliberately included despite being service-role-only in
-  normal operation.
+  normal operation. The one exception is `SELECT` on `finance_merchant_logos`;
+  `20261024140000` removed the `TRUNCATE`, `REFERENCES` and `TRIGGER` that
+  `20260907170100` had left with it.
 - **Auth**: public email signup is enabled on the project. Since every policy
   checks `public.is_admin()`, and that reads the `admin_users` table, a
   self-registered user gets nothing — the account exists but holds no grant.

@@ -1452,6 +1452,53 @@ COMMENT ON TABLE "public"."finance_transfer_single_legs" IS
 COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
     'internal = excluded from income/spending totals like a confirmed transfer leg; external = real spending or income, changes no figure.';
 
+-- Index of the merchant-logos bucket. The bucket and its storage.objects
+-- policies live in 20260907170100_merchant_logo_cache.sql; schemas/ declares
+-- no storage objects.
+-- No profile_id: a row is a brand, shared across profiles. Written only by
+-- supabase/functions/merchant-logo-cache through service_role; read by
+-- src/features/finance/useMerchantLogos.ts behind the admin-only finance page.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_merchant_logos" (
+    "slug" "text" NOT NULL,
+    "storage_path" "text",
+    "source_domain" "text",
+    "resolved_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "finance_merchant_logos_pkey" PRIMARY KEY ("slug")
+);
+
+ALTER TABLE "public"."finance_merchant_logos" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."finance_merchant_logos" IS
+  'Index of cached merchant logos in the merchant-logos bucket. A row with a '
+  'NULL storage_path is a recorded miss, so the resolver stops re-fetching a '
+  'merchant whose logo could not be found.';
+
+ALTER TABLE "public"."finance_merchant_logos" ENABLE ROW LEVEL SECURITY;
+
+-- Read is public to match the bucket. Not anonymous data: the resolver caches
+-- only directory brands it finds in finance_transactions, so the slugs and
+-- resolved_at say which brands the owner pays, and since when.
+CREATE POLICY "Public reads merchant logo index" ON "public"."finance_merchant_logos"
+    FOR SELECT TO "anon", "authenticated"
+    USING (true);
+
+CREATE POLICY "Admin writes merchant logo index" ON "public"."finance_merchant_logos"
+    FOR ALL TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+-- Least privilege. anon keeps SELECT and nothing else -- an owner-directed
+-- exception to "no anon grant on a finance_* table"; the policy comment above
+-- says what that exposes. authenticated gets the four DML privileges, like
+-- finance_transfer_links. ALTER DEFAULT PRIVILEGES hands every new table ALL
+-- and TRUNCATE is not filtered by RLS, so both REVOKEs are load-bearing.
+REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "authenticated";
+GRANT SELECT ON TABLE "public"."finance_merchant_logos" TO "anon";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_merchant_logos" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "service_role";
+
 -- Triggers live here rather than with the function in 01_functions.sql:
 -- schema files run in filename order, so the tables must exist first.
 --
