@@ -1,54 +1,59 @@
 # State
 
-**Updated:** 2026-10-24 · **Branch:** `main` (`claude/compassionate-faraday-6b9xwn` fast-forwarded into it and deleted; GitHub has only `main` and `feat/watchlist-news-finance-transfers`) · **Code on main:** `f19051b`, deployed · **Hosted database:** `20261024150000`
+**Updated:** 2026-10-24 · **Branch:** `main` · **Code:** `87a96be9`, pushed (`4a62564c..87a96be9`, 13 commits) · **Hosted database:** `20261024150000`
 
 ## In progress
 
-None. Main, GitHub Pages and the hosted database agree as of 2026-10-24.
+None in the tree. Local stack is out of sync with hosted (see Blockers).
 
-## Deployed
+## Deployed, and not
 
-- Hosted database: `20261024120000` through `20261024150000` applied 2026-10-24 with `supabase db push` from `a9d0d9f`; recorded in `supabase_migrations.schema_migrations`, hosted ends at `20261024150000`. `20261013100000_inventory_wishlist_not_edc` live since 2026-10-20 (zero conflicts, validated constraint).
-- `f19051b` (main, pushed 2026-10-24 as a fast-forward of `claude/compassionate-faraday-6b9xwn`): [Pages run 40128546816](https://github.com/DShyam3/DShyam3.github.io/actions/runs/40128546816) succeeded. Carries the grants migrations' files and schema sync, and the TrueLayer panel change ("Backfilled" / "Backfilling" pills replaced by detail-line text "History imported" / "Importing history · checked to <month>"; checked in a local browser at 1280px and 375px with fixture connections). Live site not checked.
-- `1403bbe` (main, PR #7 merged by the owner): [Pages run 40119952121](https://github.com/DShyam3/DShyam3.github.io/actions/runs/40119952121) succeeded. `55c2341` (PR #6): [Pages run 40083861946](https://github.com/DShyam3/DShyam3.github.io/actions/runs/40083861946) succeeded.
-- Parser override 7.1.7 at `9f13ce77` via [PR #5](https://github.com/DShyam3/DShyam3.github.io/pull/5): [Pages run 39995955348](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39995955348) succeeded; both CSS outputs matched the 6.1.4 baseline. Earlier: `8f6078e8`, `1395077f`, EDC `799d8358`.
-- The admin-check benchmark (1,051 → 276 ms) is local only.
+- Pages for `87a96be9` (main): [Pages run 40130002065](https://github.com/DShyam3/DShyam3.github.io/actions/runs/40130002065) succeeded (`gh run view`, 2026-10-24). Live `/travel` loads anonymously with no console errors; nothing signed in checked.
+- Hosted database: `20261024120000` through `20261024150000` applied 2026-10-24 with `supabase db push`, recorded in `supabase_migrations.schema_migrations`. `20261013100000_inventory_wishlist_not_edc` live since 2026-10-20.
+- **Not on hosted:** `20261024160000_finance_fk_covering_indexes`. Built and rolled back on the local stack only.
+- **Not deployed:** `merchant-logo-cache`. Its read-every-ledger-page fix is on main and takes effect only after `supabase functions deploy merchant-logo-cache`.
+- **On main, not checked live:** bills calendar, balance forecast, per-period recurring Paid with early payment, Student Loan "You borrowed", header social-link fade, Travel UN and city columns, About whole bio on desktop, phone collection detail as one scroller.
 
 ## Checks
 
 | Check | Date | Result |
 |---|---|---|
-| Hosted post-apply verification | 2026-10-24 | Read-only after the owner's `supabase db push` (verified by coordinator): `140000` and `150000` recorded; no public relation gives anon or authenticated TRUNCATE, REFERENCES or TRIGGER; catalog as in SECURITY.md; anon and admin access simulated in SQL; security advisor: no new findings. Live: the owner's finance page showed all four TrueLayer connections synced at 20:40, after the 20:36 push (service_role path works). NOT checked live: merchant-logo images over HTTP |
-| Lint (`npm run lint`) | 2026-10-24 | 0 errors, 0 warnings (run 2026-10-24) |
-| Typecheck (`npm run typecheck`) | 2026-10-24 | Pass (run 2026-10-24) |
-| Tests / build | 2026-10-24 | 52 files / 1,006 tests pass; build passes (from session) |
-| `typecheck:functions` | 2026-10-24 | PASS on all 14 files, but not the npm script as written: Deno 2.9.6 against deno std 0.168.0 served from localhost, `@supabase/supabase-js@2.39.8` from npm in place of esm.sh, because esm.sh and deno.land are blocked here (from session) |
-| Local grants `140000` + `150000` | 2026-10-24 | Pass on the local stack (Supabase CLI 2.120.0, reset to 140000, then `migration up`); then applied to hosted (see post-apply row) (from session) |
-| Review (`reviewer`, Opus) | 2026-10-24 | Two passes; all findings addressed except unifying `20_watchlist.sql`'s older anon idiom (cosmetic) (from session) |
-| ship-check | 2026-10-24 | 98/100; 9 findings (1 high potential N+1, 4 medium, 2 low, 2 info). No OSV engine, so the Zod advisory is not cleared (from session) |
-| Audit (`security/AI-CHECKLIST.md`) | 2026-10-23 | 0 findings then; not current assurance (Zod advisory) |
-| graphify | — | NOT run: install refused by the session's permission check; `graphify-out/` is gitignored |
-| Larger-mode browser | 2026-10-20 | Wallet fits 640×400 / 375×844 without horizontal overflow |
-| EDC local browser | 2026-10-19–20 | Owned selection persists; wishlist excluded |
+| `npm run lint` | 2026-10-24 | 0 errors, 0 warnings; re-run on `87a96be9` |
+| `npm run typecheck` | 2026-10-24 | Pass; re-run on `87a96be9` |
+| `npm run typecheck:functions` | 2026-10-24 | Pass as written, Deno 2.7.5, esm.sh and deno.land reachable (from session) |
+| Vitest | 2026-10-24 | 54 files, 1,282 tests pass (from session) |
+| `npm run build` | 2026-10-24 | Pass (from session) |
+| `npm audit` | 2026-10-24 | 0 vulnerabilities (from session) |
+| Reviewer (Opus), salvage and student-loan commits | 2026-10-24 | No blockers; invalid-date draws, runner duplication and logo-cache comment fixed (from session) |
+| Anonymous browser, `vite preview` | 2026-10-24 | Travel renders hosted data with the new columns; no console errors (from session) |
+| Hosted, read-only | 2026-10-24 | anon SELECT only (20 tables); authenticated SELECT, INSERT, UPDATE, DELETE; no TRUNCATE, REFERENCES or TRIGGER for either; migrations through `20261024150000` recorded (from session) |
+| graphify update | 2026-10-24 | Ran (from session) |
+| ship-check | 2026-10-24 | NOT re-run on `87a96be9`. Last run on `f19051b`: 98/100, 9 findings, before zod was removed |
+| Audit (`security/AI-CHECKLIST.md`) | 2026-10-23 | 0 findings then; not re-run |
+| Signed-in finance | — | NOT run. New finance features unverified live |
 
 ## Next
 
-1. Owner: check the live finance page (TrueLayer panel shows the new detail-line text) and open `https://yvtiybyuifkiwyrnjebe.supabase.co/storage/v1/object/public/merchant-logos/aldi.webp` and the finance page to confirm logo images still load live. Unverified until then.
-2. Owner: uninstall the Strix GitHub App (https://github.com/settings/installations) and delete its trial-ended comment on PR #7.
-3. Owner decision: guessable `<slug>.<ext>` merchant-logo keys. Private bucket with signed URLs, or unguessable keys (REHAUL_PLAN.md).
-4. Dashboard: Postgres upgrade from `supabase-postgres-15.8.1.030` (`/settings/general`; the project goes offline for it); leaked-password protection (Pro plan and above); TOTP MFA. SECURITY.md has the details.
-5. Still open from before: `finance_debt_observations` FK across profiles and its missing index; schemas cannot rebuild from empty; Zod 3.25.76 GHSA-mrhx-c7xc-m3w5, fix at ≥4.6.6; hosted finance benchmark; measure Watchlist and finance paths; devices, 200% zoom, live writes; graphify where installs are allowed; allow esm.sh and deno.land so `typecheck:functions` runs as written.
+1. Owner: `supabase db push --dry-run` from `main`, expect exactly `20261024160000`; then `supabase db push`; then `supabase functions deploy merchant-logo-cache`. Re-run the performance advisor; expect no unindexed foreign keys.
+2. Owner, signed in on the live site: the finance features above, including bills calendar and Forecast at 375px, recurring Paid tick, untick, early payment and edit, and Student Loan "You borrowed". Merchant logos still load: `https://yvtiybyuifkiwyrnjebe.supabase.co/storage/v1/object/public/merchant-logos/aldi.webp`.
+3. Owner: uninstall the Strix GitHub App (https://github.com/settings/installations) and delete its trial-ended comment on PR #7. Dashboard: Postgres upgrade, leaked-password protection, TOTP MFA. Confirm public signup is off (SECURITY.md recommends it; not checked today).
+4. Owner decision: guessable merchant-logo keys (REHAUL_PLAN.md, Database follow-ups).
+5. Owner decision: `finance_debt_observations` cross-profile foreign key (composite key).
+6. Owner decision: the three remaining worktrees and branches (Blockers); local stack reset.
+7. Then, all in REHAUL_PLAN.md: finance save design for per-row edits, the save-safety and race list, schemas rebuild from empty, the Borrowed rules, CI runtime.
 
-## Blockers / open risks
+## Blockers and open risks
 
-- Guessable logo keys: the public object route still confirms a guessed `<slug>.<ext>` (Next 3).
-- Logo images over HTTP after `140000` are unverified live (Next 1).
-- Sequence and function default privileges still grant anon and authenticated ALL (out of scope; anon cannot reach setval through PostgREST). `supabase_admin` default privileges are unaltered (no app table is owned by it).
-- Security advisor, accepted or dashboard-only: Postgres patches outstanding; leaked-password protection and MFA off (SECURITY.md).
+- `20261024160000` is not on hosted, so five finance foreign keys stay unindexed there.
+- Guessable logo keys: the public object route still confirms a guessed `<slug>.<ext>`. Logo images over HTTP after `20261024140000` are unverified live.
+- Local stack carries a hand-applied `20261024120000` (policy rewrite and five indexes) that `schema_migrations` does not record. `supabase db reset` when nothing local is worth keeping; owner call.
+- Worktrees and branches, owner decision: `fix/readiness-followups` (uncommitted, superseded; removal refused by the session's permission check); `fix/tablet-touch-ux` (12 uncommitted files from 2026-09-15, 52 commits behind main, never reviewed); `claude/affectionate-lamarr-f2d2cb` (site assistant v1, 6 commits, blocked on a model key).
+- Zod: removed in `2cdb02f8`, not upgraded. The scanner has not been re-run since.
+- "Borrowed" has three rules that can disagree (REHAUL_PLAN.md).
+- Unverified, live or on devices: physical devices, 200% zoom, live authenticated writes, finance load, save and reload, full ledger, the Next 2 items.
+- Finance: save-safety and race list (REHAUL_PLAN.md). Hosted finance reads unmeasured (276 ms at 5,000 rows locally vs 5 × 22 ms at 1,000). 1,000 distinct per-row edits take about 6 s locally; hosted not measured.
+- Watchlist: cron CPU unmeasured; production sync-race fix unconfirmed; favourite-facts sync not measured. Removing a 500-episode show got ~20 ms slower locally after the admin-check migration (per-row trigger; performance/README.md); not planned.
 - Parser major-version override is validated for this install, tests and CSS only.
-- Unverified live or on devices: physical devices, true 200% zoom, live authenticated writes, finance load/save/reload, full ledger, recurring Paid/tick/untick.
-- Finance: four reference tables delete-then-insert; debt observation queueing; logout/load/delete races; category changes during sync; unlimited token refresh; failed profile-switch load; recurring early-payment credit; old paid flags without last-paid dates. Finance reads unmeasured on hosted (276 ms at 5,000 rows locally vs 5 × 22 ms at 1,000).
-- Watchlist: cron CPU unmeasured; production sync-race fix unconfirmed; per-season and per-favourite reads unresolved. Other finance collections unpaged; duplicated src/Deno pagers must change together.
-- Zod advisory open. The ship-check run had no OSV engine, so it is not evidence of a fix. Nine scanner findings open.
-- CI: Node 20 Actions face Node 24 enforcement; ubuntu-latest moves to 26.
+- Security advisor items accepted or dashboard-only: Postgres patches, leaked-password protection, MFA (SECURITY.md).
+- CI: Node 20 Actions face Node 24 enforcement and `ubuntu-latest` moves to 26. Earlier handoff, not checked today.
 - Full list and reasoning: REHAUL_PLAN.md.

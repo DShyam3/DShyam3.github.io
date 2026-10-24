@@ -176,7 +176,7 @@ window and are disabled until the next sync is allowed.
 Countries and cities visited, rendered as maps by continent and by city, with
 membership and region groupings.
 
-At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list.
+At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list. Each country row keeps its UN marker and city count in fixed columns, so they line up down the list whether or not a row has either.
 
 ## Inventory and EDC
 

@@ -279,21 +279,24 @@ The scanner's four-file finding is reviewed, not resolved or suppressed:
 
 | Location | Observed behaviour | Follow-up |
 | --- | --- | --- |
-| `FinanceDataContext.tsx` | Transaction reads paginate; other finance collections still use single responses. Inserts, ID lookups and deletes batch at 100. Updates group identical patches, then batch IDs. Distinct patches can still require individual requests. | Measure large saves before changing ordering or profile scoping. |
+| `FinanceDataContext.tsx` | Transactions, goal contributions, investment activity, debt observations, and the transfer, payslip and net-worth reads page through every row. Other collections in the load still use single responses. Inserts, ID lookups and deletes batch at 100. Updates group identical patches, then batch IDs. Distinct patches still take one request each. | Measured locally 2026-10-24: 1,000 distinct per-row edits take about 6 s as 1,000 sequential requests (`performance/README.md`, "Saves and TV imports"). Hosted is not measured. The save design is open in REHAUL_PLAN.md. |
 | `TaxIncomeSettingsDialog.tsx` | Reset performs seven fixed table deletes in parallel. | Request count does not grow with row count; reset atomicity is a separate risk. |
 | `TransactionsTab.tsx` | Flagged deletes include local Set operations; bulk edits pass rows to the context's batching. | No per-row request established at these call sites. |
-| `WatchlistContext.tsx` | Initial reads paginate. Show imports fetch/insert per season with batched episodes. Favourite-facts sync makes sequential TMDB and update requests, capped at 50, with cancellation between items. | Measure import/sync latency and concurrency; preserve partial-failure and cancellation behaviour when batching. |
+| `WatchlistContext.tsx` | Initial reads paginate. Show imports fetch/insert per season with batched episodes. Favourite-facts sync makes sequential TMDB and update requests, capped at 50, with cancellation between items. | TV import and removal requests are counted and timed locally, without TMDB calls (`performance/README.md`). The favourite-facts sync is not measured. Preserve partial-failure and cancellation behaviour when batching. |
 
-A [local synthetic paged-read benchmark](performance/README.md) now measures
-movie and private-profile transaction reads through the real helper and REST API.
-It does not measure full providers, saves, TV nesting, TMDB sync or live workloads.
-The outstanding Watchlist cron CPU and finance save/race verification tasks remain open.
+Two local synthetic runners now measure
+([performance/README.md](performance/README.md)): paged reads of movie and
+private-profile transaction rows through the real helper and REST API, and finance
+saves and TV imports, including the nested TV library read. Neither measures full
+providers and rendering, TMDB sync, Watchlist cron CPU, live workloads, or hosted
+timings after the admin-check migrations. Finance save races remain unverified.
 
 ### Newly reported dependency follow-up (2026-10-24)
 
-The fresh scan reports `zod@3.25.76` under
+The scan reported `zod@3.25.76` under
 [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in
 4.6.6. The advisory concerns memory exhaustion while validating oversized
-collections. Exposure analysis and a validated major-version migration remain
-open. The zero-vulnerability npm audit above is dated 2026-10-23 and is not a
-claim about the refreshed advisory database.
+collections. Nothing in the tree imported `zod`, `react-hook-form` or
+`@hookform/resolvers`, so all three were removed (`2cdb02f8`) rather than upgraded.
+`npm audit` reports zero vulnerabilities as of 2026-10-24. The scanner has not been
+re-run since the removal, so the finding is not confirmed cleared by a scanner.

@@ -162,7 +162,7 @@ browser; Finance was not, because it needs a signed-in session.
 
 | Item | Why it is open |
 |---|---|
-| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only |
+| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Also unchecked live, landed on main 2026-10-24: bills calendar and Forecast (including 375px), recurring Paid tick, untick, early payment and edit, and the Student Loan "You borrowed" figure |
 | Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
 | Dialog audit | Statement and investment imports may still nest a `vh` cap inside `.dialog-body` |
@@ -192,6 +192,23 @@ balance, not deducted). Needs confirmation against owner's SLC 2026-27 adjustmen
 when it lands. Consider whether the pending top-up should compound interest while
 awaiting landing (~2–3% lifetime understatement versus full-rate accrual, currently
 documented approximation).
+
+### Student loan — "Borrowed" has three rules
+
+Three rules decide what Borrowed is, and they can disagree:
+
+- `isBorrowing` in `src/features/finance/useDebtMutations.ts` decides which draws
+  count as borrowing: no `kind`, or `kind` is `borrowing`.
+- `studentLoanBorrowed` in `src/lib/finance/student-loan.ts` is what the card
+  shows: borrowing rows with a real date and a positive amount, else the typed
+  amount.
+- `DebtFormDialog` sums every borrowing draw into `drawTotal` with no validity
+  check, shows that in the Edit field, and saves it as the original amount.
+
+So Edit can show, and save, a figure the card does not, when a draw has no real
+date. *Fix:* move `isBorrowing` into `src/lib/finance`, and have the Edit field
+and the saved amount use `studentLoanBorrowed(...).total`, so one rule answers
+both places. Not started.
 
 ### Blocked on a model key — any provider
 
@@ -243,13 +260,15 @@ extract in the browser.
 - **A timed-out delete in TransactionsTab / BankAccountsSection reloads immediately, inside the grace window, and shows the row again.**
 - **The sync still overwrites a category set mid-sync on a row that had none.**
 - **A token refresh on a dead link is not limited.** supabase-js refreshes through `/auth/v1/` before the request is made, so the 25 s limit never starts; a save key timed out meanwhile stays held until the refresh settles or the page reloads. Do not time out the refresh itself: aborting one the server already rotated can end the session.
+- **Distinct per-row edits are one request per row.** Saves group rows by identical patch, so a bulk recategorise is ten requests per thousand rows. A thousand edits that each carry their own patch are a thousand sequential requests, about 6 s locally and one round trip each in production (`performance/README.md`, "Saves and TV imports", 2026-10-24). Hosted is not measured. The save design for per-row updates is open; decide it before changing the save order or profile scoping.
 
 ### Database follow-ups found in the 2026-10-24 schema repair
 
-Three items. The first needs an owner decision; the second needs a decision before a migration; the last is schema files only. `supabase/schemas/40_finance.sql` describes each as the migrations in the tree leave it, and points here.
+Four items. The first is an action; the second needs an owner decision; the third needs a decision before a migration; the last is schema files only. `supabase/schemas/40_finance.sql` describes each as the migrations in the tree leave it, and points here.
 
+- **Apply `20261024160000` to hosted, then redeploy `merchant-logo-cache`.** The migration adds the five covering indexes that the hosted performance advisor lists as unindexed foreign keys. It was built and rolled back in a transaction on the local stack; hosted ends at `20261024150000`. The function's read-every-page fix (`2a2b82d5`, `87a96be9`) is on main and is not live until the function is deployed. After both, re-run the performance advisor and expect no unindexed foreign keys.
 - **Merchant-logo object keys can be guessed, so a brand can be confirmed.** Keys are `<slug>.<ext>` and the candidate slugs ship in the client bundle (`src/lib/finance/merchant-directory.ts`). The public object route still answers "exists" or "no such key" for a guessed key, and `20261024140000` (live on hosted since 2026-10-24) leaves that route open so logos keep loading. Owner to choose: a private bucket with signed URLs, or unguessable object keys. Image loading over HTTP after the change is not yet checked live.
-- **`finance_debt_observations.debt_id` references `finance_debts(id)` alone.** It can point at another profile's or a shared default debt, and no index leads on `debt_id` (advisor: unindexed foreign key), so deleting a debt cascades through a sequential scan. A composite key needs a decision first: it would reject observations against shared default debts.
+- **`finance_debt_observations.debt_id` references `finance_debts(id)` alone.** It can point at another profile's or a shared default debt. A composite key needs a decision first: it would reject observations against shared default debts. The index on `debt_id` is in `20261024160000`, pending hosted.
 - **`schemas/` cannot rebuild the database from empty.** `finance_bank_accounts_id_profile_id_key` and `idx_finance_transactions_profile_id_id` exist only in migrations, so the composite foreign keys in 40_finance.sql fail on a schemas-only build (first at `finance_transfer_links_profile_outflow_fkey`). Audit schemas/ against a migrated database object by object and add what is missing; no migration for objects that already exist.
 
 ### Sync and profile switch interactions
@@ -269,6 +288,14 @@ The code no longer names the owner outside `src/config/site.json`
   migrations `20260904130000` and `20260911090000` carry the owner email; a
   fork needs its own `admin_users` seed step documented instead.
 - `BankAccountsSection.tsx` `providerLogoUris` is dead code.
+
+### CI runtime
+
+The workflows (`.github/workflows/ci.yml`, `deploy.yml`) run on `ubuntu-latest`
+and pin their Actions to major versions 3 and 4. An earlier handoff recorded that
+GitHub will run Actions on Node 24 and move `ubuntu-latest` to 26. That was not
+checked against GitHub's announcement on 2026-10-24. Confirm it, then move the
+Actions and the Node version before the change is enforced.
 
 ### Deferred by choice
 

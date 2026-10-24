@@ -2715,3 +2715,9 @@ The fix is `20261024140000`. The public read policy on `finance_merchant_logos` 
 Logo images stay public. The app loads them through public URLs, and the public object route does not consult `storage.objects` policies (per the migration header, which records that check on the local storage API). Authenticated and service_role keep their grants on the index; `authenticated`'s wider grants are the separate decision in the table-grants entry above, applied by `20261024150000`.
 
 Applied to hosted on 2026-10-24. Not yet confirmed live: that a logo image loads over HTTP after the change, which is an owner check. Still open, in REHAUL_PLAN.md: the public object route answers "exists" or "no such key" for a guessed `<slug>.<ext>`, and the candidate slugs ship in the client bundle, so a guessed brand can still be confirmed. Closing that needs unguessable keys or a private bucket with signed URLs, which is an owner decision.
+
+### Unused dependencies are removed when an advisory lands — 2026-10-24
+
+**A vulnerable package that nothing imports is removed, not upgraded.** GHSA-mrhx-c7xc-m3w5 reported `zod@3.25.76` on 2026-10-24, fixed in 4.6.6, which is a major version. The options were an exposure analysis plus a validated migration, or removal. A search of `src/`, `supabase/`, `scripts/` and `performance/` found no import of `zod`, `react-hook-form` or `@hookform/resolvers`, so all three came out (`2cdb02f8`). With no caller there was nothing to analyse for exposure and nothing to migrate.
+
+**Search for imports before scoping an advisory.** If nothing imports the package, removal closes it without a migration. If something does, the exposure analysis and the upgrade are scoped against that caller. `npm audit` (zero vulnerabilities, 2026-10-24) is the check on the removal; no scanner had been re-run on it when this was recorded.
