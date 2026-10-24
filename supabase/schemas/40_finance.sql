@@ -974,6 +974,11 @@ CREATE UNIQUE INDEX "idx_finance_goals_one_emergency_fund" ON "public"."finance_
 
 CREATE UNIQUE INDEX "idx_finance_profiles_self" ON "public"."finance_profiles" ("is_self") WHERE "is_self";
 
+-- Covers finance_profiles_owner_user_id_fkey (ON DELETE SET NULL): deleting an
+-- auth user would otherwise scan every profile to find the owner_user_id to null.
+CREATE INDEX IF NOT EXISTS "idx_finance_profiles_owner_user_id"
+    ON "public"."finance_profiles" ("owner_user_id");
+
 ALTER TABLE ONLY "public"."finance_profile_transfers"
     ADD CONSTRAINT "finance_profile_transfers_pkey" PRIMARY KEY ("id");
 
@@ -991,6 +996,14 @@ ALTER TABLE ONLY "public"."finance_profile_transfers"
 
 CREATE INDEX "idx_finance_profile_transfers_from_profile_id" ON "public"."finance_profile_transfers" ("from_profile_id");
 CREATE INDEX "idx_finance_profile_transfers_to_profile_id" ON "public"."finance_profile_transfers" ("to_profile_id");
+
+-- Cover finance_profile_transfers_from_transaction_id_fkey and
+-- finance_profile_transfers_to_transaction_id_fkey (both ON DELETE SET NULL):
+-- deleting a transaction would otherwise scan every transfer to find the legs to null.
+CREATE INDEX IF NOT EXISTS "idx_finance_profile_transfers_from_transaction_id"
+    ON "public"."finance_profile_transfers" ("from_transaction_id");
+CREATE INDEX IF NOT EXISTS "idx_finance_profile_transfers_to_transaction_id"
+    ON "public"."finance_profile_transfers" ("to_transaction_id");
 
 -- profile_id is NULL exactly when the row is a shared template (is_default).
 
@@ -1397,6 +1410,13 @@ ALTER TABLE ONLY "public"."finance_transfer_dismissals"
 CREATE UNIQUE INDEX "idx_finance_transfer_dismissals_profile_pair"
     ON "public"."finance_transfer_dismissals" ("profile_id", "outflow_transaction_id", "inflow_transaction_id");
 
+-- The pair index above leads with (profile_id, outflow_transaction_id), so it
+-- already covers finance_transfer_dismissals_profile_outflow_fkey. This one
+-- covers finance_transfer_dismissals_profile_inflow_fkey, in the FK's own
+-- column order.
+CREATE INDEX IF NOT EXISTS "idx_finance_transfer_dismissals_profile_inflow"
+    ON "public"."finance_transfer_dismissals" ("profile_id", "inflow_transaction_id");
+
 ALTER TABLE "public"."finance_transfer_dismissals" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admin Only" ON "public"."finance_transfer_dismissals"
@@ -1510,8 +1530,7 @@ COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
 -- Known gaps, each an open line in REHAUL_PLAN.md rather than fixed here
 -- (fixing any of them changes the database, which this section does not):
 -- the two composite keys above; and finance_debt_observations.debt_id
--- referencing finance_debts(id) alone, so it can cross profiles and has no
--- index leading on debt_id.
+-- referencing finance_debts(id) alone, so it can cross profiles.
 
 -- Debt balance observations (20260907230000_finance_debt_observations.sql).
 -- Anchors a loan balance to a known date -- a statement date or a portal
@@ -1554,6 +1573,12 @@ ALTER TABLE ONLY "public"."finance_debt_observations"
 
 CREATE INDEX "idx_debt_observations_profile_debt"
     ON "public"."finance_debt_observations" ("profile_id", "debt_id", "observed_on" DESC);
+
+-- Covers finance_debt_observations_debt_id_fkey (ON DELETE CASCADE). The index
+-- above leads with profile_id, so deleting a debt could not use it to find the
+-- observations to cascade to.
+CREATE INDEX IF NOT EXISTS "idx_finance_debt_observations_debt_id"
+    ON "public"."finance_debt_observations" ("debt_id");
 
 ALTER TABLE "public"."finance_debt_observations" ENABLE ROW LEVEL SECURITY;
 
