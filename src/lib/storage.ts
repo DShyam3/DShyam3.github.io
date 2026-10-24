@@ -1,19 +1,25 @@
 import { supabase } from '@/integrations/supabase/client';
+import { asTypedBlob, readFileSignature } from '@/lib/file-signature';
 
 const PHOTOS_BUCKET = 'photos';
 const DOCUMENTS_BUCKET = 'documents';
 
 /**
- * Upload a file to Supabase Storage and return the public URL.
- * Files are stored with a unique timestamp + random suffix to avoid collisions.
+ * Upload an image to Supabase Storage and return the public URL.
+ *
+ * The type comes from the file's own first bytes, not its name or the
+ * browser's guess, and sets both the stored content type and the extension.
+ * The name is a random UUID, so it neither collides nor carries anything from
+ * the uploader's file name.
  */
 export async function uploadPhoto(file: File): Promise<string> {
-  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+  const signature = await readFileSignature(file, ['jpeg', 'png', 'gif', 'webp', 'heic']);
+  if (!signature) throw new Error('That file is not a JPEG, PNG, GIF, WebP or HEIC image.');
+  const fileName = `${crypto.randomUUID()}.${signature.ext}`;
 
   const { error } = await supabase.storage
     .from(PHOTOS_BUCKET)
-    .upload(fileName, file, {
+    .upload(fileName, asTypedBlob(file, signature), {
       cacheControl: '3600',
       upsert: false,
     });
@@ -28,34 +34,16 @@ export async function uploadPhoto(file: File): Promise<string> {
 }
 
 /**
- * Delete a photo from Supabase Storage by its public URL.
- * Extracts the file path from the URL automatically.
- */
-export async function deletePhotoFromStorage(publicUrl: string): Promise<void> {
-  // Extract the file path from the public URL
-  // URL format: https://<project>.supabase.co/storage/v1/object/public/photos/<filename>
-  const match = publicUrl.match(/\/storage\/v1\/object\/public\/photos\/(.+)$/);
-  if (!match) return; // Not a storage URL, skip deletion
-
-  const filePath = decodeURIComponent(match[1]);
-
-  const { error } = await supabase.storage
-    .from(PHOTOS_BUCKET)
-    .remove([filePath]);
-
-  if (error) {
-    console.warn('Failed to delete photo from storage:', error.message);
-  }
-}
-
-/**
  * Upload a document (like a CV) to Supabase Storage and return the public URL.
  * Overwrites if the file already exists (useful for keeping the same CV URL).
  */
 export async function uploadDocument(file: File, fileName: string = 'cv.pdf'): Promise<string> {
+  const signature = await readFileSignature(file, ['pdf']);
+  if (!signature) throw new Error('That file is not a PDF.');
+
   const { error } = await supabase.storage
     .from(DOCUMENTS_BUCKET)
-    .upload(fileName, file, {
+    .upload(fileName, asTypedBlob(file, signature), {
       cacheControl: '3600',
       upsert: true,
     });

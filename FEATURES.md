@@ -28,8 +28,9 @@ weight rather than font-size. A dot-matrix globe and clock sit beside it.
 Experience and education appear as one timeline, newest first, roles and degrees
 interleaved by start date. Entries fill two compact, content-sized columns from left to right when the
 card is wide enough, and one column in narrower cards. Both are editable in place when signed in as admin,
-skeleton-loaded otherwise. The CV uploads to private storage and downloads
-through a short-lived signed URL. Admins get a second add button for education.
+skeleton-loaded otherwise. The CV is a PDF in public storage, served from one
+fixed address that a new upload replaces; a file that is not a PDF is refused.
+Admins get a second add button for education.
 
 About stays within the page frame; experience and projects scroll inside their
 cards. Large screens show portrait and biography above the timeline, with
