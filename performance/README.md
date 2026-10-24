@@ -55,7 +55,8 @@ cannot inline it, and every admin policy called it bare: once for each row
 tested. Migrations `20261024120000` (88 public-schema policies) and
 `20261024130000` (the 14 admin policies on `storage.objects`) wrap it as
 `(SELECT public.is_admin())`, which `EXPLAIN` shows as `InitPlan 1`, evaluated
-once per statement. Both are applied to the local stack only; hosted is unchanged.
+once per statement. Both were applied to hosted on 2026-10-24, where `EXPLAIN`
+shows the same `InitPlan 1`; the timings below are from the local stack only.
 
 Same runner, two runs back to back on one local stack, before and after applying
 the two migrations. This is a 4-vCPU cloud container on Node v22.22.0, not the
@@ -83,7 +84,10 @@ rest.
 Storage reads were not timed. For storage the check was access, not speed: on
 the local stack, before and after, anon and a signed-in non-admin could not
 list, download, sign a URL for, upload, update or delete a `finance-documents`
-object, and the administrator could do all six.
+object, and the administrator could do all six. On hosted, with the roles
+simulated inside a rolled-back transaction, anon and a non-admin read none of
+the bucket's objects and could not upload; the administrator read all of them
+and could.
 
 Small statements lose nothing. The trade-off expected beforehand -- a statement
 fired per row by a trigger paying one `is_admin()` call even when it touches no

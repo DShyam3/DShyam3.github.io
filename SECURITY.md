@@ -75,9 +75,9 @@ attack surface of this site is Supabase, and it was audited separately
   Content tables are anonymous-read, `is_admin()`-write. Policies ask it as
   `(SELECT public.is_admin())`, which runs once per statement rather than once
   per row and returns the same answer (migrations `20261024120000` for public
-  tables and `20261024130000` for storage; applied to the local stack, not yet
-  to hosted). `src/integrations/supabase/rls-admin-check.test.ts` replays every
-  migration and fails on any policy, public or storage, that calls it bare.
+  tables and `20261024130000` for storage, applied to hosted 2026-10-24).
+  `src/integrations/supabase/rls-admin-check.test.ts` replays every migration
+  and fails on any policy, public or storage, that calls it bare.
 - **Edge functions**: browser calls to `truelayer-sync`,
   `merchant-logo-cache` and `watchlist-cron-sync` verify the JWT and then call
   `public.is_admin()` through the caller's own token
@@ -144,12 +144,13 @@ attack surface of this site is Supabase, and it was audited separately
   Migration `20261024130000` rewrites the 14 admin policies on
   `storage.objects` to pair each bucket test with the wrapped check,
   `bucket_id = '<bucket>' AND (SELECT public.is_admin())`, changing only the
-  call and refusing to run unless every policy reads exactly as expected. It
-  is applied to the local stack only; hosted still calls `is_admin()` bare
-  until it is pushed. On the local stack, before and after, anon and a
-  signed-in non-admin can neither list, download, sign a URL for, upload,
-  update nor delete a `finance-documents` object, and the administrator can do
-  all six.
+  call and refusing to run unless every policy reads exactly as expected. On
+  the local stack, before and after, anon and a signed-in non-admin can
+  neither list, download, sign a URL for, upload, update nor delete a
+  `finance-documents` object, and the administrator can do all six. On hosted
+  (2026-10-24, roles simulated inside a rolled-back transaction) anon and a
+  non-admin read none of the bucket's objects and cannot upload to it; the
+  administrator reads all of them and can.
 - **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the
