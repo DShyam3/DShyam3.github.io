@@ -47,11 +47,15 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
  * supplied by the caller, so use the proxy-appended final entry rather than a
  * spoofable first value. This limiter only protects shared API quota; it is
  * not an authentication or authorization boundary.
+ *
+ * Prefixed, because `rate_limits` also holds the admin cooldowns
+ * (`truelayer-sync:manual`, `watchlist-sync:full`, ...). A bare header value
+ * could otherwise name one of those keys and hold a manual sync off.
  */
 function callerKey(req: Request): string {
     const forwarded = req.headers.get('x-forwarded-for') || ''
     const hops = forwarded.split(',').map((value) => value.trim()).filter(Boolean)
-    return hops[hops.length - 1] || 'unknown'
+    return `tmdb-proxy:${hops[hops.length - 1] || 'unknown'}`
 }
 
 /**

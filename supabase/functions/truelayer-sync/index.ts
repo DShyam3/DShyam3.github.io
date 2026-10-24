@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { buildTrueLayerTransactionQuery } from '../_shared/truelayer-transaction-query.ts'
 import { requireAdmin } from '../_shared/require-admin.ts'
+import { isServiceRoleRequest } from '../_shared/service-role.ts'
 import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/cooldown.ts'
 import { groupRowsByColumns } from '../_shared/upsert-batches.ts'
 import { corsOriginHeader, allowedRedirectUris } from '../_shared/site-origins.ts'
@@ -81,7 +82,7 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
     // Verify caller is either internal service role (e.g. pg_cron) or authenticated admin
-    const isServiceRole = authHeader === `Bearer ${supabaseServiceKey}`
+    const isServiceRole = isServiceRoleRequest(authHeader, supabaseServiceKey)
     if (!isServiceRole) {
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
