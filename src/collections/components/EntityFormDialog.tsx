@@ -324,7 +324,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
     // `javascript:` URL would otherwise pass the browser's own type="url" check.
     const badLinks = config.fields.filter((f) => f.type === 'url' && values[f.name]?.trim() && !safeHref(values[f.name]));
     if (badLinks.length) {
-      setErrors(Object.fromEntries(badLinks.map((f) => [f.name, 'Enter a link starting with https://'])));
+      setErrors(Object.fromEntries(badLinks.map((f) => [f.name, 'Enter a link starting with https:// or mailto:'])));
       document.getElementById(`${mode}-${config.table}-${badLinks[0].name}`)?.focus();
       return;
     }
