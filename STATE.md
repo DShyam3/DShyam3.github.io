@@ -1,10 +1,10 @@
 # State
 
-**Updated:** 2026-10-24 · **Branch:** `claude/friendly-feynman-phs5om` (pushed, no PR, not merged) · **Last code commit:** `9534bfa` · **Deployed code:** `55c2341` (main)
+**Updated:** 2026-10-24 · **Branch:** `claude/friendly-feynman-phs5om` ([PR #7](https://github.com/DShyam3/DShyam3.github.io/pull/7), not merged) · **Last code commit:** `44dc6f9` · **Deployed code:** `55c2341` (main)
 
 ## In progress
 
-Nothing in flight.
+- Merchant-logo index admin-only: migration `20261024140000_merchant_logo_index_admin_only` (`64ff1d2`, `44dc6f9`) is committed and verified on the LOCAL stack only. NOT applied to hosted: the Supabase connector's confirmation prompt went unanswered twice; hosted is still in the exact pre-migration state (checked read-only), so the leak below is still live. Apply with the md5-checked `execute_sql` payload used for 20261024130000 (or `supabase db push`), then verify and update SECURITY.md / REHAUL_PLAN.md.
 
 - Closed, live on hosted: admin check once per statement (`7eb053d`, hosted record `41ee3ff`). Migrations `20261024120000` and `20261024130000` are applied to hosted at the repo versions; no admin policy there is bare. Decision: REHAUL_HISTORY.md, "Admin check once per statement". The 1,051 → 276 ms benchmark is local only; no hosted benchmark has run.
 - Closed, committed, not deployed: schema repair (`9534bfa`). The six migration-only finance tables are in `supabase/schemas/40_finance.sql`; hosted and local catalogs match.
@@ -34,8 +34,8 @@ Nothing in flight.
 
 ## Next
 
-1. Owner decision, live now: anon can read `finance_merchant_logos` (21 rows) and list the `merchant-logos` bucket, which shows which directory brands the owner pays. Fix proposed in REHAUL_PLAN.md ("Database follow-ups found in the 2026-10-24 schema repair"); not applied.
-2. Owner's call: open a PR for `claude/friendly-feynman-phs5om` when ready to merge, then deploy.
+1. Apply `20261024140000` to hosted (owner approved; see In progress). Live until then: anon can read `finance_merchant_logos` (21 rows) and list the `merchant-logos` bucket. Even after it, the public route still confirms a guessed `<slug>.<ext>` — owner to choose private bucket + signed URLs or unguessable keys (REHAUL_PLAN.md, "Database follow-ups found in the 2026-10-24 schema repair").
+2. Merge PR #7 when CI is green, then deploy.
 3. The other REHAUL_PLAN database follow-ups: `authenticated` holds ALL, including TRUNCATE, on most `finance_*` tables; `finance_debt_observations.debt_id` FK can cross profiles and has no index; `supabase/schemas/` cannot rebuild from empty.
 4. `typecheck:functions`: allow esm.sh and deno.land in the environment's network settings, then run it.
 5. Still open, unverified: Zod 3.25.76 advisory GHSA-mrhx-c7xc-m3w5 (patched >=4.6.6); finance benchmark on hosted; measure excluded Watchlist/finance paths and production; verify live writes, devices and true 200% zoom; resume REHAUL_PLAN (Library contained scrolling unbuilt).
