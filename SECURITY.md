@@ -73,9 +73,9 @@ attack surface of this site is Supabase, and it was audited separately
 - **RLS**: enabled on all 59 public tables (hosted, 2026-10-24; the public schema
   also holds one view). Every `finance_*` table, including
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only at the
-  policy layer. Once `20261024150000` is applied, that table has no `authenticated`
-  grant either, so only `service_role` (the `truelayer-sync` function) reaches it;
-  until then hosted still grants an admin JWT read access through PostgREST.
+  policy layer. Since `20261024150000` (applied to hosted 2026-10-24), that table
+  has no `authenticated` grant either, so only `service_role` (the `truelayer-sync`
+  function) reaches it.
   Content tables are anonymous-read, `is_admin()`-write. Policies ask it as
   `(SELECT public.is_admin())`, which runs once per statement rather than once
   per row and returns the same answer (migrations `20261024120000` for public
@@ -122,17 +122,20 @@ attack surface of this site is Supabase, and it was audited separately
   bucket. That bucket is public — a supermarket's logo is public — and its
   object keys are brand slugs, never a profile or transaction id. Writes to it
   are `is_admin()`; the same is true of its index table
-  `finance_merchant_logos`. **Finding (2026-10-24):** the index and the
-  bucket's object list are readable by anon, and they are not free of user
-  data. `merchant-logo-cache` resolves only brands found in the owner's
-  transactions, so the slugs (with `resolved_at`) say which directory brands
-  the owner pays — 21 on hosted. Images load through public URLs, which need
-  neither read; the only in-app reader of the index is admin-gated.
-  `20261024140000` narrows both reads to the administrator. It is written and
-  verified locally but **not applied to hosted** as of 2026-10-24, so anon can
-  still read both there. One gap stays open after it: the public object route
-  still answers "exists" or "no such key" for a guessed `<slug>.<ext>`, so a
-  guessed brand can be confirmed. It is an open line in `REHAUL_PLAN.md`.
+  `finance_merchant_logos`. **Finding (2026-10-24), fixed on hosted:** the index
+  and the bucket's object list were readable by anon, and they are not free of
+  user data. `merchant-logo-cache` resolves only brands found in the owner's
+  transactions, so the slugs (with `resolved_at`) said which directory brands
+  the owner pays — 21 on hosted. `20261024140000` (applied to hosted 2026-10-24)
+  makes both admin-only: the index's public read policy is dropped, anon's
+  privileges on it are revoked, and the bucket's public list policy is replaced
+  by an admin-only read. Images still load through public URLs, which need
+  neither read; the only in-app reader of the index is admin-gated. Loading a
+  logo over HTTP after the change is **unverified live**: the checks ran in SQL,
+  and no request has yet been made to the project's public storage route. One gap stays open:
+  the public object route still answers "exists" or "no such key" for a guessed
+  `<slug>.<ext>`, so a guessed brand can be confirmed. It is an open line in
+  `REHAUL_PLAN.md`.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant
@@ -172,9 +175,9 @@ attack surface of this site is Supabase, and it was audited separately
   migrations revoke `anon`'s grants from `finance_*` tables, except
   `finance_merchant_logos` (see below). The OAuth state table is deliberately
   included despite being service-role-only in normal operation. The same
-  defaults gave `authenticated` `TRUNCATE`, `REFERENCES` and `TRIGGER` as well. Migration `20261024150000` narrows
-  `authenticated` on 50 tables. 48 keep `SELECT`, `INSERT`, `UPDATE` and
-  `DELETE`. `finance_truelayer_connection` and `finance_truelayer_oauth_states`
+  defaults gave `authenticated` `TRUNCATE`, `REFERENCES` and `TRIGGER` as well.
+  Migration `20261024150000` narrows `authenticated` on 50 tables. 48 keep
+  `SELECT`, `INSERT`, `UPDATE` and `DELETE`. `finance_truelayer_connection` and `finance_truelayer_oauth_states`
   get no `authenticated` grant at all, so only `service_role` (the
   `truelayer-sync` edge function) holds any grant on them: the first stores
   TrueLayer access and refresh tokens in plain columns, and the grant was the
@@ -185,10 +188,14 @@ attack surface of this site is Supabase, and it was audited separately
   privileges into an allowlist: a new table gives `authenticated` the four data
   verbs and `anon` nothing, and a public-read table grants `anon` `SELECT` in its
   own schema file. Its post-check rolls the migration back if anything is still
-  wider. Both migrations are written and verified on the local stack but
-  **not applied to hosted** as of 2026-10-24, so hosted `authenticated` still
-  holds `TRUNCATE` (and `anon` its leftover grants on `finance_merchant_logos`)
-  until they are.
+  wider. Both migrations were applied to hosted on 2026-10-24 with
+  `supabase db push`, and checked read-only afterwards: no public relation gives
+  `anon` or `authenticated` TRUNCATE, REFERENCES or TRIGGER; `authenticated`
+  holds only the four data verbs (or SELECT) per table and nothing on the two
+  TrueLayer tables; `anon` holds SELECT on 20 tables and nothing on
+  `finance_merchant_logos`; and the `postgres` default table ACL gives
+  `authenticated` the four verbs and `anon` nothing, with no global row. A live
+  HTTP check of the API and storage routes is **unverified**.
 - **Auth**: public email signup is enabled on the project. Since every policy
   checks `public.is_admin()`, and that reads the `admin_users` table, a
   self-registered user gets nothing — the account exists but holds no grant.
@@ -214,6 +221,7 @@ re-deriving the reasoning.
 | --- | --- |
 | `anon_security_definer_function_executable` on `is_admin()` | RLS policy expressions are evaluated with the querying role's own privileges, so revoking `EXECUTE` from `anon`/`authenticated` would break every policy on the project. The function takes no arguments and returns a single boolean about the caller — it leaks nothing an attacker did not already supply. |
 | Content tables readable by `anon` | This is a public portfolio. Anonymous `SELECT` on books, links, articles, photos, recipes, the watchlist and travel tables is the product, not a finding. Writes are `is_admin()`-only at both the policy and grant layer. |
+| `rls_enabled_no_policy` (INFO) on `rate_limits` and `finance_truelayer_source_sync` | RLS is on and no policy is written, on purpose. Both tables are service-role-only: `anon` and `authenticated` hold no grant, and service_role bypasses RLS. A policy would add nothing except a route to them. |
 
 Not accepted, still open, and only fixable from the dashboard:
 
