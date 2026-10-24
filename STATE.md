@@ -1,21 +1,23 @@
 # State
 
-**Updated:** 2026-10-23 · **Branch:** `codex/selector-parser-patch` · **Deployed code:** `8f6078e8`
+**Updated:** 2026-10-24 · **Branch:** `codex/selector-parser-patch` · **Deployed code:** `9f13ce77`
 
-## In progress
+## Deployed parser update
 
-The selector-parser override is LOCAL, UNCOMMITTED and NOT SHIPPED. Tailwind and
-postcss-nested resolve parser 7.1.7 instead of 6.1.4. SECURITY.md records the
-validation caveat; clean installation and this project's checks pass, and both
-CSS outputs are byte-identical to the 6.1.4 baseline. Review, PR, CI and deployment
-remain pending. This maintenance changes no query runtime or user-facing feature.
+The selector-parser override merged through [PR #5](https://github.com/DShyam3/DShyam3.github.io/pull/5):
+code `1ffeb8ac`, merge `9f13ce77`. Tailwind/postcss-nested resolve parser 7.1.7.
+Clean installation and project checks pass; both CSS outputs are byte-identical
+to the 6.1.4 baseline. SECURITY.md records the validation caveat. CI runs
+`39995777542` / `39995786799` pass on 2026-10-23.
+[Pages run 39995955348](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39995955348)
+succeeded, verified 2026-10-24; `9f13ce77` is deployed. No query runtime or user-facing feature changes.
 
-## Deployed
+## Previous releases
 
 Readiness cleanup shipped through [PR #4](https://github.com/DShyam3/DShyam3.github.io/pull/4)
 at `8f6078e8`, removing unused typography and parser 6.0.10.
 [Pages run 39995094919](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39995094919)
-succeeded on 2026-10-23. The parser override is not included in that release.
+succeeded on 2026-10-23; that cleanup precedes the deployed parser update.
 Earlier dependency updates shipped at `1395077f`; EDC controls/dialogs at `799d8358`.
 Live Inventory verification on 2026-10-20 found 13 EDC items, brands and no wishlist item.
 Migration `20261013100000_inventory_wishlist_not_edc` is applied locally and LIVE:
@@ -35,11 +37,10 @@ zero conflicts, validated constraint; local rollback tests pass.
 
 ## Next
 
-1. Finish review, commit the parser override, open PR, verify CI and deploy.
-2. Measure Watchlist and finance workloads before changing queries. Source-only triage finds
+1. Measure Watchlist and finance workloads before changing queries. Source-only triage finds
    mostly batched/paged finance queries; Watchlist per-season/per-favourite reads remain.
-3. Verify live authenticated EDC writes, physical devices and true 200% zoom; continue dialog audit.
-4. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
+2. Verify live authenticated EDC writes, physical devices and true 200% zoom; continue dialog audit.
+3. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
 
 ## Blockers / open risks
 
