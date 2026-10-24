@@ -9,9 +9,23 @@
  * One place, so the answer is the same everywhere.
  */
 
-/** Accepts an ISO string, a timestamp, or a Date; returns null for nonsense. */
+const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Accepts an ISO string, a timestamp, or a Date; returns null for nonsense.
+ *
+ * A bare `YYYY-MM-DD` is a calendar day, not an instant: `new Date()` would
+ * read it as UTC midnight, which is the previous evening anywhere west of
+ * UTC, so it is built as local midnight on that day instead.
+ */
 const asDate = (value: string | number | Date | null | undefined): Date | null => {
   if (value === null || value === undefined || value === '') return null;
+  const day = typeof value === 'string' ? ISO_DAY.exec(value) : null;
+  if (day) {
+    const [y, m, d] = [Number(day[1]), Number(day[2]), Number(day[3])];
+    const local = new Date(y, m - 1, d);
+    return local.getFullYear() === y && local.getMonth() === m - 1 && local.getDate() === d ? local : null;
+  }
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 };

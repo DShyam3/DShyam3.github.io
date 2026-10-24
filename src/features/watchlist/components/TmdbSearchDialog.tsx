@@ -15,6 +15,7 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { ActionButton } from '@/components/shared/ActionButton';
 import { cn } from '@/lib/utils';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
+import { releaseYear } from '@/features/watchlist/watchlist-utils';
 
 interface TmdbSearchDialogProps {
   open: boolean;
@@ -44,7 +45,7 @@ interface TmdbSearchDialogProps {
 
 const yearOf = (result: TMDBResult) => {
   const date = result.release_date || result.first_air_date;
-  return date ? new Date(date).getFullYear() : 'N/A';
+  return releaseYear(date) ?? 'N/A';
 };
 
 /**
