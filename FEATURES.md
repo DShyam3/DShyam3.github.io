@@ -69,6 +69,8 @@ in one scrolling dialog.
 
 Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac.
 
+A link field in an admin form takes only an `http`, `https` or `mailto` address, and the form refuses any other value. A saved address of another kind shows without a link. Images uploaded to a collection must be JPEG, PNG, GIF, WebP or HEIC files, judged by their contents rather than their name.
+
 ## Watchlist
 
 TV and film tracking backed by TMDB, searchable by title through a server-side

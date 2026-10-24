@@ -91,7 +91,11 @@ attack surface of this site is Supabase, and it was audited separately
   `watchlist-cron-sync` also accept the service role, for their
   Vault-authenticated scheduled runs. `tmdb-proxy` is deliberately public but
   restricted to an endpoint allowlist so it cannot be used as a generic TMDB
-  proxy. All four use an origin allowlist for CORS.
+  proxy. All four use an origin allowlist for CORS. Two changes are on main and
+  not yet on hosted: `tmdb-proxy` keys its rate limit with a `tmdb-proxy:`
+  prefix, and `truelayer-sync` and `watchlist-cron-sync` refuse a service-role
+  request when the key is missing (`_shared/service-role.ts`). Hosted runs the
+  earlier code until those functions are redeployed.
 - **Rate limits**: every function that spends a third-party call limits it
   server-side in the service-role-only `rate_limits` table -- `tmdb-proxy`
   per IP, the admin-triggered syncs by a cooldown between runs
@@ -173,6 +177,21 @@ attack surface of this site is Supabase, and it was audited separately
   (2026-10-24, roles simulated inside a rolled-back transaction) anon and a
   non-admin read none of the bucket's objects and cannot upload to it; the
   administrator reads all of them and can.
+- **Stored links and uploads (checked in the browser, 2026-10-25)**: a saved
+  link becomes an `href` only if it parses as an absolute `http:`, `https:` or
+  `mailto:` URL (`src/lib/safe-url.ts`), and the admin form refuses any other
+  value in a `url` field. An upload is read from its first 32 bytes against the
+  kinds its uploader accepts (`src/lib/file-signature.ts`) and sent as a Blob
+  typed from those bytes, because supabase-js sends a Blob as a form part typed
+  by the Blob and ignores `contentType` for one. Photos and finance documents get
+  random UUID names; the CV keeps its fixed name, `cv.pdf`. These checks run in
+  the browser. Server-side, only the `is_admin()` write policies and each
+  bucket's MIME allowlist apply, and the allowlist sees the declared type, which
+  is now the sniffed one. Accepted because the only writer is the administrator:
+  there is no server-side CHECK constraint on the link columns and no
+  server-side signature check. Migration `20261024170000` (local stack
+  2026-10-25; hosted pending) removes `image/svg+xml` from the `merchant-logos`
+  and `site-assets` allowlists. Existing objects keep serving.
 - **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the
@@ -265,7 +284,9 @@ Project ref is `yvtiybyuifkiwyrnjebe`, so each link below is
   dependency advisory in the findings. One high: the potential N+1 in
   `FinanceDataContext.tsx`, which is the long-standing item below. Four medium:
   66 oversized files, two circular-dependency chains, 91 console statements, and
-  the CORS finding that follows. One low, two info.
+  the CORS finding that follows. One low, two info. That scan ran the unpinned
+  command; `npm run ship-check` is pinned to `should-i-ship@0.1.12` from
+  `3279c6f6`.
 - **CORS "allows all origins"** at `supabase/functions/_shared/site-origins.ts` is a
   false positive. No code path there emits a wildcard; the match is in the file's
   doc comments. `corsOriginHeader` echoes a request's `Origin` only when it is on

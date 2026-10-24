@@ -2733,3 +2733,13 @@ Three rules follow. An impossible day such as `2026-02-30` is unknown, not rolle
 The owner asked whether the site should simply run on UK time. In London the old code was already right, apart from the BST rate-period bug. The fix keeps that behaviour and stops a stored day shifting on a device set to another zone: a date reads the same day everywhere, and "today" is the day the viewer is in.
 
 Verified by the suite under UTC, Europe/London, America/Los_Angeles and Pacific/Auckland (1,325 tests; Los Angeles had 21 failures before the fix). Not checked on a live non-UK device.
+
+### Stored links and uploads are checked in the browser — 2026-10-25
+
+**The server keeps the administrator gate and the bucket's MIME allowlist. What a link is, and what a file is, is decided in the browser.** A saved URL becomes an `href` only if it parses as an absolute http, https or mailto address (`safeHref`, `src/lib/safe-url.ts`). An upload is sniffed from its first 32 bytes against the kinds its uploader accepts (`src/lib/file-signature.ts`) and sent as a Blob typed from those bytes.
+
+The alternative was a CHECK constraint on the link columns and a signature check in an Edge Function. Both are stronger, and neither was added. The only writer of either is the administrator, and every write is behind `is_admin()`, so a server check would guard against the one party the policy already trusts. That holds while there is one writer. A second admin, or a function that writes a link for a user, is the point to move the checks server-side.
+
+A Blob is how the stored type gets set. supabase-js sends a Blob as a form part typed by the Blob and ignores `contentType` for it. Sending the original File would store the type the browser guessed from the name, so a PNG named `.jpg` was stored as `image/jpeg`. Verified on the local stack: it is now stored as `image/png`, and a PDF typed `text/plain` is stored as `application/pdf`.
+
+SVG is refused from the two public buckets that do not need it (`20261024170000`). An SVG is a document, and a browser that opens its public URL runs its script. The allowlist does not reach existing objects, so three SVGs in `site-assets` still serve. Deleting them is the owner's call, recorded in REHAUL_PLAN.md. Not checked on the live site signed in.

@@ -303,36 +303,38 @@ checked, and how, is in `SECURITY.md`.
 
 - `tmdb-proxy`'s rate-limit key is the raw last `X-Forwarded-For` entry, in the
   same `rate_limits` table as the admin cooldown keys (`truelayer-sync:manual`,
-  `watchlist-sync:full`, `watchlist-sync:item`, `merchant-logo-cache`). Prefix
-  it `tmdb-proxy:`, and confirm what that header entry is at the edge.
-- The service-role check in `truelayer-sync` and `watchlist-cron-sync` is a
-  plain string compare. It should refuse when its env var is missing.
+  `watchlist-sync:full`, `watchlist-sync:item`, `merchant-logo-cache`). The
+  `tmdb-proxy:` prefix is on main (`34f9af5c`) and not deployed. Deploy
+  `tmdb-proxy` (owner approval), then confirm what that header entry is at the
+  edge.
+- `truelayer-sync` and `watchlist-cron-sync` refuse a service-role request when
+  their key is missing (`34f9af5c`, `_shared/service-role.ts`). On main and not
+  deployed: deploy both (owner approval).
 - `schemas/90_privileges.sql`: default privileges still give `anon` rights on
   new sequences and functions.
-- Saved link URLs render as `href` with no scheme check (`inventory.tsx`,
-  `EntityCard.tsx`, `CardDetailDialog.tsx`). `EntityFormDialog`'s `type=url`
-  accepts `javascript:`. Admin-only; the CSP blocks execution.
-- Photo uploads take the extension from the filename, name files with
-  `Math.random`, and have no magic-byte check (`src/lib/storage.ts`).
-  Admin-only. The `merchant-logos` and `site-assets` buckets allow SVG.
-- `npm run ship-check` runs `npx should-i-ship@latest`, which is unpinned
-  (`package.json`).
+- `20261024170000` removes SVG from the `merchant-logos` and `site-assets`
+  allowlists (`d954fe6a`). It is on the local stack only: apply it to hosted
+  (owner approval). Then decide whether to delete `github.svg`, `gmail.svg` and
+  `linkedin.svg` from `site-assets`. They are still SVG on the public origin,
+  because an allowlist change does not touch existing objects.
+- `file-signature.ts` reads 32 bytes. A HEIC with a generic major brand (`mif1`
+  or `msf1`) is refused when its HEVC brand is fifth or later in the compatible
+  list, or when its `ftyp` box size is 0. It fails safe; widen the read only if a
+  real file trips it (`553b08e3`).
 - The Umami tag the build injects (`vite.config.ts`, from `site.json`) lacks
   `data-exclude-search`. Umami also loads on `/finance`, where the OAuth
   callback query is probably sent before `replaceState` clears it
   (unconfirmed).
-- CSP `connect-src` lists `api.themoviedb.org`. No browser code calls it; the
-  edge functions do, server-side.
 
 **Doc drift:**
 
-- The `vite.config.ts` `style-src` comment still names the shadcn chart
-  component, deleted in `cede7d3a`. README does not list the `SITE_ORIGIN`
-  secret.
+- README does not list the `SITE_ORIGIN` secret.
 
 **Unverified.** Not checked, and not to be read as passed: hosted `verify_jwt`
 for `tmdb-proxy`, `truelayer-sync` and `watchlist-cron-sync`; whether
-`SITE_ORIGIN` is set on hosted; live response headers.
+`SITE_ORIGIN` is set on hosted; live response headers; a signed-in upload or
+saved link on the live site (checked on the local stack only); a real HEIC file
+(the tests use synthetic `ftyp` boxes).
 
 ### Sync and profile switch interactions
 
