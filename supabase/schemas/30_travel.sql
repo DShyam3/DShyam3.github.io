@@ -80,7 +80,9 @@ ALTER TABLE "public"."visited_countries" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."visited_cities" TO "anon";
+REVOKE ALL ON TABLE "public"."visited_cities" FROM "anon";
+
+GRANT SELECT ON TABLE "public"."visited_cities" TO "anon";
 
 REVOKE ALL ON TABLE "public"."visited_cities" FROM "authenticated";
 
@@ -94,7 +96,9 @@ GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "service_role";
 
-GRANT ALL ON TABLE "public"."visited_countries" TO "anon";
+REVOKE ALL ON TABLE "public"."visited_countries" FROM "anon";
+
+GRANT SELECT ON TABLE "public"."visited_countries" TO "anon";
 
 REVOKE ALL ON TABLE "public"."visited_countries" FROM "authenticated";
 
@@ -107,6 +111,3 @@ GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "service_role";
-
--- Revoked privileges (see the note in 40_finance.sql)
-REVOKE DELETE, INSERT ON TABLE "public"."visited_cities" FROM "anon";

@@ -25,7 +25,9 @@ ALTER TABLE "public"."thoughts" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT ALL ON TABLE "public"."thoughts" TO "anon";
+REVOKE ALL ON TABLE "public"."thoughts" FROM "anon";
+
+GRANT SELECT ON TABLE "public"."thoughts" TO "anon";
 
 REVOKE ALL ON TABLE "public"."thoughts" FROM "authenticated";
 

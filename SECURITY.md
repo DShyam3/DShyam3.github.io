@@ -70,8 +70,12 @@ The public scan only reads response headers and the served HTML. The real
 attack surface of this site is Supabase, and it was audited separately
 (2026-09-04):
 
-- **RLS**: enabled on all 40 public tables. Every `finance_*` table, including
-  `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
+- **RLS**: enabled on all 59 public tables (hosted, 2026-10-24; the public schema
+  also holds one view). Every `finance_*` table, including
+  `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only at the
+  policy layer. Once `20261024150000` is applied, that table has no `authenticated`
+  grant either, so only `service_role` (the `truelayer-sync` function) reaches it;
+  until then hosted still grants an admin JWT read access through PostgREST.
   Content tables are anonymous-read, `is_admin()`-write. Policies ask it as
   `(SELECT public.is_admin())`, which runs once per statement rather than once
   per row and returns the same answer (migrations `20261024120000` for public
@@ -118,13 +122,17 @@ attack surface of this site is Supabase, and it was audited separately
   bucket. That bucket is public — a supermarket's logo is public — and its
   object keys are brand slugs, never a profile or transaction id. Writes to it
   are `is_admin()`; the same is true of its index table
-  `finance_merchant_logos`. **Open finding (2026-10-24):** the index and the
+  `finance_merchant_logos`. **Finding (2026-10-24):** the index and the
   bucket's object list are readable by anon, and they are not free of user
   data. `merchant-logo-cache` resolves only brands found in the owner's
   transactions, so the slugs (with `resolved_at`) say which directory brands
   the owner pays — 21 on hosted. Images load through public URLs, which need
-  neither read; the only in-app reader of the index is admin-gated. Narrowing
-  both reads to the administrator is an open line in `REHAUL_PLAN.md`.
+  neither read; the only in-app reader of the index is admin-gated.
+  `20261024140000` narrows both reads to the administrator. It is written and
+  verified locally but **not applied to hosted** as of 2026-10-24, so anon can
+  still read both there. One gap stays open after it: the public object route
+  still answers "exists" or "no such key" for a guessed `<slug>.<ext>`, so a
+  guessed brand can be confirmed. It is an open line in `REHAUL_PLAN.md`.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant
@@ -161,17 +169,26 @@ attack surface of this site is Supabase, and it was audited separately
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the
   content, watchlist and travel tables and grants back only `SELECT`. Finance
-  migrations revoke every `anon` grant from `finance_*` tables; the OAuth
-  state table is deliberately included despite being service-role-only in
-  normal operation. The same defaults gave `authenticated` `TRUNCATE`,
-  `REFERENCES` and `TRIGGER` as well. Migration `20261024150000` narrows
-  `authenticated` to `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the 49 tables
-  that had them (`finance_merchant_logos` is handled separately by
-  `20261024140000`). It also narrows the `postgres` default privileges, so a
-  new table gives `authenticated` the four data verbs and `anon` `SELECT` only.
-  Its post-check rolls the migration back if anything is still wider. It is
-  written and verified on the local stack but **not applied to hosted** as of
-  2026-10-24, so hosted `authenticated` still holds `TRUNCATE` until it is.
+  migrations revoke `anon`'s grants from `finance_*` tables, except
+  `finance_merchant_logos` (see below). The OAuth state table is deliberately
+  included despite being service-role-only in normal operation. The same
+  defaults gave `authenticated` `TRUNCATE`, `REFERENCES` and `TRIGGER` as well. Migration `20261024150000` narrows
+  `authenticated` on 50 tables. 48 keep `SELECT`, `INSERT`, `UPDATE` and
+  `DELETE`. `finance_truelayer_connection` and `finance_truelayer_oauth_states`
+  get no `authenticated` grant at all, so only `service_role` (the
+  `truelayer-sync` edge function) holds any grant on them: the first stores
+  TrueLayer access and refresh tokens in plain columns, and the grant was the
+  only thing that let an admin JWT read them through PostgREST.
+  `finance_merchant_logos` is one of the 48: `20261024140000` revokes `anon`'s
+  privileges on it and drops its public read policy, and `20261024150000`
+  narrows `authenticated`. `20261024150000` also turns the `postgres` default
+  privileges into an allowlist: a new table gives `authenticated` the four data
+  verbs and `anon` nothing, and a public-read table grants `anon` `SELECT` in its
+  own schema file. Its post-check rolls the migration back if anything is still
+  wider. Both migrations are written and verified on the local stack but
+  **not applied to hosted** as of 2026-10-24, so hosted `authenticated` still
+  holds `TRUNCATE` (and `anon` its leftover grants on `finance_merchant_logos`)
+  until they are.
 - **Auth**: public email signup is enabled on the project. Since every policy
   checks `public.is_admin()`, and that reads the `admin_users` table, a
   self-registered user gets nothing — the account exists but holds no grant.

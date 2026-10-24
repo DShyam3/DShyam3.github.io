@@ -457,10 +457,9 @@ CREATE POLICY "Admin read" ON "public"."finance_sync_log"
     FOR SELECT TO "authenticated"
     USING ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- both REVOKEs below are load-bearing, not decorative. authenticated gets
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so both REVOKEs
+-- below are load-bearing, not decorative. authenticated gets
 -- SELECT only, matching the policy above: no write grant exists because no
 -- write policy exists to authorise it.
 REVOKE ALL ON TABLE "public"."finance_sync_log" FROM "anon";
@@ -768,7 +767,7 @@ ALTER TABLE "public"."finance_user_holidays" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_bank_accounts" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_bank_accounts" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_bank_accounts" FROM "authenticated";
 
@@ -776,7 +775,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_bank_accounts" T
 
 GRANT ALL ON TABLE "public"."finance_bank_accounts" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_categories" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_budget_categories" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_budget_categories" FROM "authenticated";
 
@@ -784,7 +783,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_categorie
 
 GRANT ALL ON TABLE "public"."finance_budget_categories" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_items" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_budget_items" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_budget_items" FROM "authenticated";
 
@@ -792,7 +791,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_items" TO
 
 GRANT ALL ON TABLE "public"."finance_budget_items" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_presets" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_budget_presets" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_budget_presets" FROM "authenticated";
 
@@ -800,7 +799,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_presets" 
 
 GRANT ALL ON TABLE "public"."finance_budget_presets" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_bureaus" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_credit_bureaus" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_credit_bureaus" FROM "authenticated";
 
@@ -808,7 +807,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_credit_bureaus" 
 
 GRANT ALL ON TABLE "public"."finance_credit_bureaus" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_scores" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_credit_scores" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_credit_scores" FROM "authenticated";
 
@@ -816,7 +815,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_credit_scores" T
 
 GRANT ALL ON TABLE "public"."finance_credit_scores" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_data" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_data" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_data" FROM "authenticated";
 
@@ -830,7 +829,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_debts" TO "authe
 
 GRANT ALL ON TABLE "public"."finance_debts" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_defaults" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_defaults" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_defaults" FROM "authenticated";
 
@@ -838,7 +837,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_defaults" TO "au
 
 GRANT ALL ON TABLE "public"."finance_defaults" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goal_contributions" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_goal_contributions" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_goal_contributions" FROM "authenticated";
 
@@ -846,7 +845,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_goal_contributio
 
 GRANT ALL ON TABLE "public"."finance_goal_contributions" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goals" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_goals" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_goals" FROM "authenticated";
 
@@ -854,7 +853,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_goals" TO "authe
 
 GRANT ALL ON TABLE "public"."finance_goals" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_holiday_defaults" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_holiday_defaults" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_holiday_defaults" FROM "authenticated";
 
@@ -862,7 +861,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_holiday_defaults
 
 GRANT ALL ON TABLE "public"."finance_holiday_defaults" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_memberships" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_memberships" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_memberships" FROM "authenticated";
 
@@ -878,7 +877,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_recurring_bills"
 
 GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_recurring_templates" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_recurring_templates" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_recurring_templates" FROM "authenticated";
 
@@ -886,7 +885,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_recurring_templa
 
 GRANT ALL ON TABLE "public"."finance_recurring_templates" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_settings" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_settings" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_settings" FROM "authenticated";
 
@@ -894,10 +893,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_settings" TO "au
 
 GRANT ALL ON TABLE "public"."finance_settings" TO "service_role";
 
--- finance_student_loan_rates: least privilege, not the legacy anon-grant
--- pattern above. anon holds no grant of any kind -- this is a finance_*
--- table, and ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on
--- creation, so both REVOKEs below are load-bearing, not decorative.
+-- finance_student_loan_rates: least privilege. anon holds no grant of any kind:
+-- this is a finance_* table, and a fresh build starts from the image's default
+-- of ALL, so both REVOKEs below are load-bearing, not decorative.
 REVOKE ALL ON TABLE "public"."finance_student_loan_rates" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_student_loan_rates" FROM "authenticated";
@@ -906,7 +904,7 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."finance_student_loan_rates"
 
 GRANT ALL ON TABLE "public"."finance_student_loan_rates" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_tax_configs" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_tax_configs" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_tax_configs" FROM "authenticated";
 
@@ -914,7 +912,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_tax_configs" TO 
 
 GRANT ALL ON TABLE "public"."finance_tax_configs" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_transactions" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_transactions" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_transactions" FROM "authenticated";
 
@@ -922,23 +920,25 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transactions" TO
 
 GRANT ALL ON TABLE "public"."finance_transactions" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_truelayer_connection" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_truelayer_connection" FROM "anon";
 
+-- Holds TrueLayer access and refresh tokens: service_role only, no grant to
+-- authenticated (see 20261024150000_authenticated_grants_least_privilege.sql).
 REVOKE ALL ON TABLE "public"."finance_truelayer_connection" FROM "authenticated";
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_truelayer_connection" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "service_role";
 
+REVOKE ALL ON TABLE "public"."finance_truelayer_source_sync" FROM "anon";
+
 GRANT ALL ON TABLE "public"."finance_truelayer_source_sync" TO "service_role";
 
+-- OAuth state for the TrueLayer connect flow: service_role only, no grant to
+-- authenticated (see 20261024150000_authenticated_grants_least_privilege.sql).
 REVOKE ALL ON TABLE "public"."finance_truelayer_oauth_states" FROM "authenticated";
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_truelayer_oauth_states" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_user_holidays" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_user_holidays" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_user_holidays" FROM "authenticated";
 
@@ -948,36 +948,10 @@ GRANT ALL ON TABLE "public"."finance_user_holidays" TO "service_role";
 
 -- Revoked privileges
 --
--- pg_dump emits GRANT but never REVOKE, so these have to be stated explicitly
--- or the differ will try to hand `anon` back its SELECT on every finance table
--- (including finance_truelayer_connection, which holds live bank tokens).
---
--- Legacy tables below retain the SELECT-only revoke unless ALL privileges
--- are explicitly revoked elsewhere (including recurring bills above).
--- Remaining grant drift is tracked in S-10 in REHAUL_PLAN.md.
-
-REVOKE SELECT ON TABLE
-  "public"."finance_bank_accounts",
-  "public"."finance_budget_categories",
-  "public"."finance_budget_items",
-  "public"."finance_budget_presets",
-  "public"."finance_credit_bureaus",
-  "public"."finance_credit_scores",
-  "public"."finance_data",
-  "public"."finance_defaults",
-  "public"."finance_goal_contributions",
-  "public"."finance_goals",
-  "public"."finance_holiday_defaults",
-  "public"."finance_memberships",
-  "public"."finance_recurring_bills",
-  "public"."finance_recurring_templates",
-  "public"."finance_settings",
-  "public"."finance_tax_configs",
-  "public"."finance_transactions",
-  "public"."finance_truelayer_connection",
-  "public"."finance_truelayer_source_sync",
-  "public"."finance_user_holidays"
-FROM "anon";
+-- Every finance_* table carries an explicit REVOKE ALL ... FROM "anon", because
+-- a fresh build starts from the image's default of ALL and anon holds nothing on
+-- finance_* live. The standalone revokes below are the ones not placed beside
+-- their table's other grants.
 
 REVOKE ALL ON TABLE "public"."finance_truelayer_source_sync" FROM "authenticated";
 
@@ -1125,8 +1099,8 @@ ALTER TABLE "public"."finance_profile_transfers" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
--- S-10: anon needs nothing on any finance table. Re-asserted here because
--- Supabase's ALTER DEFAULT PRIVILEGES re-grants on every newly created table.
+-- S-10: anon needs nothing on any finance table. Re-asserted here because a
+-- fresh build starts from the image's default of ALL.
 REVOKE ALL ON "public"."finance_profiles" FROM "anon";
 REVOKE ALL ON "public"."finance_profile_transfers" FROM "anon";
 
@@ -1357,10 +1331,9 @@ CREATE POLICY "Admin Only" ON "public"."finance_transfer_links"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- the REVOKE below is load-bearing, not decorative. "ALL" to authenticated
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so the REVOKE below
+-- is load-bearing, not decorative. "ALL" to authenticated
 -- was reviewed and narrowed: it included TRUNCATE, which RLS does not
 -- govern, so the grant was the only thing standing in front of it.
 REVOKE ALL ON TABLE "public"."finance_transfer_links" FROM "anon";
@@ -1431,10 +1404,9 @@ CREATE POLICY "Admin Only" ON "public"."finance_transfer_dismissals"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- both REVOKEs below are load-bearing, not decorative.
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so both REVOKEs
+-- below are load-bearing, not decorative.
 REVOKE ALL ON TABLE "public"."finance_transfer_dismissals" FROM "anon";
 REVOKE ALL ON TABLE "public"."finance_transfer_dismissals" FROM "authenticated";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transfer_dismissals" TO "authenticated";
@@ -1499,10 +1471,9 @@ CREATE POLICY "Admin Only" ON "public"."finance_transfer_single_legs"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- both REVOKEs below are load-bearing, not decorative.
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so both REVOKEs
+-- below are load-bearing, not decorative.
 REVOKE ALL ON TABLE "public"."finance_transfer_single_legs" FROM "anon";
 REVOKE ALL ON TABLE "public"."finance_transfer_single_legs" FROM "authenticated";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transfer_single_legs" TO "authenticated";
@@ -1518,7 +1489,8 @@ COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
 --
 -- Six tables that existed in the database, created by the migration named
 -- above each block, before this file described them. Each block is the live
--- definition, not a new one, so nothing here changes the database.
+-- definition, not a new one, apart from authenticated's grant, which is the
+-- narrowed one described below.
 --
 -- Position matters: the foreign keys reference finance_profiles,
 -- finance_debts, finance_bank_accounts (id, profile_id) and
@@ -1529,15 +1501,17 @@ COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
 -- 20260909155110_payslip_transaction_reconciliations.sql) and are not yet
 -- declared in this file.
 --
--- Grants are reproduced exactly as live: authenticated holds ALL (TRUNCATE
--- included) on all six, which is broader than the finance_transfer_* blocks
--- above and is not narrowed here.
+-- authenticated holds SELECT, INSERT, UPDATE, DELETE on all six, as in the
+-- finance_transfer_* blocks above. The live grant was ALL (TRUNCATE included,
+-- which RLS does not govern); 20261024150000_authenticated_grants_least_privilege.sql
+-- narrows it. For finance_merchant_logos, anon's revoke and the policy are
+-- 20261024140000_merchant_logo_index_admin_only.sql.
 --
 -- Known gaps, each an open line in REHAUL_PLAN.md rather than fixed here
 -- (fixing any of them changes the database, which this section does not):
--- the two composite keys above; authenticated's ALL on these tables; and
--- finance_debt_observations.debt_id referencing finance_debts(id) alone, so it
--- can cross profiles and has no index leading on debt_id.
+-- the two composite keys above; and finance_debt_observations.debt_id
+-- referencing finance_debts(id) alone, so it can cross profiles and has no
+-- index leading on debt_id.
 
 -- Debt balance observations (20260907230000_finance_debt_observations.sql).
 -- Anchors a loan balance to a known date -- a statement date or a portal
@@ -1588,10 +1562,11 @@ CREATE POLICY "Admin Only" ON "public"."finance_debt_observations"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- the REVOKE below is load-bearing, not decorative.
+-- A fresh build starts from the image's default of ALL, so the REVOKE below is
+-- load-bearing, not decorative.
 REVOKE ALL ON TABLE "public"."finance_debt_observations" FROM "anon";
-GRANT ALL ON TABLE "public"."finance_debt_observations" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_debt_observations" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_debt_observations" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_debt_observations" TO "service_role";
 
 -- Current investment positions (20260910074712_finance_investment_holdings.sql,
@@ -1667,7 +1642,8 @@ CREATE POLICY "Admin Only" ON "public"."finance_investment_holdings"
     WITH CHECK ((SELECT "public"."is_admin"()));
 
 REVOKE ALL ON TABLE "public"."finance_investment_holdings" FROM "anon";
-GRANT ALL ON TABLE "public"."finance_investment_holdings" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_investment_holdings" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_investment_holdings" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_investment_holdings" TO "service_role";
 
 COMMENT ON TABLE "public"."finance_investment_holdings" IS
@@ -1755,7 +1731,8 @@ CREATE POLICY "Admin Only" ON "public"."finance_investment_activities"
     WITH CHECK ((SELECT "public"."is_admin"()));
 
 REVOKE ALL ON TABLE "public"."finance_investment_activities" FROM "anon";
-GRANT ALL ON TABLE "public"."finance_investment_activities" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_investment_activities" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_investment_activities" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_investment_activities" TO "service_role";
 
 COMMENT ON TABLE "public"."finance_investment_activities" IS
@@ -1797,7 +1774,8 @@ CREATE POLICY "Admin writes merchant logo index" ON "public"."finance_merchant_l
 -- anon holds nothing: a grant is a layer of its own beside RLS, and TRUNCATE is
 -- not filtered by RLS at all.
 REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "anon";
-GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_merchant_logos" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "service_role";
 
 COMMENT ON TABLE "public"."finance_merchant_logos" IS
@@ -1879,7 +1857,8 @@ CREATE POLICY "Admin Only" ON "public"."finance_payslips"
     WITH CHECK ((SELECT "public"."is_admin"()));
 
 REVOKE ALL ON TABLE "public"."finance_payslips" FROM "anon";
-GRANT ALL ON TABLE "public"."finance_payslips" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_payslips" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_payslips" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_payslips" TO "service_role";
 
 COMMENT ON COLUMN "public"."finance_payslips"."lines" IS
@@ -1947,7 +1926,8 @@ CREATE POLICY "Admin Only" ON "public"."finance_payslip_transaction_reconciliati
     WITH CHECK ((SELECT "public"."is_admin"()));
 
 REVOKE ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" FROM "anon";
-GRANT ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "service_role";
 
 COMMENT ON TABLE "public"."finance_payslip_transaction_reconciliations" IS

@@ -24,7 +24,9 @@ ALTER TABLE "public"."site_content" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT ALL ON TABLE "public"."site_content" TO "anon";
+REVOKE ALL ON TABLE "public"."site_content" FROM "anon";
+
+GRANT SELECT ON TABLE "public"."site_content" TO "anon";
 
 REVOKE ALL ON TABLE "public"."site_content" FROM "authenticated";
 

@@ -171,8 +171,9 @@ grant select on table "public"."finance_truelayer_connection" to "anon";
 …and the same for every other finance table. The cause: `pg_dump` emits `GRANT`
 but never `REVOKE`, so the schema files did not record privileges this database
 had deliberately taken away, and the differ "helpfully" tried to restore them.
-Those revokes are now stated explicitly at the bottom of `40_finance.sql`,
-`20_watchlist.sql` and `30_travel.sql`.
+Those revokes are now stated explicitly: each table's `anon` `REVOKE` sits
+beside its grants (`40_finance.sql`, `30_travel.sql`, `10_`–`19_`), and
+`20_watchlist.sql` keeps its block at the bottom.
 
 The lesson generalises: **the differ proposes, you dispose.** Two known limits
 that matter for this schema in particular:

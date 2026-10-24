@@ -547,8 +547,8 @@ GRANT ALL ON SEQUENCE "public"."weekly_schedule_id_seq" TO "service_role";
 -- tables (see the "Public Read Access" policies above), so it is a public
 -- surface deliberately, not an oversight -- it carries no is_admin() gate.
 --
--- SELECT only: a newly created view inherits ALL from the default privileges
--- (see "ALTER DEFAULT PRIVILEGES" in 90_privileges.sql), and pg_dump emits
+-- SELECT only: a fresh build starts from the image's default of ALL on a newly
+-- created view (90_privileges.sql narrows the default last), and pg_dump emits
 -- GRANT and never REVOKE, so without the REVOKE below anon and authenticated
 -- would hold INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES and TRIGGER on it
 -- as they did before 20260929202643.
@@ -557,12 +557,11 @@ REVOKE ALL ON TABLE "public"."watchlist_up_next" FROM PUBLIC, "anon", "authentic
 GRANT SELECT ON TABLE "public"."watchlist_up_next" TO "anon", "authenticated";
 
 -- watchlist_events grants: narrower than every other table in this file, on
--- purpose. Default privileges on this project still hand ALL on a newly
--- created public table to anon, authenticated and service_role (the note at
--- "ALTER DEFAULT PRIVILEGES" below explains why), so the REVOKE lines here
--- are not idle defence -- without them this table would start out exactly as
--- over-granted as every sibling table was before 20260905160000 and
--- 20260912130000 narrowed them.
+-- purpose. A fresh build starts from the image's default of ALL on a newly
+-- created public table for anon, authenticated and service_role (90_privileges.sql
+-- narrows the default last), so the REVOKE lines here are not idle defence --
+-- without them this table would start out exactly as over-granted as every
+-- sibling table was before 20260905160000 and 20260912130000 narrowed them.
 --
 -- anon: SELECT only, same reasoning as every table above -- show names and
 -- platform names, nothing private.
@@ -591,7 +590,7 @@ GRANT SELECT ON TABLE "public"."watchlist_events" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."watchlist_events" TO "service_role";
 
--- Revoked privileges (see the note in 40_finance.sql)
+-- Revoked privileges
 --
 -- pg_dump emits GRANT and never REVOKE, so a privilege this database has
 -- deliberately taken away is invisible to a generated diff and gets silently
@@ -601,8 +600,10 @@ GRANT ALL ON TABLE "public"."watchlist_events" TO "service_role";
 -- layer was the only barrier between anon and an empty table. Not reachable
 -- through PostgREST, which exposes no TRUNCATE verb -- least privilege rather
 -- than an open door. Applied in 20260905160000 (tables) and
--- 20260912130000 (sequences); `authenticated` and `service_role` keep ALL,
--- and the reasoning for leaving them is in that second migration.
+-- 20260912130000 (sequences). The second left `authenticated` with ALL (its
+-- reasoning is there); 20261024150000 has since narrowed it on these tables to
+-- SELECT, INSERT, UPDATE and DELETE. `service_role` keeps ALL, and so does
+-- `authenticated` on the sequences.
 
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
   "public"."favourites",

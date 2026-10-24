@@ -36,7 +36,9 @@ ALTER TABLE "public"."inventory_items" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT ALL ON TABLE "public"."inventory_items" TO "anon";
+REVOKE ALL ON TABLE "public"."inventory_items" FROM "anon";
+
+GRANT SELECT ON TABLE "public"."inventory_items" TO "anon";
 
 REVOKE ALL ON TABLE "public"."inventory_items" FROM "authenticated";
 
