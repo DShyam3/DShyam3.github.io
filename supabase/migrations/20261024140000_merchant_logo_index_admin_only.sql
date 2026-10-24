@@ -157,7 +157,8 @@ DROP POLICY "Public reads merchant logos" ON storage.objects;
 
 -- Post-check: the index has exactly its one admin policy and anon holds nothing
 -- on it; the storage SELECT policy is admin-only under its new name; and no
--- storage policy open to anon or public mentions the bucket.
+-- other storage read policy for anon, public or authenticated could still list
+-- the bucket.
 DO $$
 DECLARE
     v_mismatch text;
