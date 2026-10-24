@@ -676,49 +676,49 @@ ALTER TABLE ONLY "public"."finance_goal_contributions"
 ALTER TABLE ONLY "public"."finance_transactions"
     ADD CONSTRAINT "finance_transactions_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."finance_bank_accounts"("id") ON DELETE SET NULL;
 
-CREATE POLICY "Admin All Access" ON "public"."finance_truelayer_connection" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin All Access" ON "public"."finance_truelayer_connection" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_truelayer_oauth_states" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_truelayer_oauth_states" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_bank_accounts" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_bank_accounts" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_categories" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_categories" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_items" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_items" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_presets" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_presets" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_credit_bureaus" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_credit_bureaus" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_credit_scores" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_credit_scores" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_data" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_data" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_debts" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_debts" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_defaults" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_defaults" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_goal_contributions" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_goal_contributions" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_goals" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_goals" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_holiday_defaults" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_holiday_defaults" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_memberships" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_memberships" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_recurring_bills" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_recurring_bills" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_recurring_templates" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_recurring_templates" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_settings" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_settings" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_student_loan_rates" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_student_loan_rates" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_tax_configs" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_tax_configs" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_transactions" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_transactions" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_user_holidays" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_user_holidays" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 ALTER TABLE "public"."finance_bank_accounts" ENABLE ROW LEVEL SECURITY;
 
@@ -1080,8 +1080,8 @@ CREATE INDEX "idx_finance_truelayer_oauth_states_profile_expires_at" ON "public"
 ALTER TABLE "public"."finance_profiles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_profile_transfers" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
-CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
+CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 -- S-10: anon needs nothing on any finance table. Re-asserted here because
 -- Supabase's ALTER DEFAULT PRIVILEGES re-grants on every newly created table.
@@ -1153,9 +1153,9 @@ ALTER TABLE "public"."finance_net_worth_snapshots" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_account_balance_snapshots" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admin Only" ON "public"."finance_net_worth_snapshots" TO "authenticated"
-    USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+    USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 CREATE POLICY "Admin Only" ON "public"."finance_account_balance_snapshots" TO "authenticated"
-    USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+    USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 REVOKE ALL ON "public"."finance_net_worth_snapshots" FROM "anon";
 REVOKE ALL ON "public"."finance_account_balance_snapshots" FROM "anon";

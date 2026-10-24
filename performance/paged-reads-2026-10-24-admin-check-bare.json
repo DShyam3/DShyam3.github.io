@@ -1,0 +1,165 @@
+{
+  "measuredAt": "2026-10-24T15:29:07.755Z",
+  "node": "v22.22.0",
+  "environment": "local Supabase; synthetic fixtures; one warm-up then five sequential reads",
+  "scope": "Real pagination helper and REST requests only; excludes React render, saves, TMDB, TV nesting, and production latency.",
+  "cleanupVerified": true,
+  "results": [
+    {
+      "name": "watchlist-movies-anonymous",
+      "rows": 100,
+      "samples": [
+        {
+          "milliseconds": 6.1,
+          "requests": 1
+        },
+        {
+          "milliseconds": 7.5,
+          "requests": 1
+        },
+        {
+          "milliseconds": 6.79,
+          "requests": 1
+        },
+        {
+          "milliseconds": 11.43,
+          "requests": 1
+        },
+        {
+          "milliseconds": 6.28,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "finance-transactions-authenticated",
+      "rows": 100,
+      "samples": [
+        {
+          "milliseconds": 9.32,
+          "requests": 1
+        },
+        {
+          "milliseconds": 11.19,
+          "requests": 1
+        },
+        {
+          "milliseconds": 8.71,
+          "requests": 1
+        },
+        {
+          "milliseconds": 8.45,
+          "requests": 1
+        },
+        {
+          "milliseconds": 9.02,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "watchlist-movies-anonymous",
+      "rows": 1000,
+      "samples": [
+        {
+          "milliseconds": 14.29,
+          "requests": 1
+        },
+        {
+          "milliseconds": 12.57,
+          "requests": 1
+        },
+        {
+          "milliseconds": 10.57,
+          "requests": 1
+        },
+        {
+          "milliseconds": 12.65,
+          "requests": 1
+        },
+        {
+          "milliseconds": 12.43,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "finance-transactions-authenticated",
+      "rows": 1000,
+      "samples": [
+        {
+          "milliseconds": 68.14,
+          "requests": 1
+        },
+        {
+          "milliseconds": 64.07,
+          "requests": 1
+        },
+        {
+          "milliseconds": 58.79,
+          "requests": 1
+        },
+        {
+          "milliseconds": 60.85,
+          "requests": 1
+        },
+        {
+          "milliseconds": 48.56,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "watchlist-movies-anonymous",
+      "rows": 5000,
+      "samples": [
+        {
+          "milliseconds": 57.61,
+          "requests": 5
+        },
+        {
+          "milliseconds": 62.1,
+          "requests": 5
+        },
+        {
+          "milliseconds": 66.05,
+          "requests": 5
+        },
+        {
+          "milliseconds": 61.99,
+          "requests": 5
+        },
+        {
+          "milliseconds": 65.76,
+          "requests": 5
+        }
+      ]
+    },
+    {
+      "name": "finance-transactions-authenticated",
+      "rows": 5000,
+      "samples": [
+        {
+          "milliseconds": 1051.11,
+          "requests": 5
+        },
+        {
+          "milliseconds": 1005.98,
+          "requests": 5
+        },
+        {
+          "milliseconds": 1085.66,
+          "requests": 5
+        },
+        {
+          "milliseconds": 1037.33,
+          "requests": 5
+        },
+        {
+          "milliseconds": 1452.13,
+          "requests": 5
+        }
+      ]
+    }
+  ]
+}

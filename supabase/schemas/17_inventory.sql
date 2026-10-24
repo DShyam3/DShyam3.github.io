@@ -24,11 +24,11 @@ ALTER TABLE "public"."inventory_items" OWNER TO "postgres";
 ALTER TABLE ONLY "public"."inventory_items"
     ADD CONSTRAINT "inventory_items_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Admin delete" ON "public"."inventory_items" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."inventory_items" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."inventory_items" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."inventory_items" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."inventory_items" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."inventory_items" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Public Read Access" ON "public"."inventory_items" FOR SELECT USING (true);
 
