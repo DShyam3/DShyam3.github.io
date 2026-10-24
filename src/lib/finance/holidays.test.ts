@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateWorkingDaysInRange,
   formatDaysList,
+  formatHolidayDates,
   getBookedDaysForMonth,
   isHalfDay,
   normalizeHolidays,
@@ -161,6 +162,25 @@ describe('getBookedDaysForMonth', () => {
   });
 });
 
+describe('formatHolidayDates', () => {
+  it('prints the stored calendar day, whatever the machine timezone', () => {
+    expect(formatHolidayDates('2025-12-22', '2025-12-22')).toBe('22 Dec 25');
+  });
+
+  it('drops the year from the start of a range within one year', () => {
+    expect(formatHolidayDates('2025-12-22', '2025-12-28')).toBe('22 Dec - 28 Dec 25');
+  });
+
+  it('keeps both years for a range across new year', () => {
+    expect(formatHolidayDates('2025-12-29', '2026-01-02')).toBe('29 Dec 25 - 2 Jan 26');
+  });
+
+  it('is empty for a missing or malformed date', () => {
+    expect(formatHolidayDates('', '2025-12-01')).toBe('');
+    expect(formatHolidayDates('2025-12-01', 'not-a-date')).toBe('');
+  });
+});
+
 describe('isHalfDay', () => {
   const day = { startDate: '2025-12-19', endDate: '2025-12-19', halfDay: 'am' as const };
 
@@ -203,6 +223,38 @@ describe('normalizeHolidays', () => {
     expect(result[0].startDate).toBe('2025-06-03');
     expect(result[1].endDate).toBe('2025-06-12');
     expect(result[1].occasion).toBe('Leave');
+  });
+
+  it('holds a day past the month end to its last day instead of dropping the range', () => {
+    // Free text: "27-30" typed for February, which has 28 days in 2026.
+    const result = normalizeHolidays({ '1': { dates: '27-30', count: 4, occasion: 'Ski' } }, 2026);
+    expect(result).toHaveLength(1);
+    expect(result[0].startDate).toBe('2026-02-27');
+    expect(result[0].endDate).toBe('2026-02-28');
+    expect(result[0].count).toBe(4);
+    // 27 Feb 2026 is a Friday and 28 Feb a Saturday: one working day, booked, not zero.
+    expect(calculateWorkingDaysInRange(result[0].startDate, result[0].endDate, [])).toBe(1);
+    expect(getBookedDaysForMonth(result, 2026, 1, []).map(b => b.day)).toEqual([27]);
+  });
+
+  it('uses the real month length: 29 in a leap February, 30 in April', () => {
+    const feb = normalizeHolidays({ '1': { dates: '27-30', count: 3 } }, 2028);
+    expect(feb[0].endDate).toBe('2028-02-29');
+    const apr = normalizeHolidays({ '3': { dates: '28-31', count: 4 } }, 2026);
+    expect(apr[0].endDate).toBe('2026-04-30');
+  });
+
+  it('drops a single day past the month end from a list, leaving valid days alone', () => {
+    const result = normalizeHolidays({ '1': { dates: '3 + 31, 10-12', count: 5 } }, 2026);
+    expect(result.map(h => [h.startDate, h.endDate])).toEqual([
+      ['2026-02-03', '2026-02-03'],
+      ['2026-02-10', '2026-02-12'],
+    ]);
+  });
+
+  it('drops a segment that lies wholly past the month end rather than booking a day nobody typed', () => {
+    // "30-31" in February names no real day; holding it to 28 Feb would book one.
+    expect(normalizeHolidays({ '1': { dates: '30-31', count: 2 } }, 2026)).toEqual([]);
   });
 
   it('produces ids that are stable across calls', () => {

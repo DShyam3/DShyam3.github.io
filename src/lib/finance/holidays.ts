@@ -5,7 +5,7 @@
  * "12-16", or "3 + 12-16" — which these functions parse, count and format.
  */
 
-import { isWeekend, toISODate } from './dates';
+import { calendarParts, getDaysInMonth, isoOfEpochDay } from './dates';
 
 export type LeaveType = 'holiday' | 'sick';
 
@@ -92,6 +92,49 @@ export const parseEntryDays = (entry: string): number => {
   return isNaN(parseInt(clean, 10)) ? 0 : 1;
 };
 
+/** UTC midnight of a `YYYY-MM-DD` already checked by `calendarParts`. Read it
+ *  with the UTC getters or `timeZone: 'UTC'` only; the local ones move with the
+ *  zone. */
+const utcMidnight = (iso: string): Date => new Date(`${iso}T00:00:00Z`);
+
+interface CalendarDay {
+  iso: string;
+  year: number;
+  /** 0-based, as `Date` uses it. */
+  monthIdx: number;
+  day: number;
+  weekend: boolean;
+}
+
+/**
+ * Each calendar day from `startStr` to `endStr`, inclusive. Nothing is yielded
+ * for a range that is inverted or has an end that is not a real `YYYY-MM-DD`.
+ *
+ * A stored date is a calendar day, not an instant. It is stepped as a whole-day
+ * number and read back as that day's own fields, so the machine's timezone and
+ * any clock change between the two dates cannot move it onto a neighbour.
+ */
+function* calendarDays(startStr: string, endStr: string): Generator<CalendarDay> {
+  const first = calendarParts(startStr);
+  const last = calendarParts(endStr);
+  if (!first || !last) return;
+
+  for (let epoch = first.epoch; epoch <= last.epoch; epoch++) {
+    const iso = isoOfEpochDay(epoch);
+    const parts = calendarParts(iso);
+    // Always a real day: `epoch` lies between two that were just validated.
+    if (!parts) continue;
+    const weekday = utcMidnight(iso).getUTCDay();
+    yield {
+      iso,
+      year: parts.year,
+      monthIdx: parts.month - 1,
+      day: parts.day,
+      weekend: weekday === 0 || weekday === 6,
+    };
+  }
+}
+
 /** Working days between two `YYYY-MM-DD` dates, inclusive, excluding weekends
  *  and bank holidays. Returns 0 for a missing, malformed or inverted range. */
 export const calculateWorkingDaysInRange = (
@@ -99,17 +142,9 @@ export const calculateWorkingDaysInRange = (
   endStr: string,
   bankHolidays: string[],
 ): number => {
-  if (!startStr || !endStr) return 0;
-
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
-
   let count = 0;
-  const current = new Date(start);
-  while (current <= end) {
-    if (!isWeekend(current) && !bankHolidays.includes(toISODate(current))) count++;
-    current.setDate(current.getDate() + 1);
+  for (const current of calendarDays(startStr, endStr)) {
+    if (!current.weekend && !bankHolidays.includes(current.iso)) count++;
   }
   return count;
 };
@@ -135,20 +170,14 @@ export const getBookedDaysForMonth = (
   const booked: BookedDay[] = [];
 
   for (const hol of holidays) {
-    const start = new Date(hol.startDate);
-    const end = new Date(hol.endDate);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) continue;
-
     const leaveType: LeaveType = hol.type || 'holiday';
     const halfDay = isHalfDay(hol) ? hol.halfDay : undefined;
     const fraction = halfDay ? HALF_DAY : 1;
-    const current = new Date(start);
-    while (current <= end) {
-      const inMonth = current.getFullYear() === year && current.getMonth() === monthIdx;
-      if (inMonth && !isWeekend(current) && !bankHolidays.includes(toISODate(current))) {
-        booked.push({ day: current.getDate(), occasion: hol.occasion, type: leaveType, fraction, ...(halfDay ? { halfDay } : {}) });
+    for (const current of calendarDays(hol.startDate, hol.endDate)) {
+      const inMonth = current.year === year && current.monthIdx === monthIdx;
+      if (inMonth && !current.weekend && !bankHolidays.includes(current.iso)) {
+        booked.push({ day: current.day, occasion: hol.occasion, type: leaveType, fraction, ...(halfDay ? { halfDay } : {}) });
       }
-      current.setDate(current.getDate() + 1);
     }
   }
   return booked;
@@ -156,15 +185,19 @@ export const getBookedDaysForMonth = (
 
 /** Formats a holiday range for display, dropping the year where it is implied. */
 export const formatHolidayDates = (startStr: string, endStr: string): string => {
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+  const first = calendarParts(startStr);
+  const last = calendarParts(endStr);
+  if (!first || !last) return '';
+  const start = utcMidnight(startStr);
+  const end = utcMidnight(endStr);
 
-  const withoutYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-  const withYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: '2-digit' };
+  // `timeZone: 'UTC'` because the dates are UTC midnights: formatting them in
+  // the local zone would print the previous day anywhere west of Greenwich.
+  const withoutYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', timeZone: 'UTC' };
+  const withYear: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' };
 
   if (startStr === endStr) return start.toLocaleDateString('en-GB', withYear);
-  if (start.getFullYear() === end.getFullYear()) {
+  if (first.year === last.year) {
     return `${start.toLocaleDateString('en-GB', withoutYear)} - ${end.toLocaleDateString('en-GB', withYear)}`;
   }
   return `${start.toLocaleDateString('en-GB', withYear)} - ${end.toLocaleDateString('en-GB', withYear)}`;
@@ -196,6 +229,15 @@ export const normalizeHolidays = (
     const monthIdx = parseInt(monthKey, 10);
     if (isNaN(monthIdx) || !val?.dates || !val.count) continue;
 
+    // The shorthand is free text, so "27-30" can be typed for February. A
+    // range running past the month's end stops at its last day, and a segment
+    // that starts past it names no real day and is dropped rather than booked
+    // on a day nobody typed. Left as written, the strict day reader would book
+    // nothing for the whole range. Only the real days are booked; `count`
+    // stays as typed.
+    const lastDayOfMonth = getDaysInMonth(taxYear, monthIdx);
+    const withinMonth = (day: number): number => Math.min(day, lastDayOfMonth);
+
     const segments = val.dates.split(/[,+]/).map(s => s.trim()).filter(Boolean);
     segments.forEach((seg, segIdx) => {
       const range = seg.match(/^(\d+)\s*-\s*(\d+)$/);
@@ -213,10 +255,12 @@ export const normalizeHolidays = (
         }
       }
 
+      if (startDay > lastDayOfMonth) return;
+
       list.push({
         id: `legacy-${monthIdx}-${segIdx}`,
-        startDate: `${taxYear}-${pad(monthIdx + 1)}-${pad(startDay)}`,
-        endDate: `${taxYear}-${pad(monthIdx + 1)}-${pad(endDay)}`,
+        startDate: `${taxYear}-${pad(monthIdx + 1)}-${pad(withinMonth(startDay))}`,
+        endDate: `${taxYear}-${pad(monthIdx + 1)}-${pad(withinMonth(endDay))}`,
         occasion: val.occasion || 'Leave',
         count: parseEntryDays(seg),
       });

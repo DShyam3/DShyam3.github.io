@@ -94,6 +94,29 @@ describe('taxYearOf', () => {
   it('handles a date well inside the year', () => {
     expect(taxYearOf('2026-08-28')).toBe(2026);
   });
+
+  it('still reads a full timestamp, which the payslips page passes for "now"', () => {
+    // Midday UTC is the same calendar day in every zone from -11 to +11.
+    expect(taxYearOf('2026-08-28T12:00:00.000Z')).toBe(2026);
+    expect(taxYearOf('2027-01-15T12:00:00.000Z')).toBe(2026);
+  });
+
+  it('puts a timestamp on the right side of 6 April by its local day', () => {
+    // 09:00 UTC is the same calendar day in every zone from UTC-9 to UTC+14.
+    expect(taxYearOf('2026-04-06T09:00:00.000Z')).toBe(2026);
+    expect(taxYearOf('2026-04-05T09:00:00.000Z')).toBe(2025);
+  });
+
+  it('reads a leap day and the turn of the calendar year from the string itself', () => {
+    expect(taxYearOf('2024-02-29')).toBe(2023);
+    expect(taxYearOf('2026-01-01')).toBe(2025);
+    expect(taxYearOf('2026-12-31')).toBe(2026);
+  });
+
+  it('is NaN for something that is not a date, rather than a plausible year', () => {
+    expect(taxYearOf('')).toBeNaN();
+    expect(taxYearOf('not a date')).toBeNaN();
+  });
 });
 
 describe('tax-year selection', () => {

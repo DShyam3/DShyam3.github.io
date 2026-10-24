@@ -53,7 +53,7 @@ export function useFinanceAlerts(today: string): FinanceAlert[] {
         type: d.type,
         repaymentType: d.repaymentType,
         balance: d.balance,
-        aprPercent: rateInForce(d.ratePeriods, d.interestRate, new Date(today)),
+        aprPercent: rateInForce(d.ratePeriods, d.interestRate, today),
       })),
       creditCards: bankAccounts
         .filter(a => a.type === 'credit')

@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { epochDay, getDaysInMonth, getStartDayOfWeek, isoOfEpochDay, isWeekend, toISODate } from './dates';
+import { calendarParts, epochDay, getDaysInMonth, getStartDayOfWeek, isoOfEpochDay, isWeekend, localCalendarDay, toISODate } from './dates';
+
+describe('localCalendarDay', () => {
+  it('reads a YYYY-MM-DD string as that day, whatever the timezone', () => {
+    expect(localCalendarDay('2026-01-01')).toEqual(calendarParts('2026-01-01'));
+  });
+
+  it('reads a Date and a timestamp string at their local day', () => {
+    const local = new Date(2026, 3, 6, 23, 30);
+    expect(localCalendarDay(local)).toEqual(calendarParts('2026-04-06'));
+    expect(localCalendarDay(local.toISOString())).toEqual(calendarParts('2026-04-06'));
+  });
+
+  it('is unknown for a day that does not exist, garbage, and an invalid Date', () => {
+    for (const bad of ['2026-02-30', '2026-13-01', '', 'not a date', new Date(Number.NaN)]) {
+      expect(localCalendarDay(bad)).toBeUndefined();
+    }
+  });
+});
 
 describe('toISODate', () => {
   it('formats in local time, not UTC', () => {
@@ -79,6 +97,42 @@ describe('epochDay', () => {
       expect(epochDay(bad)).toBeUndefined();
     }
     expect(epochDay('2028-02-29')).toBeDefined();
+  });
+});
+
+describe('calendarParts', () => {
+  it('reads year, month (1-12), day and epoch day from a real YYYY-MM-DD', () => {
+    expect(calendarParts('2026-10-09')).toEqual({ year: 2026, month: 10, day: 9, epoch: 20_735 });
+    expect(calendarParts('1970-01-01')).toEqual({ year: 1970, month: 1, day: 1, epoch: 0 });
+  });
+
+  it('agrees with epochDay', () => {
+    for (const iso of ['1969-12-31', '2026-03-29', '2026-04-06', '2028-02-29', '9999-12-31']) {
+      expect(calendarParts(iso)?.epoch).toBe(epochDay(iso));
+    }
+  });
+
+  it('keeps the first and last day of a year as they are written, not shifted by the zone', () => {
+    // Read from the string, so 1 January and 31 December cannot slip into the
+    // neighbouring year in any timezone.
+    expect(calendarParts('2026-01-01')).toMatchObject({ year: 2026, month: 1, day: 1 });
+    expect(calendarParts('2026-12-31')).toMatchObject({ year: 2026, month: 12, day: 31 });
+  });
+
+  it('accepts 29 February in a leap year and rejects it otherwise', () => {
+    expect(calendarParts('2024-02-29')).toMatchObject({ year: 2024, month: 2, day: 29 });
+    expect(calendarParts('2023-02-29')).toBeUndefined();
+    expect(calendarParts('2100-02-29')).toBeUndefined();
+  });
+
+  it('is undefined for an empty string, a timestamp, and a month or day out of range', () => {
+    expect(calendarParts('')).toBeUndefined();
+    expect(calendarParts('2026-10-09T00:00:00Z')).toBeUndefined();
+    expect(calendarParts('2026-13-01')).toBeUndefined();
+    expect(calendarParts('2026-00-10')).toBeUndefined();
+    expect(calendarParts('2026-04-31')).toBeUndefined();
+    expect(calendarParts('2026-9-3')).toBeUndefined();
+    expect(calendarParts('not a date')).toBeUndefined();
   });
 });
 

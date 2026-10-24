@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { FinanceSettings, HalfDay, LeaveType, PackageBenefit, UserHoliday } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
-import { HALF_DAY, calculateWorkingDaysInRange, formatHolidayDates, getBookedDaysForMonth, getDaysInMonth, getStartDayOfWeek, isHalfDay } from '@/lib/finance';
+import { HALF_DAY, calculateWorkingDaysInRange, calendarParts, formatHolidayDates, getBookedDaysForMonth, getDaysInMonth, getStartDayOfWeek, isHalfDay } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { Calendar, ChevronRight, Gift, Pencil, Plus, PoundSterling, Settings, Trash2 } from 'lucide-react';
 import { useFinanceTotals } from '../useFinanceTotals';
@@ -290,14 +290,14 @@ export default function TaxIncomeSurface({
   const getHolidaysUsedCount = () => {
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
     return normalizedHolidays
-      .filter(h => h.type !== 'sick' && new Date(h.startDate).getFullYear() === currentTaxYear)
+      .filter(h => h.type !== 'sick' && calendarParts(h.startDate)?.year === currentTaxYear)
       .reduce((sum, h) => sum + (h.count || 0), 0);
   };
 
   const getSickDaysUsedCount = () => {
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
     return normalizedHolidays
-      .filter(h => h.type === 'sick' && new Date(h.startDate).getFullYear() === currentTaxYear)
+      .filter(h => h.type === 'sick' && calendarParts(h.startDate)?.year === currentTaxYear)
       .reduce((sum, h) => sum + (h.count || 0), 0);
   };
 
@@ -653,12 +653,14 @@ export default function TaxIncomeSurface({
 
               // Get overlapping holidays for this month
               const overlappingHolidays = normalizedHolidays.filter(hol => {
-                const start = new Date(hol.startDate);
-                const end = new Date(hol.endDate);
-                if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+                // From the stored days' own parts: `new Date()` would read
+                // them as UTC midnight, the day before west of UTC.
+                const start = calendarParts(hol.startDate);
+                const end = calendarParts(hol.endDate);
+                if (!start || !end) return false;
 
-                const startVal = start.getFullYear() * 12 + start.getMonth();
-                const endVal = end.getFullYear() * 12 + end.getMonth();
+                const startVal = start.year * 12 + start.month - 1;
+                const endVal = end.year * 12 + end.month - 1;
                 const currentVal = settings.taxYear * 12 + monthIdx;
 
                 return currentVal >= startVal && currentVal <= endVal;

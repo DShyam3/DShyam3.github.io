@@ -33,6 +33,9 @@ export const getStartDayOfWeek = (year: number, monthIndex: number): number => {
 
 const DAY_MS = 86_400_000;
 
+/** Written as a calendar day, whether or not that day exists. */
+const DAY_SHAPED = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * Days since 1970-01-01 for a real `YYYY-MM-DD` calendar date, or undefined for
  * anything else (a timestamp, a day that does not exist, a bad format). Read as
@@ -41,10 +44,46 @@ const DAY_MS = 86_400_000;
  * local-time helpers above, this one does not move with the system zone.
  */
 export const epochDay = (iso: string): number | undefined => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return undefined;
+  if (!DAY_SHAPED.test(iso)) return undefined;
   const time = Date.parse(`${iso}T00:00:00Z`);
   if (!Number.isFinite(time) || new Date(time).toISOString().slice(0, 10) !== iso) return undefined;
   return time / DAY_MS;
+};
+
+/**
+ * Year, month (1-12), day and `epochDay` of a stored `YYYY-MM-DD`, read from the
+ * string's own parts, or undefined for anything that is not a real calendar day
+ * (what `epochDay` rejects). A stored date is a calendar day, not an instant:
+ * `new Date(iso)` is UTC midnight, and a local getter then names the previous
+ * day anywhere west of Greenwich. A bad date stays unknown here rather than
+ * rolling into a neighbouring one.
+ */
+export const calendarParts = (
+  iso: string,
+): { year: number; month: number; day: number; epoch: number } | undefined => {
+  const epoch = epochDay(iso);
+  if (epoch === undefined) return undefined;
+  return {
+    year: Number(iso.slice(0, 4)),
+    month: Number(iso.slice(5, 7)),
+    day: Number(iso.slice(8, 10)),
+    epoch,
+  };
+};
+
+/**
+ * The calendar day `on` names, as `calendarParts`, or undefined if it names
+ * none. A `YYYY-MM-DD` string is that day. A `Date`, or any other string (a
+ * timestamp), is an instant and is read at its local day, as `toISODate` does.
+ * A day-shaped string that does not exist ("2026-02-30") is unknown rather than
+ * handed to `new Date`, which would roll it into March.
+ */
+export const localCalendarDay = (
+  on: Date | string,
+): ReturnType<typeof calendarParts> => {
+  if (typeof on === 'string' && DAY_SHAPED.test(on)) return calendarParts(on);
+  const instant = typeof on === 'string' ? new Date(on) : on;
+  return Number.isNaN(instant.getTime()) ? undefined : calendarParts(toISODate(instant));
 };
 
 /** The `YYYY-MM-DD` date of an `epochDay` value (years 0000 to 9999). */

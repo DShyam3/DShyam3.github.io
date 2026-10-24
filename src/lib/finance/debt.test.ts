@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   calculateDebtDrift,
   projectDebtBalance,
@@ -125,6 +125,96 @@ describe('projectDebtBalance', () => {
     expect(pt2025).toBeDefined();
     expect(pt2025!.balance).toBe(50000);
   });
+
+  // A stored 'YYYY-MM-DD' is a calendar day. `new Date('2000-01-01')` is UTC
+  // midnight, which a local getter reads as 31 December 1999 anywhere west of
+  // Greenwich. The cases below sit on the year boundary so that reading
+  // matters; run them under TZ=America/Los_Angeles to see it.
+  describe('reads stored dates as calendar days, whatever the timezone', () => {
+    const writeOffYearFor = (startDate: string): number => {
+      const points = projectDebtBalance(
+        {
+          balance: 50000,
+          interestRate: 6,
+          minPayment: 0,
+          repaymentType: 'income_contingent',
+          studentLoanPlan: 'plan2',
+          startDate,
+        },
+        { ...opts, grossSalary: 30000 },
+      );
+      return points[points.length - 1].year;
+    };
+
+    it('counts the write-off from the year a loan started, either side of New Year', () => {
+      expect(writeOffYearFor('1999-12-31')).toBe(2029);
+      expect(writeOffYearFor('2000-01-01')).toBe(2030);
+      expect(writeOffYearFor('2000-12-31')).toBe(2030);
+      expect(writeOffYearFor('2001-01-01')).toBe(2031);
+    });
+
+    it('takes the start year from the first draw when there is no start date', () => {
+      const points = projectDebtBalance(
+        {
+          balance: 50000,
+          interestRate: 7,
+          minPayment: 100,
+          draws: [{ id: 'dw1', date: '2020-01-01', amount: 40000 }],
+        },
+        { ...opts, includeHistory: true },
+      );
+      expect(points[0].year).toBe(2020);
+    });
+
+    it('opens in the year of the latest observation when no year is passed', () => {
+      const open = { grossSalary: 0, repaymentRate: 9, threshold: 27295 };
+      const onNewYear = projectDebtBalance(
+        {
+          balance: 10000,
+          interestRate: 0,
+          minPayment: 100,
+          observations: [
+            { id: 'o1', debtId: 'd1', observedOn: '2024-06-01', balance: 12000, source: 'manual' as const },
+            { id: 'o2', debtId: 'd1', observedOn: '2025-01-01', balance: 8000, source: 'manual' as const },
+          ],
+        },
+        open,
+      );
+      expect(onNewYear[0]).toMatchObject({ year: 2025, balance: 8000 });
+
+      // The statement date, not the day it was keyed in, names the year.
+      const lagged = projectDebtBalance(
+        {
+          balance: 10000,
+          interestRate: 0,
+          minPayment: 100,
+          observations: [
+            { id: 'o1', debtId: 'd1', observedOn: '2026-03-01', statementDate: '2025-01-01', balance: 8000, source: 'statement' as const },
+          ],
+        },
+        open,
+      );
+      expect(lagged[0].year).toBe(2025);
+    });
+
+    it('files an observation under the year its statement date names', () => {
+      const points = projectDebtBalance(
+        {
+          balance: 50000,
+          originalAmount: 40000,
+          interestRate: 7,
+          minPayment: 100,
+          startDate: '2020-09-01',
+          observations: [
+            { id: 'o1', debtId: 'd1', observedOn: '2024-02-10', statementDate: '2023-01-01', balance: 45123.45, source: 'statement' as const },
+          ],
+        },
+        { ...opts, includeHistory: true },
+      );
+      expect(points.find(p => p.year === 2023)!.balance).toBe(45123.45);
+      expect(points.find(p => p.year === 2022)!.balance).not.toBe(45123.45);
+    });
+  });
 });
 
 describe('rateInForce', () => {
@@ -144,11 +234,47 @@ describe('rateInForce', () => {
   });
 
   it('takes effect on the day itself, not the day after', () => {
-    expect(rateInForce(periods, 6, new Date('2027-01-01'))).toBe(8);
+    // A Date is read at its local day, so build it in local time. (The earlier
+    // `new Date('2027-01-01')` is UTC midnight, which is 31 December in any
+    // zone west of Greenwich; the expected value is unchanged.)
+    expect(rateInForce(periods, 6, new Date(2027, 0, 1))).toBe(8);
+    expect(rateInForce(periods, 6, new Date(2027, 0, 1, 23, 59, 59))).toBe(8);
+  });
+
+  it('does not apply a period before its day has begun, however late the day before', () => {
+    expect(rateInForce(periods, 6, new Date(2026, 11, 31, 23, 59, 59))).toBe(4);
+  });
+
+  it('reads a YYYY-MM-DD string as a calendar day', () => {
+    expect(rateInForce(periods, 6, '2027-01-01')).toBe(8);
+    expect(rateInForce(periods, 6, '2026-12-31')).toBe(4);
+    expect(rateInForce(periods, 6, '2024-12-31')).toBe(6);
   });
 
   it('falls back while every period is still in the future', () => {
     expect(rateInForce(periods, 6, new Date(2024, 0, 1))).toBe(6);
+  });
+
+  it('reads a timestamp string at its day, not as an unknown that lets the latest period win', () => {
+    // 09:00 UTC is the same calendar day in every zone from UTC-9 to UTC+14
+    // (midday would tip over in Auckland's summer). The latest period (8, from
+    // 2027) must not apply to a day in 2026.
+    expect(rateInForce(periods, 6, '2026-06-01T09:00:00Z')).toBe(4);
+    expect(rateInForce(periods, 6, '2026-12-31T09:00:00Z')).toBe(4);
+    expect(rateInForce(periods, 6, '2027-01-01T09:00:00Z')).toBe(8);
+    expect(rateInForce(periods, 6, '2024-06-01T09:00:00Z')).toBe(6);
+  });
+
+  it('falls back when `on` names no real day, rather than letting the latest period win', () => {
+    expect(rateInForce(periods, 6, 'not a date')).toBe(6);
+    expect(rateInForce(periods, 6, '')).toBe(6);
+    expect(rateInForce(periods, 6, new Date(Number.NaN))).toBe(6);
+  });
+
+  it('does not roll a day that does not exist into the next month', () => {
+    // `new Date('2026-02-30')` is 2 March; the day is unknown, so the fallback stands.
+    expect(rateInForce([{ effectiveFrom: '2026-03-01', rate: 9 }], 6, '2026-02-30')).toBe(6);
+    expect(rateInForce(periods, 6, '2026-13-01')).toBe(6);
   });
 
   it('ignores a period with an unparseable date rather than throwing', () => {
@@ -205,6 +331,43 @@ describe('projectDebtBalance with a rate schedule', () => {
     );
     expect(scheduled.find(p => p.year === 2026)!.interest)
       .toBeCloseTo(flat.find(p => p.year === 2026)!.interest, 6);
+  });
+
+  it('applies a period that starts on the first day of the projection to its first month', () => {
+    // Local midnight on 1 January is still 31 December in UTC east of
+    // Greenwich, so an instant comparison would skip month one there.
+    const scheduled = projectDebtBalance(
+      {
+        balance: 10000,
+        interestRate: 0,
+        minPayment: 100,
+        ratePeriods: [{ effectiveFrom: '2025-01-01', rate: 12 }],
+      },
+      scheduleOpts,
+    );
+    const flat = projectDebtBalance(
+      { balance: 10000, interestRate: 12, minPayment: 100 },
+      scheduleOpts,
+    );
+    expect(scheduled.find(p => p.year === 2026)!.interest)
+      .toBeCloseTo(flat.find(p => p.year === 2026)!.interest, 6);
+  });
+
+  it('switches rate in the month a period begins, in a summer month too', () => {
+    // Month 5 from 1 January is 1 June. In Europe/London that is midnight BST,
+    // an hour before midnight UTC on 31 May.
+    const withJune = projectDebtBalance(
+      {
+        balance: 10000,
+        interestRate: 0,
+        minPayment: 0,
+        ratePeriods: [{ effectiveFrom: '2025-06-01', rate: 12 }],
+      },
+      scheduleOpts,
+    );
+    // Months 6..12 at 1% a month, none before.
+    const year1 = withJune.find(p => p.year === 2026)!;
+    expect(year1.interest).toBeCloseTo(10000 * (Math.pow(1.01, 7) - 1), 6);
   });
 });
 
@@ -342,6 +505,66 @@ describe('calculateDebtDrift', () => {
     expect(res.drift).toBeCloseTo(0, 1);
     expect(res.impliedAnnualRate).toBeCloseTo(rate, 0);
   });
+
+  it('counts months between the calendar days written, not between shifted instants', () => {
+    // 1 March to 16 April is 1 month and 15 days: 1.49 months, which rounds
+    // down. Read as UTC midnight and then by local getters, west of Greenwich
+    // that becomes 28 February to 15 April and rounds up.
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-03-01',
+      targetBalance: 9800,
+      targetDate: '2025-04-16',
+      monthlyPayment: 200,
+      interestRate: 0,
+    });
+    expect(res.monthsElapsed).toBe(1);
+    expect(res.predictedBalance).toBe(9800);
+  });
+
+  it('applies a rate period from the day it takes effect', () => {
+    // Monthly steps fall on the 15th. The 12% period begins on 15 March, so
+    // 15 March to 15 July are charged 1% a month and 15 February is not:
+    // five steps, not four or six.
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-01-15',
+      targetBalance: 0,
+      targetDate: '2025-07-15',
+      monthlyPayment: 0,
+      interestRate: 0,
+      ratePeriods: [{ effectiveFrom: '2025-03-15', rate: 12 }],
+    });
+    expect(res.monthsElapsed).toBe(6);
+    expect(res.predictedBalance).toBe(Math.round(10000 * Math.pow(1.01, 5) * 100) / 100);
+  });
+
+  it('returns the anchor untouched when the target is not after it', () => {
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-06-01',
+      targetBalance: 9000,
+      targetDate: '2025-06-01',
+      monthlyPayment: 200,
+      interestRate: 5,
+    });
+    expect(res.monthsElapsed).toBe(0);
+    expect(res.predictedBalance).toBe(10000);
+    expect(res.drift).toBe(-1000);
+  });
+
+  it('returns the anchor untouched when a date is not a real day', () => {
+    const res = calculateDebtDrift({
+      anchorBalance: 10000,
+      anchorDate: '2025-02-30',
+      targetBalance: 9000,
+      targetDate: '2025-06-01',
+      monthlyPayment: 200,
+      interestRate: 5,
+    });
+    expect(res.monthsElapsed).toBe(0);
+    expect(res.predictedBalance).toBe(10000);
+  });
 });
 
 describe('reconcileStudentLoanWithPayslips', () => {
@@ -372,6 +595,61 @@ describe('reconcileStudentLoanWithPayslips', () => {
     expect(result.payslipsCount).toBe(3);
     expect(result.payslipDeductionsTotal).toBe(500);
     expect(result.adjustedBalance).toBe(29500);
+  });
+
+  it('never takes the balance below zero', () => {
+    const result = reconcileStudentLoanWithPayslips(
+      { id: 'o', debtId: 'd', observedOn: '2024-04-05', balance: 100, source: 'statement' as const },
+      [{ payDate: '2024-05-28', studentLoan: 150 }],
+      '2024-12-31',
+    );
+    expect(result.adjustedBalance).toBe(0);
+  });
+
+  it('applies nothing when there are no payslips', () => {
+    const result = reconcileStudentLoanWithPayslips(
+      { id: 'o', debtId: 'd', observedOn: '2024-04-05', balance: 30000, source: 'statement' as const },
+      [],
+      '2024-12-31',
+    );
+    expect(result).toMatchObject({ payslipsCount: 0, payslipDeductionsTotal: 0, adjustedBalance: 30000 });
+  });
+
+  describe('with no asOfDate it cuts off at the local day, not the UTC day', () => {
+    afterEach(() => vi.useRealTimers());
+
+    const observation = {
+      id: 'slc-1',
+      debtId: 'd_student',
+      observedOn: '2024-03-01',
+      statementDate: '2024-04-05',
+      balance: 30000,
+      source: 'statement' as const,
+    };
+    const payslips = [
+      { payDate: '2024-06-30', studentLoan: 100 },
+      { payDate: '2024-07-01', studentLoan: 100 },
+      { payDate: '2024-07-02', studentLoan: 100 },
+    ];
+
+    it('shortly after local midnight, the new day is already counted', () => {
+      // 00:30 local on 1 July is still 30 June in UTC in Europe/London (BST)
+      // and Pacific/Auckland.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2024, 6, 1, 0, 30));
+      const result = reconcileStudentLoanWithPayslips(observation, payslips);
+      expect(result.payslipsCount).toBe(2);
+      expect(result.adjustedBalance).toBe(29800);
+    });
+
+    it('late in the local evening, the next day is not yet counted', () => {
+      // 23:30 local on 1 July is already 2 July in UTC in America/Los_Angeles.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2024, 6, 1, 23, 30));
+      const result = reconcileStudentLoanWithPayslips(observation, payslips);
+      expect(result.payslipsCount).toBe(2);
+      expect(result.adjustedBalance).toBe(29800);
+    });
   });
 });
 

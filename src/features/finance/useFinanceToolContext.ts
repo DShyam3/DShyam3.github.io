@@ -11,7 +11,7 @@ import { useFinanceData } from './FinanceDataContext';
 import { useFinanceTotals } from './useFinanceTotals';
 import { useScenarioState } from './useScenarioState';
 import { useFinanceAlerts } from './useFinanceAlerts';
-import { monthsToTarget, type FinanceToolContext } from '@/lib/finance';
+import { monthsToTarget, toISODate, type FinanceToolContext } from '@/lib/finance';
 
 export function useFinanceToolContext(): FinanceToolContext {
   const { goals } = useFinanceData();
@@ -20,7 +20,8 @@ export function useFinanceToolContext(): FinanceToolContext {
     netWorth, totalAssets, totalDebt, daysRemainingInMonth, nextPayday,
   } = useFinanceTotals();
   const { state } = useScenarioState();
-  const alerts = useFinanceAlerts(new Date().toISOString().slice(0, 10));
+  // The local day: toISOString() is the UTC day, yesterday until 01:00 in BST.
+  const alerts = useFinanceAlerts(toISODate(new Date()));
 
   return {
     position: {
