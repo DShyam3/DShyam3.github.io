@@ -27,8 +27,8 @@ const cspPlugin = (supabaseUrl: string | undefined, umamiScriptUrl: string | nul
   const policy = [
     "default-src 'self'",
     ["script-src 'self'", ...umamiScriptOrigins].join(" "),
-    // 'unsafe-inline': Recharts/shadcn chart injects a <style> element and React
-    // renders inline style attributes.
+    // 'unsafe-inline': sonner injects a <style> element, and React renders
+    // inline style attributes (Recharts sizing among them).
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     // Images come from Supabase storage, TMDB, flagcdn and Google Books thumbnails,
@@ -38,8 +38,8 @@ const cspPlugin = (supabaseUrl: string | undefined, umamiScriptUrl: string | nul
       "connect-src 'self'",
       ...supabaseOrigins,
       ...umamiConnectOrigins,
+      // TMDB is not here: the browser reaches it only through tmdb-proxy.
       "https://www.googleapis.com",
-      "https://api.themoviedb.org",
       "https://www.gov.uk",
     ].join(" "),
     "object-src 'none'",

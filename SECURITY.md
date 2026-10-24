@@ -26,7 +26,8 @@ Current allowances worth knowing about:
 
 - `script-src` allows only `'self'` and `https://cloud.umami.is` (analytics).
 - `connect-src` allows Supabase (HTTPS + WSS), the Umami ingest endpoints,
-  Google Books, TMDB and `www.gov.uk` (bank holidays).
+  Google Books and `www.gov.uk` (bank holidays). Not TMDB: the browser reaches
+  it only through the `tmdb-proxy` edge function.
 - `style-src` includes `'unsafe-inline'`: React inline style attributes require it.
 - `img-src https:` is deliberately broad — book covers, posters and flags come
   from user-supplied URLs stored in the database.
