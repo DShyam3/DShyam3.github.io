@@ -46,7 +46,7 @@ run in lexicographic order, so numeric prefixes handle dependency order --
 
 Storage bucket policies and the pg_cron schedule are **not** in `schemas/`.
 They live outside the `public` schema, are not covered by the schema diff, and
-are maintained by hand in the baseline migration.
+are maintained by hand in `migrations/`.
 
 ## From an empty project
 

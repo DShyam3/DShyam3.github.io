@@ -1473,10 +1473,9 @@ COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
 --
 -- Known gaps, each an open line in REHAUL_PLAN.md rather than fixed here
 -- (fixing any of them changes the database, which this section does not):
--- the two composite keys above; authenticated's ALL on these tables;
+-- the two composite keys above; authenticated's ALL on these tables; and
 -- finance_debt_observations.debt_id referencing finance_debts(id) alone, so it
--- can cross profiles and has no index leading on debt_id; and the anonymous
--- read of finance_merchant_logos described at that table.
+-- can cross profiles and has no index leading on debt_id.
 
 -- Debt balance observations (20260907230000_finance_debt_observations.sql).
 -- Anchors a loan balance to a known date -- a statement date or a portal
@@ -1707,7 +1706,8 @@ COMMENT ON TABLE "public"."finance_investment_activities" IS
 -- There is no profile_id, but it is not free of user data: merchant-logo-cache
 -- only resolves brands found in finance_transactions, so the set of slugs, and
 -- each resolved_at, says which directory brands the owner has paid and roughly
--- when they first appeared. Read is nonetheless open to anon (below).
+-- when they first appeared. Read and write are therefore admin-only (below).
+-- The images themselves stay publicly fetchable by URL, which needs no policy.
 
 CREATE TABLE IF NOT EXISTS "public"."finance_merchant_logos" (
     "slug" "text" NOT NULL,
@@ -1723,25 +1723,18 @@ ALTER TABLE ONLY "public"."finance_merchant_logos"
 
 ALTER TABLE "public"."finance_merchant_logos" ENABLE ROW LEVEL SECURITY;
 
--- Open to anon as live. This was written as "the index says nothing about
--- anybody", which is wrong (see the table comment above): anyone holding the
--- publishable key can list the owner's paid directory brands. The only reader
--- in the app is admin-gated. Narrowing it is an open REHAUL_PLAN.md line.
-CREATE POLICY "Public reads merchant logo index" ON "public"."finance_merchant_logos"
-    FOR SELECT TO "anon", "authenticated"
-    USING (true);
-
--- No FOR clause, so this covers every command, and the is_admin() condition
--- gates all of them.
+-- The only policy, so read is admin-only: the slugs say which brands the owner
+-- pays (see the table comment above), and the only reader in the app is
+-- admin-gated. No FOR clause, so it covers every command, and the is_admin()
+-- condition gates all of them. The name predates it being the only read path.
 CREATE POLICY "Admin writes merchant logo index" ON "public"."finance_merchant_logos"
     TO "authenticated"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- Known leftover, an open REHAUL_PLAN.md line: anon's REFERENCES, TRIGGER and
--- TRUNCATE are what the INSERT/UPDATE/DELETE revoke left of the default ALL.
-REVOKE INSERT, UPDATE, DELETE ON TABLE "public"."finance_merchant_logos" FROM "anon";
-GRANT SELECT ON TABLE "public"."finance_merchant_logos" TO "anon", "authenticated";
+-- anon holds nothing: a grant is a layer of its own beside RLS, and TRUNCATE is
+-- not filtered by RLS at all.
+REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "anon";
 GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "authenticated";
 GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "service_role";
 
