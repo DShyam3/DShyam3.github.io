@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { safeHref } from '@/lib/safe-url';
 import { ALL } from '../useCollection';
 import type {
   CollectionConfig,
@@ -316,6 +317,15 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       setErrors(Object.fromEntries(missing.map((f) => [f.name, `Enter ${f.label.toLowerCase()}`])));
       document.getElementById(`${mode}-${config.table}-${missing[0].name}`)?.focus();
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // A link is saved only if it can render as one: http(s) or mailto. A
+    // `javascript:` URL would otherwise pass the browser's own type="url" check.
+    const badLinks = config.fields.filter((f) => f.type === 'url' && values[f.name]?.trim() && !safeHref(values[f.name]));
+    if (badLinks.length) {
+      setErrors(Object.fromEntries(badLinks.map((f) => [f.name, 'Enter a link starting with https://'])));
+      document.getElementById(`${mode}-${config.table}-${badLinks[0].name}`)?.focus();
       return;
     }
 

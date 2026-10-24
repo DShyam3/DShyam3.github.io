@@ -6,6 +6,7 @@ import { uploadPhoto } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { EdcToolbarButton, EdcShowcase } from '@/features/inventory/edc/EdcShowcase';
 import { isInEdc } from '@/features/inventory/edc/categories';
+import { safeHref } from '@/lib/safe-url';
 import type { CollectionConfig, CollectionRow } from './types';
 
 export interface InventoryRow extends CollectionRow {
@@ -122,7 +123,7 @@ const linkify = (value: string): SpecSegment[] => {
   for (const match of value.matchAll(MARKDOWN_LINK)) {
     const start = match.index ?? 0;
     if (start > cursor) segments.push({ text: value.slice(cursor, start) });
-    segments.push({ text: match[1], href: match[2] });
+    segments.push({ text: match[1], href: safeHref(match[2]) });
     cursor = start + match[0].length;
   }
   if (cursor < value.length) segments.push({ text: value.slice(cursor) });

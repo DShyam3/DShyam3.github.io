@@ -10,6 +10,7 @@ import { ExternalLink, Trash2, CalendarDays, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { openAndDownload } from '@/lib/download';
+import { safeHref } from '@/lib/safe-url';
 
 interface CardDetailDialogProps {
   /**
@@ -46,7 +47,7 @@ export function CardDetailDialog({
   title,
   subtitle,
   imageUrl,
-  link,
+  link: rawLink,
   children,
   badge,
   imageIsContent,
@@ -56,6 +57,8 @@ export function CardDetailDialog({
   onSchedule,
   isScheduled,
 }: CardDetailDialogProps) {
+  // A stored link is typed text; only an http(s) or mailto one becomes an href.
+  const link = safeHref(rawLink);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="collection-detail-dialog dialog-flush app-scroll sm:max-w-4xl h-fit max-h-[85svh] sm:max-h-[calc(100svh-3rem)] overflow-x-hidden overflow-y-auto p-0 gap-0">

@@ -95,11 +95,6 @@ export const linksCollection: CollectionConfig<LinkRow> = {
     };
   },
 
-  validate: (values) =>
-    values.url && !parseUrl(values.url.trim())
-      ? { url: 'Enter a valid URL' }
-      : null,
-
   // No URL row: the dialog title is already a link out, so repeating the
   // address underneath was noise.
   renderDetail: (link) =>

@@ -6,6 +6,7 @@ import { CardDetailDialog } from '@/components/cards/CardDetailDialog';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
+import { safeHref } from '@/lib/safe-url';
 import type { CardVariant, CollectionConfig, CollectionRow } from '../types';
 
 /**
@@ -249,7 +250,7 @@ export function EntityCard<T extends CollectionRow, R>({
   const title = card.title(item);
   const subtitle = card.subtitle?.(item);
   const image = card.image?.(item);
-  const href = card.href?.(item);
+  const href = safeHref(card.href?.(item));
   const excerpt = card.excerpt?.(item);
   const badge = card.badge?.(item);
   const meta = card.meta?.(item);
