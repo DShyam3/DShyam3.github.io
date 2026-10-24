@@ -349,7 +349,8 @@ brands, in portrait and landscape.
 - Card actions appear on touch/coarse pointers; fine-pointer hover and keyboard
   focus reveal them. Shared touch controls use a `2.75rem` minimum target.
 - Dialogs retain outer gutters and a bounded scrolling body, with the close
-  control outside that body. The body's scrollbar is the thin `app-scroll` bar;
+  control outside that body (except `dialog-flush` on phones; see below). The
+  body's scrollbar is the thin `app-scroll` bar;
   on the default p-6 frame it sits in the dialog's right padding, never over
   content. Series with seasons use an `85dvh` dialog from 640px:
   poster/information above an independently scrolling episode rail through
@@ -362,13 +363,18 @@ brands, in portrait and landscape.
   content image (Photos) shares the row. From 640px only
   `.collection-detail-info` scrolls; the artwork column stays put, and the close
   button stays fixed over the text column, kept clear of the text by `3.5rem` of
-  right padding. Below 640px the detail is one stacked scroller.
+  right padding. Below 640px the whole dialog is one stacked scroller, and the
+  close button scrolls away with the artwork.
 - No control sits on top of text. The dialog close button is `2.75rem`, `0.5rem`
   in from the corner, and `.glass-dialog` reserves a `3.75rem` top inset for it
   outside the body's scroller, so headers need no right padding for it and
   scrolled fields never pass under it. The collection card detail carries
-  `dialog-flush`, which drops the inset at every width. From 640px its text
-  column keeps `3.5rem` of right padding clear of the close button instead.
+  `dialog-flush`, which drops the inset at every width. Below 640px the dialog
+  itself scrolls rather than its body, so the close button moves with the
+  content instead of floating over it; at rest it sits over the artwork, or,
+  with no artwork, beside a header padded `pr-10` to clear it. From 640px its
+  text column keeps `3.5rem` of right padding clear of the close button
+  instead.
   `SheetHeader` keeps `pr-10`, since a sheet has no inset. The dialog body's
   single column is `minmax(0, 1fr)`, so no child can widen it. Row actions sit
   in the row's flow (a menu, a trailing button, a clear button with matching

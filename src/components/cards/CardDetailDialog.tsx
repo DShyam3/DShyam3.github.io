@@ -58,7 +58,7 @@ export function CardDetailDialog({
 }: CardDetailDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="collection-detail-dialog dialog-flush sm:max-w-4xl h-fit max-h-[85svh] sm:max-h-[calc(100svh-3rem)] overflow-x-hidden overflow-y-auto p-0 gap-0">
+      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="collection-detail-dialog dialog-flush app-scroll sm:max-w-4xl h-fit max-h-[85svh] sm:max-h-[calc(100svh-3rem)] overflow-x-hidden overflow-y-auto p-0 gap-0">
         {/* Radix wires `aria-describedby` from this, and warns when a dialog
             has none: a screen reader was announcing the title and then going
             silent about what the dialog is. It is `sr-only` rather than
@@ -72,7 +72,7 @@ export function CardDetailDialog({
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (
-            <div className={cn('w-full overflow-hidden', imageIsContent ? 'max-h-[46svh] flex justify-center bg-muted/30' : 'h-48')}>
+            <div className={cn('w-full overflow-hidden', imageIsContent ? 'min-h-14 max-h-[46svh] flex justify-center bg-muted/30' : 'h-48')}>
               <img
                 src={imageUrl}
                 alt={title}
@@ -84,7 +84,9 @@ export function CardDetailDialog({
             </div>
           )}
           <div className="p-6">
-            <DialogHeader className="text-left">
+            {/* dialog-flush has no top inset, so with no artwork above it the
+                header is what sits under the close button until it scrolls. */}
+            <DialogHeader className={cn('text-left', !imageUrl && 'pr-10')}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="font-serif text-xl font-medium">

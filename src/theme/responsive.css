@@ -277,10 +277,19 @@ html[data-display="larger"] .city-remove-btn { opacity: 1; }
 /* Keep the close control outside the content scrollport: scrolled fields
    must never pass underneath its fixed hit target. */
 .glass-dialog { overflow: hidden; grid-template-rows: minmax(0, 1fr); padding-top: 3.75rem; }
-/* A dialog that scrolls as a whole takes its close control with it, so the
-   inset protects nothing there and would only leave a blank band above
-   full-bleed media. */
+/* A dialog-flush dialog drops the inset so full-bleed media meets its top
+   edge. Below 640px the dialog itself is the scroller, not its body, so the
+   close control scrolls away with the content instead of floating over it;
+   the caller keeps text clear of it at rest (the collection detail pads its
+   header when there is no artwork above it). From 640px the caller keeps its
+   text column clear instead (the collection detail's 3.5rem right padding).
+   The body's half-pixel guard below would hang a pixel past an h-fit dialog
+   and make every short one scroll, so it is undone here. */
 .glass-dialog.dialog-flush { padding-top: 0; }
+@media (max-width: 639px) {
+  .glass-dialog.dialog-flush { overflow-y: auto; grid-template-rows: auto; scroll-padding-block: 1rem; }
+  .glass-dialog.dialog-flush > .dialog-body { overflow: visible; padding-bottom: 0; margin-bottom: 0; }
+}
 .dialog-body { align-content: start; align-self: stretch; overscroll-behavior: contain; scroll-padding-block: 1rem; }
 /* Content that exactly fits still scrolled by half a pixel about half the
    time: fractional line heights meet a dialog centred at a fractional offset,
@@ -432,8 +441,9 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
 .ui-select-trigger { height: max-content; min-height: 2.5rem; }
 
 /* Collection detail dialogs keep artwork outside the text scroller, like the
-   watchlist. Phones retain one stacked scroller so a picture cannot consume
-   the available reading space. The close target stays outside both. */
+   watchlist, with the close target fixed over the padded text column. Phones
+   retain one stacked scroller so a picture cannot consume the available
+   reading space; there the close target scrolls with it (dialog-flush). */
 @media (min-width: 640px) {
   .collection-detail-dialog { --detail-max-h: calc(100svh - 3rem - 2px); }
   .collection-detail-dialog > .dialog-body { display: block; overflow: hidden; }
