@@ -162,7 +162,7 @@ browser; Finance was not, because it needs a signed-in session.
 
 | Item | Why it is open |
 |---|---|
-| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Also unchecked live, landed on main 2026-10-24: bills calendar and Forecast (including 375px), recurring Paid tick, untick, early payment and edit, and the Student Loan "You borrowed" figure |
+| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Bills calendar, Forecast, recurring Paid and the Student Loan "You borrowed" figure were checked on the local stack on 2026-10-24, with test rows deleted after: tick, untick, due-day edit, Forecast at 375px, and an empty-date draw left out. Not checked: the early-payment button (its 7-day window cannot open for a monthly bill on 24 October; unit-tested only), and anything on the live site signed in |
 | Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
 | Dialog audit | Statement and investment imports may still nest a `vh` cap inside `.dialog-body` |
@@ -209,6 +209,15 @@ So Edit can show, and save, a figure the card does not, when a draw has no real
 date. *Fix:* move `isBorrowing` into `src/lib/finance`, and have the Edit field
 and the saved amount use `studentLoanBorrowed(...).total`, so one rule answers
 both places. Not started.
+
+The simulator reads the same draws with no validity check of its own.
+`parseISODate` in `student-loan.ts` accepts any string, so one borrowing draw
+with an empty date makes the whole simulator show Invalid Date and £NaN (found
+on the local stack, 2026-10-24; pre-existing). The Edit form refuses a dateless
+draw and hosted has none, so only a write outside the UI reaches it. The fix
+belongs with the rule above: the simulator takes draws through the same test
+`studentLoanBorrowed` uses, or refuses a malformed draw with a message. Not
+started.
 
 ### Blocked on a model key — any provider
 
@@ -269,6 +278,61 @@ Three items. The first needs an owner decision; the second needs a decision befo
 - **Merchant-logo object keys can be guessed, so a brand can be confirmed.** Keys are `<slug>.<ext>` and the candidate slugs ship in the client bundle (`src/lib/finance/merchant-directory.ts`). The public object route still answers "exists" or "no such key" for a guessed key, and `20261024140000` (live on hosted since 2026-10-24) leaves that route open so logos keep loading. Owner to choose: a private bucket with signed URLs, or unguessable object keys. One object, `aldi.webp`, returned 200 over HTTP on 2026-10-24; a signed-in logo render is not yet checked.
 - **`finance_debt_observations.debt_id` references `finance_debts(id)` alone.** It can point at another profile's or a shared default debt. A composite key needs a decision first: it would reject observations against shared default debts.
 - **`schemas/` cannot rebuild the database from empty.** `finance_bank_accounts_id_profile_id_key` and `idx_finance_transactions_profile_id_id` exist only in migrations, so the composite foreign keys in 40_finance.sql fail on a schemas-only build (first at `finance_transfer_links_profile_outflow_fkey`). Audit schemas/ against a migrated database object by object and add what is missing; no migration for objects that already exist.
+
+### Security audit and scan, 2026-10-24 — what is left
+
+The audit (`security/AI-CHECKLIST.md`) found nothing critical or high; its
+MEDIUM comes from dashboard auth alone. The scan on `9568b7d4` reports no
+dependency advisory. The LOWs below are the audit's unless marked. What was
+checked, and how, is in `SECURITY.md`.
+
+**Owner, outside the code:**
+
+- Turn off public signup. Enable leaked-password protection (Pro plan). Enable
+  TOTP MFA, which clears the advisor only, since the app has no enrolment UI.
+  Upgrade Postgres (brief downtime). Re-run the security advisor afterwards.
+- Uninstall the Strix GitHub App (`github.com/settings/installations`) and
+  delete its trial-ended comment on PR #7.
+- Rotate the TMDB API key. It was in the public client bundle from 2026-05-09
+  to 2026-07-25 under a `VITE_` prefix, and the current value matches an old
+  bundle. No rotation is recorded. Checked 2026-10-24 with `gh secret list`: no
+  `VITE_TMDB_API_KEY` secret remains. `VITE_TMDB_BASE_URL` is a secret that no
+  workflow reads; delete it.
+
+**Code:**
+
+- `tmdb-proxy`'s rate-limit key is the raw last `X-Forwarded-For` entry, in the
+  same `rate_limits` table as the admin cooldown keys (`truelayer-sync:manual`,
+  `watchlist-sync:full`, `watchlist-sync:item`, `merchant-logo-cache`). Prefix
+  it `tmdb-proxy:`, and confirm what that header entry is at the edge.
+- The service-role check in `truelayer-sync` and `watchlist-cron-sync` is a
+  plain string compare. It should refuse when its env var is missing.
+- `schemas/90_privileges.sql`: default privileges still give `anon` rights on
+  new sequences and functions.
+- Saved link URLs render as `href` with no scheme check (`inventory.tsx`,
+  `EntityCard.tsx`, `CardDetailDialog.tsx`). `EntityFormDialog`'s `type=url`
+  accepts `javascript:`. Admin-only; the CSP blocks execution.
+- Photo uploads take the extension from the filename, name files with
+  `Math.random`, and have no magic-byte check (`src/lib/storage.ts`).
+  Admin-only. The `merchant-logos` and `site-assets` buckets allow SVG.
+- `npm run ship-check` runs `npx should-i-ship@latest`, which is unpinned
+  (`package.json`).
+- The Umami tag the build injects (`vite.config.ts`, from `site.json`) lacks
+  `data-exclude-search`. Umami also loads on `/finance`, where the OAuth
+  callback query is probably sent before `replaceState` clears it
+  (unconfirmed).
+- CSP `connect-src` lists `api.themoviedb.org`. No browser code calls it; the
+  edge functions do, server-side.
+
+**Doc drift:**
+
+- The `vite.config.ts` `style-src` comment still names the shadcn chart
+  component, deleted in `cede7d3a`. README does not list the `SITE_ORIGIN`
+  secret.
+
+**Unverified.** Not checked, and not to be read as passed: hosted `verify_jwt`
+for `tmdb-proxy`, `truelayer-sync` and `watchlist-cron-sync`; whether
+`SITE_ORIGIN` is set on hosted; live response headers.
 
 ### Sync and profile switch interactions
 

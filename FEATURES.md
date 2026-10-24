@@ -383,7 +383,7 @@ the page between palettes over 350ms; other browsers switch the palette immediat
 The moon rises smoothly into place without overshooting. Reduced-motion
 preferences skip the animation.
 
-The header's "+" button opens social links beside it. From 700px they open to its right; between 700 and 1023px the page title fades out to make room. Below 700px they open to its left and the name fades out instead.
+The header's "+" button opens social links beside it. From 700px they open to its right; between 700 and 1023px the page title fades out to make room. Below 700px they open to its left and the name fades out instead. On phones the page title wraps between words, and the menu and theme controls move to a line of their own when the title's longest word cannot sit beside them.
 
 Every route's content sits in one "middle card" between the fixed header and footer. The card is the page's only vertical scroller. From 768px wide it has a fine border, 24px corners and a quiet tint. Below 768px there is no frame and the ordinary page gutter is the inset.
 

@@ -2721,3 +2721,15 @@ Applied to hosted on 2026-10-24. Not yet confirmed live: that a logo image loads
 **A vulnerable package that nothing imports is removed, not upgraded.** GHSA-mrhx-c7xc-m3w5 reported `zod@3.25.76` on 2026-10-24, fixed in 4.6.6, which is a major version. The options were an exposure analysis plus a validated migration, or removal. A search of `src/`, `supabase/`, `scripts/` and `performance/` found no import of `zod`, `react-hook-form` or `@hookform/resolvers`, so all three came out (`2cdb02f8`). With no caller there was nothing to analyse for exposure and nothing to migrate.
 
 **Search for imports before scoping an advisory.** If nothing imports the package, removal closes it without a migration. If something does, the exposure analysis and the upgrade are scoped against that caller. `npm audit` (zero vulnerabilities, 2026-10-24) is the check on the removal; no scanner had been re-run on it when this was recorded.
+
+### A stored date is a calendar day, not an instant — 2026-10-24
+
+**A stored `YYYY-MM-DD` is a calendar day. It is read from its own parts (`calendarParts` in `src/lib/finance/dates.ts`), an instant is read at its local day (`localCalendarDay`), and a bare date string is never passed to `new Date` and then read with local getters.**
+
+`new Date('2026-08-28')` is UTC midnight, so a local getter names the day before anywhere west of UTC. Comparing that instant with a local midnight misfired the other way, in London during BST and east of UTC. What it broke, all fixed in `6e146826` and `b02eb1d5`: leave booked a day early, 6 April in the wrong tax year, a student-loan write-off a year early, leave counted toward the wrong year, a release dated 1 January given the previous year in three places (one of them persisted as `release_year`), and a debt rate period starting on the 1st applied a month late in London.
+
+Three rules follow. An impossible day such as `2026-02-30` is unknown, not rolled into March. Holiday ranges step by epoch day, so a clock change inside one does not move its end; a free-text range is clamped to its month's end, and a segment that starts past it is dropped. "Today" in the alerts is the device's local day.
+
+The owner asked whether the site should simply run on UK time. In London the old code was already right, apart from the BST rate-period bug. The fix keeps that behaviour and stops a stored day shifting on a device set to another zone: a date reads the same day everywhere, and "today" is the day the viewer is in.
+
+Verified by the suite under UTC, Europe/London, America/Los_Angeles and Pacific/Auckland (1,325 tests; Los Angeles had 21 failures before the fix). Not checked on a live non-UK device.

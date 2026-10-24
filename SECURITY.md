@@ -27,8 +27,7 @@ Current allowances worth knowing about:
 - `script-src` allows only `'self'` and `https://cloud.umami.is` (analytics).
 - `connect-src` allows Supabase (HTTPS + WSS), the Umami ingest endpoints,
   Google Books, TMDB and `www.gov.uk` (bank holidays).
-- `style-src` includes `'unsafe-inline'`: React inline style attributes and the
-  `<style>` element injected by the shadcn/Recharts chart component require it.
+- `style-src` includes `'unsafe-inline'`: React inline style attributes require it.
 - `img-src https:` is deliberately broad — book covers, posters and flags come
   from user-supplied URLs stored in the database.
 
@@ -55,10 +54,11 @@ can add response headers):
 - **Supabase anon key in the client bundle.** Expected: it is the publishable
   key. Access control depends entirely on Row Level Security policies in
   `supabase/migrations`.
-- **`dangerouslySetInnerHTML`.** One use in application code,
-  `src/components/ui/chart.tsx`, which builds a CSS variable block from a
-  developer-defined chart config. No user input reaches it. Scanner counts of
-  more occurrences come from the minified vendor bundle (React internals).
+- **`dangerouslySetInnerHTML`.** None in application code. It had one use, in
+  `src/components/ui/chart.tsx`, which built a CSS variable block from a
+  developer-defined chart config, so no user input reached it. The file was
+  deleted in `cede7d3a`. Scanner counts of more occurrences came from the
+  minified vendor bundle (React internals).
 - **Subresource Integrity on the Umami script.** `cloud.umami.is/script.js` is a
   rolling URL with no versioned filename, so an `integrity` hash would break the
   site on the vendor's next release. Self-hosting the script is the way to get
@@ -154,9 +154,12 @@ attack surface of this site is Supabase, and it was audited separately
   date attached, and the answer is cached in our bucket so it is never asked
   again. `BRANDFETCH_CLIENT_ID` lives in the function's env and carries no
   `VITE_` prefix, so it never reaches the bundle.
-- **Secrets**: the TMDB API key lives only in edge function env, never in the
-  bundle. Only `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
-  `VITE_TMDB_IMAGE_BASE_URL` and `VITE_ADMIN_EMAIL` reach the client.
+- **Secrets**: the TMDB API key lives in edge function env. It was also in
+  client bundles built 2026-05-09 to 2026-07-25 under a `VITE_` prefix, so treat
+  it as public until it is rotated (REHAUL_PLAN.md, owner action). The current
+  source reads no `VITE_TMDB_API_KEY`. Only `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_TMDB_IMAGE_BASE_URL` and
+  `VITE_ADMIN_EMAIL` reach the client.
 - **Storage**: see migration `20260904110337` — object policies were gated on
   the `authenticated` role rather than `is_admin()`, and are now `is_admin()`.
   Migration `20261024130000` rewrites the 14 admin policies on
@@ -250,6 +253,24 @@ Project ref is `yvtiybyuifkiwyrnjebe`, so each link below is
   scales with database size, so pick a quiet moment. Read replicas would block
   it; this project has none.
 
+## Audit and scan (2026-10-24)
+
+- **Audit** (`security/AI-CHECKLIST.md`): overall MEDIUM, with nothing critical or
+  high. The MEDIUM comes from dashboard auth only: MFA and leaked-password
+  protection are off (see the accepted lints above), and the login email is public
+  in the client bundle (`VITE_ADMIN_EMAIL`). The LOW items are listed in
+  REHAUL_PLAN.md.
+- **Scan** (`npm run ship-check`) on `9568b7d4`: 98/100, OSV engine available, no
+  dependency advisory in the findings. One high: the potential N+1 in
+  `FinanceDataContext.tsx`, which is the long-standing item below. Four medium:
+  66 oversized files, two circular-dependency chains, 91 console statements, and
+  the CORS finding that follows. One low, two info.
+- **CORS "allows all origins"** at `supabase/functions/_shared/site-origins.ts` is a
+  false positive. No code path there emits a wildcard; the match is in the file's
+  doc comments. `corsOriginHeader` echoes a request's `Origin` only when it is on
+  the allowlist; otherwise it sends the configured `SITE_ORIGIN`, or no header when
+  that is unset.
+
 ## Readiness scan triage (2026-10-23)
 
 The scan remains unsuppressed. These findings have different exposure and follow-up
@@ -301,5 +322,5 @@ The scan reported `zod@3.25.76` under
 4.6.6. The advisory concerns memory exhaustion while validating oversized
 collections. Nothing in the tree imported `zod`, `react-hook-form` or
 `@hookform/resolvers`, so all three were removed (`2cdb02f8`) rather than upgraded.
-`npm audit` reports zero vulnerabilities as of 2026-10-24. The scanner has not been
-re-run since the removal, so the finding is not confirmed cleared by a scanner.
+`npm audit` reports zero vulnerabilities as of 2026-10-24. The 2026-10-24 scan on
+`9568b7d4` ran after the removal and lists no dependency advisory.
