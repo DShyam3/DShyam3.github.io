@@ -130,9 +130,10 @@ attack surface of this site is Supabase, and it was audited separately
   makes both admin-only: the index's public read policy is dropped, anon's
   privileges on it are revoked, and the bucket's public list policy is replaced
   by an admin-only read. Images still load through public URLs, which need
-  neither read; the only in-app reader of the index is admin-gated. Loading a
-  logo over HTTP after the change is **unverified live**: the checks ran in SQL,
-  and no request has yet been made to the project's public storage route. One gap stays open:
+  neither read; the only in-app reader of the index is admin-gated. After the
+  change a public object URL (`merchant-logos/aldi.webp`) returned 200
+  `image/webp` on 2026-10-24; logos rendering on the signed-in finance page are
+  **unverified**. One gap stays open:
   the public object route still answers "exists" or "no such key" for a guessed
   `<slug>.<ext>`, so a guessed brand can be confirmed. It is an open line in
   `REHAUL_PLAN.md`.
@@ -194,8 +195,10 @@ attack surface of this site is Supabase, and it was audited separately
   holds only the four data verbs (or SELECT) per table and nothing on the two
   TrueLayer tables; `anon` holds SELECT on 20 tables and nothing on
   `finance_merchant_logos`; and the `postgres` default table ACL gives
-  `authenticated` the four verbs and `anon` nothing, with no global row. A live
-  HTTP check of the API and storage routes is **unverified**.
+  `authenticated` the four verbs and `anon` nothing, with no global row. Over
+  HTTP on 2026-10-24, only two routes were checked: a public logo object
+  returned 200, and `merchant-logo-cache` refused an unauthenticated POST with
+  401. PostgREST table routes were not probed over HTTP.
 - **Auth**: public email signup is enabled on the project. Since every policy
   checks `public.is_admin()`, and that reads the `admin_users` table, a
   self-registered user gets nothing — the account exists but holds no grant.
