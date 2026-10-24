@@ -142,7 +142,15 @@ attack surface of this site is Supabase, and it was audited separately
   content, watchlist and travel tables and grants back only `SELECT`. Finance
   migrations revoke every `anon` grant from `finance_*` tables; the OAuth
   state table is deliberately included despite being service-role-only in
-  normal operation.
+  normal operation. The same defaults gave `authenticated` `TRUNCATE`,
+  `REFERENCES` and `TRIGGER` as well. Migration `20261024150000` narrows
+  `authenticated` to `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the 49 tables
+  that had them (`finance_merchant_logos` is handled separately by
+  `20261024140000`). It also narrows the `postgres` default privileges, so a
+  new table gives `authenticated` the four data verbs and `anon` `SELECT` only.
+  Its post-check rolls the migration back if anything is still wider. It is
+  written and verified on the local stack but **not applied to hosted** as of
+  2026-10-24, so hosted `authenticated` still holds `TRUNCATE` until it is.
 - **Auth**: public email signup is enabled on the project. Since every policy
   checks `public.is_admin()`, and that reads the `admin_users` table, a
   self-registered user gets nothing — the account exists but holds no grant.

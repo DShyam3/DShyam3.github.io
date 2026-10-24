@@ -28,6 +28,8 @@ ALTER TABLE "public"."inspirations" ENABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE "public"."inspirations" TO "anon";
 
-GRANT ALL ON TABLE "public"."inspirations" TO "authenticated";
+REVOKE ALL ON TABLE "public"."inspirations" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."inspirations" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."inspirations" TO "service_role";

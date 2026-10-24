@@ -26,6 +26,8 @@ ALTER TABLE "public"."site_content" ENABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE "public"."site_content" TO "anon";
 
-GRANT ALL ON TABLE "public"."site_content" TO "authenticated";
+REVOKE ALL ON TABLE "public"."site_content" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."site_content" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."site_content" TO "service_role";

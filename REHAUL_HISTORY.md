@@ -2582,3 +2582,13 @@ merge `799d8358`). Both CI runs pass;
 [Pages run 39380259371](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39380259371)
 succeeded. The live Inventory page shows the compact toolbar and 13 EDC items
 with brands and no wishlist item. Live authenticated writes remain unverified.
+
+### Table grants are least-privilege by default — 2026-10-24
+
+**`authenticated` holds SELECT, INSERT, UPDATE and DELETE on public tables, never TRUNCATE, REFERENCES or TRIGGER.** Supabase's default privileges had given every table `postgres` created ALL to `authenticated`, and 49 public tables kept it. TRUNCATE is the one that matters: Postgres applies row-level security to the four data verbs but not to TRUNCATE, so the grant is the only guard against an RLS mistake becoming data loss. REFERENCES and TRIGGER matter only for DDL. Nothing in the app needs the three as `authenticated`: edge functions connect as service_role, and the local PostgREST checks pass on the four verbs alone.
+
+**The default changes too, not only the 49 tables.** Narrowing the existing tables alone would let the next table inherit ALL again. `anon` defaults to SELECT only: nothing writes as anon, and live anon already held only SELECT on existing tables. The same default is how `finance_merchant_logos` got anon TRUNCATE. Only the `postgres` defaults change, because `supabase_admin`'s cannot be altered from `postgres` on hosted.
+
+**The post-check reads catalog ACLs and fails closed.** `information_schema` shows only grants to roles the current user holds, so the check reads `relacl`, `has_table_privilege` and `pg_default_acl`. It rolls back the whole migration if a listed table's `authenticated` ACL is not exactly the four verbs, if any table in `public` still gives `authenticated` or `anon` TRUNCATE, REFERENCES or TRIGGER, or if a global default-privilege row (which a per-schema REVOKE cannot narrow) still grants them.
+
+Status: migration `20261024150000` is written and verified on the local stack only. It is not applied to hosted. `finance_merchant_logos` is excluded and handled by `20261024140000`.

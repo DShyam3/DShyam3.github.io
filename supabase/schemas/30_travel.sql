@@ -82,7 +82,9 @@ ALTER TABLE "public"."visited_countries" ENABLE ROW LEVEL SECURITY;
 
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."visited_cities" TO "anon";
 
-GRANT ALL ON TABLE "public"."visited_cities" TO "authenticated";
+REVOKE ALL ON TABLE "public"."visited_cities" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."visited_cities" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."visited_cities" TO "service_role";
 
@@ -94,7 +96,9 @@ GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "service_role";
 
 GRANT ALL ON TABLE "public"."visited_countries" TO "anon";
 
-GRANT ALL ON TABLE "public"."visited_countries" TO "authenticated";
+REVOKE ALL ON TABLE "public"."visited_countries" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."visited_countries" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."visited_countries" TO "service_role";
 

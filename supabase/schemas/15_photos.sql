@@ -27,6 +27,8 @@ ALTER TABLE "public"."photos" ENABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE "public"."photos" TO "anon";
 
-GRANT ALL ON TABLE "public"."photos" TO "authenticated";
+REVOKE ALL ON TABLE "public"."photos" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."photos" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."photos" TO "service_role";

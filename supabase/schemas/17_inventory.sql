@@ -38,6 +38,8 @@ ALTER TABLE "public"."inventory_items" ENABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE "public"."inventory_items" TO "anon";
 
-GRANT ALL ON TABLE "public"."inventory_items" TO "authenticated";
+REVOKE ALL ON TABLE "public"."inventory_items" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."inventory_items" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."inventory_items" TO "service_role";

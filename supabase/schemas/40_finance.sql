@@ -770,95 +770,127 @@ ALTER TABLE "public"."finance_user_holidays" ENABLE ROW LEVEL SECURITY;
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_bank_accounts" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_bank_accounts" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_bank_accounts" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_bank_accounts" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_bank_accounts" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_categories" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_budget_categories" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_budget_categories" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_categories" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_budget_categories" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_items" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_budget_items" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_budget_items" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_items" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_budget_items" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_presets" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_budget_presets" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_budget_presets" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_presets" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_budget_presets" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_bureaus" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_credit_bureaus" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_credit_bureaus" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_credit_bureaus" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_credit_bureaus" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_scores" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_credit_scores" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_credit_scores" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_credit_scores" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_credit_scores" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_data" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_data" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_data" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_data" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_data" TO "service_role";
 
-GRANT ALL ON TABLE "public"."finance_debts" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_debts" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_debts" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_debts" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_defaults" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_defaults" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_defaults" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_defaults" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_defaults" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goal_contributions" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_goal_contributions" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_goal_contributions" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_goal_contributions" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_goal_contributions" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goals" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_goals" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_goals" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_goals" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_goals" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_holiday_defaults" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_holiday_defaults" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_holiday_defaults" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_holiday_defaults" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_holiday_defaults" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_memberships" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_memberships" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_memberships" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_memberships" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_memberships" TO "service_role";
 
 REVOKE ALL ON TABLE "public"."finance_recurring_bills" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_recurring_bills" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_recurring_bills" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_recurring_templates" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_recurring_templates" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_recurring_templates" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_recurring_templates" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_recurring_templates" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_settings" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_settings" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_settings" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_settings" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_settings" TO "service_role";
 
@@ -876,31 +908,41 @@ GRANT ALL ON TABLE "public"."finance_student_loan_rates" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_tax_configs" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_tax_configs" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_tax_configs" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_tax_configs" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_tax_configs" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_transactions" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_transactions" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_transactions" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transactions" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_transactions" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_truelayer_connection" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_truelayer_connection" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_truelayer_connection" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "service_role";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_source_sync" TO "service_role";
 
-GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_truelayer_oauth_states" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_truelayer_oauth_states" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "service_role";
 
 GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_user_holidays" TO "anon";
 
-GRANT ALL ON TABLE "public"."finance_user_holidays" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_user_holidays" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_user_holidays" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_user_holidays" TO "service_role";
 
@@ -1088,6 +1130,17 @@ CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authentic
 REVOKE ALL ON "public"."finance_profiles" FROM "anon";
 REVOKE ALL ON "public"."finance_profile_transfers" FROM "anon";
 
+-- authenticated: least privilege. A fresh database inherits ALL (including
+-- TRUNCATE, which RLS does not filter) from the image's default privileges, so
+-- the REVOKE is load-bearing. See 20261024150000_authenticated_grants_least_privilege.sql.
+REVOKE ALL ON TABLE "public"."finance_profiles" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_profiles" TO "authenticated";
+
+REVOKE ALL ON TABLE "public"."finance_profile_transfers" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_profile_transfers" TO "authenticated";
+
 -- Phase 7.4 -- snapshots. See REHAUL_PLAN.md 7.D.
 --
 -- The pg_cron schedule that calls capture_finance_snapshots() lives in the
@@ -1159,6 +1212,15 @@ CREATE POLICY "Admin Only" ON "public"."finance_account_balance_snapshots" TO "a
 
 REVOKE ALL ON "public"."finance_net_worth_snapshots" FROM "anon";
 REVOKE ALL ON "public"."finance_account_balance_snapshots" FROM "anon";
+
+-- authenticated: least privilege, same reasoning as finance_profiles above.
+REVOKE ALL ON TABLE "public"."finance_net_worth_snapshots" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_net_worth_snapshots" TO "authenticated";
+
+REVOKE ALL ON TABLE "public"."finance_account_balance_snapshots" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_account_balance_snapshots" TO "authenticated";
 
 /**
  * Records today's position for every profile.

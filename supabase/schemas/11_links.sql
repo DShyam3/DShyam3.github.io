@@ -27,6 +27,8 @@ ALTER TABLE "public"."links" ENABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE "public"."links" TO "anon";
 
-GRANT ALL ON TABLE "public"."links" TO "authenticated";
+REVOKE ALL ON TABLE "public"."links" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."links" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."links" TO "service_role";

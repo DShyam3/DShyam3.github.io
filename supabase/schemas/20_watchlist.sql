@@ -463,7 +463,9 @@ ORDER  BY s.tv_show_id, s.season_number, e.episode_number;
 
 GRANT SELECT ON TABLE "public"."favourites" TO "anon";
 
-GRANT ALL ON TABLE "public"."favourites" TO "authenticated";
+REVOKE ALL ON TABLE "public"."favourites" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."favourites" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."favourites" TO "service_role";
 
@@ -473,7 +475,9 @@ GRANT ALL ON SEQUENCE "public"."favourites_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."movies" TO "anon";
 
-GRANT ALL ON TABLE "public"."movies" TO "authenticated";
+REVOKE ALL ON TABLE "public"."movies" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."movies" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."movies" TO "service_role";
 
@@ -481,7 +485,9 @@ GRANT ALL ON SEQUENCE "public"."movies_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."movies_id_seq" TO "service_role";
 
-GRANT ALL ON TABLE "public"."sync_log" TO "authenticated";
+REVOKE ALL ON TABLE "public"."sync_log" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."sync_log" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."sync_log" TO "service_role";
 
@@ -491,7 +497,9 @@ GRANT ALL ON SEQUENCE "public"."sync_log_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."tv_show_episodes" TO "anon";
 
-GRANT ALL ON TABLE "public"."tv_show_episodes" TO "authenticated";
+REVOKE ALL ON TABLE "public"."tv_show_episodes" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."tv_show_episodes" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."tv_show_episodes" TO "service_role";
 
@@ -501,7 +509,9 @@ GRANT ALL ON SEQUENCE "public"."tv_show_episodes_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."tv_show_seasons" TO "anon";
 
-GRANT ALL ON TABLE "public"."tv_show_seasons" TO "authenticated";
+REVOKE ALL ON TABLE "public"."tv_show_seasons" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."tv_show_seasons" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."tv_show_seasons" TO "service_role";
 
@@ -511,7 +521,9 @@ GRANT ALL ON SEQUENCE "public"."tv_show_seasons_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."tv_shows" TO "anon";
 
-GRANT ALL ON TABLE "public"."tv_shows" TO "authenticated";
+REVOKE ALL ON TABLE "public"."tv_shows" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."tv_shows" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."tv_shows" TO "service_role";
 
@@ -521,7 +533,9 @@ GRANT ALL ON SEQUENCE "public"."tv_shows_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."weekly_schedule" TO "anon";
 
-GRANT ALL ON TABLE "public"."weekly_schedule" TO "authenticated";
+REVOKE ALL ON TABLE "public"."weekly_schedule" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."weekly_schedule" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."weekly_schedule" TO "service_role";
 

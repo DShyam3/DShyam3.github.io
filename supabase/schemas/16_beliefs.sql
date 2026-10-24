@@ -24,6 +24,8 @@ ALTER TABLE "public"."beliefs" ENABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE "public"."beliefs" TO "anon";
 
-GRANT ALL ON TABLE "public"."beliefs" TO "authenticated";
+REVOKE ALL ON TABLE "public"."beliefs" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."beliefs" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."beliefs" TO "service_role";
