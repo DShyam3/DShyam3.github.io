@@ -1,61 +1,30 @@
 #!/usr/bin/env node
 // Local synthetic read benchmark. Requires Node 22+, Supabase CLI and seeded local stack.
 // Run: node --experimental-strip-types scripts/benchmark-paged-reads.mjs
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { performance } from 'node:perf_hooks';
-import { createClient } from '@supabase/supabase-js';
 import { selectAllPages } from '../src/integrations/supabase/select-all-pages.ts';
+import {
+  admin, checked, cleanUp, publicClient, settle, signedIn, signInSeededAdmin, timed,
+} from './local-stack.mjs';
 
-let raw;
-try {
-  raw = execFileSync('supabase', ['status', '-o', 'env'], {
-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-  });
-} catch {
-  throw new Error('Start the seeded local Supabase stack before benchmarking.');
-}
-const env = new Map(raw.split('\n').map(line => line.match(/^([A-Z_]+)="?(.*?)"?$/))
-  .filter(Boolean).map(match => [match[1], match[2]]));
-const endpoint = new URL(env.get('API_URL'));
-if (endpoint.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.hostname)) {
-  throw new Error('Benchmark refuses non-loopback Supabase endpoints.');
-}
-if (!env.get('ANON_KEY') || !env.get('SERVICE_ROLE_KEY')) throw new Error('Local stack keys unavailable.');
-
-let requests = 0;
-const options = {
-  auth: { persistSession: false, autoRefreshToken: false },
-  global: { fetch: (input, init) => {
-    if (new URL(typeof input === 'string' ? input : input.url ?? input).pathname.startsWith('/rest/v1/')) requests++;
-    return fetch(input, { ...init, redirect: 'error' });
-  } },
-};
-const admin = createClient(endpoint.href, env.get('SERVICE_ROLE_KEY'), options);
-const publicClient = createClient(endpoint.href, env.get('ANON_KEY'), options);
-const signedIn = createClient(endpoint.href, env.get('ANON_KEY'), options);
-const checked = async (query, label) => {
-  const result = await query;
-  if (result.error) throw new Error(`${label} failed; inspect the local stack.`);
-  return result;
-};
-if (!process.env.BENCHMARK_PASSWORD) throw new Error('Set BENCHMARK_PASSWORD to the seeded local test account password.');
-const { data: login } = await checked(signedIn.auth.signInWithPassword({
-  email: 'agent@localhost.test', password: process.env.BENCHMARK_PASSWORD,
-}), 'Seeded local login');
+const user = await signInSeededAdmin();
 const profileId = randomUUID();
 const marker = `paged-read-benchmark-${profileId}`;
 console.error(`Local fixture marker: ${marker}; profile: ${profileId}`);
 const results = [];
 let cleanupVerified = false;
 
+const removeTransactions = () =>
+  checked(admin.from('finance_transactions').delete().eq('profile_id', profileId), 'Transaction cleanup');
+const removeMovies = () => checked(admin.from('movies').delete().eq('title', marker), 'Movie cleanup');
 const removeFixtures = async () => {
-  await checked(admin.from('finance_transactions').delete().eq('profile_id', profileId), 'Transaction cleanup');
-  await checked(admin.from('movies').delete().eq('title', marker), 'Movie cleanup');
+  await removeTransactions();
+  await removeMovies();
 };
+let failure;
 try {
   await checked(admin.from('finance_profiles').insert({
-    id: profileId, name: marker, owner_user_id: login.user.id,
+    id: profileId, name: marker, owner_user_id: user.id,
   }), 'Fixture profile');
   for (const size of [100, 1000, 5000]) {
     await removeFixtures();
@@ -80,30 +49,33 @@ try {
     for (const [name, page] of cases) {
       const samples = [];
       for (let run = 0; run < 6; run++) {
-        requests = 0;
-        const started = performance.now();
-        const result = await selectAllPages(page, row => String(row.id));
-        const elapsedMs = performance.now() - started;
+        const { milliseconds, requests, value: result } = await timed(() => selectAllPages(page, row => String(row.id)));
         if (result.error || result.data.length !== size) throw new Error(`${name}: incomplete fixture read.`);
         if (requests !== Math.ceil(size / 1000)) throw new Error(`${name}: unexpected request count ${requests}.`);
         // First pass warms this fixture/query; remaining five are reported individually.
-        if (run > 0) samples.push({ milliseconds: Number(elapsedMs.toFixed(2)), requests });
+        if (run > 0) samples.push({ milliseconds, requests });
       }
       results.push({ name, rows: size, samples });
     }
   }
-} finally {
-  await removeFixtures();
-  await checked(admin.from('finance_profiles').delete().eq('id', profileId), 'Profile cleanup');
-  for (const [table, column, value] of [
-    ['movies', 'title', marker], ['finance_transactions', 'profile_id', profileId],
-    ['finance_profiles', 'id', profileId],
-  ]) {
-    const result = await checked(admin.from(table).select('*', { count: 'exact', head: true }).eq(column, value), 'Cleanup verification');
-    if (result.count !== 0) throw new Error('Benchmark fixtures remain in local database.');
-  }
-  cleanupVerified = true;
+} catch (error) {
+  failure = error;
 }
+settle(failure, await cleanUp([
+  removeTransactions,
+  removeMovies,
+  () => checked(admin.from('finance_profiles').delete().eq('id', profileId), 'Profile cleanup'),
+  async () => {
+    for (const [table, column, value] of [
+      ['movies', 'title', marker], ['finance_transactions', 'profile_id', profileId],
+      ['finance_profiles', 'id', profileId],
+    ]) {
+      const result = await checked(admin.from(table).select('*', { count: 'exact', head: true }).eq(column, value), 'Cleanup verification');
+      if (result.count !== 0) throw new Error('Benchmark fixtures remain in local database.');
+    }
+  },
+]));
+cleanupVerified = true;
 console.log(JSON.stringify({
   measuredAt: new Date().toISOString(), node: process.version,
   environment: 'local Supabase; synthetic fixtures; one warm-up then five sequential reads',

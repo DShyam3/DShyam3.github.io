@@ -441,7 +441,10 @@ serve(async (req) => {
 
     // Which merchants the ledger actually contains. Nothing is looked up for a
     // brand nobody here has paid. Paged: one plain select stops at the Data
-    // API's 1,000 rows, which left most of the ledger's merchants unseen.
+    // API's 1,000 rows, which left most of the ledger's merchants unseen. A
+    // write landing mid-read (a sync still importing history) can fail the
+    // whole top-up after the pager's retry; the caller is fire-and-forget, so
+    // new merchants then wait for the next sync. Acceptable for decoration.
     const { data: rows, error: rowsError } = await selectAllPages<{ id: string; merchant: string | null }>(
       (from, to) => supabaseAdmin
         .from('finance_transactions')
