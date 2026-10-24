@@ -245,6 +245,15 @@ extract in the browser.
 - **The sync still overwrites a category set mid-sync on a row that had none.**
 - **A token refresh on a dead link is not limited.** supabase-js refreshes through `/auth/v1/` before the request is made, so the 25 s limit never starts; a save key timed out meanwhile stays held until the refresh settles or the page reloads. Do not time out the refresh itself: aborting one the server already rotated can end the session.
 
+### Database follow-ups found in the 2026-10-24 schema repair
+
+The first three change the database and need a migration; the last is schema files only. `supabase/schemas/40_finance.sql` describes each as it is live and points here.
+
+- **Anonymous read of the merchant-logo index discloses spend.** `finance_merchant_logos` is `USING (true)` for anon and authenticated, and `storage.objects` lets anon list the `merchant-logos` bucket. `merchant-logo-cache` resolves only brands in the owner's transactions, so the slugs and `resolved_at` say which directory brands the owner pays (21 rows on hosted, 2026-10-24). Images load through public URLs, which need neither read, and the only in-app reader (`useMerchantLogos`) is admin-gated. Decide, then: index SELECT `TO authenticated USING ((SELECT public.is_admin()))`, revoke anon's grants (including the leftover REFERENCES, TRIGGER and TRUNCATE), and drop or narrow the anon list policy on the bucket. Removes the multiple-permissive-policies advisor warning too.
+- **`authenticated` holds ALL, TRUNCATE included, on most `finance_*` tables.** RLS does not filter TRUNCATE. Narrow to SELECT, INSERT, UPDATE, DELETE as the `finance_transfer_*` blocks already do.
+- **`finance_debt_observations.debt_id` references `finance_debts(id)` alone.** It can point at another profile's or a shared default debt, and no index leads on `debt_id` (advisor: unindexed foreign key), so deleting a debt cascades through a sequential scan. A composite key needs a decision first: it would reject observations against shared default debts.
+- **`schemas/` cannot rebuild the database from empty.** `finance_bank_accounts_id_profile_id_key` and `idx_finance_transactions_profile_id_id` exist only in migrations, so the composite foreign keys in 40_finance.sql fail on a schemas-only build (first at `finance_transfer_links_profile_outflow_fkey`). Audit schemas/ against a migrated database object by object and add what is missing; no migration for objects that already exist.
+
 ### Sync and profile switch interactions
 
 **A table that fails to load on profile switch keeps the previous profile's rows visible.** Writes are blocked (collections marked incomplete), but the display is not cleared. User sees the old profile's data with editing disabled, which is confusing. The fix clears the table on a failed load, or renders an error state. Low priority — writes are safe, reading stale data is the symptom of a network failure, and error states are not yet defined for tables.

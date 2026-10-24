@@ -14,11 +14,11 @@ ALTER TABLE "public"."inspirations" OWNER TO "postgres";
 ALTER TABLE ONLY "public"."inspirations"
     ADD CONSTRAINT "inspirations_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Admin delete" ON "public"."inspirations" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."inspirations" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."inspirations" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."inspirations" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."inspirations" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."inspirations" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Public Read Access" ON "public"."inspirations" FOR SELECT USING (true);
 
