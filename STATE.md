@@ -1,6 +1,6 @@
 # State
 
-**Updated:** 2026-10-24 · **Branch:** `main` (`claude/compassionate-faraday-6b9xwn` fast-forwarded into it; remote branch still to delete, Next 2) · **Code on main:** `f19051b`, deployed · **Hosted database:** `20261024150000`
+**Updated:** 2026-10-24 · **Branch:** `main` (`claude/compassionate-faraday-6b9xwn` fast-forwarded into it and deleted; GitHub has only `main` and `feat/watchlist-news-finance-transfers`) · **Code on main:** `f19051b`, deployed · **Hosted database:** `20261024150000`
 
 ## In progress
 
@@ -34,7 +34,7 @@ None. Main, GitHub Pages and the hosted database agree as of 2026-10-24.
 ## Next
 
 1. Owner: check the live finance page (TrueLayer panel shows the new detail-line text) and open `https://yvtiybyuifkiwyrnjebe.supabase.co/storage/v1/object/public/merchant-logos/aldi.webp` and the finance page to confirm logo images still load live. Unverified until then.
-2. Owner: delete `claude/compassionate-faraday-6b9xwn` (fully merged; the agent's session cannot delete branches), `claude/friendly-feynman-phs5om` (merged as PR #7) and `claude/wonderful-shannon-azbdhi` (superseded, unmerged); uninstall the Strix GitHub App (https://github.com/settings/installations) and delete its trial-ended comment on PR #7.
+2. Owner: uninstall the Strix GitHub App (https://github.com/settings/installations) and delete its trial-ended comment on PR #7.
 3. Owner decision: guessable `<slug>.<ext>` merchant-logo keys. Private bucket with signed URLs, or unguessable keys (REHAUL_PLAN.md).
 4. Dashboard: Postgres upgrade from `supabase-postgres-15.8.1.030` (`/settings/general`; the project goes offline for it); leaked-password protection (Pro plan and above); TOTP MFA. SECURITY.md has the details.
 5. Still open from before: `finance_debt_observations` FK across profiles and its missing index; schemas cannot rebuild from empty; Zod 3.25.76 GHSA-mrhx-c7xc-m3w5, fix at ≥4.6.6; hosted finance benchmark; measure Watchlist and finance paths; devices, 200% zoom, live writes; graphify where installs are allowed; allow esm.sh and deno.land so `typecheck:functions` runs as written.
