@@ -115,10 +115,16 @@ attack surface of this site is Supabase, and it was audited separately
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
   resolved once server-side instead and served from the `merchant-logos`
-  bucket. That bucket is public — a supermarket's logo is public — and holds
-  nothing user-specific: object keys are brand slugs, never a profile or
-  transaction id. Writes to it are `is_admin()`; the same is true of its index
-  table `finance_merchant_logos`, which is public-read by design.
+  bucket. That bucket is public — a supermarket's logo is public — and its
+  object keys are brand slugs, never a profile or transaction id. Writes to it
+  are `is_admin()`; the same is true of its index table
+  `finance_merchant_logos`. **Open finding (2026-10-24):** the index and the
+  bucket's object list are readable by anon, and they are not free of user
+  data. `merchant-logo-cache` resolves only brands found in the owner's
+  transactions, so the slugs (with `resolved_at`) say which directory brands
+  the owner pays — 21 on hosted. Images load through public URLs, which need
+  neither read; the only in-app reader of the index is admin-gated. Narrowing
+  both reads to the administrator is an open line in `REHAUL_PLAN.md`.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant

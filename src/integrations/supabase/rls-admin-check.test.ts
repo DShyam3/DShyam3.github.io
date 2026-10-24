@@ -14,10 +14,10 @@ import { describe, expect, it } from 'vitest';
  * down (performance/README.md has the measurement).
  *
  * Policies live in two places. `schemas/` is the declarative source for the
- * public tables; storage.objects policies, and a handful of finance tables
- * `schemas/` does not carry, exist only in `migrations/`. So the migrations are
- * replayed in order -- CREATE, ALTER and DROP POLICY -- to get the text each
- * policy holds after the last one, and `schemas/` is checked on its own.
+ * public tables; storage.objects policies exist only in `migrations/`. So the
+ * migrations are replayed in order -- CREATE, ALTER and DROP POLICY -- to get
+ * the text each policy holds after the last one, and `schemas/` is checked on
+ * its own.
  */
 
 type Policy = { using?: string; check?: string };
