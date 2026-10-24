@@ -9,9 +9,12 @@
 -- `auth.uid()` is null for an anonymous request, and EXISTS over no rows is
 -- false, so an unauthenticated caller is denied without a special case.
 --
--- Takes no arguments and reads no column of the row being checked, so the
--- planner evaluates it once per statement as a one-time filter rather than
--- once per row. The added table read does not scale with the size of a scan.
+-- SECURITY DEFINER and the pinned search_path stop the planner inlining it, so
+-- a policy that calls it bare runs it once for every row tested. Policies ask
+-- `(SELECT "public"."is_admin"())` instead: it takes no arguments and reads no
+-- column of the row, so the subquery becomes an InitPlan evaluated once per
+-- statement, and the table read does not scale with the size of a scan.
+-- src/integrations/supabase/rls-admin-check.test.ts fails on a bare call.
 CREATE OR REPLACE FUNCTION "public"."is_admin"() RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -38,7 +41,7 @@ ALTER FUNCTION "public"."is_admin"() OWNER TO "postgres";
 -- seed script, or the SQL editor). RLS on with no write policy denies the rest
 -- by default.
 CREATE POLICY "Admin read" ON "public"."admin_users"
-    FOR SELECT TO "authenticated" USING ("public"."is_admin"());
+    FOR SELECT TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
 -- Note on recursion: that policy calls a function that reads this table.
 -- `is_admin()` is SECURITY DEFINER and owned by postgres, and a table's owner

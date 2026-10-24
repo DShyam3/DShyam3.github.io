@@ -72,7 +72,12 @@ attack surface of this site is Supabase, and it was audited separately
 
 - **RLS**: enabled on all 40 public tables. Every `finance_*` table, including
   `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
-  Content tables are anonymous-read, `is_admin()`-write.
+  Content tables are anonymous-read, `is_admin()`-write. Policies ask it as
+  `(SELECT public.is_admin())`, which runs once per statement rather than once
+  per row and returns the same answer (migrations `20261024120000` for public
+  tables and `20261024130000` for storage, applied to hosted 2026-10-24).
+  `src/integrations/supabase/rls-admin-check.test.ts` replays every migration
+  and fails on any policy, public or storage, that calls it bare.
 - **Edge functions**: browser calls to `truelayer-sync`,
   `merchant-logo-cache` and `watchlist-cron-sync` verify the JWT and then call
   `public.is_admin()` through the caller's own token
@@ -110,10 +115,16 @@ attack surface of this site is Supabase, and it was audited separately
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
   resolved once server-side instead and served from the `merchant-logos`
-  bucket. That bucket is public — a supermarket's logo is public — and holds
-  nothing user-specific: object keys are brand slugs, never a profile or
-  transaction id. Writes to it are `is_admin()`; the same is true of its index
-  table `finance_merchant_logos`, which is public-read by design.
+  bucket. That bucket is public — a supermarket's logo is public — and its
+  object keys are brand slugs, never a profile or transaction id. Writes to it
+  are `is_admin()`; the same is true of its index table
+  `finance_merchant_logos`. **Open finding (2026-10-24):** the index and the
+  bucket's object list are readable by anon, and they are not free of user
+  data. `merchant-logo-cache` resolves only brands found in the owner's
+  transactions, so the slugs (with `resolved_at`) say which directory brands
+  the owner pays — 21 on hosted. Images load through public URLs, which need
+  neither read; the only in-app reader of the index is admin-gated. Narrowing
+  both reads to the administrator is an open line in `REHAUL_PLAN.md`.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant
@@ -136,6 +147,16 @@ attack surface of this site is Supabase, and it was audited separately
   `VITE_TMDB_IMAGE_BASE_URL` and `VITE_ADMIN_EMAIL` reach the client.
 - **Storage**: see migration `20260904110337` — object policies were gated on
   the `authenticated` role rather than `is_admin()`, and are now `is_admin()`.
+  Migration `20261024130000` rewrites the 14 admin policies on
+  `storage.objects` to pair each bucket test with the wrapped check,
+  `bucket_id = '<bucket>' AND (SELECT public.is_admin())`, changing only the
+  call and refusing to run unless every policy reads exactly as expected. On
+  the local stack, before and after, anon and a signed-in non-admin can
+  neither list, download, sign a URL for, upload, update nor delete a
+  `finance-documents` object, and the administrator can do all six. On hosted
+  (2026-10-24, roles simulated inside a rolled-back transaction) anon and a
+  non-admin read none of the bucket's objects and cannot upload to it; the
+  administrator reads all of them and can.
 - **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the

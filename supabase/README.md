@@ -32,7 +32,7 @@ exactly.
 | `10_books` … `18_site_content` | one file per content collection |
 | `20_watchlist.sql` | movies, shows, seasons, episodes, schedule, favourites, sync_log, triggers |
 | `30_travel.sql` | visited countries + cities |
-| `40_finance.sql` | the 19 `finance_*` tables |
+| `40_finance.sql` | the 37 `finance_*` tables |
 | `90_privileges.sql` | schema-level grants and default privileges only |
 | `91_realtime.sql` | the `supabase_realtime` publication |
 
@@ -46,7 +46,7 @@ run in lexicographic order, so numeric prefixes handle dependency order --
 
 Storage bucket policies and the pg_cron schedule are **not** in `schemas/`.
 They live outside the `public` schema, are not covered by the schema diff, and
-are maintained by hand in the baseline migration.
+are maintained by hand in `migrations/`.
 
 ## From an empty project
 

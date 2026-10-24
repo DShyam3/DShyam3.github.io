@@ -14,9 +14,12 @@ import { supabase } from '@/integrations/supabase/client';
  * per unknown merchant, per render, which is both slow and a rather loud way
  * to announce a spending history to the network tab.
  *
- * One shared request: the table is small, public, and identical for everyone,
- * so it is fetched once per page load and every caller waits on the same
- * promise.
+ * Reading the index is admin-only: its slugs are the brands the owner pays, so
+ * it is spend history, not public data. The images themselves are fetched by
+ * public URL, which needs no read of either the table or the bucket listing.
+ *
+ * One shared request: the table is small and the same for every admin read, so
+ * it is fetched once per page load and every caller waits on the same promise.
  */
 
 type LogoIndex = ReadonlyMap<string, string>;

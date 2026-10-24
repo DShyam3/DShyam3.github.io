@@ -15,11 +15,11 @@ ALTER TABLE ONLY "public"."thoughts"
 
 CREATE POLICY "Public Read Access" ON "public"."thoughts" FOR SELECT USING (true);
 
-CREATE POLICY "Admin insert" ON "public"."thoughts" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."thoughts" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."thoughts" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."thoughts" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete" ON "public"."thoughts" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."thoughts" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
 ALTER TABLE "public"."thoughts" ENABLE ROW LEVEL SECURITY;
 

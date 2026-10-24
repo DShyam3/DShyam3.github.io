@@ -2583,6 +2583,20 @@ merge `799d8358`). Both CI runs pass;
 succeeded. The live Inventory page shows the compact toolbar and 13 EDC items
 with brands and no wishlist item. Live authenticated writes remain unverified.
 
+### Admin check once per statement — every RLS policy wraps `is_admin()` — 2026-10-24
+
+**Every policy that asks `public.is_admin()` asks it as `(SELECT public.is_admin())`. The test in `src/integrations/supabase/rls-admin-check.test.ts` fails when one does not.**
+
+`is_admin()` is `LANGUAGE sql STABLE SECURITY DEFINER` with a pinned `search_path`, so Postgres cannot inline it. Written bare in a policy, it is called once for every row the policy tests. Wrapped in a scalar subquery, it becomes an InitPlan: at most once per statement, with every row reusing the result. The answer is the same either way, which is why a bare call slips back in unnoticed; the only symptom is a large read getting slower. The test replays the migrations to get the text each policy holds last, and checks `schemas/` on its own, because the `storage.objects` policies exist only in migrations.
+
+Measured locally, not on hosted: a 5,000-row authenticated read of finance transactions went from a median of 1,051 ms to 276 ms (`performance/README.md`). The control drifted by up to about 20% between runs.
+
+The trade-off that was feared did not reproduce. The worry was that a wrapped call would be paid by a statement that touches no rows, or by a per-row trigger that fires for one row. The InitPlan is lazy: when no row reaches the policy it never runs (EXPLAIN ANALYZE shows "never executed"), and when one row does, it runs once per clause, as the bare form did. The wrapped form never makes more calls than the bare one.
+
+The migrations refuse to run unless every targeted policy reads exactly as the scan expected, because `ALTER POLICY` replaces the whole expression and would otherwise silently overwrite a policy edited since. After the rewrite they check again: no policy may still call the function bare, and the public schema must hold exactly 145 wrapped clauses (`20261024120000`). The storage migration (`20261024130000`) applies the same two checks to the 14 `storage.objects` policies.
+
+Reached hosted on 2026-10-24 through the Supabase `execute_sql` tool, not the CLI. The container had no CLI credentials, and `apply_migration` would have stamped its own version. The statements were the committed files, byte for byte (md5 checked inside the same transaction), and `supabase_migrations.schema_migrations` records them at the repo versions. Afterwards hosted had 93 admin-gated public policies and 14 storage policies, all wrapped, none bare. In rolled-back simulations, anon and a non-admin read none of the 46 finance documents and cannot upload; a non-admin reads none of 3,862 transactions; an admin reads all of both. Commits `7eb053d` (migrations, schemas, test, docs) and `41ee3ff` (hosted record) are on `claude/friendly-feynman-phs5om`, pushed and not merged; Pages still deploys `55c2341`.
+
 ### Table grants are least-privilege by default — 2026-10-24
 
 **`authenticated` holds SELECT, INSERT, UPDATE and DELETE on public tables, never TRUNCATE, REFERENCES or TRIGGER.** Supabase's default privileges had given every table `postgres` created ALL to `authenticated`, and 49 public tables kept it. TRUNCATE is the one that matters: Postgres applies row-level security to the four data verbs but not to TRUNCATE, so the grant is the only guard against an RLS mistake becoming data loss. REFERENCES and TRIGGER matter only for DDL. Nothing in the app needs the three as `authenticated`: edge functions connect as service_role, and the local PostgREST checks pass on the four verbs alone.

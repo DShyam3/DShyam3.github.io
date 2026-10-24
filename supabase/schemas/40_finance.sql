@@ -676,49 +676,49 @@ ALTER TABLE ONLY "public"."finance_goal_contributions"
 ALTER TABLE ONLY "public"."finance_transactions"
     ADD CONSTRAINT "finance_transactions_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."finance_bank_accounts"("id") ON DELETE SET NULL;
 
-CREATE POLICY "Admin All Access" ON "public"."finance_truelayer_connection" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin All Access" ON "public"."finance_truelayer_connection" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_truelayer_oauth_states" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_truelayer_oauth_states" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_bank_accounts" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_bank_accounts" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_categories" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_categories" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_items" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_items" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_presets" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_presets" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_credit_bureaus" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_credit_bureaus" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_credit_scores" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_credit_scores" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_data" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_data" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_debts" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_debts" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_defaults" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_defaults" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_goal_contributions" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_goal_contributions" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_goals" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_goals" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_holiday_defaults" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_holiday_defaults" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_memberships" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_memberships" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_recurring_bills" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_recurring_bills" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_recurring_templates" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_recurring_templates" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_settings" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_settings" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_student_loan_rates" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_student_loan_rates" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_tax_configs" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_tax_configs" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_transactions" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_transactions" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_user_holidays" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_user_holidays" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 ALTER TABLE "public"."finance_bank_accounts" ENABLE ROW LEVEL SECURITY;
 
@@ -1122,8 +1122,8 @@ CREATE INDEX "idx_finance_truelayer_oauth_states_profile_expires_at" ON "public"
 ALTER TABLE "public"."finance_profiles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_profile_transfers" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
-CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
+CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 -- S-10: anon needs nothing on any finance table. Re-asserted here because
 -- Supabase's ALTER DEFAULT PRIVILEGES re-grants on every newly created table.
@@ -1206,9 +1206,9 @@ ALTER TABLE "public"."finance_net_worth_snapshots" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_account_balance_snapshots" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admin Only" ON "public"."finance_net_worth_snapshots" TO "authenticated"
-    USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+    USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 CREATE POLICY "Admin Only" ON "public"."finance_account_balance_snapshots" TO "authenticated"
-    USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+    USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 REVOKE ALL ON "public"."finance_net_worth_snapshots" FROM "anon";
 REVOKE ALL ON "public"."finance_account_balance_snapshots" FROM "anon";
@@ -1513,6 +1513,445 @@ COMMENT ON TABLE "public"."finance_transfer_single_legs" IS
 
 COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
     'internal = excluded from income/spending totals like a confirmed transfer leg; external = real spending or income, changes no figure.';
+
+-- Tables created by migrations and carried here since 2026-10-24
+--
+-- Six tables that existed in the database, created by the migration named
+-- above each block, before this file described them. Each block is the live
+-- definition, not a new one, so nothing here changes the database.
+--
+-- Position matters: the foreign keys reference finance_profiles,
+-- finance_debts, finance_bank_accounts (id, profile_id) and
+-- finance_transactions (profile_id, id), so this section follows all of them.
+-- The two composite keys, finance_bank_accounts_id_profile_id_key and
+-- idx_finance_transactions_profile_id_id, are themselves still created only
+-- by migrations (20260910074712_finance_investment_holdings.sql and
+-- 20260909155110_payslip_transaction_reconciliations.sql) and are not yet
+-- declared in this file.
+--
+-- Grants are reproduced exactly as live: authenticated holds ALL (TRUNCATE
+-- included) on all six, which is broader than the finance_transfer_* blocks
+-- above and is not narrowed here.
+--
+-- Known gaps, each an open line in REHAUL_PLAN.md rather than fixed here
+-- (fixing any of them changes the database, which this section does not):
+-- the two composite keys above; authenticated's ALL on these tables; and
+-- finance_debt_observations.debt_id referencing finance_debts(id) alone, so it
+-- can cross profiles and has no index leading on debt_id.
+
+-- Debt balance observations (20260907230000_finance_debt_observations.sql).
+-- Anchors a loan balance to a known date -- a statement date or a portal
+-- check -- so a projection steps forward from evidence rather than from a
+-- mutable floating number. statement_date matters for Student Loans Company
+-- balances, whose annual statements reflect a March/April balance and lag
+-- portal checks by up to 18 months; the app reads NULL as observed_on.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_debt_observations" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "debt_id" "text" NOT NULL,
+    "observed_on" "date" NOT NULL,
+    "balance" numeric DEFAULT 0 NOT NULL,
+    "source" "text" DEFAULT 'manual'::"text" NOT NULL,
+    "statement_date" "date",
+    "note" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_debt_observations" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_debt_id_fkey"
+    FOREIGN KEY ("debt_id") REFERENCES "public"."finance_debts"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_balance_check" CHECK ("balance" >= 0);
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_source_check"
+    CHECK ("source" IN ('manual', 'statement', 'provider'));
+
+CREATE INDEX "idx_debt_observations_profile_debt"
+    ON "public"."finance_debt_observations" ("profile_id", "debt_id", "observed_on" DESC);
+
+ALTER TABLE "public"."finance_debt_observations" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_debt_observations"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+-- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
+-- the REVOKE below is load-bearing, not decorative.
+REVOKE ALL ON TABLE "public"."finance_debt_observations" FROM "anon";
+GRANT ALL ON TABLE "public"."finance_debt_observations" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_debt_observations" TO "service_role";
+
+-- Current investment positions (20260910074712_finance_investment_holdings.sql,
+-- 20260910122724_investment_holding_account_index.sql,
+-- 20260910123738_investment_holding_price_facts.sql). finance_bank_accounts
+-- already represents a broker or exchange account when type = 'investment';
+-- these are the individual positions in it. The link to an account is
+-- optional, because an asset can be recorded before its broker account is
+-- added, but the composite foreign key means it can never point at another
+-- profile's account. Deleting the account clears account_id only, never
+-- profile_id.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_investment_holdings" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "account_id" "text",
+    "name" "text" NOT NULL,
+    "ticker" "text",
+    "shares" numeric NOT NULL,
+    "avg_price" numeric NOT NULL,
+    "current_price" numeric NOT NULL,
+    "category" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "cost_basis_known" boolean DEFAULT true NOT NULL,
+    "current_price_known" boolean DEFAULT true NOT NULL
+);
+
+ALTER TABLE "public"."finance_investment_holdings" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Relies on the unique constraint finance_bank_accounts_id_profile_id_key.
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_account_profile_fkey"
+    FOREIGN KEY ("account_id", "profile_id")
+    REFERENCES "public"."finance_bank_accounts"("id", "profile_id") ON DELETE SET NULL ("account_id");
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_name_check" CHECK (length(btrim("name")) > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_shares_check" CHECK ("shares" > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_avg_price_check" CHECK ("avg_price" >= 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_current_price_check" CHECK ("current_price" >= 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_category_check"
+    CHECK ("category" IN ('Stock', 'ETF', 'Crypto', 'Mutual Fund', 'Real Estate', 'Cash', 'Other'));
+
+CREATE INDEX "idx_finance_investment_holdings_profile_id"
+    ON "public"."finance_investment_holdings" ("profile_id");
+
+-- Covers the composite account foreign key, so deleting an account does not
+-- scan every holding.
+CREATE INDEX "idx_finance_investment_holdings_account_profile"
+    ON "public"."finance_investment_holdings" ("account_id", "profile_id");
+
+ALTER TABLE "public"."finance_investment_holdings" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_investment_holdings"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_investment_holdings" FROM "anon";
+GRANT ALL ON TABLE "public"."finance_investment_holdings" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_investment_holdings" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_investment_holdings" IS
+    'Current investment positions, scoped to a finance profile. Prices and quantities are entered or imported; portfolio totals are computed in the app.';
+
+COMMENT ON COLUMN "public"."finance_investment_holdings"."cost_basis_known" IS
+    'Whether avg_price is a known GBP cost basis. False means it must not contribute to gain/loss calculations.';
+
+COMMENT ON COLUMN "public"."finance_investment_holdings"."current_price_known" IS
+    'Whether current_price is a known GBP valuation. False means it must not contribute to value calculations.';
+
+-- Confirmed broker and exchange activity (20260910124547_investment_activity_history.sql).
+-- The original CSV stays in the browser; this ledger keeps only the facts a
+-- personal finance timeline and re-import identity need. The unique key on
+-- (profile_id, account_id, provider, source_reference) is that identity: a
+-- re-imported row matches the one already stored.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_investment_activities" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "account_id" "text" NOT NULL,
+    "provider" "text" NOT NULL,
+    "activity_type" "text" NOT NULL,
+    "occurred_on" "date" NOT NULL,
+    "name" "text" NOT NULL,
+    "ticker" "text",
+    "quantity" numeric NOT NULL,
+    "unit_price_gbp" numeric,
+    "source_reference" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_investment_activities" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Relies on the unique constraint finance_bank_accounts_id_profile_id_key.
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_account_profile_fkey"
+    FOREIGN KEY ("account_id", "profile_id")
+    REFERENCES "public"."finance_bank_accounts"("id", "profile_id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_provider_check"
+    CHECK ("provider" IN ('trading212', 'kraken'));
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_activity_type_check"
+    CHECK ("activity_type" IN ('buy', 'sell'));
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_name_check" CHECK (length(btrim("name")) > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_quantity_check" CHECK ("quantity" > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_unit_price_gbp_check"
+    CHECK ("unit_price_gbp" IS NULL OR "unit_price_gbp" >= 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_source_reference_check"
+    CHECK (length(btrim("source_reference")) > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_source_unique"
+    UNIQUE ("profile_id", "account_id", "provider", "source_reference");
+
+-- Leads with account_id to cover the composite account foreign key; the
+-- unique key above leads with profile_id and serves the profile-scoped lookup.
+CREATE INDEX "idx_finance_investment_activities_account_profile_occurred_on"
+    ON "public"."finance_investment_activities" ("account_id", "profile_id", "occurred_on" DESC);
+
+ALTER TABLE "public"."finance_investment_activities" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_investment_activities"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_investment_activities" FROM "anon";
+GRANT ALL ON TABLE "public"."finance_investment_activities" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_investment_activities" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_investment_activities" IS
+    'Confirmed buy and sell activity imported locally from supported broker/exchange CSV files; original exports are not stored.';
+
+-- Index of cached merchant logos (20260907170100_merchant_logo_cache.sql).
+-- A row says this slug has a logo at this path in the public merchant-logos
+-- bucket; no row means fall through to the monogram. A NULL storage_path is a
+-- recorded miss, so the resolver does not retry a merchant it could not find.
+-- There is no profile_id, but it is not free of user data: merchant-logo-cache
+-- only resolves brands found in finance_transactions, so the set of slugs, and
+-- each resolved_at, says which directory brands the owner has paid and roughly
+-- when they first appeared. Read and write are therefore admin-only (below).
+-- The images themselves stay publicly fetchable by URL, which needs no policy.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_merchant_logos" (
+    "slug" "text" NOT NULL,
+    "storage_path" "text",
+    "source_domain" "text",
+    "resolved_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_merchant_logos" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_merchant_logos"
+    ADD CONSTRAINT "finance_merchant_logos_pkey" PRIMARY KEY ("slug");
+
+ALTER TABLE "public"."finance_merchant_logos" ENABLE ROW LEVEL SECURITY;
+
+-- The only policy, so read is admin-only: the slugs say which brands the owner
+-- pays (see the table comment above), and the only reader in the app is
+-- admin-gated. No FOR clause, so it covers every command, and the is_admin()
+-- condition gates all of them. The name predates it being the only read path.
+CREATE POLICY "Admin writes merchant logo index" ON "public"."finance_merchant_logos"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+-- anon holds nothing: a grant is a layer of its own beside RLS, and TRUNCATE is
+-- not filtered by RLS at all.
+REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "anon";
+GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_merchant_logos" IS
+    'Index of cached merchant logos in the merchant-logos bucket. A row with a NULL storage_path is a recorded miss, so the resolver stops re-fetching a merchant whose logo could not be found.';
+
+-- Payslips, captured as figures rather than sent anywhere
+-- (20260907160000_finance_payslips.sql and the payslip_* migrations after it).
+-- The PDF is an archive in the private finance-documents bucket, pointed at by
+-- storage_path and nullable because a payslip typed in by hand is a complete
+-- record on its own; the app renders its own view from the columns. The
+-- pension is split because only the employee's share is a deduction from
+-- gross, and adding the two together is the classic way to make net not
+-- reconcile.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_payslips" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "pay_date" "date" NOT NULL,
+    "period_start" "date",
+    "period_end" "date",
+    "employer" "text" DEFAULT ''::"text" NOT NULL,
+    "gross" numeric DEFAULT 0 NOT NULL,
+    "income_tax" numeric DEFAULT 0 NOT NULL,
+    "national_insurance" numeric DEFAULT 0 NOT NULL,
+    "pension_employee" numeric DEFAULT 0 NOT NULL,
+    "pension_employer" numeric DEFAULT 0 NOT NULL,
+    "student_loan" numeric DEFAULT 0 NOT NULL,
+    "other_deductions" numeric DEFAULT 0 NOT NULL,
+    "net" numeric DEFAULT 0 NOT NULL,
+    "storage_path" "text",
+    "notes" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "lines" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL
+);
+
+ALTER TABLE "public"."finance_payslips" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Only what genuinely cannot be negative is constrained; see the comment on
+-- the constraint itself.
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_non_negative_check"
+    CHECK (("gross" >= 0) AND ("pension_employee" >= 0) AND ("pension_employer" >= 0));
+
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_period_check"
+    CHECK (("period_start" IS NULL) OR ("period_end" IS NULL) OR ("period_start" <= "period_end"));
+
+-- Kept deliberately loose: a payslip may list anything, and a CHECK
+-- enumerating today's labels would reject tomorrow's.
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_lines_is_array" CHECK (jsonb_typeof("lines") = 'array');
+
+-- A pay date alone does not identify a payslip: overlapping employment gives
+-- two on the same day, and the second write would replace the first. employer
+-- is NOT NULL DEFAULT '' rather than nullable so the client's lookup by
+-- profile_id, employer and pay_date matches exactly (employer '' included), and
+-- this plain unique index blocks a second row for the same three.
+CREATE UNIQUE INDEX "idx_finance_payslips_profile_employer_pay_date"
+    ON "public"."finance_payslips" ("profile_id", "employer", "pay_date");
+
+-- Exists so the reconciliation table below can reference (profile_id, id)
+-- and keep a payslip and its linked transaction in one profile.
+CREATE UNIQUE INDEX "idx_finance_payslips_profile_id_id"
+    ON "public"."finance_payslips" ("profile_id", "id");
+
+ALTER TABLE "public"."finance_payslips" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_payslips"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_payslips" FROM "anon";
+GRANT ALL ON TABLE "public"."finance_payslips" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_payslips" TO "service_role";
+
+COMMENT ON COLUMN "public"."finance_payslips"."lines" IS
+    'Line items as the payslip states them: [{ label, amount, kind }], where kind is payment | deduction | benefit. A benefit is a sacrifice taken from the pay column -- pension, a gym membership -- which reduces pay without appearing under deductions. Empty when a payslip was captured by hand.';
+
+COMMENT ON CONSTRAINT "finance_payslips_non_negative_check" ON "public"."finance_payslips" IS
+    'Income tax, National Insurance, student loan, other deductions and net are deliberately unconstrained: each can legitimately be negative when a refund or an adjustment runs through payroll.';
+
+-- A confirmed link between a payslip's take-home figure and the incoming bank
+-- transaction (20260909155110_payslip_transaction_reconciliations.sql,
+-- 20260910054857_payslip_reconciliation_fk_indexes.sql). Suggestions are
+-- computed in the browser; this table holds only a person's explicit
+-- confirmation, never an uncertain automatic match.
+--
+-- The composite foreign keys make a cross-profile link impossible at the
+-- database layer. They rely on idx_finance_payslips_profile_id_id above and on
+-- idx_finance_transactions_profile_id_id. The two foreign key names below are
+-- the 63-byte truncations Postgres stored, written out in full so they match.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_payslip_transaction_reconciliations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "payslip_id" "text" NOT NULL,
+    "transaction_id" "text" NOT NULL,
+    "confirmed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_payslip_transaction_reconciliations" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_profile_payslip_fke"
+    FOREIGN KEY ("profile_id", "payslip_id")
+    REFERENCES "public"."finance_payslips"("profile_id", "id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_profile_transaction"
+    FOREIGN KEY ("profile_id", "transaction_id")
+    REFERENCES "public"."finance_transactions"("profile_id", "id") ON DELETE CASCADE;
+
+-- A payslip is one payment and a transaction is one receipt, so neither side
+-- can be confirmed twice. Each leads with profile_id so it also covers the
+-- matching composite foreign key's cascade lookup.
+CREATE UNIQUE INDEX "idx_finance_payslip_reconciliation_profile_payslip"
+    ON "public"."finance_payslip_transaction_reconciliations" ("profile_id", "payslip_id");
+
+CREATE UNIQUE INDEX "idx_finance_payslip_reconciliation_profile_transaction"
+    ON "public"."finance_payslip_transaction_reconciliations" ("profile_id", "transaction_id");
+
+CREATE INDEX "idx_finance_payslip_reconciliation_profile"
+    ON "public"."finance_payslip_transaction_reconciliations" ("profile_id");
+
+ALTER TABLE "public"."finance_payslip_transaction_reconciliations" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_payslip_transaction_reconciliations"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" FROM "anon";
+GRANT ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_payslip_transaction_reconciliations" IS
+    'User-confirmed, one-to-one links between a payslip take-home figure and its incoming finance transaction.';
 
 -- Triggers live here rather than with the function in 01_functions.sql:
 -- schema files run in filename order, so the tables must exist first.
