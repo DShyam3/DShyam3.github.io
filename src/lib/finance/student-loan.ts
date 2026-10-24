@@ -9,7 +9,7 @@
  * side of midnight depending on the caller's timezone.
  */
 
-import { toISODate } from './dates';
+import { epochDay, toISODate } from './dates';
 import type { StudentLoanPlanKey } from './debt';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -381,8 +381,10 @@ export interface StudentLoanBorrowed {
  * What you borrowed yourself. Recorded borrowing wins, summed payment by
  * payment; refunds and payments outside payroll move the balance but are not
  * borrowing, so neither counts. A row whose amount is zero, negative or not
- * finite is not a borrowing payment either: it is left out of the total, the
- * count and the span alike. With no valid borrowing row left, the one figure
+ * finite is not a borrowing payment either, and neither is one whose date is
+ * not a real `YYYY-MM-DD` day (`draws` is unchecked jsonb, so '' and
+ * '2026-13-40' arrive): it is left out of the total, the count and the span
+ * alike. With no valid borrowing row left, the one figure
  * typed for the loan stands in, so a table of bad rows cannot hide it.
  */
 export const studentLoanBorrowed = (debt: {
@@ -390,7 +392,11 @@ export const studentLoanBorrowed = (debt: {
   draws?: { date: string; amount: number; kind?: 'borrowing' | 'refund' | 'payment' }[];
 }): StudentLoanBorrowed => {
   const borrowing = (debt.draws ?? []).filter(
-    d => (!d.kind || d.kind === 'borrowing') && Number.isFinite(d.amount) && d.amount > 0,
+    d =>
+      (!d.kind || d.kind === 'borrowing') &&
+      Number.isFinite(d.amount) &&
+      d.amount > 0 &&
+      epochDay(d.date) !== undefined,
   );
   if (borrowing.length > 0) {
     const dates = borrowing.map(d => d.date).sort();

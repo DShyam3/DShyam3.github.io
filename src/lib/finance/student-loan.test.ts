@@ -1386,6 +1386,76 @@ describe('studentLoanBorrowed', () => {
     })).toEqual({ total: 0, source: 'none', count: 0 });
   });
 
+  it('leaves a row with an empty date out of the total, count and span', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '', amount: 700 },
+        { date: '2020-09-20', amount: 5000 },
+      ],
+    });
+    expect(r).toEqual({ total: 5000, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20' });
+  });
+
+  it('leaves a row with an impossible calendar date out of the total, count and span', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2026-13-40', amount: 700 },
+        { date: '2021-02-30', amount: 800 },
+        { date: '2020-09-20', amount: 5000 },
+      ],
+    });
+    expect(r).toEqual({ total: 5000, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20' });
+  });
+
+  it('counts only the valid rows when valid and invalid dates are mixed', () => {
+    const r = studentLoanBorrowed({
+      originalAmount: 99999,
+      draws: [
+        { date: '2021-01-10', amount: 4000.1 },
+        { date: '', amount: 111 },
+        { date: '2020-09-20', amount: 5000 },
+        { date: '2026-13-40', amount: 222 },
+        { date: '10/01/2022', amount: 333 },
+        { date: '2022-04-30T00:00:00Z', amount: 444 },
+        { date: '2022-04-30', amount: 3000, kind: 'borrowing' },
+        { date: 'not a date', amount: 555, kind: 'borrowing' },
+      ],
+    });
+    expect(r).toEqual({ total: 12000.1, source: 'draws', count: 3, first: '2020-09-20', last: '2022-04-30' });
+  });
+
+  it('accepts 29 February in a leap year and rejects it otherwise', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2024-02-29', amount: 1000 },
+        { date: '2023-02-29', amount: 2000 },
+      ],
+    });
+    expect(r).toEqual({ total: 1000, source: 'draws', count: 1, first: '2024-02-29', last: '2024-02-29' });
+  });
+
+  it('treats a table of invalid dates like no draws: the typed amount stands in', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 27000,
+      draws: [
+        { date: '', amount: 5000 },
+        { date: '2026-13-40', amount: 4000 },
+      ],
+    })).toEqual({ total: 27000, source: 'entered', count: 0 });
+  });
+
+  it('is unknown when every date is invalid and no amount was typed', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '', amount: 5000 },
+        { date: '2026-13-40', amount: 4000 },
+      ],
+    });
+    expect(r).toEqual({ total: 0, source: 'none', count: 0 });
+    expect(r.first).toBeUndefined();
+    expect(r.last).toBeUndefined();
+  });
+
   it('falls back to the typed amount when no borrowing is recorded', () => {
     expect(studentLoanBorrowed({ originalAmount: 27000, draws: [{ date: '2024-05-01', amount: 300, kind: 'refund' }] }))
       .toEqual({ total: 27000, source: 'entered', count: 0 });
