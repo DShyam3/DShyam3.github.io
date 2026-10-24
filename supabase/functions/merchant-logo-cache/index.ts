@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { requireAdmin } from '../_shared/require-admin.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
+import { selectAllPages } from '../_shared/select-all-pages.ts'
 
 // Route C of the transaction-logo work: resolve a merchant's mark ONCE,
 // server-side, and cache it in our own bucket.
@@ -439,12 +440,19 @@ serve(async (req) => {
     const refresh = body?.refresh === true
 
     // Which merchants the ledger actually contains. Nothing is looked up for a
-    // brand nobody here has paid.
-    const { data: rows, error: rowsError } = await supabaseAdmin
-      .from('finance_transactions')
-      .select('merchant')
-      .not('merchant', 'is', null)
+    // brand nobody here has paid. Paged: one plain select stops at the Data
+    // API's 1,000 rows, which left most of the ledger's merchants unseen.
+    const { data: rows, error: rowsError } = await selectAllPages<{ id: string; merchant: string | null }>(
+      (from, to) => supabaseAdmin
+        .from('finance_transactions')
+        .select('id, merchant', { count: 'exact' })
+        .not('merchant', 'is', null)
+        .order('id')
+        .range(from, to),
+      (row) => row.id,
+    )
     if (rowsError) {
+      console.error('Failed to read merchants:', rowsError.message)
       return new Response(JSON.stringify({ error: 'Failed to read merchants' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -455,7 +463,7 @@ serve(async (req) => {
     // merchant seen five times rather than five merchants seen once.
     const occurrences = new Map<string, number>()
     for (const row of rows ?? []) {
-      const raw = (row as { merchant: string | null }).merchant
+      const raw = row.merchant
       if (!raw) continue
       const alias = merchantSlug(raw)
       if (!alias) continue
