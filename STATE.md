@@ -1,54 +1,54 @@
 # State
 
-**Updated:** 2026-10-24 · **Branch:** `codex/selector-parser-patch` · **Deployed code:** `9f13ce77`
+**Updated:** 2026-10-24 · **Branch:** `codex/paged-read-benchmark` · **Deployed code:** `9f13ce77`
 
-## Deployed parser update
+## In progress
 
-The selector-parser override merged through [PR #5](https://github.com/DShyam3/DShyam3.github.io/pull/5):
-code `1ffeb8ac`, merge `9f13ce77`. Tailwind/postcss-nested resolve parser 7.1.7.
-Clean installation and project checks pass; both CSS outputs are byte-identical
-to the 6.1.4 baseline. SECURITY.md records the validation caveat. CI runs
-`39995777542` / `39995786799` pass on 2026-10-23.
-[Pages run 39995955348](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39995955348)
-succeeded, verified 2026-10-24; `9f13ce77` is deployed. No query runtime or user-facing feature changes.
+Paged-read benchmark is LOCAL and UNCOMMITTED. `scripts/benchmark-paged-reads.mjs`,
+`performance/README.md` and raw JSON record local synthetic movie/finance reads;
+SECURITY.md links the findings. Review and credential-environment rerun pass; cleanup
+is verified. This measures reads; it changes no application query runtime.
 
-## Previous releases
+The local benchmark uses anonymous movies and seeded-admin private finance at
+100 / 1,000 / 5,000 rows, five measured warm reads each through real `selectAllPages`.
+At 5,000 rows, each uses five requests: median movies 44.04ms, finance 702.78ms.
+Fixtures were removed and original counts verified: 0 movies, 20 transactions.
+Scope excludes saves, provider rendering, nested TV data, TMDB and production.
 
-Readiness cleanup shipped through [PR #4](https://github.com/DShyam3/DShyam3.github.io/pull/4)
-at `8f6078e8`, removing unused typography and parser 6.0.10.
-[Pages run 39995094919](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39995094919)
-succeeded on 2026-10-23; that cleanup precedes the deployed parser update.
-Earlier dependency updates shipped at `1395077f`; EDC controls/dialogs at `799d8358`.
-Live Inventory verification on 2026-10-20 found 13 EDC items, brands and no wishlist item.
-Migration `20261013100000_inventory_wishlist_not_edc` is applied locally and LIVE:
-zero conflicts, validated constraint; local rollback tests pass.
+## Deployed
+
+Parser override 7.1.7 shipped through [PR #5](https://github.com/DShyam3/DShyam3.github.io/pull/5)
+at `9f13ce77`; [Pages run 39995955348](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39995955348)
+succeeded, verified 2026-10-24. Both CSS outputs matched the 6.1.4 baseline.
+Earlier cleanup/dependency releases: `8f6078e8` / `1395077f`; EDC: `799d8358`.
+Live Inventory on 2026-10-20 showed 13 EDC items, brands and no wishlist item.
+Migration `20261013100000_inventory_wishlist_not_edc` is local and LIVE: zero conflicts, validated constraint; local rollback tests pass.
 
 ## Checks
 
 | Check | Date | Result |
 |---|---|---|
-| Clean installation / lint | 2026-10-23 | Pass; lint 0 errors / 0 warnings |
-| Typecheck / typecheck:functions | 2026-10-23 | Pass |
-| Tests / build | 2026-10-23 | 51 files / 1,001 tests pass; build passes; both CSS outputs byte-identical to 6.1.4 baseline |
-| ship-check | 2026-10-23 | 98/100 Beta; 9 findings: 1 high, 4 medium, 2 low, 2 info |
-| npm audit | 2026-10-23 | 0 vulnerabilities |
-| Larger-mode browser | 2026-10-20 | Wallet detail fits 640×400 and 375×844 without horizontal overflow |
-| EDC local browser | 2026-10-19–20 | Owned selection persists; wishlist excluded from picker and rejected by edit form |
+| Lint / both typechecks | 2026-10-24 | Pass; lint 0 errors / 0 warnings |
+| Tests / build / graph | 2026-10-24 | 51 files / 1,001 tests pass; build passes; graph refreshed |
+| Review | 2026-10-24 | Pass |
+| ship-check | 2026-10-24 | 96/100 Beta; 10 findings: 2 high (potential N+1, Zod), 4 medium, 2 low, 2 info; password-literal finding cleared |
+| Previous ship-check / audit | 2026-10-23 | 98/100 Beta, 9 findings; audit 0 then, superseded by new advisory |
+| Larger-mode browser | 2026-10-20 | Wallet fits 640×400 / 375×844 without horizontal overflow |
+| EDC local browser | 2026-10-19–20 | Owned selection persists; wishlist excluded/rejected |
 
 ## Next
 
-1. Measure Watchlist and finance workloads before changing queries. Source-only triage finds
-   mostly batched/paged finance queries; Watchlist per-season/per-favourite reads remain.
-2. Verify live authenticated EDC writes, physical devices and true 200% zoom; continue dialog audit.
-3. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
+1. Commit the validated benchmark tooling, open PR and verify CI.
+2. Diagnose local finance query plans/RLS cost; benchmark alone does not identify the bottleneck.
+3. Migrate Zod 3.25.76 for GHSA-mrhx-c7xc-m3w5; reported patched version is >=4.6.6.
+4. Measure excluded Watchlist/finance paths and production; verify live writes, devices and true 200% zoom.
+5. Resume REHAUL_PLAN separately; Library contained scrolling remains unbuilt.
 
 ## Blockers / open risks
 
-- Remaining scanner findings are unresolved; zero npm audit vulnerabilities does not close them.
-- The parser override crosses a dependency major version; validation covers this project's install,
-  tests and generated CSS, not every upstream consumer or future CSS change.
-- Upstream withdrew braces GHSA-vfj7-8cjw-p6xm on 2026-10-23 as not practically exploitable;
-  that earlier high-count reduction came from advisory withdrawal, not a package change.
+- New Zod advisory remains open; the October 23 audit result is not current assurance.
+- Remaining scanner findings and Watchlist per-season/per-favourite reads remain unresolved.
+- Parser major-version override is validated for this project's install/tests/CSS, not future changes.
 - Physical devices, true 200% zoom and live authenticated writes remain unverified.
 - Finance load/save/reload, full ledger and recurring Paid/tick/untick remain unverified live.
 - Finance risks: four reference tables delete-then-insert, debt observation queueing, logout/load/delete
@@ -56,5 +56,5 @@ zero conflicts, validated constraint; local rollback tests pass.
 - Recurring early-payment credit and old paid flags without last-paid dates remain open.
 - Watchlist cron CPU is unmeasured; production sync-race fix remains unconfirmed.
 - Other finance collections remain unpaged; duplicated src/Deno pagers must change together.
-- Declarative grants reconciliation remains open; no unrelated finance fixes ship with this patch.
+- Declarative grants reconciliation remains open; no unrelated finance fixes ship here.
 - CI maintenance: Node 20 Actions face Node 24 enforcement; ubuntu-latest moves to 26.

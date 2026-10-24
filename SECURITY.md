@@ -230,6 +230,16 @@ The scanner's four-file finding is reviewed, not resolved or suppressed:
 | `TransactionsTab.tsx` | Flagged deletes include local Set operations; bulk edits pass rows to the context's batching. | No per-row request established at these call sites. |
 | `WatchlistContext.tsx` | Initial reads paginate. Show imports fetch/insert per season with batched episodes. Favourite-facts sync makes sequential TMDB and update requests, capped at 50, with cancellation between items. | Measure import/sync latency and concurrency; preserve partial-failure and cancellation behaviour when batching. |
 
-No latency benchmark or live workload measurement was performed for this review.
-These source findings do not close the outstanding Watchlist cron CPU or finance
-save/race verification tasks in the plan.
+A [local synthetic paged-read benchmark](performance/README.md) now measures
+movie and private-profile transaction reads through the real helper and REST API.
+It does not measure full providers, saves, TV nesting, TMDB sync or live workloads.
+The outstanding Watchlist cron CPU and finance save/race verification tasks remain open.
+
+### Newly reported dependency follow-up (2026-10-24)
+
+The fresh scan reports `zod@3.25.76` under
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in
+4.6.6. The advisory concerns memory exhaustion while validating oversized
+collections. Exposure analysis and a validated major-version migration remain
+open. The zero-vulnerability npm audit above is dated 2026-10-23 and is not a
+claim about the refreshed advisory database.
