@@ -50,8 +50,12 @@ export function Header({
         <div className="flex flex-col min-[700px]:flex-row min-[700px]:items-center min-[700px]:justify-between gap-3 flex-wrap">
           {/* Left side: Profile with social links */}
           <div className="flex items-start md:items-center justify-between w-full min-[700px]:w-auto gap-2 md:gap-3">
+            {/* Below 700px the name may give way: at 320px the avatar, name
+                and the social button come to 278px in a 256px slot, and a
+                block that cannot shrink pushed the button past the gutter.
+                Shrinking lets a two-word role break between its words. */}
             <div
-              className="flex items-center gap-3 flex-shrink-0 cursor-pointer select-none transition-opacity hover:opacity-80 md:w-auto"
+              className="flex items-center gap-3 flex-shrink-0 max-[699px]:min-w-0 max-[699px]:flex-shrink cursor-pointer select-none transition-opacity hover:opacity-80 md:w-auto"
               onClick={() => navigate('/')}
               role="button"
               tabIndex={0}
@@ -140,27 +144,45 @@ export function Header({
               full-width row: the title takes the left edge and the two
               controls the right, rather than all three bunching at the left
               with the leftover width trailing off the end. From md the row is
-              only as wide as its contents and the property does nothing. */}
-          <div className="flex items-center justify-between gap-3 md:gap-4">
-            <div
-              className="header-page-title min-w-0 text-left md:text-right cursor-pointer select-none active:opacity-70"
-              onClick={handleTitleClick}
-            >
-              <div>
-                <DotMatrixText
-                  text={title.toUpperCase()}
-                  size="sm"
-                  wrap={false}
-                  className="text-foreground justify-start md:justify-end"
-                />
-              </div>
-              <div>
-                <DotMatrixText
-                  text={subtitle.toUpperCase()}
-                  size="xs"
-                  wrap={false}
-                  className="text-muted-foreground justify-start md:justify-end mt-1"
-                />
+              only as wide as its contents and the property does nothing.
+
+              Full width has to be said, as the identity row above says it.
+              Left to size itself, the row grew to fit a long title on one
+              line -- the home page's 15-character title made it 356px in a
+              311px slot on a 375px phone -- and pushed the theme toggle past
+              the screen edge.
+
+              Held to the slot, the title takes what the controls leave and
+              wraps between words. Its narrowest is its longest word: where
+              even that does not fit beside the controls (most titles at
+              320px, "Inspiration" at 360px), the controls move to a line of
+              their own rather than overlap it or split the word. From 700px
+              none of this applies; the cluster is sized to its contents. */}
+          <div className="flex w-full items-center justify-between gap-3 max-[699px]:flex-wrap min-[700px]:w-auto md:gap-4">
+            {/* Two boxes on purpose. The outer one takes the row's free width
+                below 700px, so the title can wrap and the controls can drop;
+                the inner one is only as wide as the words, and only it opens
+                the sign-in page. One box doing both made every stray tap on
+                blank header space -- up to 212px of it -- open /auth. */}
+            <div className="header-page-title min-w-0 max-[699px]:min-w-min max-[699px]:flex-1 text-left md:text-right">
+              <div
+                className="w-fit max-w-full cursor-pointer select-none active:opacity-70 md:ml-auto"
+                onClick={handleTitleClick}
+              >
+                <div>
+                  <DotMatrixText
+                    text={title.toUpperCase()}
+                    size="sm"
+                    className="text-foreground justify-start md:justify-end"
+                  />
+                </div>
+                <div>
+                  <DotMatrixText
+                    text={subtitle.toUpperCase()}
+                    size="xs"
+                    className="text-muted-foreground justify-start md:justify-end mt-1"
+                  />
+                </div>
               </div>
             </div>
             {/* After the title rather than before it. On its own between the
@@ -170,7 +192,7 @@ export function Header({
                 joins the only other control on this side, and the pair read
                 as a control cluster pinned to the right edge instead of one
                 label adrift in the whitespace. */}
-            <div className="flex flex-shrink-0 items-center gap-2 md:gap-4">
+            <div className="flex flex-shrink-0 items-center gap-2 max-[699px]:ml-auto md:gap-4">
               <NavMenu />
               <ThemeToggle />
             </div>
