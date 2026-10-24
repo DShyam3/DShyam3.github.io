@@ -5,6 +5,7 @@
 ## In progress
 
 None. The branch awaits a PR (Next 1). Main lags the database: the two migrations below are live on hosted but not on main until this branch merges.
+The branch also carries a UI change, committed here, NOT deployed: the TrueLayer panel's green "Backfilled" / amber "Backfilling" pills are now plain detail-line text ("History imported" / "Importing history · checked to <month>"), checked in a local browser at 1280px and 375px with fixture connections (the edge function is not run locally).
 
 ## Deployed
 

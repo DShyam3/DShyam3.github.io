@@ -250,21 +250,7 @@ export default function BankAccountsSection() {
                         <div className="flex items-center gap-3 min-w-0">
                           <ProviderLogo name={providerName} uri={conn.provider_logo_uri} />
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-xs text-foreground truncate">{providerName}</span>
-                              {conn.backfill_complete && (
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-positive/10 text-positive border border-positive/20 font-mono">
-                                  Backfilled
-                                </span>
-                              )}
-                              {!conn.backfill_complete && conn.last_synced_at && (
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-mono">
-                                  {conn.backfilled_from
-                                    ? `Backfilling to ${new Date(conn.backfilled_from).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`
-                                    : 'Backfilling history'}
-                                </span>
-                              )}
-                            </div>
+                            <div className="font-semibold text-xs text-foreground truncate">{providerName}</div>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-mono mt-0.5">
                               {conn.last_synced_at ? (
                                 <span>Synced: {new Date(conn.last_synced_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
@@ -277,6 +263,18 @@ export default function BankAccountsSection() {
                                   {daysLeft === 0 ? "Consent expired" : `Consent: ${daysLeft}d left`}
                                 </span>
                               )}
+                              {/* backfilled_from is how far back the walk has checked, empty windows included, not the oldest transaction held. */}
+                              {conn.backfill_complete ? (
+                                <span title="No older transactions were found at this bank. New transactions keep syncing.">
+                                  History imported
+                                </span>
+                              ) : conn.last_synced_at ? (
+                                <span title="Older transactions are still being fetched; each sync checks further back.">
+                                  {conn.backfilled_from
+                                    ? `Importing history · checked to ${new Date(conn.backfilled_from).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`
+                                    : 'Importing history'}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </div>

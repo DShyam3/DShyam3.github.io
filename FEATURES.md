@@ -327,8 +327,12 @@ Four routes, in decreasing order of automation:
 
 1. **Open banking** — multiple banks connected simultaneously through
    TrueLayer, each with its own card, logo, consent countdown and individual
-   disconnect. Balances, transaction history and daily snapshots refresh on a
-   server-side schedule at 05:00 UTC without the browser being open; one
+   disconnect. Each connection's detail line also says how far its history
+   import has got: "Importing history · checked to <month>" while older
+   transactions are still being fetched, further back with each sync, then
+   "History imported" once the bank has no older history to give. Balances,
+   transaction history and daily snapshots refresh on a server-side schedule
+   at 05:00 UTC without the browser being open; one
    provider failing does not make the others stale. A sync history popover on the
    Transactions toolbar and beside "Sync All Banks" in Wealth lists each run with
    its trigger, new transactions and time ("Today 18:57"); hovering a run shows
