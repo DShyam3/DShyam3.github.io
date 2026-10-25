@@ -263,9 +263,8 @@ extract in the browser.
 
 ### Database follow-ups found in the 2026-10-24 schema repair
 
-Two items. The first is for the owner, outside the code; the second is schema files only. The second is also described in `supabase/schemas/40_finance.sql`, which points here.
+One item, schema files only. It is also described in `supabase/schemas/40_finance.sql`, which points here.
 
-- **Owner: delete the 41 old brand-named objects in `merchant-logos`** (`aldi.webp` and the rest). The index no longer references them, and `merchant-logo-cache` v15 writes random names (`7d2d1558`). Until they are deleted they stay public and guessable, so a brand can still be confirmed; CDN copies may outlive the deletion by up to 7 days. `SECURITY.md`, *Merchant logos*, carries the gap until then.
 - **`schemas/` cannot rebuild the database from empty.** `finance_bank_accounts_id_profile_id_key` and `idx_finance_transactions_profile_id_id` exist only in migrations, so the composite foreign keys in 40_finance.sql fail on a schemas-only build (first at `finance_transfer_links_profile_outflow_fkey`). Audit schemas/ against a migrated database object by object and add what is missing; no migration for objects that already exist.
 
 ### Security audit and scan, 2026-10-24 — what is left

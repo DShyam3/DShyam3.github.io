@@ -155,17 +155,15 @@ attack surface of this site is Supabase, and it was audited separately
   neither read; the only in-app reader of the index is admin-gated. After the
   change a public object URL (`merchant-logos/aldi.webp`) returned 200
   `image/webp` on 2026-10-24.
-  **Object names (2026-10-25), mitigated, not closed:** `merchant-logo-cache`
+  **Object names (2026-10-25), closed:** `merchant-logo-cache`
   v15 names each new logo `<uuid>.<ext>`, so a name says nothing about a brand,
   and the index is the only map from brand to file. The 41 logos cached on
   2026-10-25 were copied to random names and the index repointed; all 41 new
   URLs return 200 `image/webp`, and logos render on the signed-in Transactions
-  list (checked live, read-only). **Still open:** the 41 brand-named objects from
-  before the change (`aldi.webp` and the rest) are still in the bucket and still
-  public (`aldi.webp` returned 200 on 2026-10-25), so a guessed brand can still
-  be confirmed. The gap closes when the owner deletes them; CDN copies may outlive
-  the deletion by up to 7 days (`cacheControl` 604800). Tracked in
-  `REHAUL_PLAN.md` and `STATE.md` as pending owner deletion.
+  list (checked live, read-only). The owner then deleted the 41 brand-named
+  objects from before the change; the bucket holds only random names, and the
+  old URLs (`aldi.webp` and the rest) return 400, cache-busted or not, so a
+  guessed brand can no longer be confirmed.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant
