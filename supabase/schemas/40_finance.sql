@@ -578,6 +578,17 @@ ALTER TABLE ONLY "public"."finance_data"
 ALTER TABLE ONLY "public"."finance_debts"
     ADD CONSTRAINT "finance_debts_pkey" PRIMARY KEY ("id");
 
+-- The target of finance_debt_observations_profile_debt_fkey. id is already the
+-- primary key, so this adds no uniqueness; a composite foreign key needs a
+-- unique constraint over exactly its columns. Declared here, ahead of the
+-- foreign key in the finance_debt_observations block below, so a build
+-- finds it in place (20261025090000_debt_observations_profile_scoped_fk.sql).
+-- profile_id leads, so the index behind it also covers finance_debts_profile_id_fkey
+-- and the scoped reads; that is why there is no separate index on profile_id
+-- alone for this table.
+ALTER TABLE ONLY "public"."finance_debts"
+    ADD CONSTRAINT "finance_debts_profile_id_id_key" UNIQUE ("profile_id", "id");
+
 ALTER TABLE ONLY "public"."finance_defaults"
     ADD CONSTRAINT "finance_defaults_pkey" PRIMARY KEY ("key");
 
@@ -1038,7 +1049,8 @@ ALTER TABLE ONLY "public"."finance_debts"
     ADD CONSTRAINT "finance_debts_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 ALTER TABLE ONLY "public"."finance_debts"
     ADD CONSTRAINT "finance_debts_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
-CREATE INDEX "idx_finance_debts_profile_id" ON "public"."finance_debts" ("profile_id");
+-- No index on profile_id alone: finance_debts_profile_id_id_key (profile_id, id),
+-- declared with the primary key above, leads with it.
 
 ALTER TABLE ONLY "public"."finance_goal_contributions"
     ADD CONSTRAINT "finance_goal_contributions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
@@ -1513,11 +1525,12 @@ COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
 -- narrowed one described below.
 --
 -- Position matters: the foreign keys reference finance_profiles,
--- finance_debts, finance_bank_accounts (id, profile_id) and
+-- finance_debts (profile_id, id), finance_bank_accounts (id, profile_id) and
 -- finance_transactions (profile_id, id), so this section follows all of them.
--- The two composite keys, finance_bank_accounts_id_profile_id_key and
--- idx_finance_transactions_profile_id_id, are themselves still created only
--- by migrations (20260910074712_finance_investment_holdings.sql and
+-- finance_debts_profile_id_id_key is declared beside finance_debts_pkey above.
+-- The other two composite keys, finance_bank_accounts_id_profile_id_key and
+-- idx_finance_transactions_profile_id_id, are still created only by migrations
+-- (20260910074712_finance_investment_holdings.sql and
 -- 20260909155110_payslip_transaction_reconciliations.sql) and are not yet
 -- declared in this file.
 --
@@ -1527,10 +1540,11 @@ COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
 -- narrows it. For finance_merchant_logos, anon's revoke and the policy are
 -- 20261024140000_merchant_logo_index_admin_only.sql.
 --
--- Known gaps, each an open line in REHAUL_PLAN.md rather than fixed here
--- (fixing any of them changes the database, which this section does not):
--- the two composite keys above; and finance_debt_observations.debt_id
--- referencing finance_debts(id) alone, so it can cross profiles.
+-- Known gap, an open line in REHAUL_PLAN.md rather than fixed here (fixing it
+-- changes the database, which this section does not): the two composite keys
+-- above that migrations create and this file does not yet declare.
+-- finance_debt_observations.debt_id is no longer a gap: its foreign key is
+-- composite (20261025090000_debt_observations_profile_scoped_fk.sql).
 
 -- Debt balance observations (20260907230000_finance_debt_observations.sql).
 -- Anchors a loan balance to a known date -- a statement date or a portal
@@ -1560,9 +1574,14 @@ ALTER TABLE ONLY "public"."finance_debt_observations"
     ADD CONSTRAINT "finance_debt_observations_profile_id_fkey"
     FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 
+-- Composite so a reading can never name another profile's debt, or a shared
+-- default (profile_id NULL, which never matches). profile_id and debt_id are both
+-- NOT NULL, so MATCH SIMPLE binds them. Column order matches
+-- idx_debt_observations_profile_debt below, which covers the cascade lookup.
 ALTER TABLE ONLY "public"."finance_debt_observations"
-    ADD CONSTRAINT "finance_debt_observations_debt_id_fkey"
-    FOREIGN KEY ("debt_id") REFERENCES "public"."finance_debts"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "finance_debt_observations_profile_debt_fkey"
+    FOREIGN KEY ("profile_id", "debt_id")
+    REFERENCES "public"."finance_debts"("profile_id", "id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."finance_debt_observations"
     ADD CONSTRAINT "finance_debt_observations_balance_check" CHECK ("balance" >= 0);
@@ -1571,14 +1590,12 @@ ALTER TABLE ONLY "public"."finance_debt_observations"
     ADD CONSTRAINT "finance_debt_observations_source_check"
     CHECK ("source" IN ('manual', 'statement', 'provider'));
 
+-- Also covers finance_debt_observations_profile_debt_fkey (ON DELETE CASCADE):
+-- its leading columns are the key's, so deleting a debt finds the readings to
+-- cascade to through it. The single-column idx_finance_debt_observations_debt_id
+-- that covered the old one-column key is dropped as redundant.
 CREATE INDEX "idx_debt_observations_profile_debt"
     ON "public"."finance_debt_observations" ("profile_id", "debt_id", "observed_on" DESC);
-
--- Covers finance_debt_observations_debt_id_fkey (ON DELETE CASCADE). The index
--- above leads with profile_id, so deleting a debt could not use it to find the
--- observations to cascade to.
-CREATE INDEX IF NOT EXISTS "idx_finance_debt_observations_debt_id"
-    ON "public"."finance_debt_observations" ("debt_id");
 
 ALTER TABLE "public"."finance_debt_observations" ENABLE ROW LEVEL SECURITY;
 
