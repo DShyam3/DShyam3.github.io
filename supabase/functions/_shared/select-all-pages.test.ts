@@ -1,10 +1,5 @@
 import { PAGE_ROWS, selectAllPages } from './select-all-pages.ts'
-
-function assertEquals(actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual)
-  const e = JSON.stringify(expected)
-  if (a !== e) throw new Error(`Expected ${e}, received ${a}`)
-}
+import { assertJsonEquals } from './test-assert.ts'
 
 type Row = { id: string }
 type Page = { data: Row[] | null; error: { message: string } | null; count?: number }
@@ -32,9 +27,9 @@ Deno.test('reads past the per-response cap until it has every row', async () => 
   const { page, calls } = table(() => range(2 * PAGE_ROWS + 770))
   const { data, error } = await selectAllPages(page, keyOf)
 
-  assertEquals(error, null)
-  assertEquals(data?.length, 2 * PAGE_ROWS + 770)
-  assertEquals(calls, [
+  assertJsonEquals(error, null)
+  assertJsonEquals(data?.length, 2 * PAGE_ROWS + 770)
+  assertJsonEquals(calls, [
     [0, PAGE_ROWS - 1],
     [PAGE_ROWS, 2 * PAGE_ROWS - 1],
     [2 * PAGE_ROWS, 3 * PAGE_ROWS - 1],
@@ -43,18 +38,18 @@ Deno.test('reads past the per-response cap until it has every row', async () => 
 
 Deno.test('makes one request for a table smaller than a page, and for an exact page', async () => {
   const small = table(() => range(143))
-  assertEquals((await selectAllPages(small.page, keyOf)).data?.length, 143)
-  assertEquals(small.calls.length, 1)
+  assertJsonEquals((await selectAllPages(small.page, keyOf)).data?.length, 143)
+  assertJsonEquals(small.calls.length, 1)
 
   const exact = table(() => range(PAGE_ROWS))
-  assertEquals((await selectAllPages(exact.page, keyOf)).data?.length, PAGE_ROWS)
-  assertEquals(exact.calls.length, 1)
+  assertJsonEquals((await selectAllPages(exact.page, keyOf)).data?.length, PAGE_ROWS)
+  assertJsonEquals(exact.calls.length, 1)
 })
 
 Deno.test('keeps reading when the server caps pages below PAGE_ROWS', async () => {
   const { page, calls } = table(() => range(1200), 500)
-  assertEquals((await selectAllPages(page, keyOf)).data?.length, 1200)
-  assertEquals(calls.map(([from]) => from), [0, 500, 1000])
+  assertJsonEquals((await selectAllPages(page, keyOf)).data?.length, 1200)
+  assertJsonEquals(calls.map(([from]) => from), [0, 500, 1000])
 })
 
 Deno.test('rereads when an insert ahead of the read position shifts the pages', async () => {
@@ -66,8 +61,8 @@ Deno.test('rereads when an insert ahead of the read position shifts the pages', 
   })
 
   const { data } = await selectAllPages(page, keyOf)
-  assertEquals(data?.length, 1501)
-  assertEquals(new Set(data?.map(keyOf)).size, 1501)
+  assertJsonEquals(data?.length, 1501)
+  assertJsonEquals(new Set(data?.map(keyOf)).size, 1501)
 })
 
 Deno.test('retries once when the count moves mid-read, then succeeds on a stable table', async () => {
@@ -78,8 +73,8 @@ Deno.test('retries once when the count moves mid-read, then succeeds on a stable
   })
 
   const { data, error } = await selectAllPages(page, keyOf)
-  assertEquals(error, null)
-  assertEquals(data?.length, 1499)
+  assertJsonEquals(error, null)
+  assertJsonEquals(data?.length, 1499)
 })
 
 Deno.test('retries a failed page once, and never returns a partial ledger', async () => {
@@ -91,18 +86,18 @@ Deno.test('retries a failed page once, and never returns a partial ledger', asyn
     { data: rowsOf(range(1500).slice(PAGE_ROWS)), error: null, count: 1500 },
   ]
   const flaky = recorded((_from, _to, call) => scripted[call])
-  assertEquals((await selectAllPages(flaky.page, keyOf)).data?.length, 1500)
+  assertJsonEquals((await selectAllPages(flaky.page, keyOf)).data?.length, 1500)
 
   const down = recorded((from) => (
     from === 0
       ? { data: rowsOf(range(PAGE_ROWS)), error: null, count: 1500 }
       : { data: null, error: failure }
   ))
-  assertEquals(await selectAllPages(down.page, keyOf), { data: null, error: failure })
-  assertEquals(down.calls.length, 4)
+  assertJsonEquals(await selectAllPages(down.page, keyOf), { data: null, error: failure })
+  assertJsonEquals(down.calls.length, 4)
 })
 
 Deno.test('refuses a page without an exact count', async () => {
   const { page } = recorded(() => ({ data: rowsOf(range(10)), error: null }))
-  assertEquals((await selectAllPages(page, keyOf)).error, { message: 'A paged read needs an exact row count.' })
+  assertJsonEquals((await selectAllPages(page, keyOf)).error, { message: 'A paged read needs an exact row count.' })
 })

@@ -1,10 +1,5 @@
 import { buildTrueLayerTransactionQuery, formatTrueLayerDate } from './truelayer-transaction-query.ts'
-
-function assertEquals(actual: unknown, expected: unknown): void {
-  if (actual !== expected) {
-    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
-  }
-}
+import { assertEquals } from './test-assert.ts'
 
 Deno.test('formats Data API v1 transaction dates without a time component', () => {
   assertEquals(

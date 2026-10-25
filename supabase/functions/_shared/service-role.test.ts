@@ -1,10 +1,5 @@
 import { isServiceRoleRequest } from './service-role.ts'
-
-function assertEquals(actual: unknown, expected: unknown): void {
-  if (actual !== expected) {
-    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
-  }
-}
+import { assertEquals } from './test-assert.ts'
 
 Deno.test('accepts the service role key as a bearer token', () => {
   assertEquals(isServiceRoleRequest('Bearer secret-key', 'secret-key'), true)
