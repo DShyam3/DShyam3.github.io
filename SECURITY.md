@@ -91,11 +91,11 @@ attack surface of this site is Supabase, and it was audited separately
   `watchlist-cron-sync` also accept the service role, for their
   Vault-authenticated scheduled runs. `tmdb-proxy` is deliberately public but
   restricted to an endpoint allowlist so it cannot be used as a generic TMDB
-  proxy. All four use an origin allowlist for CORS. Two changes are on main and
-  not yet on hosted: `tmdb-proxy` keys its rate limit with a `tmdb-proxy:`
+  proxy. All four use an origin allowlist for CORS. Two changes are live on
+  hosted as of 2026-10-25: `tmdb-proxy` keys its rate limit with a `tmdb-proxy:`
   prefix, and `truelayer-sync` and `watchlist-cron-sync` refuse a service-role
-  request when the key is missing (`_shared/service-role.ts`). Hosted runs the
-  earlier code until those functions are redeployed.
+  request when the key is missing (`_shared/service-role.ts`). A real
+  authenticated run of the two syncs on this code is not yet checked.
 - **Rate limits**: every function that spends a third-party call limits it
   server-side in the service-role-only `rate_limits` table -- `tmdb-proxy`
   per IP, the admin-triggered syncs by a cooldown between runs
@@ -189,9 +189,11 @@ attack surface of this site is Supabase, and it was audited separately
   bucket's MIME allowlist apply, and the allowlist sees the declared type, which
   is now the sniffed one. Accepted because the only writer is the administrator:
   there is no server-side CHECK constraint on the link columns and no
-  server-side signature check. Migration `20261024170000` (local stack
-  2026-10-25; hosted pending) removes `image/svg+xml` from the `merchant-logos`
-  and `site-assets` allowlists. Existing objects keep serving.
+  server-side signature check. Migration `20261024170000` (live on hosted
+  2026-10-25) removes `image/svg+xml` from the `merchant-logos` and
+  `site-assets` allowlists. Existing objects keep serving: three SVGs remain in
+  `site-assets` (`github.svg`, `gmail.svg`, `linkedin.svg`), referenced nowhere
+  in `src/`; deleting them is the owner's call.
 - **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the

@@ -1,29 +1,26 @@
 # State
 
-**Updated:** 2026-10-25 · **Branch:** `codex/student-loan-draw-guard` · **HEAD before local fix:** `9b1fdece`
-**Deployed code:** `300d5c07` ([Pages 40141569566](https://github.com/DShyam3/DShyam3.github.io/actions/runs/40141569566)) · **Hosted DB:** `20261024160000` · **Local stack:** `20261024170000`
+**Updated:** 2026-10-25 · **Branch:** `main` · **Code:** `07425e0c` (PR #8 merge), on Pages ([run 40177042983](https://github.com/DShyam3/DShyam3.github.io/actions/runs/40177042983)) · **Hosted database:** `20261024170000` · **Local stack:** `20261024170000`
 
 ## In progress
 
-Student-loan draw guard is LOCAL, UNCOMMITTED and NOT SHIPPED. Simulator and course-end
-inference exclude invalid calendar dates/non-finite amounts; finite signed/zero draws stay valid.
-Thirteen regression cases cover the guard. Borrowed/Edit/saved-amount consolidation remains open.
-No new live verification or database deployment was performed.
+None in the tree.
 
-## Deployed, and not
+## Deployed and live (2026-10-25)
 
-- Pages `300d5c07` is deployed. Anonymous Watchlist with the new CSP passed earlier; no signed-in pass.
-- On main, not hosted (owner approval pending): `tmdb-proxy`, `truelayer-sync`, `watchlist-cron-sync`
-  (`34f9af5c`), and migration `20261024170000` (SVG off two buckets; local only).
-- Link/upload changes are live but verified only locally; live authenticated writes remain unchecked.
-- Hosted `merchant-logo-cache` v13 has `verify_jwt` true; no real TrueLayer sync has exercised it.
-- Calendar, forecast, early-payment Paid, Student Loan Borrowed, header fade, Travel columns,
-  About bio, phone detail scrolling and stored-date changes remain unchecked live.
+- Student-loan draw guard ([PR #8](https://github.com/DShyam3/DShyam3.github.io/pull/8), `767322b5`, merged 2026-10-25): the simulator and course-end inference skip draws with no real date or a non-finite amount. Deployed; not checked signed in.
+- Hosted schema `20261024170000` applied with `supabase db push` (dry-run listed only it). `merchant-logos` allows PNG, JPEG, WebP; `site-assets` allows no SVG. Its three SVG objects still serve.
+- Edge functions deployed from `main`; the only change since each last deploy is `34f9af5c`: `tmdb-proxy` v11 (verify_jwt true), `watchlist-cron-sync` v14 (verify_jwt true), `truelayer-sync` v46 (`--no-verify-jwt`, kept false: `config.toml` has no per-function setting).
+- `rate_limits` has one `tmdb-proxy:` row from the probe; 183 old unprefixed rows age out.
+- **Live, not checked signed in:** link and upload changes (`dad993b0`, `553b08e3`), local stack only. The owner has not signed in on the live site.
+- `merchant-logo-cache` v13 on hosted (2026-10-24), verify_jwt true. Not yet run by a real TrueLayer sync.
+- **On main, not checked live (signed out):** calendar, balance forecast, early-payment Paid, Student Loan "You borrowed", header fade, Travel columns, About bio, phone detail scrolling, stored-date changes (`6e146826`, `b02eb1d5`).
 
 ## Checks
 
 | Check | Date | Result |
 | --- | --- | --- |
+| Hosted after deploy and `20261024170000` (session) | 2026-10-25 | HTTP: `tmdb-proxy?endpoint=movie/550` with the publishable key → 200; no auth → 401 on `tmdb-proxy`, `truelayer-sync`, `watchlist-cron-sync`; `Bearer undefined` → 401 on `truelayer-sync`; publishable key → 401 on `watchlist-cron-sync`. Grants unchanged; security advisor no new findings. Not run: an authenticated sync |
 | Lint / application typecheck | 2026-10-25 | Pass; lint 0 errors, 0 warnings |
 | Deno typecheck / build / graph | 2026-10-25 | Pass; graph refreshed |
 | Full Vitest | 2026-10-25 | 1,347 tests / 56 files pass |
@@ -37,24 +34,20 @@ No new live verification or database deployment was performed.
 
 ## Next
 
-1. Commit/review release and deploy the local guard; retain Borrowed/Edit consolidation in the plan.
-2. Owner approval: apply only `20261024170000` to hosted, deploy the three edge functions above,
-   then decide on existing github.svg, gmail.svg and linkedin.svg in site-assets.
-3. Owner signed-in live checks: calendar, 375px forecast, Paid/early payment/edit, Borrowed,
-   real-sync logos, photo upload, CV and saved link.
-4. Owner dashboard: public signup off, leaked-password protection (Pro), TOTP, Postgres upgrade;
-   uninstall Strix GitHub App/delete PR #7 comment, rerun advisor; rotate exposed TMDB key.
-5. Owner decisions: guessable logo keys, debt-observation composite key, per-row saves.
-   Then remaining plan: Borrowed rules, security items, schemas rebuild from empty, Node 24 CI.
+1. Owner, signed in on the live site: calendar, Forecast at 375px, Paid (tick, untick, early payment, edit), Borrowed; one photo upload, the CV, a saved link.
+2. Owner, or the next nightly cron: a real run of `truelayer-sync` v46 and `watchlist-cron-sync` v14, then check logos render (`merchant-logo-cache` v13 has not run), and confirm what the last `X-Forwarded-For` entry is at the edge.
+3. Owner, optional: delete `github.svg`, `gmail.svg`, `linkedin.svg` from `site-assets`. Nothing in `src/` references them; the header icons are inline.
+4. Owner, dashboard: turn off public signup; leaked-password protection (Pro); TOTP; Postgres upgrade (brief downtime). Uninstall the Strix GitHub App and delete its trial-ended comments on PR #7 and PR #8. Re-run the advisor.
+5. Owner: rotate the TMDB API key. No `VITE_TMDB_API_KEY` secret remains (`gh secret list`, 2026-10-24).
+6. Owner decisions: guessable logo keys, `finance_debt_observations` composite key, per-row saves. Then REHAUL_PLAN.md: Borrowed rules, security items left, schemas rebuild from empty, Node 24 CI.
 
 ## Blockers and open risks
 
-- Hosted still runs older edge code; missing-key service-role refusal awaits deployment.
-- Hosted permits admin SVG uploads until migration; existing SVG objects require owner decision.
-- Guessable public logo keys expose existence; TMDB key formerly bundled remains unrotated.
-- Physical devices, 200% zoom, live signed-in flows/writes, real HEIC and non-UK stored dates unverified.
-- Finance save-safety/races remain in REHAUL_PLAN.md. Hosted reads/saves unmeasured;
-  1,000 distinct per-row edits take about 6 s locally. Borrowed/Edit rules still disagree.
-- Watchlist cron CPU unmeasured; production sync-race fix unconfirmed.
-- Parser override validated for this install/tests/CSS only; CI Node 20/Ubuntu transition remains.
+- Guessable logo keys: the public object route still confirms a guessed `<slug>.<ext>`. `aldi.webp` returned 200 publicly on 2026-10-24. Owner decision.
+- TMDB key: public in client bundles 2026-05-09 to 2026-07-25; not rotated. Next 5.
+- Unverified, not to be read as passed: a real authenticated run of `truelayer-sync` v46 and `watchlist-cron-sync` v14 (the probes had no admin session); what the last `X-Forwarded-For` entry is at the edge (only the probe's address seen); the `verify_jwt` setting read back from hosted (the deploy flags set it; the probes do not read it); physical devices, 200% zoom, live signed-in flows and writes (uploads and saved links included), real HEIC files (tests use synthetic boxes), stored dates on a non-UK device.
+- Finance: save-safety and races in REHAUL_PLAN.md. Hosted reads and per-row saves unmeasured; 1,000 distinct per-row edits take about 6 s locally.
+- Watchlist: cron CPU unmeasured; production sync-race fix unconfirmed.
+- Parser override validated for this install, tests and CSS only. CI Node 20 / Ubuntu transition not checked.
+- Branches: `main`; `claude/affectionate-lamarr-f2d2cb` (worktree `.claude/worktrees/affectionate-lamarr-f2d2cb`); `codex/student-loan-draw-guard` merged as PR #8, still checked out in the main checkout and in a Codex worktree.
 - Full outstanding list and reasoning: REHAUL_PLAN.md.
