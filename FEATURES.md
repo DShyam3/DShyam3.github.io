@@ -289,6 +289,8 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   to the latest payslip, plus how much you borrowed (summed from recorded
   borrowing, or the amount entered when none is recorded) and how far the current
   balance sits above or below it; and a simulator for any loan with course details.
+  The simulator and inferred course end ignore draws with invalid calendar dates
+  or non-finite amounts, while retaining valid negative and zero draws.
   Month-by-month timeline with a scrubber and play control, showing balance,
   interest rate, monthly payment and repaid-so-far. Totals: total repaid,
   written off, peak balance, interest added. Refunds and payments made outside

@@ -2743,3 +2743,17 @@ The alternative was a CHECK constraint on the link columns and a signature check
 A Blob is how the stored type gets set. supabase-js sends a Blob as a form part typed by the Blob and ignores `contentType` for it. Sending the original File would store the type the browser guessed from the name, so a PNG named `.jpg` was stored as `image/jpeg`. Verified on the local stack: it is now stored as `image/png`, and a PDF typed `text/plain` is stored as `application/pdf`.
 
 SVG is refused from the two public buckets that do not need it (`20261024170000`). An SVG is a document, and a browser that opens its public URL runs its script. The allowlist does not reach existing objects, so three SVGs in `site-assets` still serve. Deleting them is the owner's call, recorded in REHAUL_PLAN.md. Not checked on the live site signed in.
+
+### Malformed student-loan draws are excluded from projections — 2026-10-25
+
+The simulator and course-end inference exclude draws with invalid calendar dates
+or non-finite amounts before selecting dates or performing arithmetic. A malformed
+row therefore cannot turn the whole projection into Invalid Date and £NaN; valid
+rows still produce a projection instead of the entire calculation being refused.
+Finite negative and zero draws remain valid: this is a validity check, not the
+positive-borrowing rule used by the Borrowed card. Consolidating the card, Edit
+field and saved original amount remains open in REHAUL_PLAN.md.
+
+The guard is local and uncommitted. Thirteen regression cases cover it; the full
+1,347-test suite passes, and 967 finance tests pass in both Europe/London and
+America/Los_Angeles on 2026-10-25. No new live verification was performed.

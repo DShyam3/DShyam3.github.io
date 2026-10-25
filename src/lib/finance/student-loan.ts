@@ -354,11 +354,13 @@ export const academicYearDraws = (
  * Infers a course's last day of study from its latest draw: an Aug–Dec draw
  * belongs to the academic year running into the following June; a Jan–Jul
  * draw belongs to the academic year that already started, ending in June of
- * the same calendar year. `undefined` with no draws to infer from.
+ * the same calendar year. Invalid dates and non-finite amounts are excluded;
+ * `undefined` with no usable draws to infer from.
  */
 export const inferCourseEnd = (draws: StudentLoanDraw[]): string | undefined => {
-  if (draws.length === 0) return undefined;
-  const lastDate = draws.reduce((latest, d) => (d.date > latest ? d.date : latest), draws[0].date);
+  const datedDraws = draws.filter(d => epochDay(d.date) !== undefined && Number.isFinite(d.amount));
+  if (datedDraws.length === 0) return undefined;
+  const lastDate = datedDraws.reduce((latest, d) => (d.date > latest ? d.date : latest), datedDraws[0].date);
   const parsed = parseISODate(lastDate);
   const month = parsed.getMonth() + 1;
   const endYear = month >= 8 ? parsed.getFullYear() + 1 : parsed.getFullYear();
@@ -689,10 +691,14 @@ const emptyResult = (today: string): StudentLoanSimResult => {
  */
 export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimResult => {
   const {
-    plan, draws, courseEnd, salary, salaryFrom, salaryGrowth, threshold, thresholdFrom, repaymentRate, writeOffYears,
+    plan, courseEnd, salary, salaryFrom, salaryGrowth, threshold, thresholdFrom, repaymentRate, writeOffYears,
     assumptions, anchor, today, knownPayments, knownPaymentsFrom, knownPaymentsUntil, rateSchedule, extraPayments,
     slcTiming, incomeByTaxYear: incomeByTaxYearInput,
   } = input;
+
+  // Reject unusable rows before choosing a start month or doing arithmetic.
+  // Keep finite signed amounts, including negative and zero draws.
+  const draws = input.draws.filter(d => epochDay(d.date) !== undefined && Number.isFinite(d.amount));
 
   const courseEndDate = parseISODate(courseEnd);
   const firstDue = firstRepaymentDue(courseEnd);

@@ -427,6 +427,29 @@ describe('inferCourseEnd', () => {
     expect(inferCourseEnd(draws)).toBe('2022-06-30');
   });
 
+  it('ignores empty, malformed and impossible dates when finding the latest draw', () => {
+    expect(inferCourseEnd([
+      { date: '', amount: 100 },
+      { date: 'not-a-date', amount: 100 },
+      { date: '2023-02-29', amount: 100 },
+      { date: '2021-08-01', amount: 100 },
+    ])).toBe('2022-06-30');
+  });
+
+  it('excludes non-finite amounts from course-end inference', () => {
+    const unusable = [NaN, Infinity, -Infinity].map(amount => ({ date: '2025-08-01', amount }));
+    expect(inferCourseEnd([{ date: '2021-08-01', amount: 100 }, ...unusable])).toBe('2022-06-30');
+    expect(inferCourseEnd(unusable)).toBeUndefined();
+  });
+
+  it('is undefined when every draw date is invalid', () => {
+    expect(inferCourseEnd([
+      { date: '', amount: 100 },
+      { date: '2023-02-29', amount: 100 },
+      { date: 'not-a-date', amount: 100 },
+    ])).toBeUndefined();
+  });
+
   it('is exact at the July/August boundary', () => {
     expect(inferCourseEnd([{ date: '2021-07-31', amount: 1 }])).toBe('2021-06-30');
     expect(inferCourseEnd([{ date: '2021-08-01', amount: 1 }])).toBe('2022-06-30');
@@ -456,6 +479,52 @@ describe('firstRepaymentDue', () => {
 });
 
 describe('simulateStudentLoan', () => {
+  describe('unusable draws', () => {
+    const base: Parameters<typeof simulateStudentLoan>[0] = {
+      plan: 'plan5',
+      draws: [{ date: '2023-01-01', amount: 1200 }],
+      courseEnd: '2023-01-31',
+      salary: 0,
+      salaryFrom: '2023-01-01',
+      salaryGrowth: 0,
+      threshold: 25000,
+      thresholdFrom: '2023-01-01',
+      repaymentRate: 9,
+      writeOffYears: 0,
+      assumptions: STUDENT_LOAN_DEFAULT_ASSUMPTIONS,
+      today: '2023-02-01',
+    };
+    const invalidDraws = [
+      { date: '', amount: 100 },
+      { date: 'not-a-date', amount: 100 },
+      { date: '2023-02-29', amount: 100 },
+      { date: '2023-01-01T00:00:00Z', amount: 100 },
+      { date: '2023-01-01', amount: NaN },
+      { date: '2023-01-01', amount: Infinity },
+      { date: '2023-01-01', amount: -Infinity },
+    ];
+
+    it.each(invalidDraws)('ignores an unusable draw %j mixed with valid borrowing', draw => {
+      expect(simulateStudentLoan({ ...base, draws: [draw, ...base.draws] }))
+        .toEqual(simulateStudentLoan(base));
+    });
+
+    it.each([undefined, { date: '2023-02-01', balance: 1000 }])(
+      'treats all invalid draws as absent with anchor %j', anchor => {
+        expect(simulateStudentLoan({ ...base, draws: invalidDraws, anchor }))
+          .toEqual(simulateStudentLoan({ ...base, draws: [], anchor }));
+      },
+    );
+
+    it('preserves a valid negative draw and zero draw alongside unusable rows', () => {
+      const draws = [...base.draws, { date: '2023-02-01', amount: -100 }, { date: '2023-03-01', amount: 0 }];
+      const result = simulateStudentLoan({ ...base, draws: [...invalidDraws, ...draws] });
+      expect(result).toEqual(simulateStudentLoan({ ...base, draws }));
+      expect(result.totalDrawn).toBe(1100);
+      expect(result.totalDrawn).not.toBe(simulateStudentLoan(base).totalDrawn);
+    });
+  });
+
   it('is empty with no draws and no anchor, without throwing', () => {
     const result = simulateStudentLoan({
       plan: 'plan2',
