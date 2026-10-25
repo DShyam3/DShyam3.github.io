@@ -6,6 +6,7 @@ import { isServiceRoleRequest } from '../_shared/service-role.ts'
 import { claimCooldown, cooldownResponse, releaseCooldown } from '../_shared/cooldown.ts'
 import { groupRowsByColumns } from '../_shared/upsert-batches.ts'
 import { corsOriginHeader, allowedRedirectUris } from '../_shared/site-origins.ts'
+import { clientAddress } from '../_shared/client-address.ts'
 
 // A callback is safe only when its destination is an exact, registered app
 // URL. This mirrors the browser origins but deliberately includes the
@@ -54,11 +55,11 @@ function buildCorsHeaders(req: Request) {
  * authorised the connection, rather than to our shared Edge Function IP.
  * It is deliberately transient: validate the proxy-supplied value, forward it
  * only while serving that person's manual sync, and never write it to Postgres.
+ * The address comes from client-address.ts, which decides which header holds
+ * it; the first-hop fallback keeps the visitor, not a gateway node, if
+ * `cf-connecting-ip` is ever missing.
  */
-function getPsuIp(req: Request): string | null {
-  const candidate = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || ''
-  return /^[0-9a-fA-F:.]{3,45}$/.test(candidate) ? candidate : null
-}
+const getPsuIp = (req: Request): string | null => clientAddress(req, 'first')
 
 serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)

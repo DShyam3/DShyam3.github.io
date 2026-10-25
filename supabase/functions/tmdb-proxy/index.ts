@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
+import { addressBlock, clientAddress } from '../_shared/client-address.ts'
 
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY')
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
@@ -42,20 +43,17 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 /**
- * Best available caller identity. Supabase sits in front of this function and
- * appends the real client IP to x-forwarded-for. Leading entries can be
- * supplied by the caller, so use the proxy-appended final entry rather than a
- * spoofable first value. This limiter only protects shared API quota; it is
- * not an authentication or authorization boundary.
+ * The limiter key: the visitor's address (see _shared/client-address.ts). This
+ * limiter only protects shared API quota; it is not an authentication or
+ * authorization boundary.
  *
  * Prefixed, because `rate_limits` also holds the admin cooldowns
  * (`truelayer-sync:manual`, `watchlist-sync:full`, ...). A bare header value
  * could otherwise name one of those keys and hold a manual sync off.
  */
 function callerKey(req: Request): string {
-    const forwarded = req.headers.get('x-forwarded-for') || ''
-    const hops = forwarded.split(',').map((value) => value.trim()).filter(Boolean)
-    return `tmdb-proxy:${hops[hops.length - 1] || 'unknown'}`
+    const address = clientAddress(req)
+    return `tmdb-proxy:${address ? addressBlock(address) : 'unknown'}`
 }
 
 /**
