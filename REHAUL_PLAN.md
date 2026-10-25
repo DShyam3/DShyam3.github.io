@@ -295,16 +295,19 @@ checked, and how, is in `SECURITY.md`.
 - `tmdb-proxy`'s rate-limit key is the raw last `X-Forwarded-For` entry, in the
   same `rate_limits` table as the admin cooldown keys (`truelayer-sync:manual`,
   `watchlist-sync:full`, `watchlist-sync:item`, `merchant-logo-cache`). The
-  `tmdb-proxy:` prefix is live (v11, 2026-10-25). Confirm what that header entry
-  is at the edge; so far only the probe's address has been seen.
+  `tmdb-proxy:` prefix is on main (`34f9af5c`) and not deployed. Deploy
+  `tmdb-proxy` (owner approval), then confirm what that header entry is at the
+  edge.
+- `truelayer-sync` and `watchlist-cron-sync` refuse a service-role request when
+  their key is missing (`34f9af5c`, `_shared/service-role.ts`). On main and not
+  deployed: deploy both (owner approval).
 - `schemas/90_privileges.sql`: default privileges still give `anon` rights on
   new sequences and functions.
-- Optional, owner: delete `github.svg`, `gmail.svg` and `linkedin.svg` from
-  `site-assets`. They are still SVG on the public origin, because the allowlist
-  change (`20261024170000`, `d954fe6a`, live on hosted 2026-10-25) does not touch
-  existing objects. Nothing in `src/` references them: the header icons are
-  inline components (`src/components/icons/SocialIcons.tsx`), and on the live
-  site, with the header links open, no request went to an `.svg`.
+- `20261024170000` removes SVG from the `merchant-logos` and `site-assets`
+  allowlists (`d954fe6a`). It is on the local stack only: apply it to hosted
+  (owner approval). Then decide whether to delete `github.svg`, `gmail.svg` and
+  `linkedin.svg` from `site-assets`. They are still SVG on the public origin,
+  because an allowlist change does not touch existing objects.
 - `file-signature.ts` reads 32 bytes. A HEIC with a generic major brand (`mif1`
   or `msf1`) is refused when its HEVC brand is fifth or later in the compatible
   list, or when its `ftyp` box size is 0. It fails safe; widen the read only if a
@@ -318,13 +321,11 @@ checked, and how, is in `SECURITY.md`.
 
 - README does not list the `SITE_ORIGIN` secret.
 
-**Unverified.** Not checked, and not to be read as passed: a real authenticated
-run of `truelayer-sync` v46 and `watchlist-cron-sync` v14 (the 2026-10-25 probes
-had no admin session); the `verify_jwt` setting read back from hosted (the deploy
-flags set it; the probes do not read it); whether `SITE_ORIGIN` is set on hosted;
-live response headers; a signed-in upload or saved link on the live site (checked
-on the local stack only); a real HEIC file (the tests use synthetic `ftyp`
-boxes).
+**Unverified.** Not checked, and not to be read as passed: hosted `verify_jwt`
+for `tmdb-proxy`, `truelayer-sync` and `watchlist-cron-sync`; whether
+`SITE_ORIGIN` is set on hosted; live response headers; a signed-in upload or
+saved link on the live site (checked on the local stack only); a real HEIC file
+(the tests use synthetic `ftyp` boxes).
 
 ### Sync and profile switch interactions
 
