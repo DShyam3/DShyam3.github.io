@@ -101,10 +101,25 @@ attack surface of this site is Supabase, and it was audited separately
   authenticated run of the two syncs on this code is not yet checked.
 - **Rate limits**: every function that spends a third-party call limits it
   server-side in the service-role-only `rate_limits` table -- `tmdb-proxy`
-  per IP, the admin-triggered syncs by a cooldown between runs
+  per visitor, the admin-triggered syncs by a cooldown between runs
   (`_shared/cooldown.ts`), `merchant-logo-cache` per five minutes. Scheduled
   runs are exempt; a refused call answers 429 with `retry_after`. See
   README.md, *Spam protection on the edge functions*.
+  The visitor is the address in `cf-connecting-ip`, which Cloudflare sets; a
+  probe that sent its own was refused with 403 (2026-10-25). An IPv6 visitor is
+  limited per /64, since a client can hold the whole block
+  (`_shared/client-address.ts`). Until 2026-10-25 the key was the last
+  `X-Forwarded-For` entry, a Supabase gateway node: three probes from one machine
+  split across three keys. Live after `tmdb-proxy` v13: three probes, one key,
+  three hits (IPv4 only; the IPv6 grouping is unit-tested, not probed). A request
+  with no usable address shares one `tmdb-proxy:unknown` key.
+- **Cross-profile keys**: `finance_debt_observations` names its debt by
+  `(profile_id, debt_id)`, a composite foreign key onto
+  `finance_debts (profile_id, id)` (`20261025090000`, applied to hosted
+  2026-10-25). An observation can no longer name another profile's debt or a
+  shared default one; before, the key was on `debt_id` alone. The app saves a
+  profile's own copy of a default debt before it writes a reading, so nothing it
+  does depends on the old behaviour.
 - **TrueLayer OAuth (deploy migration and function together)**: the callback
   state is generated with 256 bits of server-side randomness, stored only as a
   SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI
@@ -127,8 +142,7 @@ attack surface of this site is Supabase, and it was audited separately
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
   resolved once server-side instead and served from the `merchant-logos`
-  bucket. That bucket is public — a supermarket's logo is public — and its
-  object keys are brand slugs, never a profile or transaction id. Writes to it
+  bucket. That bucket is public — a supermarket's logo is public. Writes to it
   are `is_admin()`; the same is true of its index table
   `finance_merchant_logos`. **Finding (2026-10-24), fixed on hosted:** the index
   and the bucket's object list were readable by anon, and they are not free of
@@ -140,11 +154,18 @@ attack surface of this site is Supabase, and it was audited separately
   by an admin-only read. Images still load through public URLs, which need
   neither read; the only in-app reader of the index is admin-gated. After the
   change a public object URL (`merchant-logos/aldi.webp`) returned 200
-  `image/webp` on 2026-10-24; logos rendering on the signed-in finance page are
-  **unverified**. One gap stays open:
-  the public object route still answers "exists" or "no such key" for a guessed
-  `<slug>.<ext>`, so a guessed brand can be confirmed. It is an open line in
-  `REHAUL_PLAN.md`.
+  `image/webp` on 2026-10-24.
+  **Object names (2026-10-25), mitigated, not closed:** `merchant-logo-cache`
+  v15 names each new logo `<uuid>.<ext>`, so a name says nothing about a brand,
+  and the index is the only map from brand to file. The 41 logos cached on
+  2026-10-25 were copied to random names and the index repointed; all 41 new
+  URLs return 200 `image/webp`, and logos render on the signed-in Transactions
+  list (checked live, read-only). **Still open:** the 41 brand-named objects from
+  before the change (`aldi.webp` and the rest) are still in the bucket and still
+  public (`aldi.webp` returned 200 on 2026-10-25), so a guessed brand can still
+  be confirmed. The gap closes when the owner deletes them; CDN copies may outlive
+  the deletion by up to 7 days (`cacheControl` 604800). Tracked in
+  `REHAUL_PLAN.md` and `STATE.md` as pending owner deletion.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant
@@ -331,7 +352,7 @@ The scanner's four-file finding is reviewed, not resolved or suppressed:
 
 | Location | Observed behaviour | Follow-up |
 | --- | --- | --- |
-| `FinanceDataContext.tsx` | Transactions, goal contributions, investment activity, debt observations, and the transfer, payslip and net-worth reads page through every row. Other collections in the load still use single responses. Inserts, ID lookups and deletes batch at 100. Updates group identical patches, then batch IDs. Distinct patches still take one request each. | Measured locally 2026-10-24: 1,000 distinct per-row edits take about 6 s as 1,000 sequential requests (`performance/README.md`, "Saves and TV imports"). Hosted is not measured. The save design is open in REHAUL_PLAN.md. |
+| `FinanceDataContext.tsx` | Transactions, goal contributions, investment activity, debt observations, and the transfer, payslip and net-worth reads page through every row. Other collections in the load still use single responses. Inserts, ID lookups and deletes batch at 100. Updates group identical patches, then batch IDs. Distinct patches still take one request each. | Measured locally 2026-10-24: 1,000 distinct per-row edits take about 6 s as 1,000 sequential requests (`performance/README.md`, "Saves and TV imports"). Hosted is not measured. Left as it is by decision on 2026-10-25 (REHAUL_HISTORY.md). |
 | `TaxIncomeSettingsDialog.tsx` | Reset performs seven fixed table deletes in parallel. | Request count does not grow with row count; reset atomicity is a separate risk. |
 | `TransactionsTab.tsx` | Flagged deletes include local Set operations; bulk edits pass rows to the context's batching. | No per-row request established at these call sites. |
 | `WatchlistContext.tsx` | Initial reads paginate. Show imports fetch/insert per season with batched episodes. Favourite-facts sync makes sequential TMDB and update requests, capped at 50, with cancellation between items. | TV import and removal requests are counted and timed locally, without TMDB calls (`performance/README.md`). The favourite-facts sync is not measured. Preserve partial-failure and cancellation behaviour when batching. |

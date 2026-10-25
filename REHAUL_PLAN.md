@@ -260,14 +260,12 @@ extract in the browser.
 - **A timed-out delete in TransactionsTab / BankAccountsSection reloads immediately, inside the grace window, and shows the row again.**
 - **The sync still overwrites a category set mid-sync on a row that had none.**
 - **A token refresh on a dead link is not limited.** supabase-js refreshes through `/auth/v1/` before the request is made, so the 25 s limit never starts; a save key timed out meanwhile stays held until the refresh settles or the page reloads. Do not time out the refresh itself: aborting one the server already rotated can end the session.
-- **Distinct per-row edits are one request per row.** Saves group rows by identical patch, so a bulk recategorise is ten requests per thousand rows. A thousand edits that each carry their own patch are a thousand sequential requests, about 6 s locally and one round trip each in production (`performance/README.md`, "Saves and TV imports", 2026-10-24). Hosted is not measured. The save design for per-row updates is open; decide it before changing the save order or profile scoping.
 
 ### Database follow-ups found in the 2026-10-24 schema repair
 
-Three items. The first needs an owner decision; the second needs a decision before a migration; the last is schema files only. `supabase/schemas/40_finance.sql` describes each as the migrations in the tree leave it, and points here.
+Two items. The first is for the owner, outside the code; the second is schema files only. The second is also described in `supabase/schemas/40_finance.sql`, which points here.
 
-- **Merchant-logo object keys can be guessed, so a brand can be confirmed.** Keys are `<slug>.<ext>` and the candidate slugs ship in the client bundle (`src/lib/finance/merchant-directory.ts`). The public object route still answers "exists" or "no such key" for a guessed key, and `20261024140000` (live on hosted since 2026-10-24) leaves that route open so logos keep loading. Owner to choose: a private bucket with signed URLs, or unguessable object keys. One object, `aldi.webp`, returned 200 over HTTP on 2026-10-24; a signed-in logo render is not yet checked.
-- **`finance_debt_observations.debt_id` references `finance_debts(id)` alone.** It can point at another profile's or a shared default debt. A composite key needs a decision first: it would reject observations against shared default debts.
+- **Owner: delete the 41 old brand-named objects in `merchant-logos`** (`aldi.webp` and the rest). The index no longer references them, and `merchant-logo-cache` v15 writes random names (`7d2d1558`). Until they are deleted they stay public and guessable, so a brand can still be confirmed; CDN copies may outlive the deletion by up to 7 days. `SECURITY.md`, *Merchant logos*, carries the gap until then.
 - **`schemas/` cannot rebuild the database from empty.** `finance_bank_accounts_id_profile_id_key` and `idx_finance_transactions_profile_id_id` exist only in migrations, so the composite foreign keys in 40_finance.sql fail on a schemas-only build (first at `finance_transfer_links_profile_outflow_fkey`). Audit schemas/ against a migrated database object by object and add what is missing; no migration for objects that already exist.
 
 ### Security audit and scan, 2026-10-24 — what is left
@@ -286,11 +284,6 @@ checked, and how, is in `SECURITY.md`.
 
 **Code:**
 
-- `tmdb-proxy`'s rate-limit key is the raw last `X-Forwarded-For` entry, in the
-  same `rate_limits` table as the admin cooldown keys (`truelayer-sync:manual`,
-  `watchlist-sync:full`, `watchlist-sync:item`, `merchant-logo-cache`). The
-  `tmdb-proxy:` prefix is live (v11, 2026-10-25). Confirm what that header entry
-  is at the edge; so far only the probe's address has been seen.
 - `schemas/90_privileges.sql`: default privileges still give `anon` rights on
   new sequences and functions.
 - `file-signature.ts` reads 32 bytes. A HEIC with a generic major brand (`mif1`
@@ -307,12 +300,12 @@ checked, and how, is in `SECURITY.md`.
 - README does not list the `SITE_ORIGIN` secret.
 
 **Unverified.** Not checked, and not to be read as passed: a real authenticated
-run of `truelayer-sync` v46 and `watchlist-cron-sync` v14 (the 2026-10-25 probes
-had no admin session); the `verify_jwt` setting read back from hosted (the deploy
-flags set it; the probes do not read it); whether `SITE_ORIGIN` is set on hosted;
-live response headers; a signed-in upload or saved link on the live site (checked
-on the local stack only); a real HEIC file (the tests use synthetic `ftyp`
-boxes).
+run of `truelayer-sync` v48 and `watchlist-cron-sync` v14 (the 2026-10-25 probes
+had no admin session); the `verify_jwt` setting on `truelayer-sync` v48 (read
+back before v48 was deployed; the deploy flags keep it false); whether
+`SITE_ORIGIN` is set on hosted; live response headers; a signed-in upload or
+saved link on the live site (checked on the local stack only); a real HEIC file
+(the tests use synthetic `ftyp` boxes).
 
 ### Sync and profile switch interactions
 
