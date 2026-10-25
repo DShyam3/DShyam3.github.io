@@ -29,8 +29,11 @@ const cspPlugin = (supabaseUrl: string | undefined, umamiScriptUrl: string | nul
     ["script-src 'self'", ...umamiScriptOrigins].join(" "),
     // 'unsafe-inline': sonner injects a <style> element, and React renders
     // inline style attributes (Recharts sizing among them).
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    // Fonts are bundled from @fontsource (src/theme/fonts.ts), so no font CDN.
+    // data: covers pdf.js's data: font fallback, which only its render path
+    // reaches; payslip text extraction does not. Unchecked without it, so kept.
+    "font-src 'self' data:",
     // Images come from Supabase storage, TMDB, flagcdn and Google Books thumbnails,
     // plus arbitrary cover URLs stored in the database.
     "img-src 'self' data: blob: https:",
@@ -146,6 +149,11 @@ export default defineConfig(({ mode }) => {
       environment: "node",
     },
     build: {
+      // Fonts always ship as files. Doto's subsets fall under the 4 kB inline
+      // limit, and inlined they put every weight and subset into the
+      // render-blocking CSS instead of letting unicode-range fetch only the
+      // faces a page draws.
+      assetsInlineLimit: (filePath: string) => (/\.woff2?$/.test(filePath) ? false : undefined),
       rollupOptions: {
         output: {
           /**

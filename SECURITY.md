@@ -29,6 +29,9 @@ Current allowances worth knowing about:
   Google Books and `www.gov.uk` (bank holidays). Not TMDB: the browser reaches
   it only through the `tmdb-proxy` edge function.
 - `style-src` includes `'unsafe-inline'`: React inline style attributes require it.
+- `style-src` and `font-src` allow no third-party host. Doto and Space Mono are
+  bundled from `@fontsource` (`src/theme/fonts.ts`), so a visit sends no request
+  to Google Fonts.
 - `img-src https:` is deliberately broad — book covers, posters and flags come
   from user-supplied URLs stored in the database.
 
