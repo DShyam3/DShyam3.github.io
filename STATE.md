@@ -1,12 +1,12 @@
 # State
 
-**Updated:** 2026-10-25 · **Branch:** `claude/auth-hardening` (worktree `.claude/worktrees/auth-hardening`) · **Code:** `ab0b759e` plus a docs commit, not pushed, no PR · **Pages:** `8e8c4c19` (last deploy recorded here) · **Hosted and local database:** `20261025200100`
+**Updated:** 2026-10-25 · **Branch:** `main` (pushed from worktree `.claude/worktrees/auth-hardening`) · **Code:** `60f807b5` · **Pages:** `60f807b5`, run 40235011253 · **Hosted and local database:** `20261025200100`
 
 ## In progress
 
-No code task open in this tree. The branch is committed but not live: not pushed, not merged, not deployed to Pages. Waiting on the owner: Next 1 and 2.
+No code task open. TOTP is live on Pages but not yet in force: the owner has not enrolled. Waiting on the owner: Next 1 and 2.
 
-## Closed 2026-10-25 (on `claude/auth-hardening`, not deployed)
+## Closed 2026-10-25 (on `main`, deployed)
 
 - TOTP two-factor for the single admin (`ab0b759e`): `/auth` asks for a six-digit code after the password once a verified factor exists; the admin view has a two-factor setup panel. Removing a factor is done in the Supabase dashboard; the app has no remove button.
 - `is_admin()` requires an `aal2` session once a verified factor exists (`20261025200100`). Before enrolment it behaves as before.
@@ -25,7 +25,7 @@ No code task open in this tree. The branch is committed but not live: not pushed
 
 ## Live (unchanged by this branch)
 
-- Pages: `8e8c4c19` is the last deploy recorded here (run 40202391722). `origin/main` has since moved to `ba23695d` (Finance figures hidden until shown) and PR #9 (`2d237d11`); neither is recorded as deployed here.
+- Pages: `60f807b5` deployed by run 40235011253 (success). It includes PR #9 (`2d237d11`, Finance figures hidden until shown). Live bundle checked: it carries the code step and two-factor panel strings; the page was not signed in to.
 - Hosted: `finance_debt_observations` keyed `(profile_id, debt_id)` (`20261025090000`). Merchant logos use random names (`merchant-logo-cache` v15); the 41 brand-named originals were deleted by the owner on 2026-10-25, and the old names return 400.
 - Edge functions: `tmdb-proxy` v13, `merchant-logo-cache` v15, `truelayer-sync` v48 (`verify_jwt` false), `watchlist-cron-sync` v14.
 - Live, signed in, read-only (2026-10-25): bills calendar, Forecast at 375px, Student Loan card, logos in Transactions. Self-hosted fonts and the PR #8 draw guard are live too.
@@ -33,7 +33,7 @@ No code task open in this tree. The branch is committed but not live: not pushed
 
 ## Next
 
-1. Push `claude/auth-hardening`, open a PR, merge, let Pages deploy. Then the owner enrols an authenticator on `/auth`.
+1. Owner: enrol an authenticator on `/auth` (signed in as admin, "Set up two-factor"). Needs the hosted TOTP factor enabled (step 2).
 2. Owner, Supabase dashboard (not signed in when this was written; none of this is checked):
    - Turn off "Allow new users to sign up" at `/auth/providers`. Hosted `auth/v1/settings` still gave `disable_signup: false` on 2026-10-25.
    - Enable the TOTP factor under Authentication → Multi-Factor if it is off.
@@ -43,11 +43,11 @@ No code task open in this tree. The branch is committed but not live: not pushed
 
 ## Blockers and open risks
 
-- Unverified, not to be read as passed: the code step and two-factor panel on the live site (not deployed); Safari, Firefox and a phone; the hosted TOTP setting (not checked); GoTrue's refusal of aal1 enrol and unenrol on hosted (local only); lost-authenticator recovery (local only).
+- Unverified, not to be read as passed: the code step and two-factor panel on the live site (deployed, not exercised); Safari, Firefox and a phone; the hosted TOTP setting (not checked); GoTrue's refusal of aal1 enrol and unenrol on hosted (local only); lost-authenticator recovery (local only).
 - Unverified, carried forward: live writes (Paid tick, untick and early payment; photo upload; the CV; a saved link), local stack only; the IPv6 /64 path (unit-tested, not probed); a signed-in run of `truelayer-sync` v48 and `merchant-logo-cache` v15; physical devices, 200% zoom, real HEIC files, stored dates on a non-UK device.
 - Finance: save-safety and races in REHAUL_PLAN.md; hosted reads unmeasured. Per-row saves left as they are by decision (REHAUL_HISTORY.md, 2026-10-25).
 - Visitor IPs still go off-site for images: flagcdn.com, image.tmdb.org, Google Books. Owner decision, not changed.
 - Watchlist: cron CPU unmeasured; production sync-race fix unconfirmed. Parser override validated for this install, tests and CSS only; CI Node 20 / Ubuntu transition not checked.
 - Main checkout (`/Users/dhyanshyam/Projects/DShyam3.github.io`, `codex/student-loan-draw-guard`): carries another session's uncommitted Books work and its own STATE.md edits. Do not describe that branch as deletable while the work is there.
-- Branches: `main`; `claude/auth-hardening` (this, unpushed); `claude/affectionate-lamarr-f2d2cb` (worktree `.claude/worktrees/affectionate-lamarr-f2d2cb`); `codex/student-loan-draw-guard`, PRs #8 and #9 merged, still checked out in the main checkout.
+- Branches: `main`; `claude/auth-hardening` (pushed to `main` as `60f807b5`; branch itself not on origin); `claude/affectionate-lamarr-f2d2cb` (worktree `.claude/worktrees/affectionate-lamarr-f2d2cb`); `codex/student-loan-draw-guard`, PRs #8 and #9 merged, still checked out in the main checkout.
 - Full outstanding list and reasoning: REHAUL_PLAN.md.
