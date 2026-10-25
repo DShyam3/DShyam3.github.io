@@ -43,7 +43,8 @@ import { ProfileAvatar } from './components/ProfileAvatar';
 import { NetWorthTrend } from './components/NetWorthTrend';
 import { FinanceSectionBoundary, FinanceSectionLoading } from './components/FinanceSectionBoundary';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useHiddenFigures } from './useHiddenFigures';
 import type {
   BudgetItem,
   BudgetCategory,
@@ -118,6 +119,7 @@ function FinanceView() {
   const activeTab = tabFromPath(surfaceSeg, sectionSeg);
   const activeSurface = surfaceForTab(activeTab);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
+  const figures = useHiddenFigures();
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
 
   const [cfCustomStart, setCfCustomStart] = useState<string>(() => {
@@ -806,30 +808,40 @@ function FinanceView() {
           );
         })}
       </nav>
-      {profiles.length > 1 && (
-        <Select value={profileId ?? undefined} onValueChange={setProfileId}>
-          <SelectTrigger className="h-9 w-auto gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-mono shrink-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {profiles.map(p => (
-              <SelectItem key={p.id} value={p.id} className="text-sm font-sans">
-                <span className="flex items-center gap-2">
-                  {/* `md` so the memoji reads as a face rather than a smudge —
-                      the trigger mirrors this row, so it is sized here. */}
-                  <ProfileAvatar profile={p} size="md" />
-                  {p.name}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      {loadingDb && (
-        <span className="text-xs text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
-          <Loader2 className="h-3 w-3 animate-spin text-primary" /> syncing...
-        </span>
-      )}
+      {/* A row of its own on phones, so the surface nav keeps the full width
+          rather than stacking one link per line beside these. */}
+      <div className="flex w-full items-center gap-2 pb-3 empty:hidden sm:w-auto sm:pb-0">
+        {figures.supported && (
+          <Button variant="ghost" size="sm" onClick={figures.toggle} className="shrink-0 font-sans text-xs">
+            {figures.hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+            {figures.hidden ? 'Show figures' : 'Hide figures'}
+          </Button>
+        )}
+        {loadingDb && (
+          <span className="text-xs text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
+            <Loader2 className="h-3 w-3 animate-spin text-primary" /> <span className="sr-only sm:not-sr-only">syncing...</span>
+          </span>
+        )}
+        {profiles.length > 1 && (
+          <Select value={profileId ?? undefined} onValueChange={setProfileId}>
+            <SelectTrigger className="ml-auto h-9 w-auto gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-mono shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {profiles.map(p => (
+                <SelectItem key={p.id} value={p.id} className="text-sm font-sans">
+                  <span className="flex items-center gap-2">
+                    {/* `md` so the memoji reads as a face rather than a smudge —
+                        the trigger mirrors this row, so it is sized here. */}
+                    <ProfileAvatar profile={p} size="md" />
+                    {p.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
     </div>
 
     {/* Secondary navigation: sections within a surface. Home has one
