@@ -282,13 +282,9 @@ checked, and how, is in `SECURITY.md`.
 - Turn off public signup. Enable leaked-password protection (Pro plan). Enable
   TOTP MFA, which clears the advisor only, since the app has no enrolment UI.
   Upgrade Postgres (brief downtime). Re-run the security advisor afterwards.
-- Uninstall the Strix GitHub App (`github.com/settings/installations`) and
-  delete its trial-ended comment on PR #7.
-- Rotate the TMDB API key. It was in the public client bundle from 2026-05-09
-  to 2026-07-25 under a `VITE_` prefix, and the current value matches an old
-  bundle. No rotation is recorded. Checked 2026-10-24 with `gh secret list`: no
-  `VITE_TMDB_API_KEY` secret remains. `VITE_TMDB_BASE_URL` is a secret that no
-  workflow reads; delete it.
+- Delete the Strix bot's trial-ended comments on PR #7 and PR #8 (the app is
+  uninstalled).
+- Delete the `VITE_TMDB_BASE_URL` GitHub Actions secret; no workflow reads it.
 
 **Code:**
 

@@ -160,8 +160,9 @@ attack surface of this site is Supabase, and it was audited separately
   again. `BRANDFETCH_CLIENT_ID` lives in the function's env and carries no
   `VITE_` prefix, so it never reaches the bundle.
 - **Secrets**: the TMDB API key lives in edge function env. It was also in
-  client bundles built 2026-05-09 to 2026-07-25 under a `VITE_` prefix, so treat
-  it as public until it is rotated (REHAUL_PLAN.md, owner action). The current
+  client bundles built 2026-05-09 to 2026-07-25 under a `VITE_` prefix; that key
+  was rotated on 2026-10-25 (the hosted secret's digest changed, and the proxy
+  and a full sync work with the new one). The current
   source reads no `VITE_TMDB_API_KEY`. Only `VITE_SUPABASE_URL`,
   `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_TMDB_IMAGE_BASE_URL` and
   `VITE_ADMIN_EMAIL` reach the client.

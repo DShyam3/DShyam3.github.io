@@ -20,6 +20,7 @@ None in the tree.
 
 | Check | Date | Result |
 | --- | --- | --- |
+| Real runs on hosted | 2026-10-25 | `sync_log`: manual full Watchlist sync 08:47 UTC, success, 1,185 items, 54.7 s, on `watchlist-cron-sync` v14 after the key rotation. `truelayer-sync` v46 answered the signed-in Finance page 200 at 08:28. `tmdb-proxy` answers with the new key. `verify_jwt` read back: `truelayer-sync` false, others true |
 | Hosted after deploy and `20261024170000` (session) | 2026-10-25 | HTTP: `tmdb-proxy?endpoint=movie/550` with the publishable key → 200; no auth → 401 on `tmdb-proxy`, `truelayer-sync`, `watchlist-cron-sync`; `Bearer undefined` → 401 on `truelayer-sync`; publishable key → 401 on `watchlist-cron-sync`. Grants unchanged; security advisor no new findings. Not run: an authenticated sync |
 | Lint / application typecheck | 2026-10-25 | Pass; lint 0 errors, 0 warnings |
 | Deno typecheck / build / graph | 2026-10-25 | Pass; graph refreshed |
@@ -35,17 +36,16 @@ None in the tree.
 ## Next
 
 1. Owner, signed in on the live site: calendar, Forecast at 375px, Paid (tick, untick, early payment, edit), Borrowed; one photo upload, the CV, a saved link.
-2. Owner, or the next nightly cron: a real run of `truelayer-sync` v46 and `watchlist-cron-sync` v14, then check logos render (`merchant-logo-cache` v13 has not run), and confirm what the last `X-Forwarded-For` entry is at the edge.
-3. Owner, optional: delete `github.svg`, `gmail.svg`, `linkedin.svg` from `site-assets`. Nothing in `src/` references them; the header icons are inline.
-4. Owner, dashboard: turn off public signup; leaked-password protection (Pro); TOTP; Postgres upgrade (brief downtime). Uninstall the Strix GitHub App and delete its trial-ended comments on PR #7 and PR #8. Re-run the advisor.
-5. Owner: rotate the TMDB API key. No `VITE_TMDB_API_KEY` secret remains (`gh secret list`, 2026-10-24).
-6. Owner decisions: guessable logo keys, `finance_debt_observations` composite key, per-row saves. Then REHAUL_PLAN.md: Borrowed rules, security items left, schemas rebuild from empty, Node 24 CI.
+2. After a real TrueLayer sync: check logos render (`merchant-logo-cache` v13 has not run yet), and confirm what the last `X-Forwarded-For` entry is at the edge.
+3. Owner: delete the seven unused `site-assets` files (`github.svg`, `gmail.svg`, `linkedin.svg`, `favicon.ico`, `dot-matrix.json`, `countries.geojson`, `world-topo.json`); the app draws, bundles or downloads its own copies. Back up the bucket first. Keep `memoji.png`, `selfie.webp`, `dot-world-map.json`, `dot-city-map.json`.
+4. Owner, dashboard: turn off public signup; leaked-password protection (Pro); TOTP; Postgres upgrade (brief downtime). Re-run the advisor. Delete Strix's trial-ended comments on PR #7 and PR #8 (the app was uninstalled by the owner on 2026-10-25).
+5. Owner decisions: guessable logo keys, `finance_debt_observations` composite key, per-row saves. Then REHAUL_PLAN.md: Borrowed rules, security items left, schemas rebuild from empty, Node 24 CI.
 
 ## Blockers and open risks
 
 - Guessable logo keys: the public object route still confirms a guessed `<slug>.<ext>`. `aldi.webp` returned 200 publicly on 2026-10-24. Owner decision.
-- TMDB key: public in client bundles 2026-05-09 to 2026-07-25; not rotated. Next 5.
-- Unverified, not to be read as passed: a real authenticated run of `truelayer-sync` v46 and `watchlist-cron-sync` v14 (the probes had no admin session); what the last `X-Forwarded-For` entry is at the edge (only the probe's address seen); the `verify_jwt` setting read back from hosted (the deploy flags set it; the probes do not read it); physical devices, 200% zoom, live signed-in flows and writes (uploads and saved links included), real HEIC files (tests use synthetic boxes), stored dates on a non-UK device.
+- TMDB key: rotated 2026-10-25. The hosted secret changed at 08:45 UTC and its digest matches the local `.env`, not the exposed key's. If TMDB did not revoke the old key on regenerating, revoke it there.
+- Unverified, not to be read as passed: what the last `X-Forwarded-For` entry is at the edge (only the probe's address seen); physical devices, 200% zoom, live signed-in flows and writes (uploads and saved links included), real HEIC files (tests use synthetic boxes), stored dates on a non-UK device.
 - Finance: save-safety and races in REHAUL_PLAN.md. Hosted reads and per-row saves unmeasured; 1,000 distinct per-row edits take about 6 s locally.
 - Watchlist: cron CPU unmeasured; production sync-race fix unconfirmed.
 - Parser override validated for this install, tests and CSS only. CI Node 20 / Ubuntu transition not checked.
