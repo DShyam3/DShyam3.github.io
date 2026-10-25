@@ -210,15 +210,6 @@ date. *Fix:* move `isBorrowing` into `src/lib/finance`, and have the Edit field
 and the saved amount use `studentLoanBorrowed(...).total`, so one rule answers
 both places. Not started.
 
-The simulator reads the same draws with no validity check of its own.
-`parseISODate` in `student-loan.ts` accepts any string, so one borrowing draw
-with an empty date makes the whole simulator show Invalid Date and £NaN (found
-on the local stack, 2026-10-24; pre-existing). The Edit form refuses a dateless
-draw and hosted has none, so only a write outside the UI reaches it. The fix
-belongs with the rule above: the simulator takes draws through the same test
-`studentLoanBorrowed` uses, or refuses a malformed draw with a message. Not
-started.
-
 ### Blocked on a model key — any provider
 
 The assistant is provider-agnostic by construction. There are not N vendor
