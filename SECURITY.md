@@ -162,7 +162,7 @@ attack surface of this site is Supabase, and it was audited separately
 - **Secrets**: the TMDB API key lives in edge function env. It was also in
   client bundles built 2026-05-09 to 2026-07-25 under a `VITE_` prefix; that key
   was rotated on 2026-10-25 (the hosted secret's digest changed, and the proxy
-  and a full sync work with the new one). The current
+  and a full sync work with the new one), and TMDB revoked the old key. The current
   source reads no `VITE_TMDB_API_KEY`. Only `VITE_SUPABASE_URL`,
   `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_TMDB_IMAGE_BASE_URL` and
   `VITE_ADMIN_EMAIL` reach the client.
@@ -192,9 +192,9 @@ attack surface of this site is Supabase, and it was audited separately
   there is no server-side CHECK constraint on the link columns and no
   server-side signature check. Migration `20261024170000` (live on hosted
   2026-10-25) removes `image/svg+xml` from the `merchant-logos` and
-  `site-assets` allowlists. Existing objects keep serving: three SVGs remain in
-  `site-assets` (`github.svg`, `gmail.svg`, `linkedin.svg`), referenced nowhere
-  in `src/`; deleting them is the owner's call.
+  `site-assets` allowlists, and the three SVGs that bucket held (unused; the
+  header icons are inline) were deleted on 2026-10-25, so neither public bucket
+  serves an SVG.
 - **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the

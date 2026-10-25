@@ -282,8 +282,6 @@ checked, and how, is in `SECURITY.md`.
 - Turn off public signup. Enable leaked-password protection (Pro plan). Enable
   TOTP MFA, which clears the advisor only, since the app has no enrolment UI.
   Upgrade Postgres (brief downtime). Re-run the security advisor afterwards.
-- Delete the Strix bot's trial-ended comments on PR #7 and PR #8 (the app is
-  uninstalled).
 - Delete the `VITE_TMDB_BASE_URL` GitHub Actions secret; no workflow reads it.
 
 **Code:**
@@ -295,12 +293,6 @@ checked, and how, is in `SECURITY.md`.
   is at the edge; so far only the probe's address has been seen.
 - `schemas/90_privileges.sql`: default privileges still give `anon` rights on
   new sequences and functions.
-- Optional, owner: delete `github.svg`, `gmail.svg` and `linkedin.svg` from
-  `site-assets`. They are still SVG on the public origin, because the allowlist
-  change (`20261024170000`, `d954fe6a`, live on hosted 2026-10-25) does not touch
-  existing objects. Nothing in `src/` references them: the header icons are
-  inline components (`src/components/icons/SocialIcons.tsx`), and on the live
-  site, with the header links open, no request went to an `.svg`.
 - `file-signature.ts` reads 32 bytes. A HEIC with a generic major brand (`mif1`
   or `msf1`) is refused when its HEVC brand is fifth or later in the compatible
   list, or when its `ftyp` box size is 0. It fails safe; widen the read only if a
