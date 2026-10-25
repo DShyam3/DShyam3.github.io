@@ -276,9 +276,9 @@ checked, and how, is in `SECURITY.md`.
 
 **Owner, outside the code:**
 
-- Turn off public signup. Enable leaked-password protection (Pro plan). Enable
-  TOTP MFA, which clears the advisor only, since the app has no enrolment UI.
-  Upgrade Postgres (brief downtime). Re-run the security advisor afterwards.
+- Turn off public signup (`/auth/providers`, "Allow new users to sign up"). Hosted `auth/v1/settings` still gave `disable_signup: false` on 2026-10-25.
+- Enable the TOTP factor under Authentication → Multi-Factor if it is off (not checked yet). Enrol the owner's authenticator on `/auth` once `claude/auth-hardening` is merged and deployed. Until a verified factor exists the second step does not apply (REHAUL_HISTORY.md, 2026-10-25).
+- Upgrade Postgres 15.8.1.030 → 17 (brief downtime; pgjwt no longer blocks it). Then set `major_version` to 17 in `supabase/config.toml`. Re-run the security advisor afterwards.
 - Delete the `VITE_TMDB_BASE_URL` GitHub Actions secret; no workflow reads it.
 
 **Code:**

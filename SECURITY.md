@@ -261,6 +261,14 @@ attack surface of this site is Supabase, and it was audited separately
   rested on a claim the account holder can change. The table is readable by an
   administrator and writable only by the service role — an admin session cannot
   grant admin rights over the API. Adding one is a deliberate SQL statement.
+  Once that administrator has a verified TOTP factor, `is_admin()` also requires
+  the session to be `aal2`, which means the code step has been passed. A
+  password-only session then reads no finance rows and makes no admin write
+  (checked on the local stack, 2026-10-25). GoTrue refuses to enrol, unenrol or
+  add a factor from an `aal1` session while a verified one exists (also checked
+  locally; not on hosted). Recovery from a lost authenticator is deleting the
+  admin's row in `auth.mfa_factors`, which returns the account to password-only
+  sign-in until it is enrolled again.
 
 ## Accepted Supabase advisor lints
 
@@ -273,6 +281,7 @@ re-deriving the reasoning.
 | `anon_security_definer_function_executable` on `is_admin()` | RLS policy expressions are evaluated with the querying role's own privileges, so revoking `EXECUTE` from `anon`/`authenticated` would break every policy on the project. The function takes no arguments and returns a single boolean about the caller — it leaks nothing an attacker did not already supply. |
 | Content tables readable by `anon` | This is a public portfolio. Anonymous `SELECT` on books, links, articles, photos, recipes, the watchlist and travel tables is the product, not a finding. Writes are `is_admin()`-only at both the policy and grant layer. |
 | `rls_enabled_no_policy` (INFO) on `rate_limits` and `finance_truelayer_source_sync` | RLS is on and no policy is written, on purpose. Both tables are service-role-only: `anon` and `authenticated` hold no grant, and service_role bypasses RLS. A policy would add nothing except a route to them. |
+| `auth_leaked_password_protection` (leaked-password protection off) | The HaveIBeenPwned check is offered on the Pro plan and above only. The project is on Free, where the option is not offered, and the owner accepted the risk on 2026-10-25 (REHAUL_HISTORY.md). It stays off because the account is the single administrator, every write is gated by `admin_users` through `is_admin()`, and public signup is to be turned off. Minimum length and character rules are still available on Free and are not changed by this. |
 
 Not accepted, still open, and only fixable from the dashboard:
 
@@ -284,19 +293,20 @@ Project ref is `yvtiybyuifkiwyrnjebe`, so each link below is
   every policy checks one admin address, so a self-registered account gets
   nothing, but it should not be possible to create one on a single-account
   site.
-- **Leaked-password protection is disabled** — same Email provider panel.
-  Supabase Auth checks candidate passwords against HaveIBeenPwned. **Pro plan
-  and above only**; on Free the option is not offered, which is worth knowing
-  before hunting for the toggle. Raising the minimum length and requiring mixed
-  character classes is available on any plan and lives in the same place.
-- **No MFA options enabled.** Enrollment and verification are dashboard-gated
-  under Authentication; enabling the TOTP (app authenticator) factor is the
-  cheap win on the one account that owns everything.
+- **TOTP is enforced once enrolled, but the factor is not yet confirmed on in the dashboard.**
+  `public.is_admin()` requires an `aal2` session once the administrator has a
+  verified factor (`20261025200100`, applied to hosted 2026-10-25). Before that
+  the rule does not apply. Still to do, by the owner: enable the TOTP factor under
+  Authentication → Multi-Factor if it is off (not checked on hosted yet), deploy
+  the branch, then enrol on `/auth`. The MFA advisor lint should clear once the
+  factor is on; not re-run.
 - **Postgres has outstanding security patches** (`supabase-postgres-15.8.1.030`)
   — the "Upgrade project" button is on `/settings/general`, not under
   Infrastructure. The project goes offline for the upgrade and the window
   scales with database size, so pick a quiet moment. Read replicas would block
-  it; this project has none.
+  it; this project has none. pgjwt, which blocked the upgrade to 17, was removed
+  (`20261025200000`, applied to hosted 2026-10-25). After the upgrade, set
+  `major_version` under `[db]` in `supabase/config.toml` from 15 to 17.
 
 ## Audit and scan (2026-10-24)
 

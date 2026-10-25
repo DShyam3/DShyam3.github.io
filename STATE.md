@@ -1,48 +1,53 @@
 # State
 
-**Updated:** 2026-10-25 · **Branch:** `main` · **Code on Pages:** `8e8c4c19` ([run 40202391722](https://github.com/DShyam3/DShyam3.github.io/actions/runs/40202391722)) · **Hosted database:** `20261025090000` · **Local stack:** `20261025090000`
+**Updated:** 2026-10-25 · **Branch:** `claude/auth-hardening` (worktree `.claude/worktrees/auth-hardening`) · **Code:** `ab0b759e` plus a docs commit, not pushed, no PR · **Pages:** `8e8c4c19` (last deploy recorded here) · **Hosted and local database:** `20261025200100`
 
 ## In progress
 
-None in the tree. Waiting on the owner: Next 1.
+No code task open in this tree. The branch is committed but not live: not pushed, not merged, not deployed to Pages. Waiting on the owner: Next 1 and 2.
 
-## Deployed and live (2026-10-25)
+## Closed 2026-10-25 (on `claude/auth-hardening`, not deployed)
 
-- Merchant logos have random names: `merchant-logo-cache` v15 writes `<uuid>.<ext>` (`7d2d1558`). The 41 existing logos were copied to random names and the index repointed: 41 rows, none guessable, all 41 new URLs 200 `image/webp`. The owner deleted the 41 old brand-named objects on 2026-10-25: the bucket holds only random names, and `aldi.webp`, `tesco.webp`, `zara.webp` return 400 with and without cache-busting.
-- `finance_debt_observations` is keyed `(profile_id, debt_id)` onto `finance_debts (profile_id, id)` (`20261025090000`, applied with `supabase db push`; dry-run listed only it). Observations against shared default debts are refused. Hosted: one observation, intact.
-- `tmdb-proxy` v13 keys its rate limit on the visitor (`cf-connecting-ip`, `eb86cfee`). `truelayer-sync` v48 uses the same helper for `X-PSU-IP`; its `verify_jwt` stays false.
-- Edge functions on hosted: `tmdb-proxy` v13, `merchant-logo-cache` v15, `truelayer-sync` v48, `watchlist-cron-sync` v14. `verify_jwt` was read back at 08:47 UTC, before v15 and v48: `truelayer-sync` false, the others true.
-- Live, signed in, read-only (2026-10-25): bills calendar (October, six bills, none ticked); Forecast at 375px (no overflow, lowest £20.00 today, none below zero); Student Loan card ("You borrowed" £40,758 as entered, no NaN or Invalid Date); logos render in Spending → Transactions.
-- Self-hosted fonts (`eaf8aecd`, pushed straight to `main`): Doto and Space Mono from exact `@fontsource` 5.3.0 pins via `src/theme/fonts.ts`; the CSP allows no Google font host; font files are never inlined. Checked live, signed out: both families load from `dshyam3.github.io`, no request to any Google host.
-- Student-loan draw guard ([PR #8](https://github.com/DShyam3/DShyam3.github.io/pull/8), `767322b5`, merged 2026-10-25): the simulator and course-end inference skip draws with no real date or a non-finite amount. Deployed; the Student Loan card above is its read-only live check.
-- Hosted storage: `merchant-logos` allows PNG, JPEG, WebP; `site-assets` allows no SVG (`20261024170000`). Its seven unused files were deleted by the owner 2026-10-25 after a size-checked local backup; the four the site loads still serve.
-- Link and upload changes (`dad993b0`, `553b08e3`): local stack only. The live pass was read-only, so no upload, CV or saved link was tried on the live site.
-- Not checked live: early-payment Paid, header fade, Travel columns, About bio, phone detail scrolling, stored-date changes (`6e146826`, `b02eb1d5`).
+- TOTP two-factor for the single admin (`ab0b759e`): `/auth` asks for a six-digit code after the password once a verified factor exists; the admin view has a two-factor setup panel. Removing a factor is done in the Supabase dashboard; the app has no remove button.
+- `is_admin()` requires an `aal2` session once a verified factor exists (`20261025200100`). Before enrolment it behaves as before.
+- `pgjwt` dropped (`20261025200000`): unused, and it blocked the Postgres 17 upgrade.
+- Hosted: both migrations applied with `supabase db push` (the dry run listed exactly those two). Read-only afterwards: `pgjwt` absent, the `aal2` rule in place, `auth.mfa_factors` empty, the owner's password-only session still admin. Nothing changes for the owner until enrolment.
+- Local stack only: 8 SQL session/factor cases, a 26-check supabase-js script, and the browser UI flow (setup, logout, code step, reload, wrong and right codes, recovery). Test users deleted.
+- Decisions in REHAUL_HISTORY.md (2026-10-25): the factor rule applies only once enrolled; leaked-password protection accepted off (Pro-only, on Free).
 
 ## Checks
 
 | Check | Date | Result |
 | --- | --- | --- |
-| Logo names, debt key, visitor rate limit (`8e8c4c19`) | 2026-10-25 | `npm run lint` 0 errors, 0 warnings; `npm run typecheck` pass; both run on this tree (`claude/decisions`, docs head `6f46ef95`, code as `8e8c4c19`). From the session, not re-run here: `typecheck:functions`, Deno `_shared` 29 pass, Vitest 1,347 / 56 files, build. Reviewer (Opus) three passes, all findings fixed; the last small fixes not re-reviewed |
-| Live probes (`tmdb-proxy` v13) | 2026-10-25 | Three probes from one machine → one key, three hits (IPv4); spoofed `cf-connecting-ip` → 403 at Cloudflare; `truelayer-sync` no auth and `Bearer undefined` → 401; `merchant-logo-cache` no auth → 401; the 41 new logo URLs 200; after the owner's deletion, old names 400 (CDN included) |
-| Self-hosted fonts (`eaf8aecd`) | 2026-10-25 | On `85435953` plus the fix: lint 0 errors, 0 warnings; typecheck; build (no Google font host in `dist`); Vitest 1,347 / 56 files. Reviewer no blockers (two comment fixes applied). Deploy run 40202232000 success. Live, signed out: fonts same-origin, no Google requests, CSP `style-src 'self' 'unsafe-inline'`, `font-src 'self' data:`. Not run: ship-check, Deno (no functions touched), a payslip import |
-| Real runs on hosted | 2026-10-25 | `sync_log`: manual full Watchlist sync 08:47 UTC, success, 1,185 items, 54.7 s, on `watchlist-cron-sync` v14 after the key rotation (TMDB key rotated 2026-10-25; the old one is revoked). `truelayer-sync` answered the signed-in Finance page 200 at 08:28 (v46). Not run: an authenticated sync on v48 |
-| Deno typecheck / build / graph | 2026-10-25 | Pass; graph refreshed |
-| Finance in London / Los Angeles | 2026-10-25 | 967 tests / 30 files pass in each timezone (earlier tree; not re-run) |
-| Pinned ship-check | 2026-10-25 | 98/100 Beta; 8 findings: 1 high, 4 medium, 1 low, 2 info. Before the 2026-10-25 changes; not re-run |
-| npm audit / security audit | 2026-10-24 | Earlier tree: 0 vulnerabilities; checklist MEDIUM from dashboard auth; DB checked locally |
+| `ab0b759e` (clean tree) | 2026-10-25 | From the session, not re-run here. `npm run lint` 0 errors, 0 warnings; `npm run typecheck` and `npm run typecheck:functions` pass; Vitest 1,363 tests / 58 files; `npm run build` pass; `npm run ship-check` 98/100 with 9 findings (the earlier record said 8; not reconciled), the one high is the pre-existing FinanceDataContext N+1; graphify updated |
+| Reviewer (Opus) | 2026-10-25 | One pass, no blockers. Should-fixes and nits applied; the fixes were not re-reviewed |
+| Pages `8e8c4c19` | 2026-10-25 | Earlier tree. Lint 0/0 and typecheck run on it; Vitest 1,347 / 56 files and build reported from that session, not re-run here |
+
+## Live (unchanged by this branch)
+
+- Pages: `8e8c4c19` is the last deploy recorded here (run 40202391722). `origin/main` has since moved to `ba23695d` (Finance figures hidden until shown) and PR #9 (`2d237d11`); neither is recorded as deployed here.
+- Hosted: `finance_debt_observations` keyed `(profile_id, debt_id)` (`20261025090000`). Merchant logos use random names (`merchant-logo-cache` v15); the 41 brand-named originals were deleted by the owner on 2026-10-25, and the old names return 400.
+- Edge functions: `tmdb-proxy` v13, `merchant-logo-cache` v15, `truelayer-sync` v48 (`verify_jwt` false), `watchlist-cron-sync` v14.
+- Live, signed in, read-only (2026-10-25): bills calendar, Forecast at 375px, Student Loan card, logos in Transactions. Self-hosted fonts and the PR #8 draw guard are live too.
+- Not checked live: early-payment Paid, header fade, Travel columns, About bio, phone detail scrolling, stored-date changes.
 
 ## Next
 
-1. Owner, dashboard: turn off public signup (still on: hosted `auth/v1/settings` gave `disable_signup: false`, 2026-10-25); leaked-password protection (Pro); TOTP; Postgres upgrade (brief downtime). Re-run the advisor. Strix is uninstalled; its comments on PR #7 and PR #8 are left by choice.
-2. Remaining REHAUL_PLAN.md items: Borrowed rules, security items left, schemas rebuild from empty, Node 24 CI.
+1. Push `claude/auth-hardening`, open a PR, merge, let Pages deploy. Then the owner enrols an authenticator on `/auth`.
+2. Owner, Supabase dashboard (not signed in when this was written; none of this is checked):
+   - Turn off "Allow new users to sign up" at `/auth/providers`. Hosted `auth/v1/settings` still gave `disable_signup: false` on 2026-10-25.
+   - Enable the TOTP factor under Authentication → Multi-Factor if it is off.
+   - Upgrade Postgres 15.8.1.030 → 17 (brief downtime; pgjwt no longer blocks it). Then set `major_version` 15 → 17 under `[db]` in `supabase/config.toml`.
+3. Re-run the security advisor after the push. Leaked-password stays listed (accepted). The MFA and Postgres lints stay listed until step 2 is done. Also listed and accepted: `is_admin()` EXECUTE for anon and authenticated; two `rls_enabled_no_policy` INFO.
+4. Remaining REHAUL_PLAN.md items: Borrowed rules, security items left, schemas rebuild from empty, Node 24 CI.
 
 ## Blockers and open risks
 
-- Unverified, not to be read as passed: live writes (Paid tick, untick and early payment; photo upload; the CV; a saved link), local stack only; the IPv6 /64 path (unit-tested, not probed); a signed-in run of `truelayer-sync` v48 and `merchant-logo-cache` v15; physical devices, 200% zoom, real HEIC files (tests use synthetic boxes), stored dates on a non-UK device.
-- Finance: save-safety and races in REHAUL_PLAN.md. Hosted reads unmeasured. Per-row saves left as they are by decision (REHAUL_HISTORY.md, 2026-10-25).
-- Visitor IPs still go off-site for images: flagcdn.com (flags), image.tmdb.org (posters), Google Books (thumbnails). Not changed; owner decision.
-- Watchlist: cron CPU unmeasured; production sync-race fix unconfirmed.
-- Parser override validated for this install, tests and CSS only. CI Node 20 / Ubuntu transition not checked.
-- Branches: `main`; `claude/affectionate-lamarr-f2d2cb` (worktree `.claude/worktrees/affectionate-lamarr-f2d2cb`); `codex/student-loan-draw-guard` merged as PR #8, still checked out in the main checkout and in a Codex worktree.
+- Unverified, not to be read as passed: the code step and two-factor panel on the live site (not deployed); Safari, Firefox and a phone; the hosted TOTP setting (not checked); GoTrue's refusal of aal1 enrol and unenrol on hosted (local only); lost-authenticator recovery (local only).
+- Unverified, carried forward: live writes (Paid tick, untick and early payment; photo upload; the CV; a saved link), local stack only; the IPv6 /64 path (unit-tested, not probed); a signed-in run of `truelayer-sync` v48 and `merchant-logo-cache` v15; physical devices, 200% zoom, real HEIC files, stored dates on a non-UK device.
+- Finance: save-safety and races in REHAUL_PLAN.md; hosted reads unmeasured. Per-row saves left as they are by decision (REHAUL_HISTORY.md, 2026-10-25).
+- Visitor IPs still go off-site for images: flagcdn.com, image.tmdb.org, Google Books. Owner decision, not changed.
+- Watchlist: cron CPU unmeasured; production sync-race fix unconfirmed. Parser override validated for this install, tests and CSS only; CI Node 20 / Ubuntu transition not checked.
+- Main checkout (`/Users/dhyanshyam/Projects/DShyam3.github.io`, `codex/student-loan-draw-guard`): carries another session's uncommitted Books work and its own STATE.md edits. Do not describe that branch as deletable while the work is there.
+- Branches: `main`; `claude/auth-hardening` (this, unpushed); `claude/affectionate-lamarr-f2d2cb` (worktree `.claude/worktrees/affectionate-lamarr-f2d2cb`); `codex/student-loan-draw-guard`, PRs #8 and #9 merged, still checked out in the main checkout.
 - Full outstanding list and reasoning: REHAUL_PLAN.md.

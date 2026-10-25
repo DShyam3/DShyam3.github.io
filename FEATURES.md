@@ -199,6 +199,27 @@ wishlist item, with the message "Wishlist items cannot be in your EDC".
 
 ---
 
+## Admin sign-in
+
+`/auth` signs in the site's one administrator with a password. Once that account
+has a verified authenticator app, the password is followed by a code step: the
+six digits from the app. The code field takes digits only, so a pasted code with a
+space is read as its six digits. Verify Code stays off until six are entered. A
+wrong code is refused and the field clears. Cancel signs the password session out,
+and a reload keeps the code step. Until an authenticator is set up, the password
+alone signs in.
+
+When signed in as the administrator, `/auth` shows a two-factor panel. It says
+whether an authenticator is on. When it is off, Set up two-factor shows a QR code
+and a manual key; a six-digit code from the app confirms it, and Cancel backs out.
+When it is on, the panel says so and points to the Supabase dashboard for removal.
+
+With a verified authenticator, the database gives admin rights only to a session
+that has passed the code step. Finance and every admin write depend on those
+rights, so a password alone reaches neither.
+
+---
+
 ## Finance
 
 Admin-only. Five routed surfaces, sixteen sections — each one linkable, each
