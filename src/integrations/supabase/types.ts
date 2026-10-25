@@ -572,11 +572,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "finance_debt_observations_debt_id_fkey"
-            columns: ["debt_id"]
+            foreignKeyName: "finance_debt_observations_profile_debt_fkey"
+            columns: ["profile_id", "debt_id"]
             isOneToOne: false
             referencedRelation: "finance_debts"
-            referencedColumns: ["id"]
+            referencedColumns: ["profile_id", "id"]
           },
           {
             foreignKeyName: "finance_debt_observations_profile_id_fkey"
