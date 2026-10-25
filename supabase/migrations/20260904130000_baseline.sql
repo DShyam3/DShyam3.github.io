@@ -70,7 +70,17 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
 
 
 
-CREATE EXTENSION IF NOT EXISTS "pgjwt" WITH SCHEMA "extensions";
+-- Edited after it was applied, and only here: Postgres 17 images do not ship
+-- pgjwt, so an unconditional CREATE would stop a from-empty replay on 17 at
+-- this line. On 15 it still creates it, exactly as applied, and
+-- 20261025200000_drop_pgjwt.sql removes it either way.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pgjwt') THEN
+    CREATE EXTENSION IF NOT EXISTS "pgjwt" WITH SCHEMA "extensions";
+  END IF;
+END
+$$;
 
 
 

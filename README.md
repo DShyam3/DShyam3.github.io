@@ -58,11 +58,22 @@ Copy [`.env.example`](.env.example) to `.env` and replace only its placeholder v
 The browser talks to Supabase directly via `@supabase/supabase-js` (`src/integrations/supabase/client.ts`) using the anon key. **Row Level Security is the actual authorization boundary** — every table has an `is_admin()`-gated policy. Content tables (books, links, articles, etc.) are publicly readable by design (it's a portfolio); finance and TrueLayer tables are admin-only for both read and write. The full policy set lives in `supabase/migrations/20260904130000_baseline.sql` and the migrations after it.
 
 > **Who is an administrator is a table, not an email.** `is_admin()` checks
-> the caller's user id against `public.admin_users`:
+> the caller's user id against `public.admin_users`, and once that account has
+> a verified second factor (the `/auth` page enrols TOTP), also requires a
+> session that presented a code:
 >
 > ```sql
-> SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE user_id = auth.uid());
+> SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE user_id = auth.uid())
+> AND (
+>   coalesce(auth.jwt() ->> 'aal', '') = 'aal2'
+>   OR NOT EXISTS (SELECT 1 FROM auth.mfa_factors
+>                  WHERE user_id = auth.uid() AND status = 'verified')
+> );
 > ```
+>
+> A lost authenticator is recovered by deleting its row in `auth.mfa_factors`
+> from the SQL editor; the account is then password-only until a new factor is
+> enrolled on the `/auth` page.
 >
 > The edge functions ask the same function (`supabase/functions/_shared/require-admin.ts`),
 > so there is one rule. `VITE_ADMIN_EMAIL` is only the address the `/auth`

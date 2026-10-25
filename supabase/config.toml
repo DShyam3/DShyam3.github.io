@@ -83,5 +83,13 @@ enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
 
+# TOTP (an authenticator app) is the second factor on the one admin account.
+# `public.is_admin()` refuses a password-only session once a verified factor
+# exists, so the local stack needs enrolment and verification on to exercise
+# that path. Hosted needs the same: Authentication -> Multi-Factor -> TOTP.
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
 [analytics]
 enabled = false
