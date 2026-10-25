@@ -592,22 +592,38 @@ serve(async (req) => {
 
       if (!image) {
         // A recorded miss, so the next run does not ask about this one again.
-        await supabaseAdmin.from('finance_merchant_logos').upsert({
-          slug,
+        // Written only where no file is recorded: an overlapping run may just
+        // have stored one, and nulling its path would orphan that object.
+        const miss = {
           storage_path: null,
           source_domain: resolved?.domain ?? null,
           resolved_at: new Date().toISOString(),
-        }, { onConflict: 'slug' })
+        }
+        const { data: marked } = await supabaseAdmin
+          .from('finance_merchant_logos')
+          .update(miss)
+          .eq('slug', slug)
+          .is('storage_path', null)
+          .select('slug')
+        if (!marked?.length) {
+          await supabaseAdmin
+            .from('finance_merchant_logos')
+            .upsert({ slug, ...miss }, { onConflict: 'slug', ignoreDuplicates: true })
+        }
         missed++
         continue
       }
 
-      const storagePath = `${slug}.${EXTENSIONS[image.contentType]}`
+      // A random object name, never the slug. The bucket is public so the
+      // images load by URL, and a brand-named key let anyone confirm a guess
+      // ("aldi.webp" exists, so the owner shops there). The admin-only index
+      // is now the only place that maps a brand to its file.
+      const storagePath = `${crypto.randomUUID()}.${EXTENSIONS[image.contentType]}`
       const { error: uploadError } = await supabaseAdmin.storage
         .from('merchant-logos')
         .upload(storagePath, image.bytes, {
           contentType: image.contentType,
-          upsert: true,
+          upsert: false,
           cacheControl: '604800',
         })
 
@@ -616,12 +632,51 @@ serve(async (req) => {
         continue
       }
 
-      await supabaseAdmin.from('finance_merchant_logos').upsert({
-        slug,
+      // Claim the index row only while it records no file. Two runs can
+      // overlap (every sync fires this, and the limiter lets two through in
+      // five minutes), and with random names an object no row records is an
+      // orphan nothing will ever clean up. So a row that already has a file,
+      // or a write that fails, means this upload is removed again.
+      const recorded = {
         storage_path: storagePath,
         source_domain: resolved?.domain ?? null,
         resolved_at: new Date().toISOString(),
-      }, { onConflict: 'slug' })
+      }
+      const { data: filled, error: updateError } = await supabaseAdmin
+        .from('finance_merchant_logos')
+        .update(recorded)
+        .eq('slug', slug)
+        .is('storage_path', null)
+        .select('slug')
+      let claimed = !updateError && (filled?.length ?? 0) > 0
+      let lostRace = false
+      if (!updateError && !claimed) {
+        // No empty row to fill: insert, unless a row was written meanwhile.
+        const { data: inserted, error: insertError } = await supabaseAdmin
+          .from('finance_merchant_logos')
+          .upsert({ slug, ...recorded }, { onConflict: 'slug', ignoreDuplicates: true })
+          .select('slug')
+        if (!insertError) {
+          claimed = (inserted?.length ?? 0) > 0
+          lostRace = !claimed
+        }
+      }
+      if (!claimed && !lostRace) {
+        // A write failed, or its answer was lost. Read back before removing
+        // anything, so a write that did commit keeps its file.
+        const { data: current } = await supabaseAdmin
+          .from('finance_merchant_logos')
+          .select('storage_path')
+          .eq('slug', slug)
+          .maybeSingle()
+        claimed = current?.storage_path === storagePath
+      }
+      if (!claimed) {
+        const { error: removeError } = await supabaseAdmin.storage.from('merchant-logos').remove([storagePath])
+        if (removeError) console.warn('Could not remove an unrecorded logo upload:', removeError.message)
+        missed++
+        continue
+      }
       cached++
     }
 
