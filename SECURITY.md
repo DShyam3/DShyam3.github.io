@@ -247,13 +247,13 @@ attack surface of this site is Supabase, and it was audited separately
   HTTP on 2026-10-24, only two routes were checked: a public logo object
   returned 200, and `merchant-logo-cache` refused an unauthenticated POST with
   401. PostgREST table routes were not probed over HTTP.
-- **Auth**: public email signup is enabled on the project. Since every policy
-  checks `public.is_admin()`, and that reads the `admin_users` table, a
-  self-registered user gets nothing — the account exists but holds no grant.
-  Signup should still be disabled in the dashboard (Authentication → Sign In /
-  Providers) because this is a single-account site. Disable *signup*, not the
-  email provider: the provider toggle gates sign-in too, and turning it off
-  locks the password box out of the site.
+- **Auth**: public email signup is disabled on hosted (2026-10-25:
+  `auth/v1/settings` reports `disable_signup: true`, and a signup request is
+  refused with `signup_disabled`). Every policy checks `public.is_admin()`, which
+  reads the `admin_users` table, so a self-registered account would hold no
+  grant either way. Disable *signup*, not the email provider: the provider
+  toggle gates sign-in too, and turning it off locks the password box out of the
+  site. The Email provider stays on.
 
 - **Administrator identity**: a row in `public.admin_users`, keyed on
   `auth.users.id`. It used to be an email literal inside `is_admin()`, which
@@ -268,7 +268,11 @@ attack surface of this site is Supabase, and it was audited separately
   add a factor from an `aal1` session while a verified one exists (also checked
   locally; not on hosted). Recovery from a lost authenticator is deleting the
   admin's row in `auth.mfa_factors`, which returns the account to password-only
-  sign-in until it is enrolled again.
+  sign-in until it is enrolled again. Hosted also limits `aal1` sessions
+  (Authentication → Multi-Factor → "Limit duration of AAL1 sessions", on since
+  2026-10-25): for an account with a verified factor, a session that has not
+  passed the code step within 15 minutes of sign-in can no longer refresh. An
+  account with no verified factor is never limited.
 
 ## Accepted Supabase advisor lints
 
@@ -281,32 +285,11 @@ re-deriving the reasoning.
 | `anon_security_definer_function_executable` on `is_admin()` | RLS policy expressions are evaluated with the querying role's own privileges, so revoking `EXECUTE` from `anon`/`authenticated` would break every policy on the project. The function takes no arguments and returns a single boolean about the caller — it leaks nothing an attacker did not already supply. |
 | Content tables readable by `anon` | This is a public portfolio. Anonymous `SELECT` on books, links, articles, photos, recipes, the watchlist and travel tables is the product, not a finding. Writes are `is_admin()`-only at both the policy and grant layer. |
 | `rls_enabled_no_policy` (INFO) on `rate_limits` and `finance_truelayer_source_sync` | RLS is on and no policy is written, on purpose. Both tables are service-role-only: `anon` and `authenticated` hold no grant, and service_role bypasses RLS. A policy would add nothing except a route to them. |
-| `auth_leaked_password_protection` (leaked-password protection off) | The HaveIBeenPwned check is offered on the Pro plan and above only. The project is on Free, where the option is not offered, and the owner accepted the risk on 2026-10-25 (REHAUL_HISTORY.md). It stays off because the account is the single administrator, every write is gated by `admin_users` through `is_admin()`, and public signup is to be turned off. Minimum length and character rules are still available on Free and are not changed by this. |
+| `auth_leaked_password_protection` (leaked-password protection off) | The HaveIBeenPwned check is offered on the Pro plan and above only. The project is on Free, where the option is not offered, and the owner accepted the risk on 2026-10-25 (REHAUL_HISTORY.md). It stays off because the account is the single administrator, every write is gated by `admin_users` through `is_admin()`, and public signup has been turned off (2026-10-25). Minimum length and character rules are still available on Free and are not changed by this. |
 
 Not accepted, still open, and only fixable from the dashboard:
 
-Project ref is `yvtiybyuifkiwyrnjebe`, so each link below is
-`https://supabase.com/dashboard/project/yvtiybyuifkiwyrnjebe` + the path given.
-
-- **Public email signup is enabled** — `/auth/providers`, the Email provider
-  panel, "Allow new users to sign up". This is the structural fix behind S-1:
-  every policy checks one admin address, so a self-registered account gets
-  nothing, but it should not be possible to create one on a single-account
-  site.
-- **TOTP is enforced once enrolled, but the factor is not yet confirmed on in the dashboard.**
-  `public.is_admin()` requires an `aal2` session once the administrator has a
-  verified factor (`20261025200100`, applied to hosted 2026-10-25). Before that
-  the rule does not apply. Still to do, by the owner: enable the TOTP factor under
-  Authentication → Multi-Factor if it is off (not checked on hosted yet), deploy
-  the branch, then enrol on `/auth`. The MFA advisor lint should clear once the
-  factor is on; not re-run.
-- **Postgres has outstanding security patches** (`supabase-postgres-15.8.1.030`)
-  — the "Upgrade project" button is on `/settings/general`, not under
-  Infrastructure. The project goes offline for the upgrade and the window
-  scales with database size, so pick a quiet moment. Read replicas would block
-  it; this project has none. pgjwt, which blocked the upgrade to 17, was removed
-  (`20261025200000`, applied to hosted 2026-10-25). After the upgrade, set
-  `major_version` under `[db]` in `supabase/config.toml` from 15 to 17.
+Nothing dashboard-only is open as of 2026-10-25, except enrolment, which is done in the app on `/auth`. Project ref: `yvtiybyuifkiwyrnjebe`.
 
 ## Audit and scan (2026-10-24)
 

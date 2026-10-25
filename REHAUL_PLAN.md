@@ -25,7 +25,7 @@ number is not below.
 Audit date: 2026-09-04. Plan cut back to what is left on 2026-09-12; Phase 8
 added the same day.
 Supabase project: `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2,
-Postgres 15.8.1.030).
+Postgres 17.11.0.003, upgraded in place from 15.8.1.030 on 2026-10-25).
 
 ---
 
@@ -276,9 +276,8 @@ checked, and how, is in `SECURITY.md`.
 
 **Owner, outside the code:**
 
-- Turn off public signup (`/auth/providers`, "Allow new users to sign up"). Hosted `auth/v1/settings` still gave `disable_signup: false` on 2026-10-25.
-- Enable the TOTP factor under Authentication → Multi-Factor if it is off (not checked yet). Enrol the owner's authenticator on `/auth` once `claude/auth-hardening` is merged and deployed. Until a verified factor exists the second step does not apply (REHAUL_HISTORY.md, 2026-10-25).
-- Upgrade Postgres 15.8.1.030 → 17 (brief downtime; pgjwt no longer blocks it). Then set `major_version` to 17 in `supabase/config.toml`. Re-run the security advisor afterwards.
+- Enrol the administrator's authenticator on `/auth` (signed in, "Set up two-factor"). Hosted TOTP was already enabled on 2026-10-25; until a verified factor exists the second step does not apply (REHAUL_HISTORY.md, 2026-10-25).
+- Local stack reset, then `major_version` 15 → 17 in `supabase/config.toml`. The local stack is still Postgres 15, and a 17 config cannot start on the existing PG15 volume, so the bump goes in the same change as the reset, once the owner decides on the reset.
 - Delete the `VITE_TMDB_BASE_URL` GitHub Actions secret; no workflow reads it.
 
 **Code:**
@@ -304,7 +303,10 @@ had no admin session); the `verify_jwt` setting on `truelayer-sync` v48 (read
 back before v48 was deployed; the deploy flags keep it false); whether
 `SITE_ORIGIN` is set on hosted; live response headers; a signed-in upload or
 saved link on the live site (checked on the local stack only); a real HEIC file
-(the tests use synthetic `ftyp` boxes).
+(the tests use synthetic `ftyp` boxes). Since the Postgres 17 upgrade
+(2026-10-25): the first scheduled cron runs (the next is 02:10 UTC), the edge
+functions and their pg_net calls, and a signed-in admin session. The cron jobs
+were checked in the catalogue only.
 
 ### Sync and profile switch interactions
 
