@@ -2,7 +2,7 @@
 
 **Updated:** 2026-10-27 · **Branch:** `claude/finance-calculator-followups` at `e9b60a52`, identical to `origin/main`
 **Hosted Postgres:** 17.11.0.003 · **Hosted and local schema head:** `20261027075434` · **Local Postgres:** 15 (`supabase/config.toml`, not bumped)
-**Pages for `e9b60a52`:** triggered by the push, not verified. `gh` auth is invalid on this machine.
+**Pages for `e9b60a52`:** "Deploy static content to Pages" succeeded 20:20 UTC (public Actions API). Live behaviour not checked. `gh` auth is invalid on this machine.
 
 ## On main, live not checked
 
@@ -37,7 +37,7 @@
 
 ## Next
 
-1. Verify the Pages run for `e9b60a52` succeeded, then the live site: Tax Calculator child benefit clawback, Birthday Day Off, leave booking fixes. Needs `gh auth login` or the Actions page. Local results do not count as live.
+1. Check the live site (the Pages run for `e9b60a52` succeeded): Tax Calculator child benefit clawback, Birthday Day Off, leave booking fixes. Local results do not count as live.
 2. REHAUL_PLAN.md 8.H birthday and package follow-ups, benefit-in-kind tax first: `finance-calcs.ts` subtracts `benefitTaxDeduction` from take-home although the tax code already collects it. Derive it from `uk-tax-calculator.ts`, with tests. Then the database guards (a new migration on `20261027075434`), dead code and accessibility.
 3. REHAUL_PLAN.md 8.H "Two tax engines disagree": move Tax & Income onto the calculator's rules (region, pension relief), keeping `settings.personalAllowance` and benefit-in-kind tax. Decide first whether the settings pension percentage is gross or net.
 4. Owner: enrol an authenticator on `/auth` ("Set up two-factor"). Not enrolled; until a verified factor exists the second step does not apply. Enrolment, code and recovery flows are unverified live.
@@ -48,7 +48,7 @@
 
 ## Blockers and open risks
 
-- Unverified, not to be read as passed: the Pages run for `e9b60a52`; the live site for `2fe8ff56..e9b60a52`; signed-in live writes for leave and the calculator; Safari, Firefox, phones, 375px and 200% zoom for these changes.
+- Unverified, not to be read as passed: the live site for `2fe8ff56..e9b60a52`; signed-in live writes for leave and the calculator; Safari, Firefox, phones, 375px and 200% zoom for these changes.
 - Local only: the local DB holds test rows (Test birthday trip, A1 trip, Birthday Day Off). Local checks are not hosted checks.
 - Unverified after the Postgres 17 upgrade: cron runs, edge functions, pg_net calls, a signed-in admin session. Authenticator flows: local only.
 - Unverified: signed-in runs of `truelayer-sync` v48 and `merchant-logo-cache` v15; the IPv6 /64 path has unit coverage only.
