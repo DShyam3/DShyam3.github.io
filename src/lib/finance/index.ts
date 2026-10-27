@@ -32,3 +32,4 @@ export * from './statement-import';
 export * from './student-loan';
 export * from './tools';
 export * from './transfers';
+export * from './uk-tax-calculator';

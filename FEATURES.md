@@ -250,7 +250,7 @@ rights, so a password alone reaches neither.
 
 ## Finance
 
-Admin-only. Five routed surfaces, sixteen sections — each one linkable, each
+Admin-only. Five routed surfaces, seventeen sections — each one linkable, each
 one a real URL with a working back button.
 
 Finance opens with its money hidden. The Show figures / Hide figures button in its
@@ -387,6 +387,46 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   full history shows in the page, without a scroll box of its own.
 - **Time spent** — income seen as hours rather than pounds. Its summary shows the
   gross package beside the year's take-home.
+- **Tax calculator** — a what-if calculator for 2026/27 UK rules. Type any salary
+  or self-employed profit in the box, or drag the slider up to £250,000, and it
+  shows take-home, effective rate, marginal rate and how many pence of the next
+  pound you keep. The inputs start from your Tax & Income settings (salary,
+  region, pension type and percentage, student loan plan). Changing them here
+  never changes those settings; **My settings** puts the inputs back to them.
+  While finance figures are hidden the salary and pension amount start empty,
+  since the chart marker and slider would otherwise show your salary; showing
+  figures fills them in.
+
+  The inputs are employed or self-employed; England, Wales & NI or Scotland, with
+  Scotland's six rate bands; a pension contribution paid by salary sacrifice, net
+  pay or relief at source (a self-employed profit has relief at source only); an
+  undergraduate loan on Plan 1, 2, 4 or 5, and a postgraduate loan; benefits in
+  kind for employees; the number of children claiming child benefit; childcare
+  support a year, up to £20,000, which is lost once adjusted net income passes
+  £100,000; and whether you receive a marriage allowance from a partner.
+
+  The breakdown has a year and a month column for income tax with its personal
+  allowance, National Insurance (Class 1 for employees, Class 4 for the
+  self-employed), student and postgraduate loans, child benefit and any High
+  Income Child Benefit Charge, the pension, take-home, and take-home with
+  childcare support. Pointers appear only when they apply: how far adjusted net
+  income is into the £100,000 personal allowance taper, and the pension
+  contribution that would restore the allowance; the headroom before the taper,
+  when within £10,000 of it; the child benefit charge and the fall in adjusted
+  net income that would clear it; and the two cliffs, childcare support at
+  £100,000 and marriage allowance eligibility, each with what one more pound
+  costs.
+
+  A chart switches between the marginal rate across incomes from £0 to £200,000
+  (wider for higher incomes) and take-home against gross, with your income marked
+  and the cliffs drawn as dashed lines.
+
+  It does not model savings, dividends, rent or gains, the pension annual
+  allowance, employer National Insurance, Universal Credit or other benefits, or a
+  partner's income, and it does not check childcare eligibility. Child benefit
+  counts the 53 benefit weeks in 2026/27. Its rules follow the Tax Policy
+  Associates UK tax calculator. Its £ figures sit under the Show figures toggle
+  like the rest of Finance.
 - **Holiday tracker** — Books full and half days of leave and sick time. When
   booking a single day, a Length toggle offers Full day, Morning, or Afternoon.
   Morning and Afternoon are disabled for weekends and bank holidays. Calendar

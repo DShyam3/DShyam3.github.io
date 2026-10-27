@@ -562,6 +562,15 @@ wants a `reviewer` pass before it lands.
 are not stored, so "below zero" is the warning; the forecast totals all current
 accounts rather than per account.
 
+**Two tax engines disagree.** Tax & Income (`finance-calcs.ts`) ignores
+`ukRegion`, so a Scottish profile is taxed on rUK bands, and deducts a
+relief-at-source pension in full with no relief or band extension. The Tax
+Calculator (`src/lib/finance/uk-tax-calculator.ts`) models both, so for those
+profiles the two pages open on different take-home. *Decide:* move Tax &
+Income onto the calculator's rules, keeping `settings.personalAllowance` (tax
+code) and benefit-in-kind tax, which the calculator does not read; and whether
+the settings pension percentage means gross or net.
+
 ### 8.I Still to build (the order)
 
 1. **Links dead-link check and auto-metadata**, the highest-value pair outside
