@@ -1,10 +1,10 @@
 # State
 
-**Updated:** 2026-10-27 · **Branch:** `claude/finance-calculator-followups` at `038bfe80`, 2 commits ahead of `origin/main` `88ed3f8a`, **not pushed**
+**Updated:** 2026-10-27 · **Branch:** `main` at `87d62b22`, pushed; no feature branches open from this work
 **Hosted Postgres:** 17.11.0.003 · **Hosted and local schema head:** `20261027220000` · **Local Postgres:** 15 (`supabase/config.toml`, not bumped)
-**Pages:** deploy for `e9b60a52` succeeded 20:20 UTC (public Actions API). Live behaviour not checked. `gh` auth is invalid on this machine.
+**Pages:** deploys for `e9b60a52` and `038bfe80` succeeded (public Actions API). Live behaviour not checked. `gh` auth is invalid on this machine.
 
-## Committed on the branch, not pushed
+## On main and deployed, live not checked
 
 - `27ca4669` birthday and package-benefit guards. Migration `20261027220000_finance_birthday_leave_guards.sql`, mirrored in `supabase/schemas/40_finance.sql`; no RLS or grant change. A birthday booking is one day, full or half; a birthday month needs a real day (29 February allowed); `package_benefits` must be a JSON array.
   - **Applied to hosted** by the owner with `supabase db push` from the worktree on 2026-10-27 (recorded version `20261027220000`, matching the file); all four constraints present and validated. Also on the local stack.
@@ -14,22 +14,20 @@
 
 ## In progress
 
-- Nothing uncommitted in this worktree.
-- The original checkout `/Users/dhyanshyam/Projects/DShyam3.github.io` was fast-forwarded to `main` `88ed3f8a` on 2026-10-27 and keeps another session's uncommitted employer-logo work: `employer-logo.ts` and its test (13/13), `PayslipsSection.tsx`, `useResume.ts`, one `FEATURES.md` line, `deno.lock`. Not reviewed, not committed; its `STATE.md` carries a note about that work. Graph refreshed there 2026-10-27. Do not reset or delete it.
+- Unmerged: `.claude/worktrees/affectionate-lamarr-f2d2cb` (`claude/affectionate-lamarr-f2d2cb`, also on GitHub) holds six commits of a site-wide admin chat assistant (7.6) that never reached `main`. Finished worktrees and their merged local branches were removed 2026-10-27; `codex/tax-calculator-release` (content in `main` via #11) and the GitHub copies of old branches remain.
+- The original checkout `/Users/dhyanshyam/Projects/DShyam3.github.io` was fast-forwarded to `main` `87d62b22` on 2026-10-27 and keeps another session's uncommitted employer-logo work: `employer-logo.ts` and its test (13/13), `PayslipsSection.tsx`, `useResume.ts`, one `FEATURES.md` line, `deno.lock`. Not reviewed, not committed; its `STATE.md` carries a note about that work. Graph refreshed there 2026-10-27. Do not reset or delete it.
 
 ## Next
 
-1. Owner: decide on pushing the three commits on `claude/finance-calculator-followups` to `main`; the hosted guard migration is already applied and the client does not depend on it.
-2. Owner: decide whether to push the two commits to `main`.
-3. Verify live after any deploy: the `2fe8ff56..e9b60a52` changes, and on the pushed commits, Tax & Income on the calculator engine, typed package benefits and the holiday tracker. Local results do not count as live.
-4. REHAUL_PLAN.md 8.H, birthday and package follow-ups still open: attach and detach should use `count − 1` / `count + 1`; deleting an attached birthday does not return the host holiday's day; the maximiser has no standalone birthday recommendation and does not treat sick days as booked; day-level dedupe covers holidays only; dead code (positional `planOptimalHolidays` overload, `OptimalLeavePlan`, `calculateBirthdayBenefitValue`); the FEATURES.md holiday tracker line; Settings labels without `htmlFor`; Title Case and emoji in some copy.
-5. Review nit, not fixed: `calculateFinance`'s unused `_taxConfigs` and `_asOfDate` parameters (14 call sites, mostly tests).
-6. REHAUL_PLAN.md 8.H "Tax engine — what is left": one tax year (2026/27 rules only; a new year means editing the engine); where the student-loan thresholds live; whether the band fields leave Settings. The `finance_tax_configs` table goes only after the thresholds question is answered.
-7. Owner: enrol an authenticator on `/auth` ("Set up two-factor"). Not enrolled; the second step does not apply until a verified factor exists.
-8. Verify after the Postgres 17 upgrade: the first scheduled cron run (next 02:10 UTC), the edge functions (`tmdb-proxy`, `truelayer-sync`, `merchant-logo-cache`, `watchlist-cron-sync`) and their pg_net calls, a signed-in admin session. Cron jobs were checked in the catalogue only.
-9. Books leftovers, last recorded 2026-10-27: 45 covers and 97 descriptions to backfill (`/private/tmp/books-backfill-review.md`); 14 ambiguous source entries (`/private/tmp/books-import-review.json`). Reading progress, series position, ISBN autofill and statistics are planned (REHAUL_PLAN.md 8.E).
-10. Owner: decide the local stack reset, then `major_version` 15 → 17 in `supabase/config.toml` in the same change. Delete the `VITE_TMDB_BASE_URL` GitHub Actions secret; no workflow reads it.
-11. Follow REHAUL_PLAN.md for Borrowed rules, the schema rebuild from empty, Node 24 CI and the remaining security items.
+1. Verify live after any deploy: the `2fe8ff56..e9b60a52` changes, and on the pushed commits, Tax & Income on the calculator engine, typed package benefits and the holiday tracker. Local results do not count as live.
+2. REHAUL_PLAN.md 8.H, birthday and package follow-ups still open: attach and detach should use `count − 1` / `count + 1`; deleting an attached birthday does not return the host holiday's day; the maximiser has no standalone birthday recommendation and does not treat sick days as booked; day-level dedupe covers holidays only; dead code (positional `planOptimalHolidays` overload, `OptimalLeavePlan`, `calculateBirthdayBenefitValue`); the FEATURES.md holiday tracker line; Settings labels without `htmlFor`; Title Case and emoji in some copy.
+3. Review nit, not fixed: `calculateFinance`'s unused `_taxConfigs` and `_asOfDate` parameters (14 call sites, mostly tests).
+4. REHAUL_PLAN.md 8.H "Tax engine — what is left": one tax year (2026/27 rules only; a new year means editing the engine); where the student-loan thresholds live; whether the band fields leave Settings. The `finance_tax_configs` table goes only after the thresholds question is answered.
+5. Owner: enrol an authenticator on `/auth` ("Set up two-factor"). Not enrolled; the second step does not apply until a verified factor exists.
+6. Verify after the Postgres 17 upgrade: the first scheduled cron run (next 02:10 UTC), the edge functions (`tmdb-proxy`, `truelayer-sync`, `merchant-logo-cache`, `watchlist-cron-sync`) and their pg_net calls, a signed-in admin session. Cron jobs were checked in the catalogue only.
+7. Books leftovers, last recorded 2026-10-27: 45 covers and 97 descriptions to backfill (`/private/tmp/books-backfill-review.md`); 14 ambiguous source entries (`/private/tmp/books-import-review.json`). Reading progress, series position, ISBN autofill and statistics are planned (REHAUL_PLAN.md 8.E).
+8. Owner: decide the local stack reset, then `major_version` 15 → 17 in `supabase/config.toml` in the same change. Delete the `VITE_TMDB_BASE_URL` GitHub Actions secret; no workflow reads it.
+9. Follow REHAUL_PLAN.md for Borrowed rules, the schema rebuild from empty, Node 24 CI and the remaining security items.
 
 ## Checks
 
