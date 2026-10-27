@@ -27,6 +27,7 @@ import {
   calculateWorkingDaysInRange,
   calendarParts,
   findBirthdayDayForHolidayRange,
+  findHolidayCoveringDate,
   formatDatesToBookUk,
   formatHolidayDates,
   formatUkDate,
@@ -791,6 +792,70 @@ export default function TaxIncomeSurface({
 
     const halfDay = inlineIsSingleDay && inlineHalfDay ? inlineHalfDay : undefined;
 
+    const originalHoliday = editingHolidayId
+      ? normalizedHolidays.find(h => h.id === editingHolidayId)
+      : undefined;
+    // Only a regular holiday owns a birthday, and never the entry being saved:
+    // a birthday or sick entry switched to Holiday has attached nothing.
+    const existingAttachedBday =
+      originalHoliday && (originalHoliday.type || 'holiday') === 'holiday'
+        ? normalizedHolidays.find(
+            h =>
+              h.type === 'birthday' &&
+              h.id !== originalHoliday.id &&
+              h.startDate >= originalHoliday.startDate &&
+              h.startDate <= originalHoliday.endDate,
+          )
+        : undefined;
+    // A birthday inside the saved range that this holiday did not attach. It is
+    // kept, and the holiday is charged as if it had attached it.
+    const coveredBday =
+      inlineType === 'holiday'
+        ? normalizedHolidays.find(
+            h =>
+              h.type === 'birthday' &&
+              h.id !== editingHolidayId &&
+              h.id !== existingAttachedBday?.id &&
+              h.startDate >= inlineStartDate &&
+              h.startDate <= inlineEndDate,
+          )
+        : undefined;
+    // A single working day cannot give a day up (and a half day must stay 0.5),
+    // so a holiday that short cannot share its day with the birthday.
+    if (coveredBday && inlineWorkingDays < 2) {
+      toast({
+        title: 'Birthday Day Off Already Booked',
+        description: `${formatUkDate(coveredBday.startDate)} is already your Birthday Day Off. Choose a range of at least two working days, or remove the birthday first.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // A birthday booked inside a holiday is attached to it, as
+    // handleApplyBirthdayToHoliday does, so that day is not also charged as
+    // annual leave. Re-saving a birthday on the day it already sits on changes nothing.
+    const coveringHoliday =
+      inlineType === 'birthday'
+        ? findHolidayCoveringDate(normalizedHolidays, inlineStartDate, editingHolidayId ?? undefined)
+        : undefined;
+    const previousCoveringHoliday =
+      originalHoliday?.type === 'birthday'
+        ? findHolidayCoveringDate(normalizedHolidays, originalHoliday.startDate)
+        : undefined;
+    const birthdayHost =
+      coveringHoliday && coveringHoliday.id !== previousCoveringHoliday?.id ? coveringHoliday : undefined;
+    if (
+      birthdayHost &&
+      calculateWorkingDaysInRange(birthdayHost.startDate, birthdayHost.endDate, bankHolidaysList) < 2
+    ) {
+      toast({
+        title: 'Day Already Booked as Leave',
+        description: `"${birthdayHost.occasion}" is a single day of annual leave on that date. Edit or remove it before booking your Birthday Day Off there.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const savedHoliday: UserHoliday = {
       id: editingHolidayId || 'hol_' + Date.now(),
       startDate: inlineStartDate,
@@ -802,34 +867,51 @@ export default function TaxIncomeSurface({
           : inlineType === 'birthday'
             ? 'Birthday Day Off'
             : 'Leave'),
-      count: halfDay ? HALF_DAY : inlineType === 'birthday' ? 1 : countVal,
+      // The toggle has already taken the birthday's day off `inlineCount`.
+      count: halfDay
+        ? HALF_DAY
+        : inlineType === 'birthday'
+          ? 1
+          : coveredBday && !inlineUseBirthdayDay
+            ? Math.max(0, countVal - coveredBday.count)
+            : countVal,
       type: inlineType,
       ...(halfDay ? { halfDay } : {})
     };
 
-    const originalHoliday = editingHolidayId
-      ? normalizedHolidays.find(h => h.id === editingHolidayId)
-      : undefined;
-    const existingAttachedBday = originalHoliday
-      ? normalizedHolidays.find(
-          h =>
-            h.type === 'birthday' &&
-            h.startDate >= originalHoliday.startDate &&
-            h.startDate <= originalHoliday.endDate,
-        )
-      : normalizedHolidays.find(
-          h =>
-            h.type === 'birthday' &&
-            h.startDate >= inlineStartDate &&
-            h.startDate <= inlineEndDate,
-        );
-
     let updatedHolidaysList = editingHolidayId
       ? normalizedHolidays.map(holiday => holiday.id === editingHolidayId ? savedHoliday : holiday)
       : [...normalizedHolidays, savedHoliday];
+    let leaveNote = '';
+
+    // A birthday moved out of the holiday it was attached to gives that
+    // holiday its day back. One switched to another type is charged as itself,
+    // so the old holiday stays as it was.
+    if (
+      inlineType === 'birthday' &&
+      originalHoliday &&
+      previousCoveringHoliday &&
+      previousCoveringHoliday.id !== coveringHoliday?.id
+    ) {
+      updatedHolidaysList = updatedHolidaysList.map(h =>
+        h.id === previousCoveringHoliday.id ? { ...h, count: h.count + originalHoliday.count } : h,
+      );
+    }
+
+    if (birthdayHost) {
+      // A half-day birthday takes half a day off its holiday, not a whole one.
+      const hostCount = Math.max(0, birthdayHost.count - savedHoliday.count);
+      updatedHolidaysList = updatedHolidaysList.map(h =>
+        h.id === birthdayHost.id ? { ...h, count: hostCount } : h,
+      );
+      leaveNote = ` Attached to "${birthdayHost.occasion}", which now uses ${hostCount}d annual leave.`;
+    }
 
     if (inlineType === 'holiday') {
-      if (inlineUseBirthdayDay && inlineEligibleBdayDate && !halfDay) {
+      if (coveredBday) {
+        leaveNote = ` Kept your Birthday Day Off on ${formatUkDate(coveredBday.startDate)}; this leave uses ${savedHoliday.count}d annual leave.`;
+      }
+      if (inlineUseBirthdayDay && inlineEligibleBdayDate && !halfDay && !coveredBday) {
         const bdayEntry: UserHoliday = {
           id: existingAttachedBday?.id || `hol_bday_${Date.now()}_1`,
           startDate: inlineEligibleBdayDate,
@@ -846,7 +928,9 @@ export default function TaxIncomeSurface({
           updatedHolidaysList = [...updatedHolidaysList, bdayEntry];
         }
       } else if (!inlineUseBirthdayDay && existingAttachedBday) {
+        // Changing the dates can turn the toggle off on its own, so say so.
         updatedHolidaysList = updatedHolidaysList.filter(h => h.id !== existingAttachedBday.id);
+        leaveNote += ` Your Birthday Day Off on ${formatUkDate(existingAttachedBday.startDate)} was removed from this leave.`;
       }
     }
 
@@ -873,7 +957,7 @@ export default function TaxIncomeSurface({
           : isBirthday
             ? 'Birthday day off booked'
             : 'Leave booked',
-      description: `${editingHolidayId ? 'Updated' : 'Successfully recorded'} "${savedHoliday.occasion}".`
+      description: `${editingHolidayId ? 'Updated' : 'Successfully recorded'} "${savedHoliday.occasion}".${leaveNote}`
     });
   };
 

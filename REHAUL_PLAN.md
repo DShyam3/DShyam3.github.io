@@ -571,6 +571,43 @@ Income onto the calculator's rules, keeping `settings.personalAllowance` (tax
 code) and benefit-in-kind tax, which the calculator does not read; and whether
 the settings pension percentage means gross or net.
 
+**Birthday leave and package benefits — review follow-ups (2026-10-27):**
+
+- **Benefit-in-kind tax** — `finance-calcs.ts` subtracts `benefitTaxDeduction`
+  from take-home. HMRC collects it through the tax code, so with an allowance
+  that already reflects it (1107L) it is counted twice; the Medical, Dental and
+  Travel presets pre-fill 20%. Tax on a cash item lowers take-home without the
+  cash being added, and the 20/40/45% helpers in `TaxIncomeSurface.tsx` miss the
+  allowance, the taper and Scottish bands. Derive it from `uk-tax-calculator.ts`
+  (tax with the benefit minus without), for non-cash benefits only, with tests;
+  `benefitTaxDeduction`, `birthdayLeaveDays`, `asPackageBenefits` and
+  `asBirthdayLeaveRule` have none
+- **Browsing a leave year saves it** — the year chevrons and "Plan next year"
+  write `tax_year`, which also drives bank holiday and weekend counts behind the
+  day and hour rates and Time Spent. Keep the viewed year in local state
+- **Attach and detach reset a typed count** — use `count − 1` / `count + 1`
+  rather than recounting working days
+- **Deleting an attached birthday** does not give the host holiday its day
+  back (only "Remove 🎂" and moving it do); a birthday inside a sick entry gets
+  no handling
+- **Leave maximiser** — no standalone birthday recommendation when no chosen
+  bridge contains it; sick days are not treated as booked
+- **Day-level dedupe** covers holidays only, so a birthday inside a sick range
+  shows twice
+- **No database guards** — a birthday row is not held to one day (count 1, or
+  0.5 with `half_day`); `birthday_month`/`birthday_day` are not checked as a
+  pair or against the month (31 Feb is accepted); `package_benefits` has no
+  `jsonb_typeof = 'array'` check. New migration plus `40_finance.sql`
+- **Design and accessibility** — the bridge list is a capped scroller inside a
+  scroller; the maximiser disclosure lacks `aria-expanded`; enable toggles and
+  "Use +1d" are buttons without `aria-pressed`; several labels lack `htmlFor`
+  and the birthday Day input has only a placeholder; Title Case and emoji in
+  accessible names
+- **Dead code** — the positional `planOptimalHolidays` overload (cannot pass a
+  region), `OptimalLeavePlan` and `calculateBirthdayBenefitValue`
+- **FEATURES.md** — the holiday tracker entry is one long line whose tier names
+  no longer match the code
+
 ### 8.I Still to build (the order)
 
 1. **Links dead-link check and auto-metadata**, the highest-value pair outside

@@ -582,6 +582,25 @@ export const findBirthdayDayForHolidayRange = (
   return matching[0];
 };
 
+/** The regular holiday whose range covers `isoDate`, or `undefined`. Sick and
+ *  birthday entries never cover: only annual leave is charged per day, so only
+ *  a holiday can be charged twice for a birthday that lands inside it. The entry
+ *  `excludeId` is skipped, for an entry that is being edited into something else. */
+export const findHolidayCoveringDate = (
+  holidays: UserHoliday[],
+  isoDate: string,
+  excludeId?: string,
+): UserHoliday | undefined => {
+  if (!calendarParts(isoDate)) return undefined;
+  return holidays.find(
+    hol =>
+      (hol.type || 'holiday') === 'holiday' &&
+      hol.id !== excludeId &&
+      hol.startDate <= isoDate &&
+      hol.endDate >= isoDate,
+  );
+};
+
 export const calculateBirthdayBenefitValue = (
   grossSalary: number,
   workingDaysPerYear: number,

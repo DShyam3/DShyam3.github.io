@@ -8,6 +8,7 @@ import {
   calculateWorkingDaysInRange,
   computeUkBankHolidaysForYear,
   findBirthdayDayForHolidayRange,
+  findHolidayCoveringDate,
   formatDatesToBookUk,
   formatDaysList,
   formatHolidayDates,
@@ -837,6 +838,64 @@ describe('findBirthdayDayForHolidayRange & birthday-in-range deduplication', () 
     expect(
       findBirthdayDayForHolidayRange('2026-09-07', '2026-09-11', 2026, 'within_week', { month: 5, day: 13 }, []),
     ).toBeNull();
+  });
+});
+
+describe('findHolidayCoveringDate', () => {
+  const trip = {
+    id: 'h-trip',
+    startDate: '2026-05-28',
+    endDate: '2026-06-03',
+    occasion: 'Trip',
+    count: 5,
+    type: 'holiday' as const,
+  };
+
+  it('covers every date of the range inclusive, across a month boundary', () => {
+    expect(findHolidayCoveringDate([trip], '2026-05-28')).toBe(trip);
+    expect(findHolidayCoveringDate([trip], '2026-05-31')).toBe(trip);
+    expect(findHolidayCoveringDate([trip], '2026-06-03')).toBe(trip);
+  });
+
+  it('does not cover the days either side of the range', () => {
+    expect(findHolidayCoveringDate([trip], '2026-05-27')).toBeUndefined();
+    expect(findHolidayCoveringDate([trip], '2026-06-04')).toBeUndefined();
+  });
+
+  it('treats an entry with no type as a holiday', () => {
+    const { type: _type, ...untyped } = trip;
+    expect(findHolidayCoveringDate([untyped], '2026-06-01')).toBe(untyped);
+  });
+
+  it('ignores sick and birthday entries', () => {
+    const sick = { ...trip, id: 'sick', type: 'sick' as const };
+    const birthday = { ...trip, id: 'bday', type: 'birthday' as const };
+    expect(findHolidayCoveringDate([sick, birthday], '2026-06-01')).toBeUndefined();
+  });
+
+  it('skips the excluded entry and falls through to another that covers', () => {
+    const other = { ...trip, id: 'h-other', startDate: '2026-06-01', endDate: '2026-06-05' };
+    expect(findHolidayCoveringDate([trip], '2026-06-01', 'h-trip')).toBeUndefined();
+    expect(findHolidayCoveringDate([trip, other], '2026-06-01', 'h-trip')).toBe(other);
+  });
+
+  it('covers its own date when it is a half day', () => {
+    const half = {
+      id: 'h-half',
+      startDate: '2026-06-01',
+      endDate: '2026-06-01',
+      occasion: 'Appointment',
+      count: 0.5,
+      type: 'holiday' as const,
+      halfDay: 'am' as const,
+    };
+    expect(findHolidayCoveringDate([half], '2026-06-01')).toBe(half);
+  });
+
+  it('returns nothing for a missing or malformed date or an empty list', () => {
+    expect(findHolidayCoveringDate([trip], '')).toBeUndefined();
+    expect(findHolidayCoveringDate([trip], 'not-a-date')).toBeUndefined();
+    expect(findHolidayCoveringDate([], '2026-06-01')).toBeUndefined();
   });
 });
 
