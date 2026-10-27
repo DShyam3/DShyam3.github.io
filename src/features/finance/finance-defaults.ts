@@ -61,6 +61,11 @@ export const createDefaultFinanceSettings = (activeSavingsTypes: string[], today
   ukRegion: 'england-and-wales',
   holidaysByUser: {},
   activeSavingsTypes,
+  birthdayLeaveEnabled: false,
+  birthdayLeaveRule: 'within_week',
+  birthdayMonth: null,
+  birthdayDay: null,
+  packageBenefits: [],
 });
 
 /** A zeroed tax-rate timeline, effective from that tax year's 6 April, used

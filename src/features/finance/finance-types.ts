@@ -1,5 +1,14 @@
-import type { DebtObservation, HalfDay, LeaveType, RatePeriod, StudentLoanPlanKey } from '@/lib/finance';
-export type { DebtObservation, HalfDay, LeaveType, RatePeriod };
+import type {
+  BirthdayDate,
+  BirthdayLeaveRule,
+  DebtObservation,
+  HalfDay,
+  LeaveType,
+  OptimalLeaveBias,
+  RatePeriod,
+  StudentLoanPlanKey,
+} from '@/lib/finance';
+export type { BirthdayDate, BirthdayLeaveRule, DebtObservation, HalfDay, LeaveType, OptimalLeaveBias, RatePeriod };
 
 export interface FinanceSettings {
   grossSalary: number;
@@ -22,6 +31,10 @@ export interface FinanceSettings {
   paydayBiweeklyAnchor?: string;
   activeSavingsTypes?: string[];
   packageBenefits?: PackageBenefit[];
+  birthdayLeaveEnabled?: boolean;
+  birthdayLeaveRule?: BirthdayLeaveRule;
+  birthdayMonth?: number | null;
+  birthdayDay?: number | null;
 }
 
 export interface PackageBenefit {
@@ -31,6 +44,8 @@ export interface PackageBenefit {
   type: 'monetary' | 'percentage';
   emoji?: string;
   notes?: string;
+  /** Optional annual tax taken off (Benefit-in-Kind / P11D or bonus tax deduction in £/year). */
+  annualTaxCost?: number;
 }
 
 
@@ -40,7 +55,7 @@ export interface UserHoliday {
   endDate: string; // YYYY-MM-DD
   occasion: string;
   count: number;
-  type?: LeaveType; // 'holiday' | 'sick'
+  type?: LeaveType; // 'holiday' | 'sick' | 'birthday'
   halfDay?: HalfDay; // 'am' | 'pm'; set only for a half day
 }
 

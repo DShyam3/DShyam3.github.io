@@ -12,6 +12,7 @@
  * one field instead of breaking a screen.
  */
 
+import type { BirthdayLeaveRule, LeaveType } from '@/lib/finance';
 import type {
   BankAccount,
   BudgetCategory,
@@ -21,6 +22,7 @@ import type {
   HalfDay,
   InvestmentHolding,
   Membership,
+  PackageBenefit,
   RecurringBill,
 } from '@/features/finance/finance-types';
 
@@ -86,6 +88,31 @@ export const asPaydaySchedule = oneOf<NonNullable<FinanceSettings['paydaySchedul
 /** Optional, so it has no fallback: anything but a known half reads as a full day. */
 export const asHalfDay = (value: string | null | undefined): HalfDay | undefined =>
   value === 'am' || value === 'pm' ? value : undefined;
+
+export const asLeaveType = oneOf<LeaveType>(
+  ['holiday', 'sick', 'birthday'],
+  'holiday',
+);
+
+export const asBirthdayLeaveRule = oneOf<BirthdayLeaveRule>(
+  ['exact_or_nearest', 'within_week', 'birthday_month', 'within_month', 'anytime'],
+  'within_week',
+);
+
+export const asPackageBenefits = (value: unknown): PackageBenefit[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .map((item, idx) => ({
+      id: typeof item.id === 'string' && item.id ? item.id : `benefit_${idx}`,
+      name: typeof item.name === 'string' ? item.name : 'Benefit',
+      amount: Number(item.amount) || 0,
+      type: item.type === 'percentage' ? 'percentage' : 'monetary',
+      ...(typeof item.emoji === 'string' && item.emoji ? { emoji: item.emoji } : {}),
+      ...(typeof item.notes === 'string' && item.notes ? { notes: item.notes } : {}),
+      ...(Number(item.annualTaxCost) > 0 ? { annualTaxCost: Number(item.annualTaxCost) } : {}),
+    }));
+};
 
 /**
  * A jsonb column read back as a known shape.

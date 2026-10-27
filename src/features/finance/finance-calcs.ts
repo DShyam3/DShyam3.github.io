@@ -70,6 +70,11 @@ export const calculateFinance = (
     return sum + (val || 0);
   }, 0);
 
+  const benefitTaxDeduction = packageBenefits.reduce((sum, b) => {
+    const taxCost = Number(b.annualTaxCost) || 0;
+    return sum + Math.max(0, taxCost);
+  }, 0);
+
   const totalPackage = grossSalary + employerPensionRate + totalBenefitsValue;
 
   const incomeTaxGross = pensionType === 'net_pay' || pensionType === 'salary_sacrifice'
@@ -124,12 +129,13 @@ export const calculateFinance = (
     }
   }
 
-  const totalDeductions = incomeTax + nationalInsurance + studentLoan + personalPensionRate;
+  const totalDeductions = incomeTax + nationalInsurance + studentLoan + personalPensionRate + benefitTaxDeduction;
   const netTakeHome = grossSalary - totalDeductions;
   const WEEKS_IN_YEAR_ACTUAL = 365 / 7; // 52.142857... (~52.1429) weeks
   const workingDaysStandard = WEEKS_IN_YEAR_ACTUAL * 5; // ~260.714 days
   const workingDaysIncludingLeave = Math.max(0, 365 - weekends - 1);
-  const workingDaysExcludingLeave = Math.max(0, 365 - weekends - 1 - bankHolidays - workHolidays);
+  const birthdayLeaveDays = settings.birthdayLeaveEnabled ? 1 : 0;
+  const workingDaysExcludingLeave = Math.max(0, 365 - weekends - 1 - bankHolidays - workHolidays - birthdayLeaveDays);
 
   const getBreakdown = (annualAmount: number, daysInYear: number, weeksInYear = 52) => {
     const monthly = annualAmount / 12;
@@ -144,6 +150,7 @@ export const calculateFinance = (
     preTax: getBreakdown(grossSalary, daysInYear, weeksInYear),
     employerPension: getBreakdown(employerPensionRate, daysInYear, weeksInYear),
     benefits: getBreakdown(totalBenefitsValue, daysInYear, weeksInYear),
+    benefitTax: getBreakdown(benefitTaxDeduction, daysInYear, weeksInYear),
     tax: getBreakdown(incomeTax, daysInYear, weeksInYear),
     ni: getBreakdown(nationalInsurance, daysInYear, weeksInYear),
     pension: getBreakdown(personalPensionRate, daysInYear, weeksInYear),
@@ -156,6 +163,7 @@ export const calculateFinance = (
     personalPensionRate,
     employerPensionRate,
     totalBenefitsValue,
+    benefitTaxDeduction,
     totalPackage,
     personalAllowance,
     incomeTax,

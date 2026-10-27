@@ -1440,10 +1440,15 @@ export type Database = {
         Row: {
           active_savings_types: string[] | null
           bank_holidays: number
+          birthday_day: number | null
+          birthday_leave_enabled: boolean
+          birthday_leave_rule: string
+          birthday_month: number | null
           employer_pension_percent: number
           gross_salary: number
           id: string
           is_default: boolean
+          package_benefits: Json
           pay_day_of_month: number | null
           payday_biweekly_anchor: string | null
           payday_schedule: string | null
@@ -1464,10 +1469,15 @@ export type Database = {
         Insert: {
           active_savings_types?: string[] | null
           bank_holidays?: number
+          birthday_day?: number | null
+          birthday_leave_enabled?: boolean
+          birthday_leave_rule?: string
+          birthday_month?: number | null
           employer_pension_percent?: number
           gross_salary?: number
           id?: string
           is_default?: boolean
+          package_benefits?: Json
           pay_day_of_month?: number | null
           payday_biweekly_anchor?: string | null
           payday_schedule?: string | null
@@ -1488,10 +1498,15 @@ export type Database = {
         Update: {
           active_savings_types?: string[] | null
           bank_holidays?: number
+          birthday_day?: number | null
+          birthday_leave_enabled?: boolean
+          birthday_leave_rule?: string
+          birthday_month?: number | null
           employer_pension_percent?: number
           gross_salary?: number
           id?: string
           is_default?: boolean
+          package_benefits?: Json
           pay_day_of_month?: number | null
           payday_biweekly_anchor?: string | null
           payday_schedule?: string | null

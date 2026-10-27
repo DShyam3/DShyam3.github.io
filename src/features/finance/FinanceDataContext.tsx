@@ -36,12 +36,14 @@ import type {
 } from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { normalizeHolidays } from '@/lib/finance';
+import { normalizeHolidays, resolveBankHolidaysForYear } from '@/lib/finance';
 import {
+  asBirthdayLeaveRule,
   asBudgetGroup,
   asBureauKey,
   asInvestmentCategory,
   asFrequency,
+  asPackageBenefits,
   asPensionType,
   asStudentLoanPlan,
   asPaydaySchedule,
@@ -375,31 +377,39 @@ function useProvideFinanceData() {
   useEffect(() => {
     const fetchHolidays = async () => {
       setFetchingHolidays(true);
+      const region = settings.ukRegion || 'england-and-wales';
+      let fetchedHolsInYear: string[] = [];
+      const fetchedHolsMap: Record<string, string> = {};
       try {
         const res = await fetch('https://www.gov.uk/bank-holidays.json');
         if (!res.ok) throw new Error('Failed to fetch holidays');
         const data = await res.json();
 
-        const region = settings.ukRegion || 'england-and-wales';
         const events = (data[region]?.events ?? []) as { date: string; title: string }[];
-
         const yearStr = settings.taxYear.toString();
-        const holsInYear = events
+        fetchedHolsInYear = events
           .filter((e) => e.date.startsWith(yearStr))
           .map((e) => e.date);
 
-        setBankHolidaysList(holsInYear);
-
-        const holsMap: Record<string, string> = {};
         events.forEach((e) => {
           if (e.date.startsWith(yearStr)) {
-            holsMap[e.date] = e.title;
+            fetchedHolsMap[e.date] = e.title;
           }
         });
-        setBankHolidaysMap(holsMap);
+      } catch (err) {
+        console.error('Error fetching bank holidays:', err);
+      } finally {
+        const resolved = resolveBankHolidaysForYear(
+          settings.taxYear,
+          region,
+          fetchedHolsInYear,
+          fetchedHolsMap,
+        );
+        setBankHolidaysList(resolved.dates);
+        setBankHolidaysMap(resolved.map);
 
         const calculatedWeekends = calculateWeekends(settings.taxYear);
-        const calculatedHolidays = holsInYear.length;
+        const calculatedHolidays = resolved.dates.length;
 
         setSettings(prev => {
           if (prev.bankHolidays === calculatedHolidays && prev.weekends === calculatedWeekends) {
@@ -411,9 +421,6 @@ function useProvideFinanceData() {
             weekends: calculatedWeekends
           };
         });
-      } catch (err) {
-        console.error('Error fetching bank holidays:', err);
-      } finally {
         setFetchingHolidays(false);
       }
     };
@@ -1450,7 +1457,7 @@ function useProvideFinanceData() {
           budgetPresetsRes,
           selfProfileRes
         ] = await Promise.all([
-          scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, updated_at')),
+          scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, birthday_leave_enabled, birthday_leave_rule, birthday_month, birthday_day, package_benefits, updated_at')),
           scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count, type, half_day')),
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
           selectAllPages((from, to) => scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id', { count: 'exact' }))
@@ -1584,6 +1591,11 @@ function useProvideFinanceData() {
             paydayWeekday: activeSettings.payday_weekday !== null ? activeSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: activeSettings.active_savings_types ?? [],
+            birthdayLeaveEnabled: Boolean(activeSettings.birthday_leave_enabled),
+            birthdayLeaveRule: asBirthdayLeaveRule(activeSettings.birthday_leave_rule),
+            birthdayMonth: activeSettings.birthday_month ?? null,
+            birthdayDay: activeSettings.birthday_day ?? null,
+            packageBenefits: asPackageBenefits(activeSettings.package_benefits),
           };
           setSettings(prev => ({
             ...prev,
@@ -1960,6 +1972,11 @@ function useProvideFinanceData() {
             paydayWeekday: defaultSettings.payday_weekday !== null ? defaultSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: defaultSettings.active_savings_types || [],
+            birthdayLeaveEnabled: Boolean(defaultSettings.birthday_leave_enabled),
+            birthdayLeaveRule: asBirthdayLeaveRule(defaultSettings.birthday_leave_rule),
+            birthdayMonth: defaultSettings.birthday_month ?? null,
+            birthdayDay: defaultSettings.birthday_day ?? null,
+            packageBenefits: asPackageBenefits(defaultSettings.package_benefits),
             // Ids of this profile's own, so a reset saves copies rather than
             // writing (or deleting) against the shared rows.
             holidaysByUser: scopeToProfile(defaultHolidaysList.map(h => holidayFromRow(h)), false, profileId),
@@ -2543,6 +2560,11 @@ function useProvideFinanceData() {
           payday_weekday: settingsObj.paydayWeekday !== undefined ? settingsObj.paydayWeekday : null,
           payday_biweekly_anchor: settingsObj.paydayBiweeklyAnchor || null,
           active_savings_types: settingsObj.activeSavingsTypes || [],
+          birthday_leave_enabled: Boolean(settingsObj.birthdayLeaveEnabled),
+          birthday_leave_rule: settingsObj.birthdayLeaveRule || 'within_week',
+          birthday_month: settingsObj.birthdayMonth ?? null,
+          birthday_day: settingsObj.birthdayDay ?? null,
+          package_benefits: (settingsObj.packageBenefits || []) as unknown as Json,
           updated_at: new Date().toISOString()
         };
 

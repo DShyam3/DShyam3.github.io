@@ -291,10 +291,30 @@ CREATE TABLE IF NOT EXISTS "public"."finance_settings" (
     "payday_weekday" integer DEFAULT 5,
     "payday_biweekly_anchor" "text" DEFAULT '2026-01-02'::"text",
     "active_savings_types" "text"[] DEFAULT '{}'::"text"[],
+    "birthday_leave_enabled" boolean DEFAULT false NOT NULL,
+    "birthday_leave_rule" "text" DEFAULT 'within_week'::"text" NOT NULL,
+    "birthday_month" integer,
+    "birthday_day" integer,
+    "package_benefits" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 
 ALTER TABLE "public"."finance_settings" OWNER TO "postgres";
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_leave_enabled" IS
+    'Whether the profile receives an extra paid Birthday Day Off benefit on top of standard work_holidays.';
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_leave_rule" IS
+    'Employer rule governing when the paid Birthday Day Off may be taken: exact_or_nearest, within_week, birthday_month, within_month, or anytime.';
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_month" IS
+    'Calendar month of birth (1..12) used only to compute the Birthday Day Off eligibility window; never a full date of birth.';
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_day" IS
+    'Day of month of birth (1..31) used only to compute the Birthday Day Off eligibility window; never a full date of birth.';
+
+COMMENT ON COLUMN "public"."finance_settings"."package_benefits" IS
+    'Contractual employer package benefits (JSON array of benefit items) tracked for total package valuation and comparison.';
 
 -- Global reference data, versioned by the date it takes effect -- same idea
 -- as finance_tax_configs. Not scoped to a profile: the Student Loans
@@ -510,7 +530,7 @@ CREATE TABLE IF NOT EXISTS "public"."finance_user_holidays" (
 ALTER TABLE "public"."finance_user_holidays" OWNER TO "postgres";
 
 COMMENT ON COLUMN "public"."finance_user_holidays"."type" IS
-    'Leave type: "holiday" (counts against annual holiday allowance) or "sick" (tracked separately as sick leave taken).';
+    'Leave type: "holiday" (counts against annual holiday allowance), "sick" (tracked separately as sick leave taken), or "birthday" (paid birthday day off benefit, does not consume standard holiday allowance).';
 
 COMMENT ON COLUMN "public"."finance_user_holidays"."half_day" IS
     'Which half of a single-day booking is taken: "am" (morning) or "pm" (afternoon). NULL for a full day or a range. A half day costs 0.5 days.';
@@ -1080,6 +1100,15 @@ ALTER TABLE ONLY "public"."finance_settings"
     ADD CONSTRAINT "finance_settings_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 ALTER TABLE ONLY "public"."finance_settings"
     ADD CONSTRAINT "finance_settings_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_leave_rule_check"
+    CHECK ("birthday_leave_rule" IN ('exact_or_nearest', 'within_week', 'birthday_month', 'within_month', 'anytime'));
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_month_check"
+    CHECK ("birthday_month" IS NULL OR ("birthday_month" >= 1 AND "birthday_month" <= 12));
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_day_check"
+    CHECK ("birthday_day" IS NULL OR ("birthday_day" >= 1 AND "birthday_day" <= 31));
 CREATE INDEX "idx_finance_settings_profile_id" ON "public"."finance_settings" ("profile_id");
 
 -- One non-default settings row per profile. Shared default rows
@@ -1098,7 +1127,7 @@ ALTER TABLE ONLY "public"."finance_user_holidays"
 ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
 ALTER TABLE ONLY "public"."finance_user_holidays"
-    ADD CONSTRAINT "finance_user_holidays_type_check" CHECK ("type" IN ('holiday', 'sick'));
+    ADD CONSTRAINT "finance_user_holidays_type_check" CHECK ("type" IN ('holiday', 'sick', 'birthday'));
 ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_half_day_check"
     CHECK ("half_day" IS NULL OR ("half_day" IN ('am', 'pm') AND "start_date" = "end_date" AND "count" = 0.5));

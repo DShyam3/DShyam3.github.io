@@ -1,13 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BIRTHDAY_LEAVE_RULES,
+  BIRTHDAY_LEAVE_RULE_LABELS,
+  OPTIMAL_LEAVE_BIASES,
+  OPTIMAL_LEAVE_BIAS_LABELS,
+  calculateBirthdayBenefitValue,
   calculateWorkingDaysInRange,
+  computeUkBankHolidaysForYear,
+  findBirthdayDayForHolidayRange,
+  formatDatesToBookUk,
   formatDaysList,
   formatHolidayDates,
+  formatUkDate,
+  getBirthdayLeaveWindow,
   getBookedDaysForMonth,
   isHalfDay,
   normalizeHolidays,
   parseDays,
   parseEntryDays,
+  planOptimalHolidays,
+  resolveBankHolidaysForYear,
+  resolveBirthdayInYear,
+  validateBirthdayLeaveBooking,
 } from './holidays';
 
 describe('parseDays', () => {
@@ -160,6 +174,37 @@ describe('getBookedDaysForMonth', () => {
     const booked = getBookedDaysForMonth([range], 2025, 11, []);
     expect(booked.map(b => b.fraction)).toEqual([1, 1, 1]);
   });
+
+  it('attributes type: "birthday" for a full birthday day off', () => {
+    const birthdayLeave = {
+      id: 'b1',
+      startDate: '2025-12-10',
+      endDate: '2025-12-10',
+      occasion: 'Birthday Day Off',
+      count: 1,
+      type: 'birthday' as const,
+    };
+    const booked = getBookedDaysForMonth([birthdayLeave], 2025, 11, []);
+    expect(booked).toEqual([
+      { day: 10, occasion: 'Birthday Day Off', type: 'birthday', fraction: 1 },
+    ]);
+  });
+
+  it('attributes type: "birthday" for a half-day birthday entry', () => {
+    const halfBirthday = {
+      id: 'b2',
+      startDate: '2025-12-10',
+      endDate: '2025-12-10',
+      occasion: 'Birthday afternoon',
+      count: 0.5,
+      type: 'birthday' as const,
+      halfDay: 'pm' as const,
+    };
+    const booked = getBookedDaysForMonth([halfBirthday], 2025, 11, []);
+    expect(booked).toEqual([
+      { day: 10, occasion: 'Birthday afternoon', type: 'birthday', fraction: 0.5, halfDay: 'pm' },
+    ]);
+  });
 });
 
 describe('formatHolidayDates', () => {
@@ -270,3 +315,564 @@ describe('normalizeHolidays', () => {
     expect(normalizeHolidays(null, 2025)).toEqual([]);
   });
 });
+
+describe('resolveBirthdayInYear', () => {
+  it('formats a normal birthday into YYYY-MM-DD', () => {
+    expect(resolveBirthdayInYear(2026, { month: 5, day: 9 })).toBe('2026-05-09');
+    expect(resolveBirthdayInYear(2026, { month: 12, day: 31 })).toBe('2026-12-31');
+  });
+
+  it('clamps 29 Feb to 28 Feb in non-leap years and keeps 29 Feb in leap years', () => {
+    expect(resolveBirthdayInYear(2026, { month: 2, day: 29 })).toBe('2026-02-28');
+    expect(resolveBirthdayInYear(2028, { month: 2, day: 29 })).toBe('2028-02-29');
+  });
+
+  it('returns null for missing or invalid month/day/year', () => {
+    expect(resolveBirthdayInYear(2026, null)).toBeNull();
+    expect(resolveBirthdayInYear(2026, undefined)).toBeNull();
+    expect(resolveBirthdayInYear(2026, { month: 0, day: 10 })).toBeNull();
+    expect(resolveBirthdayInYear(2026, { month: 13, day: 10 })).toBeNull();
+    expect(resolveBirthdayInYear(2026, { month: 2, day: 30 })).toBeNull();
+    expect(resolveBirthdayInYear(2026, { month: 4, day: 31 })).toBeNull();
+    expect(resolveBirthdayInYear(2026, { month: -1, day: 10 })).toBeNull();
+    expect(resolveBirthdayInYear(2026, { month: 5, day: 0 })).toBeNull();
+    expect(resolveBirthdayInYear(2026, { month: 5, day: -5 })).toBeNull();
+    expect(resolveBirthdayInYear(1899, { month: 5, day: 10 })).toBeNull();
+    expect(resolveBirthdayInYear(10000, { month: 5, day: 10 })).toBeNull();
+    expect(resolveBirthdayInYear(NaN, { month: 5, day: 10 })).toBeNull();
+  });
+});
+
+describe('getBirthdayLeaveWindow', () => {
+  it('exposes labels for every rule', () => {
+    for (const rule of BIRTHDAY_LEAVE_RULES) {
+      expect(BIRTHDAY_LEAVE_RULE_LABELS[rule].label.length).toBeGreaterThan(0);
+      expect(BIRTHDAY_LEAVE_RULE_LABELS[rule].shortLabel.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('exact_or_nearest on a working day restricts to the exact birthday', () => {
+    // 2026-06-10 is a Wednesday
+    const win = getBirthdayLeaveWindow(2026, 'exact_or_nearest', { month: 6, day: 10 }, []);
+    expect(win).toEqual({
+      birthdayIso: '2026-06-10',
+      startIso: '2026-06-10',
+      endIso: '2026-06-10',
+      eligibleDates: ['2026-06-10'],
+    });
+  });
+
+  it('exact_or_nearest on a weekend offers the nearest working days before and after', () => {
+    // 2026-06-13 is a Saturday -> Fri 12 Jun and Mon 15 Jun
+    const win = getBirthdayLeaveWindow(2026, 'exact_or_nearest', { month: 6, day: 13 }, []);
+    expect(win).toEqual({
+      birthdayIso: '2026-06-13',
+      startIso: '2026-06-12',
+      endIso: '2026-06-15',
+      eligibleDates: ['2026-06-12', '2026-06-15'],
+    });
+  });
+
+  it('exact_or_nearest on a bank holiday skips over the bank holiday and weekend', () => {
+    // 2026-12-25 (Fri) and 2026-12-28 (Mon) are bank holidays -> Thu 24 Dec and Tue 29 Dec
+    const win = getBirthdayLeaveWindow(
+      2026,
+      'exact_or_nearest',
+      { month: 12, day: 25 },
+      ['2026-12-25', '2026-12-28'],
+    );
+    expect(win).toEqual({
+      birthdayIso: '2026-12-25',
+      startIso: '2026-12-24',
+      endIso: '2026-12-29',
+      eligibleDates: ['2026-12-24', '2026-12-29'],
+    });
+  });
+
+  it('within_week spans ±7 calendar days clamped to the leave year', () => {
+    // 2026-12-29 +/- 7 days clamped to 2026 -> 2026-12-22 to 2026-12-31
+    const win = getBirthdayLeaveWindow(
+      2026,
+      'within_week',
+      { month: 12, day: 29 },
+      ['2026-12-25', '2026-12-28'],
+    );
+    expect(win?.startIso).toBe('2026-12-22');
+    expect(win?.endIso).toBe('2026-12-31');
+    expect(win?.eligibleDates).not.toContain('2026-12-25');
+    expect(win?.eligibleDates).not.toContain('2026-12-26'); // Sat
+    expect(win?.eligibleDates).toContain('2026-12-29');
+    expect(win?.eligibleDates).toContain('2026-12-31');
+    expect(win?.eligibleDates.every(d => d.startsWith('2026-'))).toBe(true);
+  });
+
+  it('birthday_month covers all working days in the birthday calendar month', () => {
+    // Feb 2026: 2026-02-01 to 2026-02-28 (20 working days)
+    const win = getBirthdayLeaveWindow(2026, 'birthday_month', { month: 2, day: 14 }, []);
+    expect(win?.startIso).toBe('2026-02-01');
+    expect(win?.endIso).toBe('2026-02-28');
+    expect(win?.eligibleDates).toHaveLength(20);
+  });
+
+  it('within_month covers ±30 calendar days around the birthday', () => {
+    const win = getBirthdayLeaveWindow(2026, 'within_month', { month: 6, day: 15 }, []);
+    expect(win?.startIso).toBe('2026-05-16');
+    expect(win?.endIso).toBe('2026-07-15');
+    expect(win?.eligibleDates.includes('2026-06-15')).toBe(true);
+  });
+
+  it('anytime returns all working days in the year even without a birthday set', () => {
+    const win = getBirthdayLeaveWindow(2026, 'anytime', null, ['2026-01-01']);
+    expect(win?.birthdayIso).toBeNull();
+    expect(win?.startIso).toBe('2026-01-01');
+    expect(win?.endIso).toBe('2026-12-31');
+    expect(win?.eligibleDates).not.toContain('2026-01-01');
+    expect(win?.eligibleDates).toContain('2026-01-02');
+  });
+
+  it('returns null for non-anytime rules when birthday is missing or year is invalid', () => {
+    expect(getBirthdayLeaveWindow(2026, 'exact_or_nearest', null, [])).toBeNull();
+    expect(getBirthdayLeaveWindow(2026, 'within_week', undefined, [])).toBeNull();
+    expect(getBirthdayLeaveWindow(2026, 'birthday_month', null, [])).toBeNull();
+    expect(getBirthdayLeaveWindow(2026, 'within_month', null, [])).toBeNull();
+    expect(getBirthdayLeaveWindow(1800, 'anytime', { month: 5, day: 10 }, [])).toBeNull();
+  });
+});
+
+describe('validateBirthdayLeaveBooking', () => {
+  const bday = { month: 6, day: 10 }; // Wed 10 Jun 2026
+
+  it('accepts a valid single working day inside the window', () => {
+    expect(
+      validateBirthdayLeaveBooking('2026-06-10', '2026-06-10', 2026, 'exact_or_nearest', bday, []),
+    ).toEqual({ valid: true });
+  });
+
+  it('rejects missing or malformed dates', () => {
+    expect(
+      validateBirthdayLeaveBooking('', '2026-06-10', 2026, 'exact_or_nearest', bday, []),
+    ).toEqual({ valid: false, reason: 'Choose a valid date for your birthday day off.' });
+    expect(
+      validateBirthdayLeaveBooking('not-a-date', 'not-a-date', 2026, 'exact_or_nearest', bday, []),
+    ).toEqual({ valid: false, reason: 'Choose a valid date for your birthday day off.' });
+  });
+
+  it('rejects a multi-day range', () => {
+    expect(
+      validateBirthdayLeaveBooking('2026-06-10', '2026-06-11', 2026, 'within_week', bday, []),
+    ).toEqual({ valid: false, reason: 'Birthday day off must be booked as a single day.' });
+  });
+
+  it('rejects a weekend or bank holiday', () => {
+    // 2026-06-13 is Saturday
+    expect(
+      validateBirthdayLeaveBooking('2026-06-13', '2026-06-13', 2026, 'within_week', bday, []),
+    ).toEqual({ valid: false, reason: 'Birthday day off must be booked on a working day.' });
+    expect(
+      validateBirthdayLeaveBooking('2026-06-10', '2026-06-10', 2026, 'within_week', bday, ['2026-06-10']),
+    ).toEqual({ valid: false, reason: 'Birthday day off must be booked on a working day.' });
+  });
+
+  it('rejects a working day outside the configured rule window with a formatted window message', () => {
+    const res = validateBirthdayLeaveBooking('2026-06-25', '2026-06-25', 2026, 'within_week', bday, []);
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('Date falls outside your ±1 week birthday window (3 Jun - 17 Jun 26).');
+  });
+
+  it('allows any working day when no birthday date is configured yet', () => {
+    expect(
+      validateBirthdayLeaveBooking('2026-09-15', '2026-09-15', 2026, 'exact_or_nearest', null, []),
+    ).toEqual({ valid: true });
+  });
+});
+
+describe('calculateBirthdayBenefitValue', () => {
+  it('computes the daily gross rate rounded to 2 decimal places', () => {
+    expect(calculateBirthdayBenefitValue(52000, 260)).toBe(200);
+    expect(calculateBirthdayBenefitValue(65000, 260)).toBe(250);
+    expect(calculateBirthdayBenefitValue(50000, 260)).toBe(192.31);
+  });
+
+  it('returns 0 for zero, negative, or non-finite inputs', () => {
+    expect(calculateBirthdayBenefitValue(0, 260)).toBe(0);
+    expect(calculateBirthdayBenefitValue(-50000, 260)).toBe(0);
+    expect(calculateBirthdayBenefitValue(50000, 0)).toBe(0);
+    expect(calculateBirthdayBenefitValue(50000, -260)).toBe(0);
+    expect(calculateBirthdayBenefitValue(NaN, 260)).toBe(0);
+    expect(calculateBirthdayBenefitValue(Infinity, 260)).toBe(0);
+    expect(calculateBirthdayBenefitValue(50000, NaN)).toBe(0);
+  });
+});
+
+describe('computeUkBankHolidaysForYear & resolveBankHolidaysForYear', () => {
+  it('computes England & Wales 2026 bank holidays including Boxing Day substitute on 28 Dec', () => {
+    const events = computeUkBankHolidaysForYear(2026, 'england-and-wales');
+    expect(events.map(e => e.date)).toEqual([
+      '2026-01-01',
+      '2026-04-03',
+      '2026-04-06',
+      '2026-05-04',
+      '2026-05-25',
+      '2026-08-31',
+      '2026-12-25',
+      '2026-12-28',
+    ]);
+  });
+
+  it('computes future years (2027, 2028, 2030) with weekend substitution for both Christmas and Boxing Day when needed', () => {
+    // In 2027, 25 Dec is Sat and 26 Dec is Sun -> substitutes on Mon 27 Dec and Tue 28 Dec
+    const bh2027 = computeUkBankHolidaysForYear(2027, 'england-and-wales');
+    expect(bh2027.map(e => e.date)).toContain('2027-12-27');
+    expect(bh2027.map(e => e.date)).toContain('2027-12-28');
+
+    const bh2030 = computeUkBankHolidaysForYear(2030, 'england-and-wales');
+    expect(bh2030).toHaveLength(8);
+  });
+
+  it('reflects regional differences for Scotland and Northern Ireland', () => {
+    const scotland = computeUkBankHolidaysForYear(2026, 'scotland');
+    expect(scotland.map(e => e.title)).toContain('2nd January');
+    expect(scotland.map(e => e.title)).toContain('St Andrew’s Day');
+    expect(scotland.map(e => e.title)).not.toContain('Easter Monday');
+    // Scotland Summer bank holiday is first Monday of August (2026-08-03)
+    expect(scotland.find(e => e.title === 'Summer bank holiday')?.date).toBe('2026-08-03');
+
+    const ni = computeUkBankHolidaysForYear(2026, 'northern-ireland');
+    expect(ni.map(e => e.title)).toContain('St Patrick’s Day');
+    expect(ni.map(e => e.title)).toContain('Battle of the Boyne (Orangemen’s Day)');
+    expect(ni).toHaveLength(10);
+  });
+
+  it('returns empty array for invalid years', () => {
+    expect(computeUkBankHolidaysForYear(1850)).toEqual([]);
+    expect(computeUkBankHolidaysForYear(10000)).toEqual([]);
+    expect(computeUkBankHolidaysForYear(NaN)).toEqual([]);
+  });
+
+  it('resolveBankHolidaysForYear prefers fetched dates for that year and falls back to computed for future years', () => {
+    const resolvedFromFetched = resolveBankHolidaysForYear(
+      2026,
+      'england-and-wales',
+      ['2026-01-01', '2026-05-04'],
+      { '2026-01-01': 'Custom NYD' },
+    );
+    expect(resolvedFromFetched.dates).toEqual(['2026-01-01', '2026-05-04']);
+    expect(resolvedFromFetched.map['2026-01-01']).toBe('Custom NYD');
+    expect(resolvedFromFetched.map['2026-05-04']).toBe('Early May bank holiday');
+
+    // Fetched list only has 2026, requesting 2029 falls back to deterministic calculation
+    const resolved2029 = resolveBankHolidaysForYear(2029, 'england-and-wales', ['2026-01-01']);
+    expect(resolved2029.dates).toHaveLength(8);
+    expect(resolved2029.dates[0]).toBe('2029-01-01');
+  });
+});
+
+describe('planOptimalHolidays', () => {
+  it('generates high-efficiency bridges for 2026 and future years', () => {
+    const plan2026 = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 25,
+    });
+    expect(plan2026.bridges.length).toBeGreaterThanOrEqual(6);
+    for (const bridge of plan2026.bridges) {
+      expect(bridge.totalDaysOff).toBeGreaterThan(bridge.workingDaysBooked);
+      expect(bridge.efficiency).toBeGreaterThan(1);
+    }
+    // Check Easter pre-week (30 Mar - 2 Apr 2026: 4 leave days -> 10 days off from Sat 28 Mar to Mon 6 Apr)
+    const preEaster = plan2026.bridges.find(b => b.startDate === '2026-03-30');
+    expect(preEaster).toBeDefined();
+    expect(preEaster?.workingDaysBooked).toBe(4);
+    expect(preEaster?.totalDaysOff).toBe(10);
+
+    // Check Christmas & New Year 2026 (29-31 Dec: 3 leave days -> 10 days off from Fri 25 Dec 2026 to Sun 3 Jan 2027)
+    const xmas = plan2026.bridges.find(b => b.startDate === '2026-12-29' && b.endDate === '2026-12-31');
+    expect(xmas).toBeDefined();
+    expect(xmas?.workingDaysBooked).toBe(3);
+    expect(xmas?.totalDaysOff).toBe(10);
+
+    // Future year 2028 works deterministically without fetched bank holidays
+    const plan2028 = planOptimalHolidays({
+      year: 2028,
+      annualAllowance: 25,
+    });
+    expect(plan2028.bridges.length).toBeGreaterThanOrEqual(6);
+    expect(plan2028.recommendedLeaveDays).toBeLessThanOrEqual(25);
+  });
+
+  it('respects annualAllowance when selecting recommended bridges', () => {
+    const tightPlan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 7,
+    });
+    expect(tightPlan.recommendedLeaveDays).toBeLessThanOrEqual(7);
+    expect(tightPlan.remainingAllowanceAfterPlan).toBe(7 - tightPlan.recommendedLeaveDays);
+  });
+
+  it('reduces leaveDaysRequired by 1 when birthday falls inside a bank-holiday bridge window', () => {
+    // Early May 2026 bank holiday is Mon 4 May; week is 5-8 May. Birthday on 6 May:
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 25,
+      birthdayLeaveEnabled: true,
+      birthdayLeaveRule: 'within_week',
+      birthday: { month: 5, day: 6 },
+    });
+    const mayBridge = plan.bridges.find(b => b.startDate === '2026-05-05');
+    expect(mayBridge).toBeDefined();
+    expect(mayBridge?.usesBirthdayDay).toBe(true);
+    expect(mayBridge?.birthdayDayDate).toBe('2026-05-06');
+    expect(mayBridge?.workingDaysBooked).toBe(4);
+    expect(mayBridge?.leaveDaysRequired).toBe(3);
+    expect(plan.recommendedUsesBirthday).toBe(true);
+  });
+
+  it('creates a standalone 0-leave Birthday Day Off Break when birthday does not overlap a bank holiday week', () => {
+    // Friday 16 Oct 2026 -> 3 consecutive days off (16-18 Oct) for 0 annual leave days
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 25,
+      birthdayLeaveEnabled: true,
+      birthdayLeaveRule: 'exact_or_nearest',
+      birthday: { month: 10, day: 16 },
+    });
+    const bdayBridge = plan.bridges.find(b => b.label === 'Birthday Day Off Break');
+    expect(bdayBridge).toBeDefined();
+    expect(bdayBridge?.usesBirthdayDay).toBe(true);
+    expect(bdayBridge?.leaveDaysRequired).toBe(0);
+    expect(bdayBridge?.workingDaysBooked).toBe(1);
+    expect(bdayBridge?.totalDaysOff).toBe(3);
+    expect(bdayBridge?.recommended).toBe(true);
+  });
+
+  it('excludes already-booked holidays and deducts used allowance', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 10,
+      existingHolidays: [
+        {
+          id: 'existing-1',
+          startDate: '2026-05-05',
+          endDate: '2026-05-08',
+          occasion: 'May Trip',
+          count: 4,
+          type: 'holiday',
+        },
+      ],
+    });
+    // The 5-8 May week is already booked so it is not offered again
+    expect(plan.bridges.find(b => b.startDate === '2026-05-05' && b.endDate === '2026-05-08')).toBeUndefined();
+    // Only 6 days of allowance remain (10 - 4)
+    expect(plan.recommendedLeaveDays).toBeLessThanOrEqual(6);
+  });
+
+  it('generates Christmas Tiers 1, 2, and 3 with datesToBook, returnToWorkDate, and tierLabel', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 25,
+    });
+    const xmasTier1 = plan.bridges.find(b => b.label.includes('Christmas') && b.tier === 1);
+    const xmasTier2 = plan.bridges.find(b => b.label.includes('Christmas') && b.tier === 2);
+    const xmasTier3 = plan.bridges.find(b => b.label.includes('Christmas') && b.tier === 3);
+
+    expect(xmasTier1).toBeDefined();
+    expect(xmasTier1?.workingDaysBooked).toBe(3);
+    expect(xmasTier1?.totalDaysOff).toBe(10);
+    expect(xmasTier1?.datesToBook).toEqual(['2026-12-29', '2026-12-30', '2026-12-31']);
+    expect(xmasTier1?.returnToWorkDate).toBe('2027-01-04');
+    expect(xmasTier1?.tierLabel).toContain('Tier 1');
+
+    expect(xmasTier2).toBeDefined();
+    expect(xmasTier2?.workingDaysBooked).toBe(5);
+    expect(xmasTier2?.totalDaysOff).toBe(12);
+    expect(xmasTier2?.returnToWorkDate).toBe('2027-01-04');
+    expect(xmasTier2?.tierLabel).toContain('Tier 2');
+
+    expect(xmasTier3).toBeDefined();
+    expect(xmasTier3?.workingDaysBooked).toBe(7);
+    expect(xmasTier3?.totalDaysOff).toBe(16);
+    expect(xmasTier3?.breakStartDate).toBe('2026-12-19');
+    expect(xmasTier3?.breakEndDate).toBe('2027-01-03');
+    expect(xmasTier3?.returnToWorkDate).toBe('2027-01-04');
+    expect(xmasTier3?.datesToBook).toEqual([
+      '2026-12-21',
+      '2026-12-22',
+      '2026-12-23',
+      '2026-12-24',
+      '2026-12-29',
+      '2026-12-30',
+      '2026-12-31',
+    ]);
+  });
+
+  it('bias: "long_christmas" recommends the Tier 3 Ultimate Christmas Shutdown even on a tighter allowance', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 15,
+      bias: 'long_christmas',
+    });
+    expect(plan.bias).toBe('long_christmas');
+    const xmasTier3 = plan.bridges.find(b => b.label.includes('Christmas') && b.tier === 3);
+    expect(xmasTier3?.recommended).toBe(true);
+    expect(plan.recommendedLeaveDays).toBeLessThanOrEqual(15);
+  });
+
+  it('bias: "long_easter" recommends the 16-Day Easter Mega-Break', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 15,
+      bias: 'long_easter',
+    });
+    expect(plan.bias).toBe('long_easter');
+    const easterTier3 = plan.bridges.find(b => b.label.includes('Easter') && b.tier === 3);
+    expect(easterTier3).toBeDefined();
+    expect(easterTier3?.workingDaysBooked).toBe(8);
+    expect(easterTier3?.totalDaysOff).toBe(16);
+    expect(easterTier3?.recommended).toBe(true);
+  });
+
+  it('bias: "summer_focus" prioritises May and August bridges when allowance is limited', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 8,
+      bias: 'summer_focus',
+    });
+    const recommended = plan.bridges.filter(b => b.recommended);
+    expect(recommended.every(b => b.startDate.startsWith('2026-05-') || b.startDate.startsWith('2026-08-'))).toBe(true);
+    expect(plan.recommendedLeaveDays).toBe(8);
+  });
+});
+
+describe('formatUkDate & formatDatesToBookUk', () => {
+  it('exposes labels for every OptimalLeaveBias', () => {
+    for (const b of OPTIMAL_LEAVE_BIASES) {
+      expect(OPTIMAL_LEAVE_BIAS_LABELS[b].label.length).toBeGreaterThan(0);
+      expect(OPTIMAL_LEAVE_BIAS_LABELS[b].shortLabel.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('formats a single date in UK day-first order with optional weekday', () => {
+    expect(formatUkDate('2027-01-04')).toBe('4 Jan 27');
+    expect(formatUkDate('2027-01-04', true)).toBe('Mon 4 Jan 27');
+    expect(formatUkDate('invalid')).toBe('');
+  });
+
+  it('collapses disjoint working-day runs into UK range segments', () => {
+    expect(
+      formatDatesToBookUk([
+        '2026-12-21',
+        '2026-12-22',
+        '2026-12-23',
+        '2026-12-24',
+        '2026-12-29',
+        '2026-12-30',
+        '2026-12-31',
+      ]),
+    ).toBe('21 Dec - 24 Dec 26 + 29 Dec - 31 Dec 26');
+    expect(formatDatesToBookUk([])).toBe('');
+  });
+});
+
+describe('findBirthdayDayForHolidayRange & birthday-in-range deduplication', () => {
+  it('deduplicates a 1-day birthday entry inside a 5-day holiday range in getBookedDaysForMonth', () => {
+    const entries = [
+      {
+        id: 'h-may',
+        startDate: '2026-05-11',
+        endDate: '2026-05-15',
+        occasion: 'May Week',
+        count: 4,
+        type: 'holiday' as const,
+      },
+      {
+        id: 'b-may',
+        startDate: '2026-05-13',
+        endDate: '2026-05-13',
+        occasion: 'Birthday Day Off (May Week)',
+        count: 1,
+        type: 'birthday' as const,
+      },
+    ];
+    const booked = getBookedDaysForMonth(entries, 2026, 4, []);
+    expect(booked).toHaveLength(5);
+    expect(booked.filter(b => b.type === 'holiday').map(b => b.day)).toEqual([11, 12, 14, 15]);
+    expect(booked.filter(b => b.type === 'birthday').map(b => b.day)).toEqual([13]);
+  });
+
+  it('finds the exact birthday inside a multi-day range for exact_or_nearest and within_week', () => {
+    expect(
+      findBirthdayDayForHolidayRange(
+        '2026-05-11',
+        '2026-05-15',
+        2026,
+        'exact_or_nearest',
+        { month: 5, day: 13 },
+        [],
+      ),
+    ).toBe('2026-05-13');
+
+    // Birthday on Sunday 10 May 2026, trip is Mon 11 May - Fri 15 May -> closest matching working day is Mon 11 May
+    expect(
+      findBirthdayDayForHolidayRange(
+        '2026-05-11',
+        '2026-05-15',
+        2026,
+        'within_week',
+        { month: 5, day: 10 },
+        [],
+      ),
+    ).toBe('2026-05-11');
+  });
+
+  it('supports anytime rule and returns null for single-day or out-of-window ranges', () => {
+    expect(
+      findBirthdayDayForHolidayRange('2026-09-07', '2026-09-11', 2026, 'anytime', null, []),
+    ).toBe('2026-09-07');
+
+    // Single-day range returns null
+    expect(
+      findBirthdayDayForHolidayRange('2026-05-13', '2026-05-13', 2026, 'within_week', { month: 5, day: 13 }, []),
+    ).toBeNull();
+
+    // Out-of-window range returns null
+    expect(
+      findBirthdayDayForHolidayRange('2026-09-07', '2026-09-11', 2026, 'within_week', { month: 5, day: 13 }, []),
+    ).toBeNull();
+  });
+});
+
+describe('planOptimalHolidays with asOfDate remaining-year filtering', () => {
+  it('excludes past bank holidays before asOfDate and emits remaining-year stretches', () => {
+    const plan = planOptimalHolidays({
+      year: 2026,
+      annualAllowance: 25,
+      asOfDate: '2026-10-25',
+    });
+
+    // No bridge before 2026-10-25 (Easter, Early May, Spring, Summer are all excluded)
+    expect(plan.bridges.every(b => b.startDate >= '2026-10-25')).toBe(true);
+    expect(plan.bridges.some(b => b.label.includes('Easter'))).toBe(false);
+    expect(plan.bridges.some(b => b.label.includes('May'))).toBe(false);
+    expect(plan.bridges.some(b => b.label.includes('Summer'))).toBe(false);
+
+    // Christmas 2026 and remaining-year stretches (Long Weekend + 9-Day Week Break) are present
+    expect(plan.bridges.some(b => b.label.includes('Christmas'))).toBe(true);
+    expect(plan.bridges.some(b => b.clusterId === 'rem_long_weekend')).toBe(true);
+    expect(plan.bridges.some(b => b.clusterId === 'rem_week_stretch')).toBe(true);
+
+    // Positional overload also works identically
+    const positionalPlan = planOptimalHolidays(
+      2026,
+      25,
+      undefined,
+      [],
+      { enabled: false, rule: 'within_week', birthday: null },
+      'balanced',
+      '2026-10-25',
+    );
+    expect(positionalPlan.bridges.map(b => b.id)).toEqual(plan.bridges.map(b => b.id));
+  });
+});
+
+
+
+

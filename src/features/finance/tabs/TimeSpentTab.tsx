@@ -26,7 +26,7 @@ export const TimeSpentTab: React.FC<TimeSpentTabProps> = ({
 
   // Work calculations from settings
   const days_of_work_nominal = 365 - settings.weekends;
-  const holidays_and_bank_holidays = settings.bankHolidays + settings.workHolidays;
+  const holidays_and_bank_holidays = settings.bankHolidays + settings.workHolidays + (settings.birthdayLeaveEnabled ? 1 : 0);
   const days_of_work_actual = days_of_work_nominal - holidays_and_bank_holidays;
   const hours_of_work_per_day = settings.workingHoursPerDay;
   const hours_work_actual_year = days_of_work_actual * hours_of_work_per_day;

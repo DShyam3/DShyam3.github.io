@@ -1,48 +1,39 @@
 # State
 
-**Updated:** 2026-10-27 · **Branch:** `codex/books-release-handoff` · **HEAD:** `d239b42`
-**Release:** [PR #10](https://github.com/DShyam3/DShyam3.github.io/pull/10) merged as `d239b421` (feature `643f869`); both CI checks pass. Pages run `40425045251` succeeded; deployed Books code is `d239b421`. The original checkout’s uncommitted Finance work is excluded.
-**Last recorded Pages:** `d239b421`, run `40425045251` · **Hosted Postgres:** 17.11.0.003 · **Last recorded hosted/local schema:** `20261025200100` · **Local Postgres:** 15
+**Updated:** 2026-10-27 · **Branch:** `main`
+**Releases:** PR #10 (`d239b421`, Books) and PR #11 (`2fe8ff56`, Tax Calculator) merged to `main`, followed by Finance Birthday Day Off, Package Benefits & Optimal Leave Maximiser.
+**Hosted Postgres:** 17.11.0.003 · **Hosted/local schema:** `20261027075434` (`finance_birthday_leave` applied to hosted DB) · **Local Postgres:** 15
 
 ## In progress
 
-- Books UI includes subjects, Currently Reading, duplicate-aware catalogue quick add, missing-details lookup and Amazon UK/Waterstones searches. No Books schema change is needed.
-- Hosted import is complete: 226 distinct requested books, five already present, 221 inserted; 227 total including The Lean Startup.
-- Last verified hosted metadata: 182 covers, 130 descriptions and 227 links. Backfill writes only missing metadata, never reading status. Remaining: 45 covers and 97 descriptions (`/private/tmp/books-backfill-review.md`); 14 ambiguous source entries (`/private/tmp/books-import-review.json`). Shop links are searches, not verified editions.
-- Books release is merged and deployed. Live editor unchanged-field save succeeds; Currently Reading artwork, description and shop search links are verified. Live catalogue lookup returns the matching Open Library edition; existing fields remain unchanged. Reading progress, series position, ISBN autofill and statistics remain planned; Currently Reading is a status only.
+- Finance Birthday Day Off, Package Benefits (preset dropdown, edit, Travel Insurance, Benefit-in-Kind tax), and Date-Aware Optimal Leave Maximiser committed and pushed to `main`, with migration `20261027075434_finance_birthday_leave.sql` applied to the hosted Supabase database. Live signed-in browser verification of the new leave/benefit writes remains open.
+- Finance Tax Calculator (`2fe8ff56`, plus `-£0.00` zero-sign fix) is on `main`. Local signed-in Chromium checks passed; live site, Safari, Firefox, and physical devices remain unverified.
+- Books UI (`d239b421`) is deployed and verified live for unchanged-field save and Open Library lookup. Hosted metadata remaining: 45 covers, 97 descriptions (`/private/tmp/books-backfill-review.md`), and 14 ambiguous source entries (`/private/tmp/books-import-review.json`).
 
 ## Checks
 
 | Check | Date | Result |
 | --- | --- | --- |
-| Isolated Books release | 2026-10-27 | Lint 0 errors/0 warnings; both typechecks; 1,371 tests / 59 files; build pass. Local build warns of absent env; CI must rebuild with secrets |
-| Launch scan | 2026-10-27 | 98/100 Beta, nine findings, one high in FinanceDataContext, zero blockers |
-| Books review | 2026-10-27 | Reviewer (high) reports nothing after timeout/cancellation, All magazine filter and stale Added-state fixes; builder (medium) lint/typecheck and eight metadata tests pass |
-| Books browser | 2026-10-27 | Signed-in localhost unchanged-field edit/save succeeds; Google 429 falls back to Open Library; duplicate Added buttons disabled. At 390px no horizontal overflow, Save reachable. Missing-only fill verified in fixture |
-| Books live | 2026-10-27 | Deployed `d239b421`; admin edit/unchanged-field Save succeeds. 227 books: 1 completed, 1 reading, 224 To Read, 1 wishlist. Take Me to Your Leader has loaded publisher cover, description and Amazon UK/Waterstones search links |
-| Original checkout graph | 2026-10-27 | Refreshed: 2,833 nodes, 6,448 edges, 136 communities; not an isolated-release graph check |
-| Earlier auth checks | 2026-10-25 | Local eight SQL cases, 26-check client script and browser flow; hosted post-upgrade reads passed. Hosted auth flows remain unverified |
+| Current working tree | 2026-10-27 | `npm run lint` (0 errors, 0 warnings), `npm run typecheck`, `npm run typecheck:functions`, `npx vitest run` (60 files, 1,519 tests), `npm run build`: pass |
+| Launch scan | 2026-10-27 | `npm run ship-check`: 98/100 Beta, nine findings, one high in `FinanceDataContext`, zero blockers |
+| Graph | 2026-10-27 | Refreshed with `graphify update .` (2,882 nodes, 6,568 edges, 146 communities) |
+| Review | 2026-10-27 | `reviewer` (Opus) passed on Birthday Day Off / Optimal Leave Maximiser / Package Benefits and UK Tax Calculator (`TaxCalculatorSurface.tsx:501` zero-sign nit fixed) |
+| Tax Calculator browser | 2026-10-27 | Local signed-in Chromium checks passed; live site, Safari, Firefox, and physical devices remain unverified |
+| Books browser/live | 2026-10-27 | Deployed and verified live for unchanged-field save and Open Library lookup |
+| Earlier auth checks | 2026-10-25 | Visitor rate limit and unauthenticated function checks passed |
 
 ## Next
 
-1. Continue uncertain metadata/entry review; the Books release and live lookup verification are complete.
-2. Owner enrols an authenticator on `/auth`; last recorded status is not enrolled, so the code step is not in force.
-3. Owner decides on local stack reset: PostgreSQL 15 volume remains; upgrade config to 17 together with reset.
-4. Verify scheduled cron execution, edge functions and pg_net after the hosted upgrade; catalogue checks alone do not verify execution.
-5. Follow REHAUL_PLAN.md for Borrowed rules, remaining security work, schema rebuild from empty and Node 24 CI.
-
-## Existing hosted state
-
-- Public signup is disabled; Email sign-in remains enabled. Hosted Postgres upgrade from 15 to 17 is ACTIVE_HEALTHY; five cron jobs retain schedules/hashes, pgjwt is absent, anon Books reads succeed and Finance reads are denied.
-- TOTP UI is deployed; `is_admin()` requires aal2 for a verified factor. Migrations `20261025200000` and `20261025200100` are applied. AAL1 session duration limiting is enabled, but not exercised hosted.
-- Advisor vulnerable-version and insufficient-MFA findings are resolved; remaining accepted findings are in SECURITY.md.
-- Edge versions last recorded: tmdb-proxy v13, merchant-logo-cache v15, truelayer-sync v48 (verify_jwt false), watchlist-cron-sync v14. Forty-one old merchant-logo names were owner-deleted; random-name replacements remain.
+1. Verify Birthday Day Off, Package Benefits, Optimal Leave Maximiser, and Tax Calculator live on the deployed site.
+2. Review remaining Books metadata (45 covers, 97 descriptions, 14 ambiguous entries).
+3. Owner dashboard: disable public signup, enable leaked-password protection (Pro) and TOTP, Postgres upgrade verification; rerun the advisor.
+4. Follow REHAUL_PLAN.md for Borrowed rules, remaining security work, and Node 24 CI.
 
 ## Blockers and open risks
 
-- Unverified live: two-factor enrolment/code/recovery flows, post-upgrade cron/edge execution, Paid/untick/early-payment, photo upload, CV and saved-link writes. Books unchanged-field save is verified live; other listed writes remain unverified.
-- Unverified: signed-in TrueLayer v48 and merchant-logo-cache v15 runs, IPv6 /64 live path, Safari/Firefox, physical phones, 200% zoom, real HEIC, phone detail scrolling and non-UK stored dates.
-- Finance save-safety/races and hosted read measurements remain in the plan; per-row saves are retained by decision. Birthday/benefits/leave changes in the original checkout are outside this release and are not claimed shipped.
-- External image requests, Watchlist cron CPU and production sync-race verification remain open. Parser override is checked locally; CI Node 20 / Ubuntu transition remains unchecked.
-- Original checkout `/Users/dhyanshyam/Projects/DShyam3.github.io` stays on `codex/student-loan-draw-guard` with unrelated uncommitted work; do not delete or reset it.
+- Unverified live writes: Paid/untick/early payment, photo upload, CV and saved links. Link/upload changes were checked locally only.
+- Unverified: signed-in runs of `truelayer-sync` v48 and `merchant-logo-cache` v15; IPv6 /64 path has unit coverage but no live probe.
+- Physical devices, 200% zoom, real HEIC files, phone detail scrolling and stored dates on non-UK devices remain unchecked.
+- Finance save-safety/races and unmeasured hosted reads remain in the plan; per-row saves are retained by decision in REHAUL_HISTORY.md.
+- Visitor IPs still reach flagcdn.com, image.tmdb.org and Google Books thumbnails; owner decision remains open.
 - Full outstanding list and reasoning: REHAUL_PLAN.md.

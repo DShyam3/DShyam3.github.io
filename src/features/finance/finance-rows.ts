@@ -24,7 +24,7 @@ import type {
   RatePeriod,
   UserHoliday,
 } from './finance-types';
-import { asAccountType, asDebtType, asHalfDay, asMembershipType } from './finance-narrow';
+import { asAccountType, asDebtType, asHalfDay, asLeaveType, asMembershipType } from './finance-narrow';
 
 export type GoalContribution = Goal['contributions'][number];
 export type Bureau = keyof CreditScores;
@@ -292,7 +292,7 @@ export const holidayFromRow = (h: Pick<Tables<'finance_user_holidays'>,
     endDate: h.end_date,
     occasion: h.occasion || '',
     count: Number(h.count) || 0,
-    type: (h.type as 'holiday' | 'sick') || 'holiday',
+    type: asLeaveType(h.type),
     ...(halfDay ? { halfDay } : {}),
   };
 };
