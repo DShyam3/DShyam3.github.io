@@ -41,7 +41,8 @@ import {
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { useFinanceData } from '../FinanceDataContext';
-import type { FinanceSettings } from '../finance-types';
+import { ukTaxInputFromSettings } from '../finance-calcs';
+import { useFinanceTotals } from '../useFinanceTotals';
 import { PillSwitch } from '../components/PillSwitch';
 import { SurfaceHero } from '../components/SurfaceHero';
 
@@ -51,6 +52,8 @@ interface Draft {
   kind: UkIncomeKind;
   region: UkTaxRegion;
   benefitsInKind: string;
+  /** Empty means the statutory allowance; settings fill it from the tax code. */
+  personalAllowance: string;
   pensionContribution: string;
   pensionMethod: UkPensionMethod;
   undergradPlan: UkUndergradPlan;
@@ -97,16 +100,19 @@ const UNDERGRAD_PLANS: { key: UkUndergradPlan; label: string }[] = [
 
 const CHILDCARE_STEPS = Array.from({ length: 9 }, (_, i) => i * 2_500);
 
-const PENSION_FROM_SETTINGS: Record<FinanceSettings['pensionType'], UkPensionMethod> = {
-  salary_sacrifice: 'salary-sacrifice',
-  net_pay: 'net-pay',
-  relief_at_source: 'relief-at-source',
-};
-
 const wholeGBP = (n: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n);
 
 const percent = (rate: number) => `${(rate * 100).toFixed(1)}%`;
+
+/**
+ * A typed allowance. Empty or unreadable is the statutory one, never zero: a
+ * typo must not silently become a code that taxes every pound.
+ */
+const allowanceFrom = (text: string): number | undefined => {
+  const n = Number(text.replace(/[£,\s]/g, ''));
+  return text.trim() === '' || !Number.isFinite(n) || n < 0 ? undefined : n;
+};
 
 /** A typed amount as pounds. Anything unreadable is nothing, not an error. */
 const amount = (text: string) => {
@@ -114,28 +120,25 @@ const amount = (text: string) => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
-const draftFromSettings = (
-  /** Zero while figures are hidden, so nothing on the page is your salary. */
-  grossSalary: number,
-  ukRegion: FinanceSettings['ukRegion'],
-  pensionType: FinanceSettings['pensionType'],
-  personalPensionPercent: number,
-  studentLoanPlan: FinanceSettings['studentLoanPlan'],
-): Draft => ({
-  income: grossSalary > 0 ? String(Math.round(grossSalary)) : '',
+/** Pounds as a field shows them: whole pounds without a trailing ".00". */
+const asField = (n: number) => (n > 0 ? String(Math.round(n * 100) / 100) : '');
+
+/**
+ * The form as your settings fill it, from the same engine input Tax & Income
+ * computes with, so the two pages agree. The pension percentage is the gross
+ * amount paid in. Benefits in kind are added unless the tax code already
+ * collects their tax, as Tax & Income does.
+ */
+const draftFromSettings = (base: UkTaxInput, benefitsInKind: number): Draft => ({
+  income: asField(base.income),
   kind: 'employed',
-  region: ukRegion === 'scotland' ? 'scotland' : 'rUK',
-  benefitsInKind: '',
-  // The settings hold a percentage of salary, read here as the gross amount
-  // paid in. Tax & Income deducts that amount in full and models no relief at
-  // source or Scottish bands, so for those profiles the two pages differ
-  // (REHAUL_PLAN.md 8.H).
-  pensionContribution: personalPensionPercent > 0
-    ? String(Math.round(grossSalary * personalPensionPercent / 100))
-    : '',
-  pensionMethod: PENSION_FROM_SETTINGS[pensionType] ?? 'salary-sacrifice',
-  undergradPlan: studentLoanPlan === 'postgrad' ? 'none' : studentLoanPlan,
-  postgradLoan: studentLoanPlan === 'postgrad',
+  region: base.region,
+  benefitsInKind: asField(benefitsInKind),
+  personalAllowance: base.personalAllowance === undefined ? '' : String(base.personalAllowance),
+  pensionContribution: asField(base.pensionContribution),
+  pensionMethod: base.pensionMethod,
+  undergradPlan: base.undergradPlan,
+  postgradLoan: base.postgradLoan,
   children: '',
   childcareSupport: '0',
   marriageAllowance: false,
@@ -153,17 +156,17 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   const { settings, hasLoaded } = useFinanceData();
 
   // The seed follows your settings until you change a field; an edited field
-  // is an override and wins until Reset. Pulled out as primitives so a refetch
-  // that returns the same values does not rebuild the seed.
-  const grossSalary = figuresHidden ? 0 : settings.grossSalary ?? 0;
-  const ukRegion = settings.ukRegion;
-  const pensionType = settings.pensionType;
-  const personalPensionPercent = settings.personalPensionPercent ?? 0;
-  const studentLoanPlan = settings.studentLoanPlan;
-  const seed = useMemo(
-    () => draftFromSettings(grossSalary, ukRegion, pensionType, personalPensionPercent, studentLoanPlan),
-    [grossSalary, ukRegion, pensionType, personalPensionPercent, studentLoanPlan],
-  );
+  // is an override and wins until Reset. While figures are hidden nothing is
+  // seeded from them: the salary, its pension and benefits, and the tax-code
+  // allowance all start empty.
+  const { results } = useFinanceTotals();
+  const benefitsInKindFromSettings = results.benefitTaxCollectedByCode ? 0 : results.benefitInKindValue;
+  const seed = useMemo(() => {
+    const base = ukTaxInputFromSettings(settings);
+    return figuresHidden
+      ? draftFromSettings({ ...base, income: 0, pensionContribution: 0, personalAllowance: undefined }, 0)
+      : draftFromSettings(base, benefitsInKindFromSettings);
+  }, [settings, figuresHidden, benefitsInKindFromSettings]);
   const [overrides, setOverrides] = useState<Partial<Draft>>({});
   const [chartMode, setChartMode] = useState<ChartMode>('marginal');
 
@@ -182,6 +185,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
     kind: draft.kind,
     region: draft.region,
     benefitsInKind: amount(draft.benefitsInKind),
+    personalAllowance: allowanceFrom(draft.personalAllowance),
     pensionContribution: amount(draft.pensionContribution),
     pensionMethod: draft.pensionMethod,
     undergradPlan: draft.undergradPlan,
@@ -330,7 +334,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
     }] : []),
   ];
 
-  const field = (id: string, label: string, key: 'income' | 'benefitsInKind' | 'pensionContribution' | 'children', count = false) => (
+  const field = (id: string, label: string, key: 'income' | 'benefitsInKind' | 'personalAllowance' | 'pensionContribution' | 'children', count = false) => (
     <div className="space-y-1.5">
       <Label htmlFor={id} className="text-xs text-muted-foreground">{label}</Label>
       <div className="relative">
@@ -341,7 +345,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
           id={id}
           inputMode={count ? 'numeric' : 'decimal'}
           value={draft[key]}
-          placeholder="0"
+          placeholder={key === 'personalAllowance' ? '12,570' : '0'}
           onChange={e => set(key, e.target.value)}
           className={cn('h-9 font-mono text-sm tabular-nums', !count && 'pl-7')}
         />
@@ -461,7 +465,10 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             </div>
           </div>
 
-          {employed && field('taxcalc-bik', 'Benefits in kind (company car, medical cover)', 'benefitsInKind')}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {field('taxcalc-allowance', 'Personal allowance (from tax code)', 'personalAllowance')}
+            {employed && field('taxcalc-bik', 'Benefits in kind (company car, medical cover)', 'benefitsInKind')}
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             {field('taxcalc-children', 'Children claiming child benefit', 'children', true)}

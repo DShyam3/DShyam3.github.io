@@ -368,12 +368,31 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
 ### Income
 
-- **Tax and income** — tax rate sets are versioned by first applicable date, so
-  a historical calculation cannot silently become a calculation using a future
-  Budget. Contractual package benefits persist on the salary profile, can be added via a preset dropdown (Annual Bonus defaulting to 10%, Private Medical Insurance, Dental Cover, Travel Insurance, Equity/RSUs, Car Allowance, Gym & Wellness, Tech/WFH Allowance, or Custom) that pre-fills the form for editing before confirming, can be edited or removed after adding, and support optional Benefit-in-Kind / P11D annual tax deductions (with quick tax-band rate helpers) that flow into a `Benefit-in-kind tax` deduction row and net take-home pay. The summary shows the year's take-home, described as modelled from salary settings, with the next payday beside it: date, days left, schedule, and a "brought forward" note when the usual day is a weekend or bank holiday. The Total Compensation card carries the tax region and the Benefits and Settings buttons. The Breakdown Rates table shows how gross salary becomes take-home,
+- **Tax and income** — income tax, National Insurance and student loan repayments
+  use the 2026/27 rules built into the site, the same rules the Tax Calculator
+  uses. A Scottish profile gets Scotland's six bands. The personal allowance is
+  the one set in Settings, which can be 0 for a BR or 0T code. Under relief at
+  source, 80% of the pension contribution comes out of pay and every band from
+  the basic rate up is widened by the whole contribution. The income tax and National
+  Insurance figures do not use the bands saved in Settings, though the National
+  Insurance row's note still shows the saved NI bands. The Student Loan section's
+  repayment threshold and rate come from the tax rates saved in Settings.
+  Contractual package items persist on the salary profile. Each is Cash or
+  Benefit in kind. A preset dropdown (Annual Bonus defaulting to 10%, Private
+  Medical Insurance, Dental Cover, Travel Insurance, Equity/RSUs, Car Allowance,
+  Gym & Wellness, Tech/WFH Allowance, or Custom) pre-fills the form, kind
+  included, for editing before confirming. Items can be edited or removed after
+  adding; an item saved before the kind existed reads as Benefit in kind. A Cash
+  item is paid through payroll, so its income tax, National Insurance and student
+  loan come off it. It shows its own after-tax value and stays out of salary
+  take-home. A Benefit in kind is not paid: the tax on its value is the extra
+  income tax that value causes, taken from take-home as a `Benefit-in-kind tax`
+  deduction row. When the tax code's allowance is below £12,570, that tax is shown
+  as collected through the code and is not taken from take-home again. Tax on a
+  benefit is never typed in. The summary shows the year's take-home, described as modelled from salary settings, with the next payday beside it: date, days left, schedule, and a "brought forward" note when the usual day is a weekend or bank holiday. The Total Compensation card carries the tax region and the Benefits and Settings buttons. The Breakdown Rates table shows how gross salary becomes take-home,
   organised into three groups: package (base salary, employer pension contributions,
   benefits and perks), deductions (personal pension, income tax, National Insurance,
-  student loan repayments), and net pay. Totals separate the groups; only additions,
+  student loan repayments, and benefit-in-kind tax when it applies), and net pay. Totals separate the groups; only additions,
   total deductions and take-home carry colour. A toggle sets the days-counted method
   (Normal, Include Paid Leave, Exclude Paid Leave); another selects the period shown
   (Annual, Monthly, Weekly, Daily, Hourly). On narrower screens, the table shows one
@@ -427,11 +446,14 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
   It does not model savings, dividends, rent or gains, the pension annual
   allowance, employer National Insurance, Universal Credit or other benefits, or a
-  partner's income, and it does not check childcare eligibility. Child benefit
+  partner's income, and it does not check childcare eligibility. A personal
+  allowance field starts from the tax-code allowance in Settings (left empty, it
+  is the standard £12,570), so with the same inputs it agrees with Tax & Income.
+  Child benefit
   counts the 53 benefit weeks in 2026/27. Its rules follow the Tax Policy
   Associates UK tax calculator. Its £ figures sit under the Show figures toggle
   like the rest of Finance.
-- **Holiday tracker** — Books full and half days of annual leave, sick leave, and a paid Birthday Day Off (+1 day that does not deduct from standard annual leave). When booking a single day, a Length toggle offers Full day, Morning, or Afternoon. Morning and Afternoon are disabled for weekends and bank holidays. Calendar cells fill only the half they take — left half for mornings, right half for afternoons — with a dashed border, and the legend shows "Half Day (AM left, PM right)". Entry lists and tooltips show "morning" or "afternoon". Month badges and allowance left reflect half-day deductions. Multi-day holiday bookings (both existing entries and new/edited inline bookings) offer a one-click `🎂 Use Birthday Day` toggle to cover one eligible working day of the trip with the Birthday Day Off (saving 1 day of annual leave). A Birthday Day Off booked on a day inside an existing holiday is attached to it, taking that day (or half day) off the holiday's count; a holiday booked over an existing Birthday Day Off keeps the birthday and is charged that day less; moving the birthday out of a holiday gives the day back. A holiday of a single working day cannot share its day with the birthday and is refused with a message. Configurable birthday leave usage rules: on the day (or nearest working day if it falls on a weekend or bank holiday), within ±1 week, within the birthday calendar month, within ±30 days, or floating anytime in the year, using day and month only (in UK `DD / MM` order, never storing a full date of birth) and highlighting the birthday and eligible booking window on the calendar. Year switcher for viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. Optimal Leave Maximiser that automatically opens in January to plan the full year, defaults later in the year to optimising remaining upcoming leave (`Remaining <Year>`) with long-weekend and 9-day week stretches alongside remaining bank holidays, includes a one-click shortcut to plan the next leave year (`Plan <Next Year> Full Year`), combines remaining annual leave allowance, UK bank holidays, and the Birthday Day Off (when enabled) to recommend the highest-leverage leave bridges for the selected year, with selectable biases (`Balanced`, `Long Christmas`, `Long Easter`, `Summer Focus`), multi-tier Christmas options (Tier 1: Efficient 3-Day Bridge, Tier 2: Balanced 4–5 Day Stretch, Tier 3: Ultimate 7–8 Day Shutdown) and Easter tiers showing exact dates to book, leave spent, consecutive days off, and return-to-work date, plus one-click booking of individual bridges or the full recommended plan.
+- **Holiday tracker** — Books full and half days of annual leave, sick leave, and a paid Birthday Day Off (+1 day that does not deduct from standard annual leave). When booking a single day, a Length toggle offers Full day, Morning, or Afternoon. Morning and Afternoon are disabled for weekends and bank holidays. Calendar cells fill only the half they take — left half for mornings, right half for afternoons — with a dashed border, and the legend shows "Half Day (AM left, PM right)". Entry lists and tooltips show "morning" or "afternoon". Month badges and allowance left reflect half-day deductions. Multi-day holiday bookings (both existing entries and new/edited inline bookings) offer a one-click `🎂 Use Birthday Day` toggle to cover one eligible working day of the trip with the Birthday Day Off (saving 1 day of annual leave). A Birthday Day Off booked on a day inside an existing holiday is attached to it, taking that day (or half day) off the holiday's count; a holiday booked over an existing Birthday Day Off keeps the birthday and is charged that day less; moving the birthday out of a holiday gives the day back. A holiday of a single working day cannot share its day with the birthday and is refused with a message. Configurable birthday leave usage rules: on the day (or nearest working day if it falls on a weekend or bank holiday), within ±1 week, within the birthday calendar month, within ±30 days, or floating anytime in the year, using day and month only (in UK `DD / MM` order, never storing a full date of birth) and highlighting the birthday and eligible booking window on the calendar. Year switcher for viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: the saved year uses the gov.uk list once it has loaded, and any other year is calculated for that region. Optimal Leave Maximiser that automatically opens in January to plan the full year, defaults later in the year to optimising remaining upcoming leave (`Remaining <Year>`) with long-weekend and 9-day week stretches alongside remaining bank holidays, includes a one-click shortcut to plan the next leave year (`Plan <Next Year> Full Year`), combines remaining annual leave allowance, UK bank holidays, and the Birthday Day Off (when enabled) to recommend the highest-leverage leave bridges for the selected year, with selectable biases (`Balanced`, `Long Christmas`, `Long Easter`, `Summer Focus`), multi-tier Christmas options (Tier 1: Efficient 3-Day Bridge, Tier 2: Balanced 4–5 Day Stretch, Tier 3: Ultimate 7–8 Day Shutdown) and Easter tiers showing exact dates to book, leave spent, consecutive days off, and return-to-work date, plus one-click booking of individual bridges or the full recommended plan. The Maximiser lists up to five bridges; with more, it lists the recommended ones and a "Show N other bridges" button reveals the rest.
 
 ### Getting data in
 
@@ -557,3 +579,6 @@ These are architectural, not aspirational — the reasoning is in `AGENTS.md`.
 - **No financial document is readable without admin.** Every finance row
   carries a profile, CHECK-enforced; the anonymous role holds no write grant on
   any finance table
+- **Impossible birthday and benefit rows are refused by the database.** A
+  Birthday Day Off is one day, a full day or a half; a birthday day must exist in
+  its month, 29 February included; package benefits are stored as a list

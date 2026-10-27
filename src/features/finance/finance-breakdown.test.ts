@@ -109,10 +109,52 @@ describe('effective-dated tax configuration', () => {
       .toThrow('No tax configuration is available for 2026-04-05.');
   });
 
-  it('makes the calculation depend on the requested date rather than the clock', () => {
-    const beforeChange = calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-03-31');
-    const afterChange = calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-04-06');
+  it('no longer lets the stored rate rows or the date move a figure', () => {
+    // Income tax, NI and student loans come from the Tax Calculator engine now;
+    // the rows only feed selectTaxConfigForDate. Rows that disagree wildly with
+    // the engine, an empty list and a date before any row all give one answer.
+    const absurdConfig: TaxConfig = {
+      ...sampleTaxConfig,
+      incomeTaxBands: { ...sampleTaxConfig.incomeTaxBands, basicRateLimit: 1, basicRatePercent: 99 },
+      nationalInsuranceBands: { ...sampleTaxConfig.nationalInsuranceBands, mainRatePercent: 50 },
+    };
+    const reference = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
+    expect(calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-03-31')).toEqual(reference);
+    expect(calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-04-06')).toEqual(reference);
+    expect(calculateFinance(sampleSettings, [absurdConfig], '2026-09-10')).toEqual(reference);
+    expect(calculateFinance(sampleSettings, [], '2026-09-10')).toEqual(reference);
+    expect(calculateFinance(sampleSettings, [sampleTaxConfig], '2020-01-01')).toEqual(reference);
+  });
 
-    expect(beforeChange.nationalInsurance).toBeGreaterThan(afterChange.nationalInsurance);
+  it('does not throw when no tax configuration exists for the date', () => {
+    expect(() => calculateFinance(sampleSettings, [], '2026-09-10')).not.toThrow();
+    expect(() => calculateFinance(sampleSettings, [sampleTaxConfig], '2026-04-05')).not.toThrow();
+  });
+});
+
+describe('calculateFinance figures for the £55,000 fixture', () => {
+  // £55,000, 5% salary sacrifice (£2,750), plan 2, 1257L, England. Pay for tax,
+  // NI and the loan is £52,250.
+  const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
+
+  it('takes income tax from the engine bands: 37,700 at 20% and the rest at 40%', () => {
+    expect(results.incomeTax).toBeCloseTo(37700 * 0.2 + (52250 - 12570 - 37700) * 0.4, 3);
+    expect(results.incomeTax).toBeCloseTo(8332, 3);
+  });
+
+  it('takes NI from the engine: 37,700 at 8% and 1,980 at 2%', () => {
+    expect(results.nationalInsurance).toBeCloseTo(3055.6, 3);
+  });
+
+  it('takes the plan 2 loan from the engine threshold of £29,385, not the stored row (old: £2,245.95)', () => {
+    expect(results.studentLoan).toBeCloseTo((52250 - 29385) * 0.09, 3);
+    expect(results.studentLoan).toBeCloseTo(2057.85, 3);
+  });
+
+  it('keeps gross less deductions equal to take-home (old: £38,616.45; now £38,804.55)', () => {
+    expect(results.personalPensionRate).toBe(2750);
+    expect(results.totalDeductions).toBeCloseTo(8332 + 3055.6 + 2057.85 + 2750, 3);
+    expect(results.netTakeHome).toBeCloseTo(38804.55, 3);
+    expect(55000 - results.totalDeductions).toBeCloseTo(results.netTakeHome, 6);
   });
 });

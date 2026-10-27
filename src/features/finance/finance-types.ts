@@ -37,15 +37,41 @@ export interface FinanceSettings {
   birthdayDay?: number | null;
 }
 
+/**
+ * How a package item reaches you. A 'cash' item is paid through payroll, so it
+ * is taxed (income tax, NI, loans) like a bonus and has its own after-tax value.
+ * A 'benefit-in-kind' item is something given rather than paid: only income tax
+ * applies, and the tax is worked out from its value, never typed in.
+ */
+export type PackageBenefitKind = 'cash' | 'benefit-in-kind';
+
 export interface PackageBenefit {
   id: string;
   name: string;
   amount: number;
   type: 'monetary' | 'percentage';
+  /** Absent on rows saved before the field existed, which read as 'benefit-in-kind'. */
+  kind?: PackageBenefitKind;
   emoji?: string;
   notes?: string;
-  /** Optional annual tax taken off (Benefit-in-Kind / P11D or bonus tax deduction in £/year). */
+  /**
+   * Legacy: a hand-typed annual tax figure. No longer used in any calculation;
+   * benefit-in-kind tax is derived from the item's value. Kept so stored rows
+   * still type-check and round-trip.
+   */
   annualTaxCost?: number;
+}
+
+/** One 'cash' package item after tax, each taxed alone on top of the salary. */
+export interface CashBenefitAfterTax {
+  id: string;
+  name: string;
+  /** The item's annual value, from its amount or its percentage of salary. */
+  gross: number;
+  incomeTax: number;
+  nationalInsurance: number;
+  studentLoan: number;
+  net: number;
 }
 
 

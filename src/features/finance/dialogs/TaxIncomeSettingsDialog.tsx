@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
   DollarSign,
   Calendar,
@@ -716,32 +717,30 @@ export function TaxIncomeSettingsDialog({
                 <div className="rounded-lg border border-border/30 bg-muted/20 p-3.5 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <span>🎂</span> Birthday Day Off Benefit
-                      </p>
-                      <p className="text-xs text-muted-foreground">
+                      <Label htmlFor="birthdayLeaveEnabled" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <span aria-hidden="true">🎂</span> Birthday Day Off Benefit
+                      </Label>
+                      <p id="birthdayLeaveEnabled-hint" className="text-xs text-muted-foreground">
                         +1 paid leave day for your birthday that does not deduct from your annual work leave
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant={birthdayLeaveEnabled ? 'default' : 'outline'}
-                      onClick={() => setBirthdayLeaveEnabled(prev => !prev)}
-                      className="h-8 rounded-lg px-3 text-xs font-mono shrink-0"
-                    >
-                      {birthdayLeaveEnabled ? 'Enabled (+1d)' : 'Disabled'}
-                    </Button>
+                    <Switch
+                      id="birthdayLeaveEnabled"
+                      checked={birthdayLeaveEnabled}
+                      onCheckedChange={setBirthdayLeaveEnabled}
+                      aria-describedby="birthdayLeaveEnabled-hint"
+                    />
                   </div>
 
                   {birthdayLeaveEnabled && (
                     <div className="space-y-3 pt-2 border-t border-border/30">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">Usage Window Rule</Label>
+                        <Label htmlFor="birthdayLeaveRule" className="text-xs font-medium text-muted-foreground">Usage Window Rule</Label>
                         <Select
                           value={birthdayLeaveRule}
                           onValueChange={(val) => setBirthdayLeaveRule(val as BirthdayLeaveRule)}
                         >
-                          <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                          <SelectTrigger id="birthdayLeaveRule" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                             <SelectValue placeholder="Select rule..." />
                           </SelectTrigger>
                           <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -757,10 +756,10 @@ export function TaxIncomeSettingsDialog({
                         </p>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div role="group" aria-labelledby="birthdayDate-label" className="space-y-1.5">
+                        <p id="birthdayDate-label" className="text-xs font-medium leading-snug text-muted-foreground">
                           Birthday Date (UK format: Day / Month)
-                        </Label>
+                        </p>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <Label htmlFor="birthdayDay" className="text-xs text-muted-foreground">Day (DD)</Label>
@@ -816,7 +815,7 @@ export function TaxIncomeSettingsDialog({
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Advanced Configurations</h3>
-                    <p className="text-xs text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
+                    <p className="text-xs text-muted-foreground">Reference rates, recurring templates, and credit bureaus</p>
                   </div>
                 </div>
               </div>
@@ -848,7 +847,7 @@ export function TaxIncomeSettingsDialog({
                           required
                         />
                         <p className="text-xs leading-relaxed text-muted-foreground">
-                          Saving a new date creates a new rate set. Earlier pays and projections keep the rates that applied then.
+                          Take-home on Tax &amp; Income and the Tax Calculator uses the built-in 2026/27 rules, not these bands. The student loan thresholds still drive the Student Loan section; saving a new date creates a new rate set for it.
                         </p>
                       </div>
                       <div className="space-y-3">

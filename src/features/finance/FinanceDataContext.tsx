@@ -36,7 +36,7 @@ import type {
 } from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { normalizeHolidays, resolveBankHolidaysForYear } from '@/lib/finance';
+import { normalizeHolidays, resolveBankHolidaysForYear, ukBasePersonalAllowance } from '@/lib/finance';
 import {
   asBirthdayLeaveRule,
   asBudgetGroup,
@@ -320,9 +320,9 @@ function useProvideFinanceData() {
     try {
       return selectTaxConfigForDate(taxConfigs, todayInLocalTimezone());
     } catch {
-      // This only covers the loading/empty state. Historical calculations do
-      // not get this fallback: calculateFinance throws instead of using future
-      // rates for a past date.
+      // This only covers the loading/empty state. Pay figures no longer read
+      // these rows: calculateFinance uses the Tax Calculator's engine, which
+      // carries one tax year's rules (REHAUL_PLAN.md 8.H).
       return taxConfigs[0] ?? createEmptyTaxConfig();
     }
   })();
@@ -1579,7 +1579,7 @@ function useProvideFinanceData() {
             employerPensionPercent: Number(activeSettings.employer_pension_percent) || 0,
             studentLoanPlan: asStudentLoanPlan(activeSettings.student_loan_plan),
             taxCode: activeSettings.tax_code || '1257L',
-            personalAllowance: Number(activeSettings.personal_allowance) || 12570,
+            personalAllowance: ukBasePersonalAllowance(activeSettings.personal_allowance == null ? undefined : Number(activeSettings.personal_allowance)),
             weekends: Number(activeSettings.weekends) || 104,
             bankHolidays: Number(activeSettings.bank_holidays) || 8,
             workHolidays: Number(activeSettings.work_holidays) || 25,
@@ -1956,7 +1956,7 @@ function useProvideFinanceData() {
             employerPensionPercent: Number(defaultSettings.employer_pension_percent) || 0,
             studentLoanPlan: asStudentLoanPlan(defaultSettings.student_loan_plan),
             taxCode: defaultSettings.tax_code || '1257L',
-            personalAllowance: Number(defaultSettings.personal_allowance) || 12570,
+            personalAllowance: ukBasePersonalAllowance(defaultSettings.personal_allowance == null ? undefined : Number(defaultSettings.personal_allowance)),
             weekends: Number(defaultSettings.weekends) || 104,
             bankHolidays: Number(defaultSettings.bank_holidays) || 8,
             workHolidays: Number(defaultSettings.work_holidays) || 25,

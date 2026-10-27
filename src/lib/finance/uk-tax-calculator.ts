@@ -15,6 +15,11 @@
  * income, no Gift Aid, no pension annual-allowance or tapering, and student
  * loan repayments are not rounded down to whole pounds.
  *
+ * The base personal allowance is an argument (a tax code can carry less than
+ * the statutory £12,570); the £100,000 taper is applied on top of whatever the
+ * caller states. NI and student loan thresholds are statutory and do not move
+ * with the tax code.
+ *
  * Pure, like everything here: no clock, no Supabase, no model output anywhere
  * near the arithmetic.
  */
@@ -42,12 +47,19 @@ export interface UkTaxInput {
   childcareSupport: number;
   /** Receives a transferred marriage allowance. */
   marriageAllowance: boolean;
+  /**
+   * £/yr base personal allowance, before the £100,000 taper: what the tax code
+   * carries. Omitted, negative or non-finite means the statutory
+   * `UK_STATUTORY_PERSONAL_ALLOWANCE`; 0 is a real value (a BR or 0T code).
+   */
+  personalAllowance?: number;
 }
 
 export interface UkTaxBreakdown {
   /** Income plus benefits in kind (BIK only when employed). */
   grossIncome: number;
   adjustedNetIncome: number;
+  /** After the £100,000 taper. */
   personalAllowance: number;
   taxableIncome: number;
   /** After the marriage allowance reduction. */
@@ -101,6 +113,17 @@ export interface UkIncomeBand {
 
 /** The tax year the rule set below describes. */
 export const UK_TAX_YEAR_LABEL = '2026/27';
+
+/** Class 1 employee National Insurance for 2026/27, annual thresholds. */
+export const UK_EMPLOYEE_NI = {
+  lowerThreshold: 12_570,
+  upperThreshold: 50_270,
+  mainRate: 0.08,
+  upperRate: 0.02,
+} as const;
+
+/** The standard personal allowance (tax code 1257L), £/yr, before the £100,000 taper. */
+export const UK_STATUTORY_PERSONAL_ALLOWANCE = 12_570;
 
 /** 6 Apr 2026 and 5 Apr 2027 are both Mondays, so the tax year holds 53 benefit weeks (as 2020/21 did). */
 export const UK_CHILD_BENEFIT_WEEKS = 53;
@@ -157,7 +180,7 @@ interface UkTaxRules {
 }
 
 const RULES: UkTaxRules = {
-  personalAllowance: 12570,
+  personalAllowance: UK_STATUTORY_PERSONAL_ALLOWANCE,
   taperStart: 100000,
   taperRate: 0.5,
   bands: {
@@ -178,9 +201,9 @@ const RULES: UkTaxRules = {
   firstExtendedBand: { rUK: 0, scotland: 1 },
   marriageAllowanceBand: { rUK: 0, scotland: 2 },
   marriageAllowanceReduction: 0.2 * 1260,
-  niLower: 12570,
-  niUpper: 50270,
-  class1: { main: 0.08, upper: 0.02 },
+  niLower: UK_EMPLOYEE_NI.lowerThreshold,
+  niUpper: UK_EMPLOYEE_NI.upperThreshold,
+  class1: { main: UK_EMPLOYEE_NI.mainRate, upper: UK_EMPLOYEE_NI.upperRate },
   class4: { main: 0.06, upper: 0.02 },
   undergradThreshold: { none: Infinity, plan1: 26900, plan2: 29385, plan4: 33795, plan5: 25000 },
   studentLoanRate: 0.09,
@@ -203,6 +226,16 @@ const nonNegative = (n: number): number => (Number.isFinite(n) && n > 0 ? n : 0)
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n));
 
+/**
+ * The base personal allowance a calculation will use for a stated one: the
+ * statutory allowance when it is omitted, negative or not a finite number, and
+ * the stated figure otherwise, 0 included. Exported so a caller deciding
+ * something from "is the allowance below the standard one" reads the same
+ * sanitised value the engine does, not the raw field.
+ */
+export const ukBasePersonalAllowance = (stated: number | undefined): number =>
+  typeof stated === 'number' && Number.isFinite(stated) && stated >= 0 ? stated : RULES.personalAllowance;
+
 /** Input after sanitising and after the self-employed substitutions. */
 interface Resolved {
   income: number;
@@ -216,6 +249,8 @@ interface Resolved {
   children: number;
   childcareSupport: number;
   marriageAllowance: boolean;
+  /** Base personal allowance before the taper. */
+  allowance: number;
 }
 
 const resolve = (input: UkTaxInput): Resolved => {
@@ -242,6 +277,7 @@ const resolve = (input: UkTaxInput): Resolved => {
     children: clamp(Math.floor(nonNegative(input.children)), 0, RULES.maxChildren),
     childcareSupport: nonNegative(input.childcareSupport),
     marriageAllowance: input.marriageAllowance === true,
+    allowance: ukBasePersonalAllowance(input.personalAllowance),
   };
 };
 
@@ -319,10 +355,7 @@ const compute = (r: Resolved, mode: Mode): Computed => {
 
   const excess = Math.max(0, adjustedNetIncome - RULES.taperStart);
   const taperLoss = RULES.taperRate * excess;
-  const personalAllowance = Math.max(
-    0,
-    RULES.personalAllowance - (mode.smooth ? taperLoss : Math.floor(taperLoss)),
-  );
+  const personalAllowance = Math.max(0, r.allowance - (mode.smooth ? taperLoss : Math.floor(taperLoss)));
   const taxableIncome = Math.max(0, totalIncome - personalAllowance);
 
   const taxBeforeRelief = taxOnBands(taxableIncome, bandsFor(r.region, rasGross));
@@ -405,6 +438,72 @@ export const calculateUkTax = (input: UkTaxInput): UkTaxBreakdown =>
   compute(resolve(input), { smooth: false }).breakdown;
 
 /**
+ * The extra income tax a taxable benefit in kind of `bikValue` £/yr adds on top
+ * of the input as it stands (its own `benefitsInKind` stay in): income tax with
+ * the benefit counted, less income tax without it. Both sides are the exact
+ * calculation, so the benefit is taxed at the bands it actually lands in,
+ * counts towards the allowance taper and can cost a marriage allowance. A
+ * benefit in kind carries no NI or student loan for the employee, so income tax
+ * is the whole of it.
+ *
+ * Employed only: a sole trader has no benefits in kind (the same rule as
+ * `calculateUkTax`), so the answer is 0. A zero, negative or non-finite value
+ * is 0 too. Never negative, never NaN.
+ */
+export const ukBenefitInKindTax = (input: UkTaxInput, bikValue: number): number => {
+  const bik = nonNegative(bikValue);
+  const base = resolve(input);
+  if (base.kind !== 'employed' || bik === 0) return 0;
+  const exact: Mode = { smooth: false };
+  const without = compute(base, exact).breakdown.incomeTax;
+  const withBenefit = compute({ ...base, bik: base.bik + bik }, exact).breakdown.incomeTax;
+  return Math.max(0, withBenefit - without);
+};
+
+/** What `ukCashAfterTax` reports; all £/yr and unrounded. */
+export interface UkCashAfterTax {
+  /** The cash, sanitised: 0 for a negative or non-finite amount. */
+  gross: number;
+  incomeTax: number;
+  nationalInsurance: number;
+  /** Undergraduate plan and postgraduate loan together. */
+  studentLoan: number;
+  /** `gross` less the three deductions above. */
+  net: number;
+}
+
+/**
+ * What a one-off or annual cash payment of `cash` £/yr keeps once it is paid
+ * through payroll on top of the input's `income`: the extra income tax, NI and
+ * student loan that `income + cash` costs over `income`, each the difference of
+ * two exact calculations. So it lands in the bands the salary leaves it in (a
+ * bonus that straddles the higher-rate threshold is taxed part at 20% and part
+ * at 40%), through the allowance taper at an effective 60% between £100,000 and
+ * £125,140, and past the NI upper limit at 2%.
+ *
+ * The pension contribution is held at its sanitised pounds on both sides rather
+ * than recapped at the larger income, so the bonus is not itself pensioned.
+ * Not counted: the High Income Child Benefit Charge and the childcare-support
+ * cliff, which the other inputs can trigger; `net` is cash less tax, NI and
+ * loans only.
+ *
+ * A zero, negative or non-finite `cash` is all zeros. Never NaN.
+ */
+export const ukCashAfterTax = (input: UkTaxInput, cash: number): UkCashAfterTax => {
+  const gross = nonNegative(cash);
+  const base = resolve(input);
+  const exact: Mode = { smooth: false };
+  const before = compute(base, exact).breakdown;
+  const after = compute({ ...base, income: base.income + gross }, exact).breakdown;
+  const extra = (now: number, then: number): number => Math.max(0, now - then);
+  const incomeTax = extra(after.incomeTax, before.incomeTax);
+  const nationalInsurance = extra(after.nationalInsurance, before.nationalInsurance);
+  const studentLoan =
+    extra(after.studentLoan, before.studentLoan) + extra(after.postgradLoan, before.postgradLoan);
+  return { gross, incomeTax, nationalInsurance, studentLoan, net: gross - incomeTax - nationalInsurance - studentLoan };
+};
+
+/**
  * The fraction of the next £1 of `income` that goes in tax, NI, student loans
  * and the child benefit charge: D(income + 1) - D(income).
  *
@@ -457,11 +556,13 @@ export const ukTaxCliffs = (input: UkTaxInput): UkTaxCliff[] => {
 
   if (r.marriageAllowance) {
     const limit = marriageAllowanceLimit(r);
-    // The personal allowance is still whole at these incomes, so taxable
-    // income of `limit` is total income of `limit` plus the allowance.
+    // The personal allowance is still whole at these incomes (true while the
+    // stated allowance plus the band ceiling is under the £100,000 taper
+    // start, which holds for any allowance up to about £62,000), so taxable
+    // income of `limit` is total income of `limit` plus the stated allowance.
     cliffs.push({
       kind: 'marriage-allowance',
-      atIncome: incomeFor(limit + RULES.personalAllowance),
+      atIncome: incomeFor(limit + r.allowance),
       cost: Math.min(RULES.marriageAllowanceReduction, taxOnBands(limit, bandsFor(r.region, rasGrossOf(r)))),
     });
   }

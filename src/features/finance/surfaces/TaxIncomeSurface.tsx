@@ -15,8 +15,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FinanceSettings, HalfDay, LeaveType, PackageBenefit, UserHoliday } from '@/features/finance/finance-types';
+import { FinanceSettings, HalfDay, LeaveType, PackageBenefit, PackageBenefitKind, UserHoliday } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
   BIRTHDAY_LEAVE_RULES,
@@ -24,6 +25,8 @@ import {
   HALF_DAY,
   OPTIMAL_LEAVE_BIASES,
   OPTIMAL_LEAVE_BIAS_LABELS,
+  UK_EMPLOYEE_NI,
+  UK_STATUTORY_PERSONAL_ALLOWANCE,
   calculateWorkingDaysInRange,
   calendarParts,
   findBirthdayDayForHolidayRange,
@@ -37,6 +40,7 @@ import {
   getStartDayOfWeek,
   isHalfDay,
   planOptimalHolidays,
+  resolveBankHolidaysForYear,
   toISODate,
   validateBirthdayLeaveBooking,
   type BirthdayLeaveRule,
@@ -48,7 +52,7 @@ import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Gift, Pencil, Plus, P
 import { useFinanceTotals } from '../useFinanceTotals';
 import { PayslipsSection } from '../components/PayslipsSection';
 import { PillSwitch } from '../components/PillSwitch';
-import { getNormalizedHolidays } from '../finance-calcs';
+import { benefitValueOf, getNormalizedHolidays } from '../finance-calcs';
 
 interface TaxIncomeSurfaceProps {
   /** Both dialogs still live in the page: Settings is opened from Time Spent
@@ -57,6 +61,9 @@ interface TaxIncomeSurfaceProps {
   isBenefitsDialogOpen: boolean;
   setIsBenefitsDialogOpen: (open: boolean) => void;
 }
+
+/** Past this many bridges the Maximiser lists only the recommended ones. */
+const MAX_INLINE_BRIDGES = 5;
 
 const HALF_DAY_LABEL: Record<HalfDay, string> = { am: 'morning', pm: 'afternoon' };
 const HALF_DAY_BUTTON: Record<HalfDay, string> = { am: 'Morning', pm: 'Afternoon' };
@@ -84,16 +91,21 @@ const PENSION_TYPE_LABEL: Record<FinanceSettings['pensionType'], string> = {
 };
 
 const BENEFIT_PRESETS = [
-  { key: 'custom', label: '✨ Custom Benefit', name: '', amount: '', type: 'monetary' as const, emoji: '🎁', notes: '', defaultTaxRate: 0 },
-  { key: 'annual_bonus', label: '🎯 Annual Bonus (default 10%)', name: 'Annual Bonus', amount: '10', type: 'percentage' as const, emoji: '🎯', notes: 'Performance / annual target bonus', defaultTaxRate: 0 },
-  { key: 'private_medical', label: '🏥 Private Medical Insurance', name: 'Private Medical Insurance', amount: '1500', type: 'monetary' as const, emoji: '🏥', notes: 'Taxable Benefit in Kind (P11D)', defaultTaxRate: 20 },
-  { key: 'dental', label: '🦷 Dental Cover', name: 'Dental Cover', amount: '400', type: 'monetary' as const, emoji: '🦷', notes: 'Taxable Benefit in Kind (P11D)', defaultTaxRate: 20 },
-  { key: 'travel_insurance', label: '✈️ Travel Insurance', name: 'Travel Insurance', amount: '350', type: 'monetary' as const, emoji: '✈️', notes: 'Employer travel cover (P11D)', defaultTaxRate: 20 },
-  { key: 'equity_rsus', label: '📈 Equity / RSUs', name: 'Equity / RSUs', amount: '5000', type: 'monetary' as const, emoji: '📈', notes: 'Annual stock / RSU grant', defaultTaxRate: 0 },
-  { key: 'car_allowance', label: '🚗 Car Allowance', name: 'Car Allowance', amount: '3000', type: 'monetary' as const, emoji: '🚗', notes: 'Annual car allowance', defaultTaxRate: 0 },
-  { key: 'gym_wellness', label: '🏋️ Gym & Wellness', name: 'Gym & Wellness', amount: '600', type: 'monetary' as const, emoji: '🏋️', notes: 'Wellness / gym subsidy', defaultTaxRate: 0 },
-  { key: 'tech_wfh', label: '💻 Tech / WFH Allowance', name: 'Tech / WFH Allowance', amount: '1000', type: 'monetary' as const, emoji: '💻', notes: 'Equipment / home office stipend', defaultTaxRate: 0 },
+  { key: 'custom', label: '✨ Custom Benefit', name: '', amount: '', type: 'monetary' as const, emoji: '🎁', notes: '', kind: 'benefit-in-kind' as const },
+  { key: 'annual_bonus', label: '🎯 Annual Bonus (default 10%)', name: 'Annual Bonus', amount: '10', type: 'percentage' as const, emoji: '🎯', notes: 'Performance / annual target bonus', kind: 'cash' as const },
+  { key: 'private_medical', label: '🏥 Private Medical Insurance', name: 'Private Medical Insurance', amount: '1500', type: 'monetary' as const, emoji: '🏥', notes: 'Taxable Benefit in Kind (P11D)', kind: 'benefit-in-kind' as const },
+  { key: 'dental', label: '🦷 Dental Cover', name: 'Dental Cover', amount: '400', type: 'monetary' as const, emoji: '🦷', notes: 'Taxable Benefit in Kind (P11D)', kind: 'benefit-in-kind' as const },
+  { key: 'travel_insurance', label: '✈️ Travel Insurance', name: 'Travel Insurance', amount: '350', type: 'monetary' as const, emoji: '✈️', notes: 'Employer travel cover (P11D)', kind: 'benefit-in-kind' as const },
+  { key: 'equity_rsus', label: '📈 Equity / RSUs', name: 'Equity / RSUs', amount: '5000', type: 'monetary' as const, emoji: '📈', notes: 'Annual stock / RSU grant', kind: 'cash' as const },
+  { key: 'car_allowance', label: '🚗 Car Allowance', name: 'Car Allowance', amount: '3000', type: 'monetary' as const, emoji: '🚗', notes: 'Annual car allowance', kind: 'cash' as const },
+  { key: 'gym_wellness', label: '🏋️ Gym & Wellness', name: 'Gym & Wellness', amount: '600', type: 'monetary' as const, emoji: '🏋️', notes: 'Wellness / gym subsidy', kind: 'benefit-in-kind' as const },
+  { key: 'tech_wfh', label: '💻 Tech / WFH Allowance', name: 'Tech / WFH Allowance', amount: '1000', type: 'monetary' as const, emoji: '💻', notes: 'Equipment / home office stipend', kind: 'cash' as const },
 ] as const;
+
+const BENEFIT_KINDS = [
+  { key: 'cash', label: 'Cash' },
+  { key: 'benefit-in-kind', label: 'Benefit in kind' },
+] as const satisfies readonly { key: PackageBenefitKind; label: string }[];
 
 /** One line of the breakdown table. A `total` is ruled off above; the
  *  `result` is the take-home figure the table ends on. */
@@ -119,9 +131,9 @@ export default function TaxIncomeSurface({
     saveDataToSupabase,
     setSettings,
     settings,
-    taxConfig,
-    bankHolidaysList,
-    bankHolidaysMap,
+    bankHolidaysList: settingsYearBankHolidays,
+    bankHolidaysMap: settingsYearBankHolidaysMap,
+    profileId,
     breakdownRateMode,
     setBreakdownRateMode,
   } = useFinanceData();
@@ -137,10 +149,9 @@ export default function TaxIncomeSurface({
   // formatGBP always adds is only noise here.
   const formatGBPNoPence = (n: number) => formatGBP(n).replace(/\.00$/, '');
 
-  const { lowerThreshold, upperThreshold, mainRatePercent, upperRatePercent } = taxConfig.nationalInsuranceBands;
-  const nationalInsuranceNote = lowerThreshold > 0 && upperThreshold > 0
-    ? `${mainRatePercent}% (${formatGBPNoPence(lowerThreshold)}–${formatGBPNoPence(upperThreshold)}), ${upperRatePercent}% above`
-    : undefined;
+  // From the engine's own rates, which are what the figure uses.
+  const nationalInsuranceNote =
+    `${UK_EMPLOYEE_NI.mainRate * 100}% (${formatGBPNoPence(UK_EMPLOYEE_NI.lowerThreshold)}–${formatGBPNoPence(UK_EMPLOYEE_NI.upperThreshold)}), ${UK_EMPLOYEE_NI.upperRate * 100}% above`;
 
   // Package, then what comes off the salary, then what lands. Take-home is
   // base salary less deductions; employer pension and perks never pass
@@ -177,7 +188,7 @@ export default function TaxIncomeSurface({
         key: 'benefit-tax',
         label: 'Benefit-in-kind tax',
         note: (settings.packageBenefits || [])
-          .filter(b => (b.annualTaxCost || 0) > 0)
+          .filter(b => b.kind !== 'cash')
           .map(b => `${b.emoji || '🎁'} ${b.name}`)
           .join(', '),
         rates: breakdownRates.benefitTax,
@@ -204,7 +215,7 @@ export default function TaxIncomeSurface({
   const [newBenefitType, setNewBenefitType] = useState<'monetary' | 'percentage'>('monetary');
   const [newBenefitEmoji, setNewBenefitEmoji] = useState('🎁');
   const [newBenefitNotes, setNewBenefitNotes] = useState('');
-  const [newBenefitTaxCost, setNewBenefitTaxCost] = useState('');
+  const [newBenefitKind, setNewBenefitKind] = useState<PackageBenefitKind>('benefit-in-kind');
 
   const resetBenefitForm = () => {
     setSelectedBenefitPreset('custom');
@@ -214,7 +225,7 @@ export default function TaxIncomeSurface({
     setNewBenefitType('monetary');
     setNewBenefitEmoji('🎁');
     setNewBenefitNotes('');
-    setNewBenefitTaxCost('');
+    setNewBenefitKind('benefit-in-kind');
   };
 
   const handleSelectBenefitPreset = (presetKey: string) => {
@@ -226,13 +237,7 @@ export default function TaxIncomeSurface({
     setNewBenefitType(preset.type);
     setNewBenefitAmount(preset.amount);
     setNewBenefitNotes(preset.notes);
-    if (preset.defaultTaxRate > 0 && preset.amount) {
-      const parsedVal = parseFloat(preset.amount) || 0;
-      const annualVal = preset.type === 'percentage' ? settings.grossSalary * (parsedVal / 100) : parsedVal;
-      setNewBenefitTaxCost(String(Math.round(annualVal * (preset.defaultTaxRate / 100))));
-    } else {
-      setNewBenefitTaxCost('');
-    }
+    setNewBenefitKind(preset.kind);
   };
 
   const handleStartEditBenefit = (benefit: PackageBenefit) => {
@@ -243,7 +248,7 @@ export default function TaxIncomeSurface({
     setNewBenefitType(benefit.type);
     setNewBenefitEmoji(benefit.emoji || '🎁');
     setNewBenefitNotes(benefit.notes || '');
-    setNewBenefitTaxCost(benefit.annualTaxCost && benefit.annualTaxCost > 0 ? String(benefit.annualTaxCost) : '');
+    setNewBenefitKind(benefit.kind ?? 'benefit-in-kind');
   };
 
   const handleAddBenefit = () => {
@@ -257,9 +262,6 @@ export default function TaxIncomeSurface({
       return;
     }
 
-    const parsedTaxCost = parseFloat(newBenefitTaxCost);
-    const annualTaxCost = !isNaN(parsedTaxCost) && parsedTaxCost > 0 ? parsedTaxCost : undefined;
-
     const savedBenefit: PackageBenefit = {
       id: editingBenefitId || 'benefit_' + Date.now(),
       name: newBenefitName.trim(),
@@ -267,7 +269,8 @@ export default function TaxIncomeSurface({
       type: newBenefitType,
       emoji: newBenefitEmoji.trim() || '🎁',
       notes: newBenefitNotes.trim() || undefined,
-      ...(annualTaxCost !== undefined ? { annualTaxCost } : {}),
+      // The tax is worked out from the kind, so a typed figure is not kept.
+      kind: newBenefitKind,
     };
 
     const existingList = settings.packageBenefits || [];
@@ -315,7 +318,26 @@ export default function TaxIncomeSurface({
   const [inlineHalfDay, setInlineHalfDay] = useState<HalfDay | null>(null);
   const [inlineUseBirthdayDay, setInlineUseBirthdayDay] = useState<boolean>(false);
 
-  const currentTaxYear = settings.taxYear || new Date().getFullYear();
+  // The leave year the tracker is showing. Browsing is local: settings.taxYear
+  // also sets the bank-holiday and weekend counts behind the pay rates, so only
+  // the Settings dialog writes it. The pick lapses when the profile or that
+  // setting changes, which sends the tracker back to the saved year.
+  const settingsYear = settings.taxYear || new Date().getFullYear();
+  const yearAnchor = `${profileId ?? ''}:${settingsYear}`;
+  const [browsedYear, setBrowsedYear] = useState<{ anchor: string; year: number } | null>(null);
+  const currentTaxYear = browsedYear?.anchor === yearAnchor ? browsedYear.year : settingsYear;
+  // gov.uk's dates for the saved year when they have landed; every other year,
+  // and the moment before they land, is the computed list for the user's region.
+  const { dates: bankHolidaysList, map: bankHolidaysMap } = useMemo(
+    () =>
+      resolveBankHolidaysForYear(
+        currentTaxYear,
+        settings.ukRegion || 'england-and-wales',
+        settingsYearBankHolidays,
+        settingsYearBankHolidaysMap,
+      ),
+    [currentTaxYear, settings.ukRegion, settingsYearBankHolidays, settingsYearBankHolidaysMap],
+  );
   const todayIso = toISODate(new Date());
   const realCurrentYear = new Date().getFullYear();
   const realCurrentMonth = new Date().getMonth();
@@ -401,6 +423,9 @@ export default function TaxIncomeSurface({
   // Optimal Leave Maximiser State
   const [isMaximiserOpen, setIsMaximiserOpen] = useState(() => new Date().getMonth() === 0);
   const [maximiserBias, setMaximiserBias] = useState<OptimalLeaveBias>('balanced');
+  // Keyed to the plan it was opened on, so a new year, bias or scope starts
+  // collapsed again.
+  const [otherBridgesOpenFor, setOtherBridgesOpenFor] = useState<string | null>(null);
   const [maximiserScope, setMaximiserScope] = useState<'remaining' | 'full_year'>(() =>
     currentTaxYear === realCurrentYear && realCurrentMonth > 0 ? 'remaining' : 'full_year',
   );
@@ -470,6 +495,22 @@ export default function TaxIncomeSurface({
     ],
   );
 
+  // Recommended bridges are always listed; once the list is long the rest sit
+  // behind a disclosure rather than a scroller inside the tracker's own.
+  const bridgePlanKey = `${currentTaxYear}:${maximiserBias}:${maximiserScope}`;
+  const showOtherBridges = otherBridgesOpenFor === bridgePlanKey;
+  // Collapsing needs something to show: with nothing recommended (allowance
+  // used up) the full list stays open.
+  const collapseOtherBridges =
+    optimalPlan.bridges.length > MAX_INLINE_BRIDGES && optimalPlan.bridges.some(b => b.recommended);
+  const shownBridges =
+    collapseOtherBridges && !showOtherBridges
+      ? optimalPlan.bridges.filter(b => b.recommended)
+      : optimalPlan.bridges;
+  const hiddenBridgeCount = collapseOtherBridges
+    ? optimalPlan.bridges.filter(b => !b.recommended).length
+    : 0;
+
   const getHolidaysUsedCount = () => {
     return normalizedHolidaysAll
       .filter(h => h.type !== 'sick' && h.type !== 'birthday' && calendarParts(h.startDate)?.year === currentTaxYear)
@@ -494,14 +535,9 @@ export default function TaxIncomeSurface({
       .reduce((sum, h) => sum + (h.count || 0), 0);
   };
 
-  const handleChangeTaxYear = (nextYear: number) => {
+  const handleBrowseYear = (nextYear: number) => {
     if (nextYear < 2000 || nextYear > 2100) return;
-    const updatedSettings: FinanceSettings = {
-      ...settings,
-      taxYear: nextYear,
-    };
-    setSettings(updatedSettings);
-    void saveDataToSupabase('settings', updatedSettings);
+    setBrowsedYear({ anchor: yearAnchor, year: nextYear });
   };
 
   const handleSaveBirthdayConfig = () => {
@@ -725,9 +761,8 @@ export default function TaxIncomeSurface({
     setEditingHolidayId(null);
     setInlineType(type);
     setInlineOccasion(type === 'birthday' ? 'Birthday Day Off' : '');
-    const year = settings.taxYear || new Date().getFullYear();
     const pad = (n: number) => n.toString().padStart(2, '0');
-    const monthPrefix = `${year}-${pad(monthIdx + 1)}-`;
+    const monthPrefix = `${currentTaxYear}-${pad(monthIdx + 1)}-`;
     const defaultDate =
       type === 'birthday' && birthdayWindow
         ? birthdayWindow.eligibleDates.find(d => d.startsWith(monthPrefix)) ||
@@ -1166,7 +1201,7 @@ export default function TaxIncomeSurface({
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => handleChangeTaxYear(currentTaxYear - 1)}
+              onClick={() => handleBrowseYear(currentTaxYear - 1)}
               className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
               title="Previous leave year"
             >
@@ -1179,7 +1214,7 @@ export default function TaxIncomeSurface({
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => handleChangeTaxYear(currentTaxYear + 1)}
+              onClick={() => handleBrowseYear(currentTaxYear + 1)}
               className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
               title="Next leave year"
             >
@@ -1206,7 +1241,7 @@ export default function TaxIncomeSurface({
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
             <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bank</span>
             <span className="mt-1 block text-sm font-bold text-chart-5 tabular-nums">
-              {bankHolidaysLeft}/{settings.bankHolidays}
+              {bankHolidaysLeft}/{bankHolidaysList.length}
             </span>
           </div>
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
@@ -1275,26 +1310,20 @@ export default function TaxIncomeSurface({
           {isBirthdayConfigOpen && (
             <div className="border-t border-border/30 pt-2.5 space-y-2.5 text-left">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">Birthday Day Off (+1 paid day)</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={bdayConfigEnabled ? 'default' : 'outline'}
-                  onClick={() => setBdayConfigEnabled(prev => !prev)}
-                  className="h-7 px-2.5 rounded-lg text-xs font-mono"
-                >
-                  {bdayConfigEnabled ? 'Enabled' : 'Disabled'}
-                </Button>
+                <Label htmlFor="tracker-bday-enabled" className="text-xs font-normal text-muted-foreground">
+                  Birthday Day Off (+1 paid day)
+                </Label>
+                <Switch id="tracker-bday-enabled" checked={bdayConfigEnabled} onCheckedChange={setBdayConfigEnabled} />
               </div>
               {bdayConfigEnabled && (
                 <>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Usage Window Rule</Label>
+                    <Label htmlFor="tracker-bday-rule" className="text-xs text-muted-foreground">Usage Window Rule</Label>
                     <Select
                       value={bdayConfigRule}
                       onValueChange={(val) => setBdayConfigRule(val as BirthdayLeaveRule)}
                     >
-                      <SelectTrigger className="h-8 rounded-lg border-border/40 bg-background/60 text-xs font-mono">
+                      <SelectTrigger id="tracker-bday-rule" className="h-8 rounded-lg border-border/40 bg-background/60 text-xs font-mono">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border-border/40 bg-popover font-mono text-xs">
@@ -1306,10 +1335,14 @@ export default function TaxIncomeSurface({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Birthday (UK Day / Month)</Label>
+                  <div role="group" aria-labelledby="tracker-bday-date-label" className="space-y-1">
+                    <p id="tracker-bday-date-label" className="text-xs font-medium leading-snug text-muted-foreground">
+                      Birthday (UK Day / Month)
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
+                      <Label htmlFor="tracker-bday-day" className="sr-only">Birthday day (DD)</Label>
                       <Input
+                        id="tracker-bday-day"
                         type="number"
                         inputMode="numeric"
                         min="1"
@@ -1319,8 +1352,9 @@ export default function TaxIncomeSurface({
                         onChange={(e) => setBdayConfigDay(e.target.value)}
                         className="h-8 rounded-lg border-border/40 bg-background/60 text-xs font-mono"
                       />
+                      <Label htmlFor="tracker-bday-month" className="sr-only">Birthday month</Label>
                       <Select value={bdayConfigMonth} onValueChange={setBdayConfigMonth}>
-                        <SelectTrigger className="h-8 rounded-lg border-border/40 bg-background/60 text-xs font-mono">
+                        <SelectTrigger id="tracker-bday-month" className="h-8 rounded-lg border-border/40 bg-background/60 text-xs font-mono">
                           <SelectValue placeholder="Month" />
                         </SelectTrigger>
                         <SelectContent className="rounded-lg border-border/40 bg-popover font-mono text-xs">
@@ -1367,6 +1401,8 @@ export default function TaxIncomeSurface({
           <button
             type="button"
             onClick={() => setIsMaximiserOpen(prev => !prev)}
+            aria-expanded={isMaximiserOpen}
+            aria-controls="holiday-maximiser-panel"
             className="w-full p-3 flex items-center justify-between gap-2 text-left hover:bg-primary/10 transition-colors"
           >
             <div className="min-w-0">
@@ -1389,7 +1425,7 @@ export default function TaxIncomeSurface({
           </button>
 
           {isMaximiserOpen && (
-            <div className="border-t border-primary/20 p-3 space-y-3 bg-card/60">
+            <div id="holiday-maximiser-panel" className="border-t border-primary/20 p-3 space-y-3 bg-card/60">
               {realCurrentMonth === 0 && currentTaxYear === realCurrentYear && (
                 <div className="rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs text-primary font-semibold">
                   🗓️ January Annual Leave Planner — Lock in your {currentTaxYear} dates early
@@ -1412,7 +1448,7 @@ export default function TaxIncomeSurface({
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      handleChangeTaxYear(realCurrentYear + 1);
+                      handleBrowseYear(realCurrentYear + 1);
                       setIsMaximiserOpen(true);
                     }}
                     className="h-7 px-2.5 rounded-lg text-xs border-border/40 bg-background/60 hover:bg-muted/40 font-mono"
@@ -1463,9 +1499,9 @@ export default function TaxIncomeSurface({
                 </Button>
               </div>
 
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <div id="holiday-maximiser-bridges" className="space-y-2">
                 {optimalPlan.bridges.length > 0 ? (
-                  optimalPlan.bridges.map(bridge => (
+                  shownBridges.map(bridge => (
                     <div
                       key={bridge.id}
                       className={cn(
@@ -1535,6 +1571,17 @@ export default function TaxIncomeSurface({
                     All bank-holiday bridges for {currentTaxYear} are already booked.
                   </p>
                 )}
+                {hiddenBridgeCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setOtherBridgesOpenFor(showOtherBridges ? null : bridgePlanKey)}
+                    aria-expanded={showOtherBridges}
+                    aria-controls="holiday-maximiser-bridges"
+                    className="text-xs font-mono text-muted-foreground hover:text-foreground"
+                  >
+                    {showOtherBridges ? 'Show recommended only' : `Show ${hiddenBridgeCount} other ${hiddenBridgeCount === 1 ? 'bridge' : 'bridges'}`}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1573,11 +1620,11 @@ export default function TaxIncomeSurface({
         <TooltipProvider delayDuration={150}>
           <div id="holiday-months-container" className="holiday-scrollbar space-y-4 lg:max-h-[315px] lg:overflow-y-auto lg:pr-3">
             {MONTH_NAMES.map((month, monthIdx) => {
-              const daysInMonth = getDaysInMonth(settings.taxYear, monthIdx);
-              const startDayOfWeek = getStartDayOfWeek(settings.taxYear, monthIdx);
+              const daysInMonth = getDaysInMonth(currentTaxYear, monthIdx);
+              const startDayOfWeek = getStartDayOfWeek(currentTaxYear, monthIdx);
 
               const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
-              const bookedDaysForMonth = getBookedDaysForMonth(normalizedHolidays, settings.taxYear, monthIdx, bankHolidaysList);
+              const bookedDaysForMonth = getBookedDaysForMonth(normalizedHolidays, currentTaxYear, monthIdx, bankHolidaysList);
 
               const monthHolidaysBooked = bookedDaysForMonth.filter(b => b.type === 'holiday').reduce((sum, b) => sum + b.fraction, 0);
               const monthBirthdayBooked = bookedDaysForMonth.filter(b => b.type === 'birthday').reduce((sum, b) => sum + b.fraction, 0);
@@ -1595,7 +1642,7 @@ export default function TaxIncomeSurface({
 
                 const startVal = start.year * 12 + start.month - 1;
                 const endVal = end.year * 12 + end.month - 1;
-                const currentVal = settings.taxYear * 12 + monthIdx;
+                const currentVal = currentTaxYear * 12 + monthIdx;
 
                 return currentVal >= startVal && currentVal <= endVal;
               });
@@ -1648,7 +1695,7 @@ export default function TaxIncomeSurface({
                     {Array.from({ length: daysInMonth }).map((_, i) => {
                       const dayNum = i + 1;
                       const pad = (n: number) => n.toString().padStart(2, '0');
-                      const dateStr = `${settings.taxYear}-${pad(monthIdx + 1)}-${pad(dayNum)}`;
+                      const dateStr = `${currentTaxYear}-${pad(monthIdx + 1)}-${pad(dayNum)}`;
 
                       const isBankHoliday = bankHolidaysList.includes(dateStr);
 
@@ -1669,7 +1716,7 @@ export default function TaxIncomeSurface({
                           birthdayWindow.eligibleDates.includes(dateStr),
                       );
 
-                      const dateObj = new Date(settings.taxYear, monthIdx, dayNum);
+                      const dateObj = new Date(currentTaxYear, monthIdx, dayNum);
                       const dayOfWeek = dateObj.getDay();
                       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
@@ -1744,7 +1791,7 @@ export default function TaxIncomeSurface({
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs p-2.5 rounded-lg bg-popover border border-border/60 shadow-md font-mono">
-                            <p className="font-bold text-foreground mb-1">{dayNum} {month} {settings.taxYear}</p>
+                            <p className="font-bold text-foreground mb-1">{dayNum} {month} {currentTaxYear}</p>
                             <div className="space-y-1 text-muted-foreground font-mono text-xs">
                               {getTooltipDetails().map((detail, idx) => {
                                 let colorClass = "text-foreground/80";
@@ -1836,6 +1883,7 @@ export default function TaxIncomeSurface({
                                             e.stopPropagation();
                                             handleRemoveBirthdayFromHoliday(hol, attachedBday);
                                           }}
+                                          aria-label="Remove Birthday Day Off from this leave"
                                           className="text-xs font-mono text-muted-foreground hover:text-destructive underline"
                                         >
                                           Remove 🎂
@@ -1850,6 +1898,7 @@ export default function TaxIncomeSurface({
                                             e.stopPropagation();
                                             handleApplyBirthdayToHoliday(hol, eligibleBdayDate);
                                           }}
+                                          aria-label="Use Birthday Day Off on this leave (saves one day)"
                                           className="bg-primary/15 hover:bg-primary/25 text-primary border border-primary/40 rounded-md px-2 py-0.5 text-xs font-mono font-semibold transition-colors"
                                         >
                                           🎂 Use Birthday Day (-1d)
@@ -1938,7 +1987,7 @@ export default function TaxIncomeSurface({
                                       setInlineOccasion('Birthday Day Off');
                                     }
                                     const pad = (n: number) => n.toString().padStart(2, '0');
-                                    const monthPrefix = `${settings.taxYear}-${pad(monthIdx + 1)}-`;
+                                    const monthPrefix = `${currentTaxYear}-${pad(monthIdx + 1)}-`;
                                     const eligibleInMonth = birthdayWindow?.eligibleDates.find(d => d.startsWith(monthPrefix));
                                     if (eligibleInMonth) {
                                       setInlineStartDate(eligibleInMonth);
@@ -1976,10 +2025,11 @@ export default function TaxIncomeSurface({
                           </div>
                           <div className="space-y-2">
                             <div className="space-y-0.5">
-                              <Label className="text-xs text-muted-foreground font-mono">
+                              <Label htmlFor="holiday-inline-occasion" className="text-xs text-muted-foreground font-mono">
                                 {inlineType === 'sick' ? 'Reason / Notes' : 'Occasion'}
                               </Label>
                               <Input
+                                id="holiday-inline-occasion"
                                 placeholder={inlineType === 'sick' ? 'e.g. Cold / Flu, Migraine, Doctor visit' : 'e.g. Skiing, Paris Trip'}
                                 value={inlineOccasion}
                                 onChange={(e) => setInlineOccasion(e.target.value)}
@@ -1988,8 +2038,9 @@ export default function TaxIncomeSurface({
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div className="space-y-0.5">
-                                <Label className="text-xs text-muted-foreground font-mono">Start Date</Label>
+                                <Label htmlFor="holiday-inline-start" className="text-xs text-muted-foreground font-mono">Start Date</Label>
                                 <Input
+                                  id="holiday-inline-start"
                                   type="date"
                                   value={inlineStartDate}
                                   onChange={(e) => {
@@ -2001,8 +2052,9 @@ export default function TaxIncomeSurface({
                                 />
                               </div>
                               <div className="space-y-0.5">
-                                <Label className="text-xs text-muted-foreground font-mono">End Date</Label>
+                                <Label htmlFor="holiday-inline-end" className="text-xs text-muted-foreground font-mono">End Date</Label>
                                 <Input
+                                  id="holiday-inline-end"
                                   type="date"
                                   value={inlineEndDate}
                                   onChange={(e) => {
@@ -2016,8 +2068,8 @@ export default function TaxIncomeSurface({
                             </div>
                             {inlineIsSingleDay && (
                               <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <Label className="text-xs text-muted-foreground font-mono">Length</Label>
-                                <div className="flex items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40">
+                                <span id="holiday-inline-length-label" className="text-xs font-medium leading-snug text-muted-foreground font-mono">Length</span>
+                                <div role="group" aria-labelledby="holiday-inline-length-label" className="flex items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40">
                                   {([null, 'am', 'pm'] as const).map(half => {
                                     const selected = inlineHalfDay === half;
                                     return (
@@ -2056,6 +2108,7 @@ export default function TaxIncomeSurface({
                                     type="button"
                                     size="sm"
                                     variant={inlineUseBirthdayDay ? 'default' : 'outline'}
+                                    aria-pressed={inlineUseBirthdayDay}
                                     onClick={() => {
                                       const nextVal = !inlineUseBirthdayDay;
                                       setInlineUseBirthdayDay(nextVal);
@@ -2070,8 +2123,9 @@ export default function TaxIncomeSurface({
                                 </div>
                               )}
                             <div className="space-y-0.5">
-                              <Label className="text-xs text-muted-foreground font-mono">Days count (working days)</Label>
+                              <Label htmlFor="holiday-inline-count" className="text-xs text-muted-foreground font-mono">Days count (working days)</Label>
                               <Input
+                                id="holiday-inline-count"
                                 type="number"
                                 step="0.5"
                                 min="0"
@@ -2148,7 +2202,7 @@ export default function TaxIncomeSurface({
         <Gift className="w-4 h-4 text-primary" /> Manage Package Benefits & Perks
       </DialogTitle>
       <DialogDescription className="text-xs text-muted-foreground font-mono">
-        Add non-cash benefits, bonuses, allowances, or equity options provided by your employer to track your total compensation package and any Benefit-in-Kind tax deductions.
+        Add bonuses, allowances, equity and non-cash benefits from your employer. Cash is taxed through payroll and shown after tax; a benefit in kind is taxed on its value, worked out from your salary, region and tax code.
       </DialogDescription>
     </DialogHeader>
 
@@ -2159,15 +2213,18 @@ export default function TaxIncomeSurface({
         <div>
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Total Active Benefits</span>
           <span className="font-mono text-xl font-bold text-foreground">
-            {formatGBP((settings.packageBenefits || []).reduce((sum, b) => {
-              const val = b.type === 'percentage' ? (settings.grossSalary * ((b.amount || 0) / 100)) : (b.amount || 0);
-              return sum + (val || 0);
-            }, 0))}
+            {formatGBP(results.totalBenefitsValue)}
             <span className="text-xs font-normal text-muted-foreground ml-1.5">/ year</span>
           </span>
           {results.benefitTaxDeduction > 0 && (
             <span className="block text-xs font-mono text-destructive mt-0.5">
-              -{formatGBP(results.benefitTaxDeduction)}/yr Benefit-in-Kind tax (-{formatGBP(results.benefitTaxDeduction / 12)}/mo)
+              -{formatGBP(results.benefitTaxDeduction)}/yr benefit-in-kind tax (-{formatGBP(results.benefitTaxDeduction / 12)}/mo)
+            </span>
+          )}
+          {results.benefitTaxCollectedByCode && (
+            <span className="block text-xs font-mono text-muted-foreground mt-0.5">
+              About {formatGBP(results.benefitTax)}/yr benefit-in-kind tax is collected through your tax code (allowance
+              below {formatGBPNoPence(UK_STATUTORY_PERSONAL_ALLOWANCE)}), so it is not taken again here.
             </span>
           )}
         </div>
@@ -2191,9 +2248,9 @@ export default function TaxIncomeSurface({
         </h4>
 
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground font-mono">Benefit Preset</Label>
+          <Label htmlFor="benefit-preset" className="text-xs text-muted-foreground font-mono">Benefit Preset</Label>
           <Select value={selectedBenefitPreset} onValueChange={handleSelectBenefitPreset}>
-            <SelectTrigger className="h-9 rounded-lg font-mono text-xs border-border/40 bg-background/60">
+            <SelectTrigger id="benefit-preset" className="h-9 rounded-lg font-mono text-xs border-border/40 bg-background/60">
               <SelectValue placeholder="Choose a benefit preset or custom..." />
             </SelectTrigger>
             <SelectContent className="font-mono text-xs">
@@ -2208,8 +2265,9 @@ export default function TaxIncomeSurface({
 
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
           <div className="sm:col-span-2 space-y-1">
-            <Label className="text-xs text-muted-foreground font-mono">Emoji</Label>
+            <Label htmlFor="benefit-emoji" className="text-xs text-muted-foreground font-mono">Emoji</Label>
             <Input
+              id="benefit-emoji"
               value={newBenefitEmoji}
               onChange={(e) => setNewBenefitEmoji(e.target.value)}
               className="h-9 rounded-lg text-center font-emoji border-border/40"
@@ -2217,8 +2275,9 @@ export default function TaxIncomeSurface({
             />
           </div>
           <div className="sm:col-span-6 space-y-1">
-            <Label className="text-xs text-muted-foreground font-mono">Benefit Name</Label>
+            <Label htmlFor="benefit-name" className="text-xs text-muted-foreground font-mono">Benefit Name</Label>
             <Input
+              id="benefit-name"
               value={newBenefitName}
               onChange={(e) => setNewBenefitName(e.target.value)}
               className="h-9 rounded-lg font-mono text-xs border-border/40"
@@ -2226,9 +2285,9 @@ export default function TaxIncomeSurface({
             />
           </div>
           <div className="sm:col-span-4 space-y-1">
-            <Label className="text-xs text-muted-foreground font-mono">Type</Label>
+            <Label htmlFor="benefit-type" className="text-xs text-muted-foreground font-mono">Type</Label>
             <Select value={newBenefitType} onValueChange={(val: 'monetary' | 'percentage') => setNewBenefitType(val)}>
-              <SelectTrigger className="h-9 rounded-lg font-mono text-xs border-border/40">
+              <SelectTrigger id="benefit-type" className="h-9 rounded-lg font-mono text-xs border-border/40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="font-mono text-xs">
@@ -2241,8 +2300,9 @@ export default function TaxIncomeSurface({
 
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
           <div className="sm:col-span-6 space-y-1">
-            <Label className="text-xs text-muted-foreground font-mono">Amount / Value ({newBenefitType === 'percentage' ? '%' : '£ / year'})</Label>
+            <Label htmlFor="benefit-amount" className="text-xs text-muted-foreground font-mono">Amount / Value ({newBenefitType === 'percentage' ? '%' : '£ / year'})</Label>
             <Input
+              id="benefit-amount"
               type="number"
               inputMode="decimal"
               step={newBenefitType === 'percentage' ? '0.1' : '1'}
@@ -2253,8 +2313,9 @@ export default function TaxIncomeSurface({
             />
           </div>
           <div className="sm:col-span-6 space-y-1">
-            <Label className="text-xs text-muted-foreground font-mono">Notes (optional)</Label>
+            <Label htmlFor="benefit-notes" className="text-xs text-muted-foreground font-mono">Notes (optional)</Label>
             <Input
+              id="benefit-notes"
               value={newBenefitNotes}
               onChange={(e) => setNewBenefitNotes(e.target.value)}
               className="h-9 rounded-lg font-mono text-xs border-border/40"
@@ -2264,44 +2325,18 @@ export default function TaxIncomeSurface({
         </div>
 
         <div className="space-y-1.5 pt-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label className="text-xs text-muted-foreground font-mono">Tax Taken Off (£ / year, optional)</Label>
-            <div className="flex flex-wrap items-center gap-1">
-              {[
-                { label: 'None (£0)', rate: 0 },
-                { label: '20% Basic', rate: 0.2 },
-                { label: '40% Higher', rate: 0.4 },
-                { label: '45% Additional', rate: 0.45 },
-              ].map(opt => {
-                const parsedAmt = parseFloat(newBenefitAmount) || 0;
-                const annualBenefitValue =
-                  newBenefitType === 'percentage'
-                    ? settings.grossSalary * (parsedAmt / 100)
-                    : parsedAmt;
-                const calcTax = opt.rate === 0 ? '' : String(Math.round(annualBenefitValue * opt.rate));
-                return (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    onClick={() => setNewBenefitTaxCost(calcTax)}
-                    className="px-1.5 py-0.5 rounded border border-border/40 bg-background/60 hover:bg-muted/40 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="1"
-            min="0"
-            value={newBenefitTaxCost}
-            onChange={(e) => setNewBenefitTaxCost(e.target.value)}
-            className="h-9 rounded-lg font-mono text-xs border-border/40"
-            placeholder="0 (enter annual P11D / PAYE tax cost if applicable)"
+          <span id="benefit-kind-label" className="block text-xs text-muted-foreground font-mono">Taxed as</span>
+          <PillSwitch
+            label="Taxed as"
+            options={BENEFIT_KINDS}
+            value={newBenefitKind}
+            onChange={setNewBenefitKind}
           />
+          <p className="text-xs text-muted-foreground font-mono">
+            {newBenefitKind === 'cash'
+              ? 'Paid through payroll: income tax, National Insurance and student loan come off it. Kept out of salary take-home.'
+              : 'Not paid to you: income tax is due on its value. Taken from take-home unless your tax code already collects it.'}
+          </p>
         </div>
 
         <div className="flex justify-end gap-2 pt-1">
@@ -2334,13 +2369,11 @@ export default function TaxIncomeSurface({
       </div>
 
       {/* Active Benefits List */}
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-muted-foreground font-mono">Configured Package Additions</Label>
+      <div role="group" aria-labelledby="benefit-list-label" className="space-y-2">
+        <p id="benefit-list-label" className="text-xs font-medium leading-snug text-muted-foreground font-mono">Configured Package Additions</p>
         <div className="space-y-2">
           {(settings.packageBenefits || []).map((benefit) => {
-            const annualVal = benefit.type === 'percentage'
-              ? (settings.grossSalary * ((benefit.amount || 0) / 100))
-              : (benefit.amount || 0);
+            const annualVal = benefitValueOf(benefit, settings.grossSalary);
             return (
               <div key={benefit.id} className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-card/40 hover:bg-card/60 transition-colors">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -2351,11 +2384,13 @@ export default function TaxIncomeSurface({
                       {benefit.type === 'percentage' ? `${benefit.amount}% of base salary` : 'Fixed annual amount'}
                       {benefit.notes ? ` · ${benefit.notes}` : ''}
                     </p>
-                    {benefit.annualTaxCost && benefit.annualTaxCost > 0 ? (
-                      <p className="text-xs text-destructive font-mono font-semibold">
-                        -{formatGBP(benefit.annualTaxCost)}/yr tax (-{formatGBP(benefit.annualTaxCost / 12)}/mo)
+                    {benefit.kind === 'cash' ? (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        Cash · about {formatGBP(results.cashBenefits.find(c => c.id === benefit.id)?.net ?? 0)}/yr after tax
                       </p>
-                    ) : null}
+                    ) : (
+                      <p className="text-xs text-muted-foreground font-mono">Benefit in kind</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">

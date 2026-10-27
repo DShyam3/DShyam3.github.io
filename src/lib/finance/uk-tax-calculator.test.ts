@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateUkTax,
+  ukBasePersonalAllowance,
+  ukBenefitInKindTax,
+  ukCashAfterTax,
   ukChildBenefitBand,
   ukMarginalRate,
   ukTaxCliffs,
@@ -10,6 +13,7 @@ import {
   UK_CHILD_BENEFIT_CHARGE_START,
   UK_CHILD_BENEFIT_CHARGE_STEP,
   UK_CHILD_BENEFIT_WEEKS,
+  UK_STATUTORY_PERSONAL_ALLOWANCE,
   UK_TAX_YEAR_LABEL,
   type UkIncomeBand,
   type UkTaxBreakdown,
@@ -1014,5 +1018,382 @@ describe('ukTaxCurve', () => {
   it('leaves zero income at zero everything with a zero marginal rate', () => {
     const [origin] = ukTaxCurve(input({}), { maxIncome: 1000, step: 250 });
     expect(origin).toEqual({ income: 0, takeHome: 0, netWithSupport: 0, marginalRate: 0 });
+  });
+});
+
+describe('UK_STATUTORY_PERSONAL_ALLOWANCE', () => {
+  it('is the standard 1257L allowance, which is what an omitted allowance means', () => {
+    expect(UK_STATUTORY_PERSONAL_ALLOWANCE).toBe(12_570);
+    const omitted = calculateUkTax(input({ income: 30000 }));
+    expect(omitted.personalAllowance).toBe(UK_STATUTORY_PERSONAL_ALLOWANCE);
+    expect(calculateUkTax(input({ income: 30000, personalAllowance: UK_STATUTORY_PERSONAL_ALLOWANCE }))).toEqual(
+      omitted,
+    );
+  });
+});
+
+describe('ukBasePersonalAllowance', () => {
+  it('passes a stated allowance through, zero included', () => {
+    expect(ukBasePersonalAllowance(11070)).toBe(11070);
+    expect(ukBasePersonalAllowance(0)).toBe(0);
+    expect(ukBasePersonalAllowance(15000)).toBe(15000);
+  });
+
+  it('falls back to the statutory allowance when omitted, negative or not a finite number', () => {
+    expect(ukBasePersonalAllowance(undefined)).toBe(12570);
+    expect(ukBasePersonalAllowance(-1)).toBe(12570);
+    expect(ukBasePersonalAllowance(Number.NaN)).toBe(12570);
+    expect(ukBasePersonalAllowance(Number.POSITIVE_INFINITY)).toBe(12570);
+    expect(ukBasePersonalAllowance('11070' as never)).toBe(12570);
+  });
+});
+
+describe('calculateUkTax: a stated personal allowance', () => {
+  it('taxes from a lower allowance such as 1107L', () => {
+    const b = calculateUkTax(input({ income: 30000, personalAllowance: 11070 }));
+    expect(b.personalAllowance).toBe(11070);
+    expect(b.taxableIncome).toBe(18930);
+    expect(b.incomeTax).toBeCloseTo(3786, money);
+    // NI has its own statutory threshold; the tax code does not move it.
+    expect(b.nationalInsurance).toBeCloseTo((30000 - 12570) * 0.08, money);
+  });
+
+  it('allows an allowance of zero: every pound is taxable, NI and loans unchanged', () => {
+    const b = calculateUkTax(input({ income: 30000, personalAllowance: 0, undergradPlan: 'plan2' }));
+    expect(b.personalAllowance).toBe(0);
+    expect(b.taxableIncome).toBe(30000);
+    expect(b.incomeTax).toBeCloseTo(6000, money);
+    expect(b.nationalInsurance).toBeCloseTo(1394.4, money);
+    expect(b.studentLoan).toBeCloseTo((30000 - 29385) * 0.09, money);
+    expect(b.takeHome).toBeCloseTo(30000 - 6000 - 1394.4 - b.studentLoan, money);
+  });
+
+  it('takes a higher allowance too', () => {
+    const b = calculateUkTax(input({ income: 30000, personalAllowance: 15000 }));
+    expect(b.taxableIncome).toBe(15000);
+    expect(b.incomeTax).toBeCloseTo(3000, money);
+  });
+
+  it('treats a negative or non-finite allowance as the statutory one, not as zero', () => {
+    const statutory = calculateUkTax(input({ income: 30000 }));
+    for (const personalAllowance of [-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(calculateUkTax(input({ income: 30000, personalAllowance }))).toEqual(statutory);
+    }
+  });
+
+  it('still tapers £1 per £2 above £100,000, from the stated allowance', () => {
+    // 11,070 - (110,000 - 100,000) / 2
+    const b = calculateUkTax(input({ income: 110000, personalAllowance: 11070 }));
+    expect(b.personalAllowance).toBe(6070);
+    expect(b.taxableIncome).toBe(103930);
+    expect(b.incomeTax).toBeCloseTo(7540 + 66230 * 0.4, money);
+  });
+
+  it('has none left once the taper has used the stated allowance up', () => {
+    expect(calculateUkTax(input({ income: 122140, personalAllowance: 11070 })).personalAllowance).toBe(0);
+    expect(calculateUkTax(input({ income: 130000, personalAllowance: 11070 })).personalAllowance).toBe(0);
+  });
+
+  it('floors the reduction in the exact calculation, as for the statutory allowance', () => {
+    expect(calculateUkTax(input({ income: 100003, personalAllowance: 11070 })).personalAllowance).toBe(11069);
+  });
+
+  it('has nothing to taper with a zero allowance, so no 60% trap', () => {
+    const b = calculateUkTax(input({ income: 110000, personalAllowance: 0 }));
+    expect(b.personalAllowance).toBe(0);
+    expect(b.incomeTax).toBeCloseTo(7540 + 72300 * 0.4, money);
+    expect(calculateUkTax(input({ income: 200000, personalAllowance: 0 })).personalAllowance).toBe(0);
+  });
+
+  it('applies to the Scottish bands and to relief at source', () => {
+    const scot = calculateUkTax(input({ income: 50000, region: 'scotland', personalAllowance: 0 }));
+    expect(scot.taxableIncome).toBe(50000);
+    expect(scot.incomeTax).toBeCloseTo(
+      3967 * 0.19 + (16956 - 3967) * 0.2 + (31092 - 16956) * 0.21 + (50000 - 31092) * 0.42,
+      money,
+    );
+    // Relief at source extends the 20% band onward by the gross contribution.
+    const ras = calculateUkTax(
+      input({ income: 50000, personalAllowance: 11070, pensionContribution: 5000, pensionMethod: 'relief-at-source' }),
+    );
+    expect(ras.taxableIncome).toBe(38930);
+    expect(ras.incomeTax).toBeCloseTo(38930 * 0.2, money);
+  });
+
+  it('does not alter the input it is given', () => {
+    const i = input({ income: 110000, personalAllowance: 11070 });
+    const copy = { ...i };
+    calculateUkTax(i);
+    ukMarginalRate(i);
+    ukTaxCliffs(i);
+    expect(i).toEqual(copy);
+  });
+});
+
+describe('a stated personal allowance: marginal rate, cliffs, bands and curve', () => {
+  it('moves where the 60% taper trap ends: 62% inside it, 42% once the allowance is gone', () => {
+    const at = (income: number) => ukMarginalRate(input({ income, personalAllowance: 11070 }));
+    expect(at(121000)).toBeCloseTo(0.62, money);
+    expect(at(123000)).toBeCloseTo(0.42, money);
+  });
+
+  it('has no taper trap with a zero allowance', () => {
+    expect(ukMarginalRate(input({ income: 110000, personalAllowance: 0 }))).toBeCloseTo(0.42, money);
+  });
+
+  it('starts taxing at the first pound with a zero allowance', () => {
+    expect(ukMarginalRate(input({ income: 10000, personalAllowance: 0 }))).toBeCloseTo(0.2, money);
+    expect(ukMarginalRate(input({ income: 10000 }))).toBe(0);
+  });
+
+  it('puts the marriage allowance cliff at the band ceiling plus the stated allowance', () => {
+    const i = input({ income: 30000, marriageAllowance: true, personalAllowance: 11070 });
+    const [cliff] = ukTaxCliffs(i);
+    expect(cliff).toEqual({ kind: 'marriage-allowance', atIncome: 48770, cost: 252 });
+    expect(calculateUkTax({ ...i, income: cliff.atIncome }).marriageAllowanceRelief).toBeCloseTo(252, money);
+    expect(calculateUkTax({ ...i, income: cliff.atIncome + 1 }).marriageAllowanceRelief).toBe(0);
+  });
+
+  it('puts the marriage allowance cliff at the band ceiling with a zero allowance', () => {
+    const i = input({ income: 20000, marriageAllowance: true, personalAllowance: 0 });
+    const [cliff] = ukTaxCliffs(i);
+    expect(cliff.atIncome).toBe(37700);
+    expect(calculateUkTax({ ...i, income: 37700 }).marriageAllowanceRelief).toBeCloseTo(252, money);
+    expect(calculateUkTax({ ...i, income: 37701 }).marriageAllowanceRelief).toBe(0);
+  });
+
+  it('follows the stated allowance in Scotland and under relief at source', () => {
+    const scot = input({ income: 20000, region: 'scotland', marriageAllowance: true, personalAllowance: 11070 });
+    expect(ukTaxCliffs(scot)[0].atIncome).toBe(31092 + 11070);
+    expect(calculateUkTax({ ...scot, income: 31092 + 11070 }).marriageAllowanceRelief).toBeCloseTo(252, money);
+    expect(calculateUkTax({ ...scot, income: 31092 + 11070 + 1 }).marriageAllowanceRelief).toBe(0);
+
+    const ras = input({
+      income: 30000,
+      marriageAllowance: true,
+      personalAllowance: 11070,
+      pensionContribution: 2000,
+      pensionMethod: 'relief-at-source',
+    });
+    expect(ukTaxCliffs(ras)[0].atIncome).toBe(37700 + 2000 + 11070);
+  });
+
+  it('leaves the childcare cliff and the child benefit band to adjusted net income, not the allowance', () => {
+    const withAllowance = input({ income: 50000, childcareSupport: 5000, children: 2, personalAllowance: 0 });
+    const without = input({ income: 50000, childcareSupport: 5000, children: 2 });
+    expect(ukTaxCliffs(withAllowance)).toEqual(ukTaxCliffs(without));
+    expect(ukChildBenefitBand(withAllowance)).toEqual(ukChildBenefitBand(without));
+  });
+
+  it('carries the allowance through every point of the curve', () => {
+    const i = input({ personalAllowance: 0 });
+    const curve = ukTaxCurve(i, { maxIncome: 120000, step: 40000 });
+    for (const p of curve) {
+      const at = { ...i, income: p.income };
+      expect(p.takeHome).toBe(calculateUkTax(at).takeHome);
+      expect(p.marginalRate).toBe(ukMarginalRate(at));
+    }
+    expect(curve[1].takeHome).toBeLessThan(calculateUkTax({ ...i, personalAllowance: undefined, income: 40000 }).takeHome);
+  });
+});
+
+describe('ukBenefitInKindTax', () => {
+  it('taxes a benefit at the rate it lands in: £1,000 at £50,000 straddles the basic band', () => {
+    // 270 of headroom at 20%, 730 at 40%.
+    expect(ukBenefitInKindTax(input({ income: 50000 }), 1000)).toBeCloseTo(270 * 0.2 + 730 * 0.4, money);
+  });
+
+  it('is 20% of the value for a basic-rate employee well inside the band', () => {
+    expect(ukBenefitInKindTax(input({ income: 30000 }), 2000)).toBeCloseTo(400, money);
+  });
+
+  it('is the difference of calculateUkTax with and without the benefit', () => {
+    const i = input({ income: 62000, undergradPlan: 'plan2', pensionContribution: 3000, pensionMethod: 'net-pay' });
+    expect(ukBenefitInKindTax(i, 4500)).toBeCloseTo(
+      calculateUkTax({ ...i, benefitsInKind: 4500 }).incomeTax - calculateUkTax(i).incomeTax,
+      money,
+    );
+  });
+
+  it('uses the Scottish bands', () => {
+    // £30,000 sits in the 21% band, which has room for £2,000 more.
+    expect(ukBenefitInKindTax(input({ income: 30000, region: 'scotland' }), 2000)).toBeCloseTo(420, money);
+  });
+
+  it('costs 60% inside the allowance taper, because the benefit also removes allowance', () => {
+    expect(ukBenefitInKindTax(input({ income: 110000 }), 1000)).toBeCloseTo(600, money);
+  });
+
+  it('has nothing to pay while the benefit stays inside the allowance', () => {
+    expect(ukBenefitInKindTax(input({ income: 10000 }), 1000)).toBe(0);
+    // £12,000 + £2,000 = £14,000: only £1,430 is over the allowance.
+    expect(ukBenefitInKindTax(input({ income: 12000 }), 2000)).toBeCloseTo(1430 * 0.2, money);
+  });
+
+  it('keeps benefits already on the input and adds the new value on top', () => {
+    // 40,000 total income -> 51,000: crosses the basic band limit.
+    const taxed = ukBenefitInKindTax(input({ income: 30000, benefitsInKind: 10000 }), 11000);
+    expect(taxed).toBeCloseTo(2346, money);
+    expect(taxed).not.toBeCloseTo(ukBenefitInKindTax(input({ income: 30000 }), 11000), 1);
+  });
+
+  it('reads the stated personal allowance', () => {
+    expect(ukBenefitInKindTax(input({ income: 37000, personalAllowance: 0 }), 1000)).toBeCloseTo(700 * 0.2 + 300 * 0.4, money);
+  });
+
+  it('sits inside the extended basic band under relief at source', () => {
+    const ras = input({ income: 50000, pensionContribution: 5000, pensionMethod: 'relief-at-source' });
+    expect(ukBenefitInKindTax(ras, 3000)).toBeCloseTo(600, money);
+    expect(ukBenefitInKindTax(input({ income: 50000 }), 3000)).toBeCloseTo(270 * 0.2 + 2730 * 0.4, money);
+  });
+
+  it('is 0 for a zero, negative or non-finite value', () => {
+    for (const value of [0, -500, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(ukBenefitInKindTax(input({ income: 50000 }), value)).toBe(0);
+    }
+  });
+
+  it('is 0 for the self-employed, who have no benefits in kind', () => {
+    expect(ukBenefitInKindTax(input({ income: 50000, kind: 'self-employed' }), 1000)).toBe(0);
+  });
+
+  it('is 0 for zero income and finite for hostile income', () => {
+    expect(ukBenefitInKindTax(input({ income: 0 }), 1000)).toBe(0);
+    expect(Number.isFinite(ukBenefitInKindTax(input({ income: Number.NaN }), 1000))).toBe(true);
+  });
+
+  it('does not alter its input', () => {
+    const i = input({ income: 50000, benefitsInKind: 200 });
+    const copy = { ...i };
+    ukBenefitInKindTax(i, 1000);
+    expect(i).toEqual(copy);
+  });
+});
+
+describe('ukCashAfterTax', () => {
+  it('works a £5,000 bonus at £50,000: 270 at 20% and 4,730 at 40%, NI 270 at 8% and 4,730 at 2%', () => {
+    const r = ukCashAfterTax(input({ income: 50000 }), 5000);
+    expect(r.gross).toBe(5000);
+    expect(r.incomeTax).toBeCloseTo(270 * 0.2 + 4730 * 0.4, money);
+    expect(r.incomeTax).toBeCloseTo(1946, money);
+    expect(r.nationalInsurance).toBeCloseTo(270 * 0.08 + 4730 * 0.02, money);
+    expect(r.nationalInsurance).toBeCloseTo(116.2, money);
+    expect(r.studentLoan).toBe(0);
+    expect(r.net).toBeCloseTo(5000 - 1946 - 116.2, money);
+    expect(r.net).toBeCloseTo(2937.8, money);
+  });
+
+  it('keeps 38% of a bonus inside the allowance taper: 60% tax and 2% NI', () => {
+    const small = ukCashAfterTax(input({ income: 110000 }), 1000);
+    expect(small.incomeTax).toBeCloseTo(600, money);
+    expect(small.nationalInsurance).toBeCloseTo(20, money);
+    expect(small.net).toBeCloseTo(380, money);
+    const large = ukCashAfterTax(input({ income: 110000 }), 5000);
+    expect(large.incomeTax).toBeCloseTo(3000, money);
+    expect(large.nationalInsurance).toBeCloseTo(100, money);
+    expect(large.net).toBeCloseTo(1900, money);
+  });
+
+  it('uses the Scottish bands: all of a £5,000 bonus at £50,000 is in the 42% band', () => {
+    const r = ukCashAfterTax(input({ income: 50000, region: 'scotland' }), 5000);
+    expect(r.incomeTax).toBeCloseTo(2100, money);
+    expect(r.nationalInsurance).toBeCloseTo(116.2, money);
+    expect(r.net).toBeCloseTo(2783.8, money);
+  });
+
+  it('adds undergraduate and postgraduate loans together', () => {
+    const r = ukCashAfterTax(input({ income: 50000, undergradPlan: 'plan2', postgradLoan: true }), 5000);
+    expect(r.studentLoan).toBeCloseTo(5000 * 0.09 + 5000 * 0.06, money);
+    expect(r.net).toBeCloseTo(5000 - 1946 - 116.2 - 750, money);
+  });
+
+  it('charges a loan only on the part of the bonus above the threshold', () => {
+    // £28,000 is under the plan 2 threshold of £29,385; £33,000 is over it by £3,615.
+    const r = ukCashAfterTax(input({ income: 28000, undergradPlan: 'plan2' }), 5000);
+    expect(r.studentLoan).toBeCloseTo(3615 * 0.09, money);
+  });
+
+  it('charges the part inside the allowance nothing', () => {
+    // £10,000 + £5,000: £2,430 is over the allowance and the NI threshold.
+    const r = ukCashAfterTax(input({ income: 10000 }), 5000);
+    expect(r.incomeTax).toBeCloseTo(2430 * 0.2, money);
+    expect(r.nationalInsurance).toBeCloseTo(2430 * 0.08, money);
+    expect(r.net).toBeCloseTo(5000 - 486 - 194.4, money);
+  });
+
+  it('holds the pension contribution in pounds: the bonus is not itself pensioned', () => {
+    const r = ukCashAfterTax(input({ income: 50000, pensionContribution: 5000, pensionMethod: 'salary-sacrifice' }), 5000);
+    // Pay goes £45,000 -> £50,000: all 20% (taxable ends at 37,430) and 8% NI.
+    expect(r.incomeTax).toBeCloseTo(1000, money);
+    expect(r.nationalInsurance).toBeCloseTo(400, money);
+    expect(r.net).toBeCloseTo(3600, money);
+  });
+
+  it('does not re-cap the contribution at the larger income', () => {
+    // £8,000 sacrificed from £5,000 is clamped to £5,000 today; it stays £5,000 with the bonus,
+    // so pay goes £0 -> £20,000 (not £17,000, which re-capping at £25,000 would give).
+    const r = ukCashAfterTax(input({ income: 5000, pensionContribution: 8000, pensionMethod: 'salary-sacrifice' }), 20000);
+    expect(r.incomeTax).toBeCloseTo(7430 * 0.2, money);
+    expect(r.nationalInsurance).toBeCloseTo(7430 * 0.08, money);
+  });
+
+  it('sits inside the extended basic band under relief at source', () => {
+    const r = ukCashAfterTax(input({ income: 50000, pensionContribution: 5000, pensionMethod: 'relief-at-source' }), 5000);
+    expect(r.incomeTax).toBeCloseTo(1000, money);
+  });
+
+  it('reads the stated personal allowance', () => {
+    // Allowance 11,070: taxable 38,930 -> 43,930, all above the 37,700 basic limit.
+    const r = ukCashAfterTax(input({ income: 50000, personalAllowance: 11070 }), 5000);
+    expect(r.incomeTax).toBeCloseTo(2000, money);
+  });
+
+  it('includes a lost marriage allowance in the tax, as the exact calculation does', () => {
+    // Taxable 35,430 -> 40,430 crosses 37,700: the £252 relief goes too.
+    const i = input({ income: 48000, marriageAllowance: true });
+    const r = ukCashAfterTax(i, 5000);
+    expect(r.incomeTax).toBeCloseTo(7540 + 2730 * 0.4 - (35430 * 0.2 - 252), money);
+    expect(r.incomeTax).toBeCloseTo(1798, money);
+  });
+
+  it('is the difference of calculateUkTax with and without the cash', () => {
+    const i = input({ income: 71000, region: 'scotland', undergradPlan: 'plan1', postgradLoan: true });
+    const before = calculateUkTax(i);
+    const after = calculateUkTax({ ...i, income: 71000 + 7500 });
+    const r = ukCashAfterTax(i, 7500);
+    expect(r.incomeTax).toBeCloseTo(after.incomeTax - before.incomeTax, money);
+    expect(r.nationalInsurance).toBeCloseTo(after.nationalInsurance - before.nationalInsurance, money);
+    expect(r.studentLoan).toBeCloseTo(
+      after.studentLoan + after.postgradLoan - before.studentLoan - before.postgradLoan,
+      money,
+    );
+    expect(r.net).toBeCloseTo(after.takeHome - before.takeHome, money);
+  });
+
+  it('charges Class 4 on a self-employed payment: 270 at 6% and 4,730 at 2%', () => {
+    const r = ukCashAfterTax(input({ income: 50000, kind: 'self-employed' }), 5000);
+    expect(r.nationalInsurance).toBeCloseTo(270 * 0.06 + 4730 * 0.02, money);
+    expect(r.incomeTax).toBeCloseTo(1946, money);
+  });
+
+  it('is all zeros for no cash, and a negative or non-finite amount reads as none', () => {
+    const none = { gross: 0, incomeTax: 0, nationalInsurance: 0, studentLoan: 0, net: 0 };
+    for (const cash of [0, -1000, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(ukCashAfterTax(input({ income: 50000, undergradPlan: 'plan2' }), cash)).toEqual(none);
+    }
+  });
+
+  it('works from zero income and never returns NaN', () => {
+    const r = ukCashAfterTax(input({ income: 0 }), 20000);
+    expect(r.incomeTax).toBeCloseTo((20000 - 12570) * 0.2, money);
+    expect(Object.values(r).every(Number.isFinite)).toBe(true);
+    expect(Object.values(ukCashAfterTax(input({ income: Number.NaN }), 1000)).every(Number.isFinite)).toBe(true);
+  });
+
+  it('does not alter its input', () => {
+    const i = input({ income: 50000, pensionContribution: 2000 });
+    const copy = { ...i };
+    ukCashAfterTax(i, 5000);
+    expect(i).toEqual(copy);
   });
 });

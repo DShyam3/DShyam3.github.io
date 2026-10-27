@@ -8,12 +8,30 @@
  * ordinary functions any surface can call.
  *
  * They live beside the feature rather than in `lib/finance` because they read
- * the feature's own settings and tax-config shapes -- the same reason
- * finance-defaults.ts is here.
+ * the feature's own settings shape -- the same reason finance-defaults.ts is
+ * here.
  */
 
-import { epochDay, nextPayday, normalizeHolidays, toISODate } from '@/lib/finance';
-import type { FinanceSettings, TaxConfig, UserHoliday } from '@/features/finance/finance-types';
+import {
+  UK_STATUTORY_PERSONAL_ALLOWANCE,
+  calculateUkTax,
+  epochDay,
+  nextPayday,
+  normalizeHolidays,
+  toISODate,
+  ukBasePersonalAllowance,
+  ukBenefitInKindTax,
+  ukCashAfterTax,
+  type UkPensionMethod,
+  type UkTaxInput,
+} from '@/lib/finance';
+import type {
+  CashBenefitAfterTax,
+  FinanceSettings,
+  PackageBenefit,
+  TaxConfig,
+  UserHoliday,
+} from '@/features/finance/finance-types';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -22,6 +40,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  *
  * Falling back to a future configuration would silently rewrite history, so a
  * caller must add the missing historical rates instead.
+ *
+ * `calculateFinance` no longer reads the result: income tax, NI and student
+ * loans come from the same engine as the Tax Calculator. The rows stay for the
+ * admin rate editor and anything else that wants the timeline.
  */
 export const selectTaxConfigForDate = (
   taxConfigs: readonly TaxConfig[],
@@ -42,95 +64,120 @@ export const selectTaxConfigForDate = (
   return config;
 };
 
+const PENSION_METHOD: Record<FinanceSettings['pensionType'], UkPensionMethod> = {
+  net_pay: 'net-pay',
+  salary_sacrifice: 'salary-sacrifice',
+  relief_at_source: 'relief-at-source',
+};
+
+/** A package item's annual value in pounds: its amount, or its share of salary. */
+export const benefitValueOf = (benefit: PackageBenefit, grossSalary: number): number => {
+  const value = benefit.type === 'percentage' ? grossSalary * ((benefit.amount || 0) / 100) : benefit.amount || 0;
+  return value || 0;
+};
+
+/**
+ * Everything the Tax & Income page derives from the settings.
+ *
+ * Income tax, National Insurance and student loans come from
+ * `calculateUkTax` in lib/finance/uk-tax-calculator.ts, the engine the Tax
+ * Calculator runs, so the two pages agree for Scottish and relief-at-source
+ * profiles. That engine describes one tax year (2026/27): `_taxConfigs` and
+ * `_asOfDate` are accepted so callers need not change, but neither affects a
+ * figure, and no tax configuration needs to exist.
+ *
+ * The pension percentage is the gross contribution. What leaves pay for it is
+ * `personalPensionRate` (80% of it under relief at source), and
+ * `personalAllowance` is the allowance after the £100,000 taper.
+ *
+ * Package items are 'cash' or 'benefit-in-kind' (anything else reads as the
+ * latter). Cash items are paid through payroll, each reported after tax in
+ * `cashBenefits` and kept out of take-home. Benefit-in-kind tax is derived from
+ * the items' combined value: `benefitTax` is what the engine says it adds, and
+ * `benefitTaxDeduction` is the part taken from take-home, which is nothing when
+ * the tax code's allowance is already below the statutory one because HMRC
+ * collects it through the code (`benefitTaxCollectedByCode`).
+ */
+/**
+ * The engine input the settings describe, salary only. The Tax Calculator
+ * seeds from this too, so the two pages read the settings the same way.
+ */
+export const ukTaxInputFromSettings = (settings: FinanceSettings): UkTaxInput => ({
+  income: settings.grossSalary,
+  kind: 'employed',
+  region: settings.ukRegion === 'scotland' ? 'scotland' : 'rUK',
+  benefitsInKind: 0,
+  pensionContribution: settings.grossSalary * (settings.personalPensionPercent / 100),
+  pensionMethod: PENSION_METHOD[settings.pensionType] ?? 'net-pay',
+  undergradPlan: settings.studentLoanPlan === 'postgrad' ? 'none' : settings.studentLoanPlan,
+  postgradLoan: settings.studentLoanPlan === 'postgrad',
+  children: 0,
+  childcareSupport: 0,
+  marriageAllowance: false,
+  personalAllowance: settings.personalAllowance,
+});
+
 export const calculateFinance = (
   settings: FinanceSettings,
-  taxConfigs: readonly TaxConfig[],
-  asOfDate: string,
+  _taxConfigs: readonly TaxConfig[],
+  _asOfDate: string,
 ) => {
-  const taxConfig = selectTaxConfigForDate(taxConfigs, asOfDate);
   const {
     grossSalary,
     pensionType,
     personalPensionPercent,
     employerPensionPercent,
     studentLoanPlan,
-    personalAllowance: rawPersonalAllowance,
+    personalAllowance: statedPersonalAllowance,
     weekends,
     bankHolidays,
     workHolidays,
     workingHoursPerDay,
   } = settings;
 
-  const personalPensionRate = grossSalary * (personalPensionPercent / 100);
   const employerPensionRate = grossSalary * (employerPensionPercent / 100);
 
   const packageBenefits = settings.packageBenefits || [];
-  const totalBenefitsValue = packageBenefits.reduce((sum, b) => {
-    const val = b.type === 'percentage' ? (grossSalary * ((b.amount || 0) / 100)) : (b.amount || 0);
-    return sum + (val || 0);
-  }, 0);
-
-  const benefitTaxDeduction = packageBenefits.reduce((sum, b) => {
-    const taxCost = Number(b.annualTaxCost) || 0;
-    return sum + Math.max(0, taxCost);
-  }, 0);
+  const totalBenefitsValue = packageBenefits.reduce((sum, b) => sum + benefitValueOf(b, grossSalary), 0);
 
   const totalPackage = grossSalary + employerPensionRate + totalBenefitsValue;
 
-  const incomeTaxGross = pensionType === 'net_pay' || pensionType === 'salary_sacrifice'
-    ? Math.max(0, grossSalary - personalPensionRate)
-    : grossSalary;
+  // Benefits in kind are kept out of the salary figures: they are taxed, not
+  // paid, and are added back through `ukBenefitInKindTax` below.
+  const salaryInput = ukTaxInputFromSettings(settings);
+  const tax = calculateUkTax(salaryInput);
 
-  const niGross = pensionType === 'salary_sacrifice'
-    ? Math.max(0, grossSalary - personalPensionRate)
-    : grossSalary;
+  const incomeTax = tax.incomeTax;
+  const nationalInsurance = tax.nationalInsurance;
+  const studentLoan = tax.studentLoan + tax.postgradLoan;
+  const personalPensionRate = tax.pensionFromPay;
+  const personalAllowance = tax.personalAllowance;
 
-  const studentLoanGross = pensionType === 'salary_sacrifice'
-    ? Math.max(0, grossSalary - personalPensionRate)
-    : grossSalary;
+  // Negative items are ignored here; they stay in `totalBenefitsValue` as before.
+  const taxableValueOf = (b: PackageBenefit): number => Math.max(0, benefitValueOf(b, grossSalary));
+  const benefitInKindValue = packageBenefits
+    .filter(b => b.kind !== 'cash')
+    .reduce((sum, b) => sum + taxableValueOf(b), 0);
+  const benefitTaxCollectedByCode =
+    benefitInKindValue > 0 && ukBasePersonalAllowance(statedPersonalAllowance) < UK_STATUTORY_PERSONAL_ALLOWANCE;
+  const benefitTax = ukBenefitInKindTax(salaryInput, benefitInKindValue);
+  const benefitTaxDeduction = benefitTaxCollectedByCode ? 0 : benefitTax;
 
-  let personalAllowance = rawPersonalAllowance;
-  if (incomeTaxGross > 100000) {
-    const excess = incomeTaxGross - 100000;
-    personalAllowance = Math.max(0, personalAllowance - excess / 2);
-  }
+  const cashBenefits: CashBenefitAfterTax[] = packageBenefits
+    .filter(b => b.kind === 'cash')
+    .map(b => {
+      const { gross, incomeTax: cashTax, nationalInsurance: cashNi, studentLoan: cashLoan, net } = ukCashAfterTax(
+        salaryInput,
+        taxableValueOf(b),
+      );
+      return { id: b.id, name: b.name, gross, incomeTax: cashTax, nationalInsurance: cashNi, studentLoan: cashLoan, net };
+    });
 
-  let incomeTax = 0;
-  if (incomeTaxGross > personalAllowance) {
-    const taxableAmount = incomeTaxGross - personalAllowance;
-    const { basicRateLimit, higherRateLimit, basicRatePercent, higherRatePercent, additionalRatePercent } = taxConfig.incomeTaxBands;
-
-    if (incomeTaxGross <= higherRateLimit) {
-      const basicRateAmount = Math.min(taxableAmount, basicRateLimit);
-      const higherRateAmount = Math.max(0, taxableAmount - basicRateAmount);
-      incomeTax = basicRateAmount * (basicRatePercent / 100) + higherRateAmount * (higherRatePercent / 100);
-    } else {
-      const basicRateAmount = basicRateLimit;
-      const higherRateAmount = higherRateLimit - basicRateLimit;
-      const additionalRateAmount = Math.max(0, incomeTaxGross - higherRateLimit);
-      incomeTax = basicRateAmount * (basicRatePercent / 100) + higherRateAmount * (higherRatePercent / 100) + additionalRateAmount * (additionalRatePercent / 100);
-    }
-  }
-
-  let nationalInsurance = 0;
-  const { lowerThreshold, upperThreshold, mainRatePercent, upperRatePercent } = taxConfig.nationalInsuranceBands;
-  if (niGross > lowerThreshold) {
-    const mainBandAmount = Math.min(niGross, upperThreshold) - lowerThreshold;
-    const upperBandAmount = Math.max(0, niGross - upperThreshold);
-    nationalInsurance = mainBandAmount * (mainRatePercent / 100) + upperBandAmount * (upperRatePercent / 100);
-  }
-
-  let studentLoan = 0;
-  if (studentLoanPlan !== 'none') {
-    const threshold = taxConfig.studentLoanThresholds[studentLoanPlan];
-    const rate = taxConfig.studentLoanRates[studentLoanPlan];
-    if (studentLoanGross > threshold) {
-      studentLoan = (studentLoanGross - threshold) * rate;
-    }
-  }
-
+  // The engine's take-home already has the pension taken from pay (80% of it
+  // under relief at source), so total deductions rebuilt from the same parts
+  // keep gross - deductions = take-home.
   const totalDeductions = incomeTax + nationalInsurance + studentLoan + personalPensionRate + benefitTaxDeduction;
-  const netTakeHome = grossSalary - totalDeductions;
+  const netTakeHome = tax.takeHome - benefitTaxDeduction;
   const WEEKS_IN_YEAR_ACTUAL = 365 / 7; // 52.142857... (~52.1429) weeks
   const workingDaysStandard = WEEKS_IN_YEAR_ACTUAL * 5; // ~260.714 days
   const workingDaysIncludingLeave = Math.max(0, 365 - weekends - 1);
@@ -164,6 +211,10 @@ export const calculateFinance = (
     employerPensionRate,
     totalBenefitsValue,
     benefitTaxDeduction,
+    benefitTax,
+    benefitTaxCollectedByCode,
+    benefitInKindValue,
+    cashBenefits,
     totalPackage,
     personalAllowance,
     incomeTax,

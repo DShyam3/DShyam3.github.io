@@ -108,6 +108,12 @@ export const asPackageBenefits = (value: unknown): PackageBenefit[] => {
       name: typeof item.name === 'string' ? item.name : 'Benefit',
       amount: Number(item.amount) || 0,
       type: item.type === 'percentage' ? 'percentage' : 'monetary',
+      // Before the field existed an item cost only the tax typed against it. An
+      // item with tax typed reads as a benefit in kind; one without reads as
+      // cash, which keeps it out of take-home exactly as it was.
+      kind: item.kind === 'cash' || item.kind === 'benefit-in-kind'
+        ? item.kind
+        : Number(item.annualTaxCost) > 0 ? 'benefit-in-kind' : 'cash',
       ...(typeof item.emoji === 'string' && item.emoji ? { emoji: item.emoji } : {}),
       ...(typeof item.notes === 'string' && item.notes ? { notes: item.notes } : {}),
       ...(Number(item.annualTaxCost) > 0 ? { annualTaxCost: Number(item.annualTaxCost) } : {}),
