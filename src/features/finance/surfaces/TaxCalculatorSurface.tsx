@@ -498,7 +498,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                         key={j}
                         className={cn(cell, 'pl-4 text-right font-mono tabular-nums whitespace-nowrap', row.tone ?? 'text-foreground', row.kind && 'font-semibold')}
                       >
-                        {row.sign}{formatGBP(v)}
+                        {v > 0 ? row.sign : ''}{formatGBP(v)}
                       </td>
                     ))}
                   </tr>
