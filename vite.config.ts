@@ -43,6 +43,7 @@ const cspPlugin = (supabaseUrl: string | undefined, umamiScriptUrl: string | nul
       ...umamiConnectOrigins,
       // TMDB is not here: the browser reaches it only through tmdb-proxy.
       "https://www.googleapis.com",
+      "https://openlibrary.org",
       "https://www.gov.uk",
     ].join(" "),
     "object-src 'none'",

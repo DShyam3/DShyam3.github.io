@@ -1,109 +1,48 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
-export interface GoogleBookResult {
-  id: string;
-  volumeInfo: {
-    title: string;
-    authors?: string[];
-    publisher?: string;
-    publishedDate?: string;
-    description?: string;
-    pageCount?: number;
-    categories?: string[];
-    averageRating?: number;
-    imageLinks?: {
-      smallThumbnail: string;
-      thumbnail: string;
-    };
-    previewLink?: string;
-    infoLink?: string;
-    canonicalVolumeLink?: string;
-  };
-}
+import { searchBookMetadata, type BookMetadataResult } from '@/lib/book-metadata';
+
+export type GoogleBookResult = BookMetadataResult;
 
 export function useGoogleBooks() {
   const [results, setResults] = useState<GoogleBookResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+  const revisionRef = useRef(0);
 
-  const performSearch = useCallback(async (query: string) => {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      setResults([]);
-      return;
-    }
+  const search = useCallback((query: string) => {
+    const revision = ++revisionRef.current;
+    if (debounceTimerRef.current !== null) window.clearTimeout(debounceTimerRef.current);
+    controllerRef.current?.abort();
+    setResults([]);
+    setError(null);
+    const trimmed = query.trim();
+    setLoading(trimmed.length >= 2);
+    if (trimmed.length < 2) return;
 
-    setLoading(true);
-    try {
-      // Using printType=all to ensure magazines like POPEYE can be found
-      const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmedQuery)}&maxResults=10&printType=all`,
-      );
-      const data = await response.json();
-
-      const filteredResults = (data.items || []).filter(
-        (item: GoogleBookResult) => item.volumeInfo,
-      );
-      setResults(filteredResults);
-    } catch (error) {
-      console.error('Google Books Search Error:', error);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
+    debounceTimerRef.current = window.setTimeout(async () => {
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      try {
+        const items = await searchBookMetadata(trimmed, controller.signal);
+        if (revision !== revisionRef.current) return;
+        setResults(items);
+      } catch {
+        if (revision !== revisionRef.current || controller.signal.aborted) return;
+        setError('Book catalogues are unavailable. Try again or use Manual entry.');
+      } finally {
+        if (revision === revisionRef.current) setLoading(false);
+      }
+    }, 350);
   }, []);
 
-  const search = useCallback(
-    (query: string) => {
-      if (debounceTimerRef.current) {
-        window.clearTimeout(debounceTimerRef.current);
-      }
-
-      const trimmed = query.trim();
-      if (trimmed.length < 2) {
-        setResults([]);
-        setLoading(false);
-        return;
-      }
-
-      debounceTimerRef.current = window.setTimeout(() => {
-        performSearch(trimmed);
-      }, 350);
-    },
-    [performSearch],
-  );
-
-  const getBookDetails = useCallback(async (volumeId: string) => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes/${volumeId}`,
-      );
-      const data = await response.json();
-
-      const info = data.volumeInfo;
-      return {
-        title: info.title,
-        author: info.authors?.join(', ') || 'Unknown Author',
-        description: info.description || '',
-        cover_url: info.imageLinks?.thumbnail?.replace('http:', 'https:'),
-        link: info.infoLink || info.previewLink,
-        pages: info.pageCount,
-        publishedDate: info.publishedDate,
-        categories: info.categories || [],
-      };
-    } catch (error) {
-      console.error('Google Books Detail Error:', error);
-      return null;
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => () => {
+    ++revisionRef.current;
+    if (debounceTimerRef.current !== null) window.clearTimeout(debounceTimerRef.current);
+    controllerRef.current?.abort();
   }, []);
 
-  return {
-    results,
-    loading,
-    search,
-    getBookDetails,
-  };
+  return { results, loading, error, search };
 }

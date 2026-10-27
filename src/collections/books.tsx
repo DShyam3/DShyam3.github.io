@@ -1,6 +1,9 @@
 import { BookOpen } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
-import { useGoogleBooks, type GoogleBookResult } from '@/hooks/useGoogleBooks';
+import { BOOK_CATEGORY_OPTIONS } from './book-categories';
+import { BookSearchDialog } from './components/BookSearchDialog';
+import { BookMetadataLookup } from './components/BookMetadataLookup';
+import { bookshopLinks } from '@/lib/book-metadata';
 import { uploadPhoto } from '@/lib/storage';
 import type { CollectionConfig, CollectionRow } from './types';
 
@@ -15,28 +18,15 @@ export interface BookRow extends CollectionRow {
   created_at: string;
 }
 
-/**
- * The categories that actually exist in the `books` table.
- *
- * Before this file there were four disagreeing definitions: types/books.ts
- * said favourite|future, useBooks' nav offered reading|completed|wishlist,
- * both dialogs offered favourite|future, and BookCard's badge assumed
- * favourite-or-not. The live data has completed, future and wishlist, so the
- * "Reading" tab matched nothing and the one `future` book was unreachable
- * from any tab but All.
- *
- * These three match the data, so nothing is hidden. `future` and `wishlist`
- * are plainly the same idea introduced twice and should be merged, but that
- * is a data migration and a naming decision, not a refactor -- see H-7 in
- * REHAUL_PLAN.md.
- */
+/** Reading status is independent of the subject stored in genre. */
 const CATEGORIES = [
   { key: 'completed', label: 'Completed' },
+  { key: 'reading', label: 'Currently Reading' },
   { key: 'future', label: 'To Read' },
   { key: 'wishlist', label: 'Wishlist' },
 ];
 
-export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
+export const booksCollection: CollectionConfig<BookRow> = {
   table: 'books',
   path: '/books',
   title: 'Books',
@@ -49,12 +39,26 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
     {
       key: 'category',
       field: 'category',
+      label: 'Reading status',
       options: CATEGORIES,
       // Books read opens first; the unread piles and All sit after it.
       allLast: true,
       defaultValue: 'completed',
     },
+    {
+      key: 'genre',
+      field: 'genre',
+      label: 'Category',
+      options: BOOK_CATEGORY_OPTIONS,
+      match: (book, key) => key === 'Uncategorized'
+        ? !BOOK_CATEGORY_OPTIONS.some((option) => option.key !== 'Uncategorized' && option.key === book.genre)
+        : book.genre === key,
+    },
   ],
+
+  customToolbarActions: ({ allItems, addItem, isAdmin }) => isAdmin
+    ? <BookSearchDialog config={booksCollection} books={allItems} onAdd={addItem} />
+    : null,
 
   card: {
     variant: 'media',
@@ -78,66 +82,37 @@ export const booksCollection: CollectionConfig<BookRow, GoogleBookResult> = {
   // bucket, which avoids depending on a third-party URL staying alive.
   uploadFile: uploadPhoto,
 
+  formLayout: 'wide',
+  formEnhancement: ({ values, onChange, mode }) => mode === 'edit'
+    ? <BookMetadataLookup values={values} onChange={onChange} />
+    : null,
+
   fields: [
     { name: 'title', label: 'Title', type: 'text', required: true },
     { name: 'author', label: 'Author', type: 'text', required: true },
-    { name: 'category', label: 'Category', type: 'select', defaultValue: 'future' },
+    { name: 'category', label: 'Reading status', type: 'select', defaultValue: 'future' },
     {
       name: 'genre',
-      label: 'Genre',
-      type: 'text',
-      placeholder: 'Fantasy, Horror, Finance...',
+      label: 'Category',
+      type: 'select',
+      options: BOOK_CATEGORY_OPTIONS,
+      defaultValue: 'Uncategorized',
     },
-    { name: 'description', label: 'Description', type: 'textarea' },
-    { name: 'cover_url', label: 'Cover Image URL', type: 'image' },
-    { name: 'link', label: 'Purchase/Info Link', type: 'url' },
+    { name: 'description', label: 'Description', type: 'textarea', advanced: true },
+    { name: 'cover_url', label: 'Cover Image URL', type: 'image', advanced: true },
+    { name: 'link', label: 'Purchase/Info Link', type: 'url', advanced: true },
   ],
-
-  externalSearch: {
-    placeholder: 'Search Google Books...',
-    useSearch: useGoogleBooks,
-    resultKey: (result) => result.id,
-    pickedMessage: (result) => `Selected "${result.volumeInfo.title}"`,
-    toValues: (result) => {
-      const info = result.volumeInfo;
-      return {
-        title: info.title ?? '',
-        author: info.authors?.join(', ') ?? '',
-        description: info.description ?? '',
-        cover_url: info.imageLinks?.thumbnail?.replace('http:', 'https:') ?? '',
-        link: info.infoLink ?? info.previewLink ?? '',
-        // Google Books returns a list; the first is usually the useful one.
-        genre: info.categories?.[0] ?? '',
-      };
-    },
-    renderResult: (result) => {
-      const info = result.volumeInfo;
-      return (
-        <div className="flex gap-3 items-start">
-          {info.imageLinks?.smallThumbnail ? (
-            <img
-              src={info.imageLinks.smallThumbnail.replace('http:', 'https:')}
-              alt={info.title}
-              className="w-8 h-12 object-cover rounded shrink-0"
-            />
-          ) : (
-            <div className="w-8 h-12 bg-secondary/50 rounded shrink-0" />
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-medium line-clamp-1">{info.title}</p>
-            <p className="text-xs text-muted-foreground line-clamp-1">
-              {info.authors?.join(', ') ?? 'Unknown author'}
-              {info.publishedDate && ` · ${info.publishedDate.slice(0, 4)}`}
-            </p>
-          </div>
-        </div>
-      );
-    },
-  },
 
   renderDetail: (book) => (
     <>
-      {book.genre && <DetailSection label="Genre">{book.genre}</DetailSection>}
+      <DetailSection label="Find a copy">
+        <div className="flex flex-wrap gap-4 text-sm">
+          <a href={bookshopLinks(book.title, book.author).amazon} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-4 hover:text-primary/80">Search Amazon UK</a>
+          <a href={bookshopLinks(book.title, book.author).waterstones} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-4 hover:text-primary/80">Search Waterstones</a>
+        </div>
+      </DetailSection>
+      {book.cover_url?.startsWith('https://covers.openlibrary.org/') && <p className="text-xs text-muted-foreground">Cover from <a href="https://openlibrary.org" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Open Library</a></p>}
+      {book.genre && <DetailSection label="Category">{book.genre}</DetailSection>}
       {book.description && (
         <DetailSection label="Blurb">
           <p className="whitespace-pre-wrap">{book.description}</p>

@@ -383,6 +383,117 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       ?.options.filter((o) => o.key !== ALL) ??
     [];
 
+  const renderField = (field: FieldDef<T>) => {
+    const id = `${mode}-${config.table}-${field.name}`;
+    const error = errors[field.name];
+    const value = values[field.name] ?? '';
+    const fieldA11y = { 'aria-invalid': Boolean(error), 'aria-describedby': error ? `${id}-error` : undefined, 'aria-required': Boolean(field.required) };
+
+    return (
+      <div key={field.name} className="space-y-2">
+        <Label htmlFor={id} className={error ? 'text-destructive' : undefined}>
+          {field.label}
+          {field.required && ' *'}
+        </Label>
+
+        {field.type === 'textarea' ? (
+          <Textarea
+            id={id}
+            {...fieldA11y}
+            value={value}
+            onChange={(e) => setValue(field.name, e.target.value)}
+            placeholder={field.placeholder}
+            rows={field.rows ?? 3}
+          />
+        ) : field.type === 'select' ? (
+          <Select value={value} onValueChange={(v) => setValue(field.name, v)}>
+            <SelectTrigger id={id} {...fieldA11y}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {optionsFor(field).map((opt) => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : field.type === 'file' ? (
+          <FileField
+            id={id}
+            field={field}
+            preview={previews[field.name] ?? values[field.name]}
+            fileName={files[field.name]?.name}
+            onPick={(file) => pickFile(field, file)}
+          />
+        ) : field.type === 'image' ? (
+          <div className="flex items-center gap-2">
+            <Input
+              id={id}
+              {...fieldA11y}
+              type="url"
+              value={files[field.name] ? files[field.name].name : value}
+              readOnly={Boolean(files[field.name])}
+              onChange={(e) => {
+                setValue(field.name, e.target.value);
+                setImageFailed((p) => ({ ...p, [field.name]: false }));
+              }}
+              placeholder={field.placeholder}
+            />
+            {/* Paste a URL, or upload -- URLs go stale, and some
+                images were never online to begin with. */}
+            <ImageUploadButton
+              onPick={(file) => pickFile(field, file)}
+              hasFile={Boolean(files[field.name])}
+              onClear={() => {
+                setFiles((prev) => {
+                  const next = { ...prev };
+                  delete next[field.name];
+                  return next;
+                });
+                setPreviews((prev) => {
+                  const next = { ...prev };
+                  delete next[field.name];
+                  return next;
+                });
+              }}
+            />
+            {(previews[field.name] || (value && !imageFailed[field.name])) && (
+              <img
+                src={previews[field.name] || value}
+                alt="Preview"
+                className="h-8 w-8 shrink-0 rounded object-contain bg-secondary/30"
+                onError={() =>
+                  setImageFailed((p) => ({ ...p, [field.name]: true }))
+                }
+              />
+            )}
+          </div>
+        ) : (
+          <Input
+            id={id}
+            {...fieldA11y}
+            type={field.type === 'url' ? 'url' : 'text'}
+            value={value}
+            onChange={(e) => setValue(field.name, e.target.value)}
+            onBlur={() => handleBlur(field)}
+            placeholder={field.placeholder}
+            className={cn(
+              error && 'border-destructive focus-visible:ring-destructive',
+            )}
+          />
+        )}
+
+        {error && <p id={`${id}-error`} role="alert" className="text-xs text-destructive">{error}</p>}
+        {field.type === 'image' && imageFailed[field.name] && (
+          <p className="text-xs text-destructive">
+            Couldn't load an image from that URL
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!saving && !uploading) setOpen(next); }}>
       <DialogTrigger asChild>
@@ -404,7 +515,7 @@ export function EntityFormDialog<T extends CollectionRow, R>({
         The shared dialog body scrolls the entire form, including search results
         and actions, so short viewports never trap a nested scrolling region.
       */}
-      <DialogContent className="sm:max-w-md p-0">
+      <DialogContent className={cn('p-0', config.formLayout === 'wide' ? 'sm:max-w-3xl' : 'sm:max-w-md')}>
         <DialogHeader className="px-6 pt-6 shrink-0">
           <DialogTitle className="font-serif text-xl">
             {mode === 'add' ? `Add New ${config.noun.singular}` : `Edit ${config.noun.singular}`}
@@ -426,116 +537,16 @@ export function EntityFormDialog<T extends CollectionRow, R>({
             />
           )}
 
-          {config.fields.map((field) => {
-            const id = `${mode}-${config.table}-${field.name}`;
-            const error = errors[field.name];
-            const value = values[field.name] ?? '';
-            const fieldA11y = { 'aria-invalid': Boolean(error), 'aria-describedby': error ? `${id}-error` : undefined, 'aria-required': Boolean(field.required) };
-
-            return (
-              <div key={field.name} className="space-y-2">
-                <Label htmlFor={id} className={error ? 'text-destructive' : undefined}>
-                  {field.label}
-                  {field.required && ' *'}
-                </Label>
-
-                {field.type === 'textarea' ? (
-                  <Textarea
-                    id={id}
-                    {...fieldA11y}
-                    value={value}
-                    onChange={(e) => setValue(field.name, e.target.value)}
-                    placeholder={field.placeholder}
-                    rows={field.rows ?? 3}
-                  />
-                ) : field.type === 'select' ? (
-                  <Select value={value} onValueChange={(v) => setValue(field.name, v)}>
-                    <SelectTrigger id={id} {...fieldA11y}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {optionsFor(field).map((opt) => (
-                        <SelectItem key={opt.key} value={opt.key}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : field.type === 'file' ? (
-                  <FileField
-                    id={id}
-                    field={field}
-                    preview={previews[field.name] ?? values[field.name]}
-                    fileName={files[field.name]?.name}
-                    onPick={(file) => pickFile(field, file)}
-                  />
-                ) : field.type === 'image' ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id={id}
-                      {...fieldA11y}
-                      type="url"
-                      value={files[field.name] ? files[field.name].name : value}
-                      readOnly={Boolean(files[field.name])}
-                      onChange={(e) => {
-                        setValue(field.name, e.target.value);
-                        setImageFailed((p) => ({ ...p, [field.name]: false }));
-                      }}
-                      placeholder={field.placeholder}
-                    />
-                    {/* Paste a URL, or upload -- URLs go stale, and some
-                        images were never online to begin with. */}
-                    <ImageUploadButton
-                      onPick={(file) => pickFile(field, file)}
-                      hasFile={Boolean(files[field.name])}
-                      onClear={() => {
-                        setFiles((prev) => {
-                          const next = { ...prev };
-                          delete next[field.name];
-                          return next;
-                        });
-                        setPreviews((prev) => {
-                          const next = { ...prev };
-                          delete next[field.name];
-                          return next;
-                        });
-                      }}
-                    />
-                    {(previews[field.name] || (value && !imageFailed[field.name])) && (
-                      <img
-                        src={previews[field.name] || value}
-                        alt="Preview"
-                        className="h-8 w-8 shrink-0 rounded object-contain bg-secondary/30"
-                        onError={() =>
-                          setImageFailed((p) => ({ ...p, [field.name]: true }))
-                        }
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <Input
-                    id={id}
-                    {...fieldA11y}
-                    type={field.type === 'url' ? 'url' : 'text'}
-                    value={value}
-                    onChange={(e) => setValue(field.name, e.target.value)}
-                    onBlur={() => handleBlur(field)}
-                    placeholder={field.placeholder}
-                    className={cn(
-                      error && 'border-destructive focus-visible:ring-destructive',
-                    )}
-                  />
-                )}
-
-                {error && <p id={`${id}-error`} role="alert" className="text-xs text-destructive">{error}</p>}
-                {field.type === 'image' && imageFailed[field.name] && (
-                  <p className="text-xs text-destructive">
-                    Couldn't load an image from that URL
-                  </p>
-                )}
-              </div>
-            );
-          })}
+          <div className={config.formLayout === 'wide' ? 'grid gap-4 sm:grid-cols-2' : 'space-y-4'}>
+            {config.fields.filter((field) => !field.advanced).map(renderField)}
+          </div>
+          {config.formEnhancement?.({ values, onChange: (picked) => setValues((prev) => ({ ...prev, ...picked })), mode })}
+          {config.fields.some((field) => field.advanced) && (
+            <div className="space-y-4 border-t pt-4">
+              <p className="text-sm font-medium">Additional details · optional</p>
+              {config.fields.filter((field) => field.advanced).map(renderField)}
+            </div>
+          )}
 
           </fieldset>
         </form>
