@@ -18,7 +18,7 @@ export const SURFACES = [
   { key: 'spending', label: 'Spending', tabs: ['transactions', 'budget', 'recurrings', 'transfers'] },
   { key: 'plan', label: 'Plan', tabs: ['cash-flow', 'forecast', 'goals', 'scenarios'] },
   { key: 'wealth', label: 'Wealth', tabs: ['accounts', 'debts', 'student-loan', 'investments', 'retirement'] },
-  { key: 'income', label: 'Income', tabs: ['tax-income', 'time-spent'] },
+  { key: 'income', label: 'Income', tabs: ['tax-income', 'time-spent', 'tax-calculator'] },
 ] as const;
 
 export type SurfaceKey = (typeof SURFACES)[number]['key'];
@@ -42,6 +42,7 @@ export const TAB_LABELS: Record<TabKey, string> = {
   retirement: 'Retirement',
   'tax-income': 'Tax & Income',
   'time-spent': 'Time Spent',
+  'tax-calculator': 'Tax Calculator',
 };
 
 export const DEFAULT_TAB: TabKey = 'dashboard';
@@ -83,9 +84,10 @@ export const surfaceForTab = (tab: TabKey): SurfaceKey => surfaceFor(tab).key;
  * a section wants above it too. Retirement does not: it opens on a projected
  * pot, and stacking net worth on top of it puts two large unrelated figures in
  * the same eyeline and makes the reader choose which one matters. Debts and
- * Student Loan open on what is owed, for the same reason.
+ * Student Loan open on what is owed, for the same reason. The Tax Calculator
+ * opens on the take-home of whatever salary you type, not the one you earn.
  */
-export const SECTIONS_WITH_OWN_HERO: readonly TabKey[] = ['retirement', 'transfers', 'debts', 'student-loan'];
+export const SECTIONS_WITH_OWN_HERO: readonly TabKey[] = ['retirement', 'transfers', 'debts', 'student-loan', 'tax-calculator'];
 
 export const showsSurfaceHero = (tab: TabKey): boolean =>
   !SECTIONS_WITH_OWN_HERO.includes(tab);

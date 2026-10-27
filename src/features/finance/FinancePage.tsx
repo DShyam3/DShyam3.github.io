@@ -30,6 +30,7 @@ const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
 const DebtsSurface = lazy(() => import('./surfaces/DebtsSurface'));
 const StudentLoanSurface = lazy(() => import('./surfaces/StudentLoanSurface'));
 const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
+const TaxCalculatorSurface = lazy(() => import('./surfaces/TaxCalculatorSurface'));
 const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
 import { consumeTrueLayerOAuthState } from './truelayer-oauth';
@@ -1024,6 +1025,11 @@ function FinanceView() {
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
           )}
+
+          {/* ==========================================
+              TAB 9: TAX CALCULATOR
+              ========================================== */}
+          {activeTab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
 
           </Suspense>
           </FinanceSectionBoundary>
