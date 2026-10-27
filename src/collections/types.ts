@@ -114,6 +114,8 @@ export interface FieldDef<T> {
   type: FieldType;
   required?: boolean;
   placeholder?: string;
+  /** Group optional metadata below the main fields. */
+  advanced?: boolean;
   /** Rows for `textarea`. */
   rows?: number;
   /** Options for `select`. Defaults to the matching facet's options. */
@@ -246,6 +248,12 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
 
   /** Drives both the add and the edit dialog. */
   fields: FieldDef<T>[];
+  formLayout?: 'wide';
+  formEnhancement?: (context: {
+    values: FormValues;
+    onChange: (values: FormValues) => void;
+    mode: 'add' | 'edit';
+  }) => ReactNode;
 
   /** Optional lookup step at the top of the add dialog. */
   externalSearch?: ExternalSearch<R>;

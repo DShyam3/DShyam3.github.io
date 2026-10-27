@@ -460,7 +460,7 @@ wear. It is arithmetic over rows, so 7.P applies in full — computed in
 | Links | Dead-link check on a cron, flag non-200 | a links page rots silently; highest value on this surface |
 | Links | Archived text on save | survives the source disappearing |
 | Links | Recently added rail, domain rollup | query only |
-| Books | Currently reading with progress | gives the page a present tense |
+| Books | Reading progress for books marked Currently Reading | |
 | Books | Series position — book 3 of 5 | |
 | Books | ISBN autofill via Open Library | free, open, no key: `openlibrary.org/isbn/{isbn}.json` |
 | Books | Reading statistics — pages per month, genre split | feeds 8.D |

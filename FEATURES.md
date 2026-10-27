@@ -71,6 +71,34 @@ Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac
 
 A link field in an admin form takes only an `http`, `https` or `mailto` address, and the form refuses any other value. A saved address of another kind shows without a link. Images uploaded to a collection must be JPEG, PNG, GIF, WebP or HEIC files, judged by their contents rather than their name.
 
+## Books
+
+Books have separate subject and reading-status filters. Reading status offers
+Completed, Currently Reading, To Read and Wishlist; admins can set it when
+adding a book or change it in the editor.
+
+Subjects cover Philosophy & Spirituality, Psychology, Personal Growth &
+Productivity, Business & Leadership, Money & Investing, Politics & Strategy,
+Science & Technology, History & Biography, Fiction, Poetry & Folklore,
+Art & Design, and Food & Cooking. Uncategorized includes books without a
+recognised subject.
+
+Add Books searches Google Books by title or author, with Open Library as a
+fallback when Google returns no results or is unavailable. Results show covers,
+authors, publication years and available descriptions. Admins choose a subject and
+reading status, then add a result with its available cover, description and
+Amazon UK search link. Matching title-and-author entries are marked Added, and an
+in-progress save cannot be submitted twice. Search failures show an error;
+Manual entry remains available.
+
+The wide book editor groups title, author, reading status and subject together.
+Find details offers catalogue matches with cover previews; choosing a match
+fills only missing artwork, description and purchase link. Existing details,
+reading status and subject stay as entered. Changes remain in the form for
+review until Save Changes. Optional metadata fields remain editable by hand.
+Book details offer Amazon UK and Waterstones searches by title and author;
+these are search links, rather than verified edition or stock listings.
+
 ## Watchlist
 
 TV and film tracking backed by TMDB, searchable by title through a server-side
