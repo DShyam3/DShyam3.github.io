@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Calculator, RotateCcw, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,9 +22,14 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
+  UK_CHILDCARE_CUTOFF,
+  UK_CHILD_BENEFIT_CHARGE_END,
+  UK_CHILD_BENEFIT_CHARGE_START,
+  UK_CHILD_BENEFIT_CHARGE_STEP,
   UK_CHILD_BENEFIT_WEEKS,
   UK_TAX_YEAR_LABEL,
   calculateUkTax,
+  ukChildBenefitBand,
   ukMarginalRate,
   ukTaxCliffs,
   ukTaxCurve,
@@ -207,8 +212,19 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   const taperGap = result.aboveTaperStart;
   const inTaper = taperGap > 0 && result.personalAllowance > 0;
   const nearTaper = taperGap <= 0 && taperGap > -10_000;
-  const inChildBenefitBand = input.children > 0 && result.childBenefitCharge > 0
-    && result.aboveChildBenefitStart < 20_000;
+  // Where child benefit stands against its charge. The charge is stepped, so
+  // "below" means nothing taken yet rather than under the start threshold.
+  const hasChildBenefit = input.children > 0 && result.childBenefit > 0;
+  const belowChildBenefitBand = hasChildBenefit && result.childBenefitCharge === 0;
+  const inChildBenefitBand = hasChildBenefit && result.childBenefitCharge > 0
+    && result.childBenefitCharge < result.childBenefit;
+  const aboveChildBenefitBand = hasChildBenefit && result.childBenefitCharge >= result.childBenefit;
+  const childBenefitBand = useMemo(() => ukChildBenefitBand(input), [input]);
+  // A large pension can push the band past the plotted range; then neither
+  // the shading nor its legend entry would point at anything.
+  const shownChildBenefitBand = childBenefitBand && childBenefitBand.from < chartMax ? childBenefitBand : null;
+  const shownCliffs = cliffs.filter(c => c.atIncome <= chartMax);
+  const childBenefitHeadroom = -result.aboveChildBenefitStart;
 
   const rows: {
     key: string;
@@ -307,7 +323,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
         ? input.region === 'scotland'
           ? 'Tax-Free Childcare, as entered. Scotland\'s funded hours are not income-tested, so leave them out.'
           : 'Funded hours and Tax-Free Childcare, as entered.'
-        : 'Lost: adjusted net income is over £100,000.',
+        : `Lost: adjusted net income is over ${wholeGBP(UK_CHILDCARE_CUTOFF)}.`,
       value: result.netWithSupport,
       tone: 'text-positive',
       kind: 'result' as const,
@@ -460,6 +476,12 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                 </SelectContent>
               </Select>
             </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Child benefit is clawed back between {wholeGBP(UK_CHILD_BENEFIT_CHARGE_START)} and
+              {' '}{wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)} of adjusted net income: 1% for every
+              {' '}{wholeGBP(UK_CHILD_BENEFIT_CHARGE_STEP)} over, all of it by {wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)}.
+              Childcare support goes at once above {wholeGBP(UK_CHILDCARE_CUTOFF)}.
+            </p>
           </div>
 
           <div className="flex items-center justify-between gap-3">
@@ -509,7 +531,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
 
           {/* Only the pointers that apply. Each is arithmetic on the breakdown
               above, worded; none of it is advice. */}
-          {(inTaper || nearTaper || inChildBenefitBand || cliffs.length > 0) && (
+          {(inTaper || nearTaper || belowChildBenefitBand || inChildBenefitBand || aboveChildBenefitBand || cliffs.length > 0) && (
             <ul className="mt-6 space-y-2 border-t border-border/40 pt-4 text-xs text-muted-foreground">
               {inTaper && (
                 <li>
@@ -520,10 +542,26 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               {nearTaper && (
                 <li>{formatGBP(-taperGap)} more adjusted net income before the personal allowance starts to go.</li>
               )}
+              {belowChildBenefitBand && (
+                <li>
+                  You keep all {formatGBP(result.childBenefit)} of child benefit. The charge takes 1% for every
+                  full {wholeGBP(UK_CHILD_BENEFIT_CHARGE_STEP)} of adjusted net income over
+                  {' '}{wholeGBP(UK_CHILD_BENEFIT_CHARGE_START)}
+                  {childBenefitHeadroom > 0 ? <>, which is {formatGBP(childBenefitHeadroom)} further on</> : null},
+                  and all of it by {wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)}.
+                </li>
+              )}
               {inChildBenefitBand && (
                 <li>
-                  The child benefit charge takes {formatGBP(result.childBenefitCharge)}. Bringing adjusted net income
-                  down by {formatGBP(result.aboveChildBenefitStart)} would clear it.
+                  The child benefit charge takes back {formatGBP(result.childBenefitCharge)} of
+                  {' '}{formatGBP(result.childBenefit)}. Bringing adjusted net income down by
+                  {' '}{formatGBP(result.aboveChildBenefitStart)} would clear it.
+                </li>
+              )}
+              {aboveChildBenefitBand && (
+                <li>
+                  The charge takes back all {formatGBP(result.childBenefit)} of child benefit. It starts to come
+                  back once adjusted net income falls below {wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)}.
                 </li>
               )}
               {cliffs.map(c => (
@@ -595,13 +633,23 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                   ? [percent(v), 'Marginal rate']
                   : [formatGBP(v), name]}
               />
-              {cliffs.map(c => (
+              {/* Named in the legend below rather than on the plot: inline
+                  labels collide with each other and with "You" on a phone. */}
+              {shownChildBenefitBand && (
+                <ReferenceArea
+                  x1={shownChildBenefitBand.from}
+                  x2={Math.min(shownChildBenefitBand.to, chartMax)}
+                  ifOverflow="hidden"
+                  fill="hsl(var(--chart-4))"
+                  fillOpacity={0.15}
+                />
+              )}
+              {shownCliffs.map(c => (
                 <ReferenceLine
                   key={c.kind}
                   x={c.atIncome}
                   stroke="hsl(var(--destructive))"
                   strokeDasharray="4 4"
-                  label={{ value: c.kind === 'childcare' ? 'Childcare' : 'Marriage', position: 'insideTopLeft', fontSize: 12, fill: 'hsl(var(--destructive))' }}
                 />
               ))}
               <ReferenceLine
@@ -655,6 +703,22 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {(shownChildBenefitBand || shownCliffs.length > 0) && (
+          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+            {shownChildBenefitBand && (
+              <li className="flex items-center gap-1.5">
+                <span aria-hidden="true" className="h-3 w-3 rounded-sm bg-chart-4/15" />
+                Child benefit clawback
+              </li>
+            )}
+            {shownCliffs.map(c => (
+              <li key={c.kind} className="flex items-center gap-1.5">
+                <span aria-hidden="true" className="h-3 w-0 border-l-2 border-dashed border-destructive" />
+                {c.kind === 'childcare' ? 'Childcare lost' : 'Marriage allowance lost'}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="space-y-2 border-t border-border/40 pt-6 text-xs text-muted-foreground">

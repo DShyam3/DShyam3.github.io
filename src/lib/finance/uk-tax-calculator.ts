@@ -93,11 +93,29 @@ export interface UkTaxCurvePoint {
   marginalRate: number;
 }
 
+/** A range of `income`, in £/yr, for shading a chart: `from` up to `to`. */
+export interface UkIncomeBand {
+  from: number;
+  to: number;
+}
+
 /** The tax year the rule set below describes. */
 export const UK_TAX_YEAR_LABEL = '2026/27';
 
 /** 6 Apr 2026 and 5 Apr 2027 are both Mondays, so the tax year holds 53 benefit weeks (as 2020/21 did). */
 export const UK_CHILD_BENEFIT_WEEKS = 53;
+
+/** Adjusted net income where the High Income Child Benefit Charge starts. */
+export const UK_CHILD_BENEFIT_CHARGE_START = 60_000;
+
+/** Adjusted net income where the charge takes 100% of the child benefit. */
+export const UK_CHILD_BENEFIT_CHARGE_END = 80_000;
+
+/** The charge is 1% of the child benefit for every complete £200 above the start. */
+export const UK_CHILD_BENEFIT_CHARGE_STEP = 200;
+
+/** Adjusted net income above which childcare support is lost in full. */
+export const UK_CHILDCARE_CUTOFF = 100_000;
 
 interface Band {
   /** Cumulative upper limit on taxable income. */
@@ -170,10 +188,10 @@ const RULES: UkTaxRules = {
   postgradRate: 0.06,
   weeksPerYear: UK_CHILD_BENEFIT_WEEKS,
   childBenefitWeekly: { first: 27.05, further: 17.9 },
-  hicbcStart: 60000,
-  hicbcStepSize: 200,
-  hicbcFullAt: 80000,
-  childcareCutoff: 100000,
+  hicbcStart: UK_CHILD_BENEFIT_CHARGE_START,
+  hicbcStepSize: UK_CHILD_BENEFIT_CHARGE_STEP,
+  hicbcFullAt: UK_CHILD_BENEFIT_CHARGE_END,
+  childcareCutoff: UK_CHILDCARE_CUTOFF,
   maxChildren: 20,
   maxCurvePoints: 2000,
 };
@@ -226,6 +244,16 @@ const resolve = (input: UkTaxInput): Resolved => {
     marriageAllowance: input.marriageAllowance === true,
   };
 };
+
+/**
+ * `resolve` with the pension contribution in full pounds rather than capped at
+ * the income given. For solving an income (a cliff, a band) the cap at the
+ * current income does not bind at the income being solved for.
+ */
+const resolveUncapped = (input: UkTaxInput): Resolved => ({
+  ...resolve(input),
+  contribution: nonNegative(input.pensionContribution),
+});
 
 /** Amount that comes off pay before tax (and, for sacrifice only, before NI). */
 const sacrificeOf = (r: Resolved): number => (r.method === 'salary-sacrifice' ? r.contribution : 0);
@@ -413,7 +441,7 @@ export const ukMarginalRate = (input: UkTaxInput): number => {
  * would sit below the contribution or below zero) is omitted.
  */
 export const ukTaxCliffs = (input: UkTaxInput): UkTaxCliff[] => {
-  const r: Resolved = { ...resolve(input), contribution: nonNegative(input.pensionContribution) };
+  const r = resolveUncapped(input);
   // Income that leaves the given total income: undo the pre-tax deduction and
   // the benefits in kind, which are in total income but not in `income`.
   const incomeFor = (totalIncome: number): number => totalIncome + preTaxDeductionOf(r) - r.bik;
@@ -442,6 +470,36 @@ export const ukTaxCliffs = (input: UkTaxInput): UkTaxCliff[] => {
   // benefits in kind, so a solved income under it means the benefit is lost
   // at every income. With no contribution this is the same as `>= 0`.
   return cliffs.filter(c => c.atIncome >= r.contribution).sort((a, b) => a.atIncome - b.atIncome);
+};
+
+/**
+ * The range of `income`, every other input fixed, over which adjusted net
+ * income runs from £60,000 to £80,000: where the High Income Child Benefit
+ * Charge climbs from nothing to all of it. For shading a chart of `ukTaxCurve`.
+ *
+ * Adjusted net income as a function of income is flat at the benefits in kind
+ * while income is below the pension contribution (pay is nil under salary
+ * sacrifice or net pay, and relief at source is capped at income), then rises
+ * pound for pound. So each end is the threshold less the benefits in kind plus
+ * the contribution, or 0 where the benefits alone already reach the threshold.
+ * As with `ukTaxCliffs` the contribution is taken in full pounds, because the
+ * curve recomputes each point and the cap at the current income does not bind
+ * where the band sits; the result therefore ignores `income` altogether.
+ *
+ * `null` when no child benefit is claimed (the children count is sanitised as
+ * in `calculateUkTax`), or when benefits in kind alone reach £80,000 so that
+ * the charge is total at every income and there is no band to shade.
+ */
+export const ukChildBenefitBand = (input: UkTaxInput): UkIncomeBand | null => {
+  const r = resolveUncapped(input);
+  if (r.children === 0) return null;
+
+  const incomeAt = (adjustedNetIncome: number): number =>
+    r.bik >= adjustedNetIncome ? 0 : adjustedNetIncome - r.bik + r.contribution;
+
+  const to = incomeAt(RULES.hicbcFullAt);
+  if (to <= 0) return null;
+  return { from: incomeAt(RULES.hicbcStart), to };
 };
 
 /**

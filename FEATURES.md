@@ -412,14 +412,18 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   childcare support. Pointers appear only when they apply: how far adjusted net
   income is into the £100,000 personal allowance taper, and the pension
   contribution that would restore the allowance; the headroom before the taper,
-  when within £10,000 of it; the child benefit charge and the fall in adjusted
-  net income that would clear it; and the two cliffs, childcare support at
-  £100,000 and marriage allowance eligibility, each with what one more pound
-  costs.
+  when within £10,000 of it; with children entered, where child benefit stands
+  against its £60,000–£80,000 clawback (how far before it starts, how much the
+  charge takes and the fall in adjusted net income that would clear it, or that
+  it has all gone); and the two cliffs, childcare support at £100,000 and
+  marriage allowance eligibility, each with what one more pound costs. A note
+  under the children field states the clawback and the childcare cliff.
 
   A chart switches between the marginal rate across incomes from £0 to £200,000
-  (wider for higher incomes) and take-home against gross, with your income marked
-  and the cliffs drawn as dashed lines.
+  (wider for higher incomes) and take-home against gross, with your income marked,
+  the child benefit clawback shaded when children are entered, and the cliffs
+  drawn as dashed lines. A legend under the chart names the shading and each cliff
+  line ("Child benefit clawback", "Childcare lost", "Marriage allowance lost").
 
   It does not model savings, dividends, rent or gains, the pension annual
   allowance, employer National Insurance, Universal Credit or other benefits, or a

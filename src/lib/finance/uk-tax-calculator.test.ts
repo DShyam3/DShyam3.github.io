@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateUkTax,
+  ukChildBenefitBand,
   ukMarginalRate,
   ukTaxCliffs,
   ukTaxCurve,
+  UK_CHILDCARE_CUTOFF,
+  UK_CHILD_BENEFIT_CHARGE_END,
+  UK_CHILD_BENEFIT_CHARGE_START,
+  UK_CHILD_BENEFIT_CHARGE_STEP,
   UK_CHILD_BENEFIT_WEEKS,
   UK_TAX_YEAR_LABEL,
+  type UkIncomeBand,
   type UkTaxBreakdown,
   type UkTaxInput,
 } from './uk-tax-calculator';
@@ -48,6 +54,38 @@ describe('UK_CHILD_BENEFIT_WEEKS', () => {
       27.05 * UK_CHILD_BENEFIT_WEEKS,
       money,
     );
+  });
+});
+
+describe('the HICBC and childcare constants', () => {
+  it('states the thresholds the rule set is built from', () => {
+    expect(UK_CHILD_BENEFIT_CHARGE_START).toBe(60_000);
+    expect(UK_CHILD_BENEFIT_CHARGE_END).toBe(80_000);
+    expect(UK_CHILD_BENEFIT_CHARGE_STEP).toBe(200);
+    expect(UK_CHILDCARE_CUTOFF).toBe(100_000);
+  });
+
+  it('make 1% per complete step reach 100% exactly at the end of the range', () => {
+    expect((UK_CHILD_BENEFIT_CHARGE_END - UK_CHILD_BENEFIT_CHARGE_START) / UK_CHILD_BENEFIT_CHARGE_STEP).toBe(100);
+  });
+
+  it('drive the calculation: the charge is 0, 1%, 50% and 100% at the matching adjusted net incomes', () => {
+    const benefit = 27.05 * UK_CHILD_BENEFIT_WEEKS;
+    const charge = (income: number): number => calculateUkTax(input({ income, children: 1 })).childBenefitCharge;
+    expect(charge(UK_CHILD_BENEFIT_CHARGE_START)).toBe(0);
+    expect(charge(UK_CHILD_BENEFIT_CHARGE_START + UK_CHILD_BENEFIT_CHARGE_STEP - 1)).toBe(0);
+    expect(charge(UK_CHILD_BENEFIT_CHARGE_START + UK_CHILD_BENEFIT_CHARGE_STEP)).toBeCloseTo(benefit * 0.01, money);
+    expect(charge(70_000)).toBeCloseTo(benefit * 0.5, money);
+    expect(charge(UK_CHILD_BENEFIT_CHARGE_END - 1)).toBeCloseTo(benefit * 0.99, money);
+    expect(charge(UK_CHILD_BENEFIT_CHARGE_END)).toBeCloseTo(benefit, money);
+  });
+
+  it('drive childcare support: held at the cutoff, lost a pound above', () => {
+    const kept = (income: number): number =>
+      calculateUkTax(input({ income, childcareSupport: 5000 })).childcareSupportKept;
+    expect(kept(UK_CHILDCARE_CUTOFF)).toBe(5000);
+    expect(kept(UK_CHILDCARE_CUTOFF + 1)).toBe(0);
+    expect(ukTaxCliffs(input({ income: 50_000, childcareSupport: 5000 }))[0].atIncome).toBe(UK_CHILDCARE_CUTOFF);
   });
 });
 
@@ -726,6 +764,190 @@ describe('ukTaxCliffs', () => {
         };
         expect(held(cliff.atIncome)).toBe(true);
         expect(held(cliff.atIncome + 1)).toBe(false);
+      }
+    });
+  });
+});
+
+describe('ukChildBenefitBand', () => {
+  const kids = (over: Partial<UkTaxInput>): UkTaxInput => input({ children: 2, ...over });
+
+  const cases: Array<[string, Partial<UkTaxInput>, UkIncomeBand]> = [
+    ['plain employed', {}, { from: 60_000, to: 80_000 }],
+    [
+      'salary sacrifice of £10,000',
+      { pensionContribution: 10_000, pensionMethod: 'salary-sacrifice' },
+      { from: 70_000, to: 90_000 },
+    ],
+    [
+      'relief at source of £10,000',
+      { pensionContribution: 10_000, pensionMethod: 'relief-at-source' },
+      { from: 70_000, to: 90_000 },
+    ],
+    [
+      'net pay of £10,000',
+      { pensionContribution: 10_000, pensionMethod: 'net-pay' },
+      { from: 70_000, to: 90_000 },
+    ],
+    ['benefits in kind of £15,000', { benefitsInKind: 15_000 }, { from: 45_000, to: 65_000 }],
+    ['benefits in kind of £70,000, already past the start', { benefitsInKind: 70_000 }, { from: 0, to: 10_000 }],
+    [
+      'benefits in kind of £15,000 and salary sacrifice of £10,000',
+      { benefitsInKind: 15_000, pensionContribution: 10_000 },
+      { from: 55_000, to: 75_000 },
+    ],
+    [
+      'Scotland, which has no bearing on adjusted net income',
+      { region: 'scotland', pensionContribution: 10_000 },
+      { from: 70_000, to: 90_000 },
+    ],
+    [
+      'self-employed, relief at source of £10,000',
+      { kind: 'self-employed', pensionContribution: 10_000 },
+      { from: 70_000, to: 90_000 },
+    ],
+  ];
+
+  it.each(cases)('finds the band for %s', (_name, over, expected) => {
+    expect(ukChildBenefitBand(kids(over))).toEqual(expected);
+  });
+
+  it('is null with no children', () => {
+    expect(ukChildBenefitBand(input({ children: 0 }))).toBeNull();
+    expect(ukChildBenefitBand(input({ children: 0, pensionContribution: 10_000, benefitsInKind: 15_000 }))).toBeNull();
+  });
+
+  it('is null when the children count sanitises to none', () => {
+    // A non-finite count is treated as none, as everywhere else in the module.
+    for (const children of [-3, 0.9, Number.NaN, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]) {
+      expect(ukChildBenefitBand(input({ children }))).toBeNull();
+    }
+  });
+
+  it('is the same band for one child as for many, however large the count', () => {
+    for (const children of [1, 2.9, 20, 500]) {
+      expect(ukChildBenefitBand(input({ children }))).toEqual({ from: 60_000, to: 80_000 });
+    }
+  });
+
+  it('is null when benefits in kind alone reach £80,000: the charge is total at every income', () => {
+    expect(ukChildBenefitBand(kids({ benefitsInKind: 90_000 }))).toBeNull();
+    expect(ukChildBenefitBand(kids({ benefitsInKind: 80_000 }))).toBeNull();
+    // Whatever the pension: the contribution cannot bring adjusted net income
+    // below the benefits while income is under it, so the band is still empty.
+    expect(ukChildBenefitBand(kids({ benefitsInKind: 90_000, pensionContribution: 50_000 }))).toBeNull();
+    const atZero = calculateUkTax(kids({ income: 0, benefitsInKind: 90_000 }));
+    expect(atZero.childBenefitCharge).toBeCloseTo(atZero.childBenefit, money);
+  });
+
+  it('starts the band at 0 where benefits alone sit between the start and the end', () => {
+    const band = ukChildBenefitBand(kids({ benefitsInKind: 60_000 }));
+    expect(band).toEqual({ from: 0, to: 20_000 });
+    expect(ukChildBenefitBand(kids({ benefitsInKind: 79_999 }))).toEqual({ from: 0, to: 1 });
+  });
+
+  it('ignores benefits in kind for the self-employed, as the calculation does', () => {
+    expect(ukChildBenefitBand(kids({ kind: 'self-employed', benefitsInKind: 90_000 }))).toEqual({
+      from: 60_000,
+      to: 80_000,
+    });
+  });
+
+  it('treats a negative or non-finite pension contribution or benefit as nil', () => {
+    for (const bad of [-5000, Number.NaN, Number.NEGATIVE_INFINITY]) {
+      expect(ukChildBenefitBand(kids({ pensionContribution: bad, benefitsInKind: bad }))).toEqual({
+        from: 60_000,
+        to: 80_000,
+      });
+    }
+  });
+
+  it('takes the contribution in full: the review probe of £5,000 income and £10,000 sacrificed', () => {
+    // The cap at £5,000 would put the band at 65,000 / 85,000. At the incomes
+    // where the band sits the cap no longer binds, so it is 70,000 / 90,000.
+    const probe = kids({ income: 5_000, pensionContribution: 10_000, pensionMethod: 'salary-sacrifice' });
+    expect(ukChildBenefitBand(probe)).toEqual({ from: 70_000, to: 90_000 });
+    expect(calculateUkTax({ ...probe, income: 70_000 }).adjustedNetIncome).toBe(60_000);
+    expect(calculateUkTax({ ...probe, income: 90_000 }).adjustedNetIncome).toBe(80_000);
+    expect(calculateUkTax({ ...probe, income: 65_000 }).adjustedNetIncome).toBe(55_000);
+  });
+
+  it('does not move with the income it is asked about', () => {
+    for (const method of ['salary-sacrifice', 'net-pay', 'relief-at-source'] as const) {
+      const i = kids({ pensionContribution: 10_000, pensionMethod: method, benefitsInKind: 3_000 });
+      const expected = ukChildBenefitBand({ ...i, income: 5_000 });
+      expect(expected).toEqual({ from: 67_000, to: 87_000 });
+      for (const income of [0, 5_000, 9_999, 10_000, 67_000, 1_000_000, -1, Number.NaN]) {
+        expect(ukChildBenefitBand({ ...i, income })).toEqual(expected);
+      }
+    }
+  });
+
+  it('does not change its answer when asked twice, nor alter its input', () => {
+    const i = kids({ pensionContribution: 10_000 });
+    const before = { ...i };
+    expect(ukChildBenefitBand(i)).toEqual(ukChildBenefitBand(i));
+    expect(i).toEqual(before);
+  });
+
+  describe('agrees with calculateUkTax to the pound', () => {
+    // Cases chosen with whole-pound figures, where the adjusted net income is
+    // exact. `income` is deliberately below the contribution in several, since
+    // the band must not depend on it.
+    const agreeing: Array<[string, Partial<UkTaxInput>]> = [
+      ['plain employed', { income: 40_000 }],
+      ['salary sacrifice', { income: 5_000, pensionContribution: 10_000, pensionMethod: 'salary-sacrifice' }],
+      ['relief at source', { income: 5_000, pensionContribution: 10_000, pensionMethod: 'relief-at-source' }],
+      ['net pay', { income: 5_000, pensionContribution: 10_000, pensionMethod: 'net-pay' }],
+      ['benefits in kind', { income: 30_000, benefitsInKind: 15_000 }],
+      ['benefits in kind past the start', { income: 30_000, benefitsInKind: 70_000 }],
+      ['benefits in kind and a pension', { income: 2_000, benefitsInKind: 15_000, pensionContribution: 120_000 }],
+      ['Scotland', { income: 30_000, region: 'scotland', pensionContribution: 12_345 }],
+      ['self-employed', { income: 1_000, kind: 'self-employed', pensionContribution: 25_000 }],
+    ];
+
+    it.each(agreeing)('reproduces the thresholds at the ends of the band: %s', (_name, over) => {
+      const i = kids(over);
+      const band = ukChildBenefitBand(i);
+      expect(band).not.toBeNull();
+      if (!band) return;
+
+      const at = (income: number) => calculateUkTax({ ...i, income });
+
+      // The far end always lands on the full charge.
+      expect(at(band.to).adjustedNetIncome).toBe(UK_CHILD_BENEFIT_CHARGE_END);
+      expect(at(band.to).childBenefitCharge).toBeCloseTo(at(band.to).childBenefit, money);
+      expect(at(band.to - 1).childBenefitCharge).toBeLessThan(at(band.to).childBenefit);
+
+      if (band.from > 0) {
+        // The near end is where adjusted net income is last short of a charge.
+        expect(at(band.from).adjustedNetIncome).toBe(UK_CHILD_BENEFIT_CHARGE_START);
+        expect(at(band.from).childBenefitCharge).toBe(0);
+        expect(at(band.from + UK_CHILD_BENEFIT_CHARGE_STEP).childBenefitCharge).toBeGreaterThan(0);
+        expect(at(band.from - 1).adjustedNetIncome).toBe(UK_CHILD_BENEFIT_CHARGE_START - 1);
+      } else {
+        // Benefits in kind alone are at or past the start at every income.
+        expect(at(0).adjustedNetIncome).toBeGreaterThanOrEqual(UK_CHILD_BENEFIT_CHARGE_START);
+      }
+    });
+
+    it('spans exactly the incomes where the curve carries the charge as marginal rate', () => {
+      const i = kids({ pensionContribution: 10_000, pensionMethod: 'salary-sacrifice' });
+      const band = ukChildBenefitBand(i);
+      if (!band) throw new Error('expected a band');
+      expect(band).toEqual({ from: 70_000, to: 90_000 });
+
+      // Children change nothing but the charge, so the difference in marginal
+      // rate with and without them is the charge's own slope.
+      const slopeAt = (income: number): number =>
+        ukMarginalRate({ ...i, income }) - ukMarginalRate({ ...i, income, children: 0 });
+      const wholeSlope = calculateUkTax({ ...i, income: band.to }).childBenefit / (band.to - band.from);
+
+      for (const income of [band.from, 75_000, 80_000, band.to - 1]) {
+        expect(slopeAt(income)).toBeCloseTo(wholeSlope, money);
+      }
+      for (const income of [0, 40_000, band.from - 1, band.to, 100_000, 150_000]) {
+        expect(slopeAt(income)).toBeCloseTo(0, money);
       }
     });
   });
