@@ -1106,9 +1106,32 @@ ALTER TABLE ONLY "public"."finance_settings"
 ALTER TABLE ONLY "public"."finance_settings"
     ADD CONSTRAINT "finance_settings_birthday_month_check"
     CHECK ("birthday_month" IS NULL OR ("birthday_month" >= 1 AND "birthday_month" <= 12));
+-- Month and day are a pair: both set or both NULL.
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_pair_check"
+    CHECK (("birthday_month" IS NULL) = ("birthday_day" IS NULL));
+-- Day 1..29 for February (29 February is a real birthday; the app clamps it in
+-- other years), 1..30 for April, June, September and November, else 1..31. A
+-- NULL month falls through to 31, harmless because the pair check rejects a
+-- day without a month.
 ALTER TABLE ONLY "public"."finance_settings"
     ADD CONSTRAINT "finance_settings_birthday_day_check"
-    CHECK ("birthday_day" IS NULL OR ("birthday_day" >= 1 AND "birthday_day" <= 31));
+    CHECK (
+        "birthday_day" IS NULL
+        OR (
+            "birthday_day" >= 1
+            AND "birthday_day" <= CASE
+                WHEN "birthday_month" = 2 THEN 29
+                WHEN "birthday_month" IN (4, 6, 9, 11) THEN 30
+                ELSE 31
+            END
+        )
+    );
+-- Kept to "is an array": a CHECK enumerating today's benefit shapes would
+-- reject tomorrow's. NOT NULL DEFAULT '[]' leaves no NULL case to allow for.
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_package_benefits_is_array"
+    CHECK (jsonb_typeof("package_benefits") = 'array');
 CREATE INDEX "idx_finance_settings_profile_id" ON "public"."finance_settings" ("profile_id");
 
 -- One non-default settings row per profile. Shared default rows
@@ -1131,6 +1154,20 @@ ALTER TABLE ONLY "public"."finance_user_holidays"
 ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_half_day_check"
     CHECK ("half_day" IS NULL OR ("half_day" IN ('am', 'pm') AND "start_date" = "end_date" AND "count" = 0.5));
+-- A birthday day off is one day: a full day (count 1, no half) or a half day
+-- (count 0.5, half named). Other leave types are untouched.
+ALTER TABLE ONLY "public"."finance_user_holidays"
+    ADD CONSTRAINT "finance_user_holidays_birthday_single_day"
+    CHECK (
+        "type" <> 'birthday'
+        OR (
+            "start_date" = "end_date"
+            AND (
+                ("count" = 1 AND "half_day" IS NULL)
+                OR ("count" = 0.5 AND "half_day" IS NOT NULL)
+            )
+        )
+    );
 CREATE INDEX "idx_finance_user_holidays_profile_id" ON "public"."finance_user_holidays" ("profile_id");
 
 ALTER TABLE ONLY "public"."finance_truelayer_connection"
