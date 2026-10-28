@@ -27,6 +27,7 @@ import {
   OPTIMAL_LEAVE_BIAS_LABELS,
   UK_EMPLOYEE_NI,
   UK_STATUTORY_PERSONAL_ALLOWANCE,
+  adjustHolidayCountForBirthday,
   calculateWorkingDaysInRange,
   calendarParts,
   findBirthdayDayForHolidayRange,
@@ -40,6 +41,7 @@ import {
   getStartDayOfWeek,
   isHalfDay,
   planOptimalHolidays,
+  removeHolidayWithBirthdayRestoration,
   resolveBankHolidaysForYear,
   toISODate,
   validateBirthdayLeaveBooking,
@@ -385,7 +387,7 @@ export default function TaxIncomeSurface({
     if (!keepBday && inlineUseBirthdayDay) {
       setInlineUseBirthdayDay(false);
     }
-    setInlineCount(String(keepHalf ? HALF_DAY : keepBday ? Math.max(0, workingDays - 1) : workingDays));
+    setInlineCount(String(keepHalf ? HALF_DAY : keepBday ? Math.max(0, workingDays - inlineBirthdayCount) : workingDays));
   };
 
   const chooseInlineLength = (half: HalfDay | null) => {
@@ -441,6 +443,12 @@ export default function TaxIncomeSurface({
       h => h.type === 'birthday' && h.startDate >= startDate && h.startDate <= endDate,
     );
   };
+
+  const inlineOriginalHoliday = normalizedHolidaysAll.find(h => h.id === editingHolidayId);
+  const inlineAttachedBirthday = inlineOriginalHoliday && (inlineOriginalHoliday.type || 'holiday') === 'holiday'
+    ? getBirthdayEntryInsideRange(inlineOriginalHoliday.startDate, inlineOriginalHoliday.endDate)
+    : undefined;
+  const inlineBirthdayCount = inlineAttachedBirthday?.count ?? 1;
 
   const birthdayWindow = useMemo(
     () =>
@@ -678,11 +686,12 @@ export default function TaxIncomeSurface({
   };
 
   const handleApplyBirthdayToHoliday = (hol: UserHoliday, bdayIso: string) => {
-    const totalWorkingDays = calculateWorkingDaysInRange(hol.startDate, hol.endDate, bankHolidaysList);
-    const updatedHoliday: UserHoliday = {
-      ...hol,
-      count: Math.max(0, totalWorkingDays - 1),
-    };
+    const count = adjustHolidayCountForBirthday(hol.count, 1, true);
+    if (count === null) {
+      toast({ title: 'Check the leave count', description: 'At least one day of annual leave is needed to attach a birthday day off.', variant: 'destructive' });
+      return;
+    }
+    const updatedHoliday: UserHoliday = { ...hol, count };
     const bdayEntry: UserHoliday = {
       id: `hol_bday_${Date.now()}`,
       startDate: bdayIso,
@@ -708,11 +717,12 @@ export default function TaxIncomeSurface({
   };
 
   const handleRemoveBirthdayFromHoliday = (hol: UserHoliday, attachedBday: UserHoliday) => {
-    const totalWorkingDays = calculateWorkingDaysInRange(hol.startDate, hol.endDate, bankHolidaysList);
-    const updatedHoliday: UserHoliday = {
-      ...hol,
-      count: totalWorkingDays,
-    };
+    const count = adjustHolidayCountForBirthday(hol.count, attachedBday.count, false);
+    if (count === null) {
+      toast({ title: 'Check the leave count', description: 'The holiday or birthday leave count is invalid.', variant: 'destructive' });
+      return;
+    }
+    const updatedHoliday: UserHoliday = { ...hol, count };
     const updatedHolidaysList = normalizedHolidaysAll
       .filter(h => h.id !== attachedBday.id)
       .map(h => (h.id === hol.id ? updatedHoliday : h));
@@ -724,7 +734,7 @@ export default function TaxIncomeSurface({
     void saveDataToSupabase('settings', updatedSettings);
     toast({
       title: 'Birthday Day Off Removed',
-      description: `Removed Birthday Day Off from "${hol.occasion}" — restored to ${totalWorkingDays}d annual leave.`,
+      description: `Removed Birthday Day Off from "${hol.occasion}" — restored to ${updatedHoliday.count}d annual leave.`,
     });
   };
 
@@ -952,8 +962,9 @@ export default function TaxIncomeSurface({
           startDate: inlineEligibleBdayDate,
           endDate: inlineEligibleBdayDate,
           occasion: `${savedHoliday.occasion} (Birthday Day Off)`,
-          count: 1,
+          count: existingAttachedBday?.count ?? 1,
           type: 'birthday',
+          ...(existingAttachedBday?.halfDay ? { halfDay: existingAttachedBday.halfDay } : {}),
         };
         if (existingAttachedBday) {
           updatedHolidaysList = updatedHolidaysList.map(h =>
@@ -998,7 +1009,7 @@ export default function TaxIncomeSurface({
 
   const performDeleteHoliday = (holidayId: string) => {
     const normalizedHolidays = getNormalizedHolidays(settings, holidayDefaults);
-    const updatedHolidaysList = normalizedHolidays.filter(h => h.id !== holidayId);
+    const updatedHolidaysList = removeHolidayWithBirthdayRestoration(normalizedHolidays, holidayId);
 
     const updatedSettings = {
       ...settings,
@@ -1875,7 +1886,7 @@ export default function TaxIncomeSurface({
                                     {isRegularHoliday && attachedBday && (
                                       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                                         <span className="bg-primary/20 text-primary border border-primary/40 rounded-sm px-1.5 py-0.5 text-xs font-mono font-semibold">
-                                          + 1d 🎂 ({formatUkDate(attachedBday.startDate)})
+                                          + {attachedBday.count}d 🎂 ({formatUkDate(attachedBday.startDate)})
                                         </span>
                                         <button
                                           type="button"
@@ -2102,7 +2113,7 @@ export default function TaxIncomeSurface({
                                   getBirthdayEntryInsideRange(inlineStartDate, inlineEndDate)?.id === yearBdayEntry.id)) && (
                                 <div className="rounded-lg border border-primary/30 bg-primary/10 p-2 flex items-center justify-between gap-2">
                                   <span className="text-xs text-foreground">
-                                    🎂 Use Birthday Day Off on <span className="font-semibold">{formatUkDate(inlineEligibleBdayDate)}</span> (saves 1d annual leave)
+                                    🎂 Use Birthday Day Off on <span className="font-semibold">{formatUkDate(inlineEligibleBdayDate)}</span> (saves {inlineBirthdayCount}d annual leave)
                                   </span>
                                   <Button
                                     type="button"
@@ -2111,14 +2122,17 @@ export default function TaxIncomeSurface({
                                     aria-pressed={inlineUseBirthdayDay}
                                     onClick={() => {
                                       const nextVal = !inlineUseBirthdayDay;
+                                      const count = inlineCount.trim() === '' ? null : adjustHolidayCountForBirthday(Number(inlineCount), inlineBirthdayCount, nextVal);
+                                      if (count === null) {
+                                        toast({ title: 'Check the leave count', description: 'Enter a valid annual leave count with at least one day available to attach birthday leave.', variant: 'destructive' });
+                                        return;
+                                      }
                                       setInlineUseBirthdayDay(nextVal);
-                                      setInlineCount(
-                                        String(nextVal ? Math.max(0, inlineWorkingDays - 1) : inlineWorkingDays),
-                                      );
+                                      setInlineCount(String(count));
                                     }}
                                     className="h-7 px-2.5 rounded-lg text-xs font-mono shrink-0"
                                   >
-                                    {inlineUseBirthdayDay ? 'Included (-1d)' : 'Use +1d 🎂'}
+                                    {inlineUseBirthdayDay ? `Included (-${inlineBirthdayCount}d)` : `Use +${inlineBirthdayCount}d 🎂`}
                                   </Button>
                                 </div>
                               )}
