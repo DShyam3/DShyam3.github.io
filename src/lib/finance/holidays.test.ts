@@ -4,6 +4,7 @@ import {
   BIRTHDAY_LEAVE_RULE_LABELS,
   OPTIMAL_LEAVE_BIASES,
   OPTIMAL_LEAVE_BIAS_LABELS,
+  adjustHolidayCountForBirthday,
   calculateBirthdayBenefitValue,
   calculateWorkingDaysInRange,
   computeUkBankHolidaysForYear,
@@ -22,6 +23,8 @@ import {
   planOptimalHolidays,
   resolveBankHolidaysForYear,
   resolveBirthdayInYear,
+  removeHolidayWithBirthdayRestoration,
+  type UserHoliday,
   validateBirthdayLeaveBooking,
 } from './holidays';
 
@@ -935,3 +938,96 @@ describe('planOptimalHolidays with asOfDate remaining-year filtering', () => {
 
 
 
+
+describe('adjustHolidayCountForBirthday', () => {
+  it.each([0.5, 1])('preserves a custom count through a %s-day round trip', birthdayCount => {
+    const attached = adjustHolidayCountForBirthday(3.5, birthdayCount, true);
+    expect(attached).toBe(3.5 - birthdayCount);
+    expect(adjustHolidayCountForBirthday(attached!, birthdayCount, false)).toBe(3.5);
+  });
+
+  it('allows exact attachment and restoration from zero', () => {
+    expect(adjustHolidayCountForBirthday(0.5, 0.5, true)).toBe(0);
+    expect(adjustHolidayCountForBirthday(0, 0.5, false)).toBe(0.5);
+    expect(adjustHolidayCountForBirthday(0, 1, false)).toBe(1);
+  });
+
+  it.each([0, 0.5])('rejects insufficient count %s rather than clamping', count => {
+    expect(adjustHolidayCountForBirthday(count, 1, true)).toBeNull();
+  });
+
+  it.each([-1, NaN, Infinity, -Infinity])('rejects invalid existing count %s in both directions', count => {
+    expect(adjustHolidayCountForBirthday(count, 1, true)).toBeNull();
+    expect(adjustHolidayCountForBirthday(count, 1, false)).toBeNull();
+  });
+
+  it.each([0, -0.5, 0.25, 2, NaN, Infinity])('rejects invalid birthday count %s', birthdayCount => {
+    expect(adjustHolidayCountForBirthday(3.5, birthdayCount, true)).toBeNull();
+    expect(adjustHolidayCountForBirthday(3.5, birthdayCount, false)).toBeNull();
+  });
+});
+
+describe('removeHolidayWithBirthdayRestoration', () => {
+  const host: UserHoliday = {
+    id: 'trip', startDate: '2026-05-28', endDate: '2026-06-03',
+    occasion: 'Custom week', count: 3.5, type: 'holiday',
+  };
+  const birthday: UserHoliday = {
+    id: 'birthday', startDate: '2026-06-01', endDate: '2026-06-01',
+    occasion: 'Birthday', count: 1, type: 'birthday',
+  };
+
+  it.each([0.5, 1])('restores a %s-day birthday without recounting a custom week', count => {
+    expect(removeHolidayWithBirthdayRestoration([host, { ...birthday, count }], birthday.id))
+      .toEqual([{ ...host, count: 3.5 + count }]);
+  });
+
+  it('restores a cross-year host by stored calendar date', () => {
+    const crossYear = { ...host, startDate: '2026-12-28', endDate: '2027-01-03' };
+    const newYear = { ...birthday, startDate: '2027-01-01', endDate: '2027-01-01' };
+    expect(removeHolidayWithBirthdayRestoration([crossYear, newYear], birthday.id))
+      .toEqual([{ ...crossYear, count: 4.5 }]);
+  });
+
+  it('restores only the first regular host and never sick or birthday entries', () => {
+    const sick: UserHoliday = { ...host, id: 'sick', type: 'sick' };
+    const otherBirthday: UserHoliday = { ...host, id: 'other-birthday', type: 'birthday' };
+    const second = { ...host, id: 'second' };
+    expect(removeHolidayWithBirthdayRestoration([sick, otherBirthday, host, second, birthday], birthday.id))
+      .toEqual([sick, otherBirthday, { ...host, count: 4.5 }, second]);
+    expect(removeHolidayWithBirthdayRestoration([sick, otherBirthday, birthday], birthday.id))
+      .toEqual([sick, otherBirthday]);
+  });
+
+  it('removes a standalone birthday and handles empty input', () => {
+    expect(removeHolidayWithBirthdayRestoration([birthday], birthday.id)).toEqual([]);
+    expect(removeHolidayWithBirthdayRestoration([], birthday.id)).toEqual([]);
+  });
+
+  it.each(['holiday', 'sick'] as const)('removes a %s without changing other counts', type => {
+    const target = { ...host, type };
+    expect(removeHolidayWithBirthdayRestoration([target, birthday], target.id)).toEqual([birthday]);
+  });
+
+  it('leaves all values unchanged for a nonexistent id', () => {
+    expect(removeHolidayWithBirthdayRestoration([host, birthday], 'missing')).toEqual([host, birthday]);
+  });
+
+  it.each([0, -1, 2, NaN, Infinity])('does not restore invalid birthday count %s', count => {
+    expect(removeHolidayWithBirthdayRestoration([host, { ...birthday, count }], birthday.id)).toEqual([host]);
+  });
+
+  it.each([-1, NaN, Infinity])('does not alter invalid host count %s', count => {
+    const invalidHost = { ...host, count };
+    expect(removeHolidayWithBirthdayRestoration([invalidHost, birthday], birthday.id)).toEqual([invalidHost]);
+  });
+
+  it('restores a zero-count host and leaves frozen inputs untouched', () => {
+    const zeroHost = Object.freeze({ ...host, count: 0 });
+    const frozenBirthday = Object.freeze({ ...birthday });
+    const holidays = [zeroHost, frozenBirthday];
+    Object.freeze(holidays);
+    expect(removeHolidayWithBirthdayRestoration(holidays, birthday.id)).toEqual([{ ...host, count: 1 }]);
+    expect(holidays).toEqual([{ ...host, count: 0 }, birthday]);
+  });
+});

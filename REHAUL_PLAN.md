@@ -583,11 +583,7 @@ accounts rather than per account.
 
 **Birthday leave and package benefits — review follow-ups (2026-10-27):**
 
-- **Attach and detach reset a typed count** — use `count − 1` / `count + 1`
-  rather than recounting working days
-- **Deleting an attached birthday** does not give the host holiday its day
-  back (only "Remove 🎂" and moving it do); a birthday inside a sick entry gets
-  no handling
+- **Birthday inside a sick entry** gets no handling
 - **Leave maximiser** — no standalone birthday recommendation when no chosen
   bridge contains it; sick days are not treated as booked
 - **Day-level dedupe** covers holidays only, so a birthday inside a sick range

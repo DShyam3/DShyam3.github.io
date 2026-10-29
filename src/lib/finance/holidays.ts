@@ -601,6 +601,38 @@ export const findHolidayCoveringDate = (
   );
 };
 
+/** Transfer birthday leave without recalculating a user-entered holiday count. */
+export const adjustHolidayCountForBirthday = (
+  count: number,
+  birthdayCount: number,
+  attach: boolean,
+): number | null => {
+  if (!Number.isFinite(count) || count < 0 || (birthdayCount !== HALF_DAY && birthdayCount !== 1)) {
+    return null;
+  }
+  if (attach && count < birthdayCount) return null;
+  return attach ? count - birthdayCount : count + birthdayCount;
+};
+
+/** Removing a birthday restores its charge to the first regular holiday host. */
+export const removeHolidayWithBirthdayRestoration = (
+  holidays: UserHoliday[],
+  holidayId: string,
+): UserHoliday[] => {
+  const target = holidays.find(holiday => holiday.id === holidayId);
+  const host = target?.type === 'birthday'
+    ? findHolidayCoveringDate(holidays, target.startDate, target.id)
+    : undefined;
+  const restoredCount = host && target
+    ? adjustHolidayCountForBirthday(host.count, target.count, false)
+    : null;
+  return holidays
+    .filter(holiday => holiday.id !== holidayId)
+    .map(holiday => holiday === host && restoredCount !== null
+      ? { ...holiday, count: restoredCount }
+      : holiday);
+};
+
 export const calculateBirthdayBenefitValue = (
   grossSalary: number,
   workingDaysPerYear: number,
