@@ -663,20 +663,6 @@ export const hasBirthdaySickOverlap = (
 });
 
 
-export const calculateBirthdayBenefitValue = (
-  grossSalary: number,
-  workingDaysPerYear: number,
-): number => {
-  if (
-    !Number.isFinite(grossSalary) ||
-    grossSalary <= 0 ||
-    !Number.isFinite(workingDaysPerYear) ||
-    workingDaysPerYear <= 0
-  ) {
-    return 0;
-  }
-  return Math.round((grossSalary / workingDaysPerYear) * 100) / 100;
-};
 
 export type UkHolidayRegion = 'england-and-wales' | 'scotland' | 'northern-ireland';
 
@@ -974,53 +960,9 @@ export interface OptimalHolidayPlan {
   remainingAllowanceAfterPlan: number;
 }
 
-export type OptimalLeavePlan = OptimalHolidayPlan;
-
 /** Computes optimal annual-leave bridges around bank holidays, weekends, and
- *  an optional birthday day off for any calendar year. Accepts either an options
- *  object or positional parameters. */
-export function planOptimalHolidays(options: PlanOptimalHolidaysOptions): OptimalHolidayPlan;
-export function planOptimalHolidays(
-  year: number,
-  workHolidaysAllowance: number,
-  bankHolidayStrings?: string[],
-  existingHolidays?: UserHoliday[],
-  birthdayConfig?: {
-    enabled: boolean;
-    rule: BirthdayLeaveRule;
-    birthday?: BirthdayDate | null;
-  },
-  bias?: OptimalLeaveBias,
-  asOfDate?: string,
-): OptimalHolidayPlan;
-export function planOptimalHolidays(
-  optionsOrYear: PlanOptimalHolidaysOptions | number,
-  workHolidaysAllowance?: number,
-  bankHolidayStrings?: string[],
-  existingHolidaysArg?: UserHoliday[],
-  birthdayConfig?: {
-    enabled: boolean;
-    rule: BirthdayLeaveRule;
-    birthday?: BirthdayDate | null;
-  },
-  biasArg?: OptimalLeaveBias,
-  asOfDateArg?: string,
-): OptimalHolidayPlan {
-  const options: PlanOptimalHolidaysOptions =
-    typeof optionsOrYear === 'number'
-      ? {
-          year: optionsOrYear,
-          annualAllowance: workHolidaysAllowance ?? 0,
-          bankHolidays: bankHolidayStrings,
-          existingHolidays: existingHolidaysArg,
-          birthdayLeaveEnabled: birthdayConfig?.enabled,
-          birthdayLeaveRule: birthdayConfig?.rule,
-          birthday: birthdayConfig?.birthday,
-          bias: biasArg,
-          asOfDate: asOfDateArg,
-        }
-      : optionsOrYear;
-
+ *  an optional birthday day off for any calendar year. */
+export function planOptimalHolidays(options: PlanOptimalHolidaysOptions): OptimalHolidayPlan {
   const { year } = options;
   const bias: OptimalLeaveBias = options.bias ?? 'balanced';
   const safeAllowance = Number.isFinite(options.annualAllowance) ? Math.max(0, options.annualAllowance) : 0;

@@ -581,21 +581,6 @@ accounts rather than per account.
   live, and whether the band fields leave Settings. The table can go only after
   the first is answered.
 
-**Birthday leave and package benefits — review follow-ups (2026-10-27):**
-
-- **Birthday inside a sick entry** gets no handling
-- **Leave maximiser** — no standalone birthday recommendation when no chosen
-  bridge contains it; sick days are not treated as booked
-- **Day-level dedupe** covers holidays only, so a birthday inside a sick range
-  shows twice
-- **Design and accessibility, what is left** — Title Case and emoji in some copy
-  and accessible names; the UK region, tax year, pension arrangement and student
-  loan plan labels in the Settings dialog have no `htmlFor`
-- **Dead code** — the positional `planOptimalHolidays` overload (cannot pass a
-  region), `OptimalLeavePlan` and `calculateBirthdayBenefitValue`
-- **FEATURES.md** — the holiday tracker entry is one long line whose tier names
-  no longer match the code
-
 ### 8.I Still to build (the order)
 
 1. **Links dead-link check and auto-metadata**, the highest-value pair outside

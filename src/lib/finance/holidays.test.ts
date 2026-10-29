@@ -6,7 +6,6 @@ import {
   OPTIMAL_LEAVE_BIASES,
   OPTIMAL_LEAVE_BIAS_LABELS,
   adjustHolidayCountForBirthday,
-  calculateBirthdayBenefitValue,
   calculateWorkingDaysInRange,
   computeUkBankHolidaysForYear,
   findBirthdayDayForHolidayRange,
@@ -491,24 +490,6 @@ describe('validateBirthdayLeaveBooking', () => {
   });
 });
 
-describe('calculateBirthdayBenefitValue', () => {
-  it('computes the daily gross rate rounded to 2 decimal places', () => {
-    expect(calculateBirthdayBenefitValue(52000, 260)).toBe(200);
-    expect(calculateBirthdayBenefitValue(65000, 260)).toBe(250);
-    expect(calculateBirthdayBenefitValue(50000, 260)).toBe(192.31);
-  });
-
-  it('returns 0 for zero, negative, or non-finite inputs', () => {
-    expect(calculateBirthdayBenefitValue(0, 260)).toBe(0);
-    expect(calculateBirthdayBenefitValue(-50000, 260)).toBe(0);
-    expect(calculateBirthdayBenefitValue(50000, 0)).toBe(0);
-    expect(calculateBirthdayBenefitValue(50000, -260)).toBe(0);
-    expect(calculateBirthdayBenefitValue(NaN, 260)).toBe(0);
-    expect(calculateBirthdayBenefitValue(Infinity, 260)).toBe(0);
-    expect(calculateBirthdayBenefitValue(50000, NaN)).toBe(0);
-  });
-});
-
 describe('computeUkBankHolidaysForYear & resolveBankHolidaysForYear', () => {
   it('computes England & Wales 2026 bank holidays including Boxing Day substitute on 28 Dec', () => {
     const events = computeUkBankHolidaysForYear(2026, 'england-and-wales');
@@ -921,18 +902,6 @@ describe('planOptimalHolidays with asOfDate remaining-year filtering', () => {
     expect(plan.bridges.some(b => b.label.includes('Christmas'))).toBe(true);
     expect(plan.bridges.some(b => b.clusterId === 'rem_long_weekend')).toBe(true);
     expect(plan.bridges.some(b => b.clusterId === 'rem_week_stretch')).toBe(true);
-
-    // Positional overload also works identically
-    const positionalPlan = planOptimalHolidays(
-      2026,
-      25,
-      undefined,
-      [],
-      { enabled: false, rule: 'within_week', birthday: null },
-      'balanced',
-      '2026-10-25',
-    );
-    expect(positionalPlan.bridges.map(b => b.id)).toEqual(plan.bridges.map(b => b.id));
   });
 });
 

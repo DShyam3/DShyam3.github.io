@@ -1471,7 +1471,9 @@ export default function TaxIncomeSurface({
               </div>
               <p className="text-xs text-muted-foreground mt-0.5 truncate">
                 Turn {optimalPlan.recommendedLeaveDays}d leave
-                {optimalPlan.recommendedUsesBirthday ? ' + 1d 🎂' : ''} into{' '}
+                {optimalPlan.recommendedUsesBirthday ? (
+                  <> + 1d <span aria-hidden="true">🎂</span><span className="sr-only">birthday day off</span></>
+                ) : ''} into{' '}
                 <span className="text-positive font-semibold">{optimalPlan.recommendedTotalDaysOff}d off</span>
               </p>
             </div>
@@ -1486,8 +1488,9 @@ export default function TaxIncomeSurface({
           {isMaximiserOpen && (
             <div id="holiday-maximiser-panel" className="border-t border-primary/20 p-3 space-y-3 bg-card/60">
               {realCurrentMonth === 0 && currentTaxYear === realCurrentYear && (
-                <div className="rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs text-primary font-semibold">
-                  🗓️ January Annual Leave Planner — Lock in your {currentTaxYear} dates early
+                <div className="rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs text-primary font-semibold flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>January annual leave planner — lock in your {currentTaxYear} dates early</span>
                 </div>
               )}
 
@@ -1520,7 +1523,7 @@ export default function TaxIncomeSurface({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">
-                    Strategy Bias
+                    Strategy bias
                   </span>
                 </div>
                 <PillSwitch
@@ -1543,7 +1546,9 @@ export default function TaxIncomeSurface({
                   <span className="text-muted-foreground">Recommended plan: </span>
                   <span className="font-semibold text-foreground">
                     {optimalPlan.recommendedLeaveDays}d leave
-                    {optimalPlan.recommendedUsesBirthday ? ' + 1d 🎂' : ''} → {optimalPlan.recommendedTotalDaysOff}d total off
+                    {optimalPlan.recommendedUsesBirthday ? (
+                      <> + 1d <span aria-hidden="true">🎂</span><span className="sr-only">birthday day off</span></>
+                    ) : ''} → {optimalPlan.recommendedTotalDaysOff}d total off
                   </span>
                   <span className="text-muted-foreground"> ({optimalPlan.remainingAllowanceAfterPlan}d left)</span>
                 </div>
@@ -1554,7 +1559,7 @@ export default function TaxIncomeSurface({
                   onClick={handleBookAllRecommended}
                   className="h-7 px-2.5 rounded-lg text-xs bg-primary text-primary-foreground font-mono shrink-0"
                 >
-                  Book Recommended
+                  Book recommended
                 </Button>
               </div>
 
@@ -1587,7 +1592,9 @@ export default function TaxIncomeSurface({
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 text-xs">
                             <span className="bg-positive/20 text-positive border border-positive/40 rounded-sm px-1.5 py-0.5 font-semibold tabular-nums">
-                              {bridge.leaveDaysRequired}d{bridge.usesBirthdayDay ? ' + 1🎂' : ''} → {bridge.totalDaysOff}d off · {bridge.efficiency}x
+                              {bridge.leaveDaysRequired}d{bridge.usesBirthdayDay ? (
+                                <> + 1<span aria-hidden="true">🎂</span><span className="sr-only">birthday day off</span></>
+                              ) : ''} → {bridge.totalDaysOff}d off · {bridge.efficiency}x
                             </span>
                           </div>
                         </div>
@@ -1612,9 +1619,9 @@ export default function TaxIncomeSurface({
                           {formatDatesToBookUk(bridge.datesToBook)}{' '}
                           <span className="text-muted-foreground">
                             (
-                            {bridge.usesBirthdayDay && bridge.birthdayDayDate
-                              ? `includes 🎂 Birthday on ${formatUkDate(bridge.birthdayDayDate)}`
-                              : `${bridge.leaveDaysRequired} working ${bridge.leaveDaysRequired === 1 ? 'day' : 'days'}`}
+                            {bridge.usesBirthdayDay && bridge.birthdayDayDate ? (
+                              <>includes <span aria-hidden="true">🎂</span> birthday on {formatUkDate(bridge.birthdayDayDate)}</>
+                            ) : `${bridge.leaveDaysRequired} working ${bridge.leaveDaysRequired === 1 ? 'day' : 'days'}`}
                             )
                           </span>
                         </p>

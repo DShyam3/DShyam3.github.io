@@ -410,7 +410,7 @@ export function TaxIncomeSettingsDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="paydaySchedule" className="text-xs font-medium text-muted-foreground">Payday Schedule</Label>
+                  <Label htmlFor="paydaySchedule" className="text-xs font-medium text-muted-foreground">Payday schedule</Label>
                   <Select
                     value={paydaySchedule}
                     onValueChange={(val) => setPaydaySchedule(val as FinanceSettings['paydaySchedule'])}
@@ -431,7 +431,7 @@ export function TaxIncomeSettingsDialog({
 
                 {paydaySchedule === 'monthly_date' && (
                   <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <Label htmlFor="payDay" className="text-xs font-medium text-muted-foreground">Scheduled Payday (Day of Month)</Label>
+                    <Label htmlFor="payDay" className="text-xs font-medium text-muted-foreground">Scheduled payday (day of month)</Label>
                     <Input
                       id="payDay"
                       type="number"
@@ -448,7 +448,7 @@ export function TaxIncomeSettingsDialog({
 
                 {paydaySchedule === 'weekly' && (
                   <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <Label htmlFor="paydayWeekday" className="text-xs font-medium text-muted-foreground">Weekly Payday</Label>
+                    <Label htmlFor="paydayWeekday" className="text-xs font-medium text-muted-foreground">Weekly payday</Label>
                     <Select
                       value={paydayWeekday.toString()}
                       onValueChange={(val) => setPaydayWeekday(parseInt(val, 10))}
@@ -469,7 +469,7 @@ export function TaxIncomeSettingsDialog({
 
                 {paydaySchedule === 'biweekly' && (
                   <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <Label htmlFor="biweeklyAnchor" className="text-xs font-medium text-muted-foreground">Reference Anchor Payday</Label>
+                    <Label htmlFor="biweeklyAnchor" className="text-xs font-medium text-muted-foreground">Reference anchor payday</Label>
                     <Input
                       id="biweeklyAnchor"
                       type="date"
@@ -484,12 +484,12 @@ export function TaxIncomeSettingsDialog({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">Pension arrangement</Label>
+                    <Label htmlFor="pensionType" className="text-xs font-medium text-muted-foreground">Pension arrangement</Label>
                     <Select
                       value={settings.pensionType}
                       onValueChange={(val) => setSettings({ ...settings, pensionType: val as FinanceSettings['pensionType'] })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="pensionType" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select type..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -501,12 +501,12 @@ export function TaxIncomeSettingsDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">Student loan plan</Label>
+                    <Label htmlFor="studentLoanPlan" className="text-xs font-medium text-muted-foreground">Student loan plan</Label>
                     <Select
                       value={settings.studentLoanPlan}
                       onValueChange={(val) => setSettings({ ...settings, studentLoanPlan: val as FinanceSettings['studentLoanPlan'] })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="studentLoanPlan" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select plan..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -628,12 +628,12 @@ export function TaxIncomeSettingsDialog({
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">UK region</Label>
+                    <Label htmlFor="ukRegion" className="text-xs font-medium text-muted-foreground">UK region</Label>
                     <Select
                       value={settings.ukRegion}
                       onValueChange={(val) => setSettings({ ...settings, ukRegion: val as FinanceSettings['ukRegion'] })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="ukRegion" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select region..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -644,12 +644,12 @@ export function TaxIncomeSettingsDialog({
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">Tax year</Label>
+                    <Label htmlFor="taxYear" className="text-xs font-medium text-muted-foreground">Tax year</Label>
                     <Select
                       value={settings.taxYear.toString()}
                       onValueChange={(val) => setSettings({ ...settings, taxYear: parseInt(val, 10) })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="taxYear" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select year..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -735,7 +735,7 @@ export function TaxIncomeSettingsDialog({
                   {birthdayLeaveEnabled && (
                     <div className="space-y-3 pt-2 border-t border-border/30">
                       <div className="space-y-1.5">
-                        <Label htmlFor="birthdayLeaveRule" className="text-xs font-medium text-muted-foreground">Usage Window Rule</Label>
+                        <Label htmlFor="birthdayLeaveRule" className="text-xs font-medium text-muted-foreground">Usage window rule</Label>
                         <Select
                           value={birthdayLeaveRule}
                           onValueChange={(val) => setBirthdayLeaveRule(val as BirthdayLeaveRule)}
