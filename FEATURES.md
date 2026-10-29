@@ -310,6 +310,12 @@ that transaction with the row selected and scrolled into view. The list's
 unless "View All" is on, plus the chosen account. Both views share the same data
 and filter logic; the navigation is read once and cleared.
 
+Category rules and review queue:
+- The Status filter in Transactions includes an "Uncategorised / Needs Review" view to triage unreviewed or ambiguously categorised transactions.
+- Transactions inspector pane provides an inline Category Rule helper ("Always for this merchant") showing live row impact before saving.
+- A "Rules" dialog in the Transactions toolbar manages profile-scoped merchant category rules with pattern matching, target category, optional merchant rename, live match counts, and impact preview.
+- Category rules derive deterministically at read time with strict precedence: manual/reviewed categories take precedence over matching category rules, which take precedence over bank-provided categories. Rule re-application never dirties unchanged ledger records or triggers false database writes.
+
 ### Plan
 
 **Cash flow** — income, spending and net come only from recorded transactions, with confirmed transfers left out; recurring bills are not added on top. The detail drawers list each year in the chosen period with that year's total and monthly average. "Where it went" shows the period's income flowing into spending categories (top five payers and top eight categories, the rest grouped as "Other"), with what was kept or drawn from balances; below tablet width it shows as a table, and on wider screens the table is one click away.

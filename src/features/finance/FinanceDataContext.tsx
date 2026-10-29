@@ -36,7 +36,14 @@ import type {
 } from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { normalizeHolidays, resolveBankHolidaysForYear, ukBasePersonalAllowance } from '@/lib/finance';
+import {
+  type CategoryRule,
+  applyCategoryRules,
+  calculateRuleImpact,
+  normalizeHolidays,
+  resolveBankHolidaysForYear,
+  ukBasePersonalAllowance,
+} from '@/lib/finance';
 import {
   asBirthdayLeaveRule,
   asBudgetGroup,
@@ -313,6 +320,9 @@ function useProvideFinanceData() {
     return [];
   });
 
+  const rawTransactionsRef = useRef<MockTransaction[]>([]);
+  const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
+
   // Tax rates are historical reference data. The active timeline is the
   // admin override when present, otherwise the built-in default timeline.
   const [taxConfigs, setTaxConfigs] = useState<TaxConfig[]>(() => [createEmptyTaxConfig()]);
@@ -466,6 +476,13 @@ function useProvideFinanceData() {
   // save). Sent before a load reads, so the load shows them instead of a copy
   // that predates them -- and an edit built on that copy cannot send it back.
   const beforeLoadFlushesRef = useRef(new Set<() => void>());
+  const rememberStoredRowsRef = useRef<(<T extends object>(
+    table: RowTable,
+    rows: readonly T[],
+    toRow: (row: T) => Record<string, unknown>,
+    owner: string | null,
+    fromLoad?: boolean,
+  ) => void) | null>(null);
   const registerBeforeLoadFlush = useCallback((flush: () => void) => {
     beforeLoadFlushesRef.current.add(flush);
     return () => { beforeLoadFlushesRef.current.delete(flush); };
@@ -1383,6 +1400,81 @@ function useProvideFinanceData() {
     toast({ title: 'Observation Removed', description: 'Debt observation deleted.' });
   };
 
+  /* ---- Category Rules (8.H) ----------------------------------------------- */
+  const reapplyRules = useCallback((rules: CategoryRule[], currentTxs: MockTransaction[]) => {
+    const userModifiedMap = new Map<string, MockTransaction>();
+    for (const tx of currentTxs) {
+      if (tx.userModified || (tx as { user_modified?: boolean }).user_modified) {
+        userModifiedMap.set(tx.id, tx);
+      }
+    }
+    const baseTxs = rawTransactionsRef.current.length > 0 ? rawTransactionsRef.current : currentTxs;
+    const merged = baseTxs.map(rawTx => userModifiedMap.get(rawTx.id) || rawTx);
+    return applyCategoryRules(merged, rules);
+  }, []);
+
+  const saveCategoryRule = useCallback(async (
+    rule: Omit<CategoryRule, 'id'> & { id?: string }
+  ): Promise<{ error: Error | null; countAffected: number }> => {
+    if (!profileId) {
+      return { error: new Error('No active profile'), countAffected: 0 };
+    }
+    const ruleId = rule.id || crypto.randomUUID();
+    const payload = {
+      id: ruleId,
+      profile_id: profileId,
+      merchant_pattern: rule.merchant_pattern.trim(),
+      category: rule.category.trim(),
+      rename_to: rule.rename_to?.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('finance_category_rules').upsert(payload);
+    if (error) {
+      toast({ title: 'Could not save category rule', description: error.message, variant: 'destructive' });
+      return { error: new Error(error.message), countAffected: 0 };
+    }
+
+    const nextRules = [
+      ...categoryRules.filter(r => r.id !== ruleId),
+      { ...payload, created_at: (rule as CategoryRule).created_at || payload.updated_at },
+    ];
+    setCategoryRules(nextRules);
+
+    const impact = calculateRuleImpact(mockTransactions, payload);
+    const updatedTxs = reapplyRules(nextRules, mockTransactions);
+    setMockTransactions(updatedTxs);
+    rememberStoredRowsRef.current?.('finance_transactions', updatedTxs, t => transactionRow(t, profileId), profileId, true);
+
+    toast({
+      title: 'Rule Saved',
+      description: `Rule for "${payload.merchant_pattern}" applied (${impact.unmodifiedCount} transactions updated).`,
+    });
+    return { error: null, countAffected: impact.unmodifiedCount };
+  }, [profileId, categoryRules, mockTransactions, reapplyRules, toast]);
+
+  const deleteCategoryRule = useCallback(async (id: string): Promise<{ error: Error | null }> => {
+    if (!profileId) {
+      return { error: new Error('No active profile') };
+    }
+
+    const { error } = await supabase.from('finance_category_rules').delete().eq('id', id).eq('profile_id', profileId);
+    if (error) {
+      toast({ title: 'Could not delete rule', description: error.message, variant: 'destructive' });
+      return { error: new Error(error.message) };
+    }
+
+    const nextRules = categoryRules.filter(r => r.id !== id);
+    setCategoryRules(nextRules);
+
+    const updatedTxs = reapplyRules(nextRules, mockTransactions);
+    setMockTransactions(updatedTxs);
+    rememberStoredRowsRef.current?.('finance_transactions', updatedTxs, t => transactionRow(t, profileId), profileId, true);
+
+    toast({ title: 'Rule Deleted', description: 'Category rule removed.' });
+    return { error: null };
+  }, [profileId, categoryRules, mockTransactions, reapplyRules, toast]);
+
   const fetchNetWorthHistory = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) return;
     // Keyed by day: the column list carries no id, and a profile has one
@@ -1455,7 +1547,8 @@ function useProvideFinanceData() {
           creditBureausRes,
           holidayDefaultsRes,
           budgetPresetsRes,
-          selfProfileRes
+          selfProfileRes,
+          categoryRulesRes
         ] = await Promise.all([
           scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, birthday_leave_enabled, birthday_leave_rule, birthday_month, birthday_day, package_benefits, updated_at')),
           scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count, type, half_day')),
@@ -1493,7 +1586,8 @@ function useProvideFinanceData() {
           supabase
             .from('finance_profiles')
             .select(FINANCE_PROFILE_COLUMNS)
-            .order('is_self', { ascending: false })
+            .order('is_self', { ascending: false }),
+          scoped(supabase.from('finance_category_rules').select('id, profile_id, merchant_pattern, category, rename_to, created_at, updated_at'))
         ]);
         if (loadSeq !== loadSeqRef.current || profileId !== currentProfileRef.current) return;
 
@@ -1530,7 +1624,8 @@ function useProvideFinanceData() {
           ['recurring_templates', recurringTemplatesRes],
           ['credit_bureaus', creditBureausRes],
           ['holiday_defaults', holidayDefaultsRes],
-          ['budget_presets', budgetPresetsRes]
+          ['budget_presets', budgetPresetsRes],
+          ['category_rules', categoryRulesRes]
         ] as const).filter(([, res]) => res.error);
         // Applied once every collection is set, at the end of the load: if
         // mapping throws first, nothing is unblocked over unset state.
@@ -1807,6 +1902,19 @@ function useProvideFinanceData() {
           ));
         }
 
+        const loadedRules: CategoryRule[] = (categoryRulesRes?.data ?? []).map(r => ({
+          id: r.id,
+          profile_id: r.profile_id,
+          merchant_pattern: r.merchant_pattern,
+          category: r.category,
+          rename_to: r.rename_to,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        }));
+        if (!categoryRulesRes?.error) {
+          setCategoryRules(loadedRules);
+        }
+
         const userTransactions = transactionsRes.data?.filter(d => !d.is_default) || [];
         const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
         const activeTransactions = userTransactions.length > 0 ? userTransactions : defaultTransactions;
@@ -1816,10 +1924,12 @@ function useProvideFinanceData() {
           const goalId = tx.goalId && goalIdFor.get(tx.goalId);
           return goalId && goalId !== tx.goalId ? { ...tx, goalId } : tx;
         });
+        rawTransactionsRef.current = mappedTransactions;
+        const appliedTransactions = applyCategoryRules(mappedTransactions, loadedRules);
         if (!transactionsRes.error) {
-          setMockTransactions(mappedTransactions);
-          rememberStoredRows('finance_transactions', mappedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
-          markLoaded('finance_transactions', mappedTransactions);
+          setMockTransactions(appliedTransactions);
+          rememberStoredRows('finance_transactions', appliedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
+          markLoaded('finance_transactions', appliedTransactions);
         }
 
         const mapTaxConfig = (row: NonNullable<typeof taxConfigsRes.data>[number]): TaxConfig => ({
@@ -2166,6 +2276,7 @@ function useProvideFinanceData() {
     }
     storedRowsRef.current.set(table, stored);
   };
+  rememberStoredRowsRef.current = rememberStoredRows;
 
   /** Restarts the deadline of the save running for `table`'s key. */
   const markSaveProgress = (table: RowTable) => saveProgressRef.current.get(SAVE_KEY_OF[table])?.();
@@ -2946,6 +3057,10 @@ function useProvideFinanceData() {
     deleteFinanceRows,
     savingDb,
     selectedGoalId,
+    categoryRules,
+    setCategoryRules,
+    saveCategoryRule,
+    deleteCategoryRule,
     setBankAccounts,
     setBudgetCategories,
     setCreditBureaus,

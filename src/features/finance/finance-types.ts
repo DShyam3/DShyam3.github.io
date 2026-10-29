@@ -207,6 +207,7 @@ export interface MockTransaction {
   tags?: string[];
   isRecurring?: boolean;
   accountId?: string;
+  userModified?: boolean;
 }
 
 export interface TaxConfig {

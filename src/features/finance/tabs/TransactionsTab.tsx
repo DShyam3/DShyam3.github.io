@@ -22,6 +22,7 @@ import {
   AlertCircle,
   TrendingDown,
   TrendingUp,
+  Sparkles,
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -60,8 +61,9 @@ import { useMerchantLogos } from '@/features/finance/useMerchantLogos';
 import { MerchantAvatar } from '@/features/finance/components/MerchantAvatar';
 import { StatementImportDialog } from '@/features/finance/components/StatementImportDialog';
 import { TransferReviewSection } from '@/features/finance/components/TransferReviewSection';
+import { CategoryRulesDialog } from '@/features/finance/components/CategoryRulesDialog';
 import { useFinanceData } from '@/features/finance/FinanceDataContext';
-import { resolveMerchant } from '@/lib/finance';
+import { resolveMerchant, matchesCategoryRule, calculateRuleImpact } from '@/lib/finance';
 
 /* Rows drawn at once. The whole ledger on screen was 18,000+ DOM nodes at
    1,000 transactions, and opening anything over it -- the sync popover took
@@ -100,14 +102,19 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   // initial state; the params are dropped below so a refresh after changing a
   // filter does not put Home's view back.
   const [searchParams, setSearchParams] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>(() => {
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed' | 'uncategorised'>(() => {
     const status = searchParams.get('status');
-    return status === 'pending' || status === 'reviewed' ? status : 'all';
+    return status === 'pending' || status === 'reviewed' || status === 'uncategorised' ? status : 'all';
   });
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [accountFilter, setAccountFilter] = useState<string>(() => searchParams.get('account') ?? 'all');
   const [sortOrder, setSortOrder] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
+
+  // Category Rules dialog state
+  const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false);
+  const [rulesInitialPattern, setRulesInitialPattern] = useState('');
+  const [rulesInitialCategory, setRulesInitialCategory] = useState('');
 
   // Form states for manual transaction addition
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -207,6 +214,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       result = result.filter(t => !t.isReviewed);
     } else if (statusFilter === 'reviewed') {
       result = result.filter(t => t.isReviewed);
+    } else if (statusFilter === 'uncategorised') {
+      result = result.filter(t => {
+        const cat = t.category?.trim().toLowerCase();
+        return !cat || cat === 'uncategorised' || cat === 'general' || cat === 'to review';
+      });
     }
 
     // Category Filter
@@ -370,7 +382,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     if (!selectedTxId) return;
     const updated = transactions.map(tx => {
       if (tx.id === selectedTxId) {
-        return { ...tx, [field]: value };
+        const next = { ...tx, [field]: value };
+        if (field === 'category') {
+          next.userModified = true;
+          next.isReviewed = true;
+        }
+        return next;
       }
       return tx;
     });
@@ -467,7 +484,13 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   // A save never deletes (the list may predate a sync), so a delete is sent
   // by id as well as dropped from the list. If it fails, reload rather than
   // leave rows that still exist missing from the screen.
-  const { deleteFinanceRows, fetchSupabaseData } = useFinanceData();
+  const {
+    deleteFinanceRows,
+    fetchSupabaseData,
+    categoryRules,
+    saveCategoryRule,
+    deleteCategoryRule,
+  } = useFinanceData();
   const deleteTransactions = (ids: string[]) => {
     void deleteFinanceRows('finance_transactions', ids).then(ok => {
       if (!ok) void fetchSupabaseData();
@@ -614,6 +637,25 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             {/* Toolbar Buttons */}
             <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
               {syncStatus}
+              {/* Rules Dialog Trigger */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setRulesInitialPattern('');
+                  setRulesInitialCategory('');
+                  setIsRulesDialogOpen(true);
+                }}
+                className="h-9 border-border/40 rounded-lg text-xs flex items-center gap-1.5 bg-background/30 hover:bg-background/80 hover:text-foreground font-mono"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span>Rules</span>
+                {categoryRules.length > 0 && (
+                  <Badge variant="secondary" className="h-4 px-1 text-xs font-mono ml-0.5">
+                    {categoryRules.length}
+                  </Badge>
+                )}
+              </Button>
               {/* Filter Popover */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -628,7 +670,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 <PopoverContent className="w-64 bg-card border border-border/60 rounded-lg p-4 shadow-xl space-y-4 z-50 font-mono">
                   <div className="space-y-1.5">
                     <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">Status</h4>
-                    <Select value={statusFilter} onValueChange={(val: 'all' | 'pending' | 'reviewed') => setStatusFilter(val)}>
+                    <Select value={statusFilter} onValueChange={(val: 'all' | 'pending' | 'reviewed' | 'uncategorised') => setStatusFilter(val)}>
                       <SelectTrigger className="h-8 bg-background/50 border-border/40 rounded-lg text-xs font-mono">
                         <SelectValue placeholder="All status" />
                       </SelectTrigger>
@@ -636,6 +678,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         <SelectItem value="all" className="text-xs font-mono">All Review Status</SelectItem>
                         <SelectItem value="pending" className="text-xs font-mono">To Review (Pending)</SelectItem>
                         <SelectItem value="reviewed" className="text-xs font-mono">Reviewed</SelectItem>
+                        <SelectItem value="uncategorised" className="text-xs font-mono">Uncategorised / Needs Review</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1154,6 +1197,78 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   </div>
                 </div>
 
+                {/* Category Rule Helper */}
+                {(() => {
+                  const merchantCandidate = (selectedTx.merchant || resolveMerchant(selectedTx.name).label || selectedTx.name).trim();
+                  if (!merchantCandidate || !selectedTx.category) return null;
+                  const activeRule = categoryRules.find(r => matchesCategoryRule(selectedTx, r));
+                  const ruleMatchesSameCategory = activeRule && activeRule.category.toLowerCase() === selectedTx.category.toLowerCase();
+                  const quickImpact = calculateRuleImpact(transactions, {
+                    merchant_pattern: merchantCandidate,
+                    category: selectedTx.category,
+                  });
+
+                  return (
+                    <div className="surface-card bg-muted/15 border border-border/40 rounded-lg p-2.5 space-y-1.5 text-xs font-mono">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="flex items-center gap-1 font-semibold text-foreground">
+                          <Sparkles className="h-3 w-3 text-primary" />
+                          Category rule
+                        </span>
+                        {activeRule && (
+                          <Badge variant="outline" className="text-xs h-4 font-mono px-1 border-primary/30 text-primary">
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+
+                      {ruleMatchesSameCategory ? (
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground pt-0.5">
+                          <span>
+                            Pattern <strong className="text-foreground font-medium">"{activeRule.merchant_pattern}"</strong> maps to {activeRule.category}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setRulesInitialPattern(activeRule.merchant_pattern);
+                              setRulesInitialCategory(activeRule.category);
+                              setIsRulesDialogOpen(true);
+                            }}
+                            className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Edit
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 pt-0.5">
+                          <p className="text-xs text-muted-foreground">
+                            {quickImpact.unmodifiedCount > 0
+                              ? `Always assign "${selectedTx.category}" to ${quickImpact.unmodifiedCount} matching transaction${quickImpact.unmodifiedCount === 1 ? '' : 's'}?`
+                              : `Always assign "${selectedTx.category}" for future "${merchantCandidate}" transactions?`}
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={async () => {
+                              await saveCategoryRule({
+                                merchant_pattern: merchantCandidate,
+                                category: selectedTx.category,
+                              });
+                            }}
+                            className="w-full h-7 rounded text-xs font-mono flex items-center justify-center gap-1.5 border border-border/50"
+                          >
+                            <Sparkles className="h-3 w-3 text-primary" />
+                            <span>Always for this merchant</span>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Account */}
                 <div className="grid grid-cols-3 items-center gap-4">
                   <Label className="text-xs text-muted-foreground font-mono">Account</Label>
@@ -1513,6 +1628,18 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CategoryRulesDialog
+        open={isRulesDialogOpen}
+        onOpenChange={setIsRulesDialogOpen}
+        rules={categoryRules}
+        onSaveRule={saveCategoryRule}
+        onDeleteRule={deleteCategoryRule}
+        transactions={transactions}
+        allCategoryOptions={allCategoryOptions}
+        initialPattern={rulesInitialPattern}
+        initialCategory={rulesInitialCategory}
+      />
 
       {deleteDialog}
     </div>

@@ -435,6 +435,44 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_category_rules: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          merchant_pattern: string
+          profile_id: string
+          rename_to: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          merchant_pattern: string
+          profile_id: string
+          rename_to?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          merchant_pattern?: string
+          profile_id?: string
+          rename_to?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_category_rules_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_credit_bureaus: {
         Row: {
           color: string | null

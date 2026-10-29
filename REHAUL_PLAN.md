@@ -505,29 +505,14 @@ against the same countdown. A flight log is worth it only at volume.
 Phase 7 covered the ledger. These are presentation and review, and each is
 arithmetic over rows already held.
 
-- **Categorisation review queue** — surface uncertain assignments for
-  confirmation rather than assigning silently. This is the 7.P-compliant shape
-  of the feature Copilot ships; straight auto-categorisation is not
 - **Subscription audit** — price risen, or unused for N months
 - **Merchant drilldown** — spend per merchant per year, off the existing
   merchant resolution
 - **Safe to spend**, **net worth milestones**, **year in review** via 8.D
 
-**Gaps against Copilot and Treasury.** Four more, from comparing the two
+**Gaps against Copilot and Treasury.** Three more, from comparing the two
 products' feature sets. Unlike the list above, not all are arithmetic over rows
-already held: three need a table or column, and one needs a data source.
-
-- **Category rules** — "merchant X is always Y", optionally with a rename,
-  applied to future rows. Rules over rows, so 7.P holds: no model assigns
-  anything. The natural entry point is the review queue above — confirming a
-  suggestion offers "always for this merchant", which writes the rule. Needs a
-  profile-scoped `finance_category_rules` table and migration. A rule never
-  overrides a category you set by hand; the sync already keeps one, and a rule
-  must not be what breaks that. *Decide:* write the category at ingest, or
-  derive it at read time (yours, else the first matching rule, else the
-  bank's). Read time keeps one source of truth and needs no `truelayer-sync`
-  change. Either way, show how many rows a new rule would change before it
-  applies
+already held: two need a table or column, and one needs a data source.
 - **Transaction splitting** — one bank row across several categories (a shop
   that is half groceries, half household). Child rows
   `finance_transaction_splits(transaction_id, category, amount)` that sum to

@@ -7,6 +7,7 @@
  */
 
 export * from './alerts';
+export * from './category-rules';
 export * from './cash-flow';
 export * from './change-summary';
 export * from './credit';
