@@ -318,7 +318,7 @@ and filter logic; the navigation is read once and cleared.
 
 **Goals** and a "what if" scenario engine for testing a change before making it.
 
-Budget and recurring defaults are generic UK: Home section covers Rent, Council Tax, Energy, Water, Internet, Phone; Transport covers Car Insurance, Fuel, Public Transport; Entertainment includes 10 streaming services (Netflix, Prime Video, Disney+, Apple TV+, Sky, NOW, Paramount+, Discovery+, YouTube Premium, Crunchyroll); Subscriptions starts empty. Payslip employer logos are matched from experience and education rows by whole-word slug, longest match wins.
+Budget and recurring defaults are generic UK: Home section covers Rent, Council Tax, Energy, Water, Internet, Phone; Transport covers Car Insurance, Fuel, Public Transport; Entertainment includes 10 streaming services (Netflix, Prime Video, Disney+, Apple TV+, Sky, NOW, Paramount+, Discovery+, YouTube Premium, Crunchyroll); Subscriptions starts empty. Payslip employer logos are matched from experience and education rows by whole-word slug (with support for configured experience `aliases`, camelCase/unspaced compound names, and multi-word initialisms of 3 or more letters), longest match wins.
 
 ### Wealth
 
@@ -397,7 +397,9 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   (Normal, Include Paid Leave, Exclude Paid Leave); another selects the period shown
   (Annual, Monthly, Weekly, Daily, Hourly). On narrower screens, the table shows one
   period at a time via the switch, so it never scrolls sideways. Pension contributions
-  show their type: Net pay arrangement, Salary sacrifice, or Relief at source
+  show their type: Net pay arrangement, Salary sacrifice, or Relief at source.
+  A Take-home by tax band card under Breakdown Rates shows the same figures
+  sliced by tax band (see Tax calculator).
 - **Payslips** — stored with line items, viewable natively, extracted from PDF
   in the browser. A PDF attached in the add or edit form is read and parsed before
   saving; the date, employer and any blank or zero fields are filled from the PDF
@@ -437,6 +439,20 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   it has all gone); and the two cliffs, childcare support at £100,000 and
   marriage allowance eligibility, each with what one more pound costs. A note
   under the children field states the clawback and the childcare cliff.
+
+  A **Take-home by tax band** card, also on Tax & Income, shows how each slice
+  of gross pay is split between income tax, National Insurance, student loans
+  and pension, and how much of it you keep. Slices break wherever a rate
+  changes: the personal allowance, each tax band (Scotland's six included), the
+  £100,000–£125,140 allowance taper, the NI thresholds and each student loan
+  threshold. A pension contribution or benefit in kind that spans a threshold
+  is split there too, so no row shows an averaged rate. A toggle switches
+  between **After pension & benefits** and **Salary only**. The headline gives
+  take-home as a share of cash pay, with a coloured bar and legend for each
+  deduction's share. Pension and benefit-in-kind rows show the change they make
+  to cash take-home, which is negative when they cost cash; benefit-in-kind
+  rows are labelled as tax from cash pay. When the tax code already collects
+  benefit-in-kind tax, the card says so.
 
   A chart switches between the marginal rate across incomes from £0 to £200,000
   (wider for higher incomes) and take-home against gross, with your income marked,

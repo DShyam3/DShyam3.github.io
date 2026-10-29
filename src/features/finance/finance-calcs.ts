@@ -160,6 +160,10 @@ export const calculateFinance = (
     .reduce((sum, b) => sum + taxableValueOf(b), 0);
   const benefitTaxCollectedByCode =
     benefitInKindValue > 0 && ukBasePersonalAllowance(statedPersonalAllowance) < UK_STATUTORY_PERSONAL_ALLOWANCE;
+  const taxInput: UkTaxInput = {
+    ...salaryInput,
+    benefitsInKind: benefitTaxCollectedByCode ? 0 : benefitInKindValue,
+  };
   const benefitTax = ukBenefitInKindTax(salaryInput, benefitInKindValue);
   const benefitTaxDeduction = benefitTaxCollectedByCode ? 0 : benefitTax;
 
@@ -207,6 +211,7 @@ export const calculateFinance = (
   });
 
   return {
+    taxInput,
     personalPensionRate,
     employerPensionRate,
     totalBenefitsValue,

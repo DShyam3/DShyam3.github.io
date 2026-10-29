@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hasBirthdaySickOverlap,
   BIRTHDAY_LEAVE_RULES,
   BIRTHDAY_LEAVE_RULE_LABELS,
   OPTIMAL_LEAVE_BIASES,
@@ -1029,5 +1030,144 @@ describe('removeHolidayWithBirthdayRestoration', () => {
     Object.freeze(holidays);
     expect(removeHolidayWithBirthdayRestoration(holidays, birthday.id)).toEqual([{ ...host, count: 1 }]);
     expect(holidays).toEqual([{ ...host, count: 0 }, birthday]);
+  });
+});
+
+describe('birthday host counts and overlapping leave', () => {
+  const host = { id: 'host', startDate: '2026-06-08', endDate: '2026-06-12', occasion: 'Trip', count: 3.5 };
+  const birthday = { id: 'birthday', startDate: '2026-06-10', endDate: '2026-06-10', occasion: 'Birthday', count: 1, type: 'birthday' as const };
+
+  it('preserves a custom host count when attaching and detaching a full birthday', () => {
+    expect(adjustHolidayCountForBirthday(host.count, birthday.count, true)).toBe(2.5);
+    expect(adjustHolidayCountForBirthday(host.count, birthday.count, false)).toBe(4.5);
+  });
+
+  it('adjusts by only half a day for a half birthday and rejects a negative host count', () => {
+    expect(adjustHolidayCountForBirthday(host.count, 0.5, true)).toBe(3);
+    expect(adjustHolidayCountForBirthday(host.count, 0.5, false)).toBe(4);
+    expect(adjustHolidayCountForBirthday(-1, birthday.count, true)).toBeNull();
+  });
+
+  it('returns the full or half birthday fraction when deleting an attached entry', () => {
+    expect(removeHolidayWithBirthdayRestoration([host, birthday], birthday.id)).toEqual([{ ...host, count: 4.5 }]);
+    expect(removeHolidayWithBirthdayRestoration([host, { ...birthday, count: 0.5, halfDay: 'pm' }], birthday.id)).toEqual([{ ...host, count: 4 }]);
+  });
+
+  it('handles empty input, a standalone birthday and deletion of the host', () => {
+    expect(removeHolidayWithBirthdayRestoration([], 'missing')).toEqual([]);
+    expect(removeHolidayWithBirthdayRestoration([birthday], birthday.id)).toEqual([]);
+    expect(removeHolidayWithBirthdayRestoration([host, birthday], host.id)).toEqual([birthday]);
+    expect(removeHolidayWithBirthdayRestoration([host], 'missing')).toEqual([host]);
+  });
+
+  it('does not restore a deleted half birthday to the opposite half holiday', () => {
+    const morning = { ...host, startDate: birthday.startDate, endDate: birthday.endDate, halfDay: 'am' as const, count: 0.5 };
+    expect(removeHolidayWithBirthdayRestoration([morning, { ...birthday, count: 0.5, halfDay: 'pm' }], birthday.id)).toEqual([morning]);
+  });
+
+  it('prevents sick and birthday overlaps symmetrically while allowing opposite halves', () => {
+    const sick = { ...birthday, id: 'sick', type: 'sick' as const };
+    expect(hasBirthdaySickOverlap([], birthday)).toBe(false);
+    expect(hasBirthdaySickOverlap([sick], birthday)).toBe(true);
+    expect(hasBirthdaySickOverlap([birthday], sick)).toBe(true);
+    expect(hasBirthdaySickOverlap([sick], birthday, sick.id)).toBe(false);
+    expect(hasBirthdaySickOverlap([{ ...sick, halfDay: 'am' }], { ...birthday, halfDay: 'pm' })).toBe(false);
+    expect(hasBirthdaySickOverlap([{ ...sick, halfDay: 'am' }], { ...birthday, halfDay: 'am' })).toBe(true);
+    expect(hasBirthdaySickOverlap([sick], { ...birthday, startDate: '2026-07-10', endDate: '2026-07-10' })).toBe(false);
+  });
+
+  it('deduplicates legacy full sick and birthday days without changing sick rows', () => {
+    const sick = { ...birthday, id: 'sick', type: 'sick' as const };
+    expect(getBookedDaysForMonth([sick, birthday], 2026, 5, [])).toEqual([
+      { day: 10, occasion: 'Birthday', type: 'birthday', fraction: 1 },
+    ]);
+    expect(sick.count).toBe(1);
+  });
+
+  it('keeps the remaining half of full sick or holiday days beside a half birthday', () => {
+    for (const type of ['holiday', 'sick'] as const) {
+      const other = { ...birthday, id: 'other', occasion: 'Other', type };
+      const booked = getBookedDaysForMonth([other, { ...birthday, halfDay: 'am' }], 2026, 5, []);
+      expect(booked).toContainEqual({ day: 10, occasion: 'Other', type, fraction: 0.5, halfDay: 'pm' });
+      expect(booked.reduce((sum, day) => sum + day.fraction, 0)).toBe(1);
+      expect(getBookedDaysForMonth([{ ...other, halfDay: 'am' }, { ...birthday, halfDay: 'am' }], 2026, 5, [])).toHaveLength(1);
+      expect(getBookedDaysForMonth([{ ...other, halfDay: 'pm' }, { ...birthday, halfDay: 'am' }], 2026, 5, [])).toHaveLength(2);
+    }
+  });
+});
+
+describe('remaining birthday recommendations', () => {
+  const options = { year: 2026, annualAllowance: 0, birthdayLeaveEnabled: true, birthdayLeaveRule: 'exact_or_nearest' as const, birthday: { month: 5, day: 6 } };
+
+  it('recommends a standalone birthday when its bridge exceeds zero or negative allowance', () => {
+    for (const annualAllowance of [0, -1]) {
+      const plan = planOptimalHolidays({ ...options, annualAllowance });
+      const selected = plan.bridges.filter(bridge => bridge.recommended);
+      expect(selected).toHaveLength(1);
+      expect(selected[0].birthdayDayDate).toBe('2026-05-06');
+      expect(selected[0].leaveDaysRequired).toBe(0);
+      expect(plan.recommendedUsesBirthday).toBe(true);
+      expect(plan.recommendedLeaveDays).toBe(0);
+    }
+  });
+
+  it('uses the birthday once when an affordable bridge includes it', () => {
+    const plan = planOptimalHolidays({ ...options, annualAllowance: 25 });
+    expect(plan.bridges.filter(bridge => bridge.recommended && bridge.usesBirthdayDay)).toHaveLength(1);
+    expect(plan.bridges.find(bridge => bridge.label === 'Birthday Day Off Break')).toBeUndefined();
+  });
+
+  it('excludes sick days from dates to book without consuming annual allowance', () => {
+    const plan = planOptimalHolidays({ year: 2026, annualAllowance: 4, existingHolidays: [
+      { id: 'sick', startDate: '2026-05-05', endDate: '2026-05-05', occasion: 'Sick', count: 10, type: 'sick' },
+    ] });
+    expect(plan.bridges.every(bridge => !bridge.datesToBook.includes('2026-05-05'))).toBe(true);
+    expect(plan.recommendedLeaveDays).toBeGreaterThan(0);
+    expect(plan.recommendedLeaveDays + plan.remainingAllowanceAfterPlan).toBe(4);
+  });
+
+  it('never counts a sick day inside a suggested holiday break', () => {
+    const sickDate = '2026-05-05';
+    const plan = planOptimalHolidays({ ...options, annualAllowance: 25, existingHolidays: [
+      { id: 'sick', startDate: sickDate, endDate: sickDate, occasion: 'Sick', count: 1, type: 'sick' },
+    ] });
+    expect(plan.bridges.length).toBeGreaterThan(0);
+    expect(plan.bridges.every(bridge => sickDate < bridge.breakStartDate || sickDate > bridge.breakEndDate)).toBe(true);
+  });
+
+  it('does not extend a standalone birthday through adjacent sick leave', () => {
+    const plan = planOptimalHolidays({ ...options, existingHolidays: [
+      { id: 'sick', startDate: '2026-05-05', endDate: '2026-05-05', occasion: 'Sick', count: 1, type: 'sick' },
+    ] });
+    const birthday = plan.bridges.find(bridge => bridge.recommended && bridge.usesBirthdayDay);
+    expect(birthday?.breakStartDate).toBe('2026-05-06');
+    expect(birthday?.totalDaysOff).toBe(1);
+  });
+
+  it('does not suggest an already booked sick or holiday birthday date', () => {
+    for (const type of ['sick', 'holiday', 'birthday'] as const) {
+      const plan = planOptimalHolidays({ ...options, existingHolidays: [
+        { id: 'booked', startDate: '2026-05-06', endDate: '2026-05-06', occasion: 'Booked', count: 1, type },
+      ] });
+      expect(plan.recommendedUsesBirthday).toBe(false);
+    }
+  });
+
+  it('allows a floating birthday without a configured birth date and with no allowance', () => {
+    const plan = planOptimalHolidays({ ...options, birthdayLeaveRule: 'anytime', birthday: null, asOfDate: '2026-12-31' });
+    expect(plan.bridges.find(bridge => bridge.recommended)?.birthdayDayDate).toBe('2026-12-31');
+  });
+
+  it('respects the as-of date and does not move a birthday past its eligible window', () => {
+    expect(planOptimalHolidays({ ...options, asOfDate: '2026-05-06' }).recommendedUsesBirthday).toBe(true);
+    expect(planOptimalHolidays({ ...options, asOfDate: '2026-05-07' }).recommendedUsesBirthday).toBe(false);
+    expect(planOptimalHolidays({ ...options, asOfDate: '2026-06-01' }).recommendedUsesBirthday).toBe(false);
+  });
+
+  it('keeps year-end birthday booking in the leave year while its break spans New Year', () => {
+    const plan = planOptimalHolidays({ ...options, birthday: { month: 12, day: 31 }, asOfDate: '2026-12-31' });
+    const birthday = plan.bridges.find(bridge => bridge.recommended);
+    expect(birthday?.birthdayDayDate).toBe('2026-12-31');
+    expect(birthday?.breakEndDate).toBe('2027-01-03');
   });
 });

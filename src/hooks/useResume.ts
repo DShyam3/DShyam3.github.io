@@ -11,6 +11,8 @@ export interface Experience {
   description?: string;
   /** How the role was held -- 'Full-time', 'Contract', 'Internship', ... */
   employment_type?: string;
+  /** Other names for the same role -- e.g. the payroll or agency company on contract payslips. */
+  aliases?: string[];
   order: number;
 }
 
@@ -63,8 +65,9 @@ export function useExperience() {
     },
     removeExperience: removeItem,
     updateExperience: (key: string, updates: Partial<Experience>) => {
+      const existing = data.find(r => r.key === key)?.metadata;
       const { order, ...metadataUpdates } = updates;
-      return updateItem({ id: key, updates: { ...(order !== undefined ? { order } : {}), metadata: metadataUpdates } });
+      return updateItem({ id: key, updates: { ...(order !== undefined ? { order } : {}), metadata: { ...existing, ...metadataUpdates } } });
     },
   };
 }

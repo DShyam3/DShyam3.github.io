@@ -46,6 +46,14 @@ export const formatGBP = (num: number) => {
   }).format(num);
 };
 
+export const formatWholeGBP = (num: number) => {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    maximumFractionDigits: 0,
+  }).format(num);
+};
+
 export const stripNumberFormatting = (value: string) => value.replace(/,/g, '');
 
 export const formatNumberInput = (value: string | number) => {

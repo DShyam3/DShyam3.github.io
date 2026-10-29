@@ -6,6 +6,7 @@ import {
   firstRepaymentDue,
   incomeByTaxYear,
   inferCourseEnd,
+  isBorrowing,
   normaliseRatePercent,
   rateRowInForce,
   simulateStudentLoan,
@@ -1396,7 +1397,39 @@ describe('balanceOnMonth', () => {
   });
 });
 
+describe('isBorrowing', () => {
+  it('recognises explicit and legacy borrowing rows', () => {
+    expect(isBorrowing({ kind: 'borrowing' })).toBe(true);
+    expect(isBorrowing({})).toBe(true);
+  });
+
+  it('excludes refunds and payments', () => {
+    expect(isBorrowing({ kind: 'refund' })).toBe(false);
+    expect(isBorrowing({ kind: 'payment' })).toBe(false);
+  });
+
+  it('keeps row classification separate from amount and date validation', () => {
+    const draw = { kind: 'borrowing' as const, date: '', amount: -100 };
+    expect(isBorrowing(draw)).toBe(true);
+    expect(studentLoanBorrowed({ draws: [draw], originalAmount: 500 }))
+      .toEqual({ total: 500, source: 'entered', count: 0 });
+  });
+});
+
 describe('studentLoanBorrowed', () => {
+  it('rounds the combined valid borrowing across the tax-year boundary', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 999,
+      draws: [
+        { date: '2026-04-05', amount: 0.104 },
+        { date: '2026-04-06', amount: 0.104, kind: 'borrowing' },
+        { date: '2026-04-06', amount: -100 },
+        { date: '2026-02-30', amount: 100 },
+        { date: '2026-04-06', amount: 100, kind: 'refund' },
+      ],
+    })).toEqual({ total: 0.21, source: 'draws', count: 2, first: '2026-04-05', last: '2026-04-06' });
+  });
+
   it('sums recorded borrowing and reports its span', () => {
     expect(studentLoanBorrowed({
       originalAmount: 1,

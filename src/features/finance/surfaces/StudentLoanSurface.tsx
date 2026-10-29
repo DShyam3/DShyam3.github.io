@@ -46,7 +46,8 @@ import {
   type StudentLoanSimResult,
 } from '@/lib/finance';
 import { useFinanceData } from '../FinanceDataContext';
-import { isBorrowing, isStudentLoanDebt, useDebtMutations } from '../useDebtMutations';
+import { isBorrowing } from '@/lib/finance/student-loan';
+import { isStudentLoanDebt, useDebtMutations } from '../useDebtMutations';
 import { useStudentLoanRules } from '../useStudentLoanRules';
 import { SurfaceHero } from '../components/SurfaceHero';
 import { DebtFormDialog } from '../components/DebtFormDialog';

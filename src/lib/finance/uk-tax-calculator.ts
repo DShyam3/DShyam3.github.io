@@ -111,6 +111,73 @@ export interface UkIncomeBand {
   to: number;
 }
 
+export type UkPaySliceKind = 'income' | 'pension' | 'benefit-in-kind';
+
+export interface UkPaySlice {
+  kind: UkPaySliceKind;
+  /** Lower bound of this slice in £/yr. */
+  from: number;
+  /** Upper bound of this slice in £/yr (`to > from`). */
+  to: number;
+  /** Width of this slice in £/yr (`to - from`). */
+  gross: number;
+  /** Income tax on this slice, £/yr. */
+  incomeTax: number;
+  /** National Insurance (Class 1 or Class 4) on this slice, £/yr. */
+  nationalInsurance: number;
+  /** Combined undergraduate + postgraduate student loan on this slice, £/yr. */
+  studentLoan: number;
+  /** Cash leaving pay into the pension on this slice, £/yr (`0.8 * gross` under relief at source). */
+  pension: number;
+  /** Change in cash take-home from this slice, £/yr; negative when pension deductions or BIK tax reduce cash. */
+  kept: number;
+  /** Cash take-home change divided by `gross`; may be negative. */
+  keptRate: number;
+  /** Marginal rates on this slice, each clamped to `[0, 1]`. */
+  incomeTaxRate: number;
+  nationalInsuranceRate: number;
+  studentLoanRate: number;
+  pensionRate: number;
+}
+
+export interface UkTakeHomeShares {
+  /** Each share is in `[0, 1]` (`amount / income`, or `0` when `income <= 0`), with `takeHome` clamped to `[0, 1]`. */
+  takeHome: number;
+  pension: number;
+  incomeTax: number;
+  nationalInsurance: number;
+  studentLoan: number;
+}
+
+export interface UkTakeHomeSummary {
+  /** Sanitised gross cash pay (`income`), £/yr. */
+  income: number;
+  /** Sanitised taxable benefits in kind included in this calculation, £/yr (`0` when excluded or self-employed). */
+  benefitsInKind: number;
+  /** Gross pension contribution included in this calculation, £/yr (`0` when excluded). */
+  pensionContribution: number;
+  /** Total cash leaving pay for the pension (`pensionFromPay`), £/yr. */
+  pensionFromPay: number;
+  /** Total income tax (including BIK tax when included), £/yr. */
+  incomeTax: number;
+  /** Total National Insurance, £/yr. */
+  nationalInsurance: number;
+  /** Total student loan (undergrad + postgrad), £/yr. */
+  studentLoan: number;
+  /** Total deductions from cash pay (`pensionFromPay + incomeTax + nationalInsurance + studentLoan`), £/yr. */
+  totalDeductions: number;
+  /** Cash pay left after `totalDeductions`, clamped at `0` (`Math.max(0, income - totalDeductions)`), £/yr. */
+  takeHome: number;
+  /** Unclamped cash pay left (`income - totalDeductions`), £/yr — matches `calculateUkTax` (with `children: 0`). */
+  rawTakeHome: number;
+  /** Fraction of `income` kept (`takeHome / income`, clamped to `[0, 1]`; `0` when `income <= 0`). */
+  takeHomeRate: number;
+  /** Per-category shares of `income` (`[0, 1]`) for the stacked bar and legend. */
+  shares: UkTakeHomeShares;
+  /** Ordered slices from £0 up through salary, pension and benefits in kind. */
+  slices: UkPaySlice[];
+}
+
 /** The tax year the rule set below describes. */
 export const UK_TAX_YEAR_LABEL = '2026/27';
 
@@ -627,4 +694,266 @@ export const ukTaxCurve = (input: UkTaxInput, opts: { maxIncome: number; step: n
     });
   }
   return points;
+};
+
+const MIN_SLICE_WIDTH = 1;
+
+/** Taxable income at which `taxOnBands(taxable, bands)` reaches `targetTax`. */
+const taxableAtTax = (targetTax: number, bands: Band[]): number => {
+  if (targetTax <= 0) return 0;
+  let remaining = targetTax;
+  let lower = 0;
+  for (const band of bands) {
+    const width = band.limit - lower;
+    const maxTax = width * band.rate;
+    if (remaining <= maxTax) {
+      return band.rate > 0 ? lower + remaining / band.rate : lower;
+    }
+    remaining -= maxTax;
+    lower = band.limit;
+  }
+  return lower;
+};
+
+/**
+ * Total-income (`pay + bik`) points where marginal income tax changes, given a
+ * fixed `allowance` and fixed `rasGross`.
+ */
+const totalIncomeTaxThresholds = (
+  allowance: number,
+  rasGross: number,
+  region: UkTaxRegion,
+  marriageAllowanceEligible: boolean,
+): number[] => {
+  const bands = bandsFor(region, rasGross);
+  const taperStartTotal = RULES.taperStart + rasGross;
+  const taperEndTotal = taperStartTotal + allowance / RULES.taperRate;
+  const thresholds: number[] = [];
+
+  if (allowance > 0) {
+    thresholds.push(taperStartTotal, taperEndTotal);
+  }
+
+  const taxableTargets: number[] = [];
+  if (allowance > 0) {
+    taxableTargets.push(0);
+  }
+  if (marriageAllowanceEligible) {
+    taxableTargets.push(taxableAtTax(RULES.marriageAllowanceReduction, bands));
+  }
+  for (const band of bands) {
+    if (Number.isFinite(band.limit)) {
+      taxableTargets.push(band.limit);
+    }
+  }
+
+  for (const target of taxableTargets) {
+    const preTaper = allowance + target;
+    if (preTaper <= taperStartTotal) {
+      thresholds.push(preTaper);
+    }
+    if (allowance > 0) {
+      const inTaper = (target + allowance + RULES.taperRate * taperStartTotal) / (1 + RULES.taperRate);
+      if (inTaper > taperStartTotal && inTaper < taperEndTotal) {
+        thresholds.push(inTaper);
+      }
+    }
+    if (target >= taperEndTotal) {
+      thresholds.push(target);
+    }
+  }
+
+  return thresholds;
+};
+
+/** NI and active student-loan thresholds on `contributionBase`. */
+const niAndLoanThresholds = (r: Resolved): number[] => {
+  const out: number[] = [RULES.niLower, RULES.niUpper];
+  if (r.plan !== 'none') {
+    out.push(RULES.undergradThreshold[r.plan]);
+  }
+  if (r.postgrad) {
+    out.push(RULES.postgradThreshold);
+  }
+  return out;
+};
+
+/**
+ * Splits `[start, end]` at sorted interior thresholds, dropping any interior
+ * split that would leave a slice narrower than `MIN_SLICE_WIDTH` (£1).
+ */
+const partitionStage = (start: number, end: number, rawThresholds: number[]): Array<[number, number]> => {
+  if (end <= start) return [];
+  const sorted = rawThresholds
+    .filter(t => Number.isFinite(t) && t > start && t < end)
+    .sort((a, b) => a - b);
+  const points: number[] = [start];
+  for (const t of sorted) {
+    const prev = points[points.length - 1];
+    if (t - prev >= MIN_SLICE_WIDTH && end - t >= MIN_SLICE_WIDTH) {
+      points.push(t);
+    }
+  }
+  points.push(end);
+  const pairs: Array<[number, number]> = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    pairs.push([points[i], points[i + 1]]);
+  }
+  return pairs;
+};
+
+const buildSlice = (
+  kind: UkPaySliceKind,
+  from: number,
+  to: number,
+  before: UkTaxBreakdown,
+  after: UkTaxBreakdown,
+): UkPaySlice => {
+  const gross = to - from;
+  const incomeTax = Math.max(0, after.incomeTax - before.incomeTax);
+  const nationalInsurance = Math.max(0, after.nationalInsurance - before.nationalInsurance);
+  const studentLoan = Math.max(0, after.studentLoan + after.postgradLoan - (before.studentLoan + before.postgradLoan));
+  const pension = Math.max(0, after.pensionFromPay - before.pensionFromPay);
+  const kept = after.takeHome - before.takeHome;
+  const rateOf = (amount: number): number => (gross > 0 ? clamp(amount / gross, 0, 1) : 0);
+  return {
+    kind,
+    from,
+    to,
+    gross,
+    incomeTax,
+    nationalInsurance,
+    studentLoan,
+    pension,
+    kept,
+    keptRate: gross > 0 ? kept / gross : 0,
+    incomeTaxRate: rateOf(incomeTax),
+    nationalInsuranceRate: rateOf(nationalInsurance),
+    studentLoanRate: rateOf(studentLoan),
+    pensionRate: rateOf(pension),
+  };
+};
+
+/**
+ * Breaks `input` down into contiguous slices across every income tax, National
+ * Insurance, and student loan threshold, followed by the pension slice and any
+ * taxable benefit-in-kind slices, plus the summary totals and shares of cash
+ * pay.
+ *
+ * When `opts.includePensionAndBenefits` is `false`, `pensionContribution` and
+ * `benefitsInKind` are zeroed before computing so the caller can toggle between
+ * salary-only and full-package views without doing arithmetic in a component.
+ */
+export const ukTakeHomeBySlice = (
+  input: UkTaxInput,
+  opts?: { includePensionAndBenefits?: boolean },
+): UkTakeHomeSummary => {
+  const include = opts?.includePensionAndBenefits ?? true;
+  const effectiveInput: UkTaxInput = include
+    ? input
+    : { ...input, pensionContribution: 0, benefitsInKind: 0 };
+  const r = resolve({ ...effectiveInput, children: 0, childcareSupport: 0 });
+  const full = compute(r, { smooth: false });
+  const mode: Mode = { smooth: false, marriageAllowanceEligible: full.marriageAllowanceEligible };
+
+  const slices: UkPaySlice[] = [];
+  const payEnd = r.income - r.contribution;
+
+  // Stage 1: cash salary after pension (`0` -> `payEnd`), with `contribution = 0, bik = 0`.
+  if (payEnd > 0) {
+    const thresholds = [
+      ...totalIncomeTaxThresholds(r.allowance, 0, r.region, full.marriageAllowanceEligible),
+      ...niAndLoanThresholds(r),
+    ];
+    const stateAt = (x: number): Resolved => ({ ...r, income: x, contribution: 0, bik: 0 });
+    for (const [a, b] of partitionStage(0, payEnd, thresholds)) {
+      slices.push(
+        buildSlice('income', a, b, compute(stateAt(a), mode).breakdown, compute(stateAt(b), mode).breakdown),
+      );
+    }
+  }
+
+  // Stage 2: pension slice (`payEnd` -> `r.income`), with `contribution = x - payEnd, bik = 0`.
+  if (r.contribution > 0) {
+    const thresholds: number[] = [];
+    if (r.method === 'net-pay') {
+      thresholds.push(...niAndLoanThresholds(r));
+    } else if (r.method === 'relief-at-source') {
+      thresholds.push(...niAndLoanThresholds(r));
+      const paAtPayEnd = compute({ ...r, income: payEnd, contribution: 0, bik: 0 }, mode).breakdown.personalAllowance;
+      thresholds.push(paAtPayEnd);
+      if (full.marriageAllowanceEligible) {
+        thresholds.push(paAtPayEnd + taxableAtTax(RULES.marriageAllowanceReduction, RULES.bands[r.region]));
+      }
+      const unextendedCount = RULES.firstExtendedBand[r.region];
+      for (let i = 0; i < unextendedCount; i++) {
+        const limit = RULES.bands[r.region][i].limit;
+        if (Number.isFinite(limit)) {
+          thresholds.push(paAtPayEnd + limit);
+        }
+      }
+    }
+    const stateAt = (x: number): Resolved => ({ ...r, income: x, contribution: x - payEnd, bik: 0 });
+    for (const [a, b] of partitionStage(payEnd, r.income, thresholds)) {
+      slices.push(
+        buildSlice('pension', a, b, compute(stateAt(a), mode).breakdown, compute(stateAt(b), mode).breakdown),
+      );
+    }
+  }
+
+  // Stage 3: taxable benefits in kind (`0` -> `r.bik`), reported on top of `r.income`.
+  if (r.bik > 0) {
+    const pay = r.income - preTaxDeductionOf(r);
+    const rasGross = rasGrossOf(r);
+    const bikThresholds = totalIncomeTaxThresholds(
+      r.allowance,
+      rasGross,
+      r.region,
+      full.marriageAllowanceEligible,
+    ).map(total => total - pay);
+    const stateAt = (b: number): Resolved => ({ ...r, income: r.income, contribution: r.contribution, bik: b });
+    for (const [bFrom, bTo] of partitionStage(0, r.bik, bikThresholds)) {
+      slices.push(
+        buildSlice(
+          'benefit-in-kind',
+          r.income + bFrom,
+          r.income + bTo,
+          compute(stateAt(bFrom), mode).breakdown,
+          compute(stateAt(bTo), mode).breakdown,
+        ),
+      );
+    }
+  }
+
+  const b = full.breakdown;
+  const incomeTax = b.incomeTax;
+  const nationalInsurance = b.nationalInsurance;
+  const studentLoan = b.studentLoan + b.postgradLoan;
+  const pensionFromPay = b.pensionFromPay;
+  const totalDeductions = pensionFromPay + incomeTax + nationalInsurance + studentLoan;
+  const rawTakeHome = r.income - totalDeductions;
+  const takeHome = Math.max(0, rawTakeHome);
+  const shareOf = (n: number): number => (r.income > 0 ? clamp(n / r.income, 0, 1) : 0);
+
+  return {
+    income: r.income,
+    benefitsInKind: r.bik,
+    pensionContribution: r.contribution,
+    pensionFromPay,
+    incomeTax,
+    nationalInsurance,
+    studentLoan,
+    totalDeductions,
+    takeHome,
+    rawTakeHome,
+    takeHomeRate: shareOf(takeHome),
+    shares: {
+      takeHome: shareOf(takeHome),
+      pension: shareOf(pensionFromPay),
+      incomeTax: shareOf(incomeTax),
+      nationalInsurance: shareOf(nationalInsurance),
+      studentLoan: shareOf(studentLoan),
+    },
+    slices,
+  };
 };

@@ -6,6 +6,7 @@ import {
   ukCashAfterTax,
   ukChildBenefitBand,
   ukMarginalRate,
+  ukTakeHomeBySlice,
   ukTaxCliffs,
   ukTaxCurve,
   UK_CHILDCARE_CUTOFF,
@@ -16,6 +17,7 @@ import {
   UK_STATUTORY_PERSONAL_ALLOWANCE,
   UK_TAX_YEAR_LABEL,
   type UkIncomeBand,
+  type UkPaySlice,
   type UkTaxBreakdown,
   type UkTaxInput,
 } from './uk-tax-calculator';
@@ -1395,5 +1397,389 @@ describe('ukCashAfterTax', () => {
     const copy = { ...i };
     ukCashAfterTax(i, 5000);
     expect(i).toEqual(copy);
+  });
+});
+
+describe('ukTakeHomeBySlice', () => {
+  const sumField = (slices: UkPaySlice[], pick: (s: UkPaySlice) => number): number =>
+    slices.reduce((acc, s) => acc + pick(s), 0);
+
+  const assertSliceInvariants = (i: UkTaxInput, opts?: { includePensionAndBenefits?: boolean }) => {
+    const summary = ukTakeHomeBySlice(i, opts);
+    const include = opts?.includePensionAndBenefits ?? true;
+    const expectedCalc = calculateUkTax({
+      ...i,
+      children: 0,
+      childcareSupport: 0,
+      pensionContribution: include ? i.pensionContribution : 0,
+      benefitsInKind: include ? i.benefitsInKind : 0,
+    });
+
+    expect(summary.incomeTax).toBeCloseTo(expectedCalc.incomeTax, money);
+    expect(summary.nationalInsurance).toBeCloseTo(expectedCalc.nationalInsurance, money);
+    expect(summary.studentLoan).toBeCloseTo(expectedCalc.studentLoan + expectedCalc.postgradLoan, money);
+    expect(summary.pensionFromPay).toBeCloseTo(expectedCalc.pensionFromPay, money);
+    expect(summary.rawTakeHome).toBeCloseTo(expectedCalc.takeHome, money);
+    expect(summary.takeHome).toBeCloseTo(Math.max(0, expectedCalc.takeHome), money);
+
+    expect(sumField(summary.slices, s => s.incomeTax)).toBeCloseTo(summary.incomeTax, money);
+    expect(sumField(summary.slices, s => s.nationalInsurance)).toBeCloseTo(summary.nationalInsurance, money);
+    expect(sumField(summary.slices, s => s.studentLoan)).toBeCloseTo(summary.studentLoan, money);
+    expect(sumField(summary.slices, s => s.pension)).toBeCloseTo(summary.pensionFromPay, money);
+    expect(sumField(summary.slices, s => s.kept)).toBeCloseTo(summary.rawTakeHome, money);
+
+    for (let idx = 0; idx < summary.slices.length; idx++) {
+      const s = summary.slices[idx];
+      expect(s.to).toBeGreaterThan(s.from);
+      expect(s.gross).toBeCloseTo(s.to - s.from, 6);
+      if (idx > 0) {
+        expect(s.from).toBeCloseTo(summary.slices[idx - 1].to, 6);
+      }
+      expect(Number.isFinite(s.keptRate)).toBe(true);
+      expect(s.keptRate).toBeCloseTo(s.kept / s.gross, 9);
+      for (const r of [s.incomeTaxRate, s.nationalInsuranceRate, s.studentLoanRate, s.pensionRate]) {
+        expect(Number.isFinite(r)).toBe(true);
+        expect(r).toBeGreaterThanOrEqual(0);
+        expect(r).toBeLessThanOrEqual(1);
+      }
+    }
+    return summary;
+  };
+
+  it('splits a basic rUK salary (£50,000, £60,000, £150,000) across exact thresholds and rates', () => {
+    const s50 = assertSliceInvariants(input({ income: 50_000 }));
+    expect(s50.slices.map(s => [s.from, s.to, s.kind])).toEqual([
+      [0, 12_570, 'income'],
+      [12_570, 50_000, 'income'],
+    ]);
+    expect(s50.slices[0].keptRate).toBe(1);
+    expect(s50.slices[1].incomeTaxRate).toBeCloseTo(0.2, 6);
+    expect(s50.slices[1].nationalInsuranceRate).toBeCloseTo(0.08, 6);
+    expect(s50.slices[1].keptRate).toBeCloseTo(0.72, 6);
+
+    const s60 = assertSliceInvariants(input({ income: 60_000 }));
+    expect(s60.slices.map(s => [s.from, s.to])).toEqual([
+      [0, 12_570],
+      [12_570, 50_270],
+      [50_270, 60_000],
+    ]);
+    expect(s60.slices[2].incomeTaxRate).toBeCloseTo(0.4, 6);
+    expect(s60.slices[2].nationalInsuranceRate).toBeCloseTo(0.02, 6);
+    expect(s60.slices[2].keptRate).toBeCloseTo(0.58, 6);
+
+    const s150 = assertSliceInvariants(input({ income: 150_000 }));
+    expect(s150.slices.map(s => [s.from, s.to])).toEqual([
+      [0, 12_570],
+      [12_570, 50_270],
+      [50_270, 100_000],
+      [100_000, 125_140],
+      [125_140, 150_000],
+    ]);
+    expect(s150.slices[3].incomeTaxRate).toBeCloseTo(0.6, 6);
+    expect(s150.slices[3].nationalInsuranceRate).toBeCloseTo(0.02, 6);
+    expect(s150.slices[3].keptRate).toBeCloseTo(0.38, 6);
+    expect(s150.slices[4].incomeTaxRate).toBeCloseTo(0.45, 6);
+    expect(s150.slices[4].nationalInsuranceRate).toBeCloseTo(0.02, 6);
+    expect(s150.slices[4].keptRate).toBeCloseTo(0.53, 6);
+  });
+
+  it('returns a single row when income stays within the personal allowance', () => {
+    const s = assertSliceInvariants(input({ income: 10_000 }));
+    expect(s.slices).toHaveLength(1);
+    expect(s.slices[0].from).toBe(0);
+    expect(s.slices[0].to).toBe(10_000);
+    expect(s.slices[0].kept).toBe(10_000);
+    expect(s.slices[0].keptRate).toBe(1);
+  });
+
+  it('splits across all six Scottish bands and NI thresholds', () => {
+    const s = assertSliceInvariants(input({ income: 150_000, region: 'scotland' }));
+    // Thresholds: 12,570 (PA + NI lower), 16,537 (19%->20%), 29,526 (20%->21%),
+    // 43,662 (21%->42%), 50,270 (NI upper), 75,000 (42%->45%), 100,000 (taper start),
+    // 125,140 (taper end & 45%->48%), 150,000.
+    expect(s.slices.map(row => [row.from, row.to])).toEqual([
+      [0, 12_570],
+      [12_570, 16_537],
+      [16_537, 29_526],
+      [29_526, 43_662],
+      [43_662, 50_270],
+      [50_270, 75_000],
+      [75_000, 100_000],
+      [100_000, 125_140],
+      [125_140, 150_000],
+    ]);
+    expect(s.slices[1].incomeTaxRate).toBeCloseTo(0.19, 6);
+    expect(s.slices[2].incomeTaxRate).toBeCloseTo(0.2, 6);
+    expect(s.slices[3].incomeTaxRate).toBeCloseTo(0.21, 6);
+    expect(s.slices[4].incomeTaxRate).toBeCloseTo(0.42, 6);
+    expect(s.slices[4].nationalInsuranceRate).toBeCloseTo(0.08, 6);
+    expect(s.slices[5].incomeTaxRate).toBeCloseTo(0.42, 6);
+    expect(s.slices[5].nationalInsuranceRate).toBeCloseTo(0.02, 6);
+    expect(s.slices[6].incomeTaxRate).toBeCloseTo(0.45, 6);
+    expect(s.slices[7].incomeTaxRate).toBeCloseTo(0.675, 6);
+    expect(s.slices[8].incomeTaxRate).toBeCloseTo(0.48, 6);
+  });
+
+  it('splits at undergraduate (Plan 1/2/4/5) and postgraduate (£21,000) student loan thresholds', () => {
+    const s = assertSliceInvariants(
+      input({ income: 40_000, undergradPlan: 'plan2', postgradLoan: true }),
+    );
+    expect(s.slices.map(row => [row.from, row.to])).toEqual([
+      [0, 12_570],
+      [12_570, 21_000],
+      [21_000, 29_385],
+      [29_385, 40_000],
+    ]);
+    expect(s.slices[1].studentLoanRate).toBe(0);
+    expect(s.slices[2].studentLoanRate).toBeCloseTo(0.06, 6);
+    expect(s.slices[3].studentLoanRate).toBeCloseTo(0.15, 6);
+
+    for (const [plan, threshold] of [
+      ['plan1', 26_900],
+      ['plan4', 33_795],
+      ['plan5', 25_000],
+    ] as const) {
+      const res = assertSliceInvariants(input({ income: 40_000, undergradPlan: plan }));
+      expect(res.slices.map(row => [row.from, row.to])).toEqual([
+        [0, 12_570],
+        [12_570, threshold],
+        [threshold, 40_000],
+      ]);
+      expect(res.slices[2].studentLoanRate).toBeCloseTo(0.09, 6);
+    }
+  });
+
+  it('handles pensions under salary-sacrifice, net-pay and relief-at-source, splitting pension across NI thresholds without blending', () => {
+    // 1. Salary sacrifice: £60,000 with £15,000 sacrificed -> payEnd = £45,000, pension [45k, 60k] has 0 tax/NI/loan
+    const sac = assertSliceInvariants(
+      input({ income: 60_000, pensionContribution: 15_000, pensionMethod: 'salary-sacrifice' }),
+    );
+    expect(sac.slices.map(row => [row.from, row.to, row.kind])).toEqual([
+      [0, 12_570, 'income'],
+      [12_570, 45_000, 'income'],
+      [45_000, 60_000, 'pension'],
+    ]);
+    expect(sac.slices[2].pensionRate).toBe(1);
+    expect(sac.slices[2].incomeTaxRate).toBe(0);
+    expect(sac.slices[2].nationalInsuranceRate).toBe(0);
+    expect(sac.slices[2].kept).toBe(0);
+
+    // 2. Net pay spanning £50,270 NI threshold: £60,000 with £15,000 pension -> pension splits at £50,270 into 8% and 2% NI
+    const netPay = assertSliceInvariants(
+      input({ income: 60_000, pensionContribution: 15_000, pensionMethod: 'net-pay' }),
+    );
+    expect(netPay.slices.map(row => [row.from, row.to, row.kind])).toEqual([
+      [0, 12_570, 'income'],
+      [12_570, 45_000, 'income'],
+      [45_000, 50_270, 'pension'],
+      [50_270, 60_000, 'pension'],
+    ]);
+    expect(netPay.slices[2].nationalInsuranceRate).toBeCloseTo(0.08, 6);
+    expect(netPay.slices[3].nationalInsuranceRate).toBeCloseTo(0.02, 6);
+    expect(netPay.slices[2].incomeTaxRate).toBe(0);
+    expect(netPay.slices[3].incomeTaxRate).toBe(0);
+
+    // 3. Relief at source spanning £50,270 NI threshold: £60,000 with £15,000 pension -> splits at £50,270 with 20% tax, 80% pensionFromPay, and 8% vs 2% NI
+    const ras = assertSliceInvariants(
+      input({ income: 60_000, pensionContribution: 15_000, pensionMethod: 'relief-at-source' }),
+    );
+    expect(ras.slices.map(row => [row.from, row.to, row.kind])).toEqual([
+      [0, 12_570, 'income'],
+      [12_570, 45_000, 'income'],
+      [45_000, 50_270, 'pension'],
+      [50_270, 60_000, 'pension'],
+    ]);
+    expect(ras.slices[2].pensionRate).toBeCloseTo(0.8, 6);
+    expect(ras.slices[2].incomeTaxRate).toBeCloseTo(0.2, 6);
+    expect(ras.slices[2].nationalInsuranceRate).toBeCloseTo(0.08, 6);
+    expect(ras.slices[3].pensionRate).toBeCloseTo(0.8, 6);
+    expect(ras.slices[3].incomeTaxRate).toBeCloseTo(0.2, 6);
+    expect(ras.slices[3].nationalInsuranceRate).toBeCloseTo(0.02, 6);
+
+    // 4. Relief at source in Scotland spanning the unextended 19% starter band ceiling (£12,570 + £3,967 = £16,537)
+    const rasScot = assertSliceInvariants(
+      input({ income: 20_000, region: 'scotland', pensionContribution: 6_000, pensionMethod: 'relief-at-source' }),
+    );
+    expect(rasScot.slices.map(row => [row.from, row.to, row.kind])).toEqual([
+      [0, 12_570, 'income'],
+      [12_570, 14_000, 'income'],
+      [14_000, 16_537, 'pension'],
+      [16_537, 20_000, 'pension'],
+    ]);
+    expect(rasScot.slices[2].incomeTaxRate).toBeCloseTo(0.19, 6);
+    expect(rasScot.slices[3].incomeTaxRate).toBeCloseTo(0.2, 6);
+  });
+
+  it('splits benefits in kind across tax thresholds without blending rates', () => {
+    // £50,000 salary + £1,000 BIK straddles £50,270 -> £270 at 20% and £730 at 40%
+    const s = assertSliceInvariants(input({ income: 50_000, benefitsInKind: 1_000 }));
+    expect(s.slices.map(row => [row.from, row.to, row.kind])).toEqual([
+      [0, 12_570, 'income'],
+      [12_570, 50_000, 'income'],
+      [50_000, 50_270, 'benefit-in-kind'],
+      [50_270, 51_000, 'benefit-in-kind'],
+    ]);
+    expect(s.slices[2].incomeTaxRate).toBeCloseTo(0.2, 6);
+    expect(s.slices[2].incomeTax).toBeCloseTo(270 * 0.2, money);
+    expect(s.slices[2].kept).toBeCloseTo(-54, money);
+    expect(s.slices[2].keptRate).toBeCloseTo(-0.2, 6);
+    expect(s.slices[3].incomeTaxRate).toBeCloseTo(0.4, 6);
+    expect(s.slices[3].incomeTax).toBeCloseTo(730 * 0.4, money);
+    expect(s.slices[3].kept).toBeCloseTo(-292, money);
+    expect(s.slices[3].keptRate).toBeCloseTo(-0.4, 6);
+  });
+
+  it('retains negative pension cash impacts from NI and both student loans', () => {
+    for (const pensionMethod of ['net-pay', 'relief-at-source'] as const) {
+      const s = assertSliceInvariants(input({
+        income: 60_000, pensionContribution: 15_000, pensionMethod,
+        undergradPlan: 'plan2', postgradLoan: true,
+      }));
+      const pensionSlices = s.slices.filter(row => row.kind === 'pension');
+      expect(pensionSlices[0].keptRate).toBeCloseTo(-0.23, 6);
+      expect(pensionSlices[1].keptRate).toBeCloseTo(-0.17, 6);
+      expect(sumField(pensionSlices, row => row.kept)).toBeCloseTo(-2866.2, money);
+    }
+  });
+
+  it('reconciles cash and every deduction across regions, employment, pension methods, loans and custom allowances', () => {
+    for (const region of ['rUK', 'scotland'] as const) {
+      for (const kind of ['employed', 'self-employed'] as const) {
+        for (const pensionMethod of ['salary-sacrifice', 'net-pay', 'relief-at-source'] as const) {
+          for (const undergradPlan of ['none', 'plan1', 'plan2', 'plan4', 'plan5'] as const) {
+            for (const personalAllowance of [0, 1000, 12_570, 20_000]) {
+              for (const income of [0, 12_570.5, 50_270, 100_000, 125_140, 160_000]) {
+                assertSliceInvariants(input({
+                  region, kind, pensionMethod, undergradPlan, personalAllowance, income,
+                  pensionContribution: income * 0.3, benefitsInKind: 12_000,
+                  postgradLoan: true, marriageAllowance: true, children: 2, childcareSupport: 5000,
+                }));
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('respects includePensionAndBenefits: false vs true', () => {
+    const fullInput = input({
+      income: 60_000,
+      pensionContribution: 10_000,
+      pensionMethod: 'salary-sacrifice',
+      benefitsInKind: 5_000,
+    });
+    const withBoth = assertSliceInvariants(fullInput, { includePensionAndBenefits: true });
+    const salaryOnly = assertSliceInvariants(fullInput, { includePensionAndBenefits: false });
+    const plainSalary = assertSliceInvariants(input({ income: 60_000 }));
+
+    expect(withBoth.pensionContribution).toBe(10_000);
+    expect(withBoth.benefitsInKind).toBe(5_000);
+    expect(withBoth.slices.some(s => s.kind === 'pension')).toBe(true);
+    expect(withBoth.slices.some(s => s.kind === 'benefit-in-kind')).toBe(true);
+
+    expect(salaryOnly.pensionContribution).toBe(0);
+    expect(salaryOnly.benefitsInKind).toBe(0);
+    expect(salaryOnly.slices.every(s => s.kind === 'income')).toBe(true);
+    expect(salaryOnly).toEqual(plainSalary);
+  });
+
+  it('pins marriage allowance eligibility so no phantom £252 cliff or >100% rate appears on any slice', () => {
+    // Eligible in rUK (£30,000 and £50,270): zero-tax zone up to £12,570 + £1,260 = £13,830
+    const s30 = assertSliceInvariants(input({ income: 30_000, marriageAllowance: true }));
+    expect(s30.slices.map(row => [row.from, row.to])).toEqual([
+      [0, 12_570],
+      [12_570, 13_830],
+      [13_830, 30_000],
+    ]);
+    expect(s30.slices[1].incomeTaxRate).toBe(0);
+    expect(s30.slices[1].nationalInsuranceRate).toBeCloseTo(0.08, 6);
+    expect(s30.slices[2].incomeTaxRate).toBeCloseTo(0.2, 6);
+
+    const s50270 = assertSliceInvariants(input({ income: 50_270, marriageAllowance: true }));
+    expect(s50270.slices.map(row => [row.from, row.to])).toEqual([
+      [0, 12_570],
+      [12_570, 13_830],
+      [13_830, 50_270],
+    ]);
+
+    // Ineligible above the cliff (£50,271 and £60,000 in rUK; £43,663 in Scotland)
+    const s50271 = assertSliceInvariants(input({ income: 50_271, marriageAllowance: true }));
+    // Sliver-row hardening merges the £1 slice [50,270, 50,271] cleanly, and pinned eligibility avoids a £252 spike
+    for (const row of s50271.slices) {
+      expect(row.incomeTaxRate).toBeLessThanOrEqual(0.45);
+    }
+
+    const s60 = assertSliceInvariants(input({ income: 60_000, marriageAllowance: true }));
+    expect(s60.slices.map(row => [row.from, row.to])).toEqual([
+      [0, 12_570],
+      [12_570, 50_270],
+      [50_270, 60_000],
+    ]);
+    expect(s60.slices[1].incomeTaxRate).toBeCloseTo(0.2, 6);
+    expect(s60.slices[2].incomeTaxRate).toBeCloseTo(0.4, 6);
+
+    const scotEligible = assertSliceInvariants(
+      input({ income: 43_662, region: 'scotland', marriageAllowance: true }),
+    );
+    expect(scotEligible.slices[1].incomeTaxRate).toBe(0);
+    expect(scotEligible.slices[2].incomeTaxRate).toBeCloseTo(0.19, 6);
+
+    const scotIneligible = assertSliceInvariants(
+      input({ income: 43_663, region: 'scotland', marriageAllowance: true }),
+    );
+    for (const row of scotIneligible.slices) {
+      expect(row.incomeTaxRate).toBeLessThanOrEqual(0.45);
+    }
+  });
+
+  it('hardens against sub-£1 sliver rows when an income or custom allowance lands within £1 of a threshold', () => {
+    for (const probe of [
+      input({ income: 12_570.4 }),
+      input({ income: 50_270.2 }),
+      input({ income: 100_000.5 }),
+      input({ income: 50_000, personalAllowance: 12_569.5 }),
+    ]) {
+      const s = assertSliceInvariants(probe);
+      for (const row of s.slices) {
+        expect(row.gross).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
+  it('clamps takeHome, takeHomeRate and shares.takeHome to 0 when BIK tax exceeds cash pay, while preserving negative rawTakeHome', () => {
+    const s = assertSliceInvariants(input({ income: 15_000, benefitsInKind: 100_000 }));
+    expect(s.rawTakeHome).toBeLessThan(0);
+    expect(s.takeHome).toBe(0);
+    expect(s.takeHomeRate).toBe(0);
+    expect(s.shares.takeHome).toBe(0);
+    expect(s.shares.incomeTax).toBe(1);
+  });
+
+  it('returns empty slices and zero totals/shares without NaN for zero, negative and non-finite inputs', () => {
+    for (const bad of [
+      input({ income: 0 }),
+      input({ income: -25_000, benefitsInKind: -1_000, pensionContribution: -500 }),
+      input({
+        income: Number.NaN,
+        benefitsInKind: Number.POSITIVE_INFINITY,
+        pensionContribution: Number.NEGATIVE_INFINITY,
+      }),
+    ]) {
+      const s = assertSliceInvariants(bad);
+      expect(s.income).toBe(0);
+      expect(s.slices).toEqual([]);
+      expect(s.takeHome).toBe(0);
+      expect(s.rawTakeHome).toBe(0);
+      expect(s.takeHomeRate).toBe(0);
+      expect(s.totalDeductions).toBe(0);
+      expect(s.shares).toEqual({
+        takeHome: 0,
+        pension: 0,
+        incomeTax: 0,
+        nationalInsurance: 0,
+        studentLoan: 0,
+      });
+    }
   });
 });

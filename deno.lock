@@ -18,6 +18,8 @@
     "packageJson": {
       "dependencies": [
         "npm:@eslint/js@9.32.0",
+        "npm:@fontsource/doto@5.3.0",
+        "npm:@fontsource/space-mono@5.3.0",
         "npm:@radix-ui/react-accordion@1.2.11",
         "npm:@radix-ui/react-alert-dialog@1.1.14",
         "npm:@radix-ui/react-aspect-ratio@1.1.7",

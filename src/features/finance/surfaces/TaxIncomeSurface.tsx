@@ -28,6 +28,7 @@ import {
   UK_EMPLOYEE_NI,
   UK_STATUTORY_PERSONAL_ALLOWANCE,
   adjustHolidayCountForBirthday,
+  hasBirthdaySickOverlap,
   calculateWorkingDaysInRange,
   calendarParts,
   findBirthdayDayForHolidayRange,
@@ -54,6 +55,7 @@ import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Gift, Pencil, Plus, P
 import { useFinanceTotals } from '../useFinanceTotals';
 import { PayslipsSection } from '../components/PayslipsSection';
 import { PillSwitch } from '../components/PillSwitch';
+import { TakeHomeSlices } from '../components/TakeHomeSlices';
 import { benefitValueOf, getNormalizedHolidays } from '../finance-calcs';
 
 interface TaxIncomeSurfaceProps {
@@ -700,6 +702,10 @@ export default function TaxIncomeSurface({
       count: 1,
       type: 'birthday',
     };
+    if (hasBirthdaySickOverlap(normalizedHolidaysAll, bdayEntry)) {
+      toast({ title: 'Day already recorded as sick leave', description: 'Choose another birthday date or edit the sick entry first.', variant: 'destructive' });
+      return;
+    }
     const updatedHolidaysList = [
       ...normalizedHolidaysAll.map(h => (h.id === hol.id ? updatedHoliday : h)),
       bdayEntry,
@@ -787,12 +793,12 @@ export default function TaxIncomeSurface({
 
   const handleSaveInlineHoliday = (monthIdx: number) => {
     void monthIdx;
-    const countVal = parseFloat(inlineCount);
+    const countVal = inlineCount.trim() === '' ? NaN : Number(inlineCount);
     if (!inlineStartDate || !inlineEndDate) {
       toast({ title: 'Missing Dates', description: 'Start and end dates are required.', variant: 'destructive' });
       return;
     }
-    if (isNaN(countVal) || countVal < 0) {
+    if (!Number.isFinite(countVal) || countVal < 0) {
       toast({ title: 'Invalid Days Count', description: 'Leave days count must be a non-negative number.', variant: 'destructive' });
       return;
     }
@@ -924,6 +930,28 @@ export default function TaxIncomeSurface({
       ...(halfDay ? { halfDay } : {})
     };
 
+    const attachedBirthday: UserHoliday | undefined =
+      inlineType === 'holiday' && inlineUseBirthdayDay && inlineEligibleBdayDate && !halfDay && !coveredBday
+        ? {
+            id: existingAttachedBday?.id || `hol_bday_${Date.now()}_1`,
+            startDate: inlineEligibleBdayDate,
+            endDate: inlineEligibleBdayDate,
+            occasion: `${savedHoliday.occasion} (Birthday Day Off)`,
+            count: existingAttachedBday?.count ?? 1,
+            type: 'birthday',
+            ...(existingAttachedBday?.halfDay ? { halfDay: existingAttachedBday.halfDay } : {}),
+          }
+        : undefined;
+
+    if (hasBirthdaySickOverlap(normalizedHolidays, savedHoliday, editingHolidayId ?? undefined)) {
+      toast({ title: 'Birthday and sick leave overlap', description: 'Choose a different day or half day, or edit the existing entry first.', variant: 'destructive' });
+      return;
+    }
+    if (attachedBirthday && hasBirthdaySickOverlap(normalizedHolidays, attachedBirthday)) {
+      toast({ title: 'Day already recorded as sick leave', description: 'Turn off the birthday option or edit the sick entry first.', variant: 'destructive' });
+      return;
+    }
+
     let updatedHolidaysList = editingHolidayId
       ? normalizedHolidays.map(holiday => holiday.id === editingHolidayId ? savedHoliday : holiday)
       : [...normalizedHolidays, savedHoliday];
@@ -938,14 +966,37 @@ export default function TaxIncomeSurface({
       previousCoveringHoliday &&
       previousCoveringHoliday.id !== coveringHoliday?.id
     ) {
+      const restoredCount = adjustHolidayCountForBirthday(previousCoveringHoliday.count, originalHoliday.count, false);
+      if (restoredCount === null) {
+        toast({ title: 'Check the leave count', description: 'The previous holiday or birthday leave count is invalid.', variant: 'destructive' });
+        return;
+      }
       updatedHolidaysList = updatedHolidaysList.map(h =>
-        h.id === previousCoveringHoliday.id ? { ...h, count: h.count + originalHoliday.count } : h,
+        h.id === previousCoveringHoliday.id ? { ...h, count: restoredCount } : h,
       );
+    }
+
+    // Editing a birthday from full to half (or back) adjusts only the difference.
+    if (inlineType === 'birthday' && originalHoliday?.type === 'birthday' &&
+      coveringHoliday && coveringHoliday.id === previousCoveringHoliday?.id) {
+      const restoredCount = adjustHolidayCountForBirthday(coveringHoliday.count, originalHoliday.count, false);
+      const updatedCount = restoredCount === null ? null : adjustHolidayCountForBirthday(restoredCount, savedHoliday.count, true);
+      if (updatedCount === null) {
+        toast({ title: 'Check the leave count', description: 'The holiday does not have enough valid annual leave to cover this birthday change.', variant: 'destructive' });
+        return;
+      }
+      updatedHolidaysList = updatedHolidaysList.map(h => h.id === coveringHoliday.id
+        ? { ...h, count: updatedCount }
+        : h);
     }
 
     if (birthdayHost) {
       // A half-day birthday takes half a day off its holiday, not a whole one.
-      const hostCount = Math.max(0, birthdayHost.count - savedHoliday.count);
+      const hostCount = adjustHolidayCountForBirthday(birthdayHost.count, savedHoliday.count, true);
+      if (hostCount === null) {
+        toast({ title: 'Check the leave count', description: 'The holiday does not have enough valid annual leave to attach this birthday.', variant: 'destructive' });
+        return;
+      }
       updatedHolidaysList = updatedHolidaysList.map(h =>
         h.id === birthdayHost.id ? { ...h, count: hostCount } : h,
       );
@@ -956,22 +1007,13 @@ export default function TaxIncomeSurface({
       if (coveredBday) {
         leaveNote = ` Kept your Birthday Day Off on ${formatUkDate(coveredBday.startDate)}; this leave uses ${savedHoliday.count}d annual leave.`;
       }
-      if (inlineUseBirthdayDay && inlineEligibleBdayDate && !halfDay && !coveredBday) {
-        const bdayEntry: UserHoliday = {
-          id: existingAttachedBday?.id || `hol_bday_${Date.now()}_1`,
-          startDate: inlineEligibleBdayDate,
-          endDate: inlineEligibleBdayDate,
-          occasion: `${savedHoliday.occasion} (Birthday Day Off)`,
-          count: existingAttachedBday?.count ?? 1,
-          type: 'birthday',
-          ...(existingAttachedBday?.halfDay ? { halfDay: existingAttachedBday.halfDay } : {}),
-        };
+      if (attachedBirthday) {
         if (existingAttachedBday) {
           updatedHolidaysList = updatedHolidaysList.map(h =>
-            h.id === existingAttachedBday.id ? bdayEntry : h,
+            h.id === existingAttachedBday.id ? attachedBirthday : h,
           );
         } else {
-          updatedHolidaysList = [...updatedHolidaysList, bdayEntry];
+          updatedHolidaysList = [...updatedHolidaysList, attachedBirthday];
         }
       } else if (!inlineUseBirthdayDay && existingAttachedBday) {
         // Changing the dates can turn the toggle off on its own, so say so.
@@ -1189,6 +1231,12 @@ export default function TaxIncomeSurface({
           </table>
         </div>
       </div>
+
+      <TakeHomeSlices
+        input={results.taxInput}
+        benefitTaxCollectedByCode={results.benefitTaxCollectedByCode}
+        codedBenefitsInKind={results.benefitInKindValue}
+      />
 
       {/* Captured payslips: the figures the deductions above are modelled
           from, as they actually landed (7.7). */}

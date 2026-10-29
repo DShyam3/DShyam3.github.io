@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateUkTax, ukBenefitInKindTax, ukCashAfterTax, type UkTaxInput } from '@/lib/finance';
+import { calculateUkTax, ukBenefitInKindTax, ukCashAfterTax, ukTakeHomeBySlice, type UkTaxInput } from '@/lib/finance';
 import { calculateFinance } from './finance-calcs';
 import { asPackageBenefits } from './finance-narrow';
 import type { FinanceSettings, PackageBenefit } from './finance-types';
@@ -369,6 +369,65 @@ describe('calculateFinance: benefits in kind', () => {
         settings({ personalAllowance: 11070, packageBenefits: [benefit({ kind: 'cash', amount: 3000 })] }),
       );
       expect(cashOnly.benefitTaxCollectedByCode).toBe(false);
+    });
+  });
+
+  describe('results.taxInput reproduces the Tax & Income figures in calculateUkTax and ukTakeHomeBySlice', () => {
+    it('reproduces netTakeHome, pension, NI, loan and total tax when benefitTaxCollectedByCode is false', () => {
+      const results = run(
+        settings({
+          grossSalary: 60000,
+          pensionType: 'net_pay',
+          personalPensionPercent: 5,
+          studentLoanPlan: 'plan2',
+          packageBenefits: [gym],
+        }),
+      );
+      expect(results.benefitTaxCollectedByCode).toBe(false);
+      expect(results.taxInput.benefitsInKind).toBe(1000);
+
+      const engine = calculateUkTax(results.taxInput);
+      expect(engine.takeHome).toBeCloseTo(results.netTakeHome, cents);
+      expect(engine.pensionFromPay).toBeCloseTo(results.personalPensionRate, cents);
+      expect(engine.nationalInsurance).toBeCloseTo(results.nationalInsurance, cents);
+      expect(engine.studentLoan + engine.postgradLoan).toBeCloseTo(results.studentLoan, cents);
+      expect(engine.incomeTax).toBeCloseTo(results.incomeTax + results.benefitTaxDeduction, cents);
+
+      const sliced = ukTakeHomeBySlice(results.taxInput);
+      expect(sliced.rawTakeHome).toBeCloseTo(results.netTakeHome, cents);
+      expect(sliced.pensionFromPay).toBeCloseTo(results.personalPensionRate, cents);
+      expect(sliced.nationalInsurance).toBeCloseTo(results.nationalInsurance, cents);
+      expect(sliced.studentLoan).toBeCloseTo(results.studentLoan, cents);
+      expect(sliced.incomeTax).toBeCloseTo(results.incomeTax + results.benefitTaxDeduction, cents);
+    });
+
+    it('reproduces netTakeHome, pension, NI, loan and total tax when benefitTaxCollectedByCode is true', () => {
+      const results = run(
+        settings({
+          grossSalary: 60000,
+          personalAllowance: 11070,
+          pensionType: 'relief_at_source',
+          personalPensionPercent: 8,
+          studentLoanPlan: 'postgrad',
+          packageBenefits: [gym],
+        }),
+      );
+      expect(results.benefitTaxCollectedByCode).toBe(true);
+      expect(results.taxInput.benefitsInKind).toBe(0);
+
+      const engine = calculateUkTax(results.taxInput);
+      expect(engine.takeHome).toBeCloseTo(results.netTakeHome, cents);
+      expect(engine.pensionFromPay).toBeCloseTo(results.personalPensionRate, cents);
+      expect(engine.nationalInsurance).toBeCloseTo(results.nationalInsurance, cents);
+      expect(engine.studentLoan + engine.postgradLoan).toBeCloseTo(results.studentLoan, cents);
+      expect(engine.incomeTax).toBeCloseTo(results.incomeTax + results.benefitTaxDeduction, cents);
+
+      const sliced = ukTakeHomeBySlice(results.taxInput);
+      expect(sliced.rawTakeHome).toBeCloseTo(results.netTakeHome, cents);
+      expect(sliced.pensionFromPay).toBeCloseTo(results.personalPensionRate, cents);
+      expect(sliced.nationalInsurance).toBeCloseTo(results.nationalInsurance, cents);
+      expect(sliced.studentLoan).toBeCloseTo(results.studentLoan, cents);
+      expect(sliced.incomeTax).toBeCloseTo(results.incomeTax + results.benefitTaxDeduction, cents);
     });
   });
 });

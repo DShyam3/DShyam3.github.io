@@ -215,7 +215,8 @@ export interface BookedDay {
 /** Which days of one month a set of holidays actually books off. Weekends and
  *  bank holidays inside a holiday range do not consume leave. When a single-day
  *  birthday leave entry falls inside a multi-day holiday range, that day is
- *  attributed to `'birthday'` rather than duplicated as `'holiday'`. */
+ *  attributed to `'birthday'` rather than duplicated as holiday or sick leave.
+ *  Half-day birthday entries replace only the matching half. */
 export const getBookedDaysForMonth = (
   holidays: UserHoliday[],
   year: number,
@@ -223,14 +224,16 @@ export const getBookedDaysForMonth = (
   bankHolidays: string[],
 ): BookedDay[] => {
   const booked: BookedDay[] = [];
-  const birthdayIsos = new Set<string>();
+  const birthdayHalves = new Map<string, Set<HalfDay>>();
 
   for (const hol of holidays) {
     if (hol.type !== 'birthday') continue;
     for (const current of calendarDays(hol.startDate, hol.endDate)) {
       const inMonth = current.year === year && current.monthIdx === monthIdx;
       if (inMonth && !current.weekend && !bankHolidays.includes(current.iso)) {
-        birthdayIsos.add(current.iso);
+        const halves = birthdayHalves.get(current.iso) ?? new Set<HalfDay>();
+        for (const half of isHalfDay(hol) ? [hol.halfDay!] : ['am', 'pm'] as const) halves.add(half);
+        birthdayHalves.set(current.iso, halves);
       }
     }
   }
@@ -242,7 +245,16 @@ export const getBookedDaysForMonth = (
     for (const current of calendarDays(hol.startDate, hol.endDate)) {
       const inMonth = current.year === year && current.monthIdx === monthIdx;
       if (inMonth && !current.weekend && !bankHolidays.includes(current.iso)) {
-        if (leaveType === 'holiday' && birthdayIsos.has(current.iso)) continue;
+        const birthdayCoverage = birthdayHalves.get(current.iso);
+        if (leaveType !== 'birthday' && birthdayCoverage) {
+          const remaining = (halfDay ? [halfDay] : ['am', 'pm'] as const)
+            .filter(half => !birthdayCoverage.has(half));
+          if (remaining.length === 0) continue;
+          if (remaining.length === 1) {
+            booked.push({ day: current.day, occasion: hol.occasion, type: leaveType, fraction: HALF_DAY, halfDay: remaining[0] });
+            continue;
+          }
+        }
         booked.push({ day: current.day, occasion: hol.occasion, type: leaveType, fraction, ...(halfDay ? { halfDay } : {}) });
       }
     }
@@ -621,7 +633,11 @@ export const removeHolidayWithBirthdayRestoration = (
 ): UserHoliday[] => {
   const target = holidays.find(holiday => holiday.id === holidayId);
   const host = target?.type === 'birthday'
-    ? findHolidayCoveringDate(holidays, target.startDate, target.id)
+    ? findHolidayCoveringDate(
+      holidays.filter(holiday => !(isHalfDay(holiday) && isHalfDay(target) && holiday.halfDay !== target.halfDay)),
+      target.startDate,
+      target.id,
+    )
     : undefined;
   const restoredCount = host && target
     ? adjustHolidayCountForBirthday(host.count, target.count, false)
@@ -632,6 +648,20 @@ export const removeHolidayWithBirthdayRestoration = (
       ? { ...holiday, count: restoredCount }
       : holiday);
 };
+
+/** Birthday and sickness cannot cover the same half of a date. */
+export const hasBirthdaySickOverlap = (
+  holidays: UserHoliday[],
+  candidate: UserHoliday,
+  excludeId?: string,
+): boolean => holidays.some(holiday => {
+  if (holiday.id === excludeId) return false;
+  if (!((candidate.type === 'birthday' && holiday.type === 'sick') ||
+    (candidate.type === 'sick' && holiday.type === 'birthday'))) return false;
+  if (candidate.startDate > holiday.endDate || candidate.endDate < holiday.startDate) return false;
+  return !(isHalfDay(candidate) && isHalfDay(holiday) && candidate.halfDay !== holiday.halfDay);
+});
+
 
 export const calculateBirthdayBenefitValue = (
   grossSalary: number,
@@ -1032,20 +1062,21 @@ export function planOptimalHolidays(
 
   const existing = options.existingHolidays ?? [];
   const bookedDatesSet = new Set<string>();
+  const sickDatesSet = new Set<string>();
   let usedHolidayDays = 0;
   let alreadyHasBirthdayInYear = false;
 
   for (const hol of existing) {
-    if (hol.type === 'sick') continue;
     const inYear = calendarParts(hol.startDate)?.year === year;
     if (hol.type === 'birthday' && inYear) {
       alreadyHasBirthdayInYear = true;
-    } else if (inYear) {
+    } else if (inYear && hol.type !== 'sick') {
       usedHolidayDays += Number.isFinite(hol.count) ? hol.count : 0;
     }
     for (const day of calendarDays(hol.startDate, hol.endDate)) {
       if (!day.weekend && !allBhSet.has(day.iso)) {
         bookedDatesSet.add(day.iso);
+        if (hol.type === 'sick') sickDatesSet.add(day.iso);
       }
     }
   }
@@ -1058,7 +1089,7 @@ export function planOptimalHolidays(
     : null;
 
   const isNonWorkingOrBooked = (iso: string, extraBooked?: Set<string>): boolean => {
-    if (!calendarParts(iso)) return false;
+    if (!calendarParts(iso) || sickDatesSet.has(iso)) return false;
     const wd = utcMidnight(iso).getUTCDay();
     if (wd === 0 || wd === 6) return true;
     if (allBhSet.has(iso) || bookedDatesSet.has(iso)) return true;
@@ -1124,6 +1155,7 @@ export function planOptimalHolidays(
   const addCandidateSpan = (rawStartIso: string, rawEndIso: string, meta?: SpanMeta) => {
     const workDays: string[] = [];
     for (const day of calendarDays(rawStartIso, rawEndIso)) {
+      if (sickDatesSet.has(day.iso)) return;
       if (day.year !== year) continue;
       if (!day.weekend && !allBhSet.has(day.iso) && !bookedDatesSet.has(day.iso)) {
         workDays.push(day.iso);
@@ -1342,63 +1374,7 @@ export function planOptimalHolidays(
           cand.leaveDaysRequired = Math.max(0, cand.workDays.length - 1);
         }
       }
-    } else if (birthdayRule !== 'anytime' || birthdayWindow.birthdayIso) {
-      // Create a standalone 1-day Birthday Day Off Break
-      const unbookedEligible = validEligibleDates.filter(d => !bookedDatesSet.has(d));
-      if (unbookedEligible.length > 0) {
-        const isMonOrFri = (iso: string) => {
-          const wd = utcMidnight(iso).getUTCDay();
-          return wd === 1 || wd === 5;
-        };
-        const chosenDate =
-          (birthdayWindow.birthdayIso &&
-          unbookedEligible.includes(birthdayWindow.birthdayIso) &&
-          isMonOrFri(birthdayWindow.birthdayIso)
-            ? birthdayWindow.birthdayIso
-            : unbookedEligible.find(isMonOrFri) ??
-              (birthdayWindow.birthdayIso && unbookedEligible.includes(birthdayWindow.birthdayIso)
-                ? birthdayWindow.birthdayIso
-                : unbookedEligible[0]));
-
-        const parts = calendarParts(chosenDate);
-        if (parts) {
-          const singleSet = new Set([chosenDate]);
-          let breakStartEpoch = parts.epoch;
-          while (isNonWorkingOrBooked(isoOfEpochDay(breakStartEpoch - 1), singleSet)) {
-            breakStartEpoch--;
-          }
-          let breakEndEpoch = parts.epoch;
-          while (isNonWorkingOrBooked(isoOfEpochDay(breakEndEpoch + 1), singleSet)) {
-            breakEndEpoch++;
-          }
-          const breakStartDate = isoOfEpochDay(breakStartEpoch);
-          const breakEndDate = isoOfEpochDay(breakEndEpoch);
-          const returnToWorkDate = isoOfEpochDay(breakEndEpoch + 1);
-          const totalDaysOff = breakEndEpoch - breakStartEpoch + 1;
-          const bhDatesInBreak: string[] = [];
-          for (let ep = breakStartEpoch; ep <= breakEndEpoch; ep++) {
-            const iso = isoOfEpochDay(ep);
-            if (allBhSet.has(iso)) bhDatesInBreak.push(iso);
-          }
-          const bankHolidayNames = [...new Set(bhDatesInBreak.map(d => allBhMap[d] || 'Bank Holiday'))];
-
-          candidateMap.set(`${chosenDate}:${chosenDate}`, {
-            startDate: chosenDate,
-            endDate: chosenDate,
-            workDays: [chosenDate],
-            breakStartDate,
-            breakEndDate,
-            returnToWorkDate,
-            totalDaysOff,
-            bankHolidayNames,
-            label: 'Birthday Day Off Break',
-            usesBirthdayDay: true,
-            birthdayDayDate: chosenDate,
-            leaveDaysRequired: 0,
-          });
-        }
-      }
-    } else if (validEligibleDates.length > 0) {
+    } else if (birthdayRule === 'anytime' && !birthdayWindow.birthdayIso && validEligibleDates.length > 0) {
       // Floating 'anytime' rule with no specific birthday date set: apply to best Tier 1 bridge
       const allCandidates = [...candidateMap.values()]
         .filter(c => !c.tier || c.tier === 1)
@@ -1597,6 +1573,7 @@ export function planOptimalHolidays(
   let recommendedUsesBirthday = false;
 
   for (const cand of ranked) {
+    if (cand.usesBirthdayDay && recommendedUsesBirthday) continue;
     if (cand.workDays.some(d => usedWorkDays.has(d))) continue;
     if (recommendedLeaveDays + cand.leaveDaysRequired > availableAllowance) continue;
 
@@ -1605,6 +1582,69 @@ export function planOptimalHolidays(
     recommendedLeaveDays += cand.leaveDaysRequired;
     recommendedTotalDaysOff += cand.totalDaysOff;
     if (cand.usesBirthdayDay) recommendedUsesBirthday = true;
+  }
+
+  // The benefit is still usable when no affordable selected bridge used it.
+  if (!recommendedUsesBirthday && birthdayWindow) {
+    // Create a standalone 1-day Birthday Day Off Break
+    const unbookedEligible = birthdayWindow.eligibleDates.filter(d => (!activeAsOfIso || d >= activeAsOfIso) && !bookedDatesSet.has(d) && !usedWorkDays.has(d));
+    if (unbookedEligible.length > 0) {
+      const isMonOrFri = (iso: string) => {
+        const wd = utcMidnight(iso).getUTCDay();
+        return wd === 1 || wd === 5;
+      };
+      const chosenDate =
+        (birthdayWindow.birthdayIso &&
+        unbookedEligible.includes(birthdayWindow.birthdayIso) &&
+        isMonOrFri(birthdayWindow.birthdayIso)
+          ? birthdayWindow.birthdayIso
+          : unbookedEligible.find(isMonOrFri) ??
+            (birthdayWindow.birthdayIso && unbookedEligible.includes(birthdayWindow.birthdayIso)
+              ? birthdayWindow.birthdayIso
+              : unbookedEligible[0]));
+
+      const parts = calendarParts(chosenDate);
+      if (parts) {
+        const singleSet = new Set([chosenDate]);
+        let breakStartEpoch = parts.epoch;
+        while (isNonWorkingOrBooked(isoOfEpochDay(breakStartEpoch - 1), singleSet)) {
+          breakStartEpoch--;
+        }
+        let breakEndEpoch = parts.epoch;
+        while (isNonWorkingOrBooked(isoOfEpochDay(breakEndEpoch + 1), singleSet)) {
+          breakEndEpoch++;
+        }
+        const breakStartDate = isoOfEpochDay(breakStartEpoch);
+        const breakEndDate = isoOfEpochDay(breakEndEpoch);
+        const returnToWorkDate = isoOfEpochDay(breakEndEpoch + 1);
+        const totalDaysOff = breakEndEpoch - breakStartEpoch + 1;
+        const bhDatesInBreak: string[] = [];
+        for (let ep = breakStartEpoch; ep <= breakEndEpoch; ep++) {
+          const iso = isoOfEpochDay(ep);
+          if (allBhSet.has(iso)) bhDatesInBreak.push(iso);
+        }
+        const bankHolidayNames = [...new Set(bhDatesInBreak.map(d => allBhMap[d] || 'Bank Holiday'))];
+
+        const key = `${chosenDate}:${chosenDate}`;
+        selectedKeys.add(key);
+        recommendedUsesBirthday = true;
+        recommendedTotalDaysOff += totalDaysOff;
+        candidateMap.set(key, {
+          startDate: chosenDate,
+          endDate: chosenDate,
+          workDays: [chosenDate],
+          breakStartDate,
+          breakEndDate,
+          returnToWorkDate,
+          totalDaysOff,
+          bankHolidayNames,
+          label: 'Birthday Day Off Break',
+          usesBirthdayDay: true,
+          birthdayDayDate: chosenDate,
+          leaveDaysRequired: 0,
+        });
+      }
+    }
   }
 
   const bridges: OptimalHolidayBridge[] = [...candidateMap.values()]

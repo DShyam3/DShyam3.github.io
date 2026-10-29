@@ -379,6 +379,10 @@ export interface StudentLoanBorrowed {
   last?: string;
 }
 
+/** Classifies the row only; the borrowed total validates its amount and date. */
+export const isBorrowing = (draw: { kind?: 'borrowing' | 'refund' | 'payment' }): boolean =>
+  !draw.kind || draw.kind === 'borrowing';
+
 /**
  * What you borrowed yourself. Recorded borrowing wins, summed payment by
  * payment; refunds and payments outside payroll move the balance but are not
@@ -395,7 +399,7 @@ export const studentLoanBorrowed = (debt: {
 }): StudentLoanBorrowed => {
   const borrowing = (debt.draws ?? []).filter(
     d =>
-      (!d.kind || d.kind === 'borrowing') &&
+      isBorrowing(d) &&
       Number.isFinite(d.amount) &&
       d.amount > 0 &&
       epochDay(d.date) !== undefined,
