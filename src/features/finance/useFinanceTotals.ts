@@ -19,7 +19,6 @@ import { calculateFinance, getNextPaydayDetails } from './finance-calcs';
 export function useFinanceTotals() {
   const {
     settings,
-    taxConfigs,
     budgetCategories,
     bankAccounts,
     investmentHoldings,
@@ -35,9 +34,7 @@ export function useFinanceTotals() {
     recurrings,
   );
 
-  const today = new Date();
-  const asOfDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const results = calculateFinance(settings, taxConfigs, asOfDate);
+  const results = calculateFinance(settings);
   const breakdownRates =
     breakdownRateMode === 'normal'
       ? results.breakdown.standard

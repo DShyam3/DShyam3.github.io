@@ -39,7 +39,7 @@ const sampleTaxConfig: TaxConfig = {
 
 describe('calculateFinance breakdown modes', () => {
   it('computes correct working days for all 3 modes', () => {
-    const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
+    const results = calculateFinance(sampleSettings);
 
     // Standard: (365 / 7) * 5 = 260.71428... (52.1429 weeks)
     expect(results.workingDaysStandard).toBeCloseTo((365 / 7) * 5, 4);
@@ -52,7 +52,7 @@ describe('calculateFinance breakdown modes', () => {
   });
 
   it('computes expected rates for £55,000 gross salary across all 3 modes', () => {
-    const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
+    const results = calculateFinance(sampleSettings);
     const actualWeeks = 365 / 7;
 
     // Standard / Normal: based on 52.1429 weeks (365 / 7)
@@ -72,7 +72,7 @@ describe('calculateFinance breakdown modes', () => {
   });
 
   it('provides all breakdown categories in standard mode', () => {
-    const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
+    const results = calculateFinance(sampleSettings);
     const standard = results.breakdown.standard;
 
     expect(standard.totalPackage.annual).toBeGreaterThan(standard.preTax.annual);
@@ -108,34 +108,12 @@ describe('effective-dated tax configuration', () => {
     expect(() => selectTaxConfigForDate([sampleTaxConfig], '2026-04-05'))
       .toThrow('No tax configuration is available for 2026-04-05.');
   });
-
-  it('no longer lets the stored rate rows or the date move a figure', () => {
-    // Income tax, NI and student loans come from the Tax Calculator engine now;
-    // the rows only feed selectTaxConfigForDate. Rows that disagree wildly with
-    // the engine, an empty list and a date before any row all give one answer.
-    const absurdConfig: TaxConfig = {
-      ...sampleTaxConfig,
-      incomeTaxBands: { ...sampleTaxConfig.incomeTaxBands, basicRateLimit: 1, basicRatePercent: 99 },
-      nationalInsuranceBands: { ...sampleTaxConfig.nationalInsuranceBands, mainRatePercent: 50 },
-    };
-    const reference = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
-    expect(calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-03-31')).toEqual(reference);
-    expect(calculateFinance(sampleSettings, [previousConfig, sampleTaxConfig], '2026-04-06')).toEqual(reference);
-    expect(calculateFinance(sampleSettings, [absurdConfig], '2026-09-10')).toEqual(reference);
-    expect(calculateFinance(sampleSettings, [], '2026-09-10')).toEqual(reference);
-    expect(calculateFinance(sampleSettings, [sampleTaxConfig], '2020-01-01')).toEqual(reference);
-  });
-
-  it('does not throw when no tax configuration exists for the date', () => {
-    expect(() => calculateFinance(sampleSettings, [], '2026-09-10')).not.toThrow();
-    expect(() => calculateFinance(sampleSettings, [sampleTaxConfig], '2026-04-05')).not.toThrow();
-  });
 });
 
 describe('calculateFinance figures for the £55,000 fixture', () => {
   // £55,000, 5% salary sacrifice (£2,750), plan 2, 1257L, England. Pay for tax,
   // NI and the loan is £52,250.
-  const results = calculateFinance(sampleSettings, [sampleTaxConfig], '2026-09-10');
+  const results = calculateFinance(sampleSettings);
 
   it('takes income tax from the engine bands: 37,700 at 20% and the rest at 40%', () => {
     expect(results.incomeTax).toBeCloseTo(37700 * 0.2 + (52250 - 12570 - 37700) * 0.4, 3);

@@ -117,11 +117,7 @@ export const ukTaxInputFromSettings = (settings: FinanceSettings): UkTaxInput =>
   personalAllowance: settings.personalAllowance,
 });
 
-export const calculateFinance = (
-  settings: FinanceSettings,
-  _taxConfigs: readonly TaxConfig[],
-  _asOfDate: string,
-) => {
+export const calculateFinance = (settings: FinanceSettings) => {
   const {
     grossSalary,
     pensionType,

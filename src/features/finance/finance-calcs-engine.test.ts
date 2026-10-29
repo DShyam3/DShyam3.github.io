@@ -27,7 +27,7 @@ const settings = (over: Partial<FinanceSettings> = {}): FinanceSettings => ({
   ...over,
 });
 
-const run = (s: FinanceSettings) => calculateFinance(s, [], '2026-09-10');
+const run = (s: FinanceSettings) => calculateFinance(s);
 
 /** The engine input written out by hand, so the test does not reuse the code under test. */
 const engineInput = (over: Partial<UkTaxInput>): UkTaxInput => ({

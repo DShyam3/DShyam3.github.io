@@ -11,7 +11,7 @@
 
 ## Leave maximiser & accessibility polish
 
-- Pruned dead code: removed positional `planOptimalHolidays` overload, `OptimalLeavePlan` type alias, and `calculateBirthdayBenefitValue` (+ redundant tests).
+- Pruned dead code: removed positional `planOptimalHolidays` overload, `OptimalLeavePlan` type alias, and `calculateBirthdayBenefitValue` (+ redundant tests). Cleaned up unused `_taxConfigs` and `_asOfDate` parameters from `calculateFinance`.
 - Settings dialog accessibility: added `htmlFor` and matching `id` attributes for `ukRegion`, `taxYear`, `pensionType`, and `studentLoanPlan` form controls. Converted labels to sentence case.
 - Maximiser UX and copy: replaced unicode calendar emoji with SVG icon, formatted strategy bias switch and booking buttons to sentence case, added screen-reader text for birthday emojis.
 - Documentation: cleaned up `FEATURES.md` holiday tracker entry with matched tier names and paragraphs; deleted finished items from `REHAUL_PLAN.md`.
@@ -30,7 +30,7 @@
 1. Verify deployed take-home by tax band card in browser (light/dark themes, 375px mobile viewport).
 2. Verify deployed birthday-count behaviour after sign-in; signed-in live verification remains open.
 3. Option 2 / Plan 8.H: categorisation review queue, category rules ("Merchant X is always Y"), and subscription audit.
-4. Tax engine follow-ups: additional tax years, student-loan threshold source, Settings band fields; clean up unused calculateFinance parameters.
+4. Tax engine follow-ups: additional tax years, student-loan threshold source, Settings band fields.
 5. Owner enrols authenticator; verify hosted auth and post-upgrade cron/edge/pg_net execution.
 6. Books: 45 covers, 97 descriptions, 14 ambiguous entries; progress/series/ISBN/statistics remain planned.
 7. Local Postgres 15→17 reset; continue plan security items, schema rebuild from empty, and Node 24 CI.
