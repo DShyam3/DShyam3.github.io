@@ -165,7 +165,6 @@ browser; Finance was not, because it needs a signed-in session.
 | Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Bills calendar, Forecast, recurring Paid and the Student Loan "You borrowed" figure were checked on the local stack on 2026-10-24, with test rows deleted after: tick, untick, due-day edit, Forecast at 375px, and an empty-date draw left out. Not checked: the early-payment button (its 7-day window cannot open for a monthly bill on 24 October; unit-tested only), and anything on the live site signed in |
 | Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
-| Dialog audit | Statement and investment imports may still nest a `vh` cap inside `.dialog-body` |
 | Watchlist episode dialog | Deliberate split panes; audit their heights on short and narrow screens on their own |
 | Further consolidation | Where a finance hero repeats its first section's figure, keep one. Audit each pair; remove nothing without a home for every figure and action |
 | Home View All | Expands inline. A capped preview linking to Transactions is a product decision, not containment work |
@@ -192,23 +191,6 @@ balance, not deducted). Needs confirmation against owner's SLC 2026-27 adjustmen
 when it lands. Consider whether the pending top-up should compound interest while
 awaiting landing (~2–3% lifetime understatement versus full-rate accrual, currently
 documented approximation).
-
-### Student loan — "Borrowed" has three rules
-
-Three rules decide what Borrowed is, and they can disagree:
-
-- `isBorrowing` in `src/features/finance/useDebtMutations.ts` decides which draws
-  count as borrowing: no `kind`, or `kind` is `borrowing`.
-- `studentLoanBorrowed` in `src/lib/finance/student-loan.ts` is what the card
-  shows: borrowing rows with a real date and a positive amount, else the typed
-  amount.
-- `DebtFormDialog` sums every borrowing draw into `drawTotal` with no validity
-  check, shows that in the Edit field, and saves it as the original amount.
-
-So Edit can show, and save, a figure the card does not, when a draw has no real
-date. *Fix:* move `isBorrowing` into `src/lib/finance`, and have the Edit field
-and the saved amount use `studentLoanBorrowed(...).total`, so one rule answers
-both places. Not started.
 
 ### Blocked on a model key — any provider
 
@@ -254,8 +236,6 @@ extract in the browser.
 ### Row-level save follow-ups (what is left)
 
 - **Four reference tables delete-then-insert.** `finance_recurring_templates`, `finance_credit_bureaus`, `finance_holiday_defaults` and `finance_budget_presets` insert rows with no `id`. A failed or aborted insert leaves no rows. Closing it means natural unique keys and a migration.
-- **`addDebtObservation`'s debt balance update is not queued through the accounts save key.** It updates synchronously; a timed-out balance update can leave the transaction unwritten while the debt is updated.
-- **`logout()` can report "Still signed in" when signOut errored after already removing the session.**
 - **The load waits on the deadline-wrapped save chain, not the raw request.** A request still running after its deadline can land after the load read, so the load gets old state that the save will overwrite.
 - **A timed-out delete in TransactionsTab / BankAccountsSection reloads immediately, inside the grace window, and shows the row again.**
 - **The sync still overwrites a category set mid-sync on a row that had none.**

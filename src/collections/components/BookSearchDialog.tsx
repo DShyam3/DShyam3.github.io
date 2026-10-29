@@ -84,7 +84,7 @@ export function BookSearchDialog({ config, books, onAdd }: BookSearchDialogProps
       if (!next) changeQuery('');
     }}>
       <DialogTrigger asChild><ActionButton icon={Plus} label="Add Book" /></DialogTrigger>
-      <DialogContent className="sm:max-w-3xl p-6">
+      <DialogContent className="sm:max-w-3xl p-6 max-h-[85dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="font-serif">Add Books</DialogTitle>
           <DialogDescription>Search book catalogues and add titles to your reading list.</DialogDescription>
@@ -113,7 +113,7 @@ export function BookSearchDialog({ config, books, onAdd }: BookSearchDialogProps
             {query && <Button type="button" variant="ghost" size="icon" aria-label="Clear book search" className="absolute right-2 top-1/2 -translate-y-1/2" onClick={() => changeQuery('')}><X className="h-5 w-5" /></Button>}
           </div>
         </div>
-        <div className="divide-y divide-border/50 border-y border-border/50" aria-live="polite" aria-busy={loading}>
+        <div className="divide-y divide-border/50 border-y border-border/50 flex-1 overflow-y-auto max-h-[45dvh] overscroll-contain pr-1" aria-live="polite" aria-busy={loading}>
           {loading ? <p className="p-12 text-center text-muted-foreground animate-pulse">Searching book catalogues...</p>
             : error ? <p role="alert" className="p-6 text-sm text-destructive">{error}</p>
             : results.length ? results.map((result) => {

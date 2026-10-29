@@ -83,7 +83,7 @@ export function TmdbSearchDialog({
         <ActionButton icon={Plus} label={triggerLabel} />
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90dvh] flex flex-col p-0">
         <div className="p-6 pb-0">
           <DialogHeader>
             <DialogTitle className="font-serif">{title}</DialogTitle>

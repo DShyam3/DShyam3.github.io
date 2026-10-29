@@ -156,11 +156,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = useCallback(async (): Promise<boolean> => {
         const { error } = await supabase.auth.signOut();
         if (error) {
-            // Offline, auth-js keeps the stored session when the server call
-            // fails (in every scope), so this device is still signed in. Say
-            // so, rather than hide the admin controls until the next token
-            // refresh or reload brings them back.
             console.error('Sign-out failed:', error.message);
+            // If the session was already removed locally despite the server error, clear state
+            const { data } = await supabase.auth.getSession();
+            if (!data.session) {
+                setIsAdmin(false);
+                setSession(null);
+                setMfaRequired(false);
+                return true;
+            }
             return false;
         }
         setIsAdmin(false);

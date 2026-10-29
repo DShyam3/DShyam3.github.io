@@ -1347,11 +1347,13 @@ function useProvideFinanceData() {
       return;
     }
 
-    const { error: balanceError } = await supabase.from('finance_debts')
-      .update({ balance: observation.balance })
-      .eq('id', observation.debtId)
-      .eq('profile_id', profileId);
-    if (balanceError) {
+    const saved = await saveDataToSupabase('accounts', {
+      bankAccounts,
+      memberships,
+      creditScores,
+      debts: updatedDebts,
+    });
+    if (!saved) {
       toast({ title: 'Balance not updated', description: 'The reading was saved, but the debt\'s stored balance was not updated. Reload to check.', variant: 'destructive' });
       return;
     }

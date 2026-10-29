@@ -87,7 +87,7 @@ export function SyncDetailDialog({ entry, open, onOpenChange }: SyncDetailDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl p-0 overflow-hidden bg-card border-border flex flex-col max-h-[85vh]">
+      <DialogContent className="max-w-xl p-0 overflow-hidden bg-card border-border flex flex-col max-h-[85dvh]">
         {/* Header */}
         <DialogHeader className="p-4 border-b border-border/60 bg-secondary/20">
           <div className="flex flex-wrap items-center justify-between gap-2">

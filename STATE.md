@@ -4,6 +4,7 @@
 
 ## Landed & Committed
 
+- **Finance Reliability & Dialog Polish**: Queued debt balance updates through accounts save key in `FinanceDataContext`, added session-cleared check on `logout()`, hardened import/search dialogs against mobile clipping (`dvh` units and scrolling containment for book library results). Pruned merged branches locally and remotely.
 - **Categorisation review queue & Category rules**: Uncategorised / Needs Review transaction filter, inline Category Rule helper ("Always for this merchant"), Rules dialog with pattern matching, target category, optional merchant rename, live match counts, and impact preview. Deterministic read-time rule derivation with strict precedence.
 - **Leave maximiser & Take-home slices**: Optimal Leave Maximiser, half-day holiday tracking, Birthday Day Off leave integration, Take-home by tax band slices across thresholds.
 
