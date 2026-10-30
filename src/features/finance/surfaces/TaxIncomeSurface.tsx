@@ -52,6 +52,7 @@ import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Gift, Pencil, Plus, P
 import { useFinanceTotals } from '../useFinanceTotals';
 import { PayslipsSection } from '../components/PayslipsSection';
 import { PillSwitch } from '../components/PillSwitch';
+import { TakeHomeSlices } from '../components/TakeHomeSlices';
 import { benefitValueOf, getNormalizedHolidays } from '../finance-calcs';
 
 interface TaxIncomeSurfaceProps {
@@ -60,6 +61,8 @@ interface TaxIncomeSurfaceProps {
   setIsSettingsOpen: (open: boolean) => void;
   isBenefitsDialogOpen: boolean;
   setIsBenefitsDialogOpen: (open: boolean) => void;
+  /** Finance figures are hidden; the slice-by-slice shares would give the salary away. */
+  figuresHidden: boolean;
 }
 
 /** Past this many bridges the Maximiser lists only the recommended ones. */
@@ -123,6 +126,7 @@ export default function TaxIncomeSurface({
   setIsSettingsOpen,
   isBenefitsDialogOpen,
   setIsBenefitsDialogOpen,
+  figuresHidden,
 }: TaxIncomeSurfaceProps) {
   const { toast } = useToast();
   const { askDelete, deleteDialog } = useDeleteConfirm();
@@ -1178,6 +1182,14 @@ export default function TaxIncomeSurface({
           </table>
         </div>
       </div>
+
+      {/* The engine input the take-home above comes from, so the two agree. */}
+      <TakeHomeSlices
+        input={results.taxInput}
+        hidden={figuresHidden}
+        benefitsInTaxCode={results.benefitTaxCollectedByCode}
+        fromSettings
+      />
 
       {/* Captured payslips: the figures the deductions above are modelled
           from, as they actually landed (7.7). */}

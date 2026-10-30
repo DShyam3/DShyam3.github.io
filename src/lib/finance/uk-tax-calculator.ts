@@ -503,6 +503,335 @@ export const ukCashAfterTax = (input: UkTaxInput, cash: number): UkCashAfterTax 
   return { gross, incomeTax, nationalInsurance, studentLoan, net: gross - incomeTax - nationalInsurance - studentLoan };
 };
 
+/** What a slice of pay is: salary taxed as pay, the pension taken from the top of it, or benefits in kind taxed on top. */
+export type UkPaySliceKind = 'salary' | 'pension' | 'benefits-in-kind';
+
+/** A slice's deductions, `taken` and `kept`, each over the slice's width. */
+export interface UkPaySliceRates {
+  incomeTax: number;
+  nationalInsurance: number;
+  studentLoan: number;
+  childBenefitCharge: number;
+  taken: number;
+  kept: number;
+}
+
+/** One slice of pay, `from` to `to` in £/yr, and what each of the four deductions takes out of it. */
+export interface UkPaySlice {
+  kind: UkPaySliceKind;
+  /** £/yr. Salary and pension slices are ranges of `income`; benefits-in-kind slices run on from `income`, up to `income` plus the benefits. */
+  from: number;
+  to: number;
+  /** Index into `UK_TAX_BAND_NAMES[region]` of the income tax band the slice's taxable income sits in; null inside the personal allowance, and on pension slices. */
+  taxBand: number | null;
+  /** True when the personal allowance is being withdrawn across the slice (adjusted net income over £100,000, allowance not yet gone). Always false on pension slices. */
+  allowanceTaper: boolean;
+  incomeTax: number;
+  nationalInsurance: number;
+  /** Undergraduate plan plus postgraduate loan. */
+  studentLoan: number;
+  childBenefitCharge: number;
+  /** incomeTax + nationalInsurance + studentLoan + childBenefitCharge. */
+  taken: number;
+  /**
+   * Cash the slice leaves you: its width less `taken` for salary; `-taken` for
+   * a pension slice (its width goes to the pension, and any NI or loan on it
+   * comes out of other pay) and for benefits in kind (never paid).
+   */
+  kept: number;
+  /** Each deduction, `taken` and `kept` over the slice's width; all 0 for a zero-width slice. */
+  rates: UkPaySliceRates;
+}
+
+/** Names of the income tax bands, lowest first, matching the rule set's bands per region. */
+export const UK_TAX_BAND_NAMES: Readonly<Record<UkTaxRegion, readonly string[]>> = {
+  rUK: ['Basic rate', 'Higher rate', 'Additional rate'],
+  scotland: ['Starter rate', 'Basic rate', 'Intermediate rate', 'Higher rate', 'Advanced rate', 'Top rate'],
+};
+
+/** The four deductions a slice reports, before they are summed into `taken`. */
+interface Takings {
+  incomeTax: number;
+  nationalInsurance: number;
+  studentLoan: number;
+  childBenefitCharge: number;
+}
+
+const takingsOf = (b: UkTaxBreakdown): Takings => ({
+  incomeTax: b.incomeTax,
+  nationalInsurance: b.nationalInsurance,
+  studentLoan: b.studentLoan + b.postgradLoan,
+  childBenefitCharge: b.childBenefitCharge,
+});
+
+/**
+ * Down to the penny, so an edge stays on the side of a crossing where its
+ * condition still holds and a cliff just past it falls in the slice above. The
+ * millionth of a pound absorbs bisection's error, so a crossing found at
+ * £12,569.9999999 is still £12,570.
+ */
+const floorPenny = (n: number): number => Math.floor(n * 100 + 1e-4) / 100;
+
+/** Slices narrower than this fold into their neighbour: a sliver is noise, and its rate is meaningless. */
+const MIN_SLICE = 1;
+
+/**
+ * The largest `x` in [0, top] at which `holds` is still true, for a predicate
+ * that is true at 0, false at `top`, and changes once, from true to false. Found
+ * by bisection to better than a ten-millionth of a pound, which the caller then
+ * floors to the penny. The bound of 1,100 halvings covers the whole range of a
+ * double; any real pay stops after about forty.
+ */
+const lastWhere = (holds: (x: number) => boolean, top: number): number => {
+  let lo = 0;
+  let hi = top;
+  for (let i = 0; i < 1100 && hi - lo > 1e-7; i++) {
+    const mid = lo + (hi - lo) / 2;
+    if (mid <= lo || mid >= hi) break;
+    if (holds(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo + (hi - lo) / 2;
+};
+
+/** NI and student loans are charged on pay less a salary sacrifice, not on benefits in kind. */
+const contributionBaseOf = (s: Resolved): number => s.income - sacrificeOf(s);
+
+/**
+ * The edges of the slices along a path from `at(0)` to `at(top)`: 0, every
+ * point inside where a rate changes, and `top`. Each crossing is of a quantity
+ * that never falls as the path goes on (the NI and loan base, adjusted net
+ * income, taxable income, income tax), measured in smooth mode so the taper and
+ * the child benefit charge are continuous: the NI and loan thresholds, the
+ * taper's start and end, the charge's start and end, each income tax band limit
+ * as taxable income reaches it, and where income tax first appears after a
+ * marriage allowance. Floored to the penny; a break under £1 from the edge
+ * before it, or from `top`, is dropped, so no slice is narrower than £1 unless
+ * the whole path is.
+ */
+const edgesAlong = (r: Resolved, at: (v: number) => Resolved, top: number): number[] => {
+  const smoothAt = (v: number): Resolved & { b: UkTaxBreakdown } => {
+    const s = at(v);
+    return { ...s, b: compute(s, { smooth: true }).breakdown };
+  };
+  const start = smoothAt(0);
+  const end = smoothAt(top);
+  const crossings: number[] = [];
+  const cross = (value: (p: Resolved & { b: UkTaxBreakdown }) => number, targets: number[]) => {
+    const from = value(start);
+    const to = value(end);
+    for (const target of targets) {
+      if (from <= target && target < to) crossings.push(lastWhere(v => value(smoothAt(v)) <= target, top));
+    }
+  };
+
+  cross(contributionBaseOf, [
+    RULES.niLower,
+    RULES.niUpper,
+    ...(r.plan !== 'none' ? [RULES.undergradThreshold[r.plan]] : []),
+    ...(r.postgrad ? [RULES.postgradThreshold] : []),
+  ]);
+  cross(p => p.b.adjustedNetIncome, [
+    // With no allowance there is nothing for the taper to withdraw.
+    ...(r.allowance > 0 ? [RULES.taperStart, RULES.taperStart + r.allowance / RULES.taperRate] : []),
+    ...(r.children > 0 ? [RULES.hicbcStart, RULES.hicbcFullAt] : []),
+  ]);
+  const ras = rasGrossOf(r);
+  cross(p => p.b.taxableIncome, [0, ...bandsFor(r.region, ras).map(band => band.limit).filter(Number.isFinite)]);
+  if (r.marriageAllowance) cross(p => p.b.incomeTax, [0]);
+
+  const edges = [0];
+  for (const b of [...new Set(crossings.map(floorPenny))].sort((x, y) => x - y)) {
+    if (b - edges[edges.length - 1] >= MIN_SLICE && top - b >= MIN_SLICE) edges.push(b);
+  }
+  edges.push(top);
+  return edges;
+};
+
+/**
+ * Your pay, slice by slice: each range of `income` over which the income tax
+ * band, the National Insurance rate, the student loan rates and the child
+ * benefit charge are all constant, and how much each takes out of that slice.
+ *
+ * The model: a pension through salary sacrifice or net pay comes off the TOP of
+ * salary, so it is the pay just under the benefits in kind. Under salary
+ * sacrifice it takes nothing at all; under net pay it escapes income tax but
+ * not National Insurance or loans. Benefits in kind sit on top of everything,
+ * taxed but carrying no NI or loan. Relief at source is not a slice, because it
+ * leaves pay untouched; it stretches the tax bands and lowers adjusted net
+ * income for every pound, so the breakpoints move with it instead.
+ *
+ * Salary, pension and benefits are each split wherever a rate changes along
+ * them (see `edgesAlong`), so a net-pay pension across the NI upper limit, or
+ * benefits across the higher-rate limit, are two slices rather than one at a
+ * blended rate. Every amount is the difference of two exact `calculateUkTax`
+ * evaluations at the slice's ends, so the slices telescope: summed,
+ * `incomeTax`, `nationalInsurance`, `studentLoan` (undergraduate plus
+ * postgraduate) and `childBenefitCharge` equal `calculateUkTax(input)`'s own
+ * figures, to float tolerance, and the benefits slices' income tax is
+ * `ukBenefitInKindTax` with the input's own benefits taken out. Where the
+ * taper or the charge steps in pounds or £200s, a slice holds the stepped
+ * total rather than a smoothed rate.
+ *
+ * Ordered salary slices low to high, then the pension's, then the benefits'.
+ * `[]` when there is nothing to show: no income and no benefits in kind, or
+ * income that is negative or not a number. Unrounded, never NaN.
+ */
+export const ukPaySlices = (input: UkTaxInput): UkPaySlice[] => {
+  const r = resolve(input);
+  const exact: Mode = { smooth: false };
+
+  const preTax = preTaxDeductionOf(r);
+  const salaryTop = r.income - preTax;
+
+  const slices: UkPaySlice[] = [];
+  const along = (
+    kind: UkPaySliceKind,
+    at: (v: number) => Resolved,
+    top: number,
+    offset: number,
+  ) => {
+    if (!(top > 0)) return;
+    const edges = edgesAlong(r, at, top);
+    let start = takingsOf(compute(at(0), exact).breakdown);
+    for (let i = 1; i < edges.length; i++) {
+      const from = edges[i - 1];
+      const to = edges[i];
+      const end = takingsOf(compute(at(to), exact).breakdown);
+      const width = to - from;
+      const incomeTax = end.incomeTax - start.incomeTax;
+      const nationalInsurance = end.nationalInsurance - start.nationalInsurance;
+      const studentLoan = end.studentLoan - start.studentLoan;
+      const childBenefitCharge = end.childBenefitCharge - start.childBenefitCharge;
+      const taken = incomeTax + nationalInsurance + studentLoan + childBenefitCharge;
+      const kept = kind === 'salary' ? width - taken : -taken;
+      const middle = compute(at(from + width / 2), { smooth: true }).breakdown;
+      const bands = bandsFor(r.region, rasGrossOf(r));
+      const taxed = kind !== 'pension' && middle.taxableIncome > 0;
+      const over = (n: number): number => (width > 0 ? n / width : 0);
+      slices.push({
+        kind,
+        from: offset + from,
+        to: offset + to,
+        taxBand: taxed ? bands.findIndex(band => band.limit >= middle.taxableIncome) : null,
+        allowanceTaper:
+          kind !== 'pension' && middle.adjustedNetIncome > RULES.taperStart && middle.personalAllowance > 0,
+        incomeTax,
+        nationalInsurance,
+        studentLoan,
+        childBenefitCharge,
+        taken,
+        kept,
+        rates: {
+          incomeTax: over(incomeTax),
+          nationalInsurance: over(nationalInsurance),
+          studentLoan: over(studentLoan),
+          childBenefitCharge: over(childBenefitCharge),
+          taken: over(taken),
+          kept: over(kept),
+        },
+      });
+      start = end;
+    }
+  };
+
+  // Salary alone at `x`: no benefits in kind and no pension that leaves pay
+  // (that is the next path), but relief at source stays, since it never leaves
+  // pay and so shapes the bands and adjusted net income at every pound.
+  along('salary', x => ({
+    ...r,
+    income: x,
+    bik: 0,
+    contribution: r.method === 'relief-at-source' ? r.contribution : 0,
+  }), salaryTop, 0);
+  // The pension taken from the top: pay rises by `v` and all of it is
+  // contributed, so taxed pay holds still and only an NI or loan base can move.
+  along('pension', v => ({ ...r, income: salaryTop + v, contribution: v, bik: 0 }), preTax, salaryTop);
+  // Benefits in kind on top of everything else.
+  along('benefits-in-kind', v => ({ ...r, bik: v }), r.bik, r.income);
+
+  return slices;
+};
+
+/** What `ukTakeHomeBySlice` reports; all £/yr and unrounded unless a share. */
+export interface UkTakeHomeBySlice {
+  /** `income` as the engine reads it (sanitised): the salary or profit every share is of. */
+  pay: number;
+  slices: UkPaySlice[];
+  /** Sums over the slices; equal to calculateUkTax(input)'s figures. `studentLoan` is undergraduate plus postgraduate. */
+  incomeTax: number;
+  nationalInsurance: number;
+  studentLoan: number;
+  childBenefitCharge: number;
+  taken: number;
+  /** Cash that leaves pay for the pension: calculateUkTax(input).pensionFromPay (80% of the gross under relief at source). */
+  pension: number;
+  /** Relief at source only: the gross contribution every band from the basic rate up is widened by. 0 otherwise. Paid from take-home, so it is no slice. */
+  reliefAtSource: number;
+  childBenefit: number;
+  /** pay - taken - pension: what reaches the bank from pay, child benefit not included. Negative when deductions and pension exceed pay. */
+  kept: number;
+  /** -kept when kept is negative, else 0. */
+  shortfall: number;
+  /** Each over pay; all 0 when pay is 0. keptShare + takenShare + pensionShare is 1 when pay is above 0. */
+  keptShare: number;
+  takenShare: number;
+  pensionShare: number;
+  /** The four deductions over pay; they add up to `takenShare`. */
+  incomeTaxShare: number;
+  nationalInsuranceShare: number;
+  studentLoanShare: number;
+  childBenefitChargeShare: number;
+}
+
+/**
+ * Take-home as the slice-by-slice card shows it: `ukPaySlices`, their totals,
+ * the pension and what pay keeps, each also as a share of pay, so the page
+ * divides nothing itself.
+ *
+ * `kept` is pay less the deductions and the pension. Child benefit is not pay,
+ * so it is reported beside it rather than in it: `kept + childBenefit` is
+ * `calculateUkTax(input).takeHome`. When benefits in kind or a pension cost more
+ * than pay, `kept` is negative and `shortfall` says by how much. Never NaN.
+ */
+export const ukTakeHomeBySlice = (input: UkTaxInput): UkTakeHomeBySlice => {
+  const r = resolve(input);
+  const slices = ukPaySlices(input);
+  const totals = slices.reduce<Takings>(
+    (sum, s) => ({
+      incomeTax: sum.incomeTax + s.incomeTax,
+      nationalInsurance: sum.nationalInsurance + s.nationalInsurance,
+      studentLoan: sum.studentLoan + s.studentLoan,
+      childBenefitCharge: sum.childBenefitCharge + s.childBenefitCharge,
+    }),
+    { incomeTax: 0, nationalInsurance: 0, studentLoan: 0, childBenefitCharge: 0 },
+  );
+  const taken = totals.incomeTax + totals.nationalInsurance + totals.studentLoan + totals.childBenefitCharge;
+  const whole = compute(r, { smooth: false }).breakdown;
+  const pay = r.income;
+  const pension = whole.pensionFromPay;
+  const kept = pay - taken - pension;
+  const share = (n: number): number => (pay > 0 ? n / pay : 0);
+  return {
+    pay,
+    slices,
+    ...totals,
+    taken,
+    pension,
+    reliefAtSource: rasGrossOf(r),
+    childBenefit: whole.childBenefit,
+    kept,
+    shortfall: kept < 0 ? -kept : 0,
+    keptShare: share(kept),
+    takenShare: share(taken),
+    pensionShare: share(pension),
+    incomeTaxShare: share(totals.incomeTax),
+    nationalInsuranceShare: share(totals.nationalInsurance),
+    studentLoanShare: share(totals.studentLoan),
+    childBenefitChargeShare: share(totals.childBenefitCharge),
+  };
+};
+
 /**
  * The fraction of the next £1 of `income` that goes in tax, NI, student loans
  * and the child benefit charge: D(income + 1) - D(income).

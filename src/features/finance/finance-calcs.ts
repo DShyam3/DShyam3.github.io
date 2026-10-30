@@ -96,7 +96,9 @@ export const benefitValueOf = (benefit: PackageBenefit, grossSalary: number): nu
  * the items' combined value: `benefitTax` is what the engine says it adds, and
  * `benefitTaxDeduction` is the part taken from take-home, which is nothing when
  * the tax code's allowance is already below the statutory one because HMRC
- * collects it through the code (`benefitTaxCollectedByCode`).
+ * collects it through the code (`benefitTaxCollectedByCode`). `taxInput` is the
+ * engine input that take-home comes from, benefits in kind included on the
+ * same rule: `calculateUkTax(taxInput).takeHome` is `netTakeHome`.
  */
 /**
  * The engine input the settings describe, salary only. The Tax Calculator
@@ -162,6 +164,14 @@ export const calculateFinance = (
     benefitInKindValue > 0 && ukBasePersonalAllowance(statedPersonalAllowance) < UK_STATUTORY_PERSONAL_ALLOWANCE;
   const benefitTax = ukBenefitInKindTax(salaryInput, benefitInKindValue);
   const benefitTaxDeduction = benefitTaxCollectedByCode ? 0 : benefitTax;
+  // The whole engine input take-home comes from: the salary, plus the benefits
+  // in kind unless the code already collects their tax. The Tax Calculator
+  // seeds from it and the slice-by-slice card reads it, so neither restates
+  // that rule.
+  const taxInput: UkTaxInput = {
+    ...salaryInput,
+    benefitsInKind: benefitTaxCollectedByCode ? 0 : benefitInKindValue,
+  };
 
   const cashBenefits: CashBenefitAfterTax[] = packageBenefits
     .filter(b => b.kind === 'cash')
@@ -214,6 +224,7 @@ export const calculateFinance = (
     benefitTax,
     benefitTaxCollectedByCode,
     benefitInKindValue,
+    taxInput,
     cashBenefits,
     totalPackage,
     personalAllowance,

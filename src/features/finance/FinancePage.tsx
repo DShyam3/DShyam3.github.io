@@ -906,6 +906,7 @@ function FinanceView() {
               setIsSettingsOpen={setIsSettingsOpen}
               isBenefitsDialogOpen={isBenefitsDialogOpen}
               setIsBenefitsDialogOpen={setIsBenefitsDialogOpen}
+              figuresHidden={figures.hidden}
             />}
 
           {/* ==========================================

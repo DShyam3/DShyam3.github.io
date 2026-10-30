@@ -373,6 +373,49 @@ describe('calculateFinance: benefits in kind', () => {
   });
 });
 
+describe('calculateFinance: taxInput', () => {
+  const car = benefit({ id: 'car', name: 'Car', amount: 1570, kind: 'benefit-in-kind' });
+  const bonus = benefit({ id: 'bonus', name: 'Bonus', amount: 10, type: 'percentage', kind: 'cash' });
+
+  it('is the salary input with the benefits in kind added', () => {
+    const results = run(settings({ grossSalary: 60000, personalPensionPercent: 5, packageBenefits: [car, bonus] }));
+    expect(results.taxInput).toEqual(engineInput({
+      income: 60000,
+      pensionContribution: 3000,
+      benefitsInKind: 1570,
+      personalAllowance: 12570,
+    }));
+  });
+
+  it('leaves the benefits out when the tax code already collects their tax', () => {
+    const results = run(settings({ personalAllowance: 11000, packageBenefits: [car] }));
+    expect(results.benefitTaxCollectedByCode).toBe(true);
+    expect(results.taxInput.benefitsInKind).toBe(0);
+    expect(results.taxInput.personalAllowance).toBe(11000);
+  });
+
+  it('reproduces netTakeHome through calculateUkTax, whether or not the code collects the tax', () => {
+    for (const personalAllowance of [12570, 11000, 0]) {
+      for (const pensionType of ['net_pay', 'salary_sacrifice', 'relief_at_source'] as const) {
+        for (const grossSalary of [0, 30000, 60000, 110000]) {
+          for (const ukRegion of ['england-and-wales', 'scotland'] as const) {
+            const results = run(settings({
+              grossSalary,
+              pensionType,
+              personalPensionPercent: 5,
+              studentLoanPlan: 'plan2',
+              personalAllowance,
+              ukRegion,
+              packageBenefits: [car, bonus],
+            }));
+            expect(calculateUkTax(results.taxInput).takeHome).toBeCloseTo(results.netTakeHome, cents);
+          }
+        }
+      }
+    }
+  });
+});
+
 describe('calculateFinance: cash package items', () => {
   const bonus = benefit({ id: 'bonus', name: 'Bonus', amount: 5000, kind: 'cash' });
 

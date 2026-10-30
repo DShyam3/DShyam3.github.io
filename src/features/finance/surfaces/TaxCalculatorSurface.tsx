@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { formatGBP } from '@/features/finance/utils/calculations';
+import { formatGBP, formatGBPWhole } from '@/features/finance/utils/calculations';
 import {
   UK_CHILDCARE_CUTOFF,
   UK_CHILD_BENEFIT_CHARGE_END,
@@ -45,6 +45,7 @@ import { ukTaxInputFromSettings } from '../finance-calcs';
 import { useFinanceTotals } from '../useFinanceTotals';
 import { PillSwitch } from '../components/PillSwitch';
 import { SurfaceHero } from '../components/SurfaceHero';
+import { TakeHomeSlices } from '../components/TakeHomeSlices';
 
 /** The form as typed. Amounts stay strings so a half-typed number survives. */
 interface Draft {
@@ -100,9 +101,6 @@ const UNDERGRAD_PLANS: { key: UkUndergradPlan; label: string }[] = [
 
 const CHILDCARE_STEPS = Array.from({ length: 9 }, (_, i) => i * 2_500);
 
-const wholeGBP = (n: number) =>
-  new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n);
-
 const percent = (rate: number) => `${(rate * 100).toFixed(1)}%`;
 
 /**
@@ -126,8 +124,8 @@ const asField = (n: number) => (n > 0 ? String(Math.round(n * 100) / 100) : '');
 /**
  * The form as your settings fill it, from the same engine input Tax & Income
  * computes with, so the two pages agree. The pension percentage is the gross
- * amount paid in. Benefits in kind are added unless the tax code already
- * collects their tax, as Tax & Income does.
+ * amount paid in. Benefits in kind are Tax & Income's (`taxInput`): added
+ * unless the tax code already collects their tax.
  */
 const draftFromSettings = (base: UkTaxInput, benefitsInKind: number): Draft => ({
   income: asField(base.income),
@@ -160,7 +158,9 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   // seeded from them: the salary, its pension and benefits, and the tax-code
   // allowance all start empty.
   const { results } = useFinanceTotals();
-  const benefitsInKindFromSettings = results.benefitTaxCollectedByCode ? 0 : results.benefitInKindValue;
+  // Tax & Income's own engine input decides these: none when the tax code
+  // already collects their tax.
+  const benefitsInKindFromSettings = results.taxInput.benefitsInKind;
   const seed = useMemo(() => {
     const base = ukTaxInputFromSettings(settings);
     return figuresHidden
@@ -255,7 +255,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
       key: 'pension',
       label: 'Pension',
       note: pensionMethod === 'relief-at-source'
-        ? `You pay ${wholeGBP(result.pensionFromPay)}; the provider claims basic-rate relief on top.`
+        ? `You pay ${formatGBPWhole(result.pensionFromPay)}; the provider claims basic-rate relief on top.`
         : pensionMethod === 'net-pay'
           ? 'Taken before income tax, after National Insurance.'
           : 'Taken before income tax and National Insurance.',
@@ -265,8 +265,8 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
     {
       key: 'tax',
       label: 'Income tax',
-      note: `${wholeGBP(result.personalAllowance)} personal allowance`
-        + (result.marriageAllowanceRelief > 0 ? `, ${wholeGBP(result.marriageAllowanceRelief)} marriage allowance relief` : '')
+      note: `${formatGBPWhole(result.personalAllowance)} personal allowance`
+        + (result.marriageAllowanceRelief > 0 ? `, ${formatGBPWhole(result.marriageAllowanceRelief)} marriage allowance relief` : '')
         + '.',
       value: result.incomeTax,
       sign: '-',
@@ -327,7 +327,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
         ? input.region === 'scotland'
           ? 'Tax-Free Childcare, as entered. Scotland\'s funded hours are not income-tested, so leave them out.'
           : 'Funded hours and Tax-Free Childcare, as entered.'
-        : `Lost: adjusted net income is over ${wholeGBP(UK_CHILDCARE_CUTOFF)}.`,
+        : `Lost: adjusted net income is over ${formatGBPWhole(UK_CHILDCARE_CUTOFF)}.`,
       value: result.netWithSupport,
       tone: 'text-positive',
       kind: 'result' as const,
@@ -478,16 +478,16 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                 <SelectTrigger id="taxcalc-childcare" className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CHILDCARE_STEPS.map(n => (
-                    <SelectItem key={n} value={String(n)} className="text-sm">{n === 0 ? 'None' : wholeGBP(n)}</SelectItem>
+                    <SelectItem key={n} value={String(n)} className="text-sm">{n === 0 ? 'None' : formatGBPWhole(n)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <p className="text-xs text-muted-foreground sm:col-span-2">
-              Child benefit is clawed back between {wholeGBP(UK_CHILD_BENEFIT_CHARGE_START)} and
-              {' '}{wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)} of adjusted net income: 1% for every
-              {' '}{wholeGBP(UK_CHILD_BENEFIT_CHARGE_STEP)} over, all of it by {wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)}.
-              Childcare support goes at once above {wholeGBP(UK_CHILDCARE_CUTOFF)}.
+              Child benefit is clawed back between {formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_START)} and
+              {' '}{formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_END)} of adjusted net income: 1% for every
+              {' '}{formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_STEP)} over, all of it by {formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_END)}.
+              Childcare support goes at once above {formatGBPWhole(UK_CHILDCARE_CUTOFF)}.
             </p>
           </div>
 
@@ -552,10 +552,10 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               {belowChildBenefitBand && (
                 <li>
                   You keep all {formatGBP(result.childBenefit)} of child benefit. The charge takes 1% for every
-                  full {wholeGBP(UK_CHILD_BENEFIT_CHARGE_STEP)} of adjusted net income over
-                  {' '}{wholeGBP(UK_CHILD_BENEFIT_CHARGE_START)}
+                  full {formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_STEP)} of adjusted net income over
+                  {' '}{formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_START)}
                   {childBenefitHeadroom > 0 ? <>, which is {formatGBP(childBenefitHeadroom)} further on</> : null},
-                  and all of it by {wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)}.
+                  and all of it by {formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_END)}.
                 </li>
               )}
               {inChildBenefitBand && (
@@ -568,7 +568,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               {aboveChildBenefitBand && (
                 <li>
                   The charge takes back all {formatGBP(result.childBenefit)} of child benefit. It starts to come
-                  back once adjusted net income falls below {wholeGBP(UK_CHILD_BENEFIT_CHARGE_END)}.
+                  back once adjusted net income falls below {formatGBPWhole(UK_CHILD_BENEFIT_CHARGE_END)}.
                 </li>
               )}
               {cliffs.map(c => (
@@ -582,6 +582,10 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
           )}
         </section>
       </div>
+
+      {/* The same figures again, as the slices of pay each rate actually
+          reaches, because a band's rate is not what a pound in it loses. */}
+      <TakeHomeSlices input={input} />
 
       {/* Chart */}
       <section aria-labelledby="taxcalc-chart" className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 sm:p-6">
@@ -635,7 +639,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               )}
               <Tooltip
                 contentStyle={tooltipStyle}
-                labelFormatter={(v: number) => `${wholeGBP(v)} income`}
+                labelFormatter={(v: number) => `${formatGBPWhole(v)} income`}
                 formatter={(v: number, name: string) => chartMode === 'marginal'
                   ? [percent(v), 'Marginal rate']
                   : [formatGBP(v), name]}

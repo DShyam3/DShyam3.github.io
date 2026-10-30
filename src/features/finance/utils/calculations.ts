@@ -46,6 +46,10 @@ export const formatGBP = (num: number) => {
   }).format(num);
 };
 
+/** Pounds with no pence, for round figures such as thresholds and slice edges. */
+export const formatGBPWhole = (num: number) =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(num);
+
 export const stripNumberFormatting = (value: string) => value.replace(/,/g, '');
 
 export const formatNumberInput = (value: string | number) => {
