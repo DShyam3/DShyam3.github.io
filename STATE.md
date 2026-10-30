@@ -1,8 +1,8 @@
 # State
 
-Updated: 2026-10-30 · Branch: `claude/affectionate-lamarr-f2d2cb` (local, not pushed) · Head: `ad0693e9` · Verified code revision: the merge of `main` `caff0df2`, committed on the branch and not pushed.
+Updated: 2026-10-30 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed) · Verified code revision: `a2e00a2e`, the merge of `main` `caff0df2`.
 
-## Landed (committed on the branch, not pushed)
+## Landed (on the branch, pushed; not in main)
 
 - Merged `main` `caff0df2` into the admin-assistant branch (plan 7.6; forked from main on 2026-10-08). The merge includes `a5a7c892` and `d895a224`.
 - Seven conflicts resolved: header keeps main's socials-open fade plus the assistant `action` slot; the inventory spec parser stays in `src/collections/inventory-specs.ts` with main's `safeHref()` check; finance tool context keeps the branch's ledger and main's local-day alert dates; SECURITY.md lists the assistant's rate limit.
@@ -26,16 +26,15 @@ Updated: 2026-10-30 · Branch: `claude/affectionate-lamarr-f2d2cb` (local, not p
 
 ## Next
 
-1. Push the branch.
-2. Owner's calls (REHAUL_PLAN 7.6): send goal and category names to the model as a confirmed exception, or switch to neutral labels; Cash Flow average divisor; phone header height at 320px.
-3. Fix the history cap: it counts messages, not what one question adds, so it can pass the Edge Function's 64-message cap (`LIMITS.maxMessages`) and wipe the history (REHAUL_PLAN 7.6).
-4. Deploy `assistant`, set a provider key (`supabase secrets set <PROVIDER>_API_KEY=...`), then verify signed in on a live model with the three target questions.
-5. Merge the branch into main.
-6. Then main's list: subscription audit; merchant drilldown; transaction splitting; budget rollover; investment pricing.
+1. Owner's calls (REHAUL_PLAN 7.6): send goal and category names to the model as a confirmed exception, or switch to neutral labels; Cash Flow average divisor; phone header height at 320px.
+2. Fix the history cap: it counts messages, not what one question adds, so it can pass the Edge Function's 64-message cap (`LIMITS.maxMessages`) and wipe the history (REHAUL_PLAN 7.6).
+3. Deploy `assistant`, set a provider key (`supabase secrets set <PROVIDER>_API_KEY=...`), then verify signed in on a live model with the three target questions.
+4. Merge the branch into main.
+5. Then main's list: subscription audit; merchant drilldown; transaction splitting; budget rollover; investment pricing.
 
 ## Blockers and open risks
 
-- The merge is committed on the branch only: not pushed, not in main. Nothing about the assistant is live; the function is not deployed and no model key is set.
+- The merge is on the branch only, pushed to origin; main has none of it. Nothing about the assistant is live; the function is not deployed and no model key is set.
 - Unverified: the assistant has never run against a real provider on this merged code, and no signed-in browser check of it has been done.
 - Unverified wire names (REHAUL_PLAN 7.6): the Anthropic row sends `fallbacks: "default"` under `anthropic-beta: server-side-fallback-2026-07-01`; if the API refuses either, every call fails as a generic 502.
 - No re-review is recorded for the post-review edits to `inventory-tool.ts` and `edc/categories.ts`.
