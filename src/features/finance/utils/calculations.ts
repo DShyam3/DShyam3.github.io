@@ -46,9 +46,12 @@ export const formatGBP = (num: number) => {
   }).format(num);
 };
 
-/** Pounds with no pence, for round figures such as thresholds and slice edges. */
+/** Pounds rounded to whole pounds, for round figures such as thresholds and chart labels. */
 export const formatGBPWhole = (num: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(num);
+
+/** Pounds without a ".00": whole pounds stay whole, and pence still show when there are any. */
+export const formatGBPNoPence = (num: number) => formatGBP(num).replace(/\.00$/, '');
 
 export const stripNumberFormatting = (value: string) => value.replace(/,/g, '');
 

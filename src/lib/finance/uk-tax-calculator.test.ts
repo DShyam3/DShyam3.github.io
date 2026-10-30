@@ -1419,9 +1419,13 @@ const sliceRate = (s: UkPaySlice, field: SliceField | 'taken'): number => s[fiel
 /** The slices of `base` with these fields changed. */
 const slicesOf = (over: Partial<UkTaxInput>): UkPaySlice[] => ukPaySlices(input(over));
 
+/** The four totals, income tax with any marriage allowance lost, which slices report apart. */
 const sumSlices = (slices: UkPaySlice[]): Record<SliceField, number> => {
   const total = { incomeTax: 0, nationalInsurance: 0, studentLoan: 0, childBenefitCharge: 0 };
-  for (const s of slices) for (const f of SLICE_FIELDS) total[f] += s[f];
+  for (const s of slices) {
+    for (const f of SLICE_FIELDS) total[f] += s[f];
+    total.incomeTax += s.marriageAllowanceLost;
+  }
   return total;
 };
 
@@ -1456,6 +1460,8 @@ const sliceProblems = (i: UkTaxInput): string[] => {
     }
     if (s.kind === 'pension' && (s.taxBand !== null || s.allowanceTaper)) fail(`slice ${n} is a pension but has a band`);
     const width = s.to - s.from;
+    if (s.width !== width) fail(`slice ${n} width ${s.width} is not to - from`);
+    if (!(s.marriageAllowanceLost >= 0)) fail(`slice ${n} marriageAllowanceLost is ${s.marriageAllowanceLost}`);
     const kept = s.kind === 'salary' ? width - s.taken : -s.taken;
     if (Math.abs(s.kept - kept) > 1e-9) fail(`slice ${n} kept is ${s.kept}, not ${kept}`);
     for (const f of [...SLICE_FIELDS, 'taken', 'kept'] as const) {
@@ -1502,7 +1508,7 @@ const sliceProblems = (i: UkTaxInput): string[] => {
     if (benefits[0].from !== income || benefits[benefits.length - 1].to !== income + bik) {
       fail('the benefits slices are not on top of pay');
     }
-    const tax = benefits.reduce((sum, b) => sum + b.incomeTax, 0);
+    const tax = benefits.reduce((sum, b) => sum + b.incomeTax + b.marriageAllowanceLost, 0);
     const alone = ukBenefitInKindTax({ ...i, benefitsInKind: 0 }, bik);
     if (Math.abs(tax - alone) > 1e-6) fail(`benefits tax ${tax}, not ${alone}`);
     if (benefits.some(b => b.nationalInsurance !== 0 || b.studentLoan !== 0)) fail('benefits in kind carry NI or a loan');
@@ -1512,7 +1518,8 @@ const sliceProblems = (i: UkTaxInput): string[] => {
   const near = (a: number, b: number) => Math.abs(a - b) < 0.5 * 10 ** -money;
   if (!near(summary.pay, summary.kept + summary.taken + summary.pension)) fail('pay is not kept + taken + pension');
   if (!near(summary.kept + summary.childBenefit, exact.takeHome)) fail('kept + child benefit is not take-home');
-  const keptBySlice = slices.reduce((sum, s) => sum + s.kept, 0) - (summary.reliefAtSource > 0 ? summary.pension : 0);
+  const keptBySlice = slices.reduce((sum, s) => sum + s.kept, 0) - summary.marriageAllowanceLost
+    - (summary.reliefAtSource > 0 ? summary.pension : 0);
   if (!near(keptBySlice, summary.kept)) fail(`the slices keep ${keptBySlice}, not ${summary.kept}`);
   for (const f of SLICE_FIELDS) if (!near(summary[f], expected[f])) fail(`summary ${f} is ${summary[f]}`);
   if (summary.pay > 0) {
@@ -1907,12 +1914,50 @@ describe('ukPaySlices: allowance, child benefit and marriage allowance', () => {
     expect(sumSlices(slices).incomeTax).toBeCloseTo(calculateUkTax(input({ income: 30000, marriageAllowance: true })).incomeTax, money);
   });
 
-  it('shows the marriage allowance lost as extra tax in the slice that crosses the basic-rate limit', () => {
+  it('reports the marriage allowance lost at the basic-rate limit apart from the slice it falls in', () => {
     const slices = slicesOf({ income: 55000, marriageAllowance: true });
     expect(sliceEdges(slices)).toEqual([0, 12570, 13830, 50270, 55000]);
-    // £4,730 at 40%, and the £252 relief gone.
-    expect(slices[3].incomeTax).toBeCloseTo(4730 * 0.2 + 4730 * 0.2 + 252, money);
-    expect(slices[3].incomeTax).toBeCloseTo(2144, money);
+    // £4,730 at 40%; the £252 relief gone is a step, not part of the rate.
+    expect(slices[3].incomeTax).toBeCloseTo(4730 * 0.4, money);
+    expect(slices[3].rates.incomeTax).toBeCloseTo(0.4, money);
+    expect(slices[3].marriageAllowanceLost).toBeCloseTo(252, money);
+    expect(slices.filter((_, n) => n !== 3).every(s => s.marriageAllowanceLost === 0)).toBe(true);
+    expect(ukTakeHomeBySlice(input({ income: 55000, marriageAllowance: true })).marriageAllowanceLost)
+      .toBeCloseTo(252, money);
+  });
+
+  it('keeps the step out of a thin slice just past the limit: £50,271.50 is still 40%', () => {
+    const slices = slicesOf({ income: 50271.5, marriageAllowance: true });
+    const last = slices[slices.length - 1];
+    expect([last.from, last.to]).toEqual([50270, 50271.5]);
+    expect(last.rates.incomeTax).toBeCloseTo(0.4, money);
+    expect(last.marriageAllowanceLost).toBeCloseTo(252, money);
+    expect(last.kept).toBeCloseTo(1.5 * (1 - 0.4 - 0.02), money);
+  });
+
+  it('keeps the step out of the benefits slice that takes taxable income past the limit', () => {
+    const benefits = slicesOf({ income: 49000, benefitsInKind: 1272, marriageAllowance: true })
+      .filter(s => s.kind === 'benefits-in-kind');
+    expect(benefits.every(s => s.rates.incomeTax <= 0.4 + 1e-9)).toBe(true);
+    expect(benefits.reduce((sum, s) => sum + s.marriageAllowanceLost, 0)).toBeCloseTo(252, money);
+  });
+
+  it('never shows an income tax rate above the top band in the taper, with or without a marriage allowance', () => {
+    const problems: string[] = [];
+    for (const region of ['rUK', 'scotland'] as const) {
+      for (const marriageAllowance of [false, true]) {
+        for (const income of [50270.5, 50271.5, 50275, 43662.4, 43663, 55000, 130000]) {
+          for (const benefitsInKind of [0, 1.5, 1272]) {
+            const slices = slicesOf({ region, marriageAllowance, income, benefitsInKind });
+            for (const s of slices) {
+              // 48% × 1.5 in Scotland's taper is the steepest the bands go.
+              if (s.rates.incomeTax > 0.72 + 1e-9) problems.push(`${region} ${income} ${benefitsInKind}: ${s.rates.incomeTax}`);
+            }
+          }
+        }
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   it('puts the first Scottish tax after a marriage allowance at £13,896.31, the penny before it starts', () => {
@@ -1975,6 +2020,8 @@ describe('ukPaySlices: empty, degenerate and hostile input', () => {
       studentLoan: 0,
       childBenefitCharge: 0,
       taken: 0,
+      width: 10000,
+      marriageAllowanceLost: 0,
       kept: 10000,
       rates: { incomeTax: 0, nationalInsurance: 0, studentLoan: 0, childBenefitCharge: 0, taken: 0, kept: 1 },
     });
@@ -2107,6 +2154,69 @@ describe('ukPaySlices: no break is missed inside a slice', () => {
   });
 });
 
+describe('ukPaySlices: no break is missed inside a pension or benefits slice', () => {
+  /** Everything calculateUkTax takes, as one figure. */
+  const deductions = (i: UkTaxInput): number => {
+    const b = calculateUkTax(i);
+    return b.incomeTax + b.nationalInsurance + b.studentLoan + b.postgradLoan + b.childBenefitCharge;
+  };
+  /** The rate over `window` pounds from `at`, along a path that moves `move` pounds. */
+  const slope = (move: (v: number) => UkTaxInput, at: number, window: number): number =>
+    (deductions(move(at + window)) - deductions(move(at))) / window;
+
+  it('has the same rate at both ends and the middle of every net-pay pension slice', () => {
+    const problems: string[] = [];
+    for (const region of ['rUK', 'scotland'] as const) {
+      for (const undergradPlan of ['none', 'plan1', 'plan2'] as const) {
+        for (const postgradLoan of [false, true]) {
+          for (const income of [30000, 61000, 120000]) {
+            for (const share of [0.05, 0.5, 1]) {
+              const i = input({ region, undergradPlan, postgradLoan, income, pensionContribution: income * share, pensionMethod: 'net-pay' });
+              const salaryTop = income - Math.min(income, income * share);
+              // The pension path: pay grows by v, and all of it is contributed.
+              const move = (y: number): UkTaxInput => ({ ...i, income: y, pensionContribution: y - salaryTop });
+              for (const s of ukPaySlices(i).filter(p => p.kind === 'pension')) {
+                if (s.width < 3) continue;
+                const rates = [s.from + 0.01, s.from + s.width / 2 - 0.5, s.to - 1.01].map(y => slope(move, y, 1));
+                if (rates.some(r => Math.abs(r - rates[0]) > 1e-9)) {
+                  problems.push(`${JSON.stringify(i)} [${s.from}, ${s.to}]: ${rates.join(', ')}`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('has the same rate at both ends and the middle of every benefits slice', () => {
+    // No children or marriage allowance: the charge's £200 steps and the allowance's
+    // one step are not rates. Measured over £2, the taper's £1 steps average out exactly.
+    const problems: string[] = [];
+    for (const region of ['rUK', 'scotland'] as const) {
+      for (const personalAllowance of [undefined, 0, 1100]) {
+        for (const pensionMethod of ['salary-sacrifice', 'net-pay', 'relief-at-source'] as const) {
+          for (const income of [20000, 45000, 98000, 123000]) {
+            for (const benefitsInKind of [3000, 40000]) {
+              const i = input({ region, personalAllowance, pensionMethod, pensionContribution: 4000, income, benefitsInKind });
+              const move = (v: number): UkTaxInput => ({ ...i, benefitsInKind: v - income });
+              for (const s of ukPaySlices(i).filter(b => b.kind === 'benefits-in-kind')) {
+                if (s.width < 7) continue;
+                const rates = [s.from + 0.01, s.from + s.width / 2 - 1, s.to - 2.01].map(v => slope(move, v, 2));
+                if (rates.some(r => Math.abs(r - rates[0]) > 1e-9)) {
+                  problems.push(`${JSON.stringify(i)} [${s.from}, ${s.to}]: ${rates.join(', ')}`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
 describe('ukPaySlices: reconciliation with calculateUkTax', () => {
   const regions: UkTaxRegion[] = ['rUK', 'scotland'];
   const methods: UkPensionMethod[] = ['salary-sacrifice', 'net-pay', 'relief-at-source'];
@@ -2219,6 +2329,13 @@ describe('ukPaySlices: edges are floored and slivers folded', () => {
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  it('floors a pension edge in pounds of salary, not of the path: £50,270 for a pension starting at £48,672.832', () => {
+    const pension = slicesOf({ income: 51234.56, pensionContribution: 51234.56 * 0.05, pensionMethod: 'net-pay' })
+      .filter(s => s.kind === 'pension');
+    expect(pension.map(s => s.to)).toEqual([50270, 51234.56]);
+    expect(pension[0].from).toBeCloseTo(48672.832, 9);
   });
 
   it('keeps a pension under £1 as its one slice', () => {

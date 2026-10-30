@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { FinanceSettings, HalfDay, LeaveType, PackageBenefit, PackageBenefitKind, UserHoliday } from '@/features/finance/finance-types';
-import { formatGBP } from '@/features/finance/utils/calculations';
+import { formatGBP, formatGBPNoPence } from '@/features/finance/utils/calculations';
 import {
   BIRTHDAY_LEAVE_RULES,
   BIRTHDAY_LEAVE_RULE_LABELS,
@@ -148,10 +148,6 @@ export default function TaxIncomeSurface({
 
   // Only read when the card is too narrow for all five period columns.
   const [period, setPeriod] = useState<Period>('monthly');
-
-  // £-formatted with no pence: NI thresholds are round pounds, so the ".00"
-  // formatGBP always adds is only noise here.
-  const formatGBPNoPence = (n: number) => formatGBP(n).replace(/\.00$/, '');
 
   // From the engine's own rates, which are what the figure uses.
   const nationalInsuranceNote =

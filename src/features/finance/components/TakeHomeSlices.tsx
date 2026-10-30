@@ -5,7 +5,8 @@
  * start in different places, so "the 40% band" is not what a pound in it
  * loses. Every figure here comes from `ukTakeHomeBySlice`: the slices of pay
  * over which each rate holds still, what each one takes and keeps, and the
- * totals and shares of pay they add up to. This component only words them.
+ * totals and shares of pay they add up to. This component only words them,
+ * and shows the year's take-home as twelve months.
  *
  * The switch takes the pension and benefits in kind out, leaving the salary
  * alone, or puts them back, so the share kept is what actually reaches the
@@ -16,7 +17,7 @@ import { useId, useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { formatGBP, formatGBPWhole } from '@/features/finance/utils/calculations';
+import { formatGBP, formatGBPNoPence } from '@/features/finance/utils/calculations';
 import {
   UK_TAX_BAND_NAMES,
   ukTakeHomeBySlice,
@@ -26,20 +27,22 @@ import {
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 
-type SegmentKey = 'pension' | 'take-home' | 'tax' | 'ni' | 'loan';
+type SegmentKey = 'pension' | 'take-home' | 'tax' | 'charge' | 'ni' | 'loan';
 
 /**
  * Fill and order of the bar. Take-home is the positive green and the pension
- * a tint of it, since both are yours; the deductions keep off green. Checked
- * with the dataviz palette validator on both themes' card surfaces: every pair
- * that can end up side by side, with the pension or loan segment missing or
- * not, stays apart in normal and colour-blind vision. The tint is under 3:1
- * against the card, so the legend under the bar names every value.
+ * a tint of it, since both are yours; the deductions keep off green, and the
+ * child benefit charge is a tint of income tax's purple. Checked with the
+ * dataviz palette validator on both themes' card surfaces: every pair that can
+ * end up side by side, whichever optional segments are missing, stays apart in
+ * normal and colour-blind vision. The tints are under 3:1 against the card, so
+ * the legend under the bar names every value.
  */
 const SEGMENT_FILL: Record<SegmentKey, string> = {
   pension: 'bg-positive/40',
   'take-home': 'bg-positive',
   tax: 'bg-chart-3',
+  charge: 'bg-chart-3/50',
   ni: 'bg-chart-4',
   loan: 'bg-chart-2',
 };
@@ -49,9 +52,6 @@ const pct = (share: number) => {
   const p = Math.round(share * 1000) / 10;
   return `${Number.isInteger(p) ? p : p.toFixed(1)}%`;
 };
-
-/** A slice edge: whole pounds unless it really has pence. */
-const edge = (n: number) => (Number.isInteger(Math.round(n * 100) / 100) ? formatGBPWhole(n) : formatGBP(n));
 
 /** Below this an amount is float dust, not a deduction worth naming. */
 const PENNY = 0.005;
@@ -96,18 +96,15 @@ export function TakeHomeSlices({
   const loanLabel = view.postgradLoan && view.undergradPlan !== 'none'
     ? 'student loans'
     : view.postgradLoan ? 'postgraduate loan' : 'student loan';
-  const hasCharge = pay.childBenefitCharge > PENNY;
   const pensionOffPay = pay.pension > PENNY && pay.reliefAtSource > 0;
+  // A row under a penny wide has nothing to show; the totals still count it.
+  const rows = pay.slices.filter(slice => slice.width > PENNY);
 
   const segments = ([
     { key: 'pension', label: 'Pension', value: pay.pension, share: pay.pensionShare },
     { key: 'take-home', label: 'Take-home', value: pay.kept, share: pay.keptShare },
-    {
-      key: 'tax',
-      label: hasCharge ? 'Income tax and child benefit charge' : 'Income tax',
-      value: pay.incomeTax + pay.childBenefitCharge,
-      share: pay.incomeTaxShare + pay.childBenefitChargeShare,
-    },
+    { key: 'tax', label: 'Income tax', value: pay.incomeTax, share: pay.incomeTaxShare },
+    { key: 'charge', label: 'Child benefit charge', value: pay.childBenefitCharge, share: pay.childBenefitChargeShare },
     { key: 'ni', label: 'National Insurance', value: pay.nationalInsurance, share: pay.nationalInsuranceShare },
     {
       key: 'loan',
@@ -147,7 +144,7 @@ export function TakeHomeSlices({
     benefitsTaxed ? 'income tax (with the tax on benefits in kind)' : 'income tax',
     'National Insurance',
     ...(pay.studentLoan > PENNY ? [loanLabel] : []),
-    ...(hasCharge ? ['the child benefit charge'] : []),
+    ...(pay.childBenefitCharge > PENNY ? ['the child benefit charge'] : []),
     ...(pay.pension > PENNY ? ['pension'] : []),
   ];
   const what = `after ${takenFrom.slice(0, -1).join(', ')} and ${takenFrom[takenFrom.length - 1]}`;
@@ -174,7 +171,7 @@ export function TakeHomeSlices({
           </Label>
           <Switch
             id={switchId}
-            checked={withExtras}
+            checked={withExtras && hasExtras}
             onCheckedChange={setWithExtras}
             disabled={hidden || !hasExtras}
           />
@@ -261,7 +258,7 @@ export function TakeHomeSlices({
               </tr>
             </thead>
             <tbody>
-              {pay.slices.map((slice, i) => {
+              {rows.map((slice, i) => {
                 const ownPay = slice.kind === 'salary';
                 const cell = cn('py-2 align-top', i === 0 && 'pt-3');
                 return (
@@ -269,8 +266,8 @@ export function TakeHomeSlices({
                     <th scope="row" className={cn(cell, 'pr-4 text-left font-normal text-foreground')}>
                       <span className="font-mono tabular-nums">
                         {slice.kind === 'benefits-in-kind'
-                          ? `${formatGBP(slice.to - slice.from)} of benefits`
-                          : `${edge(slice.from)} to ${edge(slice.to)}`}
+                          ? `${formatGBP(slice.width)} of benefits`
+                          : `${formatGBPNoPence(slice.from)} to ${formatGBPNoPence(slice.to)}`}
                       </span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
                         {sliceNote(slice)}
@@ -291,20 +288,38 @@ export function TakeHomeSlices({
                         {ownPay
                           ? pct(slice.rates.kept)
                           : slice.kind === 'pension'
-                            ? `${formatGBP(slice.to - slice.from)} to pension`
+                            ? `${formatGBP(slice.width)} to pension`
                             : 'from your pay'}
                       </span>
                     </td>
                   </tr>
                 );
               })}
+              {pay.marriageAllowanceLost > PENNY && (
+                <tr>
+                  <th scope="row" className="py-2 pr-4 align-top text-left font-normal text-foreground">
+                    Marriage allowance lost
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Taxable income passes the limit for it, so the relief stops: one step, not a rate.
+                      {' '}<span className="sm:hidden">Taken: {formatGBP(pay.marriageAllowanceLost)}.</span>
+                    </span>
+                  </th>
+                  <td className="hidden py-2 pl-4 align-top text-right font-mono tabular-nums whitespace-nowrap text-foreground sm:table-cell">
+                    {formatGBP(pay.marriageAllowanceLost)}
+                  </td>
+                  <td className="py-2 pl-4 align-top text-right font-mono tabular-nums whitespace-nowrap text-foreground">
+                    -{formatGBP(pay.marriageAllowanceLost)}
+                  </td>
+                </tr>
+              )}
               {pensionOffPay && (
                 <tr>
                   <th scope="row" className="py-2 pr-4 align-top text-left font-normal text-foreground">
                     Pension, relief at source
                     <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Paid from take-home; the provider adds basic-rate relief, and the bands from the basic
-                      rate up start {formatGBP(pay.reliefAtSource)} later.
+                      Paid from take-home; the provider adds basic-rate relief. The bands above the basic
+                      rate, the allowance taper and the child benefit charge all start
+                      {' '}{formatGBP(pay.reliefAtSource)} later.
                     </span>
                   </th>
                   <td className="hidden py-2 pl-4 align-top text-right font-mono tabular-nums text-muted-foreground sm:table-cell">

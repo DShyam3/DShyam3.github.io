@@ -77,6 +77,25 @@ export const benefitValueOf = (benefit: PackageBenefit, grossSalary: number): nu
 };
 
 /**
+ * The engine input the settings describe, salary only. The Tax Calculator
+ * seeds from this too, so the two pages read the settings the same way.
+ */
+export const ukTaxInputFromSettings = (settings: FinanceSettings): UkTaxInput => ({
+  income: settings.grossSalary,
+  kind: 'employed',
+  region: settings.ukRegion === 'scotland' ? 'scotland' : 'rUK',
+  benefitsInKind: 0,
+  pensionContribution: settings.grossSalary * (settings.personalPensionPercent / 100),
+  pensionMethod: PENSION_METHOD[settings.pensionType] ?? 'net-pay',
+  undergradPlan: settings.studentLoanPlan === 'postgrad' ? 'none' : settings.studentLoanPlan,
+  postgradLoan: settings.studentLoanPlan === 'postgrad',
+  children: 0,
+  childcareSupport: 0,
+  marriageAllowance: false,
+  personalAllowance: settings.personalAllowance,
+});
+
+/**
  * Everything the Tax & Income page derives from the settings.
  *
  * Income tax, National Insurance and student loans come from
@@ -100,25 +119,6 @@ export const benefitValueOf = (benefit: PackageBenefit, grossSalary: number): nu
  * engine input that take-home comes from, benefits in kind included on the
  * same rule: `calculateUkTax(taxInput).takeHome` is `netTakeHome`.
  */
-/**
- * The engine input the settings describe, salary only. The Tax Calculator
- * seeds from this too, so the two pages read the settings the same way.
- */
-export const ukTaxInputFromSettings = (settings: FinanceSettings): UkTaxInput => ({
-  income: settings.grossSalary,
-  kind: 'employed',
-  region: settings.ukRegion === 'scotland' ? 'scotland' : 'rUK',
-  benefitsInKind: 0,
-  pensionContribution: settings.grossSalary * (settings.personalPensionPercent / 100),
-  pensionMethod: PENSION_METHOD[settings.pensionType] ?? 'net-pay',
-  undergradPlan: settings.studentLoanPlan === 'postgrad' ? 'none' : settings.studentLoanPlan,
-  postgradLoan: settings.studentLoanPlan === 'postgrad',
-  children: 0,
-  childcareSupport: 0,
-  marriageAllowance: false,
-  personalAllowance: settings.personalAllowance,
-});
-
 export const calculateFinance = (
   settings: FinanceSettings,
   _taxConfigs: readonly TaxConfig[],
