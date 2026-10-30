@@ -1589,7 +1589,7 @@ function useProvideFinanceData() {
             .from('finance_profiles')
             .select(FINANCE_PROFILE_COLUMNS)
             .order('is_self', { ascending: false }),
-          scoped(supabase.from('finance_category_rules').select('id, profile_id, merchant_pattern, category, rename_to, created_at, updated_at'))
+          scopedByProfile(supabase.from('finance_category_rules').select('id, profile_id, merchant_pattern, category, rename_to, created_at, updated_at'))
         ]);
         if (loadSeq !== loadSeqRef.current || profileId !== currentProfileRef.current) return;
 
