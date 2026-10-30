@@ -28,6 +28,7 @@ type AiredEpisode = TMDBEpisode & { air_date: string };
 const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
 import { NIGHTLY_SYNC_HOUR_UTC } from './sync-logic';
+import { releaseYear } from './watchlist-utils';
 
 // Returns a referentially-stable function that always calls the latest
 // version of `fn`. Used so the context value below doesn't hand out a new
@@ -409,9 +410,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           status: show.status || 'Plan to Watch',
           description: undefined,
           descriptionLoaded: false,
-          year: show.release_date
-            ? new Date(show.release_date).getFullYear()
-            : undefined,
+          year: releaseYear(show.release_date),
           genres: show.genre
             ? show.genre.split(',').map((g: string) => g.trim())
             : [],

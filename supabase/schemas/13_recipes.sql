@@ -16,11 +16,11 @@ ALTER TABLE "public"."recipes" OWNER TO "postgres";
 ALTER TABLE ONLY "public"."recipes"
     ADD CONSTRAINT "recipes_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Admin delete" ON "public"."recipes" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."recipes" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."recipes" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."recipes" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."recipes" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."recipes" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Public Read Access" ON "public"."recipes" FOR SELECT USING (true);
 
@@ -28,8 +28,12 @@ ALTER TABLE "public"."recipes" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT ALL ON TABLE "public"."recipes" TO "anon";
+REVOKE ALL ON TABLE "public"."recipes" FROM "anon";
 
-GRANT ALL ON TABLE "public"."recipes" TO "authenticated";
+GRANT SELECT ON TABLE "public"."recipes" TO "anon";
+
+REVOKE ALL ON TABLE "public"."recipes" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."recipes" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."recipes" TO "service_role";

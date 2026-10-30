@@ -25,7 +25,7 @@ number is not below.
 Audit date: 2026-09-04. Plan cut back to what is left on 2026-09-12; Phase 8
 added the same day.
 Supabase project: `yvtiybyuifkiwyrnjebe` (Personal_Website, eu-west-2,
-Postgres 15.8.1.030).
+Postgres 17.11.0.003, upgraded in place from 15.8.1.030 on 2026-10-25).
 
 ---
 
@@ -158,15 +158,14 @@ The middle card landed: one framed scroller per route, toolbars that pin only
 where they fit, Travel's workspace mode, the income overview, and the nested
 caps released (`FEATURES.md`, `DESIGN_SYSTEM.md` responsive contract; the
 decisions are in `REHAUL_HISTORY.md`). Public routes were checked in the
-browser; Finance was not, because it needs a signed-in session.
+browser. Signed-in Finance verification now covers Tax & Income and a synthetic
+calculator scenario; the wider pass below remains open.
 
 | Item | Why it is open |
 |---|---|
-| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only |
+| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Bills calendar, Forecast, recurring Paid and the Student Loan "You borrowed" figure were checked on the local stack on 2026-10-24, with test rows deleted after: tick, untick, due-day edit, Forecast at 375px, and an empty-date draw left out. Not checked: the early-payment button (its 7-day window cannot open for a monthly bill on 24 October; unit-tested only), and the wider live signed-in flows. Live Tax & Income and a synthetic calculator scenario with negative benefits cash impact render correctly; a 375px viewport has no document overflow. The category-rules loading error is cleared after migration and loader deployment, verified in a fresh signed-in tab on 2026-10-30. Light-theme smoke check passed at 1440px and dark was restored; the full cross-theme pass remains open |
 | Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
-| Toolbars that wrap to many rows | Inspiration's filters take four rows (291px) at 768px, so the band unpins and scrolls away. A disclosure for secondary filters would let it pin |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
-| Dialog audit | Statement and investment imports may still nest a `vh` cap inside `.dialog-body` |
 | Watchlist episode dialog | Deliberate split panes; audit their heights on short and narrow screens on their own |
 | Further consolidation | Where a finance hero repeats its first section's figure, keep one. Audit each pair; remove nothing without a home for every figure and action |
 | Home View All | Expands inline. A capped preview linking to Transactions is a product decision, not containment work |
@@ -252,6 +251,14 @@ So the gate is *a* key, not a particular vendor's:
   is one. Confirm that as a deliberate exception, or switch both to neutral
   labels. Debt and card names are already withheld.
 
+  **Open:** the history cap counts messages, not what one question adds.
+  On the OpenAI protocol every parallel tool result is its own message, so
+  23 history messages, the system prompt and a question, then four rounds of
+  nine or more calls, pass the Edge Function's 64-message cap
+  (`LIMITS.maxMessages`, `assistant/providers.ts`). The function answers a
+  generic 400 and the history is discarded. Check the count before sending,
+  and restart the conversation rather than send a request that will be refused.
+
   **Open, the owner's call:** the Cash Flow page's monthly average. The
   assistant's `get_cash_flow` averages only complete months of records
   (`completeRecordedMonths` in `src/lib/finance/cash-flow.ts`), but
@@ -265,7 +272,8 @@ So the gate is *a* key, not a particular vendor's:
 
   **Open, the owner's call:** the phone header's height at 320px. It is
   184–226px tall at 320px wide on a 568px-tall screen (129–185px from 360px up),
-  measured in Chrome emulation on 2026-10-09; real phones are unmeasured. One
+  measured in Chrome emulation on 2026-10-09 and unchanged on the header
+  merged from main on 2026-10-30; real phones are unmeasured. One
   option is dropping the role line below 360px. The role renders only in the
   header (`SITE.role` in `src/components/layout/Header.tsx`), so the cut would
   touch no other surface. Also optional: rename /auth's title. "Authentication"
@@ -293,19 +301,63 @@ extract in the browser.
 ### Left-over from provider and save-safety work (2026-09-27)
 
 - **Shared default rows — transactions and bank accounts only** — Transactions and bank accounts refuse to write shared rows. Latent: no profile shows shared rows in these tables today. Decide: treat shared rows as read-only in the UI, or materialise them per profile as the budget does.
-- **Schema-file anon grants drift** — `supabase/schemas/40_finance.sql` declares `INSERT/UPDATE/DELETE/TRUNCATE` grants on `finance_budget_items`, `finance_categories`, `finance_recurring_bills`, `finance_templates` for the anon role, but live anon holds none (verified 2026-09-27). Not an exposure (RLS allows only what the policies grant), but the file disagrees with the live state. Clarify which is the source of truth and sync the other.
 - **`handleEditItem` in BudgetSurface** — pre-existing: drops `linkedAccountId` on save, unlike `handleAddItem`. Owner's call whether to preserve it.
 - **Preset provider names** — existing items like "Streaming (Netflix)" fold provider into the name (transactions match by name); the `provider` column is separate. Owner decided not to split existing names into the provider field. Existing and new items can diverge on this point.
 
 ### Row-level save follow-ups (what is left)
 
 - **Four reference tables delete-then-insert.** `finance_recurring_templates`, `finance_credit_bureaus`, `finance_holiday_defaults` and `finance_budget_presets` insert rows with no `id`. A failed or aborted insert leaves no rows. Closing it means natural unique keys and a migration.
-- **`addDebtObservation`'s debt balance update is not queued through the accounts save key.** It updates synchronously; a timed-out balance update can leave the transaction unwritten while the debt is updated.
-- **`logout()` can report "Still signed in" when signOut errored after already removing the session.**
 - **The load waits on the deadline-wrapped save chain, not the raw request.** A request still running after its deadline can land after the load read, so the load gets old state that the save will overwrite.
 - **A timed-out delete in TransactionsTab / BankAccountsSection reloads immediately, inside the grace window, and shows the row again.**
 - **The sync still overwrites a category set mid-sync on a row that had none.**
 - **A token refresh on a dead link is not limited.** supabase-js refreshes through `/auth/v1/` before the request is made, so the 25 s limit never starts; a save key timed out meanwhile stays held until the refresh settles or the page reloads. Do not time out the refresh itself: aborting one the server already rotated can end the session.
+
+### Database follow-ups found in the 2026-10-24 schema repair
+
+One item, schema files only. It is also described in `supabase/schemas/40_finance.sql`, which points here.
+
+- **`schemas/` cannot rebuild the database from empty.** `finance_bank_accounts_id_profile_id_key` and `idx_finance_transactions_profile_id_id` exist only in migrations, so the composite foreign keys in 40_finance.sql fail on a schemas-only build (first at `finance_transfer_links_profile_outflow_fkey`). Audit schemas/ against a migrated database object by object and add what is missing; no migration for objects that already exist.
+
+### Security audit and scan, 2026-10-24 — what is left
+
+The audit (`security/AI-CHECKLIST.md`) found nothing critical or high; its
+MEDIUM comes from dashboard auth alone. The scan on `9568b7d4` reports no
+dependency advisory. The LOWs below are the audit's unless marked. What was
+checked, and how, is in `SECURITY.md`.
+
+**Owner, outside the code:**
+
+- Enrol the administrator's authenticator on `/auth` (signed in, "Set up two-factor"). Hosted TOTP was already enabled on 2026-10-25; until a verified factor exists the second step does not apply (REHAUL_HISTORY.md, 2026-10-25).
+- Local stack reset, then `major_version` 15 → 17 in `supabase/config.toml`. The local stack is still Postgres 15, and a 17 config cannot start on the existing PG15 volume, so the bump goes in the same change as the reset, once the owner decides on the reset.
+- Delete the `VITE_TMDB_BASE_URL` GitHub Actions secret; no workflow reads it.
+
+**Code:**
+
+- `schemas/90_privileges.sql`: default privileges still give `anon` rights on
+  new sequences and functions.
+- `file-signature.ts` reads 32 bytes. A HEIC with a generic major brand (`mif1`
+  or `msf1`) is refused when its HEVC brand is fifth or later in the compatible
+  list, or when its `ftyp` box size is 0. It fails safe; widen the read only if a
+  real file trips it (`553b08e3`).
+- The Umami tag the build injects (`vite.config.ts`, from `site.json`) lacks
+  `data-exclude-search`. Umami also loads on `/finance`, where the OAuth
+  callback query is probably sent before `replaceState` clears it
+  (unconfirmed).
+
+**Doc drift:**
+
+- README does not list the `SITE_ORIGIN` secret.
+
+**Unverified.** Not checked, and not to be read as passed: a real authenticated
+run of `truelayer-sync` v48 and `watchlist-cron-sync` v14 (the 2026-10-25 probes
+had no admin session); the `verify_jwt` setting on `truelayer-sync` v48 (read
+back before v48 was deployed; the deploy flags keep it false); whether
+`SITE_ORIGIN` is set on hosted; live response headers; a signed-in upload or
+saved link on the live site (checked on the local stack only); a real HEIC file
+(the tests use synthetic `ftyp` boxes). Since the Postgres 17 upgrade
+(2026-10-25): the first scheduled cron runs (the next is 02:10 UTC), the edge
+functions and their pg_net calls, and a signed-in admin session. The cron jobs
+were checked in the catalogue only.
 
 ### Sync and profile switch interactions
 
@@ -324,6 +376,14 @@ The code no longer names the owner outside `src/config/site.json`
   migrations `20260904130000` and `20260911090000` carry the owner email; a
   fork needs its own `admin_users` seed step documented instead.
 - `BankAccountsSection.tsx` `providerLogoUris` is dead code.
+
+### CI runtime
+
+The workflows (`.github/workflows/ci.yml`, `deploy.yml`) run on `ubuntu-latest`
+and pin their Actions to major versions 3 and 4. An earlier handoff recorded that
+GitHub will run Actions on Node 24 and move `ubuntu-latest` to 26. That was not
+checked against GitHub's announcement on 2026-10-24. Confirm it, then move the
+Actions and the Node version before the change is enforced.
 
 ### Deferred by choice
 
@@ -451,7 +511,7 @@ wear. It is arithmetic over rows, so 7.P applies in full — computed in
 | Links | Dead-link check on a cron, flag non-200 | a links page rots silently; highest value on this surface |
 | Links | Archived text on save | survives the source disappearing |
 | Links | Recently added rail, domain rollup | query only |
-| Books | Currently reading with progress | gives the page a present tense |
+| Books | Reading progress for books marked Currently Reading | |
 | Books | Series position — book 3 of 5 | |
 | Books | ISBN autofill via Open Library | free, open, no key: `openlibrary.org/isbn/{isbn}.json` |
 | Books | Reading statistics — pages per month, genre split | feeds 8.D |
@@ -496,14 +556,66 @@ against the same countdown. A flight log is worth it only at volume.
 Phase 7 covered the ledger. These are presentation and review, and each is
 arithmetic over rows already held.
 
-- **Categorisation review queue** — surface uncertain assignments for
-  confirmation rather than assigning silently. This is the 7.P-compliant shape
-  of the feature Copilot ships; straight auto-categorisation is not
-- **Upcoming bills calendar** — recurrings rendered forward
 - **Subscription audit** — price risen, or unused for N months
 - **Merchant drilldown** — spend per merchant per year, off the existing
   merchant resolution
 - **Safe to spend**, **net worth milestones**, **year in review** via 8.D
+
+**Gaps against Copilot and Treasury.** Three more, from comparing the two
+products' feature sets. Unlike the list above, not all are arithmetic over rows
+already held: two need a table or column, and one needs a data source.
+- **Transaction splitting** — one bank row across several categories (a shop
+  that is half groceries, half household). Child rows
+  `finance_transaction_splits(transaction_id, category, amount)` that sum to
+  the parent to the penny, enforced on save and covered by tests. Every figure
+  that reads a category — Home, Budget history, Cash Flow, merchant drilldown —
+  reads the splits when present, so this is calculation work across those
+  modules before it is UI. Bank sync upserts the parent and never touches its
+  splits; settled-only ingest (7.M) keeps the parent amount still under them.
+  *Decide:* whether a split line can itself be a transfer
+- **Budget rollover** — per budget item, unspent money carries into next month.
+  Derive it from history rather than storing a running balance, for the same
+  reason debt balances are anchored rather than floating: a month's rollover is
+  the sum of budget minus spent since the item's rollover start. Needs a flag
+  and a start month. *Decide:* whether overspend carries too, and whether it
+  resets at the tax year or never
+- **Investment prices, benchmark and allocation** — holdings carry import cost
+  only, and the importer never invents a price; that rule stays. Needs a price
+  source behind an Edge Function (key server-side, fixed URLs, never one the
+  client names) writing a dated `finance_prices(symbol, date, close, currency,
+  source)` cache, so a missing price shows as missing rather than guessed.
+  Kraken's public market data covers crypto; equities and funds need a
+  provider whose terms allow personal use — not chosen. Performance against a
+  benchmark and allocation by account and holding are then arithmetic over
+  holdings × prices, converted to GBP. Allocation by asset class or sector
+  needs per-holding metadata nothing supplies today
+
+Order within these: category rules go with the review queue; splitting,
+rollover and prices stand alone. Splitting touches the most figures, so it
+wants a `reviewer` pass before it lands.
+
+**Forecast follow-ups** — day-to-day spending is not modelled; overdraft limits
+are not stored, so "below zero" is the warning; the forecast totals all current
+accounts rather than per account.
+
+**Tax engine — what is left.** Tax & Income and the Tax Calculator both run
+`src/lib/finance/uk-tax-calculator.ts` (decided in `REHAUL_HISTORY.md`,
+2026-10-27). Still open:
+
+- **One tax year.** The engine carries 2026/27 rules only, and no Tax & Income
+  figure reads a rule set by date any more. A new tax year means editing the
+  engine.
+  *Decide:* whether multi-year rules come back as rows, or the engine stays
+  single-year and says so.
+- **`finance_tax_configs`.** Tax & Income no longer reads it for any figure. Its
+  income tax bands feed nothing. Its NI bands feed only the note on the National
+  Insurance row (`TaxIncomeSurface.tsx`), so an edit changes the label and not
+  the amount. Settings still edits all of it under Advanced Configurations. Its
+  student-loan thresholds and rates still set the Student Loan section's
+  repayment threshold and the debt form's monthly figure, while the engine holds
+  its own student-loan thresholds. *Decide:* where the student-loan thresholds
+  live, and whether the band fields leave Settings. The table can go only after
+  the first is answered.
 
 ### 8.I Still to build (the order)
 
@@ -537,6 +649,14 @@ What was worth taking from Trakt is its `last_activities` delta shape, and the
 watched, the same way it did before.
 
 ---
+## Library card-contained scrolling
+
+Keep the Library page within the viewport, with search and category controls
+fixed above a card-contained results scroller. Use compact controls on small
+screens. Verify portrait and landscape sizes, short viewports, keyboard access
+to the end of results, and no document or main-frame overflow. This remains
+unimplemented.
+
 ## Appendix — Verification commands
 
 ```bash

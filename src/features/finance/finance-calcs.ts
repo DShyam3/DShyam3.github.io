@@ -8,13 +8,30 @@
  * ordinary functions any surface can call.
  *
  * They live beside the feature rather than in `lib/finance` because they read
- * the feature's own settings and tax-config shapes -- the same reason
- * finance-defaults.ts is here.
+ * the feature's own settings shape -- the same reason finance-defaults.ts is
+ * here.
  */
 
-import { calculateActualPayday, getDaysInMonth, normalizeHolidays, toISODate } from '@/lib/finance';
-import type { FinanceSettings, TaxConfig, UserHoliday } from '@/features/finance/finance-types';
-import { DEFAULT_BIWEEKLY_ANCHOR } from './finance-defaults';
+import {
+  UK_STATUTORY_PERSONAL_ALLOWANCE,
+  calculateUkTax,
+  epochDay,
+  nextPayday,
+  normalizeHolidays,
+  toISODate,
+  ukBasePersonalAllowance,
+  ukBenefitInKindTax,
+  ukCashAfterTax,
+  type UkPensionMethod,
+  type UkTaxInput,
+} from '@/lib/finance';
+import type {
+  CashBenefitAfterTax,
+  FinanceSettings,
+  PackageBenefit,
+  TaxConfig,
+  UserHoliday,
+} from '@/features/finance/finance-types';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -23,6 +40,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  *
  * Falling back to a future configuration would silently rewrite history, so a
  * caller must add the missing historical rates instead.
+ *
+ * `calculateFinance` no longer reads the result: income tax, NI and student
+ * loans come from the same engine as the Tax Calculator. The rows stay for the
+ * admin rate editor and anything else that wants the timeline.
  */
 export const selectTaxConfigForDate = (
   taxConfigs: readonly TaxConfig[],
@@ -43,94 +64,125 @@ export const selectTaxConfigForDate = (
   return config;
 };
 
-export const calculateFinance = (
-  settings: FinanceSettings,
-  taxConfigs: readonly TaxConfig[],
-  asOfDate: string,
-) => {
-  const taxConfig = selectTaxConfigForDate(taxConfigs, asOfDate);
+const PENSION_METHOD: Record<FinanceSettings['pensionType'], UkPensionMethod> = {
+  net_pay: 'net-pay',
+  salary_sacrifice: 'salary-sacrifice',
+  relief_at_source: 'relief-at-source',
+};
+
+/** A package item's annual value in pounds: its amount, or its share of salary. */
+export const benefitValueOf = (benefit: PackageBenefit, grossSalary: number): number => {
+  const value = benefit.type === 'percentage' ? grossSalary * ((benefit.amount || 0) / 100) : benefit.amount || 0;
+  return value || 0;
+};
+
+/**
+ * Everything the Tax & Income page derives from the settings.
+ *
+ * Income tax, National Insurance and student loans come from
+ * `calculateUkTax` in lib/finance/uk-tax-calculator.ts, the engine the Tax
+ * Calculator runs, so the two pages agree for Scottish and relief-at-source
+ * profiles. That engine describes one tax year (2026/27): `_taxConfigs` and
+ * `_asOfDate` are accepted so callers need not change, but neither affects a
+ * figure, and no tax configuration needs to exist.
+ *
+ * The pension percentage is the gross contribution. What leaves pay for it is
+ * `personalPensionRate` (80% of it under relief at source), and
+ * `personalAllowance` is the allowance after the £100,000 taper.
+ *
+ * Package items are 'cash' or 'benefit-in-kind' (anything else reads as the
+ * latter). Cash items are paid through payroll, each reported after tax in
+ * `cashBenefits` and kept out of take-home. Benefit-in-kind tax is derived from
+ * the items' combined value: `benefitTax` is what the engine says it adds, and
+ * `benefitTaxDeduction` is the part taken from take-home, which is nothing when
+ * the tax code's allowance is already below the statutory one because HMRC
+ * collects it through the code (`benefitTaxCollectedByCode`).
+ */
+/**
+ * The engine input the settings describe, salary only. The Tax Calculator
+ * seeds from this too, so the two pages read the settings the same way.
+ */
+export const ukTaxInputFromSettings = (settings: FinanceSettings): UkTaxInput => ({
+  income: settings.grossSalary,
+  kind: 'employed',
+  region: settings.ukRegion === 'scotland' ? 'scotland' : 'rUK',
+  benefitsInKind: 0,
+  pensionContribution: settings.grossSalary * (settings.personalPensionPercent / 100),
+  pensionMethod: PENSION_METHOD[settings.pensionType] ?? 'net-pay',
+  undergradPlan: settings.studentLoanPlan === 'postgrad' ? 'none' : settings.studentLoanPlan,
+  postgradLoan: settings.studentLoanPlan === 'postgrad',
+  children: 0,
+  childcareSupport: 0,
+  marriageAllowance: false,
+  personalAllowance: settings.personalAllowance,
+});
+
+export const calculateFinance = (settings: FinanceSettings) => {
   const {
     grossSalary,
     pensionType,
     personalPensionPercent,
     employerPensionPercent,
     studentLoanPlan,
-    personalAllowance: rawPersonalAllowance,
+    personalAllowance: statedPersonalAllowance,
     weekends,
     bankHolidays,
     workHolidays,
     workingHoursPerDay,
   } = settings;
 
-  const personalPensionRate = grossSalary * (personalPensionPercent / 100);
   const employerPensionRate = grossSalary * (employerPensionPercent / 100);
 
   const packageBenefits = settings.packageBenefits || [];
-  const totalBenefitsValue = packageBenefits.reduce((sum, b) => {
-    const val = b.type === 'percentage' ? (grossSalary * ((b.amount || 0) / 100)) : (b.amount || 0);
-    return sum + (val || 0);
-  }, 0);
+  const totalBenefitsValue = packageBenefits.reduce((sum, b) => sum + benefitValueOf(b, grossSalary), 0);
 
   const totalPackage = grossSalary + employerPensionRate + totalBenefitsValue;
 
-  const incomeTaxGross = pensionType === 'net_pay' || pensionType === 'salary_sacrifice'
-    ? Math.max(0, grossSalary - personalPensionRate)
-    : grossSalary;
+  // Benefits in kind are kept out of the salary figures: they are taxed, not
+  // paid, and are added back through `ukBenefitInKindTax` below.
+  const salaryInput = ukTaxInputFromSettings(settings);
+  const tax = calculateUkTax(salaryInput);
 
-  const niGross = pensionType === 'salary_sacrifice'
-    ? Math.max(0, grossSalary - personalPensionRate)
-    : grossSalary;
+  const incomeTax = tax.incomeTax;
+  const nationalInsurance = tax.nationalInsurance;
+  const studentLoan = tax.studentLoan + tax.postgradLoan;
+  const personalPensionRate = tax.pensionFromPay;
+  const personalAllowance = tax.personalAllowance;
 
-  const studentLoanGross = pensionType === 'salary_sacrifice'
-    ? Math.max(0, grossSalary - personalPensionRate)
-    : grossSalary;
+  // Negative items are ignored here; they stay in `totalBenefitsValue` as before.
+  const taxableValueOf = (b: PackageBenefit): number => Math.max(0, benefitValueOf(b, grossSalary));
+  const benefitInKindValue = packageBenefits
+    .filter(b => b.kind !== 'cash')
+    .reduce((sum, b) => sum + taxableValueOf(b), 0);
+  const benefitTaxCollectedByCode =
+    benefitInKindValue > 0 && ukBasePersonalAllowance(statedPersonalAllowance) < UK_STATUTORY_PERSONAL_ALLOWANCE;
+  const taxInput: UkTaxInput = {
+    ...salaryInput,
+    benefitsInKind: benefitTaxCollectedByCode ? 0 : benefitInKindValue,
+  };
+  const benefitTax = ukBenefitInKindTax(salaryInput, benefitInKindValue);
+  const benefitTaxDeduction = benefitTaxCollectedByCode ? 0 : benefitTax;
 
-  let personalAllowance = rawPersonalAllowance;
-  if (incomeTaxGross > 100000) {
-    const excess = incomeTaxGross - 100000;
-    personalAllowance = Math.max(0, personalAllowance - excess / 2);
-  }
+  const cashBenefits: CashBenefitAfterTax[] = packageBenefits
+    .filter(b => b.kind === 'cash')
+    .map(b => {
+      const { gross, incomeTax: cashTax, nationalInsurance: cashNi, studentLoan: cashLoan, net } = ukCashAfterTax(
+        salaryInput,
+        taxableValueOf(b),
+      );
+      return { id: b.id, name: b.name, gross, incomeTax: cashTax, nationalInsurance: cashNi, studentLoan: cashLoan, net };
+    });
 
-  let incomeTax = 0;
-  if (incomeTaxGross > personalAllowance) {
-    const taxableAmount = incomeTaxGross - personalAllowance;
-    const { basicRateLimit, higherRateLimit, basicRatePercent, higherRatePercent, additionalRatePercent } = taxConfig.incomeTaxBands;
-
-    if (incomeTaxGross <= higherRateLimit) {
-      const basicRateAmount = Math.min(taxableAmount, basicRateLimit);
-      const higherRateAmount = Math.max(0, taxableAmount - basicRateAmount);
-      incomeTax = basicRateAmount * (basicRatePercent / 100) + higherRateAmount * (higherRatePercent / 100);
-    } else {
-      const basicRateAmount = basicRateLimit;
-      const higherRateAmount = higherRateLimit - basicRateLimit;
-      const additionalRateAmount = Math.max(0, incomeTaxGross - higherRateLimit);
-      incomeTax = basicRateAmount * (basicRatePercent / 100) + higherRateAmount * (higherRatePercent / 100) + additionalRateAmount * (additionalRatePercent / 100);
-    }
-  }
-
-  let nationalInsurance = 0;
-  const { lowerThreshold, upperThreshold, mainRatePercent, upperRatePercent } = taxConfig.nationalInsuranceBands;
-  if (niGross > lowerThreshold) {
-    const mainBandAmount = Math.min(niGross, upperThreshold) - lowerThreshold;
-    const upperBandAmount = Math.max(0, niGross - upperThreshold);
-    nationalInsurance = mainBandAmount * (mainRatePercent / 100) + upperBandAmount * (upperRatePercent / 100);
-  }
-
-  let studentLoan = 0;
-  if (studentLoanPlan !== 'none') {
-    const threshold = taxConfig.studentLoanThresholds[studentLoanPlan];
-    const rate = taxConfig.studentLoanRates[studentLoanPlan];
-    if (studentLoanGross > threshold) {
-      studentLoan = (studentLoanGross - threshold) * rate;
-    }
-  }
-
-  const totalDeductions = incomeTax + nationalInsurance + studentLoan + personalPensionRate;
-  const netTakeHome = grossSalary - totalDeductions;
+  // The engine's take-home already has the pension taken from pay (80% of it
+  // under relief at source), so total deductions rebuilt from the same parts
+  // keep gross - deductions = take-home.
+  const totalDeductions = incomeTax + nationalInsurance + studentLoan + personalPensionRate + benefitTaxDeduction;
+  const netTakeHome = tax.takeHome - benefitTaxDeduction;
   const WEEKS_IN_YEAR_ACTUAL = 365 / 7; // 52.142857... (~52.1429) weeks
   const workingDaysStandard = WEEKS_IN_YEAR_ACTUAL * 5; // ~260.714 days
   const workingDaysIncludingLeave = Math.max(0, 365 - weekends - 1);
-  const workingDaysExcludingLeave = Math.max(0, 365 - weekends - 1 - bankHolidays - workHolidays);
+  const birthdayLeaveDays = settings.birthdayLeaveEnabled ? 1 : 0;
+  const workingDaysExcludingLeave = Math.max(0, 365 - weekends - 1 - bankHolidays - workHolidays - birthdayLeaveDays);
 
   const getBreakdown = (annualAmount: number, daysInYear: number, weeksInYear = 52) => {
     const monthly = annualAmount / 12;
@@ -145,6 +197,7 @@ export const calculateFinance = (
     preTax: getBreakdown(grossSalary, daysInYear, weeksInYear),
     employerPension: getBreakdown(employerPensionRate, daysInYear, weeksInYear),
     benefits: getBreakdown(totalBenefitsValue, daysInYear, weeksInYear),
+    benefitTax: getBreakdown(benefitTaxDeduction, daysInYear, weeksInYear),
     tax: getBreakdown(incomeTax, daysInYear, weeksInYear),
     ni: getBreakdown(nationalInsurance, daysInYear, weeksInYear),
     pension: getBreakdown(personalPensionRate, daysInYear, weeksInYear),
@@ -154,9 +207,15 @@ export const calculateFinance = (
   });
 
   return {
+    taxInput,
     personalPensionRate,
     employerPensionRate,
     totalBenefitsValue,
+    benefitTaxDeduction,
+    benefitTax,
+    benefitTaxCollectedByCode,
+    benefitInKindValue,
+    cashBenefits,
     totalPackage,
     personalAllowance,
     incomeTax,
@@ -175,6 +234,19 @@ export const calculateFinance = (
   };
 };
 
+/**
+ * When the next payday actually lands, from today's local date. The dates
+ * come from `nextPayday` in lib/finance/payday.ts, so this and the balance
+ * forecast read one set of rules.
+ *
+ * Differences from the version that kept its own branch per schedule: a payday
+ * that has already passed is never returned (a "the 1st" payday for a month
+ * starting on a Sunday used to be reported the day after it); a biweekly cycle
+ * runs backwards from its anchor, where the old code returned the anchor itself
+ * for a date before it; and `adjustReason` names what the scheduled date was
+ * ('weekend' if it fell on a Saturday or Sunday), not the last day stepped over.
+ * If the settings cannot place a payday, today is returned unadjusted.
+ */
 export const getNextPaydayDetails = (
   settings: FinanceSettings,
   bankHolidaysList: string[],
@@ -182,199 +254,31 @@ export const getNextPaydayDetails = (
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const schedule = settings.paydaySchedule || 'monthly_date';
-  const scheduledPayday = settings.payDayOfMonth || 25;
-  const weekday = settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5; // default Friday
-  const anchorStr = settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR;
+  const next = nextPayday(
+    settings.paydaySchedule || 'monthly_date',
+    {
+      payDayOfMonth: settings.payDayOfMonth,
+      weekday: settings.paydayWeekday,
+      biweeklyAnchor: settings.paydayBiweeklyAnchor,
+    },
+    toISODate(today),
+    bankHolidaysList,
+  );
 
-  let paydayDate = new Date();
-  let adjusted = false;
-  let adjustReason: 'weekend' | 'bank_holiday' | null = null;
-
-  const adjustIfWeekendOrHoliday = (date: Date): { date: Date; adjusted: boolean; adjustReason: 'weekend' | 'bank_holiday' | null } => {
-    let isAdj = false;
-    let reason: 'weekend' | 'bank_holiday' | null = null;
-    const d = new Date(date);
-    while (true) {
-      const dayOfWeek = d.getDay();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${yyyy}-${mm}-${dd}`;
-
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        isAdj = true;
-        reason = 'weekend';
-        d.setDate(d.getDate() - 1);
-      } else if (bankHolidaysList.includes(dateStr)) {
-        isAdj = true;
-        reason = 'bank_holiday';
-        d.setDate(d.getDate() - 1);
-      } else {
-        break;
-      }
-    }
-    return { date: d, adjusted: isAdj, adjustReason: reason };
-  };
-
-  if (schedule === 'monthly_date') {
-    let targetYear = today.getFullYear();
-    let targetMonthIdx = today.getMonth();
-
-    let res = calculateActualPayday(targetYear, targetMonthIdx, scheduledPayday, bankHolidaysList);
-    const resDate = new Date(res.date);
-    resDate.setHours(0, 0, 0, 0);
-
-    if (resDate.getTime() < today.getTime()) {
-      targetMonthIdx += 1;
-      if (targetMonthIdx > 11) {
-        targetMonthIdx = 0;
-        targetYear += 1;
-      }
-      res = calculateActualPayday(targetYear, targetMonthIdx, scheduledPayday, bankHolidaysList);
-    }
-    paydayDate = res.date;
-    adjusted = res.adjusted;
-    adjustReason = res.adjustReason;
-
-  } else if (schedule === 'last_working_day') {
-    let targetYear = today.getFullYear();
-    let targetMonthIdx = today.getMonth();
-
-    const targetDateOfLastDay = new Date(targetYear, targetMonthIdx + 1, 0);
-    let res = adjustIfWeekendOrHoliday(targetDateOfLastDay);
-    res.date.setHours(0, 0, 0, 0);
-
-    if (res.date.getTime() < today.getTime()) {
-      targetMonthIdx += 1;
-      if (targetMonthIdx > 11) {
-        targetMonthIdx = 0;
-        targetYear += 1;
-      }
-      const nextMonthLastDay = new Date(targetYear, targetMonthIdx + 1, 0);
-      res = adjustIfWeekendOrHoliday(nextMonthLastDay);
-    }
-    paydayDate = res.date;
-    adjusted = res.adjusted;
-    adjustReason = res.adjustReason;
-
-  } else if (schedule === 'last_friday') {
-    let targetYear = today.getFullYear();
-    let targetMonthIdx = today.getMonth();
-
-    const getLastFridayOfMonth = (year: number, monthIdx: number): Date => {
-      const d = new Date(year, monthIdx + 1, 0);
-      while (d.getDay() !== 5) {
-        d.setDate(d.getDate() - 1);
-      }
-      return d;
-    };
-
-    const lastFri = getLastFridayOfMonth(targetYear, targetMonthIdx);
-    let res = adjustIfWeekendOrHoliday(lastFri);
-    res.date.setHours(0, 0, 0, 0);
-
-    if (res.date.getTime() < today.getTime()) {
-      targetMonthIdx += 1;
-      if (targetMonthIdx > 11) {
-        targetMonthIdx = 0;
-        targetYear += 1;
-      }
-      const nextMonthLastFri = getLastFridayOfMonth(targetYear, targetMonthIdx);
-      res = adjustIfWeekendOrHoliday(nextMonthLastFri);
-    }
-    paydayDate = res.date;
-    adjusted = res.adjusted;
-    adjustReason = res.adjustReason;
-
-  } else if (schedule === 'biweekly') {
-    const anchor = new Date(anchorStr);
-    anchor.setHours(0, 0, 0, 0);
-    const diffTime = today.getTime() - anchor.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    let candidate = new Date(anchor);
-    if (diffDays >= 0) {
-      const biweeks = Math.floor(diffDays / 14);
-      candidate.setDate(candidate.getDate() + (biweeks * 14));
-
-      let res = adjustIfWeekendOrHoliday(candidate);
-      res.date.setHours(0, 0, 0, 0);
-
-      if (res.date.getTime() < today.getTime()) {
-        candidate = new Date(candidate);
-        candidate.setDate(candidate.getDate() + 14);
-        res = adjustIfWeekendOrHoliday(candidate);
-      }
-      paydayDate = res.date;
-      adjusted = res.adjusted;
-      adjustReason = res.adjustReason;
-    } else {
-      const res = adjustIfWeekendOrHoliday(anchor);
-      paydayDate = res.date;
-      adjusted = res.adjusted;
-      adjustReason = res.adjustReason;
-    }
-
-  } else if (schedule === 'weekly') {
-    const daysToAdd = (weekday - today.getDay() + 7) % 7;
-    let candidate = new Date(today);
-    candidate.setDate(candidate.getDate() + daysToAdd);
-
-    let res = adjustIfWeekendOrHoliday(candidate);
-    res.date.setHours(0, 0, 0, 0);
-
-    if (res.date.getTime() < today.getTime()) {
-      candidate = new Date(candidate);
-      candidate.setDate(candidate.getDate() + 7);
-      res = adjustIfWeekendOrHoliday(candidate);
-    }
-    paydayDate = res.date;
-    adjusted = res.adjusted;
-    adjustReason = res.adjustReason;
-
-  } else if (schedule === 'semimonthly') {
-    let targetYear = today.getFullYear();
-    let targetMonthIdx = today.getMonth();
-
-    const getSemimonthlyDates = (year: number, monthIdx: number) => {
-      const d15 = new Date(year, monthIdx, 15);
-      const res15 = adjustIfWeekendOrHoliday(d15);
-      res15.date.setHours(0, 0, 0, 0);
-
-      const dLast = new Date(year, monthIdx + 1, 0);
-      const resLast = adjustIfWeekendOrHoliday(dLast);
-      resLast.date.setHours(0, 0, 0, 0);
-
-      return [res15, resLast];
-    };
-
-    let candidates = getSemimonthlyDates(targetYear, targetMonthIdx);
-    let found = candidates.find(c => c.date.getTime() >= today.getTime());
-
-    if (!found) {
-      targetMonthIdx += 1;
-      if (targetMonthIdx > 11) {
-        targetMonthIdx = 0;
-        targetYear += 1;
-      }
-      candidates = getSemimonthlyDates(targetYear, targetMonthIdx);
-      found = candidates[0];
-    }
-
-    paydayDate = found.date;
-    adjusted = found.adjusted;
-    adjustReason = found.adjustReason;
-  }
-
-  paydayDate.setHours(0, 0, 0, 0);
-  const timeDiff = paydayDate.getTime() - today.getTime();
-  const daysRemaining = Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
+  // Local midnight of the payday. With nothing placeable, today stands in rather than breaking callers.
+  const paydayDate = next
+    ? new Date(Number(next.date.slice(0, 4)), Number(next.date.slice(5, 7)) - 1, Number(next.date.slice(8, 10)))
+    : new Date(today);
+  // Whole calendar days between the two dates. Elapsed milliseconds are not: a day is 23 or 25 hours long
+  // when the clocks change, and rounding that up counted an extra day across the autumn change.
+  const todayDay = epochDay(toISODate(today));
+  const paydayDay = next ? epochDay(next.date) : todayDay;
+  const daysRemaining = todayDay !== undefined && paydayDay !== undefined ? Math.max(0, paydayDay - todayDay) : 0;
 
   return {
     date: paydayDate,
-    adjusted,
-    adjustReason,
+    adjusted: next?.adjusted ?? false,
+    adjustReason: next?.adjustReason ?? null,
     daysRemaining
   };
 };

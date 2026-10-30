@@ -22,7 +22,8 @@ export function useFinanceToolContext(): FinanceToolContext {
     netWorth, totalAssets, totalDebt, daysRemainingInMonth, nextPayday,
   } = useFinanceTotals();
   const { state } = useScenarioState();
-  const alerts = useFinanceAlerts(new Date().toISOString().slice(0, 10));
+  // The local day: toISOString() is the UTC day, yesterday until 01:00 in BST.
+  const alerts = useFinanceAlerts(toISODate(new Date()));
   // The same ledger Home and Cash Flow sum, so confirmed transfers drop out
   // exactly where they do on screen.
   const { ledger, exclusionsUnreliable } = useSpendingLedger();

@@ -5,6 +5,7 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { uploadPhoto } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { EdcToolbarButton, EdcShowcase } from '@/features/inventory/edc/EdcShowcase';
+import { isInEdc } from '@/features/inventory/edc/categories';
 import type { CollectionConfig, CollectionRow } from './types';
 import { looksLikeSpecs, parseSpecs, specsPriceTotal, type SpecLine } from './inventory-specs';
 
@@ -206,7 +207,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       // Owned rather than inheriting whatever the last category was showing.
       resetsOthers: true,
       match: (item, value) => {
-        if (value === 'edc') return Boolean(item.is_edc);
+        if (value === 'edc') return isInEdc(item);
         return item.category === value;
       },
     },
@@ -215,6 +216,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       // The old page split owned and wishlist into two stacked sections, which
       // meant scrolling past everything owned to reach the wishlist.
       key: 'owned',
+      label: 'Ownership',
       field: 'is_wishlist',
       hiddenWhen: (filters) => filters.category === 'edc',
       options: [
@@ -260,9 +262,8 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       0,
     );
     return (
-      // Dot matrix, like the count on the left of this row and the button on
-      // its right -- everything the toolbar says about the collection is set
-      // in the same face.
+      // Dot matrix, like the item count beside the collection title, so the
+      // figures the toolbar reports share one face.
       <div className="flex flex-col items-end leading-tight">
         <DotMatrixText
           text="Total Value"
@@ -307,7 +308,7 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
     dimmed: (item) => Boolean(item.is_wishlist),
     badge: (item) => {
       if (item.is_wishlist) return 'Wishlist';
-      if (item.is_edc) return 'EDC';
+      if (isInEdc(item)) return 'EDC';
       return undefined;
     },
   },
@@ -348,6 +349,13 @@ export const inventoryCollection: CollectionConfig<InventoryRow> = {
       placeholder: 'One per line, e.g.\nCPU: Ryzen 9 5950X\nRAM: 128GB DDR4\nStorage: 2x 4TB NVMe',
     },
   ],
+
+  // The form does not show is_wishlist, so the rule reads it off the row being
+  // edited. The table's check constraint holds the same line.
+  validate: (values, item) =>
+    values.is_edc === 'true' && item?.is_wishlist
+      ? { is_edc: 'Wishlist items cannot be in your EDC' }
+      : null,
 
   customToolbarActions: ({ allItems, filters, isAdmin, updateItem }) => {
     if (filters.category === 'edc') {

@@ -9,7 +9,7 @@
  * side of midnight depending on the caller's timezone.
  */
 
-import { toISODate } from './dates';
+import { epochDay, toISODate } from './dates';
 import type { StudentLoanPlanKey } from './debt';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -354,15 +354,87 @@ export const academicYearDraws = (
  * Infers a course's last day of study from its latest draw: an Aug–Dec draw
  * belongs to the academic year running into the following June; a Jan–Jul
  * draw belongs to the academic year that already started, ending in June of
- * the same calendar year. `undefined` with no draws to infer from.
+ * the same calendar year. Invalid dates and non-finite amounts are excluded;
+ * `undefined` with no usable draws to infer from.
  */
 export const inferCourseEnd = (draws: StudentLoanDraw[]): string | undefined => {
-  if (draws.length === 0) return undefined;
-  const lastDate = draws.reduce((latest, d) => (d.date > latest ? d.date : latest), draws[0].date);
+  const datedDraws = draws.filter(d => epochDay(d.date) !== undefined && Number.isFinite(d.amount));
+  if (datedDraws.length === 0) return undefined;
+  const lastDate = datedDraws.reduce((latest, d) => (d.date > latest ? d.date : latest), datedDraws[0].date);
   const parsed = parseISODate(lastDate);
   const month = parsed.getMonth() + 1;
   const endYear = month >= 8 ? parsed.getFullYear() + 1 : parsed.getFullYear();
   return toISODate(new Date(endYear, 5, 30));
+};
+
+export interface StudentLoanBorrowed {
+  /** What was borrowed, before any interest or repayment. 0 when unknown. */
+  total: number;
+  /** `draws` when summed from recorded borrowing, `entered` when typed as one figure. */
+  source: 'draws' | 'entered' | 'none';
+  /** Borrowing payments counted; 0 unless `source` is `draws`. */
+  count: number;
+  /** Earliest and latest borrowing dates; set only when `source` is `draws`. */
+  first?: string;
+  last?: string;
+}
+
+/** Classifies the row only; the borrowed total validates its amount and date. */
+export const isBorrowing = (draw: { kind?: 'borrowing' | 'refund' | 'payment' }): boolean =>
+  !draw.kind || draw.kind === 'borrowing';
+
+/**
+ * What you borrowed yourself. Recorded borrowing wins, summed payment by
+ * payment; refunds and payments outside payroll move the balance but are not
+ * borrowing, so neither counts. A row whose amount is zero, negative or not
+ * finite is not a borrowing payment either, and neither is one whose date is
+ * not a real `YYYY-MM-DD` day (`draws` is unchecked jsonb, so '' and
+ * '2026-13-40' arrive): it is left out of the total, the count and the span
+ * alike. With no valid borrowing row left, the one figure
+ * typed for the loan stands in, so a table of bad rows cannot hide it.
+ */
+export const studentLoanBorrowed = (debt: {
+  originalAmount?: number;
+  draws?: { date: string; amount: number; kind?: 'borrowing' | 'refund' | 'payment' }[];
+}): StudentLoanBorrowed => {
+  const borrowing = (debt.draws ?? []).filter(
+    d =>
+      isBorrowing(d) &&
+      Number.isFinite(d.amount) &&
+      d.amount > 0 &&
+      epochDay(d.date) !== undefined,
+  );
+  if (borrowing.length > 0) {
+    const dates = borrowing.map(d => d.date).sort();
+    const total = borrowing.reduce((sum, d) => sum + d.amount, 0);
+    return { total: round2(total), source: 'draws', count: borrowing.length, first: dates[0], last: dates[dates.length - 1] };
+  }
+  const entered = debt.originalAmount ?? 0;
+  return Number.isFinite(entered) && entered > 0
+    ? { total: round2(entered), source: 'entered', count: 0 }
+    : { total: 0, source: 'none', count: 0 };
+};
+
+export interface StudentLoanBorrowedGap {
+  /** Always at least £1, in pounds and pence. */
+  amount: number;
+  /** `more` when the balance sits above what was borrowed, `less` when below. */
+  direction: 'more' | 'less';
+}
+
+/**
+ * How far the balance sits above or below what was borrowed; null when nothing
+ * was borrowed on record, either figure is not finite, or the gap rounds to
+ * under £1.
+ */
+export const studentLoanBorrowedGap = (
+  balance: number,
+  borrowed: StudentLoanBorrowed,
+): StudentLoanBorrowedGap | null => {
+  if (borrowed.source === 'none' || !Number.isFinite(balance) || !Number.isFinite(borrowed.total)) return null;
+  const gap = round2(balance - borrowed.total);
+  if (Math.abs(gap) < 1) return null;
+  return { amount: Math.abs(gap), direction: gap > 0 ? 'more' : 'less' };
 };
 
 /**
@@ -623,10 +695,14 @@ const emptyResult = (today: string): StudentLoanSimResult => {
  */
 export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimResult => {
   const {
-    plan, draws, courseEnd, salary, salaryFrom, salaryGrowth, threshold, thresholdFrom, repaymentRate, writeOffYears,
+    plan, courseEnd, salary, salaryFrom, salaryGrowth, threshold, thresholdFrom, repaymentRate, writeOffYears,
     assumptions, anchor, today, knownPayments, knownPaymentsFrom, knownPaymentsUntil, rateSchedule, extraPayments,
     slcTiming, incomeByTaxYear: incomeByTaxYearInput,
   } = input;
+
+  // Reject unusable rows before choosing a start month or doing arithmetic.
+  // Keep finite signed amounts, including negative and zero draws.
+  const draws = input.draws.filter(d => epochDay(d.date) !== undefined && Number.isFinite(d.amount));
 
   const courseEndDate = parseISODate(courseEnd);
   const firstDue = firstRepaymentDue(courseEnd);

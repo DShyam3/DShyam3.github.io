@@ -120,7 +120,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
   // nothing fetched, so an employer's mark is only ever one already on this site.
   const orgs = useMemo(
     () => [
-      ...experience.map(e => ({ name: e.company, logoUrl: e.logo_url })),
+      ...experience.map(e => ({ name: e.company, aliases: e.aliases, logoUrl: e.logo_url })),
       ...education.map(e => ({ name: e.school, logoUrl: e.logo_url })),
     ],
     [experience, education],

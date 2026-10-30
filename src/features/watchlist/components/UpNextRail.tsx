@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Tv } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Tv } from 'lucide-react';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import type { UpNextRailItem } from '@/features/watchlist/useUpNext';
 import { providerSearchUrl } from '@/features/watchlist/provider-links';
@@ -16,43 +14,21 @@ interface UpNextRailProps {
 
 /** Details and provider links are separate controls, usable by touch or keyboard. */
 export function UpNextRail({ items, onSelect, plannedDays, failed }: UpNextRailProps) {
-  const rail = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-  const measure = () => {
-    const el = rail.current;
-    if (el) setEdges({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 });
-  };
-  useEffect(() => {
-    const el = rail.current;
-    if (!el) return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    measure();
-    return () => observer.disconnect();
-  }, [items.length]);
   if (!items.length) {
-    if (!failed) return null;
     return (
-      <section className="min-w-0 space-y-3">
-        <DotMatrixText text="WATCH NEXT" size="xs" />
-        <SectionFailure>Could not load what to watch next</SectionFailure>
+      <section className="news-pane news-pane-watch-next min-w-0 space-y-3" tabIndex={0} role="region" aria-label="Watch next">
+        <div className="news-pane-heading"><DotMatrixText text="WATCH NEXT" size="xs" /></div>
+        {failed ? <SectionFailure>Could not load what to watch next</SectionFailure> : <p className="text-sm text-muted-foreground">Nothing to watch next</p>}
       </section>
     );
   }
-  const scroll = (direction: number) => rail.current?.scrollBy({ left: direction * rail.current.clientWidth * .8, behavior: 'auto' });
   return (
-    <section className="min-w-0 space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <DotMatrixText text="WATCH NEXT" size="xs" />
-        {(edges.left || edges.right) && <div className="flex gap-2">
-          <Button variant="outline" size="icon" aria-label="Previous watch next titles" disabled={!edges.left} onClick={() => scroll(-1)}><ChevronLeft /></Button>
-          <Button variant="outline" size="icon" aria-label="More watch next titles" disabled={!edges.right} onClick={() => scroll(1)}><ChevronRight /></Button>
-        </div>}
-      </div>
+    <section className="news-pane news-pane-watch-next min-w-0 space-y-3" tabIndex={0} role="region" aria-label="Watch next">
+      <div className="news-pane-heading"><DotMatrixText text="WATCH NEXT" size="xs" /></div>
       {/* Cached rows stay up; without this an episode just marked watched
           would still lead the rail with no sign the list is old. */}
       {failed && <SectionFailure>Could not refresh — showing the list from the last load</SectionFailure>}
-      <div ref={rail} onScroll={measure} className="content-rail flex gap-4 overflow-x-auto p-1 pb-3" tabIndex={0} role="region" aria-label="Watch next titles, scroll horizontally for more">
+      <div className="content-rail flex gap-4 p-1 pb-3" role="region" aria-label="Watch next titles">
         {items.map(item => {
           const url = providerSearchUrl(item.platform, item.title);
           return <article key={item.tv_show_id} className="item-card min-w-[16rem] max-w-[20rem] flex-1 basis-0 flex flex-col">

@@ -48,7 +48,10 @@ export function Header({
     // `relative` is what NavMenu's panel hangs off: it spans the header's
     // full width from the bottom edge, so it has to resolve against the
     // header rather than the right-hand cluster the button sits in.
-    <header className="app-header relative pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50">
+    <header
+      className="app-header relative pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50"
+      data-socials-open={socialOpen || undefined}
+    >
       <div className="px-4 md:px-0">
         {/* One row: identity on the left, page title and controls on the
             right. The nav strip that used to sit underneath is now the menu
@@ -59,7 +62,7 @@ export function Header({
             {/* Below 700px the name may give way: at 320px the avatar, name
                 and the social button come to 278px in a 256px slot, and a
                 block that cannot shrink pushed the button past the gutter.
-                Shrinking lets "Robotic engineer" break between its words. */}
+                Shrinking lets a two-word role break between its words. */}
             <div
               className="flex items-center gap-3 flex-shrink-0 max-[699px]:min-w-0 max-[699px]:flex-shrink cursor-pointer select-none transition-opacity hover:opacity-80 md:w-auto"
               onClick={() => navigate('/')}
@@ -79,17 +82,7 @@ export function Header({
                 loading="eager"
               />
 
-              {/* Steps aside while the social links are open on a narrow
-                  phone, as the page title does on a tablet. Below 390px the
-                  three icons leave the name less room than its longest word,
-                  and they painted over it; the avatar alone still says whose
-                  site this is, and the name returns when they close. */}
-              <div
-                className={cn(
-                  'flex flex-col items-start gap-0.5 leading-none',
-                  socialOpen && 'max-[389px]:hidden',
-                )}
-              >
+              <div className="header-identity-text flex flex-col items-start gap-0.5 leading-none">
                 <DotMatrixText
                   text={SITE.name.toUpperCase()}
                   size="md"
@@ -103,12 +96,12 @@ export function Header({
               </div>
             </div>
 
-            <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
+            <div className="relative flex items-center flex-shrink-0">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-11 w-11 order-2 md:order-1 flex-shrink-0"
+                className="h-11 w-11 flex-shrink-0"
                 onClick={() => setSocialOpen((v) => !v)}
                 aria-label={socialOpen ? "Close social links" : "Open social links"}
                 aria-expanded={socialOpen}
@@ -123,13 +116,16 @@ export function Header({
                 </div>
               </Button>
 
-              {/* Social links - appear horizontally to the side */}
+              {/* Social links, laid over the row rather than in it, so
+                  opening them reflows nothing. On a phone they open leftward
+                  from the button over the name; in the one-row header they
+                  open rightward, over the page title until lg. The neighbour
+                  they cover fades out (responsive.css). */}
               <div
                 className={cn(
-                  'flex items-center gap-1 md:gap-2 overflow-hidden transition-[max-width,opacity,margin] duration-200 order-1 md:order-2 justify-end md:justify-start',
-                  socialOpen
-                    ? 'max-w-[200px] opacity-100 mr-1 md:mr-0'
-                    : 'max-w-0 opacity-0 mr-0',
+                  'absolute top-1/2 -translate-y-1/2 right-full mr-1 min-[700px]:right-auto min-[700px]:left-full min-[700px]:mr-0 min-[700px]:ml-2 md:ml-3',
+                  'flex items-center gap-1 md:gap-2 overflow-hidden transition-[max-width,opacity] duration-200 justify-end min-[700px]:justify-start',
+                  socialOpen ? 'max-w-[10rem] opacity-100' : 'max-w-0 opacity-0',
                 )}
               >
                 {socialLinks.map(({ label, href, icon }) => {
@@ -161,8 +157,9 @@ export function Header({
 
               Full width has to be said, as the identity row above says it.
               Left to size itself, the row grew to fit a long title on one
-              line -- "Dhyan's website" made it 356px in a 311px slot on a
-              375px phone -- and pushed the theme toggle past the screen edge.
+              line -- the home page's 15-character title made it 356px in a
+              311px slot on a 375px phone -- and pushed the theme toggle past
+              the screen edge.
 
               Held to the slot, the title takes what the controls leave and
               wraps between words. Its narrowest is its longest word: where
@@ -171,23 +168,14 @@ export function Header({
               their own rather than overlap it or split the word. From 700px
               none of this applies; the cluster is sized to its contents. */}
           <div className="flex w-full items-center justify-between gap-3 max-[699px]:flex-wrap min-[700px]:w-auto md:gap-4">
-            {/* A tablet held upright (768-1023px) has the one-row header but
-                not the width for it once the social links open: identity,
-                three icons, title and controls come to ~850px, and the title
-                ran into the icons. It steps aside while they are open. */}
             {/* Two boxes on purpose. The outer one takes the row's free width
                 below 700px, so the title can wrap and the controls can drop;
                 the inner one is only as wide as the words, and only it opens
                 the sign-in page. One box doing both made every stray tap on
                 blank header space -- up to 212px of it -- open /auth. */}
-            <div
-              className={cn(
-                'header-page-title min-w-0 max-[699px]:min-w-min max-[699px]:flex-1 text-left md:text-right',
-                socialOpen && 'md:max-lg:hidden',
-              )}
-            >
+            <div className="header-page-title min-w-0 max-[699px]:min-w-min max-[699px]:flex-1 text-left md:text-right">
               <div
-                className="w-fit max-w-full cursor-pointer select-none active:opacity-70 transition-opacity md:ml-auto"
+                className="w-fit max-w-full cursor-pointer select-none active:opacity-70 md:ml-auto"
                 onClick={handleTitleClick}
               >
                 <div>

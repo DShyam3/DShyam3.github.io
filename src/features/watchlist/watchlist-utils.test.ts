@@ -6,6 +6,7 @@ import {
   daysUntil,
   displayTitle,
   filterByDayRange,
+  releaseYear,
   filterRecentByWindow,
   filterUpcomingByWindow,
   filterUpdatesByWindow,
@@ -82,6 +83,19 @@ describe('isUpcomingStatus', () => {
     expect(isUpcomingStatus('Watched')).toBe(false);
     expect(isUpcomingStatus('Released')).toBe(false);
     expect(isUpcomingStatus(undefined)).toBe(false);
+  });
+});
+
+describe('releaseYear', () => {
+  it('reads the year from the string, so 1 January stays in its own year', () => {
+    expect(releaseYear('2026-01-01')).toBe(2026);
+    expect(releaseYear('1999-12-31')).toBe(1999);
+  });
+
+  it('is undefined for a missing or unreadable date', () => {
+    for (const bad of [undefined, null, '', 'TBA']) {
+      expect(releaseYear(bad)).toBeUndefined();
+    }
   });
 });
 
@@ -862,7 +876,7 @@ describe('buildUpdatesFeed', () => {
 });
 
 describe('filterUpdatesByWindow', () => {
-  const today = new Date('2026-09-14T00:00:00Z');
+  const today = new Date(2026, 8, 14); // local midnight: the windows count local calendar days
 
   const row = (overrides: Partial<UpdatesFeedRow> = {}): UpdatesFeedRow => ({
     key: 'released-tv_show-1',
@@ -926,7 +940,7 @@ describe('filterByDayRange', () => {
 });
 
 describe('filterUpcomingByWindow', () => {
-  const today = new Date('2026-09-14T00:00:00Z');
+  const today = new Date(2026, 8, 14); // local midnight: the windows count local calendar days
   const row = (date: string | null) => ({ date });
 
   it('keeps a release today in either window', () => {
@@ -960,7 +974,7 @@ describe('filterUpcomingByWindow', () => {
 });
 
 describe('filterRecentByWindow', () => {
-  const today = new Date('2026-09-14T00:00:00Z');
+  const today = new Date(2026, 8, 14); // local midnight: the windows count local calendar days
   const row = (date: string | null) => ({ date });
 
   it('keeps a release today in either window', () => {

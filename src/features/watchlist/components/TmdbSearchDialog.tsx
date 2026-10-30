@@ -15,6 +15,7 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { ActionButton } from '@/components/shared/ActionButton';
 import { cn } from '@/lib/utils';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
+import { releaseYear } from '@/features/watchlist/watchlist-utils';
 
 interface TmdbSearchDialogProps {
   open: boolean;
@@ -44,7 +45,7 @@ interface TmdbSearchDialogProps {
 
 const yearOf = (result: TMDBResult) => {
   const date = result.release_date || result.first_air_date;
-  return date ? new Date(date).getFullYear() : 'N/A';
+  return releaseYear(date) ?? 'N/A';
 };
 
 /**
@@ -82,7 +83,7 @@ export function TmdbSearchDialog({
         <ActionButton icon={Plus} label={triggerLabel} />
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90dvh] flex flex-col p-0">
         <div className="p-6 pb-0">
           <DialogHeader>
             <DialogTitle className="font-serif">{title}</DialogTitle>

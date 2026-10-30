@@ -50,6 +50,16 @@ export const getStatusColor = (status: string) => {
 };
 
 /**
+ * The year of a TMDB `YYYY-MM-DD` release date, read from the string.
+ * `new Date()` would read it as UTC midnight, which is the previous year for a
+ * 1 January release anywhere west of UTC.
+ */
+export const releaseYear = (date?: string | null): number | undefined => {
+    const year = date ? Number(date.slice(0, 4)) : NaN;
+    return Number.isInteger(year) && year > 0 ? year : undefined;
+};
+
+/**
  * Titles come out of TMDB with a disambiguating year on some entries
  * ("Hell's Paradise (2023)"). Every surface already prints the year on its own
  * line, so strip it when it is the same year rather than showing it twice.

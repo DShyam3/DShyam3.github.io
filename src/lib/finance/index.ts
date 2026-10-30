@@ -7,6 +7,7 @@
  */
 
 export * from './alerts';
+export * from './category-rules';
 export * from './cash-flow';
 export * from './change-summary';
 export * from './credit';
@@ -31,3 +32,4 @@ export * from './statement-import';
 export * from './student-loan';
 export * from './tools';
 export * from './transfers';
+export * from './uk-tax-calculator';

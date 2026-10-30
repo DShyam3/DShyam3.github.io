@@ -92,9 +92,17 @@ aligned grid. A large card answers the main question; smaller cards support it.
 - On narrow screens, stack in reading order: summary, supporting information,
   then actions or detailed records.
 
-The About page now uses portrait, introduction and education across the first
-row at desktop widths of 1280px and above. Experience and projects occupy the
-second row. It uses two columns on tablets and one on phones.
+About uses a fixed-height workspace with card-contained scrolling. At widths
+of at least 1280px and heights of at least 700px, portrait and introduction sit
+above the combined experience/education timeline; projects span both rows on
+the right. Below either threshold, an About / Experience / Projects button
+group selects one card, with the portrait inside the introduction. At heights
+of 600px or less, the whole selected card scrolls so headings and controls
+cannot consume the available content space. Scroll regions are keyboard
+focusable; narrow timeline admin actions sit below their text. The experience
+card is an inline-size query container: entries use two equal columns at a card
+content width of 34rem or more, otherwise one. Newest-first order runs across
+each row, with scrolling contained in the existing card.
 
 ### Soft minimalism
 
@@ -276,7 +284,7 @@ uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
 | Focal panel | Stronger radial gradient with readable text | `ambient-card` or `Card` with `data-palette` |
 | Collection card | Consistent image ratio, tinted text area, modest hover lift | `item-card`, `card-body` |
 | Navigation | Pill control, frosted menu, coloured destination markers | `NavMenu`, `navigation-panel` |
-| Filters | Wrapping pills, clearly filled selection | `FilterBar`, `collection-filters` |
+| Filters | Compact toolbar: primary facet select, search with a clear button, Filters popover whose trigger counts facets moved off their default, sort select | `FilterBar`, `CollectionPage` (sort) |
 | Finance summary | Large actual figure, explanation, optional secondary figure | `SurfaceHero`, `finance-hero` |
 | Dialog | Frosted container over a dimmed, blurred backdrop | `DialogContent`, `glass-dialog` |
 | Travel | Map framed as the main visual, separate readable list | `travel-map-col`, `travel-sidebar` |
@@ -341,19 +349,33 @@ brands, in portrait and landscape.
 - Card actions appear on touch/coarse pointers; fine-pointer hover and keyboard
   focus reveal them. Shared touch controls use a `2.75rem` minimum target.
 - Dialogs retain outer gutters and a bounded scrolling body, with the close
-  control outside that body. Series with seasons use an `85dvh` dialog from
-  640px: poster/information above an independently scrolling episode rail through
+  control outside that body (except `dialog-flush` on phones; see below). The
+  body's scrollbar is the thin `app-scroll` bar;
+  on the default p-6 frame it sits in the dialog's right padding, never over
+  content. Series with seasons use an `85dvh` dialog from 640px:
+  poster/information above an independently scrolling episode rail through
   1279px, then three columns from 1280px. The outer body stays still; long
   information has its own overflow area. Below 640px the outer body scrolls and
   the episode rail is capped at `40dvh`. Episode names are always displayed,
-  with “Title unavailable” as fallback.
+  with “Title unavailable” as fallback. The collection card detail
+  (`sm:max-w-4xl`, up to 896px) keeps its artwork outside the text scroller from
+  640px: a cover (a book, a recipe) is a fixed column, 35% up to 18rem, and a
+  content image (Photos) shares the row. From 640px only
+  `.collection-detail-info` scrolls; the artwork column stays put, and the close
+  button stays fixed over the text column, kept clear of the text by `3.5rem` of
+  right padding. Below 640px the whole dialog is one stacked scroller, and the
+  close button scrolls away with the artwork.
 - No control sits on top of text. The dialog close button is `2.75rem`, `0.5rem`
   in from the corner, and `.glass-dialog` reserves a `3.75rem` top inset for it
   outside the body's scroller, so headers need no right padding for it and
-  scrolled fields never pass under it. A dialog that scrolls as a whole (the
-  collection card detail) carries `dialog-flush` and drops the inset, since
-  its close button scrolls with it. `SheetHeader` keeps `pr-10`, since a sheet
-  has no inset. The dialog body's
+  scrolled fields never pass under it. The collection card detail carries
+  `dialog-flush`, which drops the inset at every width. Below 640px the dialog
+  itself scrolls rather than its body, so the close button moves with the
+  content instead of floating over it; at rest it sits over the artwork, or,
+  with no artwork, beside a header padded `pr-10` to clear it. From 640px its
+  text column keeps `3.5rem` of right padding clear of the close button
+  instead.
+  `SheetHeader` keeps `pr-10`, since a sheet has no inset. The dialog body's
   single column is `minmax(0, 1fr)`, so no child can widen it. Row actions sit
   in the row's flow (a menu, a trailing button, a clear button with matching
   input padding), not absolutely positioned over a title; card admin actions
@@ -366,7 +388,7 @@ brands, in portrait and landscape.
 - Standard/Larger display is an explicit persisted menu preference. Larger uses
   `125%` root type and a `12rem` card minimum, with visible card actions and
   stronger focus-visible outlines. It retains native browser keyboard behavior.
-- News and Library share `PosterCard`: fixed poster ratio, a `2.9em` title row
+- Library uses `PosterCard`: fixed poster ratio, a `2.9em` title row
   clamped to two lines, a `1.4em` minimum subtitle row, and aligned metadata rows
   of `1.5rem` and `1.25rem` with `gap-1`. The separate schedule footer uses a
   44px minimum height and `py-2`. Full titles remain in the tooltip, accessible
@@ -376,8 +398,15 @@ brands, in portrait and landscape.
   whose accessible names include the full title, plan/suggestion, episode and
   date; below `md` it uses an agenda. The dialog keeps its header and navigation
   outside the vertically scrolling body, bounded to `85dvh`.
-  Updates scrolls on its own only from 1280px, where it is a column beside
-  Upcoming; stacked, it flows in the card.
+  News uses a fixed middle workspace: five equal, independently scrolling
+  columns at widths of at least 1280px and heights of at least 600px, ordered
+  Watch Next, Your Week, Out Now, Upcoming, Updates. Elsewhere, a compact
+  selector shows one column. The workspace itself never scrolls. Headings
+  are sticky except at heights of 600px or less. Upcoming contains Countdown.
+  Out Now and Upcoming use 56px poster-and-text rows with separate schedule
+  actions and missing-art fallbacks. Watch Next uses vertical rows without
+  rail arrows. Compact calendar days place dates above content; explanatory
+  text lives in a details disclosure.
 
 Validate both orientations, short landscape windows, large monitors and both
 reading sizes. Browser viewport checks do not replace physical device tests.
@@ -415,7 +444,8 @@ reading sizes. Browser viewport checks do not replace physical device tests.
 - Ambient route backgrounds and accents across the shared application shell.
 - Original Doto and Space Mono font families preserved.
 - Multicolour About bento, with the desktop composition available from 1280px.
-- Shared collection card treatments, selected filter pills and menu styling.
+- Shared collection card treatments, the compact filter toolbar and menu
+  styling.
 - Frosted shared dialogs and rounded primary/secondary controls.
 - Finance hero, summary cards, standard cards and custom finance panel surfaces.
 - Travel map framing and list surface styling.

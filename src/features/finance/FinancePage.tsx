@@ -22,6 +22,7 @@ import { FinanceAssistantSource } from './FinanceAssistantSource';
 import { useAssistantProvider } from '@/features/assistant/useAssistantProvider';
 import { useCoalescedSave } from './useCoalescedSave';
 const CashFlowSurface = lazy(() => import('./surfaces/CashFlowSurface'));
+const ForecastSurface = lazy(() => import('./surfaces/ForecastSurface'));
 const GoalsSurface = lazy(() => import('./surfaces/GoalsSurface'));
 const ScenariosSurface = lazy(() => import('./surfaces/ScenariosSurface'));
 const RetirementSurface = lazy(() => import('./surfaces/RetirementSurface'));
@@ -31,11 +32,13 @@ const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
 const DebtsSurface = lazy(() => import('./surfaces/DebtsSurface'));
 const StudentLoanSurface = lazy(() => import('./surfaces/StudentLoanSurface'));
 const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
+const TaxCalculatorSurface = lazy(() => import('./surfaces/TaxCalculatorSurface'));
 const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
 import { useTrueLayer } from './useTrueLayer';
 import { consumeTrueLayerOAuthState } from './truelayer-oauth';
 import { useSpendingLedger } from './useSpendingLedger';
-import { detectRecurringPayments, candidateMatchesBill, recurringPaymentEvidence, isRecurringPaidForPeriod, assignPaidPeriod, shiftPeriodDue, type RecurringCandidate } from '@/lib/finance/recurring-detection';
+import { useRecurringEvidence } from './useRecurringEvidence';
+import { detectRecurringPayments, candidateMatchesBill, isRecurringPaidForPeriod, assignPaidPeriod, tickRecurring, untickRecurring, payRecurringEarly, coverageAfterEdit, type RecurringCandidate } from '@/lib/finance/recurring-detection';
 import { useFinanceTotals } from './useFinanceTotals';
 import { PaydaySummary, paydayCountdown } from './components/PaydaySummary';
 import { SurfaceHero } from './components/SurfaceHero';
@@ -43,7 +46,8 @@ import { ProfileAvatar } from './components/ProfileAvatar';
 import { NetWorthTrend } from './components/NetWorthTrend';
 import { FinanceSectionBoundary, FinanceSectionLoading } from './components/FinanceSectionBoundary';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useHiddenFigures } from './useHiddenFigures';
 import type {
   BudgetItem,
   BudgetCategory,
@@ -118,6 +122,7 @@ function FinanceView() {
   const activeTab = tabFromPath(surfaceSeg, sectionSeg);
   const activeSurface = surfaceForTab(activeTab);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
+  const figures = useHiddenFigures();
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
 
   const [cfCustomStart, setCfCustomStart] = useState<string>(() => {
@@ -197,14 +202,7 @@ function FinanceView() {
   const recurringCandidates = detectedRecurrings.filter(c => !recurrings.some(b => candidateMatchesBill(c, b)));
   // Scans the whole ledger once per bill, so it runs only for the tab that
   // shows it, and not again on every keystroke in the recurring dialogs.
-  const showsRecurrings = activeTab === 'recurrings';
-  const paymentEvidence = useMemo(
-    () => new Map((showsRecurrings && recurringDataReady && !exclusionsUnreliable ? recurrings : []).flatMap(bill => {
-      const payment = recurringPaymentEvidence(ledger, bill, todayISO);
-      return payment ? [[bill.id, payment] as const] : [];
-    })),
-    [showsRecurrings, ledger, recurrings, todayISO, recurringDataReady, exclusionsUnreliable],
-  );
+  const paymentEvidence = useRecurringEvidence(activeTab === 'recurrings');
   useEffect(() => {
     setIsAddRecurringOpen(false);
     setIsEditRecurringOpen(false);
@@ -592,22 +590,24 @@ function FinanceView() {
     if (activeRecurring.lastPaidDate && activeRecurring.lastPaidDate > todayISO) return;
     const previous = recurrings.find(bill => bill.id === activeRecurring.id);
     const scheduled: RecurringBill = { ...activeRecurring, dueMonth: activeRecurring.dueMonth || 1 };
-    // The covered period is a due date under the old schedule, so a new date or
-    // schedule works it out again from the date, without early credit.
-    const recompute = !previous || scheduled.lastPaidDate !== previous.lastPaidDate
-      || scheduled.dueDate !== previous.dueDate || scheduled.dueMonth !== (previous.dueMonth || 1)
-      || scheduled.frequency !== previous.frequency;
-    const paidForDueDate = recompute
-      ? (scheduled.lastPaidDate ? assignPaidPeriod(scheduled, scheduled.lastPaidDate) : undefined)
-      : scheduled.paidForDueDate;
+    // The covered period is a due date under the old schedule, so an edit maps
+    // it onto the new one (see coverageAfterEdit). A bill with no stored
+    // original works it out from the date alone, without early credit.
+    const paidForDueDate = previous
+      ? coverageAfterEdit(previous, scheduled)
+      : (scheduled.lastPaidDate ? assignPaidPeriod(scheduled, scheduled.lastPaidDate) : undefined);
     const normalizedRecurring: RecurringBill = {
       ...scheduled,
       paidForDueDate,
-      // The tick is the owner's: only a new payment date re-decides it. A
-      // schedule change moves the covered period, which the display re-checks.
+      // The tick is the owner's: a new payment date re-decides it. A new
+      // frequency rebuilds the covered period but never revives an untick
+      // (a weekly bill reads Paid from lastPaidDate alone). A due-day change
+      // only moves the period, which the display re-checks.
       isPaid: scheduled.lastPaidDate !== previous?.lastPaidDate
         ? isRecurringPaidForPeriod({ ...scheduled, paidForDueDate }, todayISO)
-        : activeRecurring.isPaid,
+        : scheduled.frequency !== previous?.frequency
+          ? activeRecurring.isPaid && isRecurringPaidForPeriod({ ...scheduled, paidForDueDate }, todayISO)
+          : activeRecurring.isPaid,
       provider: activeRecurring.provider?.trim() || undefined,
     };
     if (!(await persistRecurringReview(recurrings.map(r => r.id === activeRecurring.id ? normalizedRecurring : r)))) return;
@@ -629,18 +629,19 @@ function FinanceView() {
     });
 
   const toggleRecurringPaid = (id: string) => {
+    // Bank evidence stays separate: clearing a tick does not erase lastPaidDate.
     void persistRecurringReview(recurrings.map(r => r.id === id ? {
       ...r,
-      isPaid: !r.isPaid,
-      // Bank evidence stays separate. Clearing a monthly check does not erase history.
-      lastPaidDate: !r.isPaid ? todayISO : r.lastPaidDate,
-      // A tick covers this period, or the next one when this one is already
-      // covered and the tick falls in the week before it is due. Clearing the
-      // tick hands the period it covered back.
-      paidForDueDate: !r.isPaid
-        ? assignPaidPeriod(r, todayISO, r.paidForDueDate)
-        : r.paidForDueDate && shiftPeriodDue(r, r.paidForDueDate, -1),
+      ...(r.isPaid ? untickRecurring(r, todayISO) : tickRecurring(r, todayISO)),
     } : r));
+  };
+
+  const recordEarlyPayment = (id: string) => {
+    const bill = recurrings.find(r => r.id === id);
+    if (!bill) return;
+    const fields = payRecurringEarly(bill, todayISO);
+    if (!fields) return;
+    void persistRecurringReview(recurrings.map(r => r.id === id ? { ...r, ...fields } : r));
   };
   // ==========================================
   // HANDLERS: HOLIDAY TRACKER (TAX & INCOME TAB)
@@ -813,30 +814,40 @@ function FinanceView() {
           );
         })}
       </nav>
-      {profiles.length > 1 && (
-        <Select value={profileId ?? undefined} onValueChange={setProfileId}>
-          <SelectTrigger className="h-9 w-auto gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-mono shrink-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {profiles.map(p => (
-              <SelectItem key={p.id} value={p.id} className="text-sm font-sans">
-                <span className="flex items-center gap-2">
-                  {/* `md` so the memoji reads as a face rather than a smudge —
-                      the trigger mirrors this row, so it is sized here. */}
-                  <ProfileAvatar profile={p} size="md" />
-                  {p.name}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      {loadingDb && (
-        <span className="text-xs text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
-          <Loader2 className="h-3 w-3 animate-spin text-primary" /> syncing...
-        </span>
-      )}
+      {/* A row of its own on phones, so the surface nav keeps the full width
+          rather than stacking one link per line beside these. */}
+      <div className="flex w-full items-center gap-2 pb-3 empty:hidden sm:w-auto sm:pb-0">
+        {figures.supported && (
+          <Button variant="ghost" size="sm" onClick={figures.toggle} className="shrink-0 font-sans text-xs">
+            {figures.hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+            {figures.hidden ? 'Show figures' : 'Hide figures'}
+          </Button>
+        )}
+        {loadingDb && (
+          <span className="text-xs text-muted-foreground animate-pulse flex items-center gap-1 shrink-0 pb-1 font-sans">
+            <Loader2 className="h-3 w-3 animate-spin text-primary" /> <span className="sr-only sm:not-sr-only">syncing...</span>
+          </span>
+        )}
+        {profiles.length > 1 && (
+          <Select value={profileId ?? undefined} onValueChange={setProfileId}>
+            <SelectTrigger className="ml-auto h-9 w-auto gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-mono shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {profiles.map(p => (
+                <SelectItem key={p.id} value={p.id} className="text-sm font-sans">
+                  <span className="flex items-center gap-2">
+                    {/* `md` so the memoji reads as a face rather than a smudge —
+                        the trigger mirrors this row, so it is sized here. */}
+                    <ProfileAvatar profile={p} size="md" />
+                    {p.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
     </div>
 
     {/* Secondary navigation: sections within a surface. Home has one
@@ -915,6 +926,8 @@ function FinanceView() {
             <CashFlowSurface breakdownRates={breakdownRates} todayDateObj={todayDateObj} />
           )}
 
+          {activeTab === 'forecast' && <ForecastSurface />}
+
           {/* ==========================================
               TAB 5: GOALS
               ========================================== */}
@@ -955,6 +968,7 @@ function FinanceView() {
                 setAddRecTemplate("scratch");
               }}
               onTogglePaid={toggleRecurringPaid}
+              onPayEarly={recordEarlyPayment}
               onEditRecurring={(bill) => {
                 setActiveRecurring(bill);
                 setIsEditRecurringOpen(true);
@@ -1017,6 +1031,11 @@ function FinanceView() {
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
           )}
+
+          {/* ==========================================
+              TAB 9: TAX CALCULATOR
+              ========================================== */}
+          {activeTab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
 
           </Suspense>
           </FinanceSectionBoundary>

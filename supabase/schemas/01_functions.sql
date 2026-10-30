@@ -9,15 +9,43 @@
 -- `auth.uid()` is null for an anonymous request, and EXISTS over no rows is
 -- false, so an unauthenticated caller is denied without a special case.
 --
--- Takes no arguments and reads no column of the row being checked, so the
--- planner evaluates it once per statement as a one-time filter rather than
--- once per row. The added table read does not scale with the size of a scan.
+-- Second factor. Once the administrator has a verified factor of any type in
+-- auth.mfa_factors (the site enrols only TOTP), only a session at assurance level aal2 (the `aal` claim of
+-- its JWT, set when a code has been verified) is an administrator: a
+-- password-only aal1 session is not, and every admin policy and the edge
+-- functions' requireAdmin() (which calls this function) deny it. Before any
+-- factor is enrolled the second half is true and behaviour is unchanged, so
+-- rolling this out cannot lock the owner out; the check bites only after
+-- enrolment, when the owner has an authenticator to present.
+--
+-- GoTrue itself refuses to enrol or unenrol a factor from an aal1 session once
+-- a verified factor exists, so a stolen password cannot remove the second
+-- factor and then pass this check without it.
+--
+-- Recovery if the authenticator is lost: delete the user's row in
+-- auth.mfa_factors from the dashboard or SQL editor (service role / postgres).
+-- With no verified factor the check falls back to password-only, and the owner
+-- can sign in and enrol a new one.
+--
+-- SECURITY DEFINER and the pinned search_path stop the planner inlining it, so
+-- a policy that calls it bare runs it once for every row tested. Policies ask
+-- `(SELECT "public"."is_admin"())` instead: it takes no arguments and reads no
+-- column of the row, so the subquery becomes an InitPlan evaluated once per
+-- statement, and the table read does not scale with the size of a scan.
+-- src/integrations/supabase/rls-admin-check.test.ts fails on a bare call.
 CREATE OR REPLACE FUNCTION "public"."is_admin"() RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.admin_users WHERE user_id = auth.uid()
+  )
+  AND (
+    coalesce(auth.jwt() ->> 'aal', '') = 'aal2'
+    OR NOT EXISTS (
+      SELECT 1 FROM auth.mfa_factors
+      WHERE user_id = auth.uid() AND status = 'verified'
+    )
   );
 $$;
 
@@ -38,7 +66,7 @@ ALTER FUNCTION "public"."is_admin"() OWNER TO "postgres";
 -- seed script, or the SQL editor). RLS on with no write policy denies the rest
 -- by default.
 CREATE POLICY "Admin read" ON "public"."admin_users"
-    FOR SELECT TO "authenticated" USING ("public"."is_admin"());
+    FOR SELECT TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
 -- Note on recursion: that policy calls a function that reads this table.
 -- `is_admin()` is SECURITY DEFINER and owned by postgres, and a table's owner

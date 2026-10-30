@@ -54,4 +54,60 @@ describe('employerLogo', () => {
     const loose = [{ name: undefined as unknown as string, logoUrl: '/x.svg' }, ...orgs];
     expect(employerLogo('Acme Robotics', loose)).toBe('/org-logos/acme-robotics.svg');
   });
+
+  it('matches camelCase and unspaced compound names against a spaced org name', () => {
+    expect(employerLogo('AcmeRobotics', orgs)).toBe('/org-logos/acme-robotics.svg');
+    expect(employerLogo('acmerobotics', orgs)).toBe('/org-logos/acme-robotics.svg');
+  });
+
+  it('matches an initialism of three or more letters against a multi-word org name', () => {
+    const schools = [
+      { name: 'University College London', logoUrl: '/org-logos/ucl.png' },
+      { name: 'Royal College of Art', logoUrl: '/org-logos/rca.png' },
+    ];
+    expect(employerLogo('UCL', schools)).toBe('/org-logos/ucl.png');
+    expect(employerLogo('RCA', schools)).toBe('/org-logos/rca.png');
+  });
+
+  it('matches an org via its configured aliases', () => {
+    const withAliases = [
+      { name: 'Apex Aerospace', aliases: ['Beacon Staffing'], logoUrl: '/org-logos/apex.png' },
+    ];
+    expect(employerLogo('Beacon Staffing', withAliases)).toBe('/org-logos/apex.png');
+    expect(employerLogo('Beacon', withAliases)).toBe('/org-logos/apex.png');
+  });
+
+  it('prefers an employer name over another role sharing that name as an alias', () => {
+    const rows = [
+      { name: 'Apex Aerospace', aliases: ['Beacon Staffing'], logoUrl: '/apex.png' },
+      { name: 'Beacon Staffing', logoUrl: '/beacon.png' },
+    ];
+    expect(employerLogo('Beacon Staffing', rows)).toBe('/beacon.png');
+  });
+
+  it('does not assign a shared payroll agency to an arbitrary employer', () => {
+    const rows = [
+      { name: 'Apex Aerospace', aliases: ['Beacon Staffing'], logoUrl: '/apex.png' },
+      { name: 'Acme Robotics', aliases: ['Beacon Staffing'], logoUrl: '/acme.png' },
+    ];
+    expect(employerLogo('Beacon Staffing', rows)).toBeNull();
+    expect(employerLogo('BeaconStaffing', [...rows].reverse())).toBeNull();
+    expect(employerLogo('Beacon Staffing UK Ltd', rows)).toBeNull();
+  });
+
+  it('leaves ambiguous initials unmatched regardless of expansion length', () => {
+    const rows = [
+      { name: 'University College London', logoUrl: '/ucl.png' },
+      { name: 'United Construction Limited', logoUrl: '/construction.png' },
+    ];
+    expect(employerLogo('UCL', rows)).toBeNull();
+    expect(employerLogo('UCL', [...rows].reverse())).toBeNull();
+  });
+
+  it('accepts repeated roles with the same logo', () => {
+    expect(employerLogo('UCL', [
+      { name: 'University College London', logoUrl: '/ucl.png' },
+      { name: 'University College London', logoUrl: '/ucl.png' },
+    ])).toBe('/ucl.png');
+  });
 });

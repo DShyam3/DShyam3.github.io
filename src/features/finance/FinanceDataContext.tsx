@@ -36,12 +36,21 @@ import type {
 } from '@/lib/finance/transfer-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { normalizeHolidays } from '@/lib/finance';
 import {
+  type CategoryRule,
+  applyCategoryRules,
+  calculateRuleImpact,
+  normalizeHolidays,
+  resolveBankHolidaysForYear,
+  ukBasePersonalAllowance,
+} from '@/lib/finance';
+import {
+  asBirthdayLeaveRule,
   asBudgetGroup,
   asBureauKey,
   asInvestmentCategory,
   asFrequency,
+  asPackageBenefits,
   asPensionType,
   asStudentLoanPlan,
   asPaydaySchedule,
@@ -311,6 +320,9 @@ function useProvideFinanceData() {
     return [];
   });
 
+  const rawTransactionsRef = useRef<MockTransaction[]>([]);
+  const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
+
   // Tax rates are historical reference data. The active timeline is the
   // admin override when present, otherwise the built-in default timeline.
   const [taxConfigs, setTaxConfigs] = useState<TaxConfig[]>(() => [createEmptyTaxConfig()]);
@@ -318,9 +330,9 @@ function useProvideFinanceData() {
     try {
       return selectTaxConfigForDate(taxConfigs, todayInLocalTimezone());
     } catch {
-      // This only covers the loading/empty state. Historical calculations do
-      // not get this fallback: calculateFinance throws instead of using future
-      // rates for a past date.
+      // This only covers the loading/empty state. Pay figures no longer read
+      // these rows: calculateFinance uses the Tax Calculator's engine, which
+      // carries one tax year's rules (REHAUL_PLAN.md 8.H).
       return taxConfigs[0] ?? createEmptyTaxConfig();
     }
   })();
@@ -375,31 +387,39 @@ function useProvideFinanceData() {
   useEffect(() => {
     const fetchHolidays = async () => {
       setFetchingHolidays(true);
+      const region = settings.ukRegion || 'england-and-wales';
+      let fetchedHolsInYear: string[] = [];
+      const fetchedHolsMap: Record<string, string> = {};
       try {
         const res = await fetch('https://www.gov.uk/bank-holidays.json');
         if (!res.ok) throw new Error('Failed to fetch holidays');
         const data = await res.json();
 
-        const region = settings.ukRegion || 'england-and-wales';
         const events = (data[region]?.events ?? []) as { date: string; title: string }[];
-
         const yearStr = settings.taxYear.toString();
-        const holsInYear = events
+        fetchedHolsInYear = events
           .filter((e) => e.date.startsWith(yearStr))
           .map((e) => e.date);
 
-        setBankHolidaysList(holsInYear);
-
-        const holsMap: Record<string, string> = {};
         events.forEach((e) => {
           if (e.date.startsWith(yearStr)) {
-            holsMap[e.date] = e.title;
+            fetchedHolsMap[e.date] = e.title;
           }
         });
-        setBankHolidaysMap(holsMap);
+      } catch (err) {
+        console.error('Error fetching bank holidays:', err);
+      } finally {
+        const resolved = resolveBankHolidaysForYear(
+          settings.taxYear,
+          region,
+          fetchedHolsInYear,
+          fetchedHolsMap,
+        );
+        setBankHolidaysList(resolved.dates);
+        setBankHolidaysMap(resolved.map);
 
         const calculatedWeekends = calculateWeekends(settings.taxYear);
-        const calculatedHolidays = holsInYear.length;
+        const calculatedHolidays = resolved.dates.length;
 
         setSettings(prev => {
           if (prev.bankHolidays === calculatedHolidays && prev.weekends === calculatedWeekends) {
@@ -411,9 +431,6 @@ function useProvideFinanceData() {
             weekends: calculatedWeekends
           };
         });
-      } catch (err) {
-        console.error('Error fetching bank holidays:', err);
-      } finally {
         setFetchingHolidays(false);
       }
     };
@@ -459,6 +476,13 @@ function useProvideFinanceData() {
   // save). Sent before a load reads, so the load shows them instead of a copy
   // that predates them -- and an edit built on that copy cannot send it back.
   const beforeLoadFlushesRef = useRef(new Set<() => void>());
+  const rememberStoredRowsRef = useRef<(<T extends object>(
+    table: RowTable,
+    rows: readonly T[],
+    toRow: (row: T) => Record<string, unknown>,
+    owner: string | null,
+    fromLoad?: boolean,
+  ) => void) | null>(null);
   const registerBeforeLoadFlush = useCallback((flush: () => void) => {
     beforeLoadFlushesRef.current.add(flush);
     return () => { beforeLoadFlushesRef.current.delete(flush); };
@@ -676,11 +700,13 @@ function useProvideFinanceData() {
 
   const fetchTransfers = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) return;
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_profile_transfers')
-      .select('id, from_profile_id, to_profile_id, from_transaction_id, to_transaction_id, amount, date, note')
+      .select('id, from_profile_id, to_profile_id, from_transaction_id, to_transaction_id, amount, date, note', { count: 'exact' })
       .or(`from_profile_id.eq.${forProfile},to_profile_id.eq.${forProfile}`)
-      .order('date', { ascending: false });
+      .order('date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('transfers unavailable', error.message);
       return;
@@ -732,11 +758,13 @@ function useProvideFinanceData() {
       setPayslips([]);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_payslips')
-      .select('id, pay_date, employer, gross, income_tax, national_insurance, pension_employee, pension_employer, student_loan, other_deductions, net, storage_path, notes, lines')
+      .select('id, pay_date, employer, gross, income_tax, national_insurance, pension_employee, pension_employer, student_loan, other_deductions, net, storage_path, notes, lines', { count: 'exact' })
       .eq('profile_id', forProfile)
-      .order('pay_date', { ascending: false });
+      .order('pay_date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('payslips unavailable', error.message);
       return;
@@ -836,10 +864,13 @@ function useProvideFinanceData() {
       setPayslipReconciliations([]);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_payslip_transaction_reconciliations')
-      .select('id, payslip_id, transaction_id, confirmed_at')
-      .eq('profile_id', forProfile);
+      .select('id, payslip_id, transaction_id, confirmed_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('confirmed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('payslip reconciliations unavailable');
       return;
@@ -873,10 +904,13 @@ function useProvideFinanceData() {
       setTransferLinksFailed(false);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_transfer_links')
-      .select('id, outflow_transaction_id, inflow_transaction_id, confirmed_at')
-      .eq('profile_id', forProfile);
+      .select('id, outflow_transaction_id, inflow_transaction_id, confirmed_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('confirmed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     /* Cleared rather than kept: the links held may belong to the profile the
        switcher just left, and a stale exclusion is invisible where a missing
        one is flagged. */
@@ -912,10 +946,13 @@ function useProvideFinanceData() {
       setTransferDismissals([]);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_transfer_dismissals')
-      .select('id, outflow_transaction_id, inflow_transaction_id, dismissed_at')
-      .eq('profile_id', forProfile);
+      .select('id, outflow_transaction_id, inflow_transaction_id, dismissed_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('dismissed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('transfer dismissals unavailable');
       setTransferDismissals([]);
@@ -1150,10 +1187,13 @@ function useProvideFinanceData() {
       setTransferSingleLegsFailed(false);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_transfer_single_legs')
-      .select('id, transaction_id, verdict, decided_at')
-      .eq('profile_id', forProfile);
+      .select('id, transaction_id, verdict, decided_at', { count: 'exact' })
+      .eq('profile_id', forProfile)
+      .order('decided_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.id);
     if (error) {
       console.warn('single-leg transfer decisions unavailable');
       setTransferSingleLegs([]);
@@ -1307,11 +1347,13 @@ function useProvideFinanceData() {
       return;
     }
 
-    const { error: balanceError } = await supabase.from('finance_debts')
-      .update({ balance: observation.balance })
-      .eq('id', observation.debtId)
-      .eq('profile_id', profileId);
-    if (balanceError) {
+    const saved = await saveDataToSupabase('accounts', {
+      bankAccounts,
+      memberships,
+      creditScores,
+      debts: updatedDebts,
+    });
+    if (!saved) {
       toast({ title: 'Balance not updated', description: 'The reading was saved, but the debt\'s stored balance was not updated. Reload to check.', variant: 'destructive' });
       return;
     }
@@ -1360,13 +1402,92 @@ function useProvideFinanceData() {
     toast({ title: 'Observation Removed', description: 'Debt observation deleted.' });
   };
 
+  /* ---- Category Rules (8.H) ----------------------------------------------- */
+  const reapplyRules = useCallback((rules: CategoryRule[], currentTxs: MockTransaction[]) => {
+    const userModifiedMap = new Map<string, MockTransaction>();
+    for (const tx of currentTxs) {
+      if (tx.userModified || (tx as { user_modified?: boolean }).user_modified) {
+        userModifiedMap.set(tx.id, tx);
+      }
+    }
+    const baseTxs = rawTransactionsRef.current.length > 0 ? rawTransactionsRef.current : currentTxs;
+    const merged = baseTxs.map(rawTx => userModifiedMap.get(rawTx.id) || rawTx);
+    return applyCategoryRules(merged, rules);
+  }, []);
+
+  const saveCategoryRule = useCallback(async (
+    rule: Omit<CategoryRule, 'id'> & { id?: string }
+  ): Promise<{ error: Error | null; countAffected: number }> => {
+    if (!profileId) {
+      return { error: new Error('No active profile'), countAffected: 0 };
+    }
+    const ruleId = rule.id || crypto.randomUUID();
+    const payload = {
+      id: ruleId,
+      profile_id: profileId,
+      merchant_pattern: rule.merchant_pattern.trim(),
+      category: rule.category.trim(),
+      rename_to: rule.rename_to?.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('finance_category_rules').upsert(payload);
+    if (error) {
+      toast({ title: 'Could not save category rule', description: error.message, variant: 'destructive' });
+      return { error: new Error(error.message), countAffected: 0 };
+    }
+
+    const nextRules = [
+      ...categoryRules.filter(r => r.id !== ruleId),
+      { ...payload, created_at: (rule as CategoryRule).created_at || payload.updated_at },
+    ];
+    setCategoryRules(nextRules);
+
+    const impact = calculateRuleImpact(mockTransactions, payload);
+    const updatedTxs = reapplyRules(nextRules, mockTransactions);
+    setMockTransactions(updatedTxs);
+    rememberStoredRowsRef.current?.('finance_transactions', updatedTxs, t => transactionRow(t, profileId), profileId, true);
+
+    toast({
+      title: 'Rule Saved',
+      description: `Rule for "${payload.merchant_pattern}" applied (${impact.unmodifiedCount} transactions updated).`,
+    });
+    return { error: null, countAffected: impact.unmodifiedCount };
+  }, [profileId, categoryRules, mockTransactions, reapplyRules, toast]);
+
+  const deleteCategoryRule = useCallback(async (id: string): Promise<{ error: Error | null }> => {
+    if (!profileId) {
+      return { error: new Error('No active profile') };
+    }
+
+    const { error } = await supabase.from('finance_category_rules').delete().eq('id', id).eq('profile_id', profileId);
+    if (error) {
+      toast({ title: 'Could not delete rule', description: error.message, variant: 'destructive' });
+      return { error: new Error(error.message) };
+    }
+
+    const nextRules = categoryRules.filter(r => r.id !== id);
+    setCategoryRules(nextRules);
+
+    const updatedTxs = reapplyRules(nextRules, mockTransactions);
+    setMockTransactions(updatedTxs);
+    rememberStoredRowsRef.current?.('finance_transactions', updatedTxs, t => transactionRow(t, profileId), profileId, true);
+
+    toast({ title: 'Rule Deleted', description: 'Category rule removed.' });
+    return { error: null };
+  }, [profileId, categoryRules, mockTransactions, reapplyRules, toast]);
+
   const fetchNetWorthHistory = useCallback(async (forProfile: string | null) => {
     if (!isAdmin || !forProfile) return;
-    const { data, error } = await supabase
+    // Keyed by day: the column list carries no id, and a profile has one
+    // snapshot per day (idx_finance_net_worth_snapshots_day).
+    const { data, error } = await selectAllPages((from, to) => supabase
       .from('finance_net_worth_snapshots')
-      .select('captured_on, net_worth, assets, liabilities')
+      .select('captured_on, net_worth, assets, liabilities', { count: 'exact' })
       .eq('profile_id', forProfile)
-      .order('captured_on', { ascending: true });
+      .order('captured_on', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to), row => row.captured_on);
     if (error) {
       // A missing series is not worth a toast: every other figure on the page
       // is current state and still correct without it.
@@ -1428,18 +1549,28 @@ function useProvideFinanceData() {
           creditBureausRes,
           holidayDefaultsRes,
           budgetPresetsRes,
-          selfProfileRes
+          selfProfileRes,
+          categoryRulesRes
         ] = await Promise.all([
-          scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, updated_at')),
+          scoped(supabase.from('finance_settings').select('id, is_default, gross_salary, pension_type, personal_pension_percent, employer_pension_percent, student_loan_plan, tax_code, personal_allowance, weekends, bank_holidays, work_holidays, working_hours_per_day, tax_year, uk_region, pay_day_of_month, payday_schedule, payday_weekday, payday_biweekly_anchor, active_savings_types, birthday_leave_enabled, birthday_leave_rule, birthday_month, birthday_day, package_benefits, updated_at')),
           scoped(supabase.from('finance_user_holidays').select('id, is_default, start_date, end_date, occasion, count, type, half_day')),
           scoped(supabase.from('finance_goals').select('id, is_default, name, target_amount, current_amount, target_date, is_emergency_fund, monthly_contribution, start_date, status, emoji')),
-          scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id')),
+          selectAllPages((from, to) => scoped(supabase.from('finance_goal_contributions').select('id, is_default, goal_id, amount, date, note, bank_account_id', { count: 'exact' }))
+            .order('date', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to), row => row.id),
           scoped(supabase.from('finance_bank_accounts').select('id, is_default, name, type, issuer, balance, annual_fee, credit_limit, use_case, emoji, color')),
           scopedByProfile(supabase.from('finance_investment_holdings').select('id, account_id, name, ticker, shares, avg_price, cost_basis_known, current_price, current_price_known, category')),
-          scopedByProfile(supabase.from('finance_investment_activities').select('id, account_id, provider, activity_type, occurred_on, name, ticker, quantity, unit_price_gbp, source_reference').order('occurred_on', { ascending: false })),
+          selectAllPages((from, to) => scopedByProfile(supabase.from('finance_investment_activities').select('id, account_id, provider, activity_type, occurred_on, name, ticker, quantity, unit_price_gbp, source_reference', { count: 'exact' }))
+            .order('occurred_on', { ascending: false })
+            .order('id', { ascending: true })
+            .range(from, to), row => row.id),
           scoped(supabase.from('finance_memberships').select('id, is_default, name, type, status, annual_fee, use_case')),
           scoped(supabase.from('finance_debts').select('id, is_default, name, type, lender, original_amount, balance, interest_rate, min_payment, start_date, course_end_date, payoff_date, repayment_type, student_loan_plan, write_off_years, draws, rate_periods, final_payment, notes, emoji, color')),
-          scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at')),
+          selectAllPages((from, to) => scopedByProfile(supabase.from('finance_debt_observations').select('id, debt_id, observed_on, balance, source, statement_date, note, created_at', { count: 'exact' }))
+            .order('observed_on', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to), row => row.id),
           scoped(supabase.from('finance_credit_scores').select('id, is_default, bureau, date, score, storage_path')),
           scoped(supabase.from('finance_budget_categories').select('id, is_default, is_template, name, budgeted, group_type, emoji')),
           scoped(supabase.from('finance_budget_items').select('id, is_default, is_template, category_id, name, budgeted, spent, linked_account_id, emoji, provider')),
@@ -1457,7 +1588,8 @@ function useProvideFinanceData() {
           supabase
             .from('finance_profiles')
             .select(FINANCE_PROFILE_COLUMNS)
-            .order('is_self', { ascending: false })
+            .order('is_self', { ascending: false }),
+          scopedByProfile(supabase.from('finance_category_rules').select('id, profile_id, merchant_pattern, category, rename_to, created_at, updated_at'))
         ]);
         if (loadSeq !== loadSeqRef.current || profileId !== currentProfileRef.current) return;
 
@@ -1494,7 +1626,8 @@ function useProvideFinanceData() {
           ['recurring_templates', recurringTemplatesRes],
           ['credit_bureaus', creditBureausRes],
           ['holiday_defaults', holidayDefaultsRes],
-          ['budget_presets', budgetPresetsRes]
+          ['budget_presets', budgetPresetsRes],
+          ['category_rules', categoryRulesRes]
         ] as const).filter(([, res]) => res.error);
         // Applied once every collection is set, at the end of the load: if
         // mapping throws first, nothing is unblocked over unset state.
@@ -1543,7 +1676,7 @@ function useProvideFinanceData() {
             employerPensionPercent: Number(activeSettings.employer_pension_percent) || 0,
             studentLoanPlan: asStudentLoanPlan(activeSettings.student_loan_plan),
             taxCode: activeSettings.tax_code || '1257L',
-            personalAllowance: Number(activeSettings.personal_allowance) || 12570,
+            personalAllowance: ukBasePersonalAllowance(activeSettings.personal_allowance == null ? undefined : Number(activeSettings.personal_allowance)),
             weekends: Number(activeSettings.weekends) || 104,
             bankHolidays: Number(activeSettings.bank_holidays) || 8,
             workHolidays: Number(activeSettings.work_holidays) || 25,
@@ -1555,6 +1688,11 @@ function useProvideFinanceData() {
             paydayWeekday: activeSettings.payday_weekday !== null ? activeSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: activeSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: activeSettings.active_savings_types ?? [],
+            birthdayLeaveEnabled: Boolean(activeSettings.birthday_leave_enabled),
+            birthdayLeaveRule: asBirthdayLeaveRule(activeSettings.birthday_leave_rule),
+            birthdayMonth: activeSettings.birthday_month ?? null,
+            birthdayDay: activeSettings.birthday_day ?? null,
+            packageBenefits: asPackageBenefits(activeSettings.package_benefits),
           };
           setSettings(prev => ({
             ...prev,
@@ -1766,6 +1904,19 @@ function useProvideFinanceData() {
           ));
         }
 
+        const loadedRules: CategoryRule[] = (categoryRulesRes?.data ?? []).map(r => ({
+          id: r.id,
+          profile_id: r.profile_id,
+          merchant_pattern: r.merchant_pattern,
+          category: r.category,
+          rename_to: r.rename_to,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        }));
+        if (!categoryRulesRes?.error) {
+          setCategoryRules(loadedRules);
+        }
+
         const userTransactions = transactionsRes.data?.filter(d => !d.is_default) || [];
         const defaultTransactions = transactionsRes.data?.filter(d => d.is_default) || [];
         const activeTransactions = userTransactions.length > 0 ? userTransactions : defaultTransactions;
@@ -1775,10 +1926,12 @@ function useProvideFinanceData() {
           const goalId = tx.goalId && goalIdFor.get(tx.goalId);
           return goalId && goalId !== tx.goalId ? { ...tx, goalId } : tx;
         });
+        rawTransactionsRef.current = mappedTransactions;
+        const appliedTransactions = applyCategoryRules(mappedTransactions, loadedRules);
         if (!transactionsRes.error) {
-          setMockTransactions(mappedTransactions);
-          rememberStoredRows('finance_transactions', mappedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
-          markLoaded('finance_transactions', mappedTransactions);
+          setMockTransactions(appliedTransactions);
+          rememberStoredRows('finance_transactions', appliedTransactions, t => transactionRow(t, profileId), userTransactions.length > 0 ? profileId : null, true);
+          markLoaded('finance_transactions', appliedTransactions);
         }
 
         const mapTaxConfig = (row: NonNullable<typeof taxConfigsRes.data>[number]): TaxConfig => ({
@@ -1915,7 +2068,7 @@ function useProvideFinanceData() {
             employerPensionPercent: Number(defaultSettings.employer_pension_percent) || 0,
             studentLoanPlan: asStudentLoanPlan(defaultSettings.student_loan_plan),
             taxCode: defaultSettings.tax_code || '1257L',
-            personalAllowance: Number(defaultSettings.personal_allowance) || 12570,
+            personalAllowance: ukBasePersonalAllowance(defaultSettings.personal_allowance == null ? undefined : Number(defaultSettings.personal_allowance)),
             weekends: Number(defaultSettings.weekends) || 104,
             bankHolidays: Number(defaultSettings.bank_holidays) || 8,
             workHolidays: Number(defaultSettings.work_holidays) || 25,
@@ -1931,6 +2084,11 @@ function useProvideFinanceData() {
             paydayWeekday: defaultSettings.payday_weekday !== null ? defaultSettings.payday_weekday : 5,
             paydayBiweeklyAnchor: defaultSettings.payday_biweekly_anchor || DEFAULT_BIWEEKLY_ANCHOR,
             activeSavingsTypes: defaultSettings.active_savings_types || [],
+            birthdayLeaveEnabled: Boolean(defaultSettings.birthday_leave_enabled),
+            birthdayLeaveRule: asBirthdayLeaveRule(defaultSettings.birthday_leave_rule),
+            birthdayMonth: defaultSettings.birthday_month ?? null,
+            birthdayDay: defaultSettings.birthday_day ?? null,
+            packageBenefits: asPackageBenefits(defaultSettings.package_benefits),
             // Ids of this profile's own, so a reset saves copies rather than
             // writing (or deleting) against the shared rows.
             holidaysByUser: scopeToProfile(defaultHolidaysList.map(h => holidayFromRow(h)), false, profileId),
@@ -2120,6 +2278,7 @@ function useProvideFinanceData() {
     }
     storedRowsRef.current.set(table, stored);
   };
+  rememberStoredRowsRef.current = rememberStoredRows;
 
   /** Restarts the deadline of the save running for `table`'s key. */
   const markSaveProgress = (table: RowTable) => saveProgressRef.current.get(SAVE_KEY_OF[table])?.();
@@ -2514,6 +2673,11 @@ function useProvideFinanceData() {
           payday_weekday: settingsObj.paydayWeekday !== undefined ? settingsObj.paydayWeekday : null,
           payday_biweekly_anchor: settingsObj.paydayBiweeklyAnchor || null,
           active_savings_types: settingsObj.activeSavingsTypes || [],
+          birthday_leave_enabled: Boolean(settingsObj.birthdayLeaveEnabled),
+          birthday_leave_rule: settingsObj.birthdayLeaveRule || 'within_week',
+          birthday_month: settingsObj.birthdayMonth ?? null,
+          birthday_day: settingsObj.birthdayDay ?? null,
+          package_benefits: (settingsObj.packageBenefits || []) as unknown as Json,
           updated_at: new Date().toISOString()
         };
 
@@ -2816,7 +2980,7 @@ function useProvideFinanceData() {
   const recurringToday = todayInLocalTimezone();
   const visibleRecurrings = recurrings.map(bill => ({
     ...bill,
-    isPaid: bill.isPaid && (!bill.lastPaidDate || isRecurringPaidForPeriod(bill, recurringToday)),
+    isPaid: bill.isPaid && isRecurringPaidForPeriod(bill, recurringToday),
   }));
 
   const value = {
@@ -2899,6 +3063,10 @@ function useProvideFinanceData() {
     deleteFinanceRows,
     savingDb,
     selectedGoalId,
+    categoryRules,
+    setCategoryRules,
+    saveCategoryRule,
+    deleteCategoryRule,
     setBankAccounts,
     setBudgetCategories,
     setCreditBureaus,

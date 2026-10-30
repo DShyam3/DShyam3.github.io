@@ -6,6 +6,7 @@ import type {
     TMDBSearchResponse,
 } from './tmdb-types';
 import { getPlatform } from './sync-logic';
+import { releaseYear } from './watchlist-utils';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 const TMDB_BACKDROP_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
@@ -96,7 +97,7 @@ export function useTMDB() {
                 poster: data.poster_path ? getPosterUrl(data.poster_path) : null,
                 backdrop: data.backdrop_path ? getBackdropUrl(data.backdrop_path) : null,
                 release_date: data.release_date || data.first_air_date || null,
-                release_year: data.release_date || data.first_air_date ? new Date(data.release_date || data.first_air_date).getFullYear() : null,
+                release_year: releaseYear(data.release_date || data.first_air_date) ?? null,
                 runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : null),
                 genres: data.genres?.map((g) => g.name) || [],
                 tmdb_id: data.id,

@@ -270,7 +270,12 @@ the shape of this project in mind:
   acting on the Security Headers section.
 - **The backend is Supabase**, so the Database and Authorization rules are the
   load-bearing ones here: RLS on every table, `is_admin()` on every write, and
-  no policy left as `USING (true)` for anything but public reads.
+  no policy left as `USING (true)` for anything but public reads. A policy
+  writes the check as `(SELECT public.is_admin())`, never bare: the function
+  cannot be inlined, so a bare call runs once per row tested and the wrapped
+  one once per statement. `src/integrations/supabase/rls-admin-check.test.ts`
+  fails a bare call anywhere in `supabase/schemas/`, or in any policy still
+  bare once `supabase/migrations/` is replayed.
 - **`VITE_SUPABASE_URL` and the publishable key belong in the client.** The
   anon key is public by design and is safe only because RLS is correct --
   which is why the Database rules matter more here than the Secrets ones. No

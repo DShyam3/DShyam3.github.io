@@ -13,11 +13,11 @@ ALTER TABLE "public"."links" OWNER TO "postgres";
 ALTER TABLE ONLY "public"."links"
     ADD CONSTRAINT "links_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Admin delete" ON "public"."links" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."links" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."links" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."links" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."links" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."links" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Public Read Access" ON "public"."links" FOR SELECT USING (true);
 
@@ -25,8 +25,12 @@ ALTER TABLE "public"."links" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT ALL ON TABLE "public"."links" TO "anon";
+REVOKE ALL ON TABLE "public"."links" FROM "anon";
 
-GRANT ALL ON TABLE "public"."links" TO "authenticated";
+GRANT SELECT ON TABLE "public"."links" TO "anon";
+
+REVOKE ALL ON TABLE "public"."links" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."links" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."links" TO "service_role";

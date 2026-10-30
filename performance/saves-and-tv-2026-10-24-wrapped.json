@@ -1,0 +1,425 @@
+{
+  "measuredAt": "2026-10-24T12:13:51.227Z",
+  "node": "v22.23.1",
+  "environment": "local Supabase; synthetic fixtures; one warm-up then five sequential runs",
+  "scope": "Real REST requests in the shapes the app sends; excludes React, TMDB, cron and production latency.",
+  "cleanupVerified": true,
+  "results": [
+    {
+      "name": "finance-save-insert",
+      "size": 100,
+      "samples": [
+        {
+          "milliseconds": 10.33,
+          "requests": 1
+        },
+        {
+          "milliseconds": 10.66,
+          "requests": 1
+        },
+        {
+          "milliseconds": 10.55,
+          "requests": 1
+        },
+        {
+          "milliseconds": 8.99,
+          "requests": 1
+        },
+        {
+          "milliseconds": 8.75,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "finance-save-update-shared-patch",
+      "size": 100,
+      "samples": [
+        {
+          "milliseconds": 9.26,
+          "requests": 1
+        },
+        {
+          "milliseconds": 6.85,
+          "requests": 1
+        },
+        {
+          "milliseconds": 9.32,
+          "requests": 1
+        },
+        {
+          "milliseconds": 8,
+          "requests": 1
+        },
+        {
+          "milliseconds": 7.57,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "finance-save-update-distinct-patches",
+      "size": 100,
+      "samples": [
+        {
+          "milliseconds": 653.83,
+          "requests": 100
+        },
+        {
+          "milliseconds": 713.85,
+          "requests": 100
+        },
+        {
+          "milliseconds": 651.87,
+          "requests": 100
+        },
+        {
+          "milliseconds": 553.27,
+          "requests": 100
+        },
+        {
+          "milliseconds": 563.3,
+          "requests": 100
+        }
+      ]
+    },
+    {
+      "name": "finance-save-delete",
+      "size": 100,
+      "samples": [
+        {
+          "milliseconds": 11.32,
+          "requests": 1
+        },
+        {
+          "milliseconds": 11.41,
+          "requests": 1
+        },
+        {
+          "milliseconds": 7.76,
+          "requests": 1
+        },
+        {
+          "milliseconds": 8.12,
+          "requests": 1
+        },
+        {
+          "milliseconds": 11.45,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "finance-save-insert",
+      "size": 1000,
+      "samples": [
+        {
+          "milliseconds": 93.73,
+          "requests": 10
+        },
+        {
+          "milliseconds": 104.65,
+          "requests": 10
+        },
+        {
+          "milliseconds": 91.31,
+          "requests": 10
+        },
+        {
+          "milliseconds": 102,
+          "requests": 10
+        },
+        {
+          "milliseconds": 107.39,
+          "requests": 10
+        }
+      ]
+    },
+    {
+      "name": "finance-save-update-shared-patch",
+      "size": 1000,
+      "samples": [
+        {
+          "milliseconds": 117.22,
+          "requests": 10
+        },
+        {
+          "milliseconds": 94.73,
+          "requests": 10
+        },
+        {
+          "milliseconds": 83.64,
+          "requests": 10
+        },
+        {
+          "milliseconds": 91.88,
+          "requests": 10
+        },
+        {
+          "milliseconds": 83.42,
+          "requests": 10
+        }
+      ]
+    },
+    {
+      "name": "finance-save-update-distinct-patches",
+      "size": 1000,
+      "samples": [
+        {
+          "milliseconds": 7632.01,
+          "requests": 1000
+        },
+        {
+          "milliseconds": 5837.65,
+          "requests": 1000
+        },
+        {
+          "milliseconds": 6305.46,
+          "requests": 1000
+        },
+        {
+          "milliseconds": 5974.45,
+          "requests": 1000
+        },
+        {
+          "milliseconds": 5521.37,
+          "requests": 1000
+        }
+      ]
+    },
+    {
+      "name": "finance-save-delete",
+      "size": 1000,
+      "samples": [
+        {
+          "milliseconds": 106.63,
+          "requests": 10
+        },
+        {
+          "milliseconds": 89.08,
+          "requests": 10
+        },
+        {
+          "milliseconds": 100.75,
+          "requests": 10
+        },
+        {
+          "milliseconds": 102.28,
+          "requests": 10
+        },
+        {
+          "milliseconds": 86.67,
+          "requests": 10
+        }
+      ]
+    },
+    {
+      "name": "tv-import-1x10",
+      "size": 10,
+      "samples": [
+        {
+          "milliseconds": 20.48,
+          "requests": 3
+        },
+        {
+          "milliseconds": 18,
+          "requests": 3
+        },
+        {
+          "milliseconds": 18.91,
+          "requests": 3
+        },
+        {
+          "milliseconds": 17.93,
+          "requests": 3
+        },
+        {
+          "milliseconds": 20.31,
+          "requests": 3
+        }
+      ]
+    },
+    {
+      "name": "tv-remove-1x10",
+      "size": 10,
+      "samples": [
+        {
+          "milliseconds": 21.54,
+          "requests": 4
+        },
+        {
+          "milliseconds": 20.15,
+          "requests": 4
+        },
+        {
+          "milliseconds": 21.74,
+          "requests": 4
+        },
+        {
+          "milliseconds": 18.56,
+          "requests": 4
+        },
+        {
+          "milliseconds": 20.54,
+          "requests": 4
+        }
+      ]
+    },
+    {
+      "name": "tv-import-5x10",
+      "size": 50,
+      "samples": [
+        {
+          "milliseconds": 24.08,
+          "requests": 11
+        },
+        {
+          "milliseconds": 20.66,
+          "requests": 11
+        },
+        {
+          "milliseconds": 22.02,
+          "requests": 11
+        },
+        {
+          "milliseconds": 24.99,
+          "requests": 11
+        },
+        {
+          "milliseconds": 24.08,
+          "requests": 11
+        }
+      ]
+    },
+    {
+      "name": "tv-remove-5x10",
+      "size": 50,
+      "samples": [
+        {
+          "milliseconds": 21.13,
+          "requests": 4
+        },
+        {
+          "milliseconds": 23.67,
+          "requests": 4
+        },
+        {
+          "milliseconds": 20.67,
+          "requests": 4
+        },
+        {
+          "milliseconds": 26.38,
+          "requests": 4
+        },
+        {
+          "milliseconds": 22.6,
+          "requests": 4
+        }
+      ]
+    },
+    {
+      "name": "tv-import-20x25",
+      "size": 500,
+      "samples": [
+        {
+          "milliseconds": 49.43,
+          "requests": 41
+        },
+        {
+          "milliseconds": 52.19,
+          "requests": 41
+        },
+        {
+          "milliseconds": 48.8,
+          "requests": 41
+        },
+        {
+          "milliseconds": 50.67,
+          "requests": 41
+        },
+        {
+          "milliseconds": 50.51,
+          "requests": 41
+        }
+      ]
+    },
+    {
+      "name": "tv-remove-20x25",
+      "size": 500,
+      "samples": [
+        {
+          "milliseconds": 57.61,
+          "requests": 4
+        },
+        {
+          "milliseconds": 52.56,
+          "requests": 4
+        },
+        {
+          "milliseconds": 53.96,
+          "requests": 4
+        },
+        {
+          "milliseconds": 52.92,
+          "requests": 4
+        },
+        {
+          "milliseconds": 55.37,
+          "requests": 4
+        }
+      ]
+    },
+    {
+      "name": "tv-library-read-anonymous",
+      "size": 8625,
+      "samples": [
+        {
+          "milliseconds": 56.09,
+          "requests": 1
+        },
+        {
+          "milliseconds": 52.69,
+          "requests": 1
+        },
+        {
+          "milliseconds": 55.95,
+          "requests": 1
+        },
+        {
+          "milliseconds": 56.09,
+          "requests": 1
+        },
+        {
+          "milliseconds": 54.62,
+          "requests": 1
+        }
+      ]
+    },
+    {
+      "name": "tv-library-read-authenticated",
+      "size": 8625,
+      "samples": [
+        {
+          "milliseconds": 57.85,
+          "requests": 1
+        },
+        {
+          "milliseconds": 55.48,
+          "requests": 1
+        },
+        {
+          "milliseconds": 56.47,
+          "requests": 1
+        },
+        {
+          "milliseconds": 56.45,
+          "requests": 1
+        },
+        {
+          "milliseconds": 57.12,
+          "requests": 1
+        }
+      ]
+    }
+  ]
+}

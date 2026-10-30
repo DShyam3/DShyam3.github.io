@@ -60,9 +60,10 @@ const DialogContent = React.forwardRef<
           fit its widest child, and on a phone the EDC builder's widened to
           861px inside a 343px dialog, running its header under the close
           button and off the edge. */}
-      <div className="dialog-body min-h-0 overflow-y-auto grid grid-cols-[minmax(0,1fr)] gap-4">{children}</div>
+      <div className="dialog-body app-scroll min-h-0 overflow-y-auto grid grid-cols-[minmax(0,1fr)] gap-4">{children}</div>
       {/* The shared top inset reserves this close target outside the body
-          scroller, including when fields are scrolled to its upper edge. */}
+          scroller, including when fields are scrolled to its upper edge.
+          `dialog-flush` drops the inset; see src/theme/responsive.css. */}
       <DialogPrimitive.Close className="absolute right-2 top-2 h-11 w-11 flex items-center justify-center rounded-full bg-background/90 p-1.5 opacity-75 ring-offset-background transition-[opacity,background-color] hover:opacity-100 hover:bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none shadow-sm">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>

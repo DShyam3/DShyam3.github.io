@@ -18,9 +18,20 @@ describe('formatDate', () => {
   });
 
   it('returns an empty string rather than "Invalid Date"', () => {
-    for (const bad of [null, undefined, '', 'not a date']) {
+    for (const bad of [null, undefined, '', 'not a date', '2026-02-30', '2026-13-01']) {
       expect(formatDate(bad)).toBe('');
     }
+  });
+
+  it('reads a bare date as that calendar day, not as UTC midnight', () => {
+    // West of UTC, UTC midnight is the previous evening; the day must not move.
+    expect(formatDate('2026-01-01')).toBe('01/01/2026');
+    expect(formatMonthYear('2026-03-01')).toBe('Mar 2026');
+  });
+
+  it('still reads a full timestamp as an instant', () => {
+    const instant = '2026-08-28T12:00:00Z';
+    expect(formatDate(instant)).toBe(formatDate(new Date(instant)));
   });
 });
 

@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { requireAdmin } from '../_shared/require-admin.ts'
 import { corsOriginHeader } from '../_shared/site-origins.ts'
+import { selectAllPages } from '../_shared/select-all-pages.ts'
 
 // Route C of the transaction-logo work: resolve a merchant's mark ONCE,
 // server-side, and cache it in our own bucket.
@@ -439,12 +440,22 @@ serve(async (req) => {
     const refresh = body?.refresh === true
 
     // Which merchants the ledger actually contains. Nothing is looked up for a
-    // brand nobody here has paid.
-    const { data: rows, error: rowsError } = await supabaseAdmin
-      .from('finance_transactions')
-      .select('merchant')
-      .not('merchant', 'is', null)
+    // brand nobody here has paid. Paged: one plain select stops at the Data
+    // API's 1,000 rows, which left most of the ledger's merchants unseen. A
+    // write landing mid-read (a sync still importing history) can fail the
+    // whole top-up after the pager's retry; the caller is fire-and-forget, so
+    // new merchants then wait for the next sync. Acceptable for decoration.
+    const { data: rows, error: rowsError } = await selectAllPages<{ id: string; merchant: string | null }>(
+      (from, to) => supabaseAdmin
+        .from('finance_transactions')
+        .select('id, merchant', { count: 'exact' })
+        .not('merchant', 'is', null)
+        .order('id')
+        .range(from, to),
+      (row) => row.id,
+    )
     if (rowsError) {
+      console.error('Failed to read merchants:', rowsError.message)
       return new Response(JSON.stringify({ error: 'Failed to read merchants' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -455,7 +466,7 @@ serve(async (req) => {
     // merchant seen five times rather than five merchants seen once.
     const occurrences = new Map<string, number>()
     for (const row of rows ?? []) {
-      const raw = (row as { merchant: string | null }).merchant
+      const raw = row.merchant
       if (!raw) continue
       const alias = merchantSlug(raw)
       if (!alias) continue
@@ -581,22 +592,38 @@ serve(async (req) => {
 
       if (!image) {
         // A recorded miss, so the next run does not ask about this one again.
-        await supabaseAdmin.from('finance_merchant_logos').upsert({
-          slug,
+        // Written only where no file is recorded: an overlapping run may just
+        // have stored one, and nulling its path would orphan that object.
+        const miss = {
           storage_path: null,
           source_domain: resolved?.domain ?? null,
           resolved_at: new Date().toISOString(),
-        }, { onConflict: 'slug' })
+        }
+        const { data: marked } = await supabaseAdmin
+          .from('finance_merchant_logos')
+          .update(miss)
+          .eq('slug', slug)
+          .is('storage_path', null)
+          .select('slug')
+        if (!marked?.length) {
+          await supabaseAdmin
+            .from('finance_merchant_logos')
+            .upsert({ slug, ...miss }, { onConflict: 'slug', ignoreDuplicates: true })
+        }
         missed++
         continue
       }
 
-      const storagePath = `${slug}.${EXTENSIONS[image.contentType]}`
+      // A random object name, never the slug. The bucket is public so the
+      // images load by URL, and a brand-named key let anyone confirm a guess
+      // ("aldi.webp" exists, so the owner shops there). The admin-only index
+      // is now the only place that maps a brand to its file.
+      const storagePath = `${crypto.randomUUID()}.${EXTENSIONS[image.contentType]}`
       const { error: uploadError } = await supabaseAdmin.storage
         .from('merchant-logos')
         .upload(storagePath, image.bytes, {
           contentType: image.contentType,
-          upsert: true,
+          upsert: false,
           cacheControl: '604800',
         })
 
@@ -605,12 +632,51 @@ serve(async (req) => {
         continue
       }
 
-      await supabaseAdmin.from('finance_merchant_logos').upsert({
-        slug,
+      // Claim the index row only while it records no file. Two runs can
+      // overlap (every sync fires this, and the limiter lets two through in
+      // five minutes), and with random names an object no row records is an
+      // orphan nothing will ever clean up. So a row that already has a file,
+      // or a write that fails, means this upload is removed again.
+      const recorded = {
         storage_path: storagePath,
         source_domain: resolved?.domain ?? null,
         resolved_at: new Date().toISOString(),
-      }, { onConflict: 'slug' })
+      }
+      const { data: filled, error: updateError } = await supabaseAdmin
+        .from('finance_merchant_logos')
+        .update(recorded)
+        .eq('slug', slug)
+        .is('storage_path', null)
+        .select('slug')
+      let claimed = !updateError && (filled?.length ?? 0) > 0
+      let lostRace = false
+      if (!updateError && !claimed) {
+        // No empty row to fill: insert, unless a row was written meanwhile.
+        const { data: inserted, error: insertError } = await supabaseAdmin
+          .from('finance_merchant_logos')
+          .upsert({ slug, ...recorded }, { onConflict: 'slug', ignoreDuplicates: true })
+          .select('slug')
+        if (!insertError) {
+          claimed = (inserted?.length ?? 0) > 0
+          lostRace = !claimed
+        }
+      }
+      if (!claimed && !lostRace) {
+        // A write failed, or its answer was lost. Read back before removing
+        // anything, so a write that did commit keeps its file.
+        const { data: current } = await supabaseAdmin
+          .from('finance_merchant_logos')
+          .select('storage_path')
+          .eq('slug', slug)
+          .maybeSingle()
+        claimed = current?.storage_path === storagePath
+      }
+      if (!claimed) {
+        const { error: removeError } = await supabaseAdmin.storage.from('merchant-logos').remove([storagePath])
+        if (removeError) console.warn('Could not remove an unrecorded logo upload:', removeError.message)
+        missed++
+        continue
+      }
       cached++
     }
 

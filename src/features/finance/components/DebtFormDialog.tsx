@@ -27,7 +27,8 @@ import {
   type StudentLoanPlanKey,
 } from '@/lib/finance';
 import { useFinanceData } from '../FinanceDataContext';
-import { isBorrowing, useDebtMutations } from '../useDebtMutations';
+import { isBorrowing, studentLoanBorrowed } from '@/lib/finance/student-loan';
+import { useDebtMutations } from '../useDebtMutations';
 import { useStudentLoanRules } from '../useStudentLoanRules';
 
 export type DebtFormKind = 'standard' | 'student';
@@ -118,6 +119,8 @@ export function DebtFormDialog({
     setForm(f => ({ ...f, [key]: value }));
 
   const drawTotal = form.draws.reduce((sum, d) => sum + d.amount, 0);
+  const borrowed = studentLoanBorrowed({ draws: form.draws, originalAmount: Number(form.originalAmount) });
+  const borrowedFromDraws = kind === 'student' ? borrowed.source === 'draws' : drawTotal > 0;
   const { threshold, repaymentRate: ratePercent } = planRules(form.plan);
   const studentMonthly = studentLoanMonthlyRepayment(settings.grossSalary || 0, threshold, ratePercent);
   // A student loan's rate is not a term of the loan: it follows from the plan,
@@ -125,8 +128,11 @@ export function DebtFormDialog({
   const studentRate = rateNow(form.plan, form.courseEndDate || undefined, settings.grossSalary || 0);
 
   const addDraw = () => {
-    const amount = num(draw.amount);
-    if (!draw.date || amount <= 0) {
+    const amount = kind === 'student' ? Number(draw.amount) : num(draw.amount);
+    const valid = kind === 'student'
+      ? studentLoanBorrowed({ draws: [{ date: draw.date, amount }] }).source === 'draws'
+      : Boolean(draw.date) && amount > 0;
+    if (!valid) {
       toast({ title: 'Borrowing needs a date and an amount', variant: 'destructive' });
       return;
     }
@@ -141,8 +147,12 @@ export function DebtFormDialog({
       return;
     }
     const balance = num(form.balance);
-    const original = drawTotal > 0 ? drawTotal : (form.originalAmount ? num(form.originalAmount) : balance);
     const isStudent = kind === 'student';
+    // A student loan's "You borrowed" shows this figure as entered, so a blank
+    // field stays blank rather than borrowing today's balance.
+    const original = isStudent
+      ? borrowed.total
+      : drawTotal > 0 ? drawTotal : (form.originalAmount ? num(form.originalAmount) : balance);
 
     const saved: Debt = {
       // Spread first so fields this form does not show (observations, rate
@@ -247,8 +257,8 @@ export function DebtFormDialog({
             {field('balance', kind === 'student' ? 'Latest balance (£)' : 'Owed now (£)', { ...money, required: true })}
             {field('originalAmount', 'Borrowed (£)', {
               ...money,
-              disabled: drawTotal > 0,
-              value: drawTotal > 0 ? String(drawTotal) : form.originalAmount,
+              disabled: borrowedFromDraws,
+              value: borrowedFromDraws ? String(kind === 'student' ? borrowed.total : drawTotal) : form.originalAmount,
             })}
             {kind === 'standard' && field('interestRate', 'Interest rate (% a year)', { inputMode: 'decimal', placeholder: '4.5' })}
 

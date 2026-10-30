@@ -85,9 +85,23 @@ header.app-header { padding-block: .75rem; }
 .app-header .dot-matrix-text-xs { font-size: .95rem; }
 .header-page-title { max-width: 25rem; }
 /* Between words only. `anywhere` split "Inspiration" into "Inspiratio" / "n"
-   on a 360px phone; `break-word` still breaks a word wider than the whole
-   row, but never lets the title squeeze below its longest word (Header). */
-.header-page-title .dot-matrix-text { white-space: normal; overflow-wrap: break-word; }
+   on a 360px phone. Below 700px the title box is never narrower than its
+   longest word (Header), so a word wider than the row would overflow rather
+   than break; no title is that long. */
+.header-page-title .dot-matrix-text { overflow-wrap: break-word; }
+/* Open social links are laid over the header, covering a neighbour that
+   fades out: the name on a phone, where they share its row, and the page
+   title in the one-row header until lg, which has no width for identity,
+   three links and the title at once. Only opacity changes here, so nothing
+   reflows while the links slide out. */
+.header-identity-text,
+.header-page-title { transition: opacity .15s, visibility .15s; }
+@media (max-width: 699.98px) {
+  .app-header[data-socials-open] .header-identity-text { opacity: 0; visibility: hidden; }
+}
+@media (min-width: 700px) and (max-width: 1023.98px) {
+  .app-header[data-socials-open] .header-page-title { opacity: 0; visibility: hidden; }
+}
 /* Keep footer labels and clock readable together, including short screens. */
 footer.app-footer { padding-block: .75rem; }
 .app-footer .dot-matrix-text-xs { font-size: 1.125rem; }
@@ -128,6 +142,95 @@ footer.app-footer { padding-block: .75rem; }
 @media (min-width: 1280px) {
   .record-inspector { right: max(1rem, calc((100vw - var(--page-max)) / 2)); }
 }
+
+/* The middle area is fixed; each News column owns its vertical scroll. */
+.app-shell[data-section="watchlist"] .app-frame[data-layout="workspace"] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.watchlist-news-workspace {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: .75rem;
+  padding-block: .75rem;
+  overflow: hidden;
+}
+.watchlist-news-workspace > .news-column {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid hsl(var(--border) / .45);
+  border-radius: 1.5rem;
+  background: hsl(var(--card) / .18);
+  padding: 1rem;
+}
+.news-column > .news-pane { min-width: 0; }
+.news-column { scroll-padding-top: 4rem; }
+.news-column[data-panel="week"] { scroll-padding-top: 7rem; }
+.news-column .news-pane-heading {
+  position: sticky;
+  top: -1rem;
+  z-index: 2;
+  margin: -1rem -1rem .75rem;
+  padding: 1rem;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border) / .4);
+}
+.news-column .news-card-grid { gap: .75rem; }
+.news-column .content-rail { gap: .75rem; }
+.news-column .content-rail > .item-card > button { align-items: flex-start; }
+@media (max-height: 600px) {
+  .news-column .news-pane-heading { position: static; }
+  .news-column, .news-column[data-panel="week"] { scroll-padding-top: .5rem; }
+  .watchlist-news-workspace { padding-block: .375rem; }
+}
+.news-column .news-update-row { grid-template-columns: 44px minmax(0, 1fr); gap: .5rem; }
+.news-update-row > :first-child { width: 44px; grid-row: 1 / 4; }
+.news-update-row > span:nth-child(2), .news-update-row > span:nth-child(3) { white-space: normal; overflow-wrap: anywhere; }
+.news-update-row > span:nth-child(4) { display: none; }
+.news-update-row > span:last-child { grid-column: 2; grid-row: 3; justify-self: start; text-align: left; }
+.news-column-upcoming > section + section { margin-top: 1.5rem; }
+.news-panel-switcher { display: flex; align-items: center; gap: .75rem; flex-shrink: 0; padding-top: .5rem; }
+.news-panel-switcher select { min-height: 2.75rem; }
+.app-shell[data-section="watchlist"] .app-frame[data-layout="workspace"] > .app-toolbar { flex-shrink: 0; position: static; }
+@media (min-width: 1280px) and (min-height: 600px) {
+  .watchlist-news-workspace { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .news-panel-switcher { display: none; }
+}
+@media not all and (min-width: 1280px) and (min-height: 600px) {
+  .watchlist-news-workspace:not([data-active-panel="next"]) > [data-panel="next"],
+  .watchlist-news-workspace:not([data-active-panel="week"]) > [data-panel="week"],
+  .watchlist-news-workspace:not([data-active-panel="now"]) > [data-panel="now"],
+  .watchlist-news-workspace:not([data-active-panel="upcoming"]) > [data-panel="upcoming"],
+  .watchlist-news-workspace:not([data-active-panel="updates"]) > [data-panel="updates"] { display: none; }
+}
+.watchlist-news-workspace .news-pane .content-rail {
+  flex-direction: column;
+  overflow: visible;
+  padding-right: .25rem;
+}
+.watchlist-news-workspace .news-pane .content-rail > .item-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  flex: none;
+}
+.watchlist-news-workspace .news-pane .news-card-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.watchlist-news-workspace .news-pane-your-week .news-agenda {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.news-column .news-agenda > div { display: block; }
+.news-column .news-agenda > div > div:first-child { flex-direction: row; flex-wrap: wrap; justify-content: space-between; margin-bottom: .5rem; }
 /* Distance viewing is opted into, not inferred from the screen's pixel count. */
 html[data-display="larger"] { font-size: 125%; }
 html[data-display="larger"] .card-grid { --card-min: 12rem; }
@@ -178,16 +281,32 @@ html[data-display="larger"] .city-remove-btn { opacity: 1; }
 /* Keep the close control outside the content scrollport: scrolled fields
    must never pass underneath its fixed hit target. */
 .glass-dialog { overflow: hidden; grid-template-rows: minmax(0, 1fr); padding-top: 3.75rem; }
-/* A dialog that scrolls as a whole takes its close control with it, so the
-   inset protects nothing there and would only leave a blank band above
-   full-bleed media. */
+/* A dialog-flush dialog drops the inset so full-bleed media meets its top
+   edge. Below 640px the dialog itself is the scroller, not its body, so the
+   close control scrolls away with the content instead of floating over it;
+   the caller keeps text clear of it at rest (the collection detail pads its
+   header when there is no artwork above it). From 640px the caller keeps its
+   text column clear instead (the collection detail's 3.5rem right padding).
+   The body's half-pixel guard below would hang a pixel past an h-fit dialog
+   and make every short one scroll, so it is undone here. */
 .glass-dialog.dialog-flush { padding-top: 0; }
+@media (max-width: 639px) {
+  .glass-dialog.dialog-flush { overflow-y: auto; grid-template-rows: auto; scroll-padding-block: 1rem; }
+  .glass-dialog.dialog-flush > .dialog-body { overflow: visible; padding-bottom: 0; margin-bottom: 0; }
+}
 .dialog-body { align-content: start; align-self: stretch; overscroll-behavior: contain; scroll-padding-block: 1rem; }
 /* Content that exactly fits still scrolled by half a pixel about half the
    time: fractional line heights meet a dialog centred at a fractional offset,
    and the rounding lands on the wrong side. A pixel of end padding, taken back
    by the margin, absorbs it without changing the dialog's size. */
 .dialog-body { padding-bottom: 1px; margin-bottom: -1px; }
+/* The body's scrollbar sits in the dialog's right padding, not on the edge of
+   its rows. macOS overlay scrollbars take no layout space and drew their track
+   over bordered rows (the EDC builder); the margin hands the padding back, so
+   the content stays as wide as before. Only on the default p-6 frame: cn()
+   drops p-6 when a dialog sets its own padding, and p-0 has none to lend. It
+   keeps p-6 beside a px- or pr- override, which may leave less than the lane. */
+.glass-dialog.p-6:not([class*="px-"]):not([class*="pr-"]) > .dialog-body { margin-right: -.75rem; padding-right: .75rem; }
 
 @media (min-width: 1280px) {
   .watchlist-news-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
@@ -199,7 +318,8 @@ html[data-display="larger"] .city-remove-btn { opacity: 1; }
 .travel-sidebar-labels .dot-matrix-text { white-space: normal; }
 
 /* Keep the library frame compact; disclosure content lives in portals. */
-.app-shell[data-section="watchlist"] .app-toolbar { padding-block: .5rem; }
+.app-shell[data-section="watchlist"] .app-toolbar,
+.app-toolbar:has(.collection-toolbar) { padding-block: .5rem; }
 .app-shell[data-section="watchlist"] main { scrollbar-gutter: stable; }
 .app-shell[data-section="watchlist"] .card-grid { --card-min: 11rem; --card-gap: 1rem; }
 .app-shell[data-section="watchlist"] .card-body { padding: .75rem; }
@@ -260,9 +380,7 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
   }
   .watchlist-detail-with-seasons .watchlist-detail-info {
     min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scroll-padding-block: 1rem;
+    overflow: hidden;
   }
   .watchlist-detail-with-seasons .watchlist-detail-poster { min-height: 0; }
   .watchlist-detail-with-seasons .watchlist-detail-poster img { max-height: 100%; object-fit: contain; }
@@ -271,12 +389,83 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
      whole season: capping it is what keeps the dialog from filling the screen. */
   .watchlist-detail-with-seasons [data-episode-scroll] { max-height: 24rem; }
 }
+@media (min-width: 640px) and (max-width: 1279px) {
+  /* A definite height and bounded rows keep the synopsis from squeezing the
+     stacked episode panel out of the dialog, including in iPad landscape. */
+  .watchlist-detail-with-seasons { height: 85dvh; }
+  .watchlist-detail-with-seasons .watchlist-detail-grid {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  /* Wrapped season buttons and touch-sized controls can fill the panel on
+     their own. Scroll them with the episodes instead of pinning them above
+     a list that can collapse to zero height. */
+  .watchlist-detail-with-seasons .watchlist-episode-rail {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scroll-padding-block: 1rem;
+  }
+  .watchlist-detail-with-seasons .watchlist-episode-rail > * { height: auto; }
+  .watchlist-detail-with-seasons [data-episode-scroll] {
+    flex: none;
+    max-height: none;
+    overflow: visible;
+  }
+}
+@media (min-width: 640px) and (max-height: 700px) {
+  .watchlist-detail-with-seasons .watchlist-detail-summary p { -webkit-line-clamp: 1; }
+  .watchlist-detail-with-seasons .watchlist-detail-info { padding-block: .5rem; }
+}
+@media (min-width: 640px) and (max-width: 1279px) and (max-height: 600px) {
+  /* Keep an episode viewport in short landscape without scrolling the info.
+     The full synopsis remains available through its separate dialog. */
+  .watchlist-detail-with-seasons .watchlist-detail-summary p { display: none; }
+  .watchlist-detail-with-seasons .watchlist-detail-poster { display: none; }
+  .watchlist-detail-with-seasons .watchlist-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .watchlist-detail-with-seasons .watchlist-episode-rail { grid-column: 1; }
+  .watchlist-detail-with-seasons .watchlist-detail-info { padding: .5rem 1rem; }
+  .watchlist-detail-with-seasons .watchlist-detail-info > .watchlist-detail-genres,
+  .watchlist-detail-with-seasons .watchlist-detail-info > .watchlist-detail-series-status { display: none; }
+}
 @media (min-width: 1280px) {
+  /* The close button shares the episode heading row on wide dialogs, so a
+     separate full-width strip above the content is unnecessary. */
+  .glass-dialog.watchlist-detail-with-seasons { padding-top: 0; }
   .watchlist-detail-with-seasons .watchlist-detail-grid { grid-template-rows: minmax(0, 1fr); }
   /* The rail is the dialog's right-hand column here. A taller heading starts
      the season buttons below the close button rather than under it. */
-  .watchlist-detail-with-seasons .watchlist-episode-rail [data-season-heading] { min-height: 2.25rem; }
+  .watchlist-detail-with-seasons .watchlist-episode-rail [data-season-heading] {
+    min-height: 2.25rem;
+    padding-right: 3rem;
+  }
 }
 
 /* A selected value may wrap even when a compact caller requests h-8/h-9. */
 .ui-select-trigger { height: max-content; min-height: 2.5rem; }
+
+/* Collection detail dialogs keep artwork outside the text scroller, like the
+   watchlist, with the close target fixed over the padded text column. Phones
+   retain one stacked scroller so a picture cannot consume the available
+   reading space; there the close target scrolls with it (dialog-flush). */
+@media (min-width: 640px) {
+  .collection-detail-dialog { --detail-max-h: calc(100svh - 3rem - 2px); }
+  .collection-detail-dialog > .dialog-body { display: block; overflow: hidden; }
+  .collection-detail-layout { max-height: var(--detail-max-h); min-height: 0; }
+  .collection-detail-image { min-width: 0; }
+  .collection-detail-image img {
+    max-height: calc(var(--detail-max-h) - 3rem);
+    object-fit: contain;
+  }
+  /* A cover (a book, a recipe) is a fixed column; a content image (Photos)
+     keeps sharing the row, so it is not squeezed beside an empty text pane. */
+  .collection-detail-cover { width: 35%; flex: 0 0 35%; max-width: 18rem; }
+  .collection-detail-cover img { width: 100%; }
+  .collection-detail-info {
+    max-height: var(--detail-max-h);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 3.5rem;
+  }
+}

@@ -288,33 +288,33 @@ ALTER TABLE ONLY "public"."weekly_schedule"
 ALTER TABLE ONLY "public"."weekly_schedule"
     ADD CONSTRAINT "weekly_schedule_tv_show_id_fkey" FOREIGN KEY ("tv_show_id") REFERENCES "public"."tv_shows"("id") ON DELETE CASCADE;
 
-CREATE POLICY "Admin delete" ON "public"."movies" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."movies" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete" ON "public"."tv_show_episodes" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."tv_show_episodes" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete" ON "public"."tv_show_seasons" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."tv_show_seasons" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete" ON "public"."tv_shows" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."tv_shows" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete" ON "public"."weekly_schedule" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."weekly_schedule" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete favourites" ON "public"."favourites" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete favourites" ON "public"."favourites" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete sync_log" ON "public"."sync_log" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete sync_log" ON "public"."sync_log" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."movies" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."movies" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."tv_show_episodes" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."tv_show_episodes" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."tv_show_seasons" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."tv_show_seasons" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."tv_shows" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."tv_shows" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."weekly_schedule" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."weekly_schedule" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert favourites" ON "public"."favourites" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert favourites" ON "public"."favourites" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert sync_log" ON "public"."sync_log" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert sync_log" ON "public"."sync_log" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
 -- watchlist_events deliberately has no INSERT policy. Its only writer is the
 -- trigger function log_watchlist_event() (01_functions.sql), which is SECURITY
@@ -324,19 +324,19 @@ CREATE POLICY "Admin insert sync_log" ON "public"."sync_log" FOR INSERT TO "auth
 -- row by updating tv_shows/movies. No signed-in role can insert directly, admin
 -- included; service_role bypasses RLS and keeps its grant.
 
-CREATE POLICY "Admin read sync_log" ON "public"."sync_log" FOR SELECT TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin read sync_log" ON "public"."sync_log" FOR SELECT TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."movies" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."movies" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."tv_show_episodes" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."tv_show_episodes" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."tv_show_seasons" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."tv_show_seasons" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."tv_shows" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."tv_shows" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."weekly_schedule" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."weekly_schedule" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update favourites" ON "public"."favourites" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update favourites" ON "public"."favourites" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Anyone can read favourites" ON "public"."favourites" FOR SELECT USING (true);
 
@@ -463,7 +463,9 @@ ORDER  BY s.tv_show_id, s.season_number, e.episode_number;
 
 GRANT SELECT ON TABLE "public"."favourites" TO "anon";
 
-GRANT ALL ON TABLE "public"."favourites" TO "authenticated";
+REVOKE ALL ON TABLE "public"."favourites" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."favourites" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."favourites" TO "service_role";
 
@@ -473,7 +475,9 @@ GRANT ALL ON SEQUENCE "public"."favourites_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."movies" TO "anon";
 
-GRANT ALL ON TABLE "public"."movies" TO "authenticated";
+REVOKE ALL ON TABLE "public"."movies" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."movies" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."movies" TO "service_role";
 
@@ -481,7 +485,9 @@ GRANT ALL ON SEQUENCE "public"."movies_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."movies_id_seq" TO "service_role";
 
-GRANT ALL ON TABLE "public"."sync_log" TO "authenticated";
+REVOKE ALL ON TABLE "public"."sync_log" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."sync_log" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."sync_log" TO "service_role";
 
@@ -491,7 +497,9 @@ GRANT ALL ON SEQUENCE "public"."sync_log_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."tv_show_episodes" TO "anon";
 
-GRANT ALL ON TABLE "public"."tv_show_episodes" TO "authenticated";
+REVOKE ALL ON TABLE "public"."tv_show_episodes" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."tv_show_episodes" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."tv_show_episodes" TO "service_role";
 
@@ -501,7 +509,9 @@ GRANT ALL ON SEQUENCE "public"."tv_show_episodes_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."tv_show_seasons" TO "anon";
 
-GRANT ALL ON TABLE "public"."tv_show_seasons" TO "authenticated";
+REVOKE ALL ON TABLE "public"."tv_show_seasons" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."tv_show_seasons" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."tv_show_seasons" TO "service_role";
 
@@ -511,7 +521,9 @@ GRANT ALL ON SEQUENCE "public"."tv_show_seasons_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."tv_shows" TO "anon";
 
-GRANT ALL ON TABLE "public"."tv_shows" TO "authenticated";
+REVOKE ALL ON TABLE "public"."tv_shows" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."tv_shows" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."tv_shows" TO "service_role";
 
@@ -521,7 +533,9 @@ GRANT ALL ON SEQUENCE "public"."tv_shows_id_seq" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."weekly_schedule" TO "anon";
 
-GRANT ALL ON TABLE "public"."weekly_schedule" TO "authenticated";
+REVOKE ALL ON TABLE "public"."weekly_schedule" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."weekly_schedule" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."weekly_schedule" TO "service_role";
 
@@ -533,8 +547,8 @@ GRANT ALL ON SEQUENCE "public"."weekly_schedule_id_seq" TO "service_role";
 -- tables (see the "Public Read Access" policies above), so it is a public
 -- surface deliberately, not an oversight -- it carries no is_admin() gate.
 --
--- SELECT only: a newly created view inherits ALL from the default privileges
--- (see "ALTER DEFAULT PRIVILEGES" in 90_privileges.sql), and pg_dump emits
+-- SELECT only: a fresh build starts from the image's default of ALL on a newly
+-- created view (90_privileges.sql narrows the default last), and pg_dump emits
 -- GRANT and never REVOKE, so without the REVOKE below anon and authenticated
 -- would hold INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES and TRIGGER on it
 -- as they did before 20260929202643.
@@ -543,12 +557,11 @@ REVOKE ALL ON TABLE "public"."watchlist_up_next" FROM PUBLIC, "anon", "authentic
 GRANT SELECT ON TABLE "public"."watchlist_up_next" TO "anon", "authenticated";
 
 -- watchlist_events grants: narrower than every other table in this file, on
--- purpose. Default privileges on this project still hand ALL on a newly
--- created public table to anon, authenticated and service_role (the note at
--- "ALTER DEFAULT PRIVILEGES" below explains why), so the REVOKE lines here
--- are not idle defence -- without them this table would start out exactly as
--- over-granted as every sibling table was before 20260905160000 and
--- 20260912130000 narrowed them.
+-- purpose. A fresh build starts from the image's default of ALL on a newly
+-- created public table for anon, authenticated and service_role (90_privileges.sql
+-- narrows the default last), so the REVOKE lines here are not idle defence --
+-- without them this table would start out exactly as over-granted as every
+-- sibling table was before 20260905160000 and 20260912130000 narrowed them.
 --
 -- anon: SELECT only, same reasoning as every table above -- show names and
 -- platform names, nothing private.
@@ -577,7 +590,7 @@ GRANT SELECT ON TABLE "public"."watchlist_events" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."watchlist_events" TO "service_role";
 
--- Revoked privileges (see the note in 40_finance.sql)
+-- Revoked privileges
 --
 -- pg_dump emits GRANT and never REVOKE, so a privilege this database has
 -- deliberately taken away is invisible to a generated diff and gets silently
@@ -587,8 +600,10 @@ GRANT ALL ON TABLE "public"."watchlist_events" TO "service_role";
 -- layer was the only barrier between anon and an empty table. Not reachable
 -- through PostgREST, which exposes no TRUNCATE verb -- least privilege rather
 -- than an open door. Applied in 20260905160000 (tables) and
--- 20260912130000 (sequences); `authenticated` and `service_role` keep ALL,
--- and the reasoning for leaving them is in that second migration.
+-- 20260912130000 (sequences). The second left `authenticated` with ALL (its
+-- reasoning is there); 20261024150000 has since narrowed it on these tables to
+-- SELECT, INSERT, UPDATE and DELETE. `service_role` keeps ALL, and so does
+-- `authenticated` on the sequences.
 
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
   "public"."favourites",

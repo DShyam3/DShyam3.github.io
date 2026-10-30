@@ -27,12 +27,19 @@ dots are circles that fuse as weight increases, so the look is reached for with
 weight rather than font-size. A dot-matrix globe and clock sit beside it.
 
 Experience and education appear as one timeline, newest first, roles and degrees
-interleaved by start date. Both are editable in place when signed in as admin,
-skeleton-loaded otherwise. The CV uploads to private storage and downloads
-through a short-lived signed URL. Admins get a second add button for education.
+interleaved by start date. Entries fill two compact, content-sized columns from left to right when the
+card is wide enough, and one column in narrower cards. Both are editable in place when signed in as admin,
+skeleton-loaded otherwise. The CV is a PDF in public storage, served from one
+fixed address that a new upload replaces; a file that is not a PDF is refused.
+Admins get a second add button for education.
 
-On a tablet held upright, the timeline spans the full width. The projects card
-sits below it, filling the row entirely.
+About stays within the page frame; experience and projects scroll inside their
+cards. Large screens show portrait and biography above the timeline, with
+projects alongside; the biography shows in full unless it would need more than
+about two-thirds of the height, and the timeline takes the rest. Smaller or shorter screens offer About, Experience and
+Projects buttons to select one full-size card, where the biography scrolls only
+if it cannot fit. Scroll regions support keyboard
+focus, and short screens scroll the whole selected card to keep controls reachable.
 
 ## Collections
 
@@ -42,16 +49,56 @@ hook. A collection is defined end to end in a single file under
 `src/collections/`, and `registry.ts` is the one place that answers "what does
 this site list?" without opening the router.
 
-Each gets faceted filtering, search, and admin-only add/edit/remove. Adding a
-tenth collection is a file, a registry line, a route and a schema file — not a
-new implementation of the same idea.
+Each collection has a title pill, item count and admin actions in the same
+compact toolbar as the Watchlist Library. Categories use a dropdown with counts;
+search fills the available space and has a clear button. Additional filters
+open from Filters, and collections with multiple sort orders have a sort
+dropdown. Search and filters appear where the collection supports them. Admins
+can add, edit and remove items; Inventory’s EDC view keeps its Edit EDC action.
 
 Media cards show the category badge on the artwork, truncating rather than overlaying text. Admin edit and delete buttons sit in a row beneath the card text, shown on hover or focus with a mouse and always on touch.
 
 Search and filter controls wrap into available space. Cards keep readable widths
 as the number of columns changes.
 
+Collection and EDC detail dialogs grow with the screen and their content, up to
+896px wide. On screens at least 640px wide, the image stays stationary beside
+the details; the details scroll independently only when they exceed the
+available height. Images fit the available space, and the details pane
+supports keyboard focus and scrolling. On phones, the image and details stack
+in one scrolling dialog.
+
 Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac.
+
+A link field in an admin form takes only an `http`, `https` or `mailto` address, and the form refuses any other value. A saved address of another kind shows without a link. Images uploaded to a collection must be JPEG, PNG, GIF, WebP or HEIC files, judged by their contents rather than their name.
+
+## Books
+
+Books have separate subject and reading-status filters. Reading status offers
+Completed, Currently Reading, To Read and Wishlist; admins can set it when
+adding a book or change it in the editor.
+
+Subjects cover Philosophy & Spirituality, Psychology, Personal Growth &
+Productivity, Business & Leadership, Money & Investing, Politics & Strategy,
+Science & Technology, History & Biography, Fiction, Poetry & Folklore,
+Art & Design, and Food & Cooking. Uncategorized includes books without a
+recognised subject.
+
+Add Books searches Google Books by title or author, with Open Library as a
+fallback when Google returns no results or is unavailable. Results show covers,
+authors, publication years and available descriptions. Admins choose a subject and
+reading status, then add a result with its available cover, description and
+Amazon UK search link. Matching title-and-author entries are marked Added, and an
+in-progress save cannot be submitted twice. Search failures show an error;
+Manual entry remains available.
+
+The wide book editor groups title, author, reading status and subject together.
+Find details offers catalogue matches with cover previews; choosing a match
+fills only missing artwork, description and purchase link. Existing details,
+reading status and subject stay as entered. Changes remain in the form for
+review until Save Changes. Optional metadata fields remain editable by hand.
+Book details offer Amazon UK and Waterstones searches by title and author;
+these are search links, rather than verified edition or stock listings.
 
 ## Watchlist
 
@@ -62,18 +109,16 @@ proxy so the API key never reaches the browser.
 
 - **News** — the default view. A segmented pill at the top switches between
   this week and this month, with the selected option filled. Out Now shows a
-  grid of portrait poster cards for season premieres and film releases from the
-  past week or month. The poster grid adds columns as space allows while keeping cards readable. Each card shows the 2:3 poster,
+  list of compact poster-and-text rows for season premieres and film releases
+  from the past week or month. Each row shows a small poster,
   the title, the release date (with "Season N ·" before it for a later season)
-  and the platform mark. Out Now spans the full desktop content width. Watch Next follows: the next episode of any season
+  and the platform mark. Watch Next shows: the next episode of any season
   already under way, plus anything aired in the last 14 days. Watch Next skips
   specials (season 0); a show whose only unwatched episodes are specials does
-  not appear. Its horizontal rail has scroll arrows and a visible scrollbar, with separate
-  title-detail buttons and provider links. Upcoming shows the same poster cards for season premieres and film
+  not appear. Its vertical rows have separate title-detail buttons and provider links. Upcoming shows the same compact rows for season premieres and film
   releases in the coming week or month, nearest first, each with a small dated
-  pill showing the days left ("3d", or "Today"). Upcoming and Updates sit in
-  two columns beneath Watch Next. The pinned Countdown card uses an overlay
-  layout, showing the title's landscape backdrop where one is stored, else the poster. An Updates list closes the page, covering the past week or
+  pill showing the days left ("3d", or "Today"). The pinned Countdown card sits inside Upcoming and uses an overlay
+  layout, showing the title's landscape backdrop where one is stored, else the poster. The Updates column covers the past week or
   month: new episodes ("S1E23 · Emotion and Reason"), platform moves
   ("Netflix → Disney+") and status changes (Ended, Cancelled, In production,
   Returning), each with a poster, the title with the change beneath it, then
@@ -85,9 +130,9 @@ proxy so the API key never reaches the browser.
   cards, always show an explicit Add to schedule or Scheduled · remove action.
   Admins can schedule a film or show from News, Library and detail cards using the shared Smart scheduling dialog. TV shows default to a weekly schedule on their
   release weekday, while films default to a one-off calendar date; either mode
-  can be selected in the schedule dialog. Known episode release dates suggest the weekday; when no date is available, a day must be chosen. Episode rows keep names visible, mark
+ can be selected in the schedule dialog. Known episode release dates suggest the weekday; when no date is available, a day must be chosen. Episode rows keep names visible, mark
   the next unwatched released episode as "Next up", and disable episodes whose
-  release date has not arrived. Updates scrolls on its own only from 1280px, where it is a column beside Upcoming; narrower, it scrolls with the page content. When a News section fails to load, it says "Could not load …" instead of
+ release date has not arrived. News keeps its page frame and middle workspace fixed. On large, tall screens, Watch Next, Your Week, Out Now, Upcoming and Updates form five independently scrolling columns. Smaller or shorter screens use a selector to show one column. Headings stay visible except in short windows. Calendar days place their date above their content, with an expandable explanation. Empty Watch Next and Out Now sections remain visible. When a News section fails to load, it says "Could not load …" instead of
   showing an empty "Nothing this week"; Watch Next keeps showing the rows it
   last loaded. Announcements are ordered by recency, capped at 1,000 and marked
   partial when capped. Events for titles that have been removed from the
@@ -108,14 +153,20 @@ proxy so the API key never reaches the browser.
   One-off plans appear on their saved date. Dated season premieres and films
   already in the library appear as suggestions until an admin adds them through
   Smart scheduling. Cards open title details; admins can manage saved plans.
+  Suggested releases have a Decline action in the agenda and expanded calendar.
+  Declined releases stay hidden in this browser across reloads, including when
+  their release date changes; another season remains a separate suggestion.
+  Restore declined suggestions brings them all back. These choices do not sync
+  across devices, and a failed save displays an error.
   Month view uses a seven-column grid on wider screens and an agenda on narrow
   screens. The calendar header and controls stay visible while its body scrolls.
   The former Schedule view opens News.
 
 Library has a compact category picker, search field, Filters popover and text-only
 sort choices. Sync opens a popover whose history list scrolls independently.
-News and Library share compact poster cards with aligned title, subtitle, platform
-and status rows, plus a separate scheduling action. Titles show up to two lines;
+Library uses compact poster cards with aligned title, subtitle, platform and
+status rows. News release rows place text beside small posters. Both keep
+scheduling actions separate from title details. Titles show up to two lines;
 the full title is available in the tooltip, accessible label and details.
 News details support scheduling and episode watched-state controls for admins.
 
@@ -124,10 +175,14 @@ the saved progress. Watched marks change only after the save succeeds. If a save
 fails, an error toast appears and the existing watched marks stay unchanged.
 
 Details place episodes below the poster and information on tablets, with a
-third column on wider screens. The episode list scrolls independently while
-the season picker, season details and poster/show information stay fixed above.
-Unusually long information has its own scroll area. The close control stays
-reachable. The first unwatched regular season opens by default.
+third column on wider screens. On tablets, information stays fixed above the
+episode area; the season picker and season details scroll with the episodes.
+On wider screens, the episode list scrolls independently below the
+season controls, and the close control shares the episode heading row without
+an empty strip above the content. TV details show a short synopsis preview;
+Read synopsis opens the full text separately. Tablet and desktop details place
+Delete in the header and ask for confirmation. The close control stays reachable.
+The first unwatched regular season opens by default.
 
 **Both views:**
 
@@ -153,19 +208,44 @@ window and are disabled until the next sync is allowed.
 Countries and cities visited, rendered as maps by continent and by city, with
 membership and region groupings.
 
-At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list.
+At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list. Each country row keeps its UN marker and city count in fixed columns, so they line up down the list whether or not a row has either.
 
 ## Inventory and EDC
 
 Inventory opens on EDC: selected everyday-carry items from the inventory,
 grouped by category, including Tech, Jewellery and Toiletries. The showcase is
 read-only and shows all selected items without an Owned, Wishlist or All filter.
-Other inventory categories retain their ownership filters.
+Wishlist items never appear in the EDC view or its category filter, even when
+flagged for EDC. Other inventory categories retain their ownership filters.
 
-Admins use Edit EDC to search all existing inventory items and filter by category,
-then add or remove items from EDC. Each selection saves automatically. The editor
-wraps long item names and brands on narrow screens and keeps focused controls
-fully visible.
+Admins use Edit EDC to search owned inventory items and filter by category,
+then add or remove items from EDC. A wishlist item still flagged for EDC is
+listed as "Wishlist · not shown in EDC" with Remove only, and leaves the list
+once removed. Each selection saves automatically. The editor wraps long item
+names and brands on narrow screens and keeps focused controls fully visible.
+The item edit form refuses Include in Everyday Carry (EDC) set to Yes on a
+wishlist item, with the message "Wishlist items cannot be in your EDC".
+
+---
+
+## Admin sign-in
+
+`/auth` signs in the site's one administrator with a password. Once that account
+has a verified authenticator app, the password is followed by a code step: the
+six digits from the app. The code field takes digits only, so a pasted code with a
+space is read as its six digits. Verify Code stays off until six are entered. A
+wrong code is refused and the field clears. Cancel signs the password session out,
+and a reload keeps the code step. Until an authenticator is set up, the password
+alone signs in.
+
+When signed in as the administrator, `/auth` shows a two-factor panel. It says
+whether an authenticator is on. When it is off, Set up two-factor shows a QR code
+and a manual key; a six-digit code from the app confirms it, and Cancel backs out.
+When it is on, the panel says so and points to the Supabase dashboard for removal.
+
+With a verified authenticator, the database gives admin rights only to a session
+that has passed the code step. Finance and every admin write depend on those
+rights, so a password alone reaches neither.
 
 A build list's parts show as a table, each with its price. The Total adds the
 priced parts up when they are all in one currency. With mixed currencies, or no
@@ -175,8 +255,16 @@ priced part, the item's own price is shown as the Total instead, if it has one.
 
 ## Finance
 
-Admin-only. Five routed surfaces, fifteen sections — each one linkable, each
+Admin-only. Five routed surfaces, seventeen sections — each one linkable, each
 one a real URL with a working back button.
+
+Finance opens with its money hidden. The Show figures / Hide figures button in its
+toolbar paints over every £ amount in text, charts, dialogs and toasts. Labels,
+dates, percentages, rates and hours stay readable as text; every number field blurs
+until you click into it. Showing lasts for the browser tab, through reloads, and a
+freshly opened tab starts hidden again. Values stay in the page for screen readers and hover
+tooltips, so this is a screen-privacy aid, not a lock. Browsers without support show
+figures and no button.
 
 ### Home
 
@@ -193,12 +281,18 @@ membership tables scroll horizontally within their panels.
 ### Spending
 
 Transactions, budget, recurrings and transfers. At 1024px or wider and 720px or taller, the list scrolls with the page and the details panel stays in view beside it, with its own scroll. Smaller, the list keeps its own pane above the details, capped to the measured card height. Budgets build from preset groups
-rather than a blank form. Budget items and recurring bills can have an optional provider name (up to 60 characters), shown after the item name — for example, "Phone · O2". Merchants resolve to logos through a server-side
+rather than a blank form. Budget items and recurring bills can have an optional provider name (up to 60 characters), shown after the item name — for example, "Phone · O2". Logos are looked up for merchants across the whole ledger, through a server-side
 cache. Confirmed transfers are left out of spending and income everywhere figures are shown: Home, Budget history and Cash Flow. Transaction lists still show them.
 
 Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, monthly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
 
-Paid is decided per period: a month, quarter or year, labelled by the bill's due date. Marking a monthly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. Marking the bill unpaid returns that period to unpaid. Editing a bill's schedule keeps its tick. Weekly bills count as paid for a payment made in the last seven days, today included.
+Paid is decided per period: a month, quarter or year, labelled by the bill's due date. A bill shows Paid only when a recorded payment covers the current period, so a bill ticked before any payment date was recorded shows Unpaid until it is ticked again. Marking a monthly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. A tick never covers the next period. Marking the bill unpaid returns that period to unpaid. Weekly bills count as paid for a payment made in the last seven days, today included.
+
+From seven days before a bill's next due date, a bill that is paid for the current period shows a "Paid 1 Nov early" button in its row, in both Due this month and Future / Scheduled. It records today's payment against that next period. Marking the bill unpaid then hands back only that early payment, so the current period stays Paid.
+
+Editing a bill keeps the period its payment covers. Changing the due day or month keeps that period, including an early payment, and keeps the bill's tick. Correcting the last-paid date works out the covered period again from the corrected date, and Paid is decided again from it. Changing the frequency never stretches a payment over a longer period, and never brings back a payment that was marked unpaid.
+
+The Recurrings section has a calendar of bills: a month grid from the current month to eleven months ahead. Days with bills are marked, and selecting one filters the list below to that day. Each bill shows one of four statuses, written out as well as marked: Paid, when that period is confirmed paid; Seen in bank, when a matching bank payment settles it, counted from up to a week before its due date (three days for a weekly bill); Not confirmed, for a past date with neither; or Due. The summary reads the scheduled total and the amount still to pay, labelled as a forecast. Bills that cannot be placed on a date are named beneath the calendar.
 
 A quick failure loading finance profiles is retried automatically twice; if it still fails, or the database does not answer within 15 seconds, a persistent error offers “Try again”. A finance section that fails to display, or takes more than 15 seconds to load, offers “Reload page”.
 
@@ -213,7 +307,7 @@ on bank-synced rows. Possible transfers also lists one-sided transfers — a row
 
 Bank-synced transfers are labelled "Transfers" rather than a spending category, and a category you change on a synced transaction stays changed after the next sync.
 
-The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown.
+The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown. Transfer links, transfer dismissals, one-sided transfers, transfers between profiles, payslips and their bank matches, net-worth history, goal contributions, investment activity and debt balance records also load in full, however many there are.
 
 Home's transaction list links to the Transactions tab: clicking a row's name opens
 that transaction with the row selected and scrolled into view. The list's
@@ -221,13 +315,21 @@ that transaction with the row selected and scrolled into view. The list's
 unless "View All" is on, plus the chosen account. Both views share the same data
 and filter logic; the navigation is read once and cleared.
 
+Category rules and review queue:
+- The Status filter in Transactions includes an "Uncategorised / Needs Review" view to triage unreviewed or ambiguously categorised transactions.
+- Transactions inspector pane provides an inline Category Rule helper ("Always for this merchant") showing live row impact before saving.
+- A "Rules" dialog in the Transactions toolbar manages profile-scoped merchant category rules with pattern matching, target category, optional merchant rename, live match counts, and impact preview.
+- Category rules derive deterministically at read time with strict precedence: manual/reviewed categories take precedence over matching category rules, which take precedence over bank-provided categories. Rule re-application never dirties unchanged ledger records or triggers false database writes.
+
 ### Plan
 
 **Cash flow** — income, spending and net come only from recorded transactions, with confirmed transfers left out; recurring bills are not added on top. The detail drawers list each year in the chosen period with that year's total and monthly average. "Where it went" shows the period's income flowing into spending categories (top five payers and top eight categories, the rest grouped as "Other"), with what was kept or drawn from balances; below tablet width it shows as a table, and on wider screens the table is one click away.
 
+**Forecast** — the projected balance of the checking accounts for each of the next 60 days. It starts from their balances today, takes off each active bill not yet paid or seen in the bank, and adds modelled take-home on each payday. It shows the lowest point, the first day below zero and the balance in 60 days, with a chart and a list of pay and bills by date. Day-to-day spending is not included. Bills paid from another account, and past bills not confirmed, are listed rather than subtracted. Pay that has already arrived a few days before payday is not counted twice. If take-home pay cannot be modelled, the forecast says pay is not included. A warning appears when transfers fail to load, because bills may then not match their bank payments.
+
 **Goals** and a "what if" scenario engine for testing a change before making it.
 
-Budget and recurring defaults are generic UK: Home section covers Rent, Council Tax, Energy, Water, Internet, Phone; Transport covers Car Insurance, Fuel, Public Transport; Entertainment includes 10 streaming services (Netflix, Prime Video, Disney+, Apple TV+, Sky, NOW, Paramount+, Discovery+, YouTube Premium, Crunchyroll); Subscriptions starts empty. Payslip employer logos are matched from experience and education rows by whole-word slug, longest match wins.
+Budget and recurring defaults are generic UK: Home section covers Rent, Council Tax, Energy, Water, Internet, Phone; Transport covers Car Insurance, Fuel, Public Transport; Entertainment includes 10 streaming services (Netflix, Prime Video, Disney+, Apple TV+, Sky, NOW, Paramount+, Discovery+, YouTube Premium, Crunchyroll); Subscriptions starts empty. Payslip employer logos are matched from experience and education rows by whole-word slug (with support for configured experience `aliases`, camelCase/unspaced compound names, and multi-word initialisms of 3 or more letters), longest match wins.
 
 ### Wealth
 
@@ -252,7 +354,11 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   much is pending. Income by tax year is derived from payslips and sets each
   year's Plan 2 rate. Two views: your loan showing balance from latest SLC
   statement, accrued interest, and payslip deductions replacing modelled ones up
-  to the latest payslip; and a simulator for any loan with course details.
+  to the latest payslip, plus how much you borrowed (summed from recorded
+  borrowing, or the amount entered when none is recorded) and how far the current
+  balance sits above or below it; and a simulator for any loan with course details.
+  The simulator and inferred course end ignore draws with invalid calendar dates
+  or non-finite amounts, while retaining valid negative and zero draws.
   Month-by-month timeline with a scrubber and play control, showing balance,
   interest rate, monthly payment and repaid-so-far. Totals: total repaid,
   written off, peak balance, interest added. Refunds and payments made outside
@@ -273,17 +379,38 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
 ### Income
 
-- **Tax and income** — tax rate sets are versioned by first applicable date, so
-  a historical calculation cannot silently become a calculation using a future
-  Budget. The summary shows the year's take-home, described as modelled from salary settings, with the next payday beside it: date, days left, schedule, and a "brought forward" note when the usual day is a weekend or bank holiday. The Total Compensation card carries the tax region and the Benefits and Settings buttons. The Breakdown Rates table shows how gross salary becomes take-home,
+- **Tax and income** — income tax, National Insurance and student loan repayments
+  use the 2026/27 rules built into the site, the same rules the Tax Calculator
+  uses. A Scottish profile gets Scotland's six bands. The personal allowance is
+  the one set in Settings, which can be 0 for a BR or 0T code. Under relief at
+  source, 80% of the pension contribution comes out of pay and every band from
+  the basic rate up is widened by the whole contribution. The income tax and National
+  Insurance figures do not use the bands saved in Settings, though the National
+  Insurance row's note still shows the saved NI bands. The Student Loan section's
+  repayment threshold and rate come from the tax rates saved in Settings.
+  Contractual package items persist on the salary profile. Each is Cash or
+  Benefit in kind. A preset dropdown (Annual Bonus defaulting to 10%, Private
+  Medical Insurance, Dental Cover, Travel Insurance, Equity/RSUs, Car Allowance,
+  Gym & Wellness, Tech/WFH Allowance, or Custom) pre-fills the form, kind
+  included, for editing before confirming. Items can be edited or removed after
+  adding; an item saved before the kind existed reads as Benefit in kind. A Cash
+  item is paid through payroll, so its income tax, National Insurance and student
+  loan come off it. It shows its own after-tax value and stays out of salary
+  take-home. A Benefit in kind is not paid: the tax on its value is the extra
+  income tax that value causes, taken from take-home as a `Benefit-in-kind tax`
+  deduction row. When the tax code's allowance is below £12,570, that tax is shown
+  as collected through the code and is not taken from take-home again. Tax on a
+  benefit is never typed in. The summary shows the year's take-home, described as modelled from salary settings, with the next payday beside it: date, days left, schedule, and a "brought forward" note when the usual day is a weekend or bank holiday. The Total Compensation card carries the tax region and the Benefits and Settings buttons. The Breakdown Rates table shows how gross salary becomes take-home,
   organised into three groups: package (base salary, employer pension contributions,
   benefits and perks), deductions (personal pension, income tax, National Insurance,
-  student loan repayments), and net pay. Totals separate the groups; only additions,
+  student loan repayments, and benefit-in-kind tax when it applies), and net pay. Totals separate the groups; only additions,
   total deductions and take-home carry colour. A toggle sets the days-counted method
   (Normal, Include Paid Leave, Exclude Paid Leave); another selects the period shown
   (Annual, Monthly, Weekly, Daily, Hourly). On narrower screens, the table shows one
   period at a time via the switch, so it never scrolls sideways. Pension contributions
-  show their type: Net pay arrangement, Salary sacrifice, or Relief at source
+  show their type: Net pay arrangement, Salary sacrifice, or Relief at source.
+  A Take-home by tax band card under Breakdown Rates shows the same figures
+  sliced by tax band (see Tax calculator).
 - **Payslips** — stored with line items, viewable natively, extracted from PDF
   in the browser. A PDF attached in the add or edit form is read and parsed before
   saving; the date, employer and any blank or zero fields are filled from the PDF
@@ -292,13 +419,76 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   full history shows in the page, without a scroll box of its own.
 - **Time spent** — income seen as hours rather than pounds. Its summary shows the
   gross package beside the year's take-home.
-- **Holiday tracker** — Books full and half days of leave and sick time. When
-  booking a single day, a Length toggle offers Full day, Morning, or Afternoon.
-  Morning and Afternoon are disabled for weekends and bank holidays. Calendar
-  cells fill only the half they take — left half for mornings, right half for
-  afternoons — with a dashed border, and the legend shows "Half Day (AM left, PM
-  right)". Entry lists and tooltips show "morning" or "afternoon". Month badges
-  and allowance left reflect half-day deductions
+- **Tax calculator** — a what-if calculator for 2026/27 UK rules. Type any salary
+  or self-employed profit in the box, or drag the slider up to £250,000, and it
+  shows take-home, effective rate, marginal rate and how many pence of the next
+  pound you keep. The inputs start from your Tax & Income settings (salary,
+  region, pension type and percentage, student loan plan). Changing them here
+  never changes those settings; **My settings** puts the inputs back to them.
+  While finance figures are hidden the salary and pension amount start empty,
+  since the chart marker and slider would otherwise show your salary; showing
+  figures fills them in.
+
+  The inputs are employed or self-employed; England, Wales & NI or Scotland, with
+  Scotland's six rate bands; a pension contribution paid by salary sacrifice, net
+  pay or relief at source (a self-employed profit has relief at source only); an
+  undergraduate loan on Plan 1, 2, 4 or 5, and a postgraduate loan; benefits in
+  kind for employees; the number of children claiming child benefit; childcare
+  support a year, up to £20,000, which is lost once adjusted net income passes
+  £100,000; and whether you receive a marriage allowance from a partner.
+
+  The breakdown has a year and a month column for income tax with its personal
+  allowance, National Insurance (Class 1 for employees, Class 4 for the
+  self-employed), student and postgraduate loans, child benefit and any High
+  Income Child Benefit Charge, the pension, take-home, and take-home with
+  childcare support. Pointers appear only when they apply: how far adjusted net
+  income is into the £100,000 personal allowance taper, and the pension
+  contribution that would restore the allowance; the headroom before the taper,
+  when within £10,000 of it; with children entered, where child benefit stands
+  against its £60,000–£80,000 clawback (how far before it starts, how much the
+  charge takes and the fall in adjusted net income that would clear it, or that
+  it has all gone); and the two cliffs, childcare support at £100,000 and
+  marriage allowance eligibility, each with what one more pound costs. A note
+  under the children field states the clawback and the childcare cliff.
+
+  A **Take-home by tax band** card, also on Tax & Income, shows how each slice
+  of gross pay is split between income tax, National Insurance, student loans
+  and pension, and how much of it you keep. Slices break wherever a rate
+  changes: the personal allowance, each tax band (Scotland's six included), the
+  £100,000–£125,140 allowance taper, the NI thresholds and each student loan
+  threshold. A pension contribution or benefit in kind that spans a threshold
+  is split there too, so no row shows an averaged rate. A toggle switches
+  between **After pension & benefits** and **Salary only**. The headline gives
+  take-home as a share of cash pay, with a coloured bar and legend for each
+  deduction's share. Pension and benefit-in-kind rows show the change they make
+  to cash take-home, which is negative when they cost cash; benefit-in-kind
+  rows are labelled as tax from cash pay. When the tax code already collects
+  benefit-in-kind tax, the card says so.
+
+  A chart switches between the marginal rate across incomes from £0 to £200,000
+  (wider for higher incomes) and take-home against gross, with your income marked,
+  the child benefit clawback shaded when children are entered, and the cliffs
+  drawn as dashed lines. A legend under the chart names the shading and each cliff
+  line ("Child benefit clawback", "Childcare lost", "Marriage allowance lost").
+
+  It does not model savings, dividends, rent or gains, the pension annual
+  allowance, employer National Insurance, Universal Credit or other benefits, or a
+  partner's income, and it does not check childcare eligibility. A personal
+  allowance field starts from the tax-code allowance in Settings (left empty, it
+  is the standard £12,570), so with the same inputs it agrees with Tax & Income.
+  Child benefit
+  counts the 53 benefit weeks in 2026/27. Its rules follow the Tax Policy
+  Associates UK tax calculator. Its £ figures sit under the Show figures toggle
+  like the rest of Finance.
+- **Holiday tracker** — Books full and half days of annual leave, sick leave, and a paid Birthday Day Off (+1 day that does not deduct from standard annual leave). When booking a single day, a Length toggle offers Full day, Morning, or Afternoon. Morning and Afternoon are disabled for weekends and bank holidays. Calendar cells fill only the half they take — left half for mornings, right half for afternoons — with a dashed border, and the legend shows "Half Day (AM left, PM right)". Entry lists and tooltips show "morning" or "afternoon". Month badges and allowance left reflect half-day deductions.
+
+  Multi-day holiday bookings offer a one-click toggle to cover one eligible working day of the trip with the Birthday Day Off, saving one day of annual leave. A Birthday Day Off booked on a day inside an existing holiday is attached to it, taking that day (or half day) off the holiday's count; a holiday booked over an existing Birthday Day Off keeps the birthday and charges one less day; moving the birthday out of a holiday gives the day back. Attaching or detaching birthday leave preserves a custom holiday count, adjusting it by the birthday’s full or half day, and an invalid or insufficient count is refused. Deleting an attached birthday restores that amount to the first regular holiday covering its date. A holiday of a single working day cannot share its day with the birthday and is refused with a message. Sickness and birthday leave cannot cover the same half day, preventing double-counted leave.
+
+  Configurable birthday leave usage rules: on the day (or nearest working day if it falls on a weekend or bank holiday), within ±1 week, within the birthday calendar month, within ±30 days, or floating anytime in the year, using day and month only (in UK `DD / MM` order, never storing a full date of birth) and highlighting the birthday and eligible booking window on the calendar.
+
+  A year switcher allows viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: the saved year uses the gov.uk list once it has loaded, and any other year is calculated for that region.
+
+  The Optimal Leave Maximiser opens in January to plan the full year and defaults later in the year to optimising remaining upcoming leave with long-weekend and 9-day week stretches alongside remaining bank holidays. It includes a shortcut to plan the next leave year, combining remaining annual leave allowance, UK bank holidays, and the Birthday Day Off (when enabled) to recommend the highest-leverage leave bridges. Selectable biases include Balanced, Long Christmas, Long Easter, and Summer Focus. Christmas bridges offer three tiers: Tier 1 · Efficient Bridge (Twixmas), Tier 2 · Balanced Stretch (pre-Christmas working days + Twixmas), and Tier 3 · Ultimate Shutdown (full Christmas week + Twixmas); Easter offers Tier 1 · Pre-Easter 4-Day Bridge, Tier 1 · Post-Easter 4-Day Bridge, and Tier 3 · 16-Day Easter Shutdown. Each bridge shows exact dates to book, leave spent, consecutive days off, and return-to-work date, with one-click booking for individual bridges or the full recommended plan. When no chosen bridge captures the Birthday Day Off, a standalone 1-day Birthday Day Off Break is recommended. Recorded sick days are excluded from suggestions and do not consume annual allowance. The Maximiser lists up to five bridges inline; with more, it lists the recommended ones and a button reveals the rest.
 
 ### Getting data in
 
@@ -306,8 +496,12 @@ Four routes, in decreasing order of automation:
 
 1. **Open banking** — multiple banks connected simultaneously through
    TrueLayer, each with its own card, logo, consent countdown and individual
-   disconnect. Balances, transaction history and daily snapshots refresh on a
-   server-side schedule at 05:00 UTC without the browser being open; one
+   disconnect. Each connection's detail line also says how far its history
+   import has got: "Importing history · checked to <month>" while older
+   transactions are still being fetched, further back with each sync, then
+   "History imported" once the bank has no older history to give. Balances,
+   transaction history and daily snapshots refresh on a server-side schedule
+   at 05:00 UTC without the browser being open; one
    provider failing does not make the others stale. A sync history popover on the
    Transactions toolbar and beside "Sync All Banks" in Wealth lists each run with
    its trigger, new transactions and time ("Today 18:57"); hovering a run shows
@@ -385,9 +579,9 @@ the page between palettes over 350ms; other browsers switch the palette immediat
 The moon rises smoothly into place without overshooting. Reduced-motion
 preferences skip the animation.
 
-Every route's content sits in one "middle card" between the fixed header and footer. The card is the page's only vertical scroller. From 768px wide it has a fine border, 24px corners and a quiet tint. Below 768px there is no frame and the ordinary page gutter is the inset.
+The header's "+" button opens social links beside it. From 700px they open to its right; between 700 and 1023px the page title fades out to make room. Below 700px they open to its left and the name fades out instead. On phones the page title wraps between words, and the menu and theme controls move to a line of their own when the title's longest word cannot sit beside them.
 
-Below 700px wide a long page title wraps between words. If a word cannot fit beside the menu and theme controls, those controls move to a line of their own. While the social links are open below 390px wide, the name and role step aside so the icons never cover them.
+Every route's content sits in one "middle card" between the fixed header and footer. The card is the page's only vertical scroller. From 768px wide it has a fine border, 24px corners and a quiet tint. Below 768px there is no frame and the ordinary page gutter is the inset.
 
 Section controls (filter bars, Finance's two nav rows) sit inside the card at its top. From 768px they pin as a frosted band, but only while they take at most a quarter of the card's height. Otherwise they scroll away with the content.
 
@@ -424,11 +618,13 @@ credit cards align in one row.
 The menu offers persistent Standard and Larger display sizes. Larger increases
 text and controls while retaining ordinary browser keyboard navigation.
 
-Dialogs maintain rounded corners and a gutter at all screen widths. Tapping or
-clicking the backdrop of a dialog closes it without activating anything behind
-it. Dragging across the backdrop does not dismiss it. Dialog and sheet headers
-keep titles and text clear of the close button; on phones, a date beside a
-title moves beneath it, as in sync run details.
+Dialogs maintain rounded corners and a gutter at all screen widths. A dialog
+body that scrolls shows a thin scrollbar, which on dialogs with the default
+padding sits in the right padding, clear of the content. Tapping or clicking
+the backdrop of a dialog closes it without activating anything behind it.
+Dragging across the backdrop does not dismiss it. Dialog and sheet headers keep
+titles and text clear of the close button; on phones, a date beside a title
+moves beneath it, as in sync run details.
 
 ---
 
@@ -457,3 +653,6 @@ These are architectural, not aspirational — the reasoning is in `AGENTS.md`.
 - **No financial document is readable without admin.** Every finance row
   carries a profile, CHECK-enforced; the anonymous role holds no write grant on
   any finance table
+- **Impossible birthday and benefit rows are refused by the database.** A
+  Birthday Day Off is one day, a full day or a half; a birthday day must exist in
+  its month, 29 February included; package benefits are stored as a list

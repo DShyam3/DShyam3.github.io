@@ -435,6 +435,44 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_category_rules: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          merchant_pattern: string
+          profile_id: string
+          rename_to: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          merchant_pattern: string
+          profile_id: string
+          rename_to?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          merchant_pattern?: string
+          profile_id?: string
+          rename_to?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_category_rules_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "finance_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_credit_bureaus: {
         Row: {
           color: string | null
@@ -572,11 +610,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "finance_debt_observations_debt_id_fkey"
-            columns: ["debt_id"]
+            foreignKeyName: "finance_debt_observations_profile_debt_fkey"
+            columns: ["profile_id", "debt_id"]
             isOneToOne: false
             referencedRelation: "finance_debts"
-            referencedColumns: ["id"]
+            referencedColumns: ["profile_id", "id"]
           },
           {
             foreignKeyName: "finance_debt_observations_profile_id_fkey"
@@ -1440,10 +1478,15 @@ export type Database = {
         Row: {
           active_savings_types: string[] | null
           bank_holidays: number
+          birthday_day: number | null
+          birthday_leave_enabled: boolean
+          birthday_leave_rule: string
+          birthday_month: number | null
           employer_pension_percent: number
           gross_salary: number
           id: string
           is_default: boolean
+          package_benefits: Json
           pay_day_of_month: number | null
           payday_biweekly_anchor: string | null
           payday_schedule: string | null
@@ -1464,10 +1507,15 @@ export type Database = {
         Insert: {
           active_savings_types?: string[] | null
           bank_holidays?: number
+          birthday_day?: number | null
+          birthday_leave_enabled?: boolean
+          birthday_leave_rule?: string
+          birthday_month?: number | null
           employer_pension_percent?: number
           gross_salary?: number
           id?: string
           is_default?: boolean
+          package_benefits?: Json
           pay_day_of_month?: number | null
           payday_biweekly_anchor?: string | null
           payday_schedule?: string | null
@@ -1488,10 +1536,15 @@ export type Database = {
         Update: {
           active_savings_types?: string[] | null
           bank_holidays?: number
+          birthday_day?: number | null
+          birthday_leave_enabled?: boolean
+          birthday_leave_rule?: string
+          birthday_month?: number | null
           employer_pension_percent?: number
           gross_salary?: number
           id?: string
           is_default?: boolean
+          package_benefits?: Json
           pay_day_of_month?: number | null
           payday_biweekly_anchor?: string | null
           payday_schedule?: string | null

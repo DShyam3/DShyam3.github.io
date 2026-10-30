@@ -466,23 +466,21 @@ const Travel = () => {
                                                                             />
                                                                         </div>
                                                                         <span className="travel-country-name">{country.country_name}</span>
-                                                                        {sovereignCodes.has(country.country_code) && (
-                                                                            <span className="travel-un-badge" title="UN member or observer state">UN</span>
-                                                                        )}
-                                                                        {cityCount > 0 && (
-                                                                            <span style={{
-                                                                                fontSize: '0.75rem',
-                                                                                color: 'hsl(var(--muted-foreground))',
-                                                                                fontFamily: 'var(--font-sans)',
-                                                                                flexShrink: 0,
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                            }}>
-                                                                                <MapPin className="w-2.5 h-2.5" />
-                                                                                {cityCount}
-                                                                            </span>
-                                                                        )}
+                                                                        {/* Fixed-width columns, always rendered, so the UN marker
+                                                                            and the city count line up whether or not either is set. */}
+                                                                        <span className="travel-un-col">
+                                                                            {sovereignCodes.has(country.country_code) && (
+                                                                                <span className="travel-un-badge" title="UN member or observer state">UN</span>
+                                                                            )}
+                                                                        </span>
+                                                                        <span className="travel-city-col">
+                                                                            {cityCount > 0 && (
+                                                                                <>
+                                                                                    <MapPin className="w-2.5 h-2.5" />
+                                                                                    {cityCount}
+                                                                                </>
+                                                                            )}
+                                                                        </span>
                                                                         {isAdmin && (
                                                                             <button
                                                                                 className="travel-remove-btn"
@@ -532,20 +530,15 @@ const Travel = () => {
                                                                         />
                                                                     </div>
                                                                     <span className="travel-country-name">{country.country_name}</span>
-                                                                    {cityCount > 0 && (
-                                                                        <span style={{
-                                                                            fontSize: '0.75rem',
-                                                                            color: 'hsl(var(--muted-foreground))',
-                                                                            fontFamily: 'var(--font-sans)',
-                                                                            flexShrink: 0,
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '3px',
-                                                                        }}>
-                                                                            <MapPin className="w-2.5 h-2.5" />
-                                                                            {cityCount}
-                                                                        </span>
-                                                                    )}
+                                                                    <span className="travel-un-col" />
+                                                                    <span className="travel-city-col">
+                                                                        {cityCount > 0 && (
+                                                                            <>
+                                                                                <MapPin className="w-2.5 h-2.5" />
+                                                                                {cityCount}
+                                                                            </>
+                                                                        )}
+                                                                    </span>
                                                                     {isAdmin && (
                                                                         <button
                                                                             className="travel-remove-btn"

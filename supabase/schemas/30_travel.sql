@@ -60,15 +60,15 @@ ALTER TABLE ONLY "public"."visited_countries"
 ALTER TABLE ONLY "public"."visited_countries"
     ADD CONSTRAINT "visited_countries_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Admin delete" ON "public"."visited_cities" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."visited_cities" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin delete" ON "public"."visited_countries" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."visited_countries" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."visited_cities" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."visited_cities" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."visited_countries" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."visited_countries" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."visited_countries" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."visited_countries" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Public Read Access" ON "public"."visited_countries" FOR SELECT USING (true);
 
@@ -80,9 +80,13 @@ ALTER TABLE "public"."visited_countries" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."visited_cities" TO "anon";
+REVOKE ALL ON TABLE "public"."visited_cities" FROM "anon";
 
-GRANT ALL ON TABLE "public"."visited_cities" TO "authenticated";
+GRANT SELECT ON TABLE "public"."visited_cities" TO "anon";
+
+REVOKE ALL ON TABLE "public"."visited_cities" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."visited_cities" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."visited_cities" TO "service_role";
 
@@ -92,9 +96,13 @@ GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."visited_cities_id_seq" TO "service_role";
 
-GRANT ALL ON TABLE "public"."visited_countries" TO "anon";
+REVOKE ALL ON TABLE "public"."visited_countries" FROM "anon";
 
-GRANT ALL ON TABLE "public"."visited_countries" TO "authenticated";
+GRANT SELECT ON TABLE "public"."visited_countries" TO "anon";
+
+REVOKE ALL ON TABLE "public"."visited_countries" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."visited_countries" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."visited_countries" TO "service_role";
 
@@ -103,6 +111,3 @@ GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "authenticated";
 
 GRANT ALL ON SEQUENCE "public"."visited_countries_id_seq" TO "service_role";
-
--- Revoked privileges (see the note in 40_finance.sql)
-REVOKE DELETE, INSERT ON TABLE "public"."visited_cities" FROM "anon";

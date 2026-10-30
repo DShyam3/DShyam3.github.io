@@ -32,7 +32,7 @@ exactly.
 | `10_books` … `18_site_content` | one file per content collection |
 | `20_watchlist.sql` | movies, shows, seasons, episodes, schedule, favourites, sync_log, triggers |
 | `30_travel.sql` | visited countries + cities |
-| `40_finance.sql` | the 19 `finance_*` tables |
+| `40_finance.sql` | the 37 `finance_*` tables |
 | `90_privileges.sql` | schema-level grants and default privileges only |
 | `91_realtime.sql` | the `supabase_realtime` publication |
 
@@ -46,7 +46,7 @@ run in lexicographic order, so numeric prefixes handle dependency order --
 
 Storage bucket policies and the pg_cron schedule are **not** in `schemas/`.
 They live outside the `public` schema, are not covered by the schema diff, and
-are maintained by hand in the baseline migration.
+are maintained by hand in `migrations/`.
 
 ## From an empty project
 
@@ -171,8 +171,9 @@ grant select on table "public"."finance_truelayer_connection" to "anon";
 …and the same for every other finance table. The cause: `pg_dump` emits `GRANT`
 but never `REVOKE`, so the schema files did not record privileges this database
 had deliberately taken away, and the differ "helpfully" tried to restore them.
-Those revokes are now stated explicitly at the bottom of `40_finance.sql`,
-`20_watchlist.sql` and `30_travel.sql`.
+Those revokes are now stated explicitly: each table's `anon` `REVOKE` sits
+beside its grants (`40_finance.sql`, `30_travel.sql`, `10_`–`19_`), and
+`20_watchlist.sql` keeps its block at the bottom.
 
 The lesson generalises: **the differ proposes, you dispose.** Two known limits
 that matter for this schema in particular:

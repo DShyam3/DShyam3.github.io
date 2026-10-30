@@ -24,9 +24,8 @@ import type {
 /**
  * The UK tax year (starting 6 April) `today` falls in; 2026 means 2026/27.
  *
- * Compared on local date fields. Going through an ISO string and `taxYearOf`
- * reparses it as UTC midnight, which west of Greenwich puts 6 April back in
- * the previous tax year.
+ * Compared on `today`'s local date fields, so the 6 April cut-over follows the
+ * device's own day rather than the UTC one.
  */
 export const currentTaxYear = (today: Date = new Date()): number => exactTaxYearOf(today);
 
@@ -62,6 +61,11 @@ export const createDefaultFinanceSettings = (activeSavingsTypes: string[], today
   ukRegion: 'england-and-wales',
   holidaysByUser: {},
   activeSavingsTypes,
+  birthdayLeaveEnabled: false,
+  birthdayLeaveRule: 'within_week',
+  birthdayMonth: null,
+  birthdayDay: null,
+  packageBenefits: [],
 });
 
 /** A zeroed tax-rate timeline, effective from that tax year's 6 April, used

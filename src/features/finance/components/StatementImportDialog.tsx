@@ -298,7 +298,7 @@ export function StatementImportDialog({
                     <button type="button" onClick={() => choose(false)} className="rounded-md border border-border/40 px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-border/80">None</button>
                     {skippedDuplicates > 0 && <span className="ml-auto text-muted-foreground">{skippedDuplicates} duplicate{skippedDuplicates === 1 ? '' : 's'} unticked</span>}
                   </div>
-                  <div className="max-h-[36vh] overflow-y-auto space-y-1 pr-1">
+                  <div className="max-h-[36dvh] overflow-y-auto space-y-1 pr-1">
                     {previewRows.map(row => {
                       const included = overrides[row.key] ?? !row.duplicate;
                       const isIncome = row.transaction.amount < 0;

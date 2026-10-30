@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { asTypedBlob, readFileSignature } from '@/lib/file-signature';
 
 export const FINANCE_BUCKET = 'finance-documents';
 
@@ -18,33 +19,13 @@ export const FINANCE_BUCKET = 'finance-documents';
 const SIGNED_URL_TTL_SECONDS = 300;
 
 /**
- * Types accepted, keyed by the bytes a file actually starts with.
- *
- * Checked by signature rather than by filename or by the browser's guess,
- * both of which are supplied by whoever chose the file. This is not a defence
- * against a hostile admin — they own the bucket — but it does stop a renamed
- * or truncated file being archived as a payslip and discovered to be unusable
- * years later, which is the failure that actually matters for an archive.
+ * Kinds accepted, checked by the bytes a file starts with rather than by its
+ * name or the browser's guess (src/lib/file-signature.ts). This is not a
+ * defence against a hostile admin -- they own the bucket -- but it does stop a
+ * renamed or truncated file being archived as a payslip and discovered to be
+ * unusable years later, which is the failure that actually matters here.
  */
-const SIGNATURES: { mime: string; ext: string; magic: number[] }[] = [
-  { mime: 'application/pdf', ext: 'pdf', magic: [0x25, 0x50, 0x44, 0x46] },       // %PDF
-  { mime: 'image/png', ext: 'png', magic: [0x89, 0x50, 0x4e, 0x47] },             // .PNG
-  { mime: 'image/jpeg', ext: 'jpg', magic: [0xff, 0xd8, 0xff] },
-];
-
-export interface SniffResult {
-  mime: string;
-  ext: string;
-}
-
-/** Reads the first bytes and returns the type they declare, or null. */
-export async function sniffFileType(file: File): Promise<SniffResult | null> {
-  const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
-  for (const { mime, ext, magic } of SIGNATURES) {
-    if (magic.every((byte, i) => head[i] === byte)) return { mime, ext };
-  }
-  return null;
-}
+const ACCEPTED_KINDS = ['pdf', 'png', 'jpeg'] as const;
 
 export interface UploadResult {
   path: string;
@@ -63,16 +44,15 @@ export async function uploadFinanceDocument(
   file: File,
   profileId: string,
 ): Promise<UploadResult> {
-  const sniffed = await sniffFileType(file);
+  const sniffed = await readFileSignature(file, ACCEPTED_KINDS);
   if (!sniffed) {
     throw new Error('That file is not a PDF, PNG or JPEG.');
   }
 
   const path = `${profileId}/${crypto.randomUUID()}.${sniffed.ext}`;
-  const { error } = await supabase.storage.from(FINANCE_BUCKET).upload(path, file, {
-    // The sniffed type, not `file.type`, which the browser infers from the
-    // extension and therefore inherits whatever the name claimed.
-    contentType: sniffed.mime,
+  // Typed from the bytes: the original File would go up with the browser's
+  // filename-based guess, since supabase-js ignores `contentType` for a Blob.
+  const { error } = await supabase.storage.from(FINANCE_BUCKET).upload(path, asTypedBlob(file, sniffed), {
     upsert: false,
   });
   if (error) throw new Error(error.message);

@@ -12,11 +12,11 @@ ALTER TABLE "public"."site_content" OWNER TO "postgres";
 ALTER TABLE ONLY "public"."site_content"
     ADD CONSTRAINT "site_content_pkey" PRIMARY KEY ("key");
 
-CREATE POLICY "Admin delete" ON "public"."site_content" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."site_content" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."site_content" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."site_content" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."site_content" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."site_content" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Public Read Site Content" ON "public"."site_content" FOR SELECT USING (true);
 
@@ -24,8 +24,12 @@ ALTER TABLE "public"."site_content" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT ALL ON TABLE "public"."site_content" TO "anon";
+REVOKE ALL ON TABLE "public"."site_content" FROM "anon";
 
-GRANT ALL ON TABLE "public"."site_content" TO "authenticated";
+GRANT SELECT ON TABLE "public"."site_content" TO "anon";
+
+REVOKE ALL ON TABLE "public"."site_content" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."site_content" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."site_content" TO "service_role";

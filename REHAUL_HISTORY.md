@@ -2557,3 +2557,253 @@ and `SyncDetailDialog.tsx`.
 ### Recurring suggestions require human review — 2026-10-07
 
 Repeated bank payments establish a pattern, not an ongoing commitment. Detection therefore runs deterministically over merchant/account groups and proposes candidates for review; only the user confirms active status and the last-paid date. The latest ledger evidence remains separate from that confirmation, and inactive or dismissed entries remain restorable without contributing to recurring totals. Recurring CRUD and paid checks no longer debit or credit bank balances: the ledger already records those movements. This closes the distinction between evidence, a reviewed commitment and an actual bank payment. Implementation is local and uncommitted; migration `20261006220926_finance_recurring_review.sql` is written but unapplied, and live persistence remains unverified.
+
+### About viewport composition — 2026-10-08
+
+About keeps scrolling inside cards. A simultaneous multi-card composition needs
+both width and height, so it is reserved for viewports at least 1280 × 700.
+Smaller or shorter viewports select one card with a section switcher, preserving
+reading space instead of shrinking every pane. At heights of 600px or less,
+the selected card scrolls as a whole so its heading and controls cannot crowd
+out its content. This closes the responsive composition decision for About;
+Library remains planned.
+
+### Bills calendar and balance forecast share one schedule — 2026-10-09
+
+**The decisions:** the forecast starts from checking accounts only, lists overdue
+unconfirmed bills rather than subtracting them, and lets one bank payment settle
+exactly one due date, whatever range is on screen.
+
+Checking accounts only, because bills and pay move through them. A savings or
+card balance would need a transfer or a repayment the forecast does not model,
+so bills paid from another account are listed, not counted.
+
+An overdue bill that is not confirmed is usually a payment the app could not
+match, not a missed one. The money has probably already left the balance, so
+subtracting the bill again would count it twice.
+
+A payment settles the one due date whose window holds it. The window opens up to
+seven days before that date (three for a weekly bill) and closes where the next
+one's opens. The rule depends only on the bill, its coverage and the payment,
+never on the range shown, so the calendar and the forecast agree. Known limit: a
+payment for a missed date that lands within a week of the next date reads as the
+next date paid early, so the missed date shows as not confirmed. Settling the
+older date instead would double-count every bill debited a day early while the
+previous period is unticked, which is the common case.
+
+Pay counts as landed if a non-transfer credit of at least half a payday's share
+reached a checking account from five days before the coming payday up to today.
+This errs low: weekly pay arriving two or more days late can leave one pay out
+of the forecast, but a pay is never counted twice.
+
+Next-payday details now come from `nextPayday` and `paydaysBetween` in
+`lib/finance/payday.ts`, the same functions the forecast uses, so the two cannot
+disagree about a payday. `calculateActualPayday` is deleted.
+
+Closure: `src/lib/finance/bill-schedule.ts`, `balance-forecast.ts`, `payday.ts`;
+`src/features/finance/finance-calcs.ts`.
+
+### Recurring Paid follows the covered period; early payment is explicit — 2026-10-10
+
+**The decisions:** for monthly, quarterly and annual bills, the period a payment
+covers is the single source of truth for Paid. The stored tick can only hide Paid,
+never show it: a row is shown Paid when the tick is on and the covered period
+includes today's.
+
+- **The old trust-the-tick rule is gone.** A bill with a ticked row and no payment
+  date used to show Paid every month. Five live bills were in that state (Rent,
+  Gym Membership and Octopus Energy on the owner's profile, two on Demo). They now
+  show Unpaid until ticked once, because a tick alone cannot say which period it paid.
+- **A tick never gives early credit; only the explicit early button does.** A tick
+  covers the period containing today. Early credit through a tick could only come
+  from an inconsistent untick state, and it would claim a payment that was not made.
+  The "Paid {date} early" button appears from seven days before the next due date,
+  and only while the current period is covered.
+- **An untick hands back exactly one period, counted from coverage** rather than
+  from the stored field alone, so rows confirmed before `paid_for_due_date` existed
+  hand back the same way. Unticking an early payment leaves the current period Paid.
+- **Edits map coverage, they do not re-derive it from the tick.** A due-day or month
+  change maps the covered period as it is onto the new schedule. A last-paid date
+  correction earns against the coverage before that payment, decided by whether the
+  coverage includes the old payment (judged from stored dates), not by the shown
+  tick, which changes as periods roll over. A frequency change moves the payment back
+  one period when the new period is longer or the old coverage did not include its
+  payment, so a monthly payment never becomes a whole annual period and an untick
+  never comes back.
+- **Only lists that grow over time are paged.** A read capped at 1,000 rows returns
+  a shorter list with no error, so transfers and matches would miscount silently.
+  Paged now, through `selectAllPages`: transfer links, transfer dismissals,
+  one-sided transfers, transfers between profiles, payslips and their bank matches,
+  net-worth snapshots, goal contributions, investment activity and debt observations.
+  Settings-sized lists stay single reads. This supersedes the 2026-10-06 note in
+  pagination (P-6) that the other finance reads were under 300 rows.
+
+**Known limits:** a weekly untick leaves coverage at `lastPaidDate`, so the calendar
+can still show that week paid (no weekly bills are live). Changing frequency on a
+bill marked unpaid leaves it Unpaid.
+
+Closure: `src/lib/finance/recurring-detection.ts` (`tickRecurring`, `untickRecurring`,
+`payRecurringEarly`, `coverageAfterEdit`, `isRecurringPaidForPeriod`);
+`src/features/finance/FinancePage.tsx`, `FinanceDataContext.tsx`, `tabs/RecurringsTab.tsx`;
+`src/integrations/supabase/select-all-pages.ts`. Reviewed by Opus in three passes, all
+findings fixed. Not checked signed in in a browser, and not deployed.
+
+### Deploy record — 2026-10-07 and 2026-10-08
+
+Deployed 2026-10-07: `056afb97`, `e9a72a7a`, `531561f0`, `48e70a23`, with migrations
+`20261006090000` and `20261006220926`. Live: finance loading recovery, recurring
+review, payslip reconciliation, ledger and watchlist pagination, the three-part
+nightly sync. The 7 Oct incident was a client-side network stall in Chrome: edge
+logs show the profile request never reached Supabase.
+
+Deployed 2026-10-08: `c081b08a` and `55269ec5` on `0d04bd24`, Pages run
+37739685661. Live DB: migration `20261008090000_finance_recurring_paid_period.sql`
+(nullable `paid_for_due_date`, no backfill, anon grants 0). All 11 live bills lack
+`last_paid_date`, so no early credit was lost. `watchlist-cron-sync` is v13.
+
+### Compact collection controls — 2026-10-20
+
+Collections use the Watchlist Library’s compact toolbar pattern: the primary
+category remains visible as a dropdown, while secondary facets open from
+Filters. This closes the tall wrapping-toolbar decision without hiding options
+in a horizontally scrolling strip. The existing measured pin rule still lets
+the band scroll away when it would consume too much of the card frame.
+The earlier local browser check on 2026-10-13 measured Inspiration’s toolbar at
+142px at 768×1024, replacing the four-row, 291px layout recorded in the plan.
+The isolated release merged through PR #2 on 2026-10-20 (code `fe83fe54`,
+merge `799d8358`). Both CI runs pass;
+[Pages run 39380259371](https://github.com/DShyam3/DShyam3.github.io/actions/runs/39380259371)
+succeeded. The live Inventory page shows the compact toolbar and 13 EDC items
+with brands and no wishlist item. Live authenticated writes remain unverified.
+
+### Admin check once per statement — every RLS policy wraps `is_admin()` — 2026-10-24
+
+**Every policy that asks `public.is_admin()` asks it as `(SELECT public.is_admin())`. The test in `src/integrations/supabase/rls-admin-check.test.ts` fails when one does not.**
+
+`is_admin()` is `LANGUAGE sql STABLE SECURITY DEFINER` with a pinned `search_path`, so Postgres cannot inline it. Written bare in a policy, it is called once for every row the policy tests. Wrapped in a scalar subquery, it becomes an InitPlan: at most once per statement, with every row reusing the result. The answer is the same either way, which is why a bare call slips back in unnoticed; the only symptom is a large read getting slower. The test replays the migrations to get the text each policy holds last, and checks `schemas/` on its own, because the `storage.objects` policies exist only in migrations.
+
+Measured locally, not on hosted: a 5,000-row authenticated read of finance transactions went from a median of 1,051 ms to 276 ms (`performance/README.md`). The control drifted by up to about 20% between runs.
+
+The trade-off that was feared did not reproduce. The worry was that a wrapped call would be paid by a statement that touches no rows, or by a per-row trigger that fires for one row. The InitPlan is lazy: when no row reaches the policy it never runs (EXPLAIN ANALYZE shows "never executed"), and when one row does, it runs once per clause, as the bare form did. The wrapped form never makes more calls than the bare one.
+
+The migrations refuse to run unless every targeted policy reads exactly as the scan expected, because `ALTER POLICY` replaces the whole expression and would otherwise silently overwrite a policy edited since. After the rewrite they check again: no policy may still call the function bare, and the public schema must hold exactly 145 wrapped clauses (`20261024120000`). The storage migration (`20261024130000`) applies the same two checks to the 14 `storage.objects` policies.
+
+Reached hosted on 2026-10-24 through the Supabase `execute_sql` tool, not the CLI. The container had no CLI credentials, and `apply_migration` would have stamped its own version. The statements were the committed files, byte for byte (md5 checked inside the same transaction), and `supabase_migrations.schema_migrations` records them at the repo versions. Afterwards hosted had 93 admin-gated public policies and 14 storage policies, all wrapped, none bare. In rolled-back simulations, anon and a non-admin read none of the 46 finance documents and cannot upload; a non-admin reads none of 3,862 transactions; an admin reads all of both. Commits `7eb053d` (migrations, schemas, test, docs) and `41ee3ff` (hosted record) are on `claude/friendly-feynman-phs5om`, pushed and not merged; Pages still deploys `55c2341`.
+
+### Table grants are least-privilege by default — 2026-10-24
+
+**`authenticated` holds SELECT, INSERT, UPDATE and DELETE on public tables, never TRUNCATE, REFERENCES or TRIGGER.** Supabase's default privileges had given every table `postgres` created ALL to `authenticated`, and 50 public tables kept it. TRUNCATE is the one that matters: Postgres applies row-level security to the four data verbs but not to TRUNCATE, so the grant is the only guard against an RLS mistake becoming data loss. REFERENCES and TRIGGER matter only for DDL. Nothing in the app needs the three as `authenticated`: edge functions connect as service_role, and the local PostgREST checks pass on the four verbs alone.
+
+**The two TrueLayer tables get no grant at all, not even the four verbs.** `finance_truelayer_connection` stores the bank's access and refresh tokens in plain columns, and `finance_truelayer_oauth_states` holds the OAuth state. Every query on either is in `truelayer-sync`, on the service_role client; `src/` has no runtime query on either, and no view, invoker-rights function or realtime publication reads them. So the `authenticated` grant enabled one thing: an admin JWT reading bank tokens through PostgREST. The grant is removed rather than narrowed. Their RLS policies stay, inert, because with no grant they are never reached. Deleting a profile still cascades into both, since referential actions run as the table owner. The owner approved this on 2026-10-24.
+
+**The default changes too, not only the 50 tables.** Narrowing the existing tables alone would let the next table inherit ALL again. New `postgres`-owned tables now start from an allowlist: `authenticated` gets the four data verbs and `anon` gets nothing. A public-read table grants `anon` `SELECT` in its own schema file, so the default need not hand it out to every table, and a table that forgets the grant is unreadable to anon rather than readable. The same default is how `finance_merchant_logos` got anon TRUNCATE. Only the `postgres` defaults change, because `supabase_admin`'s cannot be altered from `postgres` on hosted.
+
+**The defaults are an allowlist rather than a denylist, on purpose.** A REVOKE of TRUNCATE, REFERENCES and TRIGGER from the image's ALL would leave whatever Postgres adds to ALL later. Postgres 17 added MAINTAIN, which covers VACUUM, ANALYZE and LOCK TABLE, so a denylist would hand that to `authenticated` on every new table after an upgrade. The 50 existing tables take the same shape: REVOKE ALL, then the four verbs (or nothing).
+
+**The post-check reads catalog ACLs and fails closed.** `information_schema` shows only grants to roles the current user holds, so the check reads `relacl`, `has_table_privilege`, `has_any_column_privilege` and `pg_default_acl`. It rolls back the whole migration if a listed table's `authenticated` ACL is not exactly the four verbs, or not empty for the two TrueLayer tables (checked as effective privilege, so a grant through PUBLIC or a role membership counts). It also rolls back if any table in `public` still gives `authenticated` or `anon` TRUNCATE, REFERENCES or TRIGGER, or if the default privileges go beyond the allowlist: a global row (which a per-schema REVOKE cannot narrow), a PUBLIC entry, anything for `anon`, or anything for `authenticated` beyond the four verbs.
+
+**The schema files carry the same grants.** A build from `supabase/schemas/` alone gives `anon` and `authenticated` the same effective privileges as the migrated database on every public relation that builds. That build still stops on nine statements (the schemas-cannot-rebuild item in REHAUL_PLAN.md), so the comparison covers what does build.
+
+Status: applied to hosted on 2026-10-24 with `supabase db push` from `claude/compassionate-faraday-6b9xwn` (commit `a9d0d9f`), after a dry run that listed exactly `20261024140000` and `20261024150000`. Both are recorded in `supabase_migrations.schema_migrations`, and hosted now ends at `20261024150000`. Verified read-only afterwards: the catalog, and anon and admin access simulated in SQL. A live HTTP check was not run. `20261024140000` takes `anon`'s privileges and the public read policy off `finance_merchant_logos`. `20261024150000` narrows `authenticated` everywhere and fails closed unless 140000 has run first.
+
+### Merchant-logo index and bucket listing are admin-only — 2026-10-24
+
+**The index of cached merchant logos, and the listing of the `merchant-logos` bucket, are readable by the administrator only.** `merchant-logo-cache` resolves only brands found in the owner's transactions, so the index's slugs and `resolved_at` said which brands the owner pays and roughly when each first appeared, and the bucket listing named the same slugs. Both were readable by anyone holding the publishable key.
+
+The fix is `20261024140000`. The public read policy on `finance_merchant_logos` is dropped; the remaining admin policy has no `FOR` clause, so it covers SELECT too, and only the administrator passes it. anon's privileges on the table are revoked, because TRUNCATE is not filtered by RLS and the grant is the only guard against it. The bucket's public list policy is replaced by an admin-only read, created before the old one is dropped so the bucket is never without one.
+
+Logo images stay public. The app loads them through public URLs, and the public object route does not consult `storage.objects` policies (per the migration header, which records that check on the local storage API). Authenticated and service_role keep their grants on the index; `authenticated`'s wider grants are the separate decision in the table-grants entry above, applied by `20261024150000`.
+
+Applied to hosted on 2026-10-24. Not yet confirmed live: that a logo image loads over HTTP after the change, which is an owner check. Still open, in REHAUL_PLAN.md: the public object route answers "exists" or "no such key" for a guessed `<slug>.<ext>`, and the candidate slugs ship in the client bundle, so a guessed brand can still be confirmed. Closing that needs unguessable keys or a private bucket with signed URLs, which is an owner decision.
+
+### Unused dependencies are removed when an advisory lands — 2026-10-24
+
+**A vulnerable package that nothing imports is removed, not upgraded.** GHSA-mrhx-c7xc-m3w5 reported `zod@3.25.76` on 2026-10-24, fixed in 4.6.6, which is a major version. The options were an exposure analysis plus a validated migration, or removal. A search of `src/`, `supabase/`, `scripts/` and `performance/` found no import of `zod`, `react-hook-form` or `@hookform/resolvers`, so all three came out (`2cdb02f8`). With no caller there was nothing to analyse for exposure and nothing to migrate.
+
+**Search for imports before scoping an advisory.** If nothing imports the package, removal closes it without a migration. If something does, the exposure analysis and the upgrade are scoped against that caller. `npm audit` (zero vulnerabilities, 2026-10-24) is the check on the removal; no scanner had been re-run on it when this was recorded.
+
+### A stored date is a calendar day, not an instant — 2026-10-24
+
+**A stored `YYYY-MM-DD` is a calendar day. It is read from its own parts (`calendarParts` in `src/lib/finance/dates.ts`), an instant is read at its local day (`localCalendarDay`), and a bare date string is never passed to `new Date` and then read with local getters.**
+
+`new Date('2026-08-28')` is UTC midnight, so a local getter names the day before anywhere west of UTC. Comparing that instant with a local midnight misfired the other way, in London during BST and east of UTC. What it broke, all fixed in `6e146826` and `b02eb1d5`: leave booked a day early, 6 April in the wrong tax year, a student-loan write-off a year early, leave counted toward the wrong year, a release dated 1 January given the previous year in three places (one of them persisted as `release_year`), and a debt rate period starting on the 1st applied a month late in London.
+
+Three rules follow. An impossible day such as `2026-02-30` is unknown, not rolled into March. Holiday ranges step by epoch day, so a clock change inside one does not move its end; a free-text range is clamped to its month's end, and a segment that starts past it is dropped. "Today" in the alerts is the device's local day.
+
+The owner asked whether the site should simply run on UK time. In London the old code was already right, apart from the BST rate-period bug. The fix keeps that behaviour and stops a stored day shifting on a device set to another zone: a date reads the same day everywhere, and "today" is the day the viewer is in.
+
+Verified by the suite under UTC, Europe/London, America/Los_Angeles and Pacific/Auckland (1,325 tests; Los Angeles had 21 failures before the fix). Not checked on a live non-UK device.
+
+### Stored links and uploads are checked in the browser — 2026-10-25
+
+**The server keeps the administrator gate and the bucket's MIME allowlist. What a link is, and what a file is, is decided in the browser.** A saved URL becomes an `href` only if it parses as an absolute http, https or mailto address (`safeHref`, `src/lib/safe-url.ts`). An upload is sniffed from its first 32 bytes against the kinds its uploader accepts (`src/lib/file-signature.ts`) and sent as a Blob typed from those bytes.
+
+The alternative was a CHECK constraint on the link columns and a signature check in an Edge Function. Both are stronger, and neither was added. The only writer of either is the administrator, and every write is behind `is_admin()`, so a server check would guard against the one party the policy already trusts. That holds while there is one writer. A second admin, or a function that writes a link for a user, is the point to move the checks server-side.
+
+A Blob is how the stored type gets set. supabase-js sends a Blob as a form part typed by the Blob and ignores `contentType` for it. Sending the original File would store the type the browser guessed from the name, so a PNG named `.jpg` was stored as `image/jpeg`. Verified on the local stack: it is now stored as `image/png`, and a PDF typed `text/plain` is stored as `application/pdf`.
+
+SVG is refused from the two public buckets that do not need it (`20261024170000`). An SVG is a document, and a browser that opens its public URL runs its script. The allowlist does not reach existing objects, so three SVGs in `site-assets` still serve. Deleting them is the owner's call, recorded in REHAUL_PLAN.md. Not checked on the live site signed in.
+
+### Malformed student-loan draws are excluded from projections — 2026-10-25
+
+The simulator and course-end inference exclude draws with invalid calendar dates
+or non-finite amounts before selecting dates or performing arithmetic. A malformed
+row therefore cannot turn the whole projection into Invalid Date and £NaN; valid
+rows still produce a projection instead of the entire calculation being refused.
+Finite negative and zero draws remain valid: this is a validity check, not the
+positive-borrowing rule used by the Borrowed card. Consolidating the card, Edit
+field and saved original amount remains open in REHAUL_PLAN.md.
+
+The guard is local and uncommitted. Thirteen regression cases cover it; the full
+1,347-test suite passes, and 967 finance tests pass in both Europe/London and
+America/Los_Angeles on 2026-10-25. No new live verification was performed.
+
+### Logo names, the debt key, per-row saves, and the visitor's rate-limit key — 2026-10-25
+
+Three owner decisions and one finding, all settled on 2026-10-25. The logo item is mitigated in code and in the index, and stays open until the owner deletes the old objects.
+
+**Merchant logos get random object names, not a private bucket.** The bucket is public and a logo's object name was its brand slug, so `aldi.webp` confirmed a guess about where the owner shops. The slugs also ship in the client bundle, which made the guesses cheap. Two fixes were open: a private bucket with signed URLs, or unguessable names. Random names were chosen. Signed URLs are minted per logo on each render, which costs a request for every row and stops the browser caching an image under a stable URL. Random names keep the public route, its caching and its speed, and the admin-only index (`20261024140000`) is the only map from brand to file. `merchant-logo-cache` v15 writes `<uuid>.<ext>` and claims an index row only while it records no file, misses included. It removes its own upload only after a confirmed lost race or a read-back, so overlapping runs cannot orphan an object or null another run's path. The 41 logos were copied to random names and the index repointed: 41 rows, no guessable path, and all 41 new URLs return 200 `image/webp`. The 41 brand-named originals stay public until the owner deletes them, and CDN copies can outlive that deletion by up to a week (`cacheControl` 604800), so the item is mitigated, not closed.
+
+**`finance_debt_observations` is keyed on the profile's own debt.** The key was `debt_id` alone, so an observation carrying one profile's `profile_id` could name another profile's debt, or a shared default. The rule for `finance_*` rows is that a key crossing profiles is made impossible by the database, as the payslip and transfer links already are, not left to the app picking the right `profile_id`. Migration `20261025090000` makes the key `(profile_id, debt_id)` → `finance_debts (profile_id, id) ON DELETE CASCADE`. The cost is that an observation against a shared default debt is now refused, and that was accepted: `addDebtObservation` saves a profile's own copy of a default debt before it writes a reading, so the write path does not depend on the old behaviour. Hosted had no default debts, one observation and no mismatches, and the observation survives. A fresh local reset showed a matching pair accepted, a cross-profile pair refused, a debt delete cascading to its readings, and a re-run as a no-op. The two indexes the key made redundant were dropped; the migration refuses to run unless a covering index remains.
+
+**Per-row saves stay as they are.** Saves already group rows that share one change, so 1,000 rows with one patch are about 10 requests. The slow case is 1,000 distinct edits, one request each: about 6 s locally, unmeasured on hosted. No screen makes that many distinct edits, and a different save design would change the save order and profile scoping, which is where the save-safety items in REHAUL_PLAN.md sit. Revisit only if a real flow proves slow.
+
+**The `tmdb-proxy` rate limit keys on the visitor, not on a gateway node.** It keyed on the last `X-Forwarded-For` entry, which is a Supabase gateway node. Three probes from one machine within a minute hit three different keys, so the limit did not hold for one visitor. Cloudflare sets `cf-connecting-ip` to the visitor's address and refuses a request that supplies its own (a probe that did got 403 at the edge). `_shared/client-address.ts` reads that header, shape-checks it, and falls back to a forwarded hop only when it is missing. An IPv6 visitor is keyed on its /64, since a client holds the whole block and can pick a new address per request. Live after `tmdb-proxy` v13, three probes from one machine gave one key with three hits. That probe was IPv4; the IPv6 grouping is covered by a unit test only. `truelayer-sync` uses the same helper for `X-PSU-IP`, falling back to the first forwarded hop, which is the visitor unless the caller set the header itself. Its `verify_jwt` setting is unchanged.
+
+Status: the migration is applied to hosted with `supabase db push`, after a dry run that listed only `20261025090000`. Code on `main` is `8e8c4c19`, deployed to Pages by run 40202391722. Edge functions on hosted: `tmdb-proxy` v13, `truelayer-sync` v48, `merchant-logo-cache` v15. The reviewer (Opus) ran three passes and every finding was fixed; the last small fixes were not re-reviewed. Not checked live: any write (uploads, saved links, Paid ticks) and the IPv6 path.
+
+### Admin sign-in: two-factor enforced once enrolled, leaked-password protection accepted off — 2026-10-25
+
+Two decisions, both made by the owner on 2026-10-25.
+
+**Two-factor is enforced by `is_admin()` only once the administrator has a verified TOTP factor, not unconditionally.** An unconditional aal2 rule would have locked the owner out on the day it landed: no factor, so no code, so no admin. Tying the rule to a verified factor leaves the account behaving as before until enrolment, and enrolment is the step that switches the rule on. The trade-off is that deleting the factor row returns the account to password-only sign-in. That needs dashboard or SQL access, which is the owner's own path, and it is the recovery path.
+
+**A stolen password cannot strip the factor.** Once a verified factor exists, GoTrue refuses to unenrol or add a factor from an `aal1` session. This was checked on the local stack, not on hosted. Without that refusal the conditional rule would be only as strong as the password.
+
+**Leaked-password protection stays off.** The HaveIBeenPwned check is offered on the Pro plan and above only, and the organisation is on Free. The owner accepts the risk and stays on Free. The reasoning: the account is the single administrator, every write is gated by `admin_users` through `is_admin()`, and public signup is to be turned off. The lint is recorded as accepted in SECURITY.md.
+
+Status: `20261025200000_drop_pgjwt` and `20261025200100_is_admin_requires_aal2_when_enrolled` are applied to hosted with `supabase db push`; the dry run listed exactly those two. pgjwt went in the same change because nothing called it and it blocked the Postgres 17 upgrade. The code (`ab0b759e`) was pushed straight to `main` and deployed to Pages (`60f807b5`, run 40235011253) the same day; nothing changes for the owner until they enrol. Later that day, from the dashboard: signup turned off, TOTP confirmed enabled, "Limit duration of AAL1 sessions" turned on, Postgres upgraded 15.8.1.030 → 17.11.0.003.
+
+### Tax & Income uses the Tax Calculator's engine — one implementation of tax law — 2026-10-27
+
+**The decision:** Tax & Income works out income tax, National Insurance and student loan repayments with `calculateUkTax` in `lib/finance/uk-tax-calculator.ts`, the engine the Tax Calculator already ran. `calculateFinance` no longer reads `finance_tax_configs` for those figures, so 7.K's rate set chosen by date decides no Tax & Income figure. The Student Loan section still picks its threshold that way. The engine carries 2026/27 rules only.
+
+The two pages had drifted apart. Tax & Income ignored the region, so a Scottish profile was taxed on the rUK bands. It took a relief-at-source pension from pay in full, with no 20% relief and no widening of the bands; the Calculator did both. For the same salary the two pages reported different take-home, and the difference was in the rules, not the display. Fixing it on one page meant copying the rules to the other and keeping two copies in step. One function removes the second copy.
+
+Three inputs were settled on the way. The settings pension percentage is read as the gross contribution, which is what the Calculator already read it as; under relief at source the amount from pay is 80% of that. The settings personal allowance is the base allowance, 0 included, so a BR or 0T code is taxed as entered rather than replaced by £12,570. The taper applies to whatever base is stated. A missing allowance still means the statutory £12,570.
+
+**The trade-off is that the rules live in code, not rows.** A new tax year now means editing the engine and shipping it, where a row could have carried the new bands without a release. The cost is accepted because a single function with one set of rules is easier to check than rows that two pages read differently. The rows are not fully retired: student-loan thresholds and rates still come from `finance_tax_configs` for the Student Loan section and the debt form, and Settings still edits income tax and NI bands: the income tax bands feed nothing, and the NI bands feed only the note on the NI row. The Tax Calculator does not yet read the tax-code allowance. These are open in REHAUL_PLAN.md 8.H, and the table is not dropped until the student-loan thresholds have a home.
+
+Closure: `src/lib/finance/uk-tax-calculator.ts`, `src/features/finance/finance-calcs.ts`, `src/features/finance/FinanceDataContext.tsx`. Status: in the working tree on `claude/finance-calculator-followups`, not committed, not deployed.
+
+### Benefit-in-kind tax is worked out, and cash items are taxed as pay — 2026-10-27
+
+**The decision:** each package item is Cash or Benefit in kind. A benefit's tax is the extra income tax its value causes: the engine's answer with the benefit counted, less its answer without. It comes off take-home, unless the tax code's allowance is below £12,570, when the tax is shown as collected through the code and not taken again. A cash item is paid through payroll, so it shows its own income tax, National Insurance and student loan, and its after-tax value, and it stays out of salary take-home. The typed "tax taken off" field and the 20/40/45% helpers are gone. An item saved with no kind reads as Benefit in kind.
+
+A typed figure was the wrong quantity. Whatever the owner typed ignored the allowance, the £100,000 taper and the Scottish bands, so the helpers were wrong for anyone off the plain basic-rate path. A typed figure could also be counted twice. Under a reduced code, such as 1107L, the allowance already carries the benefit's tax, and subtracting the typed amount from take-home taxed the same benefit again. Taking the tax from the engine, and only when the code does not already collect it, follows how HMRC collects it.
+
+A cash item lowered take-home by its tax while its value never reached the page: a bonus was taxed but not added. Now the tax on a cash item is the extra tax that the salary plus the item causes, so a bonus that crosses the higher-rate threshold is taxed partly at 20% and partly at 40%. The item shows its own net figure beside the salary, and the salary and take-home figures do not include it.
+
+The trade-off is that the tax moves with the salary, region and code, and there is no typed figure to override it. A wrong code gives a wrong benefit tax, as it already gives a wrong income tax. The legacy `annualTaxCost` field stays on stored rows so they still type-check and round-trip. No calculation reads it.
+
+Closure: `src/lib/finance/uk-tax-calculator.ts` (`ukBenefitInKindTax`, `ukCashAfterTax`), `src/features/finance/finance-calcs.ts`, `src/features/finance/finance-narrow.ts`, `src/features/finance/finance-types.ts`, `src/features/finance/surfaces/TaxIncomeSurface.tsx`. Status: in the working tree on `claude/finance-calculator-followups`, not committed, not deployed.

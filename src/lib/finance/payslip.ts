@@ -11,6 +11,8 @@
  * Pure, like the rest of this directory. No clock, no Supabase, no React.
  */
 
+import { localCalendarDay } from './dates';
+
 export interface Payslip {
   id: string;
   payDate: string;
@@ -173,13 +175,20 @@ export const sumPayslips = (slips: readonly Payslip[]): PayslipTotals =>
  * Returned as the starting calendar year, so 2026 means 2026/27. Everything
  * HMRC does is bounded by this, and a payslip total for "this year" that used
  * January would be answering a different question.
+ *
+ * A `YYYY-MM-DD` pay date is a calendar day and is read as that day's own
+ * year, month and day, whatever the machine's timezone. Parsing it with
+ * `new Date` would give UTC midnight, and the local getters would then put it
+ * on the previous day anywhere west of Greenwich -- 6 April would fall in the
+ * year before. Any other string is an instant (a full timestamp) and is read
+ * on the local calendar, which is the day it is where the reader is. A day
+ * that does not exist, or text that is no date, gives NaN.
  */
 export const taxYearOf = (date: string): number => {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = d.getMonth();
-  const day = d.getDate();
-  const beforeApril6 = month < 3 || (month === 3 && day < 6);
+  const parts = localCalendarDay(date);
+  if (!parts) return Number.NaN;
+  const { year, month, day } = parts;
+  const beforeApril6 = month < 4 || (month === 4 && day < 6);
   return beforeApril6 ? year - 1 : year;
 };
 

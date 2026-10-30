@@ -8,7 +8,7 @@ For the design direction, component recipes and future page work, see
 
 | What | Where |
 |---|---|
-| Font stacks and the Google Fonts request | `src/theme/fonts.ts` |
+| Font stacks and the self-hosted font imports | `src/theme/fonts.ts` |
 | Colour tokens, shadows, radii (light + dark) | `src/index.css`, the `:root` and `.dark` blocks |
 | Tailwind's view of those tokens | `tailwind.config.ts` |
 | The dot-matrix look itself | `src/components/dot-matrix/` |
@@ -21,7 +21,8 @@ Two families, and they do different jobs:
   rendered through `DotMatrixText`. This is the site's signature.
 - **Space Mono** — everything you read: body copy, card text, form fields.
 
-Both load from Google Fonts via a single `<link>` in `index.html`.
+Both are self-hosted: `src/theme/fonts.ts` imports the `@fontsource` files and
+Vite bundles them, so nothing is fetched from Google Fonts.
 
 A font is named in three places and they have to agree:
 

@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_items" (
     "specs" "text",
     "is_edc" boolean DEFAULT false,
     "edc_slot" "text" DEFAULT 'pockets'::"text",
-    "edc_order" integer DEFAULT 0
+    "edc_order" integer DEFAULT 0,
+    -- A wishlist item is not owned, so it cannot be carried.
+    CONSTRAINT "inventory_items_wishlist_not_edc" CHECK (NOT (COALESCE("is_wishlist", false) AND COALESCE("is_edc", false)))
 );
 
 ALTER TABLE "public"."inventory_items" OWNER TO "postgres";
@@ -22,11 +24,11 @@ ALTER TABLE "public"."inventory_items" OWNER TO "postgres";
 ALTER TABLE ONLY "public"."inventory_items"
     ADD CONSTRAINT "inventory_items_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Admin delete" ON "public"."inventory_items" FOR DELETE TO "authenticated" USING ("public"."is_admin"());
+CREATE POLICY "Admin delete" ON "public"."inventory_items" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin insert" ON "public"."inventory_items" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin insert" ON "public"."inventory_items" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin update" ON "public"."inventory_items" FOR UPDATE TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin update" ON "public"."inventory_items" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 CREATE POLICY "Public Read Access" ON "public"."inventory_items" FOR SELECT USING (true);
 
@@ -34,8 +36,12 @@ ALTER TABLE "public"."inventory_items" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT ALL ON TABLE "public"."inventory_items" TO "anon";
+REVOKE ALL ON TABLE "public"."inventory_items" FROM "anon";
 
-GRANT ALL ON TABLE "public"."inventory_items" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_items" TO "anon";
+
+REVOKE ALL ON TABLE "public"."inventory_items" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."inventory_items" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."inventory_items" TO "service_role";

@@ -497,6 +497,39 @@
   }
 }
 
+/* ─── Hidden figures ────────────────────────────────────────────────────
+   Finance opens with its money painted over (useHiddenFigures). A highlight
+   may set only colour and shadow, so the digits go clear and a blurred
+   shadow of them stands in. Chart labels are SVG, where highlights do not
+   paint, so those are marked and blurred by the hook's SVG filter; a
+   `<tspan>` takes no filter, so its glyphs go clear behind a soft smudge.
+   A number field cannot be told apart from a money one by its markup, so
+   every number field shows its value only while it has focus. Separate
+   rules, because a browser that cannot parse ::highlight drops every
+   selector in the same list. */
+
+::highlight(finance-figure) {
+  color: transparent;
+  text-shadow: 0 0 0.45em hsl(var(--foreground) / 0.75);
+}
+
+[data-finance-figures="hidden"] input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]):not(:focus, :placeholder-shown) {
+  color: transparent;
+  text-shadow: 0 0 0.45em hsl(var(--foreground) / 0.75);
+}
+
+[data-finance-figures="hidden"] text[data-hidden-figure] {
+  filter: url(#finance-figure-blur);
+}
+
+[data-finance-figures="hidden"] tspan[data-hidden-figure] {
+  fill-opacity: 0;
+  stroke: hsl(var(--foreground) / 0.12);
+  stroke-width: 1.2em;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* ─── Reduced motion ────────────────────────────────────────────────────
    The site leans on motion: the opening sequence, the theme toggle sweep,
    cards lifting on hover, the globe turning. All of it is decoration, and

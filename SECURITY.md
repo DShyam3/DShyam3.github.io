@@ -26,9 +26,12 @@ Current allowances worth knowing about:
 
 - `script-src` allows only `'self'` and `https://cloud.umami.is` (analytics).
 - `connect-src` allows Supabase (HTTPS + WSS), the Umami ingest endpoints,
-  Google Books, TMDB and `www.gov.uk` (bank holidays).
-- `style-src` includes `'unsafe-inline'`: React inline style attributes and the
-  `<style>` element injected by the shadcn/Recharts chart component require it.
+  Google Books, Open Library and `www.gov.uk` (bank holidays). Not TMDB: the browser reaches
+  it only through the `tmdb-proxy` edge function.
+- `style-src` includes `'unsafe-inline'`: React inline style attributes require it.
+- `style-src` and `font-src` allow no third-party host. Doto and Space Mono are
+  bundled from `@fontsource` (`src/theme/fonts.ts`), so a visit sends no request
+  to Google Fonts.
 - `img-src https:` is deliberately broad — book covers, posters and flags come
   from user-supplied URLs stored in the database.
 
@@ -55,10 +58,11 @@ can add response headers):
 - **Supabase anon key in the client bundle.** Expected: it is the publishable
   key. Access control depends entirely on Row Level Security policies in
   `supabase/migrations`.
-- **`dangerouslySetInnerHTML`.** One use in application code,
-  `src/components/ui/chart.tsx`, which builds a CSS variable block from a
-  developer-defined chart config. No user input reaches it. Scanner counts of
-  more occurrences come from the minified vendor bundle (React internals).
+- **`dangerouslySetInnerHTML`.** None in application code. It had one use, in
+  `src/components/ui/chart.tsx`, which built a CSS variable block from a
+  developer-defined chart config, so no user input reached it. The file was
+  deleted in `cede7d3a`. Scanner counts of more occurrences came from the
+  minified vendor bundle (React internals).
 - **Subresource Integrity on the Umami script.** `cloud.umami.is/script.js` is a
   rolling URL with no versioned filename, so an `integrity` hash would break the
   site on the vendor's next release. Self-hosting the script is the way to get
@@ -70,9 +74,18 @@ The public scan only reads response headers and the served HTML. The real
 attack surface of this site is Supabase, and it was audited separately
 (2026-09-04):
 
-- **RLS**: enabled on all 40 public tables. Every `finance_*` table, including
-  `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only.
-  Content tables are anonymous-read, `is_admin()`-write.
+- **RLS**: enabled on all 59 public tables (hosted, 2026-10-24; the public schema
+  also holds one view). Every `finance_*` table, including
+  `finance_truelayer_connection` (live bank tokens), is `is_admin()`-only at the
+  policy layer. Since `20261024150000` (applied to hosted 2026-10-24), that table
+  has no `authenticated` grant either, so only `service_role` (the `truelayer-sync`
+  function) reaches it.
+  Content tables are anonymous-read, `is_admin()`-write. Policies ask it as
+  `(SELECT public.is_admin())`, which runs once per statement rather than once
+  per row and returns the same answer (migrations `20261024120000` for public
+  tables and `20261024130000` for storage, applied to hosted 2026-10-24).
+  `src/integrations/supabase/rls-admin-check.test.ts` replays every migration
+  and fails on any policy, public or storage, that calls it bare.
 - **Edge functions**: browser calls to `truelayer-sync`,
   `merchant-logo-cache`, `watchlist-cron-sync` and `assistant` verify the JWT and then call
   `public.is_admin()` through the caller's own token
@@ -81,15 +94,34 @@ attack surface of this site is Supabase, and it was audited separately
   `watchlist-cron-sync` also accept the service role, for their
   Vault-authenticated scheduled runs. `tmdb-proxy` is deliberately public but
   restricted to an endpoint allowlist so it cannot be used as a generic TMDB
-  proxy. All five use an origin allowlist for CORS.
+  proxy. All five use an origin allowlist for CORS. Two changes are live on
+  hosted as of 2026-10-25: `tmdb-proxy` keys its rate limit with a `tmdb-proxy:`
+  prefix, and `truelayer-sync` and `watchlist-cron-sync` refuse a service-role
+  request when the key is missing (`_shared/service-role.ts`). A real
+  authenticated run of the two syncs on this code is not yet checked.
 - **Rate limits**: every function that spends a third-party call limits it
   server-side in the service-role-only `rate_limits` table -- `tmdb-proxy`
-  per IP, the admin-triggered syncs by a cooldown between runs
+  per visitor, the admin-triggered syncs by a cooldown between runs
   (`_shared/cooldown.ts`), `merchant-logo-cache` per five minutes, and
   `assistant` per administrator (40 model calls per ten minutes, failing
   closed, because it spends a paid key). Scheduled
   runs are exempt; a refused call answers 429 with `retry_after`. See
   README.md, *Spam protection on the edge functions*.
+  The visitor is the address in `cf-connecting-ip`, which Cloudflare sets; a
+  probe that sent its own was refused with 403 (2026-10-25). An IPv6 visitor is
+  limited per /64, since a client can hold the whole block
+  (`_shared/client-address.ts`). Until 2026-10-25 the key was the last
+  `X-Forwarded-For` entry, a Supabase gateway node: three probes from one machine
+  split across three keys. Live after `tmdb-proxy` v13: three probes, one key,
+  three hits (IPv4 only; the IPv6 grouping is unit-tested, not probed). A request
+  with no usable address shares one `tmdb-proxy:unknown` key.
+- **Cross-profile keys**: `finance_debt_observations` names its debt by
+  `(profile_id, debt_id)`, a composite foreign key onto
+  `finance_debts (profile_id, id)` (`20261025090000`, applied to hosted
+  2026-10-25). An observation can no longer name another profile's debt or a
+  shared default one; before, the key was on `debt_id` alone. The app saves a
+  profile's own copy of a default debt before it writes a reading, so nothing it
+  does depends on the old behaviour.
 - **TrueLayer OAuth (deploy migration and function together)**: the callback
   state is generated with 256 bits of server-side randomness, stored only as a
   SHA-256 hash with a ten-minute expiry, and bound to the exact redirect URI
@@ -120,10 +152,28 @@ attack surface of this site is Supabase, and it was audited separately
   from a third-party CDN would send that CDN one request per transaction row,
   with the user's IP and referrer, describing where they shop. The logo is
   resolved once server-side instead and served from the `merchant-logos`
-  bucket. That bucket is public — a supermarket's logo is public — and holds
-  nothing user-specific: object keys are brand slugs, never a profile or
-  transaction id. Writes to it are `is_admin()`; the same is true of its index
-  table `finance_merchant_logos`, which is public-read by design.
+  bucket. That bucket is public — a supermarket's logo is public. Writes to it
+  are `is_admin()`; the same is true of its index table
+  `finance_merchant_logos`. **Finding (2026-10-24), fixed on hosted:** the index
+  and the bucket's object list were readable by anon, and they are not free of
+  user data. `merchant-logo-cache` resolves only brands found in the owner's
+  transactions, so the slugs (with `resolved_at`) said which directory brands
+  the owner pays — 21 on hosted. `20261024140000` (applied to hosted 2026-10-24)
+  makes both admin-only: the index's public read policy is dropped, anon's
+  privileges on it are revoked, and the bucket's public list policy is replaced
+  by an admin-only read. Images still load through public URLs, which need
+  neither read; the only in-app reader of the index is admin-gated. After the
+  change a public object URL (`merchant-logos/aldi.webp`) returned 200
+  `image/webp` on 2026-10-24.
+  **Object names (2026-10-25), closed:** `merchant-logo-cache`
+  v15 names each new logo `<uuid>.<ext>`, so a name says nothing about a brand,
+  and the index is the only map from brand to file. The 41 logos cached on
+  2026-10-25 were copied to random names and the index repointed; all 41 new
+  URLs return 200 `image/webp`, and logos render on the signed-in Transactions
+  list (checked live, read-only). The owner then deleted the 41 brand-named
+  objects from before the change; the bucket holds only random names, and the
+  old URLs (`aldi.webp` and the rest) return 400, cache-busted or not, so a
+  guessed brand can no longer be confirmed.
 - **What a merchant lookup discloses**: resolving a brand to a logo sends a
   name to Brandfetch, so only names from `src/lib/finance/merchant-directory.ts`
   are ever sent — public brand names committed to our own source. A merchant
@@ -141,25 +191,79 @@ attack surface of this site is Supabase, and it was audited separately
   date attached, and the answer is cached in our bucket so it is never asked
   again. `BRANDFETCH_CLIENT_ID` lives in the function's env and carries no
   `VITE_` prefix, so it never reaches the bundle.
-- **Secrets**: the TMDB API key lives only in edge function env, never in the
-  bundle. Only `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
-  `VITE_TMDB_IMAGE_BASE_URL` and `VITE_ADMIN_EMAIL` reach the client.
+- **Secrets**: the TMDB API key lives in edge function env. It was also in
+  client bundles built 2026-05-09 to 2026-07-25 under a `VITE_` prefix; that key
+  was rotated on 2026-10-25 (the hosted secret's digest changed, and the proxy
+  and a full sync work with the new one), and TMDB revoked the old key. The current
+  source reads no `VITE_TMDB_API_KEY`. Only `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_TMDB_IMAGE_BASE_URL` and
+  `VITE_ADMIN_EMAIL` reach the client.
 - **Storage**: see migration `20260904110337` — object policies were gated on
   the `authenticated` role rather than `is_admin()`, and are now `is_admin()`.
+  Migration `20261024130000` rewrites the 14 admin policies on
+  `storage.objects` to pair each bucket test with the wrapped check,
+  `bucket_id = '<bucket>' AND (SELECT public.is_admin())`, changing only the
+  call and refusing to run unless every policy reads exactly as expected. On
+  the local stack, before and after, anon and a signed-in non-admin can
+  neither list, download, sign a URL for, upload, update nor delete a
+  `finance-documents` object, and the administrator can do all six. On hosted
+  (2026-10-24, roles simulated inside a rolled-back transaction) anon and a
+  non-admin read none of the bucket's objects and cannot upload to it; the
+  administrator reads all of them and can.
+- **Stored links and uploads (checked in the browser, 2026-10-25)**: a saved
+  link becomes an `href` only if it parses as an absolute `http:`, `https:` or
+  `mailto:` URL (`src/lib/safe-url.ts`), and the admin form refuses any other
+  value in a `url` field. An upload is read from its first 32 bytes against the
+  kinds its uploader accepts (`src/lib/file-signature.ts`) and sent as a Blob
+  typed from those bytes, because supabase-js sends a Blob as a form part typed
+  by the Blob and ignores `contentType` for one. Photos and finance documents get
+  random UUID names; the CV keeps its fixed name, `cv.pdf`. These checks run in
+  the browser. Server-side, only the `is_admin()` write policies and each
+  bucket's MIME allowlist apply, and the allowlist sees the declared type, which
+  is now the sniffed one. Accepted because the only writer is the administrator:
+  there is no server-side CHECK constraint on the link columns and no
+  server-side signature check. Migration `20261024170000` (live on hosted
+  2026-10-25) removes `image/svg+xml` from the `merchant-logos` and
+  `site-assets` allowlists, and the three SVGs that bucket held (unused; the
+  header icons are inline) were deleted on 2026-10-25, so neither public bucket
+  serves an SVG.
 - **Table grants**: RLS is not the only layer. Supabase's defaults `GRANT ALL`
   to `anon` on every table in `public`, and `TRUNCATE` is **not** filtered by
   row-level security. Migration `20260905160000` revokes those grants on the
   content, watchlist and travel tables and grants back only `SELECT`. Finance
-  migrations revoke every `anon` grant from `finance_*` tables; the OAuth
-  state table is deliberately included despite being service-role-only in
-  normal operation.
-- **Auth**: public email signup is enabled on the project. Since every policy
-  checks `public.is_admin()`, and that reads the `admin_users` table, a
-  self-registered user gets nothing — the account exists but holds no grant.
-  Signup should still be disabled in the dashboard (Authentication → Sign In /
-  Providers) because this is a single-account site. Disable *signup*, not the
-  email provider: the provider toggle gates sign-in too, and turning it off
-  locks the password box out of the site.
+  migrations revoke `anon`'s grants from `finance_*` tables, except
+  `finance_merchant_logos` (see below). The OAuth state table is deliberately
+  included despite being service-role-only in normal operation. The same
+  defaults gave `authenticated` `TRUNCATE`, `REFERENCES` and `TRIGGER` as well.
+  Migration `20261024150000` narrows `authenticated` on 50 tables. 48 keep
+  `SELECT`, `INSERT`, `UPDATE` and `DELETE`. `finance_truelayer_connection` and `finance_truelayer_oauth_states`
+  get no `authenticated` grant at all, so only `service_role` (the
+  `truelayer-sync` edge function) holds any grant on them: the first stores
+  TrueLayer access and refresh tokens in plain columns, and the grant was the
+  only thing that let an admin JWT read them through PostgREST.
+  `finance_merchant_logos` is one of the 48: `20261024140000` revokes `anon`'s
+  privileges on it and drops its public read policy, and `20261024150000`
+  narrows `authenticated`. `20261024150000` also turns the `postgres` default
+  privileges into an allowlist: a new table gives `authenticated` the four data
+  verbs and `anon` nothing, and a public-read table grants `anon` `SELECT` in its
+  own schema file. Its post-check rolls the migration back if anything is still
+  wider. Both migrations were applied to hosted on 2026-10-24 with
+  `supabase db push`, and checked read-only afterwards: no public relation gives
+  `anon` or `authenticated` TRUNCATE, REFERENCES or TRIGGER; `authenticated`
+  holds only the four data verbs (or SELECT) per table and nothing on the two
+  TrueLayer tables; `anon` holds SELECT on 20 tables and nothing on
+  `finance_merchant_logos`; and the `postgres` default table ACL gives
+  `authenticated` the four verbs and `anon` nothing, with no global row. Over
+  HTTP on 2026-10-24, only two routes were checked: a public logo object
+  returned 200, and `merchant-logo-cache` refused an unauthenticated POST with
+  401. PostgREST table routes were not probed over HTTP.
+- **Auth**: public email signup is disabled on hosted (2026-10-25:
+  `auth/v1/settings` reports `disable_signup: true`, and a signup request is
+  refused with `signup_disabled`). Every policy checks `public.is_admin()`, which
+  reads the `admin_users` table, so a self-registered account would hold no
+  grant either way. Disable *signup*, not the email provider: the provider
+  toggle gates sign-in too, and turning it off locks the password box out of the
+  site. The Email provider stays on.
 
 - **Administrator identity**: a row in `public.admin_users`, keyed on
   `auth.users.id`. It used to be an email literal inside `is_admin()`, which
@@ -167,6 +271,18 @@ attack surface of this site is Supabase, and it was audited separately
   rested on a claim the account holder can change. The table is readable by an
   administrator and writable only by the service role — an admin session cannot
   grant admin rights over the API. Adding one is a deliberate SQL statement.
+  Once that administrator has a verified TOTP factor, `is_admin()` also requires
+  the session to be `aal2`, which means the code step has been passed. A
+  password-only session then reads no finance rows and makes no admin write
+  (checked on the local stack, 2026-10-25). GoTrue refuses to enrol, unenrol or
+  add a factor from an `aal1` session while a verified one exists (also checked
+  locally; not on hosted). Recovery from a lost authenticator is deleting the
+  admin's row in `auth.mfa_factors`, which returns the account to password-only
+  sign-in until it is enrolled again. Hosted also limits `aal1` sessions
+  (Authentication → Multi-Factor → "Limit duration of AAL1 sessions", on since
+  2026-10-25): for an account with a verified factor, a session that has not
+  passed the code step within 15 minutes of sign-in can no longer refresh. An
+  account with no verified factor is never limited.
 
 ## Accepted Supabase advisor lints
 
@@ -178,27 +294,83 @@ re-deriving the reasoning.
 | --- | --- |
 | `anon_security_definer_function_executable` on `is_admin()` | RLS policy expressions are evaluated with the querying role's own privileges, so revoking `EXECUTE` from `anon`/`authenticated` would break every policy on the project. The function takes no arguments and returns a single boolean about the caller — it leaks nothing an attacker did not already supply. |
 | Content tables readable by `anon` | This is a public portfolio. Anonymous `SELECT` on books, links, articles, photos, recipes, the watchlist and travel tables is the product, not a finding. Writes are `is_admin()`-only at both the policy and grant layer. |
+| `rls_enabled_no_policy` (INFO) on `rate_limits` and `finance_truelayer_source_sync` | RLS is on and no policy is written, on purpose. Both tables are service-role-only: `anon` and `authenticated` hold no grant, and service_role bypasses RLS. A policy would add nothing except a route to them. |
+| `auth_leaked_password_protection` (leaked-password protection off) | The HaveIBeenPwned check is offered on the Pro plan and above only. The project is on Free, where the option is not offered, and the owner accepted the risk on 2026-10-25 (REHAUL_HISTORY.md). It stays off because the account is the single administrator, every write is gated by `admin_users` through `is_admin()`, and public signup has been turned off (2026-10-25). Minimum length and character rules are still available on Free and are not changed by this. |
 
 Not accepted, still open, and only fixable from the dashboard:
 
-Project ref is `yvtiybyuifkiwyrnjebe`, so each link below is
-`https://supabase.com/dashboard/project/yvtiybyuifkiwyrnjebe` + the path given.
+Nothing dashboard-only is open as of 2026-10-25, except enrolment, which is done in the app on `/auth`. Project ref: `yvtiybyuifkiwyrnjebe`.
 
-- **Public email signup is enabled** — `/auth/providers`, the Email provider
-  panel, "Allow new users to sign up". This is the structural fix behind S-1:
-  every policy checks one admin address, so a self-registered account gets
-  nothing, but it should not be possible to create one on a single-account
-  site.
-- **Leaked-password protection is disabled** — same Email provider panel.
-  Supabase Auth checks candidate passwords against HaveIBeenPwned. **Pro plan
-  and above only**; on Free the option is not offered, which is worth knowing
-  before hunting for the toggle. Raising the minimum length and requiring mixed
-  character classes is available on any plan and lives in the same place.
-- **No MFA options enabled.** Enrollment and verification are dashboard-gated
-  under Authentication; enabling the TOTP (app authenticator) factor is the
-  cheap win on the one account that owns everything.
-- **Postgres has outstanding security patches** (`supabase-postgres-15.8.1.030`)
-  — the "Upgrade project" button is on `/settings/general`, not under
-  Infrastructure. The project goes offline for the upgrade and the window
-  scales with database size, so pick a quiet moment. Read replicas would block
-  it; this project has none.
+## Audit and scan (2026-10-24)
+
+- **Audit** (`security/AI-CHECKLIST.md`): overall MEDIUM, with nothing critical or
+  high. The MEDIUM comes from dashboard auth only: MFA and leaked-password
+  protection are off (see the accepted lints above), and the login email is public
+  in the client bundle (`VITE_ADMIN_EMAIL`). The LOW items are listed in
+  REHAUL_PLAN.md.
+- **Scan** (`npm run ship-check`) on `9568b7d4`: 98/100, OSV engine available, no
+  dependency advisory in the findings. One high: the potential N+1 in
+  `FinanceDataContext.tsx`, which is the long-standing item below. Four medium:
+  66 oversized files, two circular-dependency chains, 91 console statements, and
+  the CORS finding that follows. One low, two info. That scan ran the unpinned
+  command; `npm run ship-check` is pinned to `should-i-ship@0.1.12` from
+  `3279c6f6`.
+- **CORS "allows all origins"** at `supabase/functions/_shared/site-origins.ts` is a
+  false positive. No code path there emits a wildcard; the match is in the file's
+  doc comments. `corsOriginHeader` echoes a request's `Origin` only when it is on
+  the allowlist; otherwise it sends the configured `SITE_ORIGIN`, or no header when
+  that is unset.
+
+## Readiness scan triage (2026-10-23)
+
+The scan remains unsuppressed. These findings have different exposure and follow-up
+requirements; a successful build does not mean the advisories are fixed.
+
+### Build-tool dependency follow-up
+
+- `braces@3.0.3` arrives through Tailwind's watch/glob tools and the TypeScript
+  ESLint tooling. The [upstream advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+  was withdrawn on 2026-10-23 as not practically exploitable. The package is
+  unchanged; disappearance from the refreshed scan is an advisory withdrawal,
+  not a code fix. Tailwind's inputs remain repository-defined globs, and no
+  application or Edge Function import was found.
+- `postcss-selector-parser` is pinned to 7.1.7 through `package.json` overrides
+  for Tailwind and postcss-nested. This includes the linear-time parsing fix in
+  the [upstream advisory](https://github.com/advisories/GHSA-rj75-hqrm-r3gf).
+  Tailwind 3 still requests parser 6, so this is an explicitly validated major
+  override: a clean install, lint, both typechecks, 1,001 tests and production
+  build pass, and both emitted CSS files are byte-identical to the parser 6.1.4
+  baseline. This covers the current site's CSS, not every possible future
+  selector. Recheck the override when upgrading either parent and remove it
+  when both parents request a patched version themselves. npm audit reports
+  zero vulnerabilities on 2026-10-23; this is not a whole-application security audit.
+- The unused `@tailwindcss/typography` dependency has been removed, along with its
+  separate parser 6.0.10 copy. It was not registered in the Tailwind plugin list.
+
+### Potential N+1 queries
+
+The scanner's four-file finding is reviewed, not resolved or suppressed:
+
+| Location | Observed behaviour | Follow-up |
+| --- | --- | --- |
+| `FinanceDataContext.tsx` | Transactions, goal contributions, investment activity, debt observations, and the transfer, payslip and net-worth reads page through every row. Other collections in the load still use single responses. Inserts, ID lookups and deletes batch at 100. Updates group identical patches, then batch IDs. Distinct patches still take one request each. | Measured locally 2026-10-24: 1,000 distinct per-row edits take about 6 s as 1,000 sequential requests (`performance/README.md`, "Saves and TV imports"). Hosted is not measured. Left as it is by decision on 2026-10-25 (REHAUL_HISTORY.md). |
+| `TaxIncomeSettingsDialog.tsx` | Reset performs seven fixed table deletes in parallel. | Request count does not grow with row count; reset atomicity is a separate risk. |
+| `TransactionsTab.tsx` | Flagged deletes include local Set operations; bulk edits pass rows to the context's batching. | No per-row request established at these call sites. |
+| `WatchlistContext.tsx` | Initial reads paginate. Show imports fetch/insert per season with batched episodes. Favourite-facts sync makes sequential TMDB and update requests, capped at 50, with cancellation between items. | TV import and removal requests are counted and timed locally, without TMDB calls (`performance/README.md`). The favourite-facts sync is not measured. Preserve partial-failure and cancellation behaviour when batching. |
+
+Two local synthetic runners now measure
+([performance/README.md](performance/README.md)): paged reads of movie and
+private-profile transaction rows through the real helper and REST API, and finance
+saves and TV imports, including the nested TV library read. Neither measures full
+providers and rendering, TMDB sync, Watchlist cron CPU, live workloads, or hosted
+timings after the admin-check migrations. Finance save races remain unverified.
+
+### Newly reported dependency follow-up (2026-10-24)
+
+The scan reported `zod@3.25.76` under
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), patched in
+4.6.6. The advisory concerns memory exhaustion while validating oversized
+collections. Nothing in the tree imported `zod`, `react-hook-form` or
+`@hookform/resolvers`, so all three were removed (`2cdb02f8`) rather than upgraded.
+`npm audit` reports zero vulnerabilities as of 2026-10-24. The 2026-10-24 scan on
+`9568b7d4` ran after the removal and lists no dependency advisory.

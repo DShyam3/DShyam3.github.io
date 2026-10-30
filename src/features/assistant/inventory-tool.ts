@@ -13,6 +13,7 @@
 
 import type { ToolSchema } from '@/lib/assistant/protocol';
 import { looksLikeSpecs, parseSpecPrice, parseSpecs, specsPriceTotal } from '@/collections/inventory-specs';
+import { isInEdc } from '@/features/inventory/edc/categories';
 
 /** The columns read for this tool, and nothing else. */
 export const INVENTORY_COLUMNS = 'id, name, brand, category, subcategory, price, specs, description, is_wishlist, is_edc';
@@ -143,7 +144,7 @@ const score = (row: InventoryToolRow, words: string[]): Scored => {
 
 /** The EDC facet on the inventory page reads the flag, not the category. */
 const inCategory = (row: InventoryToolRow, category: string): boolean =>
-  category === 'edc' ? row.is_edc === true : row.category.toLowerCase() === category;
+  category === 'edc' ? isInEdc(row) : row.category.toLowerCase() === category;
 
 const projectItem = (row: InventoryToolRow): InventoryItemProjection => {
   const description = row.description?.trim() || null;
@@ -160,7 +161,7 @@ const projectItem = (row: InventoryToolRow): InventoryItemProjection => {
     subcategory: row.subcategory,
     price: row.price,
     owned: row.is_wishlist !== true,
-    inEdc: row.is_edc === true,
+    inEdc: isInEdc(row),
     description: prose && prose.length > MAX_DESCRIPTION_CHARS ? `${prose.slice(0, MAX_DESCRIPTION_CHARS)}…` : prose,
     specs: lines.slice(0, MAX_SPEC_LINES).map(line => {
       const price = line.price ? parseSpecPrice(line.price) : null;

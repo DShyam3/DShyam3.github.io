@@ -1,5 +1,14 @@
-import type { DebtObservation, HalfDay, LeaveType, RatePeriod, StudentLoanPlanKey } from '@/lib/finance';
-export type { DebtObservation, HalfDay, LeaveType, RatePeriod };
+import type {
+  BirthdayDate,
+  BirthdayLeaveRule,
+  DebtObservation,
+  HalfDay,
+  LeaveType,
+  OptimalLeaveBias,
+  RatePeriod,
+  StudentLoanPlanKey,
+} from '@/lib/finance';
+export type { BirthdayDate, BirthdayLeaveRule, DebtObservation, HalfDay, LeaveType, OptimalLeaveBias, RatePeriod };
 
 export interface FinanceSettings {
   grossSalary: number;
@@ -22,15 +31,47 @@ export interface FinanceSettings {
   paydayBiweeklyAnchor?: string;
   activeSavingsTypes?: string[];
   packageBenefits?: PackageBenefit[];
+  birthdayLeaveEnabled?: boolean;
+  birthdayLeaveRule?: BirthdayLeaveRule;
+  birthdayMonth?: number | null;
+  birthdayDay?: number | null;
 }
+
+/**
+ * How a package item reaches you. A 'cash' item is paid through payroll, so it
+ * is taxed (income tax, NI, loans) like a bonus and has its own after-tax value.
+ * A 'benefit-in-kind' item is something given rather than paid: only income tax
+ * applies, and the tax is worked out from its value, never typed in.
+ */
+export type PackageBenefitKind = 'cash' | 'benefit-in-kind';
 
 export interface PackageBenefit {
   id: string;
   name: string;
   amount: number;
   type: 'monetary' | 'percentage';
+  /** Absent on rows saved before the field existed, which read as 'benefit-in-kind'. */
+  kind?: PackageBenefitKind;
   emoji?: string;
   notes?: string;
+  /**
+   * Legacy: a hand-typed annual tax figure. No longer used in any calculation;
+   * benefit-in-kind tax is derived from the item's value. Kept so stored rows
+   * still type-check and round-trip.
+   */
+  annualTaxCost?: number;
+}
+
+/** One 'cash' package item after tax, each taxed alone on top of the salary. */
+export interface CashBenefitAfterTax {
+  id: string;
+  name: string;
+  /** The item's annual value, from its amount or its percentage of salary. */
+  gross: number;
+  incomeTax: number;
+  nationalInsurance: number;
+  studentLoan: number;
+  net: number;
 }
 
 
@@ -40,7 +81,7 @@ export interface UserHoliday {
   endDate: string; // YYYY-MM-DD
   occasion: string;
   count: number;
-  type?: LeaveType; // 'holiday' | 'sick'
+  type?: LeaveType; // 'holiday' | 'sick' | 'birthday'
   halfDay?: HalfDay; // 'am' | 'pm'; set only for a half day
 }
 
@@ -166,6 +207,7 @@ export interface MockTransaction {
   tags?: string[];
   isRecurring?: boolean;
   accountId?: string;
+  userModified?: boolean;
 }
 
 export interface TaxConfig {

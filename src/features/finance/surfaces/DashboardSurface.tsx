@@ -32,7 +32,7 @@ import { useSpendingLedger } from '../useSpendingLedger';
 import { useFinanceAlerts } from '../useFinanceAlerts';
 import { useTrueLayer } from '../useTrueLayer';
 import { pathForTab, type TabKey } from '../surfaces';
-import { deriveFinanceChangeSummary } from '@/lib/finance';
+import { deriveFinanceChangeSummary, toISODate } from '@/lib/finance';
 import { paydayCountdown } from '../components/PaydaySummary';
 
 export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurringPaid: (id: string) => void }) {
@@ -54,7 +54,8 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   const { ledger, exclusionsUnreliable } = useSpendingLedger();
 
   const navigate = useNavigate();
-  const alerts = useFinanceAlerts(new Date().toISOString().slice(0, 10));
+  // The local day: toISOString() is the UTC day, yesterday until 01:00 in BST.
+  const alerts = useFinanceAlerts(toISODate(new Date()));
   const { trueLayerStatus, isSyncingTrueLayer, syncAvailableAt, syncTrueLayer } = useTrueLayer(fetchSupabaseData);
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const {

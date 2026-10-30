@@ -58,11 +58,22 @@ Copy [`.env.example`](.env.example) to `.env` and replace only its placeholder v
 The browser talks to Supabase directly via `@supabase/supabase-js` (`src/integrations/supabase/client.ts`) using the anon key. **Row Level Security is the actual authorization boundary** — every table has an `is_admin()`-gated policy. Content tables (books, links, articles, etc.) are publicly readable by design (it's a portfolio); finance and TrueLayer tables are admin-only for both read and write. The full policy set lives in `supabase/migrations/20260904130000_baseline.sql` and the migrations after it.
 
 > **Who is an administrator is a table, not an email.** `is_admin()` checks
-> the caller's user id against `public.admin_users`:
+> the caller's user id against `public.admin_users`, and once that account has
+> a verified second factor (the `/auth` page enrols TOTP), also requires a
+> session that presented a code:
 >
 > ```sql
-> SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE user_id = auth.uid());
+> SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE user_id = auth.uid())
+> AND (
+>   coalesce(auth.jwt() ->> 'aal', '') = 'aal2'
+>   OR NOT EXISTS (SELECT 1 FROM auth.mfa_factors
+>                  WHERE user_id = auth.uid() AND status = 'verified')
+> );
 > ```
+>
+> A lost authenticator is recovered by deleting its row in `auth.mfa_factors`
+> from the SQL editor; the account is then password-only until a new factor is
+> enrolled on the `/auth` page.
 >
 > The edge functions ask the same function (`supabase/functions/_shared/require-admin.ts`),
 > so there is one rule. `VITE_ADMIN_EMAIL` is only the address the `/auth`
@@ -155,7 +166,7 @@ files.
 
 ## 🔡 Dot-matrix text system
 
-The pixel/LED-style headings and labels ("DHYAN SHYAM", nav links, etc.) render as real text set in [Doto](https://fonts.google.com/specimen/Doto), a Google Font imported in `src/index.css` (`--font-matrix`) — `DotMatrixText` is just a `<span>` with that font applied, no per-character data or generation step involved. Doto is a variable font where the "dots" are literally circles that grow and fuse together as weight increases, so low weights (400-600, see `DotMatrixText.css`) read as distinct dots and heavy weights read as solid strokes — reach for weight, not font-size, if the dot-matrix look isn't obvious enough.
+The pixel/LED-style headings and labels ("DHYAN SHYAM", nav links, etc.) render as real text set in [Doto](https://fonts.google.com/specimen/Doto), a Google Font self-hosted from `@fontsource/doto` (imported in `src/theme/fonts.ts`, applied through `--font-matrix` in `src/index.css`) — `DotMatrixText` is just a `<span>` with that font applied, no per-character data or generation step involved. Doto is a variable font where the "dots" are literally circles that grow and fuse together as weight increases, so low weights (400-600, see `DotMatrixText.css`) read as distinct dots and heavy weights read as solid strokes — reach for weight, not font-size, if the dot-matrix look isn't obvious enough.
 
 Icons that can't be represented as a font glyph (theme toggle sun/moon, the `+` social-links trigger, the flip-style `DotMatrixClock`) still use the original hand-authored dot-grid approach (`DotMatrixIcon`/`DotMatrixClock` → `DotMatrixGlyph`, backed by `src/data/dot-matrix.json`) — `iconPatterns` for icons, and `charPatterns` (trimmed to just `0-9`/`:`, all `DotMatrixClock` ever renders) for the clock digits.
 

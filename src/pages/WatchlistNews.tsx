@@ -44,7 +44,6 @@ import { formatDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 import { useSchedule, type ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 import { useAuth } from '@/contexts/AuthContext';
-import { PosterCard } from '@/features/watchlist/components/PosterCard';
 import { SmartScheduleDialog, scheduleReleaseDate } from '@/features/watchlist/components/SmartScheduleDialog';
 import { YourWeek } from '@/features/watchlist/components/YourWeek';
 
@@ -80,14 +79,24 @@ function NewsPosterCard({
   };
 }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [failedPoster, setFailedPoster] = useState<string | null>(null);
   return (
     <>
-      <PosterCard title={title} poster={poster}
-        subtitle={<span aria-label={srLabel}>{sub}</span>}
-        meta={<><PlatformBadge platform={platform ?? undefined} size={18} />{pill}</>}
-        onOpen={onClick} scheduled={schedule?.scheduled}
-        onSchedule={schedule ? () => { if (schedule.scheduled) schedule.onRemove(); else setScheduleOpen(true); } : undefined}
-      />
+      <article className="item-card min-w-0">
+        <button type="button" onClick={onClick} aria-label={srLabel || `${title} — open details`} className="flex w-full items-start gap-3 rounded-t-2xl p-3 text-left">
+          <span className="aspect-[2/3] w-14 shrink-0 overflow-hidden rounded bg-muted">
+            {poster && poster !== failedPoster ? <img src={poster} alt="" loading="lazy" onError={() => setFailedPoster(poster)} className="h-full w-full object-contain" /> : <span className="flex h-full items-center justify-center"><Tv className="h-5 w-5" /></span>}
+          </span>
+          <span className="min-w-0 space-y-2">
+            <span className="block break-words text-sm font-medium leading-snug">{title}</span>
+            <span className="block text-xs text-muted-foreground">{sub}</span>
+            <span className="flex flex-wrap items-center gap-2"><PlatformBadge platform={platform ?? undefined} size={18} />{pill}</span>
+          </span>
+        </button>
+        {schedule && <Button variant="ghost" aria-label={schedule.scheduled ? `Remove ${title} from schedule` : `Add ${title} to schedule`} className="h-auto min-h-11 w-full justify-start whitespace-normal rounded-t-none border-t px-3 py-2 text-left text-xs text-primary" onClick={() => { if (schedule.scheduled) schedule.onRemove(); else setScheduleOpen(true); }}>
+          <Calendar className="h-4 w-4 shrink-0" />{schedule.scheduled ? 'Scheduled · remove' : 'Add to schedule'}
+        </Button>}
+      </article>
       {schedule && <SmartScheduleDialog open={scheduleOpen} onOpenChange={setScheduleOpen} title={title} releaseDate={schedule.releaseDate} defaultMode={schedule.defaultMode} onAdd={schedule.onAdd} />}
     </>
   );
@@ -136,7 +145,7 @@ function UpdateRow({
       type="button"
       onClick={onClick}
       aria-label={`${row.title} — open details`}
-      className="grid w-full grid-cols-[44px_minmax(0,1fr)_64px] items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[56px_minmax(0,1fr)_104px_72px] sm:gap-x-4"
+      className="news-update-row grid w-full grid-cols-[44px_minmax(0,1fr)_64px] items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[56px_minmax(0,1fr)_104px_72px] sm:gap-x-4"
     >
       <div className="col-start-1 row-span-2 row-start-1 aspect-[2/3] w-11 shrink-0 self-center overflow-hidden rounded bg-muted sm:w-14">
         {showFallback ? (
@@ -211,8 +220,8 @@ function UpdatesList({
   failed: boolean;
 }) {
   return (
-    <section className="min-w-0 space-y-1">
-      <DotMatrixText text="UPDATES" size="xs" />
+    <section className="news-pane news-pane-updates min-w-0 space-y-1" tabIndex={0} role="region" aria-label="Updates">
+      <div className="news-pane-heading"><DotMatrixText text="UPDATES" size="xs" /></div>
       {failed && (
         <SectionFailure>
           {rows.length === 0 ? 'Could not load updates' : 'Some updates could not load'}
@@ -225,9 +234,7 @@ function UpdatesList({
         </p>
         )
       ) : (
-        // Its own scroll only from xl, where it is a column beside Upcoming;
-        // stacked, a capped list would be a scroller inside the page's.
-        <div className="watchlist-updates-scroll divide-y divide-border/50 rounded-lg border border-border/50 xl:max-h-[min(36rem,65dvh)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2" tabIndex={0} role="region" aria-label="Recent watchlist updates">
+        <div className="watchlist-updates-scroll divide-y divide-border/50">
           {rows.map((row) => (
             <UpdateRow
               key={row.key}
@@ -297,8 +304,8 @@ function UpcomingGrid({
   failed: boolean;
 }) {
   return (
-    <section className="min-w-0 space-y-3">
-      <DotMatrixText text="UPCOMING" size="xs" />
+    <section className="news-pane news-pane-upcoming min-w-0 space-y-3">
+      <div className="news-pane-heading"><DotMatrixText text="UPCOMING" size="xs" /></div>
       {failed && (
         <SectionFailure>
           {items.length === 0 ? 'Could not load upcoming releases' : 'Some upcoming releases could not load'}
@@ -354,6 +361,7 @@ const WatchlistNews = () => {
   // Page level (REHAUL_PLAN.md 8.C-bis): drives both Upcoming (forward) and
   // Updates (backward), and Out Now (backward) too.
   const [newsWindow, setNewsWindow] = useState<UpdatesWindow>(readStoredNewsWindow);
+  const [newsPanel, setNewsPanel] = useState('next');
 
   useEffect(() => {
     try {
@@ -564,15 +572,27 @@ const WatchlistNews = () => {
   );
 
   return (
-    <AppShell title="Watchlist" subtitle="What to watch now" toolbar={toolbar}>
-      <div className="watchlist-news-grid grid grid-cols-1 gap-8 py-6">
+    <AppShell title="Watchlist" subtitle="What to watch now" toolbar={toolbar} layout="workspace">
+      <div className="news-panel-switcher">
+        <label htmlFor="news-panel" className="text-sm">Section</label>
+        <select id="news-panel" value={newsPanel} onChange={(event) => setNewsPanel(event.target.value)} className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2 text-sm">
+          <option value="next">Watch Next</option>
+          <option value="week">Your Week</option>
+          <option value="now">Out Now</option>
+          <option value="upcoming">Upcoming</option>
+          <option value="updates">Updates</option>
+        </select>
+      </div>
+      <div className="watchlist-news-workspace" data-active-panel={newsPanel}>
+        <div className="news-column" data-panel="next">
         <UpNextRail
           items={upNext}
           onSelect={(tvShowId) => openDetail({ entityType: 'tv_show', entityId: tvShowId })}
           failed={upNextFailed}
           plannedDays={Object.fromEntries(schedule.filter((entry) => entry.category === 'TV Shows').map((entry) => [entry.watchlistItemId, entry.mode === 'date' && entry.scheduledDate ? new Date(`${entry.scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : entry.day]))}
         />
-
+        </div>
+        <div className="news-column" data-panel="week">
         <YourWeek
           schedule={schedule}
           loading={scheduleLoading || watchlistLoading}
@@ -586,10 +606,12 @@ const WatchlistNews = () => {
           getAutoStatus={getAutoStatus}
           isInSchedule={isInSchedule}
         />
-
-        {!outNowLoading && (outNowItems.length > 0 || outNowFailed) && (
-          <section className="min-w-0 space-y-3">
-            <DotMatrixText text="OUT NOW" size="xs" />
+        </div>
+        <div className="news-column" data-panel="now">
+          <section className="news-pane news-pane-out-now min-w-0 space-y-3" tabIndex={0} role="region" aria-label="Out now">
+            <div className="news-pane-heading"><DotMatrixText text="OUT NOW" size="xs" /></div>
+            {outNowLoading && <p role="status" className="text-sm text-muted-foreground">Loading new releases…</p>}
+            {!outNowLoading && !outNowFailed && outNowItems.length === 0 && <p className="text-sm text-muted-foreground">No new releases in this window.</p>}
             {outNowFailed && (
               <SectionFailure>
                 {outNowItems.length === 0 ? 'Could not load new releases' : 'Some new releases could not load'}
@@ -620,8 +642,9 @@ const WatchlistNews = () => {
             </div>
             )}
           </section>
-        )}
-
+        </div>
+        <div className="news-column news-column-upcoming" data-panel="upcoming" tabIndex={0} role="region" aria-label="Upcoming releases and countdown">
+        {upcomingLoading && <p role="status">Loading upcoming releases…</p>}
         {!upcomingLoading && (
           <UpcomingGrid
           items={upcomingWindowItems}
@@ -630,10 +653,6 @@ const WatchlistNews = () => {
           scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)}
           failed={upcomingFailed}
           />
-        )}
-
-        {!updatesLoading && (
-          <UpdatesList rows={updatesFeed} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />
         )}
 
         {!pinnedLoading && pinnedFailed && (
@@ -657,6 +676,10 @@ const WatchlistNews = () => {
             />
           </section>
         )}
+        </div>
+        <div className="news-column" data-panel="updates">
+          {updatesLoading ? <p role="status">Loading updates…</p> : <UpdatesList rows={updatesFeed} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />}
+        </div>
       </div>
 
       {selectedItem && (

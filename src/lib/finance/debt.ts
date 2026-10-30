@@ -4,7 +4,15 @@
  * `projectDebtBalance` used to read `new Date()` internally, which made it
  * untestable and its output dependent on when it ran. The current year is now
  * an argument with a sensible default.
+ *
+ * Every stored `YYYY-MM-DD` here is a calendar day, not an instant. Its year,
+ * month and day are read from the string (`calendarParts`); `new Date(iso)` would
+ * make it UTC midnight, and a local getter then names the previous day anywhere
+ * west of Greenwich. A `Date` handed in is read at its local day, as
+ * `toISODate` does.
  */
+
+import { calendarParts, epochDay, localCalendarDay, toISODate } from './dates';
 
 export type StudentLoanPlanKey = 'plan1' | 'plan2' | 'plan4' | 'plan5' | 'postgrad';
 
@@ -126,24 +134,40 @@ export interface DebtProjectionPoint {
   writtenOff: number;
 }
 
+/** Calendar year of a stored `YYYY-MM-DD`; NaN if it is not a real day. */
+const yearOfCalendarDay = (iso: string): number => calendarParts(iso)?.year ?? Number.NaN;
+
 /**
  * The rate in force on `on`.
  *
+ * `on` is a calendar day: a `YYYY-MM-DD` string, or a `Date` or timestamp
+ * string, which is read at its local day. A period takes effect at the start of
+ * its `effectiveFrom` day, so it applies on that day itself and not before,
+ * whatever the time of day.
+ *
  * Periods need not be sorted. A period starting in the future does not apply
  * yet, so if none has begun the debt's own `interestRate` stands in — which is
- * also what happens when there are no periods at all.
+ * also what happens when there are no periods at all, and when `on` names no
+ * real day (an invalid `Date`, garbage text): an unknown day does not get to
+ * pick the latest period.
  */
 export const rateInForce = (
   periods: RatePeriod[] | undefined,
   fallback: number,
-  on: Date,
+  on: Date | string,
 ): number => {
   if (!periods || periods.length === 0) return fallback;
+  const onDay = localCalendarDay(on)?.epoch;
+  if (onDay === undefined) return fallback;
   let best: RatePeriod | undefined;
+  let bestDay = Number.NEGATIVE_INFINITY;
   for (const period of periods) {
-    const from = new Date(period.effectiveFrom);
-    if (Number.isNaN(from.getTime()) || from > on) continue;
-    if (!best || from > new Date(best.effectiveFrom)) best = period;
+    const from = epochDay(period.effectiveFrom);
+    if (from === undefined || from > onDay) continue;
+    if (!best || from > bestDay) {
+      best = period;
+      bestDay = from;
+    }
   }
   return best ? best.rate : fallback;
 };
@@ -179,7 +203,7 @@ export const projectDebtBalance = (
 
   const currentYear = opts.currentYear ?? (
     latestObs
-      ? new Date(latestObs.statementDate || latestObs.observedOn).getFullYear()
+      ? yearOfCalendarDay(latestObs.statementDate || latestObs.observedOn)
       : new Date().getFullYear()
   );
 
@@ -196,8 +220,8 @@ export const projectDebtBalance = (
   };
 
   const startYear = debt.startDate
-    ? new Date(debt.startDate).getFullYear()
-    : (debt.draws && debt.draws.length > 0 ? new Date(debt.draws[0].date).getFullYear() : currentYear);
+    ? yearOfCalendarDay(debt.startDate)
+    : (debt.draws && debt.draws.length > 0 ? yearOfCalendarDay(debt.draws[0].date) : currentYear);
 
   const isIncomeContingent = debt.repaymentType === 'income_contingent';
   const writeOffYears =
@@ -233,7 +257,7 @@ export const projectDebtBalance = (
     const obsByYear = new Map<number, number>();
     if (debt.observations) {
       for (const obs of debt.observations) {
-        const y = new Date(obs.statementDate || obs.observedOn).getFullYear();
+        const y = yearOfCalendarDay(obs.statementDate || obs.observedOn);
         if (!Number.isNaN(y)) obsByYear.set(y, obs.balance);
       }
     }
@@ -345,10 +369,10 @@ export const calculateDebtDrift = (params: DebtDriftParams): DebtDriftResult => 
     ratePeriods,
   } = params;
 
-  const d1 = new Date(anchorDate);
-  const d2 = new Date(targetDate);
+  const d1 = calendarParts(anchorDate);
+  const d2 = calendarParts(targetDate);
 
-  if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime()) || d2 <= d1) {
+  if (!d1 || !d2 || d2.epoch <= d1.epoch) {
     return {
       observedBalance: targetBalance,
       predictedBalance: anchorBalance,
@@ -358,17 +382,17 @@ export const calculateDebtDrift = (params: DebtDriftParams): DebtDriftResult => 
     };
   }
 
-  const yearDiff = d2.getFullYear() - d1.getFullYear();
-  const monthDiff = d2.getMonth() - d1.getMonth();
-  const dayDiff = d2.getDate() - d1.getDate();
+  const yearDiff = d2.year - d1.year;
+  const monthDiff = d2.month - d1.month;
+  const dayDiff = d2.day - d1.day;
   const exactMonths = Math.max(yearDiff * 12 + monthDiff + dayDiff / 30.4375, 0);
   const wholeMonths = Math.max(Math.round(exactMonths), 1);
 
   // Step month by month to predict expected balance
   let predicted = anchorBalance;
   for (let m = 1; m <= wholeMonths; m++) {
-    const stepDate = new Date(d1);
-    stepDate.setMonth(stepDate.getMonth() + m);
+    // The anchor's day of month, `m` months on, as a local calendar day.
+    const stepDate = new Date(d1.year, d1.month - 1 + m, d1.day);
     const rate = rateInForce(ratePeriods, interestRate, stepDate) / 100 / 12;
     const interest = predicted * rate;
     predicted += interest;
@@ -448,7 +472,9 @@ export const reconcileStudentLoanWithPayslips = (
   asOfDate?: string,
 ): StudentLoanReconcileResult => {
   const statementDate = observation.statementDate || observation.observedOn;
-  const cutoff = asOfDate || new Date().toISOString().split('T')[0];
+  // The local day. `toISOString()` is the UTC day, a day out for the first or
+  // last hours of the day in any zone but UTC.
+  const cutoff = asOfDate || toISODate(new Date());
 
   const relevantPayslips = payslips.filter(p => {
     return p.payDate > statementDate && p.payDate <= cutoff && p.studentLoan > 0;

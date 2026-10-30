@@ -10,6 +10,7 @@ import { ExternalLink, Trash2, CalendarDays, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { openAndDownload } from '@/lib/download';
+import { safeHref } from '@/lib/safe-url';
 
 interface CardDetailDialogProps {
   /**
@@ -46,7 +47,7 @@ export function CardDetailDialog({
   title,
   subtitle,
   imageUrl,
-  link,
+  link: rawLink,
   children,
   badge,
   imageIsContent,
@@ -56,9 +57,11 @@ export function CardDetailDialog({
   onSchedule,
   isScheduled,
 }: CardDetailDialogProps) {
+  // A stored link is typed text; only an http(s) or mailto one becomes an href.
+  const link = safeHref(rawLink);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="dialog-flush sm:max-w-2xl h-fit max-h-[85svh] overflow-x-hidden overflow-y-auto p-0 gap-0">
+      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="collection-detail-dialog dialog-flush app-scroll sm:max-w-4xl h-fit max-h-[85svh] sm:max-h-[calc(100svh-3rem)] overflow-x-hidden overflow-y-auto p-0 gap-0">
         {/* Radix wires `aria-describedby` from this, and warns when a dialog
             has none: a screen reader was announcing the title and then going
             silent about what the dialog is. It is `sr-only` rather than
@@ -72,7 +75,7 @@ export function CardDetailDialog({
         {/* Mobile Layout */}
         <div className="sm:hidden">
           {imageUrl && (
-            <div className={cn('w-full overflow-hidden', imageIsContent ? 'max-h-[46svh] flex justify-center bg-muted/30' : 'h-48')}>
+            <div className={cn('w-full overflow-hidden', imageIsContent ? 'min-h-14 max-h-[46svh] flex justify-center bg-muted/30' : 'h-48')}>
               <img
                 src={imageUrl}
                 alt={title}
@@ -84,7 +87,9 @@ export function CardDetailDialog({
             </div>
           )}
           <div className="p-6">
-            <DialogHeader className="text-left">
+            {/* dialog-flush has no top inset, so with no artwork above it the
+                header is what sits under the close button until it scrolls. */}
+            <DialogHeader className={cn('text-left', !imageUrl && 'pr-10')}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="font-serif text-xl font-medium">
@@ -156,15 +161,15 @@ export function CardDetailDialog({
         </div>
 
         {/* Desktop Layout */}
-        <div className="hidden sm:flex">
+        <div className="collection-detail-layout hidden sm:flex">
           {imageUrl && (
             <div
               className={cn(
-                'flex items-start bg-secondary/5',
+                'collection-detail-image flex items-start bg-secondary/5',
                 // A content image shares the row instead of owning it: it
                 // shrinks with the dialog rather than pushing the text
                 // column out and giving the whole thing a sideways scroll.
-                imageIsContent ? 'p-4 min-w-0 flex-1' : 'shrink-0 p-6',
+                imageIsContent ? 'p-4 min-w-0 flex-1' : 'collection-detail-cover shrink-0 p-6',
               )}
             >
               <img
@@ -172,16 +177,21 @@ export function CardDetailDialog({
                 alt={title}
                 className={cn(
                   'h-auto rounded-lg shadow-lg object-contain',
-                  // A recipe or a book cover is worth looking at, and at
-                  // w-40 it was a thumbnail beside a column of text. The
-                  // height cap is svh rather than vh so the dialog still
-                  // clears an iPad's browser chrome in either orientation.
-                  imageIsContent ? 'max-w-full max-h-[58svh]' : 'w-56 object-contain',
+                  // This layout only shows from 640px, where the
+                  // .collection-detail-* rules in responsive.css size it: a
+                  // cover fills its fixed column, a content image shares the
+                  // row, and both stop at the dialog's svh height cap.
+                  imageIsContent && 'max-w-full',
                 )}
               />
             </div>
           )}
-          <div className="flex-1 p-6 min-w-0 flex flex-col">
+          <div
+            className="collection-detail-info app-scroll flex-1 p-6 min-w-0 flex flex-col"
+            role="region"
+            aria-label={`${title} details`}
+            tabIndex={0}
+          >
             <DialogHeader className="text-left">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">

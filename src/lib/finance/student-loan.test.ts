@@ -6,13 +6,17 @@ import {
   firstRepaymentDue,
   incomeByTaxYear,
   inferCourseEnd,
+  isBorrowing,
   normaliseRatePercent,
   rateRowInForce,
   simulateStudentLoan,
+  studentLoanBorrowed,
+  studentLoanBorrowedGap,
   studentLoanInterestRate,
   studentLoanMonthlyRepayment,
   STUDENT_LOAN_DEFAULT_ASSUMPTIONS,
   type StudentLoanAssumptions,
+  type StudentLoanBorrowed,
   type StudentLoanDraw,
   type StudentLoanRateRow,
 } from './student-loan';
@@ -424,6 +428,29 @@ describe('inferCourseEnd', () => {
     expect(inferCourseEnd(draws)).toBe('2022-06-30');
   });
 
+  it('ignores empty, malformed and impossible dates when finding the latest draw', () => {
+    expect(inferCourseEnd([
+      { date: '', amount: 100 },
+      { date: 'not-a-date', amount: 100 },
+      { date: '2023-02-29', amount: 100 },
+      { date: '2021-08-01', amount: 100 },
+    ])).toBe('2022-06-30');
+  });
+
+  it('excludes non-finite amounts from course-end inference', () => {
+    const unusable = [NaN, Infinity, -Infinity].map(amount => ({ date: '2025-08-01', amount }));
+    expect(inferCourseEnd([{ date: '2021-08-01', amount: 100 }, ...unusable])).toBe('2022-06-30');
+    expect(inferCourseEnd(unusable)).toBeUndefined();
+  });
+
+  it('is undefined when every draw date is invalid', () => {
+    expect(inferCourseEnd([
+      { date: '', amount: 100 },
+      { date: '2023-02-29', amount: 100 },
+      { date: 'not-a-date', amount: 100 },
+    ])).toBeUndefined();
+  });
+
   it('is exact at the July/August boundary', () => {
     expect(inferCourseEnd([{ date: '2021-07-31', amount: 1 }])).toBe('2021-06-30');
     expect(inferCourseEnd([{ date: '2021-08-01', amount: 1 }])).toBe('2022-06-30');
@@ -453,6 +480,52 @@ describe('firstRepaymentDue', () => {
 });
 
 describe('simulateStudentLoan', () => {
+  describe('unusable draws', () => {
+    const base: Parameters<typeof simulateStudentLoan>[0] = {
+      plan: 'plan5',
+      draws: [{ date: '2023-01-01', amount: 1200 }],
+      courseEnd: '2023-01-31',
+      salary: 0,
+      salaryFrom: '2023-01-01',
+      salaryGrowth: 0,
+      threshold: 25000,
+      thresholdFrom: '2023-01-01',
+      repaymentRate: 9,
+      writeOffYears: 0,
+      assumptions: STUDENT_LOAN_DEFAULT_ASSUMPTIONS,
+      today: '2023-02-01',
+    };
+    const invalidDraws = [
+      { date: '', amount: 100 },
+      { date: 'not-a-date', amount: 100 },
+      { date: '2023-02-29', amount: 100 },
+      { date: '2023-01-01T00:00:00Z', amount: 100 },
+      { date: '2023-01-01', amount: NaN },
+      { date: '2023-01-01', amount: Infinity },
+      { date: '2023-01-01', amount: -Infinity },
+    ];
+
+    it.each(invalidDraws)('ignores an unusable draw %j mixed with valid borrowing', draw => {
+      expect(simulateStudentLoan({ ...base, draws: [draw, ...base.draws] }))
+        .toEqual(simulateStudentLoan(base));
+    });
+
+    it.each([undefined, { date: '2023-02-01', balance: 1000 }])(
+      'treats all invalid draws as absent with anchor %j', anchor => {
+        expect(simulateStudentLoan({ ...base, draws: invalidDraws, anchor }))
+          .toEqual(simulateStudentLoan({ ...base, draws: [], anchor }));
+      },
+    );
+
+    it('preserves a valid negative draw and zero draw alongside unusable rows', () => {
+      const draws = [...base.draws, { date: '2023-02-01', amount: -100 }, { date: '2023-03-01', amount: 0 }];
+      const result = simulateStudentLoan({ ...base, draws: [...invalidDraws, ...draws] });
+      expect(result).toEqual(simulateStudentLoan({ ...base, draws }));
+      expect(result.totalDrawn).toBe(1100);
+      expect(result.totalDrawn).not.toBe(simulateStudentLoan(base).totalDrawn);
+    });
+  });
+
   it('is empty with no draws and no anchor, without throwing', () => {
     const result = simulateStudentLoan({
       plan: 'plan2',
@@ -1321,5 +1394,233 @@ describe('balanceOnMonth', () => {
   it('is undefined outside the grid', () => {
     expect(balanceOnMonth(result, '1990-01-01')).toBeUndefined();
     expect(balanceOnMonth(result, '2999-01-01')).toBeUndefined();
+  });
+});
+
+describe('isBorrowing', () => {
+  it('recognises explicit and legacy borrowing rows', () => {
+    expect(isBorrowing({ kind: 'borrowing' })).toBe(true);
+    expect(isBorrowing({})).toBe(true);
+  });
+
+  it('excludes refunds and payments', () => {
+    expect(isBorrowing({ kind: 'refund' })).toBe(false);
+    expect(isBorrowing({ kind: 'payment' })).toBe(false);
+  });
+
+  it('keeps row classification separate from amount and date validation', () => {
+    const draw = { kind: 'borrowing' as const, date: '', amount: -100 };
+    expect(isBorrowing(draw)).toBe(true);
+    expect(studentLoanBorrowed({ draws: [draw], originalAmount: 500 }))
+      .toEqual({ total: 500, source: 'entered', count: 0 });
+  });
+});
+
+describe('studentLoanBorrowed', () => {
+  it('rounds the combined valid borrowing across the tax-year boundary', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 999,
+      draws: [
+        { date: '2026-04-05', amount: 0.104 },
+        { date: '2026-04-06', amount: 0.104, kind: 'borrowing' },
+        { date: '2026-04-06', amount: -100 },
+        { date: '2026-02-30', amount: 100 },
+        { date: '2026-04-06', amount: 100, kind: 'refund' },
+      ],
+    })).toEqual({ total: 0.21, source: 'draws', count: 2, first: '2026-04-05', last: '2026-04-06' });
+  });
+
+  it('sums recorded borrowing and reports its span', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 1,
+      draws: [
+        { date: '2021-01-10', amount: 4000.1 },
+        { date: '2020-09-20', amount: 5000, kind: 'borrowing' },
+        { date: '2022-04-30', amount: 3000 },
+      ],
+    })).toEqual({ total: 12000.1, source: 'draws', count: 3, first: '2020-09-20', last: '2022-04-30' });
+  });
+
+  it('leaves out refunds and payments outside payroll', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2020-09-20', amount: 5000 },
+        { date: '2024-05-01', amount: 300, kind: 'refund' },
+        { date: '2024-06-01', amount: 1000, kind: 'payment' },
+      ],
+    });
+    expect(r.total).toBe(5000);
+    expect(r.count).toBe(1);
+    expect(r.last).toBe('2020-09-20');
+  });
+
+  it('leaves a zero, negative or non-finite amount out of the total, count and span', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2020-09-20', amount: 5000 },
+        { date: '2019-01-05', amount: -200 },
+        { date: '2020-11-20', amount: Number.NaN },
+        { date: '2018-03-01', amount: 0 },
+        { date: '2023-12-31', amount: Number.POSITIVE_INFINITY },
+      ],
+    });
+    expect(r).toEqual({ total: 5000, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20' });
+  });
+
+  it('falls back to the typed amount when every borrowing row is invalid', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 27000,
+      draws: [
+        { date: '2020-09-20', amount: -200 },
+        { date: '2020-10-20', amount: Number.NaN },
+        { date: '2020-11-20', amount: 0 },
+        { date: '2020-12-20', amount: Number.POSITIVE_INFINITY },
+      ],
+    })).toEqual({ total: 27000, source: 'entered', count: 0 });
+  });
+
+  it('is unknown when every borrowing row is invalid and no amount was typed', () => {
+    expect(studentLoanBorrowed({
+      draws: [
+        { date: '2020-09-20', amount: -200 },
+        { date: '2020-10-20', amount: Number.NaN },
+      ],
+    })).toEqual({ total: 0, source: 'none', count: 0 });
+  });
+
+  it('leaves a row with an empty date out of the total, count and span', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '', amount: 700 },
+        { date: '2020-09-20', amount: 5000 },
+      ],
+    });
+    expect(r).toEqual({ total: 5000, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20' });
+  });
+
+  it('leaves a row with an impossible calendar date out of the total, count and span', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2026-13-40', amount: 700 },
+        { date: '2021-02-30', amount: 800 },
+        { date: '2020-09-20', amount: 5000 },
+      ],
+    });
+    expect(r).toEqual({ total: 5000, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20' });
+  });
+
+  it('counts only the valid rows when valid and invalid dates are mixed', () => {
+    const r = studentLoanBorrowed({
+      originalAmount: 99999,
+      draws: [
+        { date: '2021-01-10', amount: 4000.1 },
+        { date: '', amount: 111 },
+        { date: '2020-09-20', amount: 5000 },
+        { date: '2026-13-40', amount: 222 },
+        { date: '10/01/2022', amount: 333 },
+        { date: '2022-04-30T00:00:00Z', amount: 444 },
+        { date: '2022-04-30', amount: 3000, kind: 'borrowing' },
+        { date: 'not a date', amount: 555, kind: 'borrowing' },
+      ],
+    });
+    expect(r).toEqual({ total: 12000.1, source: 'draws', count: 3, first: '2020-09-20', last: '2022-04-30' });
+  });
+
+  it('accepts 29 February in a leap year and rejects it otherwise', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '2024-02-29', amount: 1000 },
+        { date: '2023-02-29', amount: 2000 },
+      ],
+    });
+    expect(r).toEqual({ total: 1000, source: 'draws', count: 1, first: '2024-02-29', last: '2024-02-29' });
+  });
+
+  it('treats a table of invalid dates like no draws: the typed amount stands in', () => {
+    expect(studentLoanBorrowed({
+      originalAmount: 27000,
+      draws: [
+        { date: '', amount: 5000 },
+        { date: '2026-13-40', amount: 4000 },
+      ],
+    })).toEqual({ total: 27000, source: 'entered', count: 0 });
+  });
+
+  it('is unknown when every date is invalid and no amount was typed', () => {
+    const r = studentLoanBorrowed({
+      draws: [
+        { date: '', amount: 5000 },
+        { date: '2026-13-40', amount: 4000 },
+      ],
+    });
+    expect(r).toEqual({ total: 0, source: 'none', count: 0 });
+    expect(r.first).toBeUndefined();
+    expect(r.last).toBeUndefined();
+  });
+
+  it('falls back to the typed amount when no borrowing is recorded', () => {
+    expect(studentLoanBorrowed({ originalAmount: 27000, draws: [{ date: '2024-05-01', amount: 300, kind: 'refund' }] }))
+      .toEqual({ total: 27000, source: 'entered', count: 0 });
+  });
+
+  it('is unknown with neither', () => {
+    expect(studentLoanBorrowed({})).toEqual({ total: 0, source: 'none', count: 0 });
+    expect(studentLoanBorrowed({ originalAmount: 0, draws: [] })).toEqual({ total: 0, source: 'none', count: 0 });
+    expect(studentLoanBorrowed({ originalAmount: Number.NaN })).toEqual({ total: 0, source: 'none', count: 0 });
+  });
+});
+
+describe('studentLoanBorrowedGap', () => {
+  const draws = (total: number): StudentLoanBorrowed => ({
+    total, source: 'draws', count: 1, first: '2020-09-20', last: '2020-09-20',
+  });
+  const entered = (total: number): StudentLoanBorrowed => ({ total, source: 'entered', count: 0 });
+  const none: StudentLoanBorrowed = { total: 0, source: 'none', count: 0 };
+
+  it('reports a balance above what was borrowed as more', () => {
+    expect(studentLoanBorrowedGap(30000, draws(27000))).toEqual({ amount: 3000, direction: 'more' });
+  });
+
+  it('reports a balance below what was borrowed as less', () => {
+    expect(studentLoanBorrowedGap(20000, draws(27000))).toEqual({ amount: 7000, direction: 'less' });
+  });
+
+  it('measures against a typed figure the same as recorded borrowing', () => {
+    expect(studentLoanBorrowedGap(30000, entered(27000))).toEqual({ amount: 3000, direction: 'more' });
+  });
+
+  it('is null when the balance equals what was borrowed', () => {
+    expect(studentLoanBorrowedGap(27000, draws(27000))).toBeNull();
+  });
+
+  it('is null when the gap is under a pound, either way', () => {
+    expect(studentLoanBorrowedGap(27000.6, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(26999.4, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(27000.994, draws(27000))).toBeNull();
+  });
+
+  it('is returned from exactly £1, either way', () => {
+    expect(studentLoanBorrowedGap(27001, draws(27000))).toEqual({ amount: 1, direction: 'more' });
+    expect(studentLoanBorrowedGap(26999, draws(27000))).toEqual({ amount: 1, direction: 'less' });
+  });
+
+  it('rounds the gap to pence before comparing with £1', () => {
+    // 0.996 rounds up to 1.00, so it clears the threshold.
+    expect(studentLoanBorrowedGap(27000.996, draws(27000))).toEqual({ amount: 1, direction: 'more' });
+    expect(studentLoanBorrowedGap(27001.234, draws(27000))).toEqual({ amount: 1.23, direction: 'more' });
+  });
+
+  it('is null when nothing was borrowed on record', () => {
+    expect(studentLoanBorrowedGap(30000, none)).toBeNull();
+  });
+
+  it('is null when the balance or the borrowed total is not finite', () => {
+    expect(studentLoanBorrowedGap(Number.NaN, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(Number.POSITIVE_INFINITY, draws(27000))).toBeNull();
+    expect(studentLoanBorrowedGap(30000, draws(Number.NaN))).toBeNull();
+  });
+
+  it('reports a zero balance as less than what was borrowed', () => {
+    expect(studentLoanBorrowedGap(0, draws(27000))).toEqual({ amount: 27000, direction: 'less' });
   });
 });

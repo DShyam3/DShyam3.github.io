@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
+import { mfaStepRequired } from '@/lib/auth-aal';
 
 interface AuthContextType {
     isAdmin: boolean;
     isAuthLoading: boolean;
-    login: (password: string) => Promise<boolean>;
+    /** True while a password-only session waits for its authenticator code. */
+    mfaRequired: boolean;
+    /** 'needs-code': the password was right, but a second factor is still to be presented. */
+    login: (password: string) => Promise<'signed-in' | 'needs-code' | 'failed'>;
+    /** False for a wrong code or any error; success arrives through the auth listener. */
+    verifyCode: (code: string) => Promise<boolean>;
     /** False when the sign-out failed and the session is still stored. */
     logout: () => Promise<boolean>;
     session: Session | null;
@@ -31,6 +37,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [isAuthLoading, setIsAuthLoading] = useState(true);
     const [session, setSession] = useState<Session | null>(null);
+    const [mfaRequired, setMfaRequired] = useState(false);
 
     useEffect(() => {
         // Ask the database rather than compare the email ourselves. The client
@@ -73,6 +80,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
+            // Read off the session itself, never by calling back into
+            // `supabase.auth` from this callback, which can deadlock.
+            setMfaRequired(mfaStepRequired(session));
             void resolveAdmin(session).then(({ current, admin }) => {
                 // A sign-out that lands while an earlier check is still in
                 // flight must win. Without this the resolved older answer
@@ -86,24 +96,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => subscription.unsubscribe();
     }, []);
 
-    const login = useCallback(async (password: string): Promise<boolean> => {
+    const login = useCallback(async (password: string): Promise<'signed-in' | 'needs-code' | 'failed'> => {
         if (!LOGIN_EMAIL) {
             console.error('Login failed: sign-in is not configured (VITE_ADMIN_EMAIL is unset).');
-            return false;
+            return 'failed';
         }
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabase.auth.signInWithPassword({
                 email: LOGIN_EMAIL,
                 password: password,
             });
 
             if (error) {
                 console.error('Login failed:', error.message);
-                return false;
+                return 'failed';
             }
-            return true;
+            // A right password is only the first step once a factor exists.
+            // Asked of the returned session, as the listener does, so the page
+            // can move to the code step without waiting on a render.
+            return mfaStepRequired(data.session) ? 'needs-code' : 'signed-in';
         } catch (error) {
             console.error('Login error:', error);
+            return 'failed';
+        }
+    }, []);
+
+    const verifyCode = useCallback(async (code: string): Promise<boolean> => {
+        try {
+            const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
+            if (listError) {
+                console.error('Could not list authentication factors:', listError.message);
+                return false;
+            }
+            const factor = factors.totp[0];
+            if (!factor) {
+                // The stored session still lists a factor the server no
+                // longer has -- the recovery path deletes the row from SQL.
+                // A refresh fetches the current user, and the listener then
+                // drops the code step rather than refusing every code.
+                console.error('Code check failed: no verified authenticator is enrolled.');
+                await supabase.auth.refreshSession();
+                return false;
+            }
+            const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+            if (error) {
+                console.error('Code check failed:', error.message);
+                return false;
+            }
+            // Admin state is deliberately not set here. A verified code makes
+            // auth-js emit a session with an aal2 token, and the listener
+            // above asks `is_admin` about that one.
+            return true;
+        } catch (error) {
+            console.error('Code check error:', error);
             return false;
         }
     }, []);
@@ -111,21 +156,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = useCallback(async (): Promise<boolean> => {
         const { error } = await supabase.auth.signOut();
         if (error) {
-            // Offline, auth-js keeps the stored session when the server call
-            // fails (in every scope), so this device is still signed in. Say
-            // so, rather than hide the admin controls until the next token
-            // refresh or reload brings them back.
             console.error('Sign-out failed:', error.message);
+            // If the session was already removed locally despite the server error, clear state
+            const { data } = await supabase.auth.getSession();
+            if (!data.session) {
+                setIsAdmin(false);
+                setSession(null);
+                setMfaRequired(false);
+                return true;
+            }
             return false;
         }
         setIsAdmin(false);
         setSession(null);
+        setMfaRequired(false);
         return true;
     }, []);
 
     const value = useMemo(
-        () => ({ isAdmin, isAuthLoading, login, logout, session }),
-        [isAdmin, isAuthLoading, login, logout, session],
+        () => ({ isAdmin, isAuthLoading, mfaRequired, login, verifyCode, logout, session }),
+        [isAdmin, isAuthLoading, mfaRequired, login, verifyCode, logout, session],
     );
 
     return (

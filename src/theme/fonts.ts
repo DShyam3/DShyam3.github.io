@@ -1,7 +1,8 @@
 /**
  * The site's typefaces, in one place.
  *
- * Two families, both loaded from Google Fonts in index.html:
+ * Two families, both self-hosted from @fontsource and bundled by Vite, so no
+ * visitor's browser asks a font CDN for anything:
  *
  *   Doto        the dot-matrix display face. Headings, nav, buttons, the
  *               DotMatrixText component. This is the site's signature.
@@ -13,9 +14,23 @@
  *   - Tailwind's fontFamily in tailwind.config.ts, so `font-serif` etc. work
  *   - This file, for anything that needs the stack in TypeScript
  *
- * If you change a family, change it in all three, and update the Google Fonts
- * <link> in index.html.
+ * If you change a family, change it in all three, and swap the @fontsource
+ * imports below. Imported once, from src/main.tsx.
  */
+
+// The weights the site actually uses. Each file declares its subsets (latin,
+// latin-ext; Space Mono adds vietnamese) by unicode-range, so the browser
+// fetches only the subsets a page needs.
+import '@fontsource/doto/400.css';
+import '@fontsource/doto/500.css';
+import '@fontsource/doto/600.css';
+import '@fontsource/doto/700.css';
+import '@fontsource/doto/800.css';
+import '@fontsource/doto/900.css';
+import '@fontsource/space-mono/400.css';
+import '@fontsource/space-mono/700.css';
+import '@fontsource/space-mono/400-italic.css';
+import '@fontsource/space-mono/700-italic.css';
 
 export const FONT_STACKS = {
   /** Dot-matrix display face. */
@@ -23,13 +38,3 @@ export const FONT_STACKS = {
   /** Body and UI text. */
   body: "'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
 } as const;
-
-/**
- * The Google Fonts request index.html makes. Kept here so the weights the
- * site actually uses are visible next to the stacks that use them.
- */
-export const GOOGLE_FONTS_HREF =
-  'https://fonts.googleapis.com/css2' +
-  '?family=Doto:wght@400;500;600;700;800;900' +
-  '&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700' +
-  '&display=swap';

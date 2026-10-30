@@ -291,10 +291,30 @@ CREATE TABLE IF NOT EXISTS "public"."finance_settings" (
     "payday_weekday" integer DEFAULT 5,
     "payday_biweekly_anchor" "text" DEFAULT '2026-01-02'::"text",
     "active_savings_types" "text"[] DEFAULT '{}'::"text"[],
+    "birthday_leave_enabled" boolean DEFAULT false NOT NULL,
+    "birthday_leave_rule" "text" DEFAULT 'within_week'::"text" NOT NULL,
+    "birthday_month" integer,
+    "birthday_day" integer,
+    "package_benefits" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 
 ALTER TABLE "public"."finance_settings" OWNER TO "postgres";
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_leave_enabled" IS
+    'Whether the profile receives an extra paid Birthday Day Off benefit on top of standard work_holidays.';
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_leave_rule" IS
+    'Employer rule governing when the paid Birthday Day Off may be taken: exact_or_nearest, within_week, birthday_month, within_month, or anytime.';
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_month" IS
+    'Calendar month of birth (1..12) used only to compute the Birthday Day Off eligibility window; never a full date of birth.';
+
+COMMENT ON COLUMN "public"."finance_settings"."birthday_day" IS
+    'Day of month of birth (1..31) used only to compute the Birthday Day Off eligibility window; never a full date of birth.';
+
+COMMENT ON COLUMN "public"."finance_settings"."package_benefits" IS
+    'Contractual employer package benefits (JSON array of benefit items) tracked for total package valuation and comparison.';
 
 -- Global reference data, versioned by the date it takes effect -- same idea
 -- as finance_tax_configs. Not scoped to a profile: the Student Loans
@@ -457,10 +477,9 @@ CREATE POLICY "Admin read" ON "public"."finance_sync_log"
     FOR SELECT TO "authenticated"
     USING ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- both REVOKEs below are load-bearing, not decorative. authenticated gets
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so both REVOKEs
+-- below are load-bearing, not decorative. authenticated gets
 -- SELECT only, matching the policy above: no write grant exists because no
 -- write policy exists to authorise it.
 REVOKE ALL ON TABLE "public"."finance_sync_log" FROM "anon";
@@ -511,7 +530,7 @@ CREATE TABLE IF NOT EXISTS "public"."finance_user_holidays" (
 ALTER TABLE "public"."finance_user_holidays" OWNER TO "postgres";
 
 COMMENT ON COLUMN "public"."finance_user_holidays"."type" IS
-    'Leave type: "holiday" (counts against annual holiday allowance) or "sick" (tracked separately as sick leave taken).';
+    'Leave type: "holiday" (counts against annual holiday allowance), "sick" (tracked separately as sick leave taken), or "birthday" (paid birthday day off benefit, does not consume standard holiday allowance).';
 
 COMMENT ON COLUMN "public"."finance_user_holidays"."half_day" IS
     'Which half of a single-day booking is taken: "am" (morning) or "pm" (afternoon). NULL for a full day or a range. A half day costs 0.5 days.';
@@ -578,6 +597,17 @@ ALTER TABLE ONLY "public"."finance_data"
 
 ALTER TABLE ONLY "public"."finance_debts"
     ADD CONSTRAINT "finance_debts_pkey" PRIMARY KEY ("id");
+
+-- The target of finance_debt_observations_profile_debt_fkey. id is already the
+-- primary key, so this adds no uniqueness; a composite foreign key needs a
+-- unique constraint over exactly its columns. Declared here, ahead of the
+-- foreign key in the finance_debt_observations block below, so a build
+-- finds it in place (20261025090000_debt_observations_profile_scoped_fk.sql).
+-- profile_id leads, so the index behind it also covers finance_debts_profile_id_fkey
+-- and the scoped reads; that is why there is no separate index on profile_id
+-- alone for this table.
+ALTER TABLE ONLY "public"."finance_debts"
+    ADD CONSTRAINT "finance_debts_profile_id_id_key" UNIQUE ("profile_id", "id");
 
 ALTER TABLE ONLY "public"."finance_defaults"
     ADD CONSTRAINT "finance_defaults_pkey" PRIMARY KEY ("key");
@@ -676,49 +706,49 @@ ALTER TABLE ONLY "public"."finance_goal_contributions"
 ALTER TABLE ONLY "public"."finance_transactions"
     ADD CONSTRAINT "finance_transactions_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."finance_bank_accounts"("id") ON DELETE SET NULL;
 
-CREATE POLICY "Admin All Access" ON "public"."finance_truelayer_connection" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin All Access" ON "public"."finance_truelayer_connection" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_truelayer_oauth_states" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_truelayer_oauth_states" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_bank_accounts" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_bank_accounts" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_categories" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_categories" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_items" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_items" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_budget_presets" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_budget_presets" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_credit_bureaus" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_credit_bureaus" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_credit_scores" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_credit_scores" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_data" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_data" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_debts" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_debts" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_defaults" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_defaults" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_goal_contributions" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_goal_contributions" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_goals" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_goals" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_holiday_defaults" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_holiday_defaults" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_memberships" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_memberships" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_recurring_bills" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_recurring_bills" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_recurring_templates" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_recurring_templates" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_settings" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_settings" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_student_loan_rates" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_student_loan_rates" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_tax_configs" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_tax_configs" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_transactions" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_transactions" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Admin Only" ON "public"."finance_user_holidays" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_user_holidays" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 ALTER TABLE "public"."finance_bank_accounts" ENABLE ROW LEVEL SECURITY;
 
@@ -768,104 +798,135 @@ ALTER TABLE "public"."finance_user_holidays" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_bank_accounts" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_bank_accounts" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_bank_accounts" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_bank_accounts" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_bank_accounts" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_bank_accounts" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_categories" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_budget_categories" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_budget_categories" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_budget_categories" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_categories" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_budget_categories" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_items" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_budget_items" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_budget_items" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_budget_items" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_items" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_budget_items" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_budget_presets" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_budget_presets" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_budget_presets" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_budget_presets" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_budget_presets" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_budget_presets" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_bureaus" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_credit_bureaus" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_credit_bureaus" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_credit_bureaus" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_credit_bureaus" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_credit_bureaus" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_credit_scores" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_credit_scores" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_credit_scores" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_credit_scores" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_credit_scores" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_credit_scores" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_data" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_data" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_data" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_data" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_data" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_data" TO "service_role";
 
-GRANT ALL ON TABLE "public"."finance_debts" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_debts" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_debts" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_debts" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_defaults" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_defaults" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_defaults" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_defaults" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_defaults" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_defaults" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goal_contributions" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_goal_contributions" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_goal_contributions" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_goal_contributions" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_goal_contributions" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_goal_contributions" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_goals" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_goals" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_goals" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_goals" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_goals" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_goals" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_holiday_defaults" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_holiday_defaults" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_holiday_defaults" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_holiday_defaults" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_holiday_defaults" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_holiday_defaults" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_memberships" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_memberships" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_memberships" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_memberships" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_memberships" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_memberships" TO "service_role";
 
 REVOKE ALL ON TABLE "public"."finance_recurring_bills" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_recurring_bills" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_recurring_bills" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_recurring_bills" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_recurring_templates" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_recurring_templates" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_recurring_templates" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_recurring_templates" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_recurring_templates" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_recurring_templates" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_settings" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_settings" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_settings" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_settings" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_settings" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_settings" TO "service_role";
 
--- finance_student_loan_rates: least privilege, not the legacy anon-grant
--- pattern above. anon holds no grant of any kind -- this is a finance_*
--- table, and ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on
--- creation, so both REVOKEs below are load-bearing, not decorative.
+-- finance_student_loan_rates: least privilege. anon holds no grant of any kind:
+-- this is a finance_* table, and a fresh build starts from the image's default
+-- of ALL, so both REVOKEs below are load-bearing, not decorative.
 REVOKE ALL ON TABLE "public"."finance_student_loan_rates" FROM "anon";
 
 REVOKE ALL ON TABLE "public"."finance_student_loan_rates" FROM "authenticated";
@@ -874,68 +935,54 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "public"."finance_student_loan_rates"
 
 GRANT ALL ON TABLE "public"."finance_student_loan_rates" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_tax_configs" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_tax_configs" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_tax_configs" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_tax_configs" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_tax_configs" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_tax_configs" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_transactions" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_transactions" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_transactions" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_transactions" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transactions" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_transactions" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_truelayer_connection" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_truelayer_connection" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "authenticated";
+-- Holds TrueLayer access and refresh tokens: service_role only, no grant to
+-- authenticated (see 20261024150000_authenticated_grants_least_privilege.sql).
+REVOKE ALL ON TABLE "public"."finance_truelayer_connection" FROM "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_connection" TO "service_role";
 
+REVOKE ALL ON TABLE "public"."finance_truelayer_source_sync" FROM "anon";
+
 GRANT ALL ON TABLE "public"."finance_truelayer_source_sync" TO "service_role";
 
-GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "authenticated";
+-- OAuth state for the TrueLayer connect flow: service_role only, no grant to
+-- authenticated (see 20261024150000_authenticated_grants_least_privilege.sql).
+REVOKE ALL ON TABLE "public"."finance_truelayer_oauth_states" FROM "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_truelayer_oauth_states" TO "service_role";
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."finance_user_holidays" TO "anon";
+REVOKE ALL ON TABLE "public"."finance_user_holidays" FROM "anon";
 
-GRANT ALL ON TABLE "public"."finance_user_holidays" TO "authenticated";
+REVOKE ALL ON TABLE "public"."finance_user_holidays" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_user_holidays" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."finance_user_holidays" TO "service_role";
 
 -- Revoked privileges
 --
--- pg_dump emits GRANT but never REVOKE, so these have to be stated explicitly
--- or the differ will try to hand `anon` back its SELECT on every finance table
--- (including finance_truelayer_connection, which holds live bank tokens).
---
--- Legacy tables below retain the SELECT-only revoke unless ALL privileges
--- are explicitly revoked elsewhere (including recurring bills above).
--- Remaining grant drift is tracked in S-10 in REHAUL_PLAN.md.
-
-REVOKE SELECT ON TABLE
-  "public"."finance_bank_accounts",
-  "public"."finance_budget_categories",
-  "public"."finance_budget_items",
-  "public"."finance_budget_presets",
-  "public"."finance_credit_bureaus",
-  "public"."finance_credit_scores",
-  "public"."finance_data",
-  "public"."finance_defaults",
-  "public"."finance_goal_contributions",
-  "public"."finance_goals",
-  "public"."finance_holiday_defaults",
-  "public"."finance_memberships",
-  "public"."finance_recurring_bills",
-  "public"."finance_recurring_templates",
-  "public"."finance_settings",
-  "public"."finance_tax_configs",
-  "public"."finance_transactions",
-  "public"."finance_truelayer_connection",
-  "public"."finance_truelayer_source_sync",
-  "public"."finance_user_holidays"
-FROM "anon";
+-- Every finance_* table carries an explicit REVOKE ALL ... FROM "anon", because
+-- a fresh build starts from the image's default of ALL and anon holds nothing on
+-- finance_* live. The standalone revokes below are the ones not placed beside
+-- their table's other grants.
 
 REVOKE ALL ON TABLE "public"."finance_truelayer_source_sync" FROM "authenticated";
 
@@ -958,6 +1005,11 @@ CREATE UNIQUE INDEX "idx_finance_goals_one_emergency_fund" ON "public"."finance_
 
 CREATE UNIQUE INDEX "idx_finance_profiles_self" ON "public"."finance_profiles" ("is_self") WHERE "is_self";
 
+-- Covers finance_profiles_owner_user_id_fkey (ON DELETE SET NULL): deleting an
+-- auth user would otherwise scan every profile to find the owner_user_id to null.
+CREATE INDEX IF NOT EXISTS "idx_finance_profiles_owner_user_id"
+    ON "public"."finance_profiles" ("owner_user_id");
+
 ALTER TABLE ONLY "public"."finance_profile_transfers"
     ADD CONSTRAINT "finance_profile_transfers_pkey" PRIMARY KEY ("id");
 
@@ -975,6 +1027,14 @@ ALTER TABLE ONLY "public"."finance_profile_transfers"
 
 CREATE INDEX "idx_finance_profile_transfers_from_profile_id" ON "public"."finance_profile_transfers" ("from_profile_id");
 CREATE INDEX "idx_finance_profile_transfers_to_profile_id" ON "public"."finance_profile_transfers" ("to_profile_id");
+
+-- Cover finance_profile_transfers_from_transaction_id_fkey and
+-- finance_profile_transfers_to_transaction_id_fkey (both ON DELETE SET NULL):
+-- deleting a transaction would otherwise scan every transfer to find the legs to null.
+CREATE INDEX IF NOT EXISTS "idx_finance_profile_transfers_from_transaction_id"
+    ON "public"."finance_profile_transfers" ("from_transaction_id");
+CREATE INDEX IF NOT EXISTS "idx_finance_profile_transfers_to_transaction_id"
+    ON "public"."finance_profile_transfers" ("to_transaction_id");
 
 -- profile_id is NULL exactly when the row is a shared template (is_default).
 
@@ -1009,7 +1069,8 @@ ALTER TABLE ONLY "public"."finance_debts"
     ADD CONSTRAINT "finance_debts_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 ALTER TABLE ONLY "public"."finance_debts"
     ADD CONSTRAINT "finance_debts_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
-CREATE INDEX "idx_finance_debts_profile_id" ON "public"."finance_debts" ("profile_id");
+-- No index on profile_id alone: finance_debts_profile_id_id_key (profile_id, id),
+-- declared with the primary key above, leads with it.
 
 ALTER TABLE ONLY "public"."finance_goal_contributions"
     ADD CONSTRAINT "finance_goal_contributions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
@@ -1039,6 +1100,38 @@ ALTER TABLE ONLY "public"."finance_settings"
     ADD CONSTRAINT "finance_settings_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
 ALTER TABLE ONLY "public"."finance_settings"
     ADD CONSTRAINT "finance_settings_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_leave_rule_check"
+    CHECK ("birthday_leave_rule" IN ('exact_or_nearest', 'within_week', 'birthday_month', 'within_month', 'anytime'));
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_month_check"
+    CHECK ("birthday_month" IS NULL OR ("birthday_month" >= 1 AND "birthday_month" <= 12));
+-- Month and day are a pair: both set or both NULL.
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_pair_check"
+    CHECK (("birthday_month" IS NULL) = ("birthday_day" IS NULL));
+-- Day 1..29 for February (29 February is a real birthday; the app clamps it in
+-- other years), 1..30 for April, June, September and November, else 1..31. A
+-- NULL month falls through to 31, harmless because the pair check rejects a
+-- day without a month.
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_birthday_day_check"
+    CHECK (
+        "birthday_day" IS NULL
+        OR (
+            "birthday_day" >= 1
+            AND "birthday_day" <= CASE
+                WHEN "birthday_month" = 2 THEN 29
+                WHEN "birthday_month" IN (4, 6, 9, 11) THEN 30
+                ELSE 31
+            END
+        )
+    );
+-- Kept to "is an array": a CHECK enumerating today's benefit shapes would
+-- reject tomorrow's. NOT NULL DEFAULT '[]' leaves no NULL case to allow for.
+ALTER TABLE ONLY "public"."finance_settings"
+    ADD CONSTRAINT "finance_settings_package_benefits_is_array"
+    CHECK (jsonb_typeof("package_benefits") = 'array');
 CREATE INDEX "idx_finance_settings_profile_id" ON "public"."finance_settings" ("profile_id");
 
 -- One non-default settings row per profile. Shared default rows
@@ -1057,10 +1150,24 @@ ALTER TABLE ONLY "public"."finance_user_holidays"
 ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_profile_scope_check" CHECK (("is_default" AND "profile_id" IS NULL) OR (NOT "is_default" AND "profile_id" IS NOT NULL));
 ALTER TABLE ONLY "public"."finance_user_holidays"
-    ADD CONSTRAINT "finance_user_holidays_type_check" CHECK ("type" IN ('holiday', 'sick'));
+    ADD CONSTRAINT "finance_user_holidays_type_check" CHECK ("type" IN ('holiday', 'sick', 'birthday'));
 ALTER TABLE ONLY "public"."finance_user_holidays"
     ADD CONSTRAINT "finance_user_holidays_half_day_check"
     CHECK ("half_day" IS NULL OR ("half_day" IN ('am', 'pm') AND "start_date" = "end_date" AND "count" = 0.5));
+-- A birthday day off is one day: a full day (count 1, no half) or a half day
+-- (count 0.5, half named). Other leave types are untouched.
+ALTER TABLE ONLY "public"."finance_user_holidays"
+    ADD CONSTRAINT "finance_user_holidays_birthday_single_day"
+    CHECK (
+        "type" <> 'birthday'
+        OR (
+            "start_date" = "end_date"
+            AND (
+                ("count" = 1 AND "half_day" IS NULL)
+                OR ("count" = 0.5 AND "half_day" IS NOT NULL)
+            )
+        )
+    );
 CREATE INDEX "idx_finance_user_holidays_profile_id" ON "public"."finance_user_holidays" ("profile_id");
 
 ALTER TABLE ONLY "public"."finance_truelayer_connection"
@@ -1080,13 +1187,24 @@ CREATE INDEX "idx_finance_truelayer_oauth_states_profile_expires_at" ON "public"
 ALTER TABLE "public"."finance_profiles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_profile_transfers" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
-CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+CREATE POLICY "Admin Only" ON "public"."finance_profiles" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
+CREATE POLICY "Admin Only" ON "public"."finance_profile_transfers" TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
--- S-10: anon needs nothing on any finance table. Re-asserted here because
--- Supabase's ALTER DEFAULT PRIVILEGES re-grants on every newly created table.
+-- S-10: anon needs nothing on any finance table. Re-asserted here because a
+-- fresh build starts from the image's default of ALL.
 REVOKE ALL ON "public"."finance_profiles" FROM "anon";
 REVOKE ALL ON "public"."finance_profile_transfers" FROM "anon";
+
+-- authenticated: least privilege. A fresh database inherits ALL (including
+-- TRUNCATE, which RLS does not filter) from the image's default privileges, so
+-- the REVOKE is load-bearing. See 20261024150000_authenticated_grants_least_privilege.sql.
+REVOKE ALL ON TABLE "public"."finance_profiles" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_profiles" TO "authenticated";
+
+REVOKE ALL ON TABLE "public"."finance_profile_transfers" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_profile_transfers" TO "authenticated";
 
 -- Phase 7.4 -- snapshots. See REHAUL_PLAN.md 7.D.
 --
@@ -1153,12 +1271,21 @@ ALTER TABLE "public"."finance_net_worth_snapshots" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."finance_account_balance_snapshots" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admin Only" ON "public"."finance_net_worth_snapshots" TO "authenticated"
-    USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+    USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 CREATE POLICY "Admin Only" ON "public"."finance_account_balance_snapshots" TO "authenticated"
-    USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
+    USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
 REVOKE ALL ON "public"."finance_net_worth_snapshots" FROM "anon";
 REVOKE ALL ON "public"."finance_account_balance_snapshots" FROM "anon";
+
+-- authenticated: least privilege, same reasoning as finance_profiles above.
+REVOKE ALL ON TABLE "public"."finance_net_worth_snapshots" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_net_worth_snapshots" TO "authenticated";
+
+REVOKE ALL ON TABLE "public"."finance_account_balance_snapshots" FROM "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_account_balance_snapshots" TO "authenticated";
 
 /**
  * Records today's position for every profile.
@@ -1295,10 +1422,9 @@ CREATE POLICY "Admin Only" ON "public"."finance_transfer_links"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- the REVOKE below is load-bearing, not decorative. "ALL" to authenticated
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so the REVOKE below
+-- is load-bearing, not decorative. "ALL" to authenticated
 -- was reviewed and narrowed: it included TRUNCATE, which RLS does not
 -- govern, so the grant was the only thing standing in front of it.
 REVOKE ALL ON TABLE "public"."finance_transfer_links" FROM "anon";
@@ -1362,6 +1488,13 @@ ALTER TABLE ONLY "public"."finance_transfer_dismissals"
 CREATE UNIQUE INDEX "idx_finance_transfer_dismissals_profile_pair"
     ON "public"."finance_transfer_dismissals" ("profile_id", "outflow_transaction_id", "inflow_transaction_id");
 
+-- The pair index above leads with (profile_id, outflow_transaction_id), so it
+-- already covers finance_transfer_dismissals_profile_outflow_fkey. This one
+-- covers finance_transfer_dismissals_profile_inflow_fkey, in the FK's own
+-- column order.
+CREATE INDEX IF NOT EXISTS "idx_finance_transfer_dismissals_profile_inflow"
+    ON "public"."finance_transfer_dismissals" ("profile_id", "inflow_transaction_id");
+
 ALTER TABLE "public"."finance_transfer_dismissals" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admin Only" ON "public"."finance_transfer_dismissals"
@@ -1369,10 +1502,9 @@ CREATE POLICY "Admin Only" ON "public"."finance_transfer_dismissals"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- both REVOKEs below are load-bearing, not decorative.
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so both REVOKEs
+-- below are load-bearing, not decorative.
 REVOKE ALL ON TABLE "public"."finance_transfer_dismissals" FROM "anon";
 REVOKE ALL ON TABLE "public"."finance_transfer_dismissals" FROM "authenticated";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transfer_dismissals" TO "authenticated";
@@ -1437,10 +1569,9 @@ CREATE POLICY "Admin Only" ON "public"."finance_transfer_single_legs"
     USING ((SELECT "public"."is_admin"()))
     WITH CHECK ((SELECT "public"."is_admin"()));
 
--- Least privilege, not the legacy anon-grant pattern used elsewhere in this
--- file: anon holds no grant of any kind -- this is a finance_* table, and
--- ALTER DEFAULT PRIVILEGES hands every new table ALL to anon on creation, so
--- both REVOKEs below are load-bearing, not decorative.
+-- Least privilege: anon holds no grant of any kind -- this is a finance_* table,
+-- and a fresh build starts from the image's default of ALL, so both REVOKEs
+-- below are load-bearing, not decorative.
 REVOKE ALL ON TABLE "public"."finance_transfer_single_legs" FROM "anon";
 REVOKE ALL ON TABLE "public"."finance_transfer_single_legs" FROM "authenticated";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_transfer_single_legs" TO "authenticated";
@@ -1451,6 +1582,512 @@ COMMENT ON TABLE "public"."finance_transfer_single_legs" IS
 
 COMMENT ON COLUMN "public"."finance_transfer_single_legs"."verdict" IS
     'internal = excluded from income/spending totals like a confirmed transfer leg; external = real spending or income, changes no figure.';
+
+-- Tables created by migrations and carried here since 2026-10-24
+--
+-- Six tables that existed in the database, created by the migration named
+-- above each block, before this file described them. Each block is the live
+-- definition, not a new one, apart from authenticated's grant, which is the
+-- narrowed one described below.
+--
+-- Position matters: the foreign keys reference finance_profiles,
+-- finance_debts (profile_id, id), finance_bank_accounts (id, profile_id) and
+-- finance_transactions (profile_id, id), so this section follows all of them.
+-- finance_debts_profile_id_id_key is declared beside finance_debts_pkey above.
+-- The other two composite keys, finance_bank_accounts_id_profile_id_key and
+-- idx_finance_transactions_profile_id_id, are still created only by migrations
+-- (20260910074712_finance_investment_holdings.sql and
+-- 20260909155110_payslip_transaction_reconciliations.sql) and are not yet
+-- declared in this file.
+--
+-- authenticated holds SELECT, INSERT, UPDATE, DELETE on all six, as in the
+-- finance_transfer_* blocks above. The live grant was ALL (TRUNCATE included,
+-- which RLS does not govern); 20261024150000_authenticated_grants_least_privilege.sql
+-- narrows it. For finance_merchant_logos, anon's revoke and the policy are
+-- 20261024140000_merchant_logo_index_admin_only.sql.
+--
+-- Known gap, an open line in REHAUL_PLAN.md rather than fixed here (fixing it
+-- changes the database, which this section does not): the two composite keys
+-- above that migrations create and this file does not yet declare.
+-- finance_debt_observations.debt_id is no longer a gap: its foreign key is
+-- composite (20261025090000_debt_observations_profile_scoped_fk.sql).
+
+-- Debt balance observations (20260907230000_finance_debt_observations.sql).
+-- Anchors a loan balance to a known date -- a statement date or a portal
+-- check -- so a projection steps forward from evidence rather than from a
+-- mutable floating number. statement_date matters for Student Loans Company
+-- balances, whose annual statements reflect a March/April balance and lag
+-- portal checks by up to 18 months; the app reads NULL as observed_on.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_debt_observations" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "debt_id" "text" NOT NULL,
+    "observed_on" "date" NOT NULL,
+    "balance" numeric DEFAULT 0 NOT NULL,
+    "source" "text" DEFAULT 'manual'::"text" NOT NULL,
+    "statement_date" "date",
+    "note" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_debt_observations" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Composite so a reading can never name another profile's debt, or a shared
+-- default (profile_id NULL, which never matches). profile_id and debt_id are both
+-- NOT NULL, so MATCH SIMPLE binds them. Column order matches
+-- idx_debt_observations_profile_debt below, which covers the cascade lookup.
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_profile_debt_fkey"
+    FOREIGN KEY ("profile_id", "debt_id")
+    REFERENCES "public"."finance_debts"("profile_id", "id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_balance_check" CHECK ("balance" >= 0);
+
+ALTER TABLE ONLY "public"."finance_debt_observations"
+    ADD CONSTRAINT "finance_debt_observations_source_check"
+    CHECK ("source" IN ('manual', 'statement', 'provider'));
+
+-- Also covers finance_debt_observations_profile_debt_fkey (ON DELETE CASCADE):
+-- its leading columns are the key's, so deleting a debt finds the readings to
+-- cascade to through it. The single-column idx_finance_debt_observations_debt_id
+-- that covered the old one-column key is dropped as redundant.
+CREATE INDEX "idx_debt_observations_profile_debt"
+    ON "public"."finance_debt_observations" ("profile_id", "debt_id", "observed_on" DESC);
+
+ALTER TABLE "public"."finance_debt_observations" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_debt_observations"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+-- A fresh build starts from the image's default of ALL, so the REVOKE below is
+-- load-bearing, not decorative.
+REVOKE ALL ON TABLE "public"."finance_debt_observations" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_debt_observations" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_debt_observations" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_debt_observations" TO "service_role";
+
+-- Current investment positions (20260910074712_finance_investment_holdings.sql,
+-- 20260910122724_investment_holding_account_index.sql,
+-- 20260910123738_investment_holding_price_facts.sql). finance_bank_accounts
+-- already represents a broker or exchange account when type = 'investment';
+-- these are the individual positions in it. The link to an account is
+-- optional, because an asset can be recorded before its broker account is
+-- added, but the composite foreign key means it can never point at another
+-- profile's account. Deleting the account clears account_id only, never
+-- profile_id.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_investment_holdings" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "account_id" "text",
+    "name" "text" NOT NULL,
+    "ticker" "text",
+    "shares" numeric NOT NULL,
+    "avg_price" numeric NOT NULL,
+    "current_price" numeric NOT NULL,
+    "category" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "cost_basis_known" boolean DEFAULT true NOT NULL,
+    "current_price_known" boolean DEFAULT true NOT NULL
+);
+
+ALTER TABLE "public"."finance_investment_holdings" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Relies on the unique constraint finance_bank_accounts_id_profile_id_key.
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_account_profile_fkey"
+    FOREIGN KEY ("account_id", "profile_id")
+    REFERENCES "public"."finance_bank_accounts"("id", "profile_id") ON DELETE SET NULL ("account_id");
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_name_check" CHECK (length(btrim("name")) > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_shares_check" CHECK ("shares" > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_avg_price_check" CHECK ("avg_price" >= 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_current_price_check" CHECK ("current_price" >= 0);
+
+ALTER TABLE ONLY "public"."finance_investment_holdings"
+    ADD CONSTRAINT "finance_investment_holdings_category_check"
+    CHECK ("category" IN ('Stock', 'ETF', 'Crypto', 'Mutual Fund', 'Real Estate', 'Cash', 'Other'));
+
+CREATE INDEX "idx_finance_investment_holdings_profile_id"
+    ON "public"."finance_investment_holdings" ("profile_id");
+
+-- Covers the composite account foreign key, so deleting an account does not
+-- scan every holding.
+CREATE INDEX "idx_finance_investment_holdings_account_profile"
+    ON "public"."finance_investment_holdings" ("account_id", "profile_id");
+
+ALTER TABLE "public"."finance_investment_holdings" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_investment_holdings"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_investment_holdings" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_investment_holdings" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_investment_holdings" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_investment_holdings" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_investment_holdings" IS
+    'Current investment positions, scoped to a finance profile. Prices and quantities are entered or imported; portfolio totals are computed in the app.';
+
+COMMENT ON COLUMN "public"."finance_investment_holdings"."cost_basis_known" IS
+    'Whether avg_price is a known GBP cost basis. False means it must not contribute to gain/loss calculations.';
+
+COMMENT ON COLUMN "public"."finance_investment_holdings"."current_price_known" IS
+    'Whether current_price is a known GBP valuation. False means it must not contribute to value calculations.';
+
+-- Confirmed broker and exchange activity (20260910124547_investment_activity_history.sql).
+-- The original CSV stays in the browser; this ledger keeps only the facts a
+-- personal finance timeline and re-import identity need. The unique key on
+-- (profile_id, account_id, provider, source_reference) is that identity: a
+-- re-imported row matches the one already stored.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_investment_activities" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "account_id" "text" NOT NULL,
+    "provider" "text" NOT NULL,
+    "activity_type" "text" NOT NULL,
+    "occurred_on" "date" NOT NULL,
+    "name" "text" NOT NULL,
+    "ticker" "text",
+    "quantity" numeric NOT NULL,
+    "unit_price_gbp" numeric,
+    "source_reference" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_investment_activities" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Relies on the unique constraint finance_bank_accounts_id_profile_id_key.
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_account_profile_fkey"
+    FOREIGN KEY ("account_id", "profile_id")
+    REFERENCES "public"."finance_bank_accounts"("id", "profile_id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_provider_check"
+    CHECK ("provider" IN ('trading212', 'kraken'));
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_activity_type_check"
+    CHECK ("activity_type" IN ('buy', 'sell'));
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_name_check" CHECK (length(btrim("name")) > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_quantity_check" CHECK ("quantity" > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_unit_price_gbp_check"
+    CHECK ("unit_price_gbp" IS NULL OR "unit_price_gbp" >= 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_source_reference_check"
+    CHECK (length(btrim("source_reference")) > 0);
+
+ALTER TABLE ONLY "public"."finance_investment_activities"
+    ADD CONSTRAINT "finance_investment_activities_source_unique"
+    UNIQUE ("profile_id", "account_id", "provider", "source_reference");
+
+-- Leads with account_id to cover the composite account foreign key; the
+-- unique key above leads with profile_id and serves the profile-scoped lookup.
+CREATE INDEX "idx_finance_investment_activities_account_profile_occurred_on"
+    ON "public"."finance_investment_activities" ("account_id", "profile_id", "occurred_on" DESC);
+
+ALTER TABLE "public"."finance_investment_activities" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_investment_activities"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_investment_activities" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_investment_activities" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_investment_activities" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_investment_activities" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_investment_activities" IS
+    'Confirmed buy and sell activity imported locally from supported broker/exchange CSV files; original exports are not stored.';
+
+-- Index of cached merchant logos (20260907170100_merchant_logo_cache.sql).
+-- A row says this slug has a logo at this path in the public merchant-logos
+-- bucket; no row means fall through to the monogram. A NULL storage_path is a
+-- recorded miss, so the resolver does not retry a merchant it could not find.
+-- There is no profile_id, but it is not free of user data: merchant-logo-cache
+-- only resolves brands found in finance_transactions, so the set of slugs, and
+-- each resolved_at, says which directory brands the owner has paid and roughly
+-- when they first appeared. Read and write are therefore admin-only (below).
+-- The images themselves stay publicly fetchable by URL, which needs no policy.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_merchant_logos" (
+    "slug" "text" NOT NULL,
+    "storage_path" "text",
+    "source_domain" "text",
+    "resolved_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_merchant_logos" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_merchant_logos"
+    ADD CONSTRAINT "finance_merchant_logos_pkey" PRIMARY KEY ("slug");
+
+ALTER TABLE "public"."finance_merchant_logos" ENABLE ROW LEVEL SECURITY;
+
+-- The only policy, so read is admin-only: the slugs say which brands the owner
+-- pays (see the table comment above), and the only reader in the app is
+-- admin-gated. No FOR clause, so it covers every command, and the is_admin()
+-- condition gates all of them. The name predates it being the only read path.
+CREATE POLICY "Admin writes merchant logo index" ON "public"."finance_merchant_logos"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+-- anon holds nothing: a grant is a layer of its own beside RLS, and TRUNCATE is
+-- not filtered by RLS at all.
+REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_merchant_logos" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_merchant_logos" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_merchant_logos" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_merchant_logos" IS
+    'Index of cached merchant logos in the merchant-logos bucket. A row with a NULL storage_path is a recorded miss, so the resolver stops re-fetching a merchant whose logo could not be found.';
+
+-- Payslips, captured as figures rather than sent anywhere
+-- (20260907160000_finance_payslips.sql and the payslip_* migrations after it).
+-- The PDF is an archive in the private finance-documents bucket, pointed at by
+-- storage_path and nullable because a payslip typed in by hand is a complete
+-- record on its own; the app renders its own view from the columns. The
+-- pension is split because only the employee's share is a deduction from
+-- gross, and adding the two together is the classic way to make net not
+-- reconcile.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_payslips" (
+    "id" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "pay_date" "date" NOT NULL,
+    "period_start" "date",
+    "period_end" "date",
+    "employer" "text" DEFAULT ''::"text" NOT NULL,
+    "gross" numeric DEFAULT 0 NOT NULL,
+    "income_tax" numeric DEFAULT 0 NOT NULL,
+    "national_insurance" numeric DEFAULT 0 NOT NULL,
+    "pension_employee" numeric DEFAULT 0 NOT NULL,
+    "pension_employer" numeric DEFAULT 0 NOT NULL,
+    "student_loan" numeric DEFAULT 0 NOT NULL,
+    "other_deductions" numeric DEFAULT 0 NOT NULL,
+    "net" numeric DEFAULT 0 NOT NULL,
+    "storage_path" "text",
+    "notes" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "lines" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL
+);
+
+ALTER TABLE "public"."finance_payslips" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+-- Only what genuinely cannot be negative is constrained; see the comment on
+-- the constraint itself.
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_non_negative_check"
+    CHECK (("gross" >= 0) AND ("pension_employee" >= 0) AND ("pension_employer" >= 0));
+
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_period_check"
+    CHECK (("period_start" IS NULL) OR ("period_end" IS NULL) OR ("period_start" <= "period_end"));
+
+-- Kept deliberately loose: a payslip may list anything, and a CHECK
+-- enumerating today's labels would reject tomorrow's.
+ALTER TABLE ONLY "public"."finance_payslips"
+    ADD CONSTRAINT "finance_payslips_lines_is_array" CHECK (jsonb_typeof("lines") = 'array');
+
+-- A pay date alone does not identify a payslip: overlapping employment gives
+-- two on the same day, and the second write would replace the first. employer
+-- is NOT NULL DEFAULT '' rather than nullable so the client's lookup by
+-- profile_id, employer and pay_date matches exactly (employer '' included), and
+-- this plain unique index blocks a second row for the same three.
+CREATE UNIQUE INDEX "idx_finance_payslips_profile_employer_pay_date"
+    ON "public"."finance_payslips" ("profile_id", "employer", "pay_date");
+
+-- Exists so the reconciliation table below can reference (profile_id, id)
+-- and keep a payslip and its linked transaction in one profile.
+CREATE UNIQUE INDEX "idx_finance_payslips_profile_id_id"
+    ON "public"."finance_payslips" ("profile_id", "id");
+
+ALTER TABLE "public"."finance_payslips" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_payslips"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_payslips" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_payslips" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_payslips" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_payslips" TO "service_role";
+
+COMMENT ON COLUMN "public"."finance_payslips"."lines" IS
+    'Line items as the payslip states them: [{ label, amount, kind }], where kind is payment | deduction | benefit. A benefit is a sacrifice taken from the pay column -- pension, a gym membership -- which reduces pay without appearing under deductions. Empty when a payslip was captured by hand.';
+
+COMMENT ON CONSTRAINT "finance_payslips_non_negative_check" ON "public"."finance_payslips" IS
+    'Income tax, National Insurance, student loan, other deductions and net are deliberately unconstrained: each can legitimately be negative when a refund or an adjustment runs through payroll.';
+
+-- A confirmed link between a payslip's take-home figure and the incoming bank
+-- transaction (20260909155110_payslip_transaction_reconciliations.sql,
+-- 20260910054857_payslip_reconciliation_fk_indexes.sql). Suggestions are
+-- computed in the browser; this table holds only a person's explicit
+-- confirmation, never an uncertain automatic match.
+--
+-- The composite foreign keys make a cross-profile link impossible at the
+-- database layer. They rely on idx_finance_payslips_profile_id_id above and on
+-- idx_finance_transactions_profile_id_id. The two foreign key names below are
+-- the 63-byte truncations Postgres stored, written out in full so they match.
+
+CREATE TABLE IF NOT EXISTS "public"."finance_payslip_transaction_reconciliations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "payslip_id" "text" NOT NULL,
+    "transaction_id" "text" NOT NULL,
+    "confirmed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_payslip_transaction_reconciliations" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_profile_payslip_fke"
+    FOREIGN KEY ("profile_id", "payslip_id")
+    REFERENCES "public"."finance_payslips"("profile_id", "id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_payslip_transaction_reconciliations"
+    ADD CONSTRAINT "finance_payslip_transaction_reconciliations_profile_transaction"
+    FOREIGN KEY ("profile_id", "transaction_id")
+    REFERENCES "public"."finance_transactions"("profile_id", "id") ON DELETE CASCADE;
+
+-- A payslip is one payment and a transaction is one receipt, so neither side
+-- can be confirmed twice. Each leads with profile_id so it also covers the
+-- matching composite foreign key's cascade lookup.
+CREATE UNIQUE INDEX "idx_finance_payslip_reconciliation_profile_payslip"
+    ON "public"."finance_payslip_transaction_reconciliations" ("profile_id", "payslip_id");
+
+CREATE UNIQUE INDEX "idx_finance_payslip_reconciliation_profile_transaction"
+    ON "public"."finance_payslip_transaction_reconciliations" ("profile_id", "transaction_id");
+
+CREATE INDEX "idx_finance_payslip_reconciliation_profile"
+    ON "public"."finance_payslip_transaction_reconciliations" ("profile_id");
+
+ALTER TABLE "public"."finance_payslip_transaction_reconciliations" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_payslip_transaction_reconciliations"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_payslip_transaction_reconciliations" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_payslip_transaction_reconciliations" IS
+    'User-confirmed, one-to-one links between a payslip take-home figure and its incoming finance transaction.';
+
+-- Merchant pattern matching rules for transaction categorisation and renaming
+-- (20261029230000_finance_category_rules.sql).
+CREATE TABLE IF NOT EXISTS "public"."finance_category_rules" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "merchant_pattern" "text" NOT NULL,
+    "category" "text" NOT NULL,
+    "rename_to" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "public"."finance_category_rules" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."finance_category_rules"
+    ADD CONSTRAINT "finance_category_rules_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."finance_category_rules"
+    ADD CONSTRAINT "finance_category_rules_profile_id_fkey"
+    FOREIGN KEY ("profile_id") REFERENCES "public"."finance_profiles"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."finance_category_rules"
+    ADD CONSTRAINT "finance_category_rules_pattern_not_empty"
+    CHECK (length(trim("merchant_pattern")) > 0);
+
+ALTER TABLE ONLY "public"."finance_category_rules"
+    ADD CONSTRAINT "finance_category_rules_category_not_empty"
+    CHECK (length(trim("category")) > 0);
+
+CREATE INDEX IF NOT EXISTS "idx_finance_category_rules_profile_id"
+    ON "public"."finance_category_rules" ("profile_id");
+
+ALTER TABLE "public"."finance_category_rules" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin Only" ON "public"."finance_category_rules"
+    TO "authenticated"
+    USING ((SELECT "public"."is_admin"()))
+    WITH CHECK ((SELECT "public"."is_admin"()));
+
+REVOKE ALL ON TABLE "public"."finance_category_rules" FROM "anon";
+REVOKE ALL ON TABLE "public"."finance_category_rules" FROM "authenticated";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."finance_category_rules" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_category_rules" TO "service_role";
+
+COMMENT ON TABLE "public"."finance_category_rules" IS
+    'User-defined merchant pattern matching rules for automated transaction categorisation and merchant renaming, scoped to a finance profile.';
+
 
 -- Triggers live here rather than with the function in 01_functions.sql:
 -- schema files run in filename order, so the tables must exist first.

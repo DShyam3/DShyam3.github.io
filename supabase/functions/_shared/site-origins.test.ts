@@ -1,10 +1,5 @@
 import { buildOrigins } from './site-origins.ts'
-
-function assertEquals(actual: unknown, expected: unknown): void {
-  if (actual !== expected) {
-    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
-  }
-}
+import { assertEquals } from './test-assert.ts'
 
 function requestWithOrigin(origin: string | null): Request {
   const headers = new Headers()

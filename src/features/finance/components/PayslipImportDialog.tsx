@@ -209,7 +209,7 @@ export function PayslipImportDialog({ open, onOpenChange }: {
           )}
 
           {rows.length > 0 && (
-            <div className="space-y-1 max-h-[45vh] overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[45dvh] overflow-y-auto pr-1">
               {rows.map((row, i) => {
                 const check = checkPayslip(row.slip);
                 // A file that yielded nothing is not a file that balances.

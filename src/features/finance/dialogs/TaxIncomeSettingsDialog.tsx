@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
   DollarSign,
   Calendar,
@@ -45,8 +46,15 @@ import {
   DEFAULT_BIWEEKLY_ANCHOR,
   DEFAULT_RECURRING_TEMPLATES,
   DEFAULT_CATEGORY_TEMPLATES,
+  MONTH_NAMES,
   SAVINGS_PRESETS
 } from '../finance-defaults';
+import {
+  BIRTHDAY_LEAVE_RULES,
+  BIRTHDAY_LEAVE_RULE_LABELS,
+  getDaysInMonth,
+  type BirthdayLeaveRule,
+} from '@/lib/finance';
 import type { FinanceSettings, TaxConfig, RecurringTemplate, CreditBureauConfig } from '../finance-types';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -85,11 +93,11 @@ export function TaxIncomeSettingsDialog({
   const { isAdmin } = useAuth();
   const { toast } = useToast();
 
-  // 2020 through next tax year, plus whatever the loaded settings carry even
-  // if it falls outside that range -- a stored year should stay selectable.
+  // 2020 through currentTaxYear() + 6, plus whatever the loaded settings carry
+  // even if it falls outside that range -- a stored year should stay selectable.
   const taxYearOptions = useMemo(() => {
     const years = new Set<number>();
-    for (let y = 2020; y <= currentTaxYear() + 1; y++) years.add(y);
+    for (let y = 2020; y <= currentTaxYear() + 6; y++) years.add(y);
     years.add(settings.taxYear);
     return Array.from(years).sort((a, b) => a - b);
   }, [settings.taxYear]);
@@ -115,6 +123,10 @@ export function TaxIncomeSettingsDialog({
   const [paydaySchedule, setPaydaySchedule] = useState<FinanceSettings['paydaySchedule']>(settings.paydaySchedule || 'monthly_date');
   const [paydayWeekday, setPaydayWeekday] = useState<number>(settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
   const [paydayBiweeklyAnchor, setPaydayBiweeklyAnchor] = useState<string>(settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
+  const [birthdayLeaveEnabled, setBirthdayLeaveEnabled] = useState<boolean>(Boolean(settings.birthdayLeaveEnabled));
+  const [birthdayLeaveRule, setBirthdayLeaveRule] = useState<BirthdayLeaveRule>(settings.birthdayLeaveRule || 'within_week');
+  const [birthdayDayInput, setBirthdayDayInput] = useState<string>(settings.birthdayDay ? String(settings.birthdayDay) : '');
+  const [birthdayMonthInput, setBirthdayMonthInput] = useState<string>(settings.birthdayMonth ? String(settings.birthdayMonth) : 'none');
 
   useEffect(() => {
     if (isOpen) {
@@ -136,6 +148,10 @@ export function TaxIncomeSettingsDialog({
       setPaydaySchedule(settings.paydaySchedule || 'monthly_date');
       setPaydayWeekday(settings.paydayWeekday !== undefined ? settings.paydayWeekday : 5);
       setPaydayBiweeklyAnchor(settings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
+      setBirthdayLeaveEnabled(Boolean(settings.birthdayLeaveEnabled));
+      setBirthdayLeaveRule(settings.birthdayLeaveRule || 'within_week');
+      setBirthdayDayInput(settings.birthdayDay ? String(settings.birthdayDay) : '');
+      setBirthdayMonthInput(settings.birthdayMonth ? String(settings.birthdayMonth) : 'none');
     }
   }, [isOpen, taxConfig, recurringTemplates, creditBureaus, settings]);
 
@@ -208,6 +224,25 @@ export function TaxIncomeSettingsDialog({
       return;
     }
 
+    const parsedBdayDay = birthdayDayInput.trim() ? parseInt(birthdayDayInput.trim(), 10) : null;
+    const parsedBdayMonth = birthdayMonthInput !== 'none' ? parseInt(birthdayMonthInput, 10) : null;
+
+    if ((parsedBdayDay !== null && parsedBdayMonth === null) || (parsedBdayDay === null && parsedBdayMonth !== null)) {
+      toast({ title: 'Incomplete Birthday Date', description: 'Please provide both day (DD) and month (MM) for your birthday, or clear both.', variant: 'destructive' });
+      return;
+    }
+    if (parsedBdayDay !== null && parsedBdayMonth !== null) {
+      if (isNaN(parsedBdayMonth) || parsedBdayMonth < 1 || parsedBdayMonth > 12) {
+        toast({ title: 'Invalid Birthday Month', description: 'Month must be between 1 and 12.', variant: 'destructive' });
+        return;
+      }
+      const maxDays = getDaysInMonth(2024, parsedBdayMonth - 1);
+      if (isNaN(parsedBdayDay) || parsedBdayDay < 1 || parsedBdayDay > maxDays) {
+        toast({ title: 'Invalid Birthday Day', description: `Day must be between 1 and ${maxDays} for ${MONTH_NAMES[parsedBdayMonth - 1]}.`, variant: 'destructive' });
+        return;
+      }
+    }
+
     const updatedSettings: FinanceSettings = {
       ...settings,
       grossSalary: newGross,
@@ -224,6 +259,10 @@ export function TaxIncomeSettingsDialog({
       paydayWeekday,
       paydayBiweeklyAnchor,
       activeSavingsTypes: draftActiveSavingsTypes,
+      birthdayLeaveEnabled,
+      birthdayLeaveRule,
+      birthdayMonth: parsedBdayMonth,
+      birthdayDay: parsedBdayDay,
     };
 
     setSettings(updatedSettings);
@@ -289,6 +328,10 @@ export function TaxIncomeSettingsDialog({
     setPaydaySchedule(defaultSettings.paydaySchedule || 'monthly_date');
     setPaydayWeekday(defaultSettings.paydayWeekday !== undefined ? defaultSettings.paydayWeekday : 5);
     setPaydayBiweeklyAnchor(defaultSettings.paydayBiweeklyAnchor || DEFAULT_BIWEEKLY_ANCHOR);
+    setBirthdayLeaveEnabled(Boolean(defaultSettings.birthdayLeaveEnabled));
+    setBirthdayLeaveRule(defaultSettings.birthdayLeaveRule || 'within_week');
+    setBirthdayDayInput(defaultSettings.birthdayDay ? String(defaultSettings.birthdayDay) : '');
+    setBirthdayMonthInput(defaultSettings.birthdayMonth ? String(defaultSettings.birthdayMonth) : 'none');
 
     if (isAdmin) {
       try {
@@ -324,7 +367,12 @@ export function TaxIncomeSettingsDialog({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="!flex !flex-col sm:rounded-lg border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none">
+      {/* Focus the dialog, not its first field: that is the salary, and a
+          focused number field shows its value while figures are hidden. */}
+      <DialogContent
+        onOpenAutoFocus={e => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}
+        className="!flex !flex-col sm:rounded-lg border border-border/40 bg-card font-mono w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl lg:max-w-3xl max-h-[90dvh] gap-0 p-0 overflow-hidden shadow-none"
+      >
         <DialogHeader className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border/40 text-left shrink-0">
           <DialogTitle className="font-mono text-base font-bold tracking-tight text-foreground">Tax & Income Settings</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground font-mono">
@@ -362,7 +410,7 @@ export function TaxIncomeSettingsDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="paydaySchedule" className="text-xs font-medium text-muted-foreground">Payday Schedule</Label>
+                  <Label htmlFor="paydaySchedule" className="text-xs font-medium text-muted-foreground">Payday schedule</Label>
                   <Select
                     value={paydaySchedule}
                     onValueChange={(val) => setPaydaySchedule(val as FinanceSettings['paydaySchedule'])}
@@ -383,7 +431,7 @@ export function TaxIncomeSettingsDialog({
 
                 {paydaySchedule === 'monthly_date' && (
                   <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <Label htmlFor="payDay" className="text-xs font-medium text-muted-foreground">Scheduled Payday (Day of Month)</Label>
+                    <Label htmlFor="payDay" className="text-xs font-medium text-muted-foreground">Scheduled payday (day of month)</Label>
                     <Input
                       id="payDay"
                       type="number"
@@ -400,7 +448,7 @@ export function TaxIncomeSettingsDialog({
 
                 {paydaySchedule === 'weekly' && (
                   <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <Label htmlFor="paydayWeekday" className="text-xs font-medium text-muted-foreground">Weekly Payday</Label>
+                    <Label htmlFor="paydayWeekday" className="text-xs font-medium text-muted-foreground">Weekly payday</Label>
                     <Select
                       value={paydayWeekday.toString()}
                       onValueChange={(val) => setPaydayWeekday(parseInt(val, 10))}
@@ -421,7 +469,7 @@ export function TaxIncomeSettingsDialog({
 
                 {paydaySchedule === 'biweekly' && (
                   <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <Label htmlFor="biweeklyAnchor" className="text-xs font-medium text-muted-foreground">Reference Anchor Payday</Label>
+                    <Label htmlFor="biweeklyAnchor" className="text-xs font-medium text-muted-foreground">Reference anchor payday</Label>
                     <Input
                       id="biweeklyAnchor"
                       type="date"
@@ -436,12 +484,12 @@ export function TaxIncomeSettingsDialog({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">Pension arrangement</Label>
+                    <Label htmlFor="pensionType" className="text-xs font-medium text-muted-foreground">Pension arrangement</Label>
                     <Select
                       value={settings.pensionType}
                       onValueChange={(val) => setSettings({ ...settings, pensionType: val as FinanceSettings['pensionType'] })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="pensionType" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select type..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -453,12 +501,12 @@ export function TaxIncomeSettingsDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">Student loan plan</Label>
+                    <Label htmlFor="studentLoanPlan" className="text-xs font-medium text-muted-foreground">Student loan plan</Label>
                     <Select
                       value={settings.studentLoanPlan}
                       onValueChange={(val) => setSettings({ ...settings, studentLoanPlan: val as FinanceSettings['studentLoanPlan'] })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="studentLoanPlan" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select plan..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -580,12 +628,12 @@ export function TaxIncomeSettingsDialog({
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">UK region</Label>
+                    <Label htmlFor="ukRegion" className="text-xs font-medium text-muted-foreground">UK region</Label>
                     <Select
                       value={settings.ukRegion}
                       onValueChange={(val) => setSettings({ ...settings, ukRegion: val as FinanceSettings['ukRegion'] })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="ukRegion" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select region..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -596,12 +644,12 @@ export function TaxIncomeSettingsDialog({
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">Tax year</Label>
+                    <Label htmlFor="taxYear" className="text-xs font-medium text-muted-foreground">Tax year</Label>
                     <Select
                       value={settings.taxYear.toString()}
                       onValueChange={(val) => setSettings({ ...settings, taxYear: parseInt(val, 10) })}
                     >
-                      <SelectTrigger className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                      <SelectTrigger id="taxYear" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
                         <SelectValue placeholder="Select year..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
@@ -664,6 +712,97 @@ export function TaxIncomeSettingsDialog({
                     />
                   </div>
                 </div>
+
+                {/* Birthday Day Off Benefit */}
+                <div className="rounded-lg border border-border/30 bg-muted/20 p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label htmlFor="birthdayLeaveEnabled" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <span aria-hidden="true">🎂</span> Birthday Day Off Benefit
+                      </Label>
+                      <p id="birthdayLeaveEnabled-hint" className="text-xs text-muted-foreground">
+                        +1 paid leave day for your birthday that does not deduct from your annual work leave
+                      </p>
+                    </div>
+                    <Switch
+                      id="birthdayLeaveEnabled"
+                      checked={birthdayLeaveEnabled}
+                      onCheckedChange={setBirthdayLeaveEnabled}
+                      aria-describedby="birthdayLeaveEnabled-hint"
+                    />
+                  </div>
+
+                  {birthdayLeaveEnabled && (
+                    <div className="space-y-3 pt-2 border-t border-border/30">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="birthdayLeaveRule" className="text-xs font-medium text-muted-foreground">Usage window rule</Label>
+                        <Select
+                          value={birthdayLeaveRule}
+                          onValueChange={(val) => setBirthdayLeaveRule(val as BirthdayLeaveRule)}
+                        >
+                          <SelectTrigger id="birthdayLeaveRule" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                            <SelectValue placeholder="Select rule..." />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
+                            {BIRTHDAY_LEAVE_RULES.map(rule => (
+                              <SelectItem key={rule} value={rule}>
+                                {BIRTHDAY_LEAVE_RULE_LABELS[rule].label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {BIRTHDAY_LEAVE_RULE_LABELS[birthdayLeaveRule].description}
+                        </p>
+                      </div>
+
+                      <div role="group" aria-labelledby="birthdayDate-label" className="space-y-1.5">
+                        <p id="birthdayDate-label" className="text-xs font-medium leading-snug text-muted-foreground">
+                          Birthday Date (UK format: Day / Month)
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label htmlFor="birthdayDay" className="text-xs text-muted-foreground">Day (DD)</Label>
+                            <Input
+                              id="birthdayDay"
+                              type="number"
+                              inputMode="numeric"
+                              min="1"
+                              max="31"
+                              placeholder="e.g. 15"
+                              value={birthdayDayInput}
+                              onChange={(e) => setBirthdayDayInput(e.target.value)}
+                              className="rounded-lg h-9 border border-border/40 bg-background/50 font-mono text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="birthdayMonth" className="text-xs text-muted-foreground">Month</Label>
+                            <Select
+                              value={birthdayMonthInput}
+                              onValueChange={setBirthdayMonthInput}
+                            >
+                              <SelectTrigger id="birthdayMonth" className="rounded-lg h-9 border border-border/40 bg-background/50 text-xs font-mono">
+                                <SelectValue placeholder="Month..." />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-lg border border-border/40 bg-popover font-mono text-xs">
+                                <SelectItem value="none">Not set</SelectItem>
+                                {MONTH_NAMES.map((mName, idx) => {
+                                  const mNum = idx + 1;
+                                  const padM = String(mNum).padStart(2, '0');
+                                  return (
+                                    <SelectItem key={mNum} value={String(mNum)}>
+                                      {padM} — {mName}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
 
@@ -676,7 +815,7 @@ export function TaxIncomeSettingsDialog({
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Advanced Configurations</h3>
-                    <p className="text-xs text-muted-foreground">Customize tax bands, recurring templates, and credit bureaus</p>
+                    <p className="text-xs text-muted-foreground">Reference rates, recurring templates, and credit bureaus</p>
                   </div>
                 </div>
               </div>
@@ -708,7 +847,7 @@ export function TaxIncomeSettingsDialog({
                           required
                         />
                         <p className="text-xs leading-relaxed text-muted-foreground">
-                          Saving a new date creates a new rate set. Earlier pays and projections keep the rates that applied then.
+                          Take-home on Tax &amp; Income and the Tax Calculator uses the built-in 2026/27 rules, not these bands. The student loan thresholds still drive the Student Loan section; saving a new date creates a new rate set for it.
                         </p>
                       </div>
                       <div className="space-y-3">

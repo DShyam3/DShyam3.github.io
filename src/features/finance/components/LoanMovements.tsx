@@ -21,7 +21,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { Debt, DebtDraw } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { toISODate } from '@/lib/finance';
-import { isBorrowing, useDebtMutations } from '../useDebtMutations';
+import { isBorrowing } from '@/lib/finance/student-loan';
+import { useDebtMutations } from '../useDebtMutations';
 
 type Movement = 'refund' | 'payment';
 

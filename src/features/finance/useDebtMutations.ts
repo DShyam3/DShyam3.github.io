@@ -7,7 +7,7 @@
  */
 
 import { useFinanceData } from './FinanceDataContext';
-import type { Debt, DebtDraw } from './finance-types';
+import type { Debt } from './finance-types';
 
 /**
  * A student loan is income-contingent whatever its type says: older rows set
@@ -15,9 +15,6 @@ import type { Debt, DebtDraw } from './finance-types';
  */
 export const isStudentLoanDebt = (debt: Pick<Debt, 'type' | 'repaymentType'>): boolean =>
   debt.type === 'student' || debt.repaymentType === 'income_contingent';
-
-/** Borrowing, as opposed to a refund or a payment recorded in the same list. */
-export const isBorrowing = (draw: DebtDraw): boolean => !draw.kind || draw.kind === 'borrowing';
 
 export function useDebtMutations() {
   const { bankAccounts, creditScores, debts, memberships, saveDataToSupabase, setDebts } = useFinanceData();
