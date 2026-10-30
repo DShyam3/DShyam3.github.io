@@ -158,11 +158,12 @@ The middle card landed: one framed scroller per route, toolbars that pin only
 where they fit, Travel's workspace mode, the income overview, and the nested
 caps released (`FEATURES.md`, `DESIGN_SYSTEM.md` responsive contract; the
 decisions are in `REHAUL_HISTORY.md`). Public routes were checked in the
-browser; Finance was not, because it needs a signed-in session.
+browser. Signed-in Finance verification now covers Tax & Income and a synthetic
+calculator scenario; the wider pass below remains open.
 
 | Item | Why it is open |
 |---|---|
-| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Bills calendar, Forecast, recurring Paid and the Student Loan "You borrowed" figure were checked on the local stack on 2026-10-24, with test rows deleted after: tick, untick, due-day edit, Forecast at 375px, and an empty-date draw left out. Not checked: the early-payment button (its 7-day window cannot open for a monthly bill on 24 October; unit-tested only), and anything on the live site signed in |
+| Signed-in pass over Finance | Income overview, compensation header, Transactions panes and released caps are covered by typecheck and tests only. Bills calendar, Forecast, recurring Paid and the Student Loan "You borrowed" figure were checked on the local stack on 2026-10-24, with test rows deleted after: tick, untick, due-day edit, Forecast at 375px, and an empty-date draw left out. Not checked: the early-payment button (its 7-day window cannot open for a monthly bill on 24 October; unit-tested only), and the wider live signed-in flows. Live Tax & Income and a synthetic calculator scenario with negative benefits cash impact render correctly; a 375px viewport has no document overflow. The category-rules loading error is cleared after migration and loader deployment, verified in a fresh signed-in tab on 2026-10-30. Light-theme smoke check passed at 1440px and dark was restored; the full cross-theme pass remains open |
 | Transactions below 1024px or 720px tall | The list keeps a pane capped to the measured card height (16rem floor) so the inspector stacked under it stays in reach. Open the inspector as a sheet on selection, then drop the cap |
 | Real devices | iPhone Safari toolbar and keyboard, iPad split view, Larger mode, 200% zoom. The pin rule re-measures on resize through `ResizeObserver`, which a hidden preview pane pauses, so only the on-load measurement is verified |
 | Watchlist episode dialog | Deliberate split panes; audit their heights on short and narrow screens on their own |
