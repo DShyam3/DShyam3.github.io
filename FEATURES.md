@@ -397,7 +397,24 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   (Normal, Include Paid Leave, Exclude Paid Leave); another selects the period shown
   (Annual, Monthly, Weekly, Daily, Hourly). On narrower screens, the table shows one
   period at a time via the switch, so it never scrolls sideways. Pension contributions
-  show their type: Net pay arrangement, Salary sacrifice, or Relief at source
+  show their type: Net pay arrangement, Salary sacrifice, or Relief at source.
+  Under the breakdown, **Your pay, slice by slice** splits the salary wherever a
+  rate changes (the personal allowance, each income tax band, the National
+  Insurance thresholds, the student loan thresholds, the allowance taper and the
+  child benefit charge) and lists each slice with what income tax, National
+  Insurance, student loans and the child benefit charge take from it and what it
+  keeps, in pounds and as a share of the slice. Above the list are the share of
+  salary kept, and a bar with a legend splitting the salary into pension,
+  take-home, income tax, child benefit charge, National Insurance and student
+  loan. A switch, **After pension and benefits in kind**, takes the pension off
+  the top of the salary and taxes benefits in kind on top of it, so the share
+  kept is what reaches the bank; off, it shows the salary alone. It is off and
+  cannot be switched when there is no pension or benefit in kind to take out. A
+  salary-sacrifice or net-pay pension is its own slice; relief at source is a row
+  paid from take-home. Cash package items are not in it, as they are not in
+  take-home. When the tax code already collects the tax on benefits in kind, the
+  card says the tax is in every slice either way. While figures are hidden, the
+  card shows no shares.
 - **Payslips** — stored with line items, viewable natively, extracted from PDF
   in the browser. A PDF attached in the add or edit form is read and parsed before
   saving; the date, employer and any blank or zero fields are filled from the PDF
@@ -436,7 +453,11 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   charge takes and the fall in adjusted net income that would clear it, or that
   it has all gone); and the two cliffs, childcare support at £100,000 and
   marriage allowance eligibility, each with what one more pound costs. A note
-  under the children field states the clawback and the childcare cliff.
+  under the children field states the clawback and the childcare cliff. Under the
+  breakdown, the same **Your pay, slice by slice** card shows the figures typed,
+  slice by slice, with the same switch. A marriage allowance lost at its limit is
+  its own row rather than part of a rate, and child benefit is named beside what
+  pay keeps rather than counted in it.
 
   A chart switches between the marginal rate across incomes from £0 to £200,000
   (wider for higher incomes) and take-home against gross, with your income marked,
