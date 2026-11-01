@@ -1,26 +1,27 @@
 # State
 
-Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed; the fix is `a8534650`) · Verified code revision: `a8534650` (the history-cap fix on the merge of `main` `caff0df2`).
+Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` `a7c892c7` merged in (committed, not pushed; origin is at `5fb3a990`) · Main: `a7c892c7`, deployed.
 
-## Landed (on the branch, pushed; not in main)
+## Landed (on the branch; not in main)
 
+- Merge of `main` `a7c892c7` (#13), committed locally, not pushed. Only STATE.md conflicted; this file keeps the branch's handoff plus main's new facts.
 - The history cap (`a8534650`). Each request is checked against the Edge Function's caps (64 messages, 256 KiB) before it is sent. A question whose tool rounds outgrow the history starts afresh when its own turns fit and two calls remain; otherwise it stops unsent and the history is kept. A question that fails after starting afresh (stopped, cut off or empty) keeps the history too. Six tests in `conversation.test.ts`. The stop notice now reads "ran out of steps or room".
 - Merged `main` `caff0df2` into the admin-assistant branch (plan 7.6; forked from main on 2026-10-08). The merge includes `a5a7c892` and `d895a224`.
 - Seven conflicts resolved: header keeps main's socials-open fade plus the assistant `action` slot; the inventory spec parser stays in `src/collections/inventory-specs.ts` with main's `safeHref()` check; finance tool context keeps the branch's ledger and main's local-day alert dates; SECURITY.md lists the assistant's rate limit.
 - After review: the inventory tool uses main's `isInEdc` (`src/features/inventory/edc/categories.ts`, widened to take `is_edc`/`is_wishlist`); a duplicate, contradicting header paragraph was removed from FEATURES.md; phone-header heights re-measured on the merged header and unchanged.
 - Reviewer (Opus) found no high findings: Edge Function admin check, rate limit, CORS allowlist, provider-by-id and generic errors are correct; category rules and the tax engine do not drift from the screens.
-- Main, deployed and unchanged by this merge: Pages run `41046846244` on `d895a224`; hosted migration `20261029230000` applied on `yvtiybyuifkiwyrnjebe`; signed-in Tax & Income and calculator render.
+- Main, deployed: Pages run `41347059793` on `a7c892c7` (#13: the take-home-by-income-slice card counts the High Income Child Benefit Charge). Before it, `d895a224`; hosted migration `20261029230000` applied on `yvtiybyuifkiwyrnjebe`.
 
 ## Checks
 
 | Check | Date | Verified revision / result |
 |---|---|---|
-| Lint | 2026-11-01 | `a8534650`: 0 errors, 0 warnings |
-| Typecheck (`npm run typecheck`, `src`) | 2026-11-01 | `a8534650`: pass |
-| Function typecheck (`npm run typecheck:functions`) | 2026-10-30 | Merged tree: pass. Not re-run on the fix; no file under `supabase/functions` changed |
-| Tests | 2026-11-01 | `a8534650`: 1,855 of 1,855 pass across 67 files |
-| Build | 2026-11-01 | `a8534650`: pass |
-| Graph | 2026-11-01 | `graphify update .` current on `a8534650` |
+| Lint | 2026-11-01 | Merge of `a7c892c7`: 0 errors, 0 warnings |
+| Typecheck (`npm run typecheck`, `src`) | 2026-11-01 | Merge of `a7c892c7`: pass |
+| Function typecheck (`npm run typecheck:functions`) | 2026-10-30 | Merged tree: pass. Not re-run since; no file under `supabase/functions` changed |
+| Tests | 2026-11-01 | Merge of `a7c892c7`: 1,870 of 1,870 pass across 67 files |
+| Build | 2026-11-01 | Merge of `a7c892c7`: pass |
+| Graph | 2026-11-01 | `graphify update .` current on the merge of `a7c892c7` |
 | Reviewer (Opus) | 2026-10-30 | Merged diff, before the post-review edits: no high findings |
 | Reviewer (Opus), history-cap fix | 2026-11-01 | First pass: one medium, two low, all fixed. Second pass: one risk (an empty answer after a restart wiped the history) and three nits, all fixed; that last fix is not re-reviewed |
 | Ship-check | 2026-11-01 | `a8534650`: 16 findings, 0 blockers. New against main's 2026-10-30 run: four "hardcoded credential" highs in `assistant/providers.ts`, which are secret names (`ANTHROPIC_API_KEY` etc.), not values; glob/minimatch advisories on an unchanged lockfile, so main has them too |
@@ -36,8 +37,7 @@ Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed; the 
 ## Blockers and open risks
 
 - The merge is on the branch only, pushed to origin; main has none of it. Nothing about the assistant is live; the function is not deployed and no model key is set.
-- The history-cap fix is on the branch only, not in main.
-- The history-cap fix is unit-tested only. It has not run against a real provider, and the assistant still needs a deployed function and a key.
+- The history-cap fix is on the branch only and unit-tested only; it has not run against a real provider.
 - Unverified: the assistant has never run against a real provider on this merged code, and no signed-in browser check of it has been done.
 - Unverified wire names (REHAUL_PLAN 7.6): the Anthropic row sends `fallbacks: "default"` under `anthropic-beta: server-side-fallback-2026-07-01`; if the API refuses either, every call fails as a generic 502.
 - No re-review is recorded for the post-review edits to `inventory-tool.ts` and `edc/categories.ts`.
@@ -47,6 +47,7 @@ Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed; the 
 
 ## Carried from main (open, unverified where stated)
 
+- #13's card with children has never been seen in a browser, locally or live. FEATURES.md ~line 412 still says "Take-home by tax band"; the card's heading is "Take-home by income slice" (owner to correct).
 - Main's live checks still open: signed-in Finance flows (early payment, actual writes, bank sync, uploads, saved links); cross-theme, iPhone Safari, iPad split view, Larger mode and 200% zoom.
 - Four reference tables still delete then insert; deadline/reload races, category edits during sync and stalled token refresh remain open.
 - A schemas-only rebuild lacks composite-key objects. Local PG15→17 reset and administrator authenticator enrolment need the owner.

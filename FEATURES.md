@@ -451,13 +451,21 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   marriage allowance eligibility, each with what one more pound costs. A note
   under the children field states the clawback and the childcare cliff.
 
-  A **Take-home by tax band** card, also on Tax & Income, shows how each slice
-  of gross pay is split between income tax, National Insurance, student loans
-  and pension, and how much of it you keep. Slices break wherever a rate
+  A **Take-home by income slice** card, also on Tax & Income, shows how each slice
+  of gross pay is split between income tax, National Insurance, student loans,
+  pension and, where children are entered and the charge applies, the child
+  benefit charge; and how much of it you keep. Slices break wherever a rate
   changes: the personal allowance, each tax band (Scotland's six included), the
-  £100,000–£125,140 allowance taper, the NI thresholds and each student loan
-  threshold. A pension contribution or benefit in kind that spans a threshold
-  is split there too, so no row shows an averaged rate. A toggle switches
+  £100,000–£125,140 allowance taper, the NI thresholds, each student loan
+  threshold and, with children entered, £60,000 and £80,000 of adjusted net
+  income, where the child benefit charge starts and ends. A pension contribution
+  or benefit in kind that spans a threshold is split there too, so no row shows
+  an averaged rate for income tax, National Insurance, student loans or pension.
+  The child benefit charge rises in £200 steps of adjusted net income, so a
+  slice's charge rate is the average across it. The charge is paid through Self
+  Assessment rather than from the payslip. Child benefit itself and childcare
+  support are not pay and are left out; when there are children, the card names
+  the child benefit amount beneath the table. A toggle switches
   between **After pension & benefits** and **Salary only**. The headline gives
   take-home as a share of cash pay, with a coloured bar and legend for each
   deduction's share. Pension and benefit-in-kind rows show the change they make

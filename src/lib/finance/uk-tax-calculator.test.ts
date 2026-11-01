@@ -1407,9 +1407,10 @@ describe('ukTakeHomeBySlice', () => {
   const assertSliceInvariants = (i: UkTaxInput, opts?: { includePensionAndBenefits?: boolean }) => {
     const summary = ukTakeHomeBySlice(i, opts);
     const include = opts?.includePensionAndBenefits ?? true;
+    // Children stay in: the charge is a tax on income. Childcare support is
+    // not pay and does not move take-home either way.
     const expectedCalc = calculateUkTax({
       ...i,
-      children: 0,
       childcareSupport: 0,
       pensionContribution: include ? i.pensionContribution : 0,
       benefitsInKind: include ? i.benefitsInKind : 0,
@@ -1418,13 +1419,30 @@ describe('ukTakeHomeBySlice', () => {
     expect(summary.incomeTax).toBeCloseTo(expectedCalc.incomeTax, money);
     expect(summary.nationalInsurance).toBeCloseTo(expectedCalc.nationalInsurance, money);
     expect(summary.studentLoan).toBeCloseTo(expectedCalc.studentLoan + expectedCalc.postgradLoan, money);
+    expect(summary.childBenefitCharge).toBeCloseTo(expectedCalc.childBenefitCharge, money);
+    expect(summary.childBenefit).toBeCloseTo(expectedCalc.childBenefit, money);
     expect(summary.pensionFromPay).toBeCloseTo(expectedCalc.pensionFromPay, money);
-    expect(summary.rawTakeHome).toBeCloseTo(expectedCalc.takeHome, money);
-    expect(summary.takeHome).toBeCloseTo(Math.max(0, expectedCalc.takeHome), money);
+    expect(summary.totalDeductions).toBeCloseTo(
+      expectedCalc.pensionFromPay +
+        expectedCalc.incomeTax +
+        expectedCalc.nationalInsurance +
+        expectedCalc.studentLoan +
+        expectedCalc.postgradLoan +
+        expectedCalc.childBenefitCharge,
+      money,
+    );
+    // The charge is in, the benefit is not: cash pay is take-home less the benefit.
+    expect(summary.rawTakeHome).toBeCloseTo(expectedCalc.takeHome - expectedCalc.childBenefit, money);
+    expect(summary.takeHome).toBeCloseTo(Math.max(0, expectedCalc.takeHome - expectedCalc.childBenefit), money);
+    expect(summary.shares.childBenefitCharge).toBeCloseTo(
+      summary.income > 0 ? Math.min(1, Math.max(0, summary.childBenefitCharge / summary.income)) : 0,
+      9,
+    );
 
     expect(sumField(summary.slices, s => s.incomeTax)).toBeCloseTo(summary.incomeTax, money);
     expect(sumField(summary.slices, s => s.nationalInsurance)).toBeCloseTo(summary.nationalInsurance, money);
     expect(sumField(summary.slices, s => s.studentLoan)).toBeCloseTo(summary.studentLoan, money);
+    expect(sumField(summary.slices, s => s.childBenefitCharge)).toBeCloseTo(summary.childBenefitCharge, money);
     expect(sumField(summary.slices, s => s.pension)).toBeCloseTo(summary.pensionFromPay, money);
     expect(sumField(summary.slices, s => s.kept)).toBeCloseTo(summary.rawTakeHome, money);
 
@@ -1437,11 +1455,19 @@ describe('ukTakeHomeBySlice', () => {
       }
       expect(Number.isFinite(s.keptRate)).toBe(true);
       expect(s.keptRate).toBeCloseTo(s.kept / s.gross, 9);
-      for (const r of [s.incomeTaxRate, s.nationalInsuranceRate, s.studentLoanRate, s.pensionRate]) {
+      for (const r of [
+        s.incomeTaxRate,
+        s.nationalInsuranceRate,
+        s.studentLoanRate,
+        s.childBenefitChargeRate,
+        s.pensionRate,
+      ]) {
         expect(Number.isFinite(r)).toBe(true);
         expect(r).toBeGreaterThanOrEqual(0);
         expect(r).toBeLessThanOrEqual(1);
       }
+      expect(s.childBenefitCharge).toBeGreaterThanOrEqual(0);
+      expect(s.childBenefitChargeRate).toBeCloseTo(Math.min(1, Math.max(0, s.childBenefitCharge / s.gross)), 9);
     }
     return summary;
   };
@@ -1779,7 +1805,296 @@ describe('ukTakeHomeBySlice', () => {
         incomeTax: 0,
         nationalInsurance: 0,
         studentLoan: 0,
+        childBenefitCharge: 0,
       });
+      expect(s.childBenefitCharge).toBe(0);
+      expect(s.childBenefit).toBe(0);
     }
+  });
+
+  describe('the High Income Child Benefit Charge', () => {
+    // 1 child: 27.05 x 53 = 1,433.65. 2 children: (27.05 + 17.9) x 53 = 2,382.35.
+    const oneChild = 1_433.65;
+    const twoChildren = 2_382.35;
+    const slicesOf = (s: ReturnType<typeof ukTakeHomeBySlice>, kind: UkPaySlice['kind']) =>
+      s.slices.filter(row => row.kind === kind);
+
+    it('charges £72,000, 2 children, plan 2 and £3,600 net pay 42% of the benefit, in the slice from £60,000', () => {
+      const s = assertSliceInvariants(
+        input({
+          income: 72_000,
+          children: 2,
+          undergradPlan: 'plan2',
+          pensionContribution: 3_600,
+          pensionMethod: 'net-pay',
+        }),
+      );
+      // Adjusted net income is £68,400: 42 complete £200 steps above £60,000.
+      expect(s.childBenefit).toBeCloseTo(twoChildren, money);
+      expect(s.childBenefitCharge).toBeCloseTo(twoChildren * 0.42, money);
+      expect(s.childBenefitCharge).toBeCloseTo(1_000.587, money);
+      expect(s.rawTakeHome).toBeCloseTo(45_321.46, 2);
+      expect(s.totalDeductions).toBeCloseTo(72_000 - s.rawTakeHome, money);
+
+      expect(s.slices.map(row => [row.from, row.to, row.kind])).toEqual([
+        [0, 12_570, 'income'],
+        [12_570, 29_385, 'income'],
+        [29_385, 50_270, 'income'],
+        [50_270, 60_000, 'income'],
+        [60_000, 68_400, 'income'],
+        [68_400, 72_000, 'pension'],
+      ]);
+      const above = s.slices[4];
+      expect(above.childBenefitCharge).toBeCloseTo(1_000.587, money);
+      expect(above.childBenefitChargeRate).toBeCloseTo(1_000.587 / 8_400, 6);
+      // 40% tax + 2% NI + 9% loan + the charge, averaged over the slice.
+      expect(above.keptRate).toBeCloseTo(1 - 0.4 - 0.02 - 0.09 - 1_000.587 / 8_400, 6);
+
+      for (const row of [...s.slices.slice(0, 4), ...slicesOf(s, 'pension')]) {
+        expect(row.childBenefitCharge).toBe(0);
+        expect(row.childBenefitChargeRate).toBe(0);
+      }
+      expect(s.shares.childBenefitCharge).toBeCloseTo(1_000.587 / 72_000, 9);
+      const shareTotal =
+        s.shares.takeHome +
+        s.shares.pension +
+        s.shares.incomeTax +
+        s.shares.nationalInsurance +
+        s.shares.studentLoan +
+        s.shares.childBenefitCharge;
+      expect(shareTotal).toBeCloseTo(1, 9);
+    });
+
+    it('matches the figure the old card was missing: kept is calculateUkTax take-home less the benefit', () => {
+      const i = input({
+        income: 72_000,
+        children: 2,
+        undergradPlan: 'plan2',
+        pensionContribution: 3_600,
+        pensionMethod: 'net-pay',
+      });
+      const s = ukTakeHomeBySlice(i);
+      const withoutChildren = calculateUkTax({ ...i, children: 0 });
+      // The old card read £46,322.05: the charge was the whole difference.
+      expect(withoutChildren.takeHome).toBeCloseTo(46_322.05, 2);
+      expect(s.rawTakeHome).toBeCloseTo(withoutChildren.takeHome - s.childBenefitCharge, money);
+      expect(s.rawTakeHome).toBeCloseTo(calculateUkTax(i).takeHome - s.childBenefit, money);
+    });
+
+    it('keeps the charge when pension and benefits are excluded', () => {
+      const s = assertSliceInvariants(
+        input({
+          income: 72_000,
+          children: 2,
+          pensionContribution: 3_600,
+          pensionMethod: 'net-pay',
+          benefitsInKind: 2_000,
+        }),
+        { includePensionAndBenefits: false },
+      );
+      // Adjusted net income is the £72,000 salary: 60 steps, 60% of the benefit.
+      expect(s.childBenefitCharge).toBeCloseTo(twoChildren * 0.6, money);
+      expect(s.childBenefit).toBeCloseTo(twoChildren, money);
+      expect(s.slices.every(row => row.kind === 'income')).toBe(true);
+      expect(s.slices.map(row => [row.from, row.to])).toContainEqual([60_000, 72_000]);
+    });
+
+    it('splits at £60,000 and £80,000 and puts the whole benefit in the slice between them', () => {
+      const s = assertSliceInvariants(input({ income: 90_000, children: 2 }));
+      expect(s.slices.map(row => [row.from, row.to])).toEqual([
+        [0, 12_570],
+        [12_570, 50_270],
+        [50_270, 60_000],
+        [60_000, 80_000],
+        [80_000, 90_000],
+      ]);
+      expect(s.slices[3].childBenefitCharge).toBeCloseTo(twoChildren, money);
+      expect(s.slices[3].childBenefitChargeRate).toBeCloseTo(twoChildren / 20_000, 6);
+      expect(s.slices[4].childBenefitCharge).toBe(0);
+      expect(s.childBenefitCharge).toBeCloseTo(twoChildren, money);
+      // Past £80,000 the benefit is repaid in full: pay is down by all of it, and the
+      // benefit received beside pay brings the household back to the childless figure.
+      expect(s.rawTakeHome).toBeCloseTo(calculateUkTax(input({ income: 90_000 })).takeHome - twoChildren, money);
+      expect(s.rawTakeHome + s.childBenefit).toBeCloseTo(calculateUkTax(input({ income: 90_000 })).takeHome, money);
+    });
+
+    it('splits benefits in kind at £60,000 of total income, and the upper slice carries the steps', () => {
+      const s = assertSliceInvariants(input({ income: 59_000, benefitsInKind: 3_000, children: 1 }));
+      const bik = slicesOf(s, 'benefit-in-kind');
+      expect(bik.map(row => [row.from, row.to])).toEqual([
+        [59_000, 60_000],
+        [60_000, 62_000],
+      ]);
+      // Adjusted net income reaches £62,000: 10 complete £200 steps, 10% of £1,433.65.
+      expect(bik[0].childBenefitCharge).toBe(0);
+      expect(bik[1].childBenefitCharge).toBeCloseTo(0.1 * oneChild, money);
+      expect(bik[1].childBenefitCharge).toBeCloseTo(143.365, money);
+      expect(s.childBenefitCharge).toBeCloseTo(143.365, money);
+      expect(s.childBenefit).toBeCloseTo(oneChild, money);
+      // 40% BIK tax plus the charge, on £2,000.
+      expect(bik[1].keptRate).toBeCloseTo(-0.4 - 143.365 / 2_000, 6);
+    });
+
+    it('places the benefit-in-kind split under relief at source at £60,000 of adjusted net income', () => {
+      // Relief at source does not reduce pay, so pay is £54,000 and adjusted
+      // net income is 54,000 + b - 4,000 = 50,000 + b. The £60,000 line is
+      // b = 10,000, a slice boundary at 54,000 + 10,000 = £64,000.
+      const s = assertSliceInvariants(
+        input({
+          income: 54_000,
+          benefitsInKind: 16_000,
+          children: 1,
+          pensionContribution: 4_000,
+          pensionMethod: 'relief-at-source',
+        }),
+      );
+      const bik = slicesOf(s, 'benefit-in-kind');
+      expect(bik.map(row => [row.from, row.to])).toEqual([
+        [54_000, 54_270],
+        [54_270, 64_000],
+        [64_000, 70_000],
+      ]);
+      expect(bik[0].childBenefitCharge).toBe(0);
+      expect(bik[1].childBenefitCharge).toBe(0);
+      // Adjusted net income reaches £66,000: 30 complete £200 steps, 30% of £1,433.65.
+      expect(bik[2].childBenefitCharge).toBeCloseTo(0.3 * oneChild, money);
+      expect(s.childBenefitCharge).toBeCloseTo(0.3 * oneChild, money);
+    });
+
+    it('charges £70,000 with £6,000 relief at source on adjusted net income of £64,000, in the salary slice', () => {
+      const s = assertSliceInvariants(
+        input({
+          income: 70_000,
+          children: 1,
+          pensionContribution: 6_000,
+          pensionMethod: 'relief-at-source',
+        }),
+      );
+      // 20 complete £200 steps above £60,000: 20% of £1,433.65.
+      expect(s.childBenefitCharge).toBeCloseTo(0.2 * oneChild, money);
+      expect(s.childBenefitCharge).toBeCloseTo(286.73, money);
+      const salary = s.slices.find(row => row.from === 60_000);
+      expect(salary).toBeDefined();
+      expect(salary?.to).toBe(64_000);
+      expect(salary?.kind).toBe('income');
+      expect(salary?.childBenefitCharge).toBeCloseTo(286.73, money);
+      for (const row of slicesOf(s, 'pension')) {
+        expect(row.childBenefitCharge).toBe(0);
+        expect(row.childBenefitChargeRate).toBe(0);
+      }
+      expect(slicesOf(s, 'pension').length).toBeGreaterThan(0);
+    });
+
+    it('holds adjusted net income flat across the pension slices for every method', () => {
+      for (const pensionMethod of ['salary-sacrifice', 'net-pay', 'relief-at-source'] as const) {
+        const s = assertSliceInvariants(
+          input({ income: 75_000, children: 3, pensionContribution: 12_000, pensionMethod }),
+        );
+        // Adjusted net income is £63,000 whatever the method, so all of the charge is on salary.
+        expect(s.childBenefitCharge).toBeCloseTo(calculateUkTax(input({
+          income: 75_000, children: 3, pensionContribution: 12_000, pensionMethod,
+        })).childBenefitCharge, money);
+        expect(sumField(slicesOf(s, 'pension'), row => row.childBenefitCharge)).toBe(0);
+        expect(sumField(slicesOf(s, 'income'), row => row.childBenefitCharge)).toBeCloseTo(s.childBenefitCharge, money);
+      }
+    });
+
+    it('lets a slice narrower than a £200 step carry the whole step while its rate clamps to 1', () => {
+      // Adjusted net income crosses £60,200 inside a £10 benefit slice: 1% of £1,433.65 is £14.34 on £10.
+      const s = assertSliceInvariants(input({ income: 60_195, benefitsInKind: 10, children: 1 }));
+      const bik = slicesOf(s, 'benefit-in-kind');
+      expect(bik).toHaveLength(1);
+      expect(bik[0].gross).toBe(10);
+      expect(bik[0].childBenefitCharge).toBeCloseTo(0.01 * oneChild, money);
+      expect(bik[0].childBenefitCharge).toBeGreaterThan(bik[0].gross);
+      expect(bik[0].childBenefitChargeRate).toBe(1);
+      expect(bik[0].kept).toBeCloseTo(-(10 * 0.4 + 0.01 * oneChild), money);
+    });
+
+    it('reports the benefit and no charge below £60,000, and does not split there', () => {
+      const s = assertSliceInvariants(input({ income: 50_000, children: 2 }));
+      expect(s.childBenefit).toBeCloseTo(twoChildren, money);
+      expect(s.childBenefitCharge).toBe(0);
+      expect(s.shares.childBenefitCharge).toBe(0);
+      expect(s.slices.map(row => [row.from, row.to])).toEqual([
+        [0, 12_570],
+        [12_570, 50_000],
+      ]);
+      expect(s.rawTakeHome).toBeCloseTo(calculateUkTax(input({ income: 50_000 })).takeHome, money);
+    });
+
+    it('is exactly at the threshold, not over it, at £60,000 adjusted net income', () => {
+      const s = assertSliceInvariants(input({ income: 60_000, children: 2 }));
+      expect(s.childBenefitCharge).toBe(0);
+      expect(s.slices.map(row => [row.from, row.to])).toEqual([
+        [0, 12_570],
+        [12_570, 50_270],
+        [50_270, 60_000],
+      ]);
+    });
+
+    it('never reports a negative charge on a slice, including a BIK slice that stops just short of a step', () => {
+      const s = assertSliceInvariants(input({ income: 60_199, benefitsInKind: 2, children: 1 }));
+      expect(s.childBenefitCharge).toBeCloseTo(0.01 * oneChild, money);
+      for (const row of s.slices) {
+        expect(row.childBenefitCharge).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('sanitises the number of children as calculateUkTax does', () => {
+      for (const children of [-3, Number.NaN, 0.9]) {
+        const s = assertSliceInvariants(input({ income: 72_000, children }));
+        expect(s.childBenefit).toBe(0);
+        expect(s.childBenefitCharge).toBe(0);
+        expect(s.slices.map(row => row.from)).not.toContain(60_000);
+      }
+      const frac = assertSliceInvariants(input({ income: 72_000, children: 2.9 }));
+      expect(frac.childBenefit).toBeCloseTo(twoChildren, money);
+    });
+
+    it('ignores childcare support entirely', () => {
+      const without = ukTakeHomeBySlice(input({ income: 110_000, children: 2 }));
+      const withSupport = ukTakeHomeBySlice(input({ income: 110_000, children: 2, childcareSupport: 8_000 }));
+      expect(withSupport).toEqual(without);
+    });
+
+    it('with no children, every charge and rate is 0 and every other figure is unchanged', () => {
+      for (const income of [60_000, 72_000, 150_000]) {
+        const s = assertSliceInvariants(input({ income, undergradPlan: 'plan2' }));
+        expect(s.childBenefitCharge).toBe(0);
+        expect(s.childBenefit).toBe(0);
+        expect(s.shares.childBenefitCharge).toBe(0);
+        for (const row of s.slices) {
+          expect(row.childBenefitCharge).toBe(0);
+          expect(row.childBenefitChargeRate).toBe(0);
+        }
+        expect(s.rawTakeHome).toBeCloseTo(calculateUkTax(input({ income, undergradPlan: 'plan2' })).takeHome, money);
+      }
+
+      // Two of the pre-existing expectations, re-asserted: no £60,000 or £80,000 split appears.
+      const s60 = ukTakeHomeBySlice(input({ income: 60_000 }));
+      expect(s60.slices.map(row => [row.from, row.to])).toEqual([
+        [0, 12_570],
+        [12_570, 50_270],
+        [50_270, 60_000],
+      ]);
+      expect(s60.slices[2].keptRate).toBeCloseTo(0.58, 6);
+
+      const s150 = ukTakeHomeBySlice(input({ income: 150_000 }));
+      expect(s150.slices.map(row => [row.from, row.to])).toEqual([
+        [0, 12_570],
+        [12_570, 50_270],
+        [50_270, 100_000],
+        [100_000, 125_140],
+        [125_140, 150_000],
+      ]);
+      expect(s150.slices[3].keptRate).toBeCloseTo(0.38, 6);
+
+      // The summary totals equal calculateUkTax's, with nothing added for the charge.
+      expect(s150.totalDeductions).toBeCloseTo(
+        s150.pensionFromPay + s150.incomeTax + s150.nationalInsurance + s150.studentLoan,
+        money,
+      );
+    });
   });
 });
