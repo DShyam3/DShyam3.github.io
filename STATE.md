@@ -1,13 +1,10 @@
 # State
 
-Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed at `1c391c4c`) · Verified code revision: `a2e00a2e` (the merge of `main` `caff0df2`) plus the history-cap fix, uncommitted.
-
-## In the worktree, uncommitted (not on the branch, not pushed)
-
-- The history cap. Each request is checked against the Edge Function's caps (64 messages, 256 KiB) before it is sent. A question whose tool rounds outgrow the history starts afresh when its own turns fit and two calls remain; otherwise it stops unsent and the history is kept. A question that fails after starting afresh (stopped, cut off or empty) keeps the history too. Six tests in `conversation.test.ts`. The stop notice now reads "ran out of steps or room".
+Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed; the fix is `a8534650`) · Verified code revision: `a8534650` (the history-cap fix on the merge of `main` `caff0df2`).
 
 ## Landed (on the branch, pushed; not in main)
 
+- The history cap (`a8534650`). Each request is checked against the Edge Function's caps (64 messages, 256 KiB) before it is sent. A question whose tool rounds outgrow the history starts afresh when its own turns fit and two calls remain; otherwise it stops unsent and the history is kept. A question that fails after starting afresh (stopped, cut off or empty) keeps the history too. Six tests in `conversation.test.ts`. The stop notice now reads "ran out of steps or room".
 - Merged `main` `caff0df2` into the admin-assistant branch (plan 7.6; forked from main on 2026-10-08). The merge includes `a5a7c892` and `d895a224`.
 - Seven conflicts resolved: header keeps main's socials-open fade plus the assistant `action` slot; the inventory spec parser stays in `src/collections/inventory-specs.ts` with main's `safeHref()` check; finance tool context keeps the branch's ledger and main's local-day alert dates; SECURITY.md lists the assistant's rate limit.
 - After review: the inventory tool uses main's `isInEdc` (`src/features/inventory/edc/categories.ts`, widened to take `is_edc`/`is_wishlist`); a duplicate, contradicting header paragraph was removed from FEATURES.md; phone-header heights re-measured on the merged header and unchanged.
@@ -18,29 +15,28 @@ Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed at `1
 
 | Check | Date | Verified revision / result |
 |---|---|---|
-| Lint | 2026-11-01 | Worktree with the fix: 0 errors, 0 warnings |
-| Typecheck (`npm run typecheck`, `src`) | 2026-11-01 | Worktree with the fix: pass |
+| Lint | 2026-11-01 | `a8534650`: 0 errors, 0 warnings |
+| Typecheck (`npm run typecheck`, `src`) | 2026-11-01 | `a8534650`: pass |
 | Function typecheck (`npm run typecheck:functions`) | 2026-10-30 | Merged tree: pass. Not re-run on the fix; no file under `supabase/functions` changed |
-| Tests | 2026-11-01 | Worktree with the fix: 1,855 of 1,855 pass across 67 files |
-| Build | 2026-11-01 | Worktree with the fix: pass |
-| Graph | 2026-11-01 | `graphify update .` current on the worktree with the fix |
+| Tests | 2026-11-01 | `a8534650`: 1,855 of 1,855 pass across 67 files |
+| Build | 2026-11-01 | `a8534650`: pass |
+| Graph | 2026-11-01 | `graphify update .` current on `a8534650` |
 | Reviewer (Opus) | 2026-10-30 | Merged diff, before the post-review edits: no high findings |
 | Reviewer (Opus), history-cap fix | 2026-11-01 | First pass: one medium, two low, all fixed. Second pass: one risk (an empty answer after a restart wiped the history) and three nits, all fixed; that last fix is not re-reviewed |
-| Ship-check | 2026-11-01 | Worktree with the fix: 16 findings, 0 blockers. New against main's 2026-10-30 run: four "hardcoded credential" highs in `assistant/providers.ts`, which are secret names (`ANTHROPIC_API_KEY` etc.), not values; glob/minimatch advisories on an unchanged lockfile, so main has them too |
+| Ship-check | 2026-11-01 | `a8534650`: 16 findings, 0 blockers. New against main's 2026-10-30 run: four "hardcoded credential" highs in `assistant/providers.ts`, which are secret names (`ANTHROPIC_API_KEY` etc.), not values; glob/minimatch advisories on an unchanged lockfile, so main has them too |
 | Hosted migration / advisors | 2026-10-30 | Main `d895a224`: applied; same three warnings before and after |
 
 ## Next
 
-1. Commit and push the history-cap fix (owner to say).
-2. Owner's calls (REHAUL_PLAN 7.6): send goal and category names to the model as a confirmed exception, or switch to neutral labels; Cash Flow average divisor; phone header height at 320px.
-3. Deploy `assistant`, set a provider key (`supabase secrets set <PROVIDER>_API_KEY=...`), then verify signed in on a live model with the three target questions.
-4. Merge the branch into main.
-5. Then main's list: subscription audit; merchant drilldown; transaction splitting; budget rollover; investment pricing.
+1. Owner's calls (REHAUL_PLAN 7.6): send goal and category names to the model as a confirmed exception, or switch to neutral labels; Cash Flow average divisor; phone header height at 320px.
+2. Deploy `assistant`, set a provider key (`supabase secrets set <PROVIDER>_API_KEY=...`), then verify signed in on a live model with the three target questions.
+3. Merge the branch into main.
+4. Then main's list: subscription audit; merchant drilldown; transaction splitting; budget rollover; investment pricing.
 
 ## Blockers and open risks
 
 - The merge is on the branch only, pushed to origin; main has none of it. Nothing about the assistant is live; the function is not deployed and no model key is set.
-- The history-cap fix is uncommitted in the worktree: not on the branch, not pushed, not in main.
+- The history-cap fix is on the branch only, not in main.
 - The history-cap fix is unit-tested only. It has not run against a real provider, and the assistant still needs a deployed function and a key.
 - Unverified: the assistant has never run against a real provider on this merged code, and no signed-in browser check of it has been done.
 - Unverified wire names (REHAUL_PLAN 7.6): the Anthropic row sends `fallbacks: "default"` under `anthropic-beta: server-side-fallback-2026-07-01`; if the API refuses either, every call fails as a generic 502.
