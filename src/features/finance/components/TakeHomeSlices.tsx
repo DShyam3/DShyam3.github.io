@@ -43,6 +43,7 @@ export function TakeHomeSlices({
 
   const showLoan = summary.studentLoan > 0 || input.undergradPlan !== 'none' || input.postgradLoan;
   const showPension = summary.pensionFromPay > 0;
+  const showCharge = summary.childBenefitCharge > 0;
 
   const contextualNote = (() => {
     if (benefitTaxCollectedByCode && codedBenefitsInKind > 0) {
@@ -89,6 +90,17 @@ export function TakeHomeSlices({
       amount: summary.incomeTax,
       share: summary.shares.incomeTax,
     },
+    ...(showCharge
+      ? [
+          {
+            key: 'child-benefit-charge',
+            label: 'Child benefit charge',
+            swatch: 'bg-chart-3/50',
+            amount: summary.childBenefitCharge,
+            share: summary.shares.childBenefitCharge,
+          },
+        ]
+      : []),
     {
       key: 'ni',
       label: 'National Insurance',
@@ -123,7 +135,9 @@ export function TakeHomeSlices({
             <Layers aria-hidden="true" className="w-4 h-4 text-primary shrink-0" /> Take-home by income slice
           </h3>
           <p className="text-xs text-muted-foreground">
-            Cash pay after income tax, National Insurance, student loans, and pension. Child benefit and childcare support are excluded.
+            Cash pay after income tax, National Insurance, student loans and pension, and after any child benefit
+            charge, which is paid through Self Assessment rather than from your payslip. Child benefit itself and
+            childcare support are not pay, so they are left out.
           </p>
         </div>
         <PillSwitch
@@ -162,6 +176,7 @@ export function TakeHomeSlices({
             <div className="bg-positive" style={{ width: `${summary.shares.takeHome * 100}%` }} />
             <div className="bg-positive/45" style={{ width: `${summary.shares.pension * 100}%` }} />
             <div className="bg-chart-3" style={{ width: `${summary.shares.incomeTax * 100}%` }} />
+            <div className="bg-chart-3/50" style={{ width: `${summary.shares.childBenefitCharge * 100}%` }} />
             <div className="bg-chart-4" style={{ width: `${summary.shares.nationalInsurance * 100}%` }} />
             <div className="bg-chart-2" style={{ width: `${summary.shares.studentLoan * 100}%` }} />
           </div>
@@ -193,6 +208,9 @@ export function TakeHomeSlices({
                 <th scope="col" className="pb-2.5 pr-4 text-left font-normal">Slice</th>
                 <th scope="col" className="pb-2.5 px-3 text-right font-normal">Gross</th>
                 <th scope="col" className="pb-2.5 px-3 text-right font-normal">Income tax</th>
+                {showCharge && (
+                  <th scope="col" className="pb-2.5 px-3 text-right font-normal">Child benefit charge</th>
+                )}
                 <th scope="col" className="pb-2.5 px-3 text-right font-normal">NI</th>
                 {showLoan && (
                   <th scope="col" className="pb-2.5 px-3 text-right font-normal">Student loan</th>
@@ -215,6 +233,7 @@ export function TakeHomeSlices({
                       <div className="bg-positive" style={{ width: `${slice.keptRate * 100}%` }} />
                       <div className="bg-positive/45" style={{ width: `${slice.pensionRate * 100}%` }} />
                       <div className="bg-chart-3" style={{ width: `${slice.incomeTaxRate * 100}%` }} />
+                      <div className="bg-chart-3/50" style={{ width: `${slice.childBenefitChargeRate * 100}%` }} />
                       <div className="bg-chart-4" style={{ width: `${slice.nationalInsuranceRate * 100}%` }} />
                       <div className="bg-chart-2" style={{ width: `${slice.studentLoanRate * 100}%` }} />
                     </div>}
@@ -232,6 +251,18 @@ export function TakeHomeSlices({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
+                  {showCharge && (
+                    <td className="py-2.5 px-3 text-right tabular-nums text-foreground align-top whitespace-nowrap">
+                      {slice.childBenefitCharge > 0 ? (
+                        <>
+                          -{formatGBP(slice.childBenefitCharge)}
+                          <span className="block text-xs text-muted-foreground">{percent(slice.childBenefitChargeRate)}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className="py-2.5 px-3 text-right tabular-nums text-foreground align-top whitespace-nowrap">
                     {slice.nationalInsurance > 0 ? (
                       <>
@@ -289,6 +320,14 @@ export function TakeHomeSlices({
                     {percent(summary.shares.incomeTax)}
                   </span>}
                 </td>
+                {showCharge && (
+                  <td className="pt-3 px-3 text-right tabular-nums text-foreground align-top whitespace-nowrap">
+                    -{formatGBP(summary.childBenefitCharge)}
+                    {summary.rawTakeHome >= 0 && <span className="block text-xs font-normal text-muted-foreground">
+                      {percent(summary.shares.childBenefitCharge)}
+                    </span>}
+                  </td>
+                )}
                 <td className="pt-3 px-3 text-right tabular-nums text-foreground align-top whitespace-nowrap">
                   {summary.nationalInsurance > 0 ? `-${formatGBP(summary.nationalInsurance)}` : formatGBP(0)}
                   {summary.rawTakeHome >= 0 && <span className="block text-xs font-normal text-muted-foreground">
@@ -322,6 +361,9 @@ export function TakeHomeSlices({
           </table>
           <p className="mt-3 text-xs text-muted-foreground">
             Negative cash impacts are paid from the other income slices. Benefits in kind add taxable value, not cash pay.
+            {summary.childBenefit > 0 && (
+              <> Child benefit of {formatGBP(summary.childBenefit)} comes on top of the cash remaining.</>
+            )}
           </p>
         </div>
       )}

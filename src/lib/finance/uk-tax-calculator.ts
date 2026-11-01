@@ -127,9 +127,21 @@ export interface UkPaySlice {
   nationalInsurance: number;
   /** Combined undergraduate + postgraduate student loan on this slice, £/yr. */
   studentLoan: number;
+  /**
+   * High Income Child Benefit Charge on this slice, £/yr. The exact calculation
+   * takes 1% of the child benefit per complete £200 of adjusted net income
+   * above £60,000, so a slice inside £60,000-£80,000 carries a stepped total
+   * (a slice narrower than £200 that straddles a step carries the whole step):
+   * the rate below is a slice average, not a marginal rate.
+   */
+  childBenefitCharge: number;
   /** Cash leaving pay into the pension on this slice, £/yr (`0.8 * gross` under relief at source). */
   pension: number;
-  /** Change in cash take-home from this slice, £/yr; negative when pension deductions or BIK tax reduce cash. */
+  /**
+   * Change in cash take-home from this slice, £/yr; negative when pension
+   * deductions, BIK tax or the child benefit charge reduce cash. The child
+   * benefit itself is constant in income, so it cancels out of this.
+   */
   kept: number;
   /** Cash take-home change divided by `gross`; may be negative. */
   keptRate: number;
@@ -137,6 +149,7 @@ export interface UkPaySlice {
   incomeTaxRate: number;
   nationalInsuranceRate: number;
   studentLoanRate: number;
+  childBenefitChargeRate: number;
   pensionRate: number;
 }
 
@@ -147,6 +160,7 @@ export interface UkTakeHomeShares {
   incomeTax: number;
   nationalInsurance: number;
   studentLoan: number;
+  childBenefitCharge: number;
 }
 
 export interface UkTakeHomeSummary {
@@ -164,12 +178,23 @@ export interface UkTakeHomeSummary {
   nationalInsurance: number;
   /** Total student loan (undergrad + postgrad), £/yr. */
   studentLoan: number;
-  /** Total deductions from cash pay (`pensionFromPay + incomeTax + nationalInsurance + studentLoan`), £/yr. */
+  /** Total High Income Child Benefit Charge, £/yr (`0` when no child benefit is claimed). */
+  childBenefitCharge: number;
+  /**
+   * Total deductions from cash pay
+   * (`pensionFromPay + incomeTax + nationalInsurance + studentLoan + childBenefitCharge`), £/yr.
+   */
   totalDeductions: number;
   /** Cash pay left after `totalDeductions`, clamped at `0` (`Math.max(0, income - totalDeductions)`), £/yr. */
   takeHome: number;
-  /** Unclamped cash pay left (`income - totalDeductions`), £/yr — matches `calculateUkTax` (with `children: 0`). */
+  /**
+   * Unclamped cash pay left (`income - totalDeductions`), £/yr. Equals
+   * `calculateUkTax(input).takeHome` less the child benefit itself: the charge
+   * is a tax on income and is included, the benefit is not pay and is not.
+   */
   rawTakeHome: number;
+  /** Annual child benefit claimed, £/yr (`0` when `children` is `0`). Reported beside pay, not in `income`, `takeHome` or `rawTakeHome`. */
+  childBenefit: number;
   /** Fraction of `income` kept (`takeHome / income`, clamped to `[0, 1]`; `0` when `income <= 0`). */
   takeHomeRate: number;
   /** Per-category shares of `income` (`[0, 1]`) for the stacked bar and legend. */
@@ -813,7 +838,10 @@ const buildSlice = (
   const incomeTax = Math.max(0, after.incomeTax - before.incomeTax);
   const nationalInsurance = Math.max(0, after.nationalInsurance - before.nationalInsurance);
   const studentLoan = Math.max(0, after.studentLoan + after.postgradLoan - (before.studentLoan + before.postgradLoan));
+  const childBenefitCharge = Math.max(0, after.childBenefitCharge - before.childBenefitCharge);
   const pension = Math.max(0, after.pensionFromPay - before.pensionFromPay);
+  // The child benefit is constant in income, so it cancels here and only the
+  // charge on it moves `kept`.
   const kept = after.takeHome - before.takeHome;
   const rateOf = (amount: number): number => (gross > 0 ? clamp(amount / gross, 0, 1) : 0);
   return {
@@ -824,21 +852,34 @@ const buildSlice = (
     incomeTax,
     nationalInsurance,
     studentLoan,
+    childBenefitCharge,
     pension,
     kept,
     keptRate: gross > 0 ? kept / gross : 0,
     incomeTaxRate: rateOf(incomeTax),
     nationalInsuranceRate: rateOf(nationalInsurance),
     studentLoanRate: rateOf(studentLoan),
+    childBenefitChargeRate: rateOf(childBenefitCharge),
     pensionRate: rateOf(pension),
   };
 };
 
 /**
  * Breaks `input` down into contiguous slices across every income tax, National
- * Insurance, and student loan threshold, followed by the pension slice and any
- * taxable benefit-in-kind slices, plus the summary totals and shares of cash
- * pay.
+ * Insurance, student loan and (when child benefit is claimed) High Income Child
+ * Benefit Charge threshold, followed by the pension slice and any taxable
+ * benefit-in-kind slices, plus the summary totals and shares of cash pay.
+ *
+ * The totals match `calculateUkTax` on the same input, less the child benefit
+ * itself: the charge is a tax on income and is counted, the benefit is not pay
+ * and is reported apart (`childBenefit`). `rawTakeHome` is therefore
+ * `calculateUkTax(input).takeHome - childBenefit`. Childcare support is not
+ * pay either and is ignored.
+ *
+ * The exact calculation takes the charge 1% per complete £200 of adjusted net
+ * income above £60,000, so a slice inside £60,000-£80,000 carries a stepped
+ * total. That is fine for a slice average, but a slice's charge is not its
+ * marginal rate times its width.
  *
  * When `opts.includePensionAndBenefits` is `false`, `pensionContribution` and
  * `benefitsInKind` are zeroed before computing so the caller can toggle between
@@ -852,19 +893,25 @@ export const ukTakeHomeBySlice = (
   const effectiveInput: UkTaxInput = include
     ? input
     : { ...input, pensionContribution: 0, benefitsInKind: 0 };
-  const r = resolve({ ...effectiveInput, children: 0, childcareSupport: 0 });
+  // Children stay in: the charge is a tax on income. Childcare support is a
+  // cliff in what the household keeps, not pay, so it is dropped.
+  const r = resolve({ ...effectiveInput, childcareSupport: 0 });
   const full = compute(r, { smooth: false });
   const mode: Mode = { smooth: false, marriageAllowanceEligible: full.marriageAllowanceEligible };
 
   const slices: UkPaySlice[] = [];
   const payEnd = r.income - r.contribution;
 
-  // Stage 1: cash salary after pension (`0` -> `payEnd`), with `contribution = 0, bik = 0`.
+  // Stage 1: cash salary after pension (`0` -> `payEnd`), with `contribution = 0, bik = 0`,
+  // so adjusted net income is `x`.
   if (payEnd > 0) {
     const thresholds = [
       ...totalIncomeTaxThresholds(r.allowance, 0, r.region, full.marriageAllowanceEligible),
       ...niAndLoanThresholds(r),
     ];
+    if (r.children > 0) {
+      thresholds.push(RULES.hicbcStart, RULES.hicbcFullAt);
+    }
     const stateAt = (x: number): Resolved => ({ ...r, income: x, contribution: 0, bik: 0 });
     for (const [a, b] of partitionStage(0, payEnd, thresholds)) {
       slices.push(
@@ -874,6 +921,10 @@ export const ukTakeHomeBySlice = (
   }
 
   // Stage 2: pension slice (`payEnd` -> `r.income`), with `contribution = x - payEnd, bik = 0`.
+  // Adjusted net income is `payEnd` all the way along, whatever the method, so
+  // the charge has no threshold here and the slices carry none of it:
+  //   salary sacrifice / net pay: pay = x - (x - payEnd) = payEnd, no relief at source;
+  //   relief at source:           pay = x, less the grossed-up (x - payEnd) = payEnd.
   if (r.contribution > 0) {
     const thresholds: number[] = [];
     if (r.method === 'net-pay') {
@@ -911,6 +962,11 @@ export const ukTakeHomeBySlice = (
       r.region,
       full.marriageAllowanceEligible,
     ).map(total => total - pay);
+    if (r.children > 0) {
+      // Adjusted net income is `pay + b - rasGross`, so a threshold `t` on it
+      // falls at `b = t + rasGross - pay`.
+      bikThresholds.push(RULES.hicbcStart + rasGross - pay, RULES.hicbcFullAt + rasGross - pay);
+    }
     const stateAt = (b: number): Resolved => ({ ...r, income: r.income, contribution: r.contribution, bik: b });
     for (const [bFrom, bTo] of partitionStage(0, r.bik, bikThresholds)) {
       slices.push(
@@ -929,8 +985,9 @@ export const ukTakeHomeBySlice = (
   const incomeTax = b.incomeTax;
   const nationalInsurance = b.nationalInsurance;
   const studentLoan = b.studentLoan + b.postgradLoan;
+  const childBenefitCharge = b.childBenefitCharge;
   const pensionFromPay = b.pensionFromPay;
-  const totalDeductions = pensionFromPay + incomeTax + nationalInsurance + studentLoan;
+  const totalDeductions = pensionFromPay + incomeTax + nationalInsurance + studentLoan + childBenefitCharge;
   const rawTakeHome = r.income - totalDeductions;
   const takeHome = Math.max(0, rawTakeHome);
   const shareOf = (n: number): number => (r.income > 0 ? clamp(n / r.income, 0, 1) : 0);
@@ -943,9 +1000,11 @@ export const ukTakeHomeBySlice = (
     incomeTax,
     nationalInsurance,
     studentLoan,
+    childBenefitCharge,
     totalDeductions,
     takeHome,
     rawTakeHome,
+    childBenefit: b.childBenefit,
     takeHomeRate: shareOf(takeHome),
     shares: {
       takeHome: shareOf(takeHome),
@@ -953,6 +1012,7 @@ export const ukTakeHomeBySlice = (
       incomeTax: shareOf(incomeTax),
       nationalInsurance: shareOf(nationalInsurance),
       studentLoan: shareOf(studentLoan),
+      childBenefitCharge: shareOf(childBenefitCharge),
     },
     slices,
   };
