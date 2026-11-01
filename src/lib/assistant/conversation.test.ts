@@ -1,5 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ask, MAX_HISTORY_CHARS, MAX_HISTORY_MESSAGES, MAX_MODEL_CALLS } from './conversation';
+import {
+  ask,
+  MAX_HISTORY_CHARS,
+  MAX_HISTORY_MESSAGES,
+  MAX_MODEL_CALLS,
+  MAX_REQUEST_CHARS,
+  MAX_REQUEST_MESSAGES,
+} from './conversation';
 import type { ToolSchema } from './protocol';
 
 const TOOLS: readonly ToolSchema[] = [{
@@ -161,5 +170,87 @@ describe('ask — history', () => {
     expect(result.incomplete).toBe(true);
     expect(result.text).toBe('');
     expect(result.history).toEqual(earlier);
+  });
+});
+
+describe('ask — the Edge Function caps', () => {
+  /** An OpenAI-protocol reply asking for `count` calls at once. */
+  const openaiToolCalls = (round: number, count: number) => ({
+    choices: [{ message: {
+      role: 'assistant',
+      content: null,
+      tool_calls: Array.from({ length: count }, (_, i) => ({
+        id: `r${round}c${i}`, function: { name: 'get_position', arguments: '{}' },
+      })),
+    } }],
+  });
+  const openaiAnswer = (text: string) => ({ choices: [{ message: { role: 'assistant', content: text } }] });
+  const sentCount = (body: Record<string, unknown>) => (body.messages as unknown[]).length;
+
+  it('mirrors the caps the function enforces', () => {
+    const limits = readFileSync(resolve(process.cwd(), 'supabase/functions/assistant/providers.ts'), 'utf8');
+    expect(limits).toContain(`maxMessages: ${MAX_REQUEST_MESSAGES},`);
+    expect(limits).toContain(`maxBodyChars: ${MAX_REQUEST_CHARS / 1024} * 1024,`);
+  });
+
+  // Just under the restart point: 23 messages, then system and question.
+  const nearlyFull = Array.from({ length: MAX_HISTORY_MESSAGES - 1 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: `${i}` }));
+
+  it('starts afresh mid-question rather than send more messages than the function takes', async () => {
+    // Two rounds of 19 parallel calls: 25 + 2 x (1 + 19) is 65, one over.
+    const { send, sent } = scripted([openaiToolCalls(0, 19), openaiToolCalls(1, 19), openaiAnswer('Fresh answer.')]);
+    const result = await ask({
+      protocol: 'openai', model: 'm', system: 'sys', tools: TOOLS, history: nearlyFull,
+      question: 'q', send, runTool: () => ({}),
+    });
+    expect(sent).toHaveLength(3);
+    expect(Math.max(...sent.map(sentCount))).toBeLessThanOrEqual(MAX_REQUEST_MESSAGES);
+    expect(sent[2].messages).toEqual([{ role: 'system', content: 'sys' }, { role: 'user', content: 'q' }]);
+    expect(result).toMatchObject({ text: 'Fresh answer.', restarted: true, stoppedEarly: false, toolsUsed: [] });
+    expect(result.history).toEqual([{ role: 'user', content: 'q' }, { role: 'assistant', content: 'Fresh answer.' }]);
+  });
+
+  it('keeps the history when the question fails after starting afresh', async () => {
+    // Over at the second call; the fresh run then outgrows the cap on its own.
+    const { send, sent } = scripted([openaiToolCalls(0, 40), openaiToolCalls(1, 40), openaiToolCalls(2, 40)]);
+    const result = await ask({
+      protocol: 'openai', model: 'm', system: 'sys', tools: TOOLS, history: nearlyFull,
+      question: 'q', send, runTool: () => ({}),
+    });
+    expect(sent).toHaveLength(3);
+    expect(Math.max(...sent.map(sentCount))).toBeLessThanOrEqual(MAX_REQUEST_MESSAGES);
+    expect(result).toMatchObject({ text: '', stoppedEarly: true, restarted: false });
+  });
+
+  it('keeps the history when the answer after starting afresh comes back empty', async () => {
+    const { send, sent } = scripted([openaiToolCalls(0, 19), openaiToolCalls(1, 19), openaiAnswer('')]);
+    const result = await ask({
+      protocol: 'openai', model: 'm', system: 'sys', tools: TOOLS, history: nearlyFull,
+      question: 'q', send, runTool: () => ({}),
+    });
+    expect(sent).toHaveLength(3);
+    expect(result).toMatchObject({ text: '', stoppedEarly: false, restarted: false });
+  });
+
+  it('stops rather than start afresh with too few calls left to answer', async () => {
+    // Four rounds of nine: 25 + 4 x (1 + 9) is 65 at the last call.
+    const { send, sent } = scripted(Array.from({ length: 4 }, (_, round) => openaiToolCalls(round, 9)));
+    const result = await ask({
+      protocol: 'openai', model: 'm', system: 'sys', tools: TOOLS, history: nearlyFull,
+      question: 'q', send, runTool: () => ({}),
+    });
+    expect(sent).toHaveLength(4);
+    expect(result).toMatchObject({ text: '', stoppedEarly: true, restarted: false });
+  });
+
+  it("stops rather than start afresh when the question's own turns are too big to send", async () => {
+    const earlier = [{ role: 'user', content: 'before' }, { role: 'assistant', content: [{ type: 'text', text: 'ok' }] }];
+    const { send, sent } = scripted([anthropicToolCall('t1'), anthropicAnswer('never sent')]);
+    const result = await ask({
+      protocol: 'anthropic', model: 'm', system: 's', tools: TOOLS, history: earlier,
+      question: 'q', send, runTool: () => ({ rows: 'x'.repeat(MAX_REQUEST_CHARS) }),
+    });
+    expect(sent).toHaveLength(1);
+    expect(result).toMatchObject({ text: '', stoppedEarly: true, restarted: false });
   });
 });

@@ -251,14 +251,6 @@ So the gate is *a* key, not a particular vendor's:
   is one. Confirm that as a deliberate exception, or switch both to neutral
   labels. Debt and card names are already withheld.
 
-  **Open:** the history cap counts messages, not what one question adds.
-  On the OpenAI protocol every parallel tool result is its own message, so
-  23 history messages, the system prompt and a question, then four rounds of
-  nine or more calls, pass the Edge Function's 64-message cap
-  (`LIMITS.maxMessages`, `assistant/providers.ts`). The function answers a
-  generic 400 and the history is discarded. Check the count before sending,
-  and restart the conversation rather than send a request that will be refused.
-
   **Open, the owner's call:** the Cash Flow page's monthly average. The
   assistant's `get_cash_flow` averages only complete months of records
   (`completeRecordedMonths` in `src/lib/finance/cash-flow.ts`), but

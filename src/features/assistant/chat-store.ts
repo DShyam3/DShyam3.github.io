@@ -142,7 +142,7 @@ export async function askQuestion(provider: AssistantProvider, question: string,
         entries: [...state.entries, entry('notice', result.incomplete
           ? 'The answer was cut off before it finished. Try a narrower question.'
           : result.stoppedEarly
-            ? 'The assistant ran out of steps before answering. Try a narrower question.'
+            ? 'The assistant ran out of steps or room before answering. Try a narrower question.'
             : 'No answer came back. Try asking again.', sources)],
         history: result.restarted ? [] : historyBefore,
       });

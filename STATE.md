@@ -1,6 +1,10 @@
 # State
 
-Updated: 2026-10-30 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed) · Verified code revision: `a2e00a2e`, the merge of `main` `caff0df2`.
+Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed at `1c391c4c`) · Verified code revision: `a2e00a2e` (the merge of `main` `caff0df2`) plus the history-cap fix, uncommitted.
+
+## In the worktree, uncommitted (not on the branch, not pushed)
+
+- The history cap. Each request is checked against the Edge Function's caps (64 messages, 256 KiB) before it is sent. A question whose tool rounds outgrow the history starts afresh when its own turns fit and two calls remain; otherwise it stops unsent and the history is kept. A question that fails after starting afresh (stopped, cut off or empty) keeps the history too. Six tests in `conversation.test.ts`. The stop notice now reads "ran out of steps or room".
 
 ## Landed (on the branch, pushed; not in main)
 
@@ -14,20 +18,21 @@ Updated: 2026-10-30 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed) · V
 
 | Check | Date | Verified revision / result |
 |---|---|---|
-| Lint | 2026-10-30 | Merged tree: 0 errors, 0 warnings |
-| Typecheck (`npm run typecheck`, `src`) | 2026-10-30 | Merged tree: pass |
-| Function typecheck (`npm run typecheck:functions`) | 2026-10-30 | Merged tree: pass |
-| Tests | 2026-10-30 | Merged tree: 1,849 of 1,849 pass across 67 files |
-| Build | 2026-10-30 | Merged tree: pass |
-| Graph | 2026-10-30 | `graphify update .` current on the merged tree |
+| Lint | 2026-11-01 | Worktree with the fix: 0 errors, 0 warnings |
+| Typecheck (`npm run typecheck`, `src`) | 2026-11-01 | Worktree with the fix: pass |
+| Function typecheck (`npm run typecheck:functions`) | 2026-10-30 | Merged tree: pass. Not re-run on the fix; no file under `supabase/functions` changed |
+| Tests | 2026-11-01 | Worktree with the fix: 1,855 of 1,855 pass across 67 files |
+| Build | 2026-11-01 | Worktree with the fix: pass |
+| Graph | 2026-11-01 | `graphify update .` current on the worktree with the fix |
 | Reviewer (Opus) | 2026-10-30 | Merged diff, before the post-review edits: no high findings |
-| Ship-check | 2026-10-30 | Not run on this tree. Last run on `d895a224` (main): 98/100, Beta only; 9 findings, 1 high, 0 blockers |
+| Reviewer (Opus), history-cap fix | 2026-11-01 | First pass: one medium, two low, all fixed. Second pass: one risk (an empty answer after a restart wiped the history) and three nits, all fixed; that last fix is not re-reviewed |
+| Ship-check | 2026-11-01 | Worktree with the fix: 16 findings, 0 blockers. New against main's 2026-10-30 run: four "hardcoded credential" highs in `assistant/providers.ts`, which are secret names (`ANTHROPIC_API_KEY` etc.), not values; glob/minimatch advisories on an unchanged lockfile, so main has them too |
 | Hosted migration / advisors | 2026-10-30 | Main `d895a224`: applied; same three warnings before and after |
 
 ## Next
 
-1. Owner's calls (REHAUL_PLAN 7.6): send goal and category names to the model as a confirmed exception, or switch to neutral labels; Cash Flow average divisor; phone header height at 320px.
-2. Fix the history cap: it counts messages, not what one question adds, so it can pass the Edge Function's 64-message cap (`LIMITS.maxMessages`) and wipe the history (REHAUL_PLAN 7.6).
+1. Commit and push the history-cap fix (owner to say).
+2. Owner's calls (REHAUL_PLAN 7.6): send goal and category names to the model as a confirmed exception, or switch to neutral labels; Cash Flow average divisor; phone header height at 320px.
 3. Deploy `assistant`, set a provider key (`supabase secrets set <PROVIDER>_API_KEY=...`), then verify signed in on a live model with the three target questions.
 4. Merge the branch into main.
 5. Then main's list: subscription audit; merchant drilldown; transaction splitting; budget rollover; investment pricing.
@@ -35,10 +40,12 @@ Updated: 2026-10-30 · Branch: `claude/affectionate-lamarr-f2d2cb` (pushed) · V
 ## Blockers and open risks
 
 - The merge is on the branch only, pushed to origin; main has none of it. Nothing about the assistant is live; the function is not deployed and no model key is set.
+- The history-cap fix is uncommitted in the worktree: not on the branch, not pushed, not in main.
+- The history-cap fix is unit-tested only. It has not run against a real provider, and the assistant still needs a deployed function and a key.
 - Unverified: the assistant has never run against a real provider on this merged code, and no signed-in browser check of it has been done.
 - Unverified wire names (REHAUL_PLAN 7.6): the Anthropic row sends `fallbacks: "default"` under `anthropic-beta: server-side-fallback-2026-07-01`; if the API refuses either, every call fails as a generic 502.
 - No re-review is recorded for the post-review edits to `inventory-tool.ts` and `edc/categories.ts`.
-- Ship-check has not been run on this tree.
+- The glob and minimatch advisories in `package-lock.json` are unfixed on main and the branch.
 - Shared checkout: the owner runs parallel sessions on this tree. Agree on one committer and confirm no other session has staged or edited files before committing.
 - Pending, not verified: signed-in live Finance on production; real bank sync and TrueLayer credentials against live endpoints.
 

@@ -27,8 +27,10 @@ export const MAX_MODEL_CALLS = 5;
 
 /**
  * History allowed before the next question starts a fresh conversation. Sits
- * under the Edge Function's message cap with room for one question's tool
- * rounds.
+ * under the Edge Function's message cap with room for a typical question's
+ * tool rounds. Not every question's: on the OpenAI protocol each parallel
+ * call's result is a message of its own, so one question has no fixed size,
+ * and `ask` checks each request against the caps before sending it.
  *
  * Full means start again, never trim. A model's thinking blocks stay valid
  * only while everything sent before them is unchanged, so dropping the oldest
@@ -43,6 +45,22 @@ export const MAX_HISTORY_MESSAGES = 24;
  * leaves the turn being built room to grow.
  */
 export const MAX_HISTORY_CHARS = 128 * 1024;
+
+/**
+ * The Edge Function's caps on one request (`LIMITS` in
+ * supabase/functions/assistant/providers.ts), mirrored so a request it would
+ * refuse is never sent. Refused, the question fails and the chat starts over;
+ * caught here, the question can start afresh and still be answered.
+ */
+export const MAX_REQUEST_MESSAGES = 64;
+export const MAX_REQUEST_CHARS = 256 * 1024;
+
+/** Room for the envelope the client wraps a request body in. */
+const ENVELOPE_CHARS = 1024;
+
+const withinFunctionCaps = (body: Record<string, unknown>) =>
+  (Array.isArray(body.messages) ? body.messages.length : 0) <= MAX_REQUEST_MESSAGES
+  && JSON.stringify(body).length + ENVELOPE_CHARS <= MAX_REQUEST_CHARS;
 
 export interface AskOptions {
   protocol: LlmProtocol;
@@ -66,9 +84,19 @@ export interface AskResult {
   history: unknown[];
   /** Tool names in the order they ran, for showing what an answer rests on. */
   toolsUsed: string[];
-  /** True when the call limit ended the turn before the model answered. */
+  /**
+   * True when the turn ended before the model answered: the call limit was
+   * reached, or the next request would pass the Edge Function's caps and
+   * starting afresh could not help.
+   */
   stoppedEarly: boolean;
-  /** True when the history was full, so this question started a fresh conversation. */
+  /**
+   * True when the history was discarded: it was full before the question, or
+   * the question's own tool rounds outgrew the room it left and the question
+   * was answered on its own. A question that fails after the second kind of
+   * restart reports false, so the caller keeps the history it had -- it was
+   * still a valid prefix, and only this question was too big for it.
+   */
   restarted: boolean;
   /**
    * True when the model's last turn did not finish (`LlmReply.incomplete`).
@@ -84,22 +112,49 @@ export interface AskResult {
  */
 export async function ask(options: AskOptions): Promise<AskResult> {
   const { protocol, model, system, tools, send, runTool, maxTokens } = options;
-  const restarted = options.history.length >= MAX_HISTORY_MESSAGES
+  const historyFull = options.history.length >= MAX_HISTORY_MESSAGES
     || JSON.stringify(options.history).length > MAX_HISTORY_CHARS;
-  const before = restarted ? [] : [...options.history];
-  const messages: unknown[] = [...before, userMessage(options.question)];
-  const toolsUsed: string[] = [];
+  const start = historyFull ? [] : [...options.history];
+  let before = start;
+  let restarted = historyFull;
+  let messages: unknown[] = [...before, userMessage(options.question)];
+  let toolsUsed: string[] = [];
+  const request = (turns: unknown[]) => buildRequest(protocol, model, system, [...turns], tools, maxTokens);
 
   for (let call = 0; call < MAX_MODEL_CALLS; call += 1) {
-    const raw = await send(buildRequest(protocol, model, system, [...messages], tools, maxTokens));
+    let body = request(messages);
+    if (!withinFunctionCaps(body)) {
+      // This question's tool rounds outgrew the room the history left.
+      // Discarding the history whole, as the check above does, and asking
+      // again on its own helps only when there is history to drop, the
+      // question's own turns would fit without it, and calls remain for a
+      // tool round and an answer. Calls already made still count.
+      const ownTurns = messages.slice(before.length);
+      const canRestart = before.length > 0
+        && MAX_MODEL_CALLS - call >= 2
+        && withinFunctionCaps(request(ownTurns));
+      if (!canRestart) {
+        return { text: '', history: messages, toolsUsed, stoppedEarly: true, restarted: historyFull, incomplete: false };
+      }
+      restarted = true;
+      before = [];
+      messages = [userMessage(options.question)];
+      toolsUsed = [];
+      body = request(messages);
+    }
+
+    const raw = await send(body);
     const reply = parseReply(protocol, raw);
 
     if (reply.incomplete) {
-      return { text: '', history: before, toolsUsed, stoppedEarly: false, restarted, incomplete: true };
+      return { text: '', history: start, toolsUsed, stoppedEarly: false, restarted: historyFull, incomplete: true };
     }
     if (!reply.wantsTools || reply.toolCalls.length === 0) {
       messages.push(assistantMessage(protocol, raw));
-      return { text: reply.text, history: messages, toolsUsed, stoppedEarly: false, restarted, incomplete: false };
+      // An empty answer is a failed question, so a restart it made does not
+      // count against the history the caller already had.
+      const answered = reply.text.trim() !== '';
+      return { text: reply.text, history: messages, toolsUsed, stoppedEarly: false, restarted: answered ? restarted : historyFull, incomplete: false };
     }
 
     const results: { call: LlmToolCall; output: unknown }[] = [];
@@ -118,5 +173,5 @@ export async function ask(options: AskOptions): Promise<AskResult> {
     messages.push(...toolResultMessages(protocol, raw, results));
   }
 
-  return { text: '', history: messages, toolsUsed, stoppedEarly: true, restarted, incomplete: false };
+  return { text: '', history: messages, toolsUsed, stoppedEarly: true, restarted: historyFull, incomplete: false };
 }

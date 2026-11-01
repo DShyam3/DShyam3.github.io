@@ -565,9 +565,10 @@ panel offers three starters: "What is in my PC?", "What comes out this year?"
 and "How much did I make last month?"
 
 The conversation is held in memory only. Sign-out clears it, and so does Clear.
-When it grows long, the next question starts a fresh conversation and the panel
-says so. An answer that is cut off, stops short, comes back empty or is
-rate-limited shows a notice in place of an answer.
+When it grows long, or one question gathers more than a single request can
+carry, that question starts a fresh conversation where that leaves room to
+answer it, and the panel says so. An answer that is cut off, stops short, comes
+back empty or is rate-limited shows a notice in place of an answer.
 
 ---
 
