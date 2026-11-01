@@ -135,8 +135,9 @@ export function TakeHomeSlices({
             <Layers aria-hidden="true" className="w-4 h-4 text-primary shrink-0" /> Take-home by income slice
           </h3>
           <p className="text-xs text-muted-foreground">
-            Cash pay after income tax, National Insurance, student loans, pension and any child benefit charge.
-            Child benefit itself and childcare support are not pay, so they are left out.
+            Cash pay after income tax, National Insurance, student loans and pension, and after any child benefit
+            charge, which is paid through Self Assessment rather than from your payslip. Child benefit itself and
+            childcare support are not pay, so they are left out.
           </p>
         </div>
         <PillSwitch
