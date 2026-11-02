@@ -1,10 +1,10 @@
 # State
 
-Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` `a7c892c7` merged in (committed, not pushed; origin is at `5fb3a990`) · Main: `a7c892c7`, deployed.
+Updated: 2026-11-02 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` `a7c892c7` merged in as `89a8a48a` (pushed) · Main: `a7c892c7`, deployed.
 
 ## Landed (on the branch; not in main)
 
-- Merge of `main` `a7c892c7` (#13), committed locally, not pushed. Only STATE.md conflicted; this file keeps the branch's handoff plus main's new facts.
+- Merge of `main` `a7c892c7` (#13) as `89a8a48a`, pushed. Only STATE.md conflicted; this file keeps the branch's handoff plus main's new facts.
 - The history cap (`a8534650`). Each request is checked against the Edge Function's caps (64 messages, 256 KiB) before it is sent. A question whose tool rounds outgrow the history starts afresh when its own turns fit and two calls remain; otherwise it stops unsent and the history is kept. A question that fails after starting afresh (stopped, cut off or empty) keeps the history too. Six tests in `conversation.test.ts`. The stop notice now reads "ran out of steps or room".
 - Merged `main` `caff0df2` into the admin-assistant branch (plan 7.6; forked from main on 2026-10-08). The merge includes `a5a7c892` and `d895a224`.
 - Seven conflicts resolved: header keeps main's socials-open fade plus the assistant `action` slot; the inventory spec parser stays in `src/collections/inventory-specs.ts` with main's `safeHref()` check; finance tool context keeps the branch's ledger and main's local-day alert dates; SECURITY.md lists the assistant's rate limit.
@@ -54,4 +54,5 @@ Updated: 2026-11-01 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` 
 - Hosted authenticated sync, JWT configuration, `SITE_ORIGIN`, response headers, cron/Edge/pg_net checks and real HEIC uploads: unverified.
 - Advisor warnings: `is_admin` security-definer callable by anon/authenticated; leaked-password protection disabled.
 - Gemini was last observed stopped by quota; current activity unverified.
+- `origin/claude/net-take-home-tax-f2n71j` was squash-merged as #13 and its tree matches `main`; safe to delete (owner's call). The root checkout's `main` is still at `caff0df2`, one behind origin.
 - Keep the stash named `finance-reconciliation-backup-2026-10-29` until its backup is no longer needed (find it by name; the stack is shared).
