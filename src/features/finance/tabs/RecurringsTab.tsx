@@ -23,6 +23,7 @@ interface RecurringsTabProps {
   onPayEarly?: (id: string) => void;
   onEditRecurring: (bill: RecurringBill) => void;
   onDeleteRecurring: (id: string) => void;
+  onUndismissRecurring: (id: string) => void;
 }
 
 const isDueThisMonth = (bill: RecurringBill, currentMonth: number): boolean => {
@@ -73,6 +74,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
   onPayEarly,
   onEditRecurring,
   onDeleteRecurring,
+  onUndismissRecurring,
 }) => {
   const activeBills = recurrings.filter(bill => !bill.status || bill.status === 'active');
   const inactiveBills = recurrings.filter(bill => bill.status === 'inactive' || bill.status === 'dismissed');
@@ -241,7 +243,7 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
         {inactiveBills.length > 0 && (
           <section className="surface-card bg-card/50 rounded-lg border border-border/40 p-4 space-y-3">
             <h4 className="text-sm font-semibold font-mono">Inactive / dismissed ({inactiveBills.length})</h4>
-            <p className="text-xs text-muted-foreground">Excluded from your recurring schedule. Edit an entry to make it active again.</p>
+            <p className="text-xs text-muted-foreground">Excluded from your recurring schedule. Edit an entry to make it active again. A payment marked not recurring stays out of suggestions until you show it again.</p>
             {inactiveBills.map(bill => (
               <div key={bill.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
                 <div className="text-xs space-y-1">
@@ -250,7 +252,11 @@ export const RecurringsTab: React.FC<RecurringsTabProps> = ({
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="text-xs" disabled={busy} onClick={() => onEditRecurring(bill)}>Edit / restore</Button>
-                  <Button size="sm" variant="outline" className="text-xs text-destructive" disabled={busy} onClick={() => onDeleteRecurring(bill.id)}>Delete</Button>
+                  {bill.status === 'dismissed' ? (
+                    <Button size="sm" variant="outline" className="text-xs" disabled={busy} onClick={() => onUndismissRecurring(bill.id)}>Show as suggestion again</Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="text-xs text-destructive" disabled={busy} onClick={() => onDeleteRecurring(bill.id)}>Delete</Button>
+                  )}
                 </div>
               </div>
             ))}

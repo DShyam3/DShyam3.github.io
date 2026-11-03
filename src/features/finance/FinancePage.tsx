@@ -623,6 +623,14 @@ function FinanceView() {
       onConfirm: () => { void performDeleteRecurring(id); },
     });
 
+  // The dismissed row is what hides the suggestion, so removing it is an undo,
+  // not a delete: no confirm, and "Not recurring" puts it straight back.
+  const undismissRecurring = async (id: string) => {
+    if (await persistRecurringReview(recurrings.filter(r => r.id !== id))) {
+      toast({ title: 'Back in suggestions', description: 'Review it or mark it not recurring again.' });
+    }
+  };
+
   const toggleRecurringPaid = (id: string) => {
     // Bank evidence stays separate: clearing a tick does not erase lastPaidDate.
     void persistRecurringReview(recurrings.map(r => r.id === id ? {
@@ -968,6 +976,7 @@ function FinanceView() {
                 setIsEditRecurringOpen(true);
               }}
               onDeleteRecurring={handleDeleteRecurring}
+              onUndismissRecurring={(id) => { void undismissRecurring(id); }}
             />
           )}
 
