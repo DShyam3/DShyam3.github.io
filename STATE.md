@@ -1,54 +1,51 @@
 # State
 
-Updated: 2026-11-01 · Branch: `claude/net-take-home-tax-f2n71j` (not merged) · Main verified: `d895a224` (deployed).
+Updated: 2026-11-03 · Branch: `main` · Head: `dec67110`, pushed and deployed (Pages run `41680495085`: success).
+Production check so far: anonymous home page only — loads, no console errors, 30 warm-up reads (sizes unreadable cross-origin). Everything else below is verified locally only.
 
-## This branch: `claude/net-take-home-tax-f2n71j`
+## Pushed 2026-11-03 (`a7c892c7..dec67110`, rebased onto #13)
 
-- Head: `99f1a6d` plus the docs commit that rewrote this file. NOT merged, NOT deployed, NOT live. A PR to `main` is being opened; no PR number is recorded here.
-- Landed here: the take-home-by-slice card and `ukTakeHomeBySlice` count the High Income Child Benefit Charge, split at £60,000 and £80,000 of adjusted net income. The card names the child benefit amount beneath the table and says the charge is paid through Self Assessment. FEATURES.md matches.
-- History: the branch first held a separate card implementation (`b99483c`, `46d9b11`, `37d8bf4`). `main` had already shipped its own (`0c9da54`), so the owner chose to fix main's version; the branch was reset onto main and force-pushed. Those three commits are no longer on any branch.
-- Reviewer (Opus) on `d816a2e`: no engine or card defects; 534k fuzzed inputs agree across slices, summary and `calculateUkTax`. Its two findings (the FEATURES.md paragraph, the Self Assessment copy) are fixed by the docs commit and `99f1a6d`.
-- Known and accepted: a slice under £200 wide that straddles a charge step carries the whole 1% step, so its charge rate is capped at 100%.
-- Unverified: the card with children has never been seen in a browser, locally or live.
-- Next: review and merge the PR, deploy, then check the Tax Calculator with children live.
+- `c12d8751` Tax Calculator chart: marginal-rate step list, Take-home % mode. Rebase conflict with #13 in `uk-tax-calculator.ts` resolved by keeping #13's `childBenefit` and charge share on top of the shared `deductionSharesOf` helper; 322 tax tests pass.
+- `579b7866` Student Loan: repayments on current pay, itemised headline, Repaid and interest card, Checking SLC's figures, shared `formatDayMonth`.
+- `a4af67fd` Holiday tracker: cross-year day count, booking dialog and calendar, container-query tiles. Second Opus pass found no new bugs.
+- `a6b16406` Recurring: "Show as suggestion again" on dismissed rows; Delete only on inactive rows.
+- `f16e7a7f` Home Transactions card draws `MerchantAvatar`; merchant tiles are rounded squares (8px) with logos filling the tile.
+- `f93d13e2` Background warm-up and tab-long query cache, with three review fixes: watched-episode toggles now reach the cache write-back; `queryClient.clear()` on `SIGNED_OUT`; Finance section warm-up honours Save-Data (`prefersSavedData` moved to `src/lib/idle.ts`).
+- `dec67110` `.claude/launch.json` dev ports.
+- Local branch `backup/pre-rebase-2026-11-03` holds the pre-rebase commits; delete once production is checked.
+
+## Held back (uncommitted, in the tree)
+
+- `src/features/finance/components/CashFlowSankey.tsx`: a Sankey restyle no session claimed and nobody reviewed. Opus flagged it as a blocker: labels at 10–11px and amounts at 10.5px break the 12px minimum, `cursor-pointer` with no click handler, unused `kind`, gradient id not scoped with `useId()`, drawn-from-savings links lost the hatch (colour-only now). Owner to decide: fix and ship, or drop.
 
 ## Checks
 
-| Check | Date | Verified revision / result |
+| Check | Date | Tree / result |
 |---|---|---|
-| Lint, typecheck (app) | 2026-11-01 | `99f1a6d`: lint 0 errors, 0 warnings; typecheck pass (both re-run on this head) |
-| Build, tests | 2026-11-01 | `d816a2e`: build pass; `npx vitest run` 62 files, 1,783 pass (`99f1a6d` changed copy only, not re-run) |
-| Function typecheck | — | Not run on this branch: Deno not installed here; no function changed |
-| Ship-check | — | Not run on this branch |
-| Graph | — | Not updated: `graphify-out/` is absent from this checkout |
-| Main: lint / typecheck | 2026-10-30 | `d895a224`: pass; lint 0 errors, 0 warnings |
-| Main: function typecheck / build | 2026-10-30 | `d895a224`: pass |
-| Main: tests | 2026-10-30 | `d895a224`: 1,768 pass across 62 files |
-| Main: ship-check | 2026-10-30 | `d895a224`: 98/100, Beta only; 9 findings, 1 high, 0 blockers |
-| Main: graph | 2026-10-30 | Updated after loader fix: 2,942 nodes, 6,732 edges |
-| Main: hosted migration / advisors | 2026-10-30 | Applied; same three warnings before/after |
-| Main: Pages / live loading | 2026-10-30 | `d895a224`: CI checks pass; signed-in loading error cleared |
+| Pushed tip `dec67110` | 2026-11-03 | Clean worktree at the tip: `npm run lint` 0/0; typecheck passes on each of the 7 commits; `npx vitest run` 2,127 pass across 63 files; `typecheck:functions` pass; `npm run build` pass |
+| Ship-check | 2026-11-03 | Pre-rebase working tree: 96/100, Beta only, 0 blockers, 1 high (possible N+1 in `FinanceDataContext.tsx`, already present 2026-10-30) |
+| Browser, local `dev:test` | 2026-11-03 | Home card monograms and stand-in logos (rounded squares, `object-cover`); sign-in then sign-out renders with no new console errors. Watched-episode fix NOT browser-tested: local stack has no shows |
+| Graph | 2026-11-03 | `graphify update .` after the rebase: 2,082 nodes, 4,790 edges |
+| Production | 2026-11-03 | Pages run `41680495085` success. Anonymous home: no console errors, 30 REST reads. Nothing signed-in checked |
 
-## Main: in progress and next
+## Next
 
-1. Finish signed-in live flows: early payment, actual writes, bank sync, uploads and saved links.
-2. Complete cross-theme checks, iPhone Safari keyboard/toolbars, iPad split view, Larger mode and 200% zoom.
-3. Address remaining save/reload races and schema reproducibility before the next new feature; remaining feature work stays in `REHAUL_PLAN.md`.
+1. Check on production signed in: Tax Calculator (light theme too), Student Loan figures, holiday booking, recurring undismiss, Home logos with real Brandfetch icons, watched-episode toggle surviving leave-and-return, sign-out.
+2. Owner: decide `CashFlowSankey.tsx` (above).
+3. Owner: other branches are unmerged and untouched: `claude/affectionate-lamarr-f2d2cb` (12 commits, admin assistant), `codex/assistant-integration-2026-11-02` (13), `origin/claude/net-take-home-tax-f2n71j` (3, possibly superseded by #13, unverified).
+4. Owner: switch the hosted pension type from net pay to salary sacrifice in Tax & Income, then record SLC's next balance and use "Checking SLC's figures" on the pending top-up.
+5. Owner: holiday LEFT charges a cross-year booking's whole count to its start year (29 Dec 26 – 8 Jan 27 charges 8 to 2026); split rule needed. The real "Christmas Holidays" row still stores 8 days ("Use 7" in its edit dialog).
+6. Owner decision: move Finance rows into the query cache, or keep `FinanceDataProvider` mounted (about 30 tables refetch on re-entry).
+7. Finish signed-in live flows, cross-theme and device checks, save/reload races and schema reproducibility; feature work stays in `REHAUL_PLAN.md`.
 
-## Main: landed and deployed
+## Open risks (from the 2026-11-03 Opus review, shipped as risks)
 
-- Take-home slices, leave/birthday reconciliation, employer matching and category rules are deployed on `d895a224` (Pages run `41046846244`).
-- `a5a7c892` adds queued debt-balance saves, logout verification and mobile dialog containment; the category-rules loader fix is included.
-- Hosted migration `20261029230000` is applied on `yvtiybyuifkiwyrnjebe`; migration history, RLS and restricted grants were verified. Local replay is untested.
-- Signed-in Tax & Income and a synthetic calculator scenario with negative benefits cash impact render correctly; a 375px check found no document overflow.
-- After deployment, a fresh signed-in calculator loads with empty notifications and no console warnings or errors. Light-theme smoke check passed at 1440px; dark theme restored.
-
-## Open risks and session handoff
-
-- Four reference tables still delete then insert; deadline/reload races, category edits during sync and stalled token refresh remain open.
-- A schemas-only rebuild lacks composite-key objects. Local PG15→17 reset and administrator authenticator enrolment need the owner.
-- Hosted authenticated sync, JWT configuration, `SITE_ORIGIN`, response headers, cron/Edge/pg_net checks and real HEIC uploads remain unverified.
-- Existing advisor warnings: `is_admin` security-definer callable by anon/authenticated, and leaked-password protection disabled; no new warning appeared with this migration.
-- Claude's admin-assistant branch was last observed unmerged (six commits); Gemini was last observed stopped by quota. Current activity is unverified.
-- Keep `finance-reconciliation-backup-2026-10-29` stash until its backup is no longer needed.
-- FEATURES.md, the Breakdown Rates sentence (~line 407), still says "Take-home by tax band"; the card's heading is "Take-home by income slice". Left alone by the docs change; the owner to correct.
+- Warm-up: every anonymous view sends about 30 reads, including the full watchlist library (about 7,600 episodes); payload unmeasured, and Save-Data exists only in Chromium.
+- Watchlist: an edit made during a background re-read of a stale library is overwritten when the read lands; a failed first read is cached as an empty library.
+- Recurring: "Show as suggestion again" deletes the row without confirming, losing edits on a once-active bill, and the toast can be wrong if detection no longer qualifies it.
+- Holiday: the 731-day / pre-1900 "counts 0" guard lives in `TaxIncomeSurface.tsx`, untested, and lets an over-long range save with 0.
+- `MerchantAvatar` uses an arbitrary `rounded-[0.5rem]`; the resolver lookup is duplicated in `DashboardSurface` and `TransactionsTab`.
+- Carried: four reference tables delete then insert; category edits during sync; stalled token refresh; schemas-only rebuild lacks composite-key objects; hosted sync, JWT config, `SITE_ORIGIN`, headers, cron/Edge/pg_net and HEIC uploads unverified; advisor warnings (`is_admin` callable by anon/authenticated, leaked-password protection off).
+- Student Loan approximation: pending income-linked interest accrues on the rebuilt balance, not SLC's; a phantom £12 lands October 2026 under net pay.
+- Local only: `supabase/seed.sql` (~line 127) has the 2026/27 Plan 2 threshold at 28,470 vs 29,385 hosted; a local test profile's `personal_pension_percent` was set to 5.
+- Keep stash `finance-reconciliation-backup-2026-10-29` until its backup is no longer needed.
