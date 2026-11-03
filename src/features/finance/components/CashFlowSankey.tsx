@@ -27,7 +27,7 @@ const TONE: Record<CashFlowSankeyNodeKind, string> = {
 };
 
 const LABEL_MAX = 22;
-const ROW_HEIGHT = 44;
+const ROW_HEIGHT = 48;
 
 const shorten = (label: string) => (label.length > LABEL_MAX ? `${label.slice(0, LABEL_MAX - 1)}…` : label);
 
@@ -58,6 +58,18 @@ interface LinkProps {
 const linkKind = (link: LinkProps['payload']): CashFlowSankeyNodeKind =>
   link.source.kind === 'hub' ? link.target.kind : link.source.kind;
 
+type GradientStop = { color: string; opacity: number };
+
+/** Each solid link fades from the tone it leaves to the tone it reaches. "From balances" is hatched instead. */
+const LINK_GRADIENT: Record<Exclude<CashFlowSankeyNodeKind, 'drawn'>, [GradientStop, GradientStop]> = {
+  source: [{ color: TONE.source, opacity: 0.38 }, { color: TONE.hub, opacity: 0.22 }],
+  kept: [{ color: TONE.hub, opacity: 0.25 }, { color: TONE.kept, opacity: 0.38 }],
+  category: [{ color: TONE.hub, opacity: 0.2 }, { color: TONE.category, opacity: 0.12 }],
+  // `linkKind` takes the far end of a hub link, so no link resolves to the
+  // hub itself; the entry is there because the type allows it.
+  hub: [{ color: TONE.hub, opacity: 0.2 }, { color: TONE.hub, opacity: 0.12 }],
+};
+
 function FlowTable({ graph }: { graph: CashFlowSankeyGraph }) {
   const into = graph.nodes.filter(n => n.kind === 'source' || n.kind === 'drawn');
   const out = graph.nodes.filter(n => n.kind === 'category' || n.kind === 'kept');
@@ -82,15 +94,22 @@ function FlowTable({ graph }: { graph: CashFlowSankeyGraph }) {
 }
 
 export function CashFlowSankey({ sankey, loading }: { sankey: CashFlowSankeyGraph | null; loading?: boolean }) {
-  const hatchId = `cf-hatch-${useId().replace(/:/g, '')}`;
+  const instanceId = useId().replace(/:/g, '');
+  const hatchId = `cf-hatch-${instanceId}`;
+  const gradPrefix = `cf-grad-${instanceId}`;
 
   const fillFor = (kind: CashFlowSankeyNodeKind) => (kind === 'drawn' ? `url(#${hatchId})` : TONE[kind]);
 
   const renderNode = ({ x, y, width, height, payload }: NodeProps) => {
     const onLeft = payload.kind === 'source' || payload.kind === 'drawn';
     const isHub = payload.kind === 'hub';
-    const labelX = isHub ? x + width / 2 : onLeft ? x - 8 : x + width + 8;
-    const labelY = isHub ? y - 8 : y + height / 2;
+    const minHeight = 8;
+    const nodeHeight = Math.max(height, minHeight);
+    const adjustedY = height < minHeight ? y - (minHeight - height) / 2 : y;
+
+    const labelX = isHub ? x + width / 2 : onLeft ? x - 10 : x + width + 10;
+    const labelY = isHub ? y - 10 : y + height / 2;
+
     return (
       <g>
         {/* Recharts renders no children but its Tooltip, so the hatch is
@@ -103,19 +122,44 @@ export function CashFlowSankey({ sankey, loading }: { sankey: CashFlowSankeyGrap
             </pattern>
           </defs>
         )}
-        <rect x={x} y={y} width={width} height={Math.max(height, 2)} rx={2} fill={fillFor(payload.kind)} stroke={payload.kind === 'drawn' ? TONE.drawn : undefined} />
+        <rect
+          x={x}
+          y={adjustedY}
+          width={width}
+          height={nodeHeight}
+          rx={3}
+          fill={fillFor(payload.kind)}
+          stroke={payload.kind === 'drawn' ? TONE.drawn : undefined}
+          className="transition-opacity hover:opacity-80"
+        />
         <text
           x={labelX}
           y={labelY}
           textAnchor={isHub ? 'middle' : onLeft ? 'end' : 'start'}
-          dominantBaseline={isHub ? 'auto' : 'middle'}
-          className="font-mono"
-          fontSize={12}
-          fill="hsl(var(--foreground))"
+          className="font-mono select-none"
         >
           <title>{`${payload.label}: ${formatGBP(payload.amount)}`}</title>
-          {shorten(payload.label)}
-          <tspan fill="hsl(var(--muted-foreground))" dx={6}>{formatGBP(payload.amount)}</tspan>
+          {/* Name above amount, both at the 12px floor: the amount is a
+              value, so it never drops below the label naming it. */}
+          <tspan
+            x={labelX}
+            dy={isHub ? '-0.9em' : '-0.3em'}
+            fill={isHub ? 'hsl(var(--muted-foreground))' : 'hsl(var(--foreground))'}
+            fontSize={12}
+            fontWeight={isHub ? 600 : 500}
+          >
+            {isHub ? payload.label : shorten(payload.label)}
+          </tspan>
+          <tspan
+            x={labelX}
+            dy="1.35em"
+            fill={isHub ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))'}
+            fontSize={12}
+            fontWeight={isHub ? 700 : undefined}
+            className="tabular-nums"
+          >
+            {formatGBP(payload.amount)}
+          </tspan>
         </text>
       </g>
     );
@@ -123,21 +167,50 @@ export function CashFlowSankey({ sankey, loading }: { sankey: CashFlowSankeyGrap
 
   const renderLink = ({ sourceX, sourceY, sourceControlX, targetX, targetY, targetControlX, linkWidth, payload }: LinkProps) => {
     const kind = linkKind(payload);
+    const d = `M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`;
+    const strokeWidth = Math.max(linkWidth, 2);
+
+    // "From balances" keeps the hatch: a gradient would leave it told apart
+    // by red alone, which a deuteranope cannot separate from green.
+    if (kind === 'drawn') {
+      return (
+        <path
+          d={d}
+          fill="none"
+          stroke={fillFor(kind)}
+          strokeWidth={strokeWidth}
+          strokeOpacity={0.45}
+          className="transition-opacity duration-150 opacity-90 hover:opacity-100"
+        />
+      );
+    }
+
+    // Scoped by this instance's id, as the hatch is, so two diagrams on one
+    // page cannot pick up each other's gradients.
+    const gradId = `${gradPrefix}-${payload.source.id}-${payload.target.id}`.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const [from, to] = LINK_GRADIENT[kind];
     return (
-      <path
-        d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
-        fill="none"
-        stroke={fillFor(kind)}
-        strokeWidth={Math.max(linkWidth, 1)}
-        strokeOpacity={kind === 'category' ? 0.25 : 0.35}
-        className="transition-[stroke-opacity] hover:[stroke-opacity:0.55]"
-      />
+      <g>
+        <defs>
+          <linearGradient id={gradId} gradientUnits="userSpaceOnUse" x1={sourceX} y1={sourceY} x2={targetX} y2={targetY}>
+            <stop offset="0%" stopColor={from.color} stopOpacity={from.opacity} />
+            <stop offset="100%" stopColor={to.color} stopOpacity={to.opacity} />
+          </linearGradient>
+        </defs>
+        <path
+          d={d}
+          fill="none"
+          stroke={`url(#${gradId})`}
+          strokeWidth={strokeWidth}
+          className="transition-opacity duration-150 opacity-90 hover:opacity-100"
+        />
+      </g>
     );
   };
 
   const leftCount = sankey ? sankey.nodes.filter(n => n.kind === 'source' || n.kind === 'drawn').length : 0;
   const rightCount = sankey ? sankey.nodes.filter(n => n.kind === 'category' || n.kind === 'kept').length : 0;
-  const height = Math.max(240, Math.max(leftCount, rightCount) * ROW_HEIGHT + 32);
+  const height = Math.max(260, Math.max(leftCount, rightCount) * ROW_HEIGHT + 48);
 
   return (
     <Card className="rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4 font-mono">
@@ -160,11 +233,11 @@ export function CashFlowSankey({ sankey, loading }: { sankey: CashFlowSankeyGrap
                 data={{ nodes: sankey.nodes.map(n => ({ ...n, name: n.label })), links: sankey.links }}
                 nameKey="name"
                 sort={false}
-                nodeWidth={10}
-                nodePadding={24}
+                nodeWidth={8}
+                nodePadding={28}
                 linkCurvature={0.5}
                 iterations={0}
-                margin={{ top: 24, right: 190, bottom: 8, left: 190 }}
+                margin={{ top: 40, right: 180, bottom: 16, left: 180 }}
                 node={renderNode as never}
                 link={renderLink as never}
               >
