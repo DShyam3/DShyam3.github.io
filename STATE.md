@@ -17,7 +17,7 @@ Production check so far: anonymous home page only — loads, no console errors, 
 ## Pushed later 2026-11-03 (`1b273019..29ed4d85`)
 
 - `3fc1180d` Cash Flow Sankey restyle, fixed per the review at the owner's request: every name and amount at 12px, hub label sentence case, hatch restored on the "From balances" link, gradient ids scoped by `useId`, no pointer cursors. Checked on local `dev:test` (Demo): 18 text spans at 12px, 1 hatched link, 7 gradient links, no overlap. Lint 0/0, typecheck, 2,131 tests, build pass.
-- `29ed4d85` Holiday: refuse saving an implausible leave range (`isCountableLeaveRange` in `holidays.ts`, tested). Committed by the Holiday session for the owner to push; it went out with the Sankey push by mistake (a plain `git push` after it landed). Its session reports lint, typecheck, 2,131 tests, build and a local browser check. Keep or revert is the owner's call.
+- `29ed4d85` Holiday: refuse saving an implausible leave range (`isCountableLeaveRange` in `holidays.ts`, tested). Committed by the Holiday session for the owner to push; it went out with the Sankey push by mistake (a plain `git push` after it landed). Its session reports lint, typecheck, 2,131 tests, build and a local browser check. Owner chose to keep it (2026-11-03).
 - Demo-profile Cash Flow reads backwards (Rent and ISA on the left feeding "Spending" into "Income"): labels come from `lib/finance/cash-flow`, likely the Demo rows' signs. Not investigated.
 
 ## Checks
@@ -33,12 +33,11 @@ Production check so far: anonymous home page only — loads, no console errors, 
 ## Next
 
 1. Check on production signed in: Tax Calculator (light theme too), Student Loan figures, holiday booking, recurring undismiss, Home logos with real Brandfetch icons, watched-episode toggle surviving leave-and-return, sign-out, Cash Flow Sankey.
-2. Owner: keep or revert `29ed4d85` (above).
-3. Owner: other branches are unmerged and untouched: `claude/affectionate-lamarr-f2d2cb` (12 commits, admin assistant), `codex/assistant-integration-2026-11-02` (13), `origin/claude/net-take-home-tax-f2n71j` (3, possibly superseded by #13, unverified).
-4. Owner: switch the hosted pension type from net pay to salary sacrifice in Tax & Income, then record SLC's next balance and use "Checking SLC's figures" on the pending top-up.
-5. Owner: holiday LEFT charges a cross-year booking's whole count to its start year (29 Dec 26 – 8 Jan 27 charges 8 to 2026); split rule needed. The real "Christmas Holidays" row still stores 8 days ("Use 7" in its edit dialog).
-6. Owner decision: move Finance rows into the query cache, or keep `FinanceDataProvider` mounted (about 30 tables refetch on re-entry).
-7. Finish signed-in live flows, cross-theme and device checks, save/reload races and schema reproducibility; feature work stays in `REHAUL_PLAN.md`.
+2. Owner: other branches are unmerged and untouched: `claude/affectionate-lamarr-f2d2cb` (12 commits, admin assistant), `codex/assistant-integration-2026-11-02` (13), `origin/claude/net-take-home-tax-f2n71j` (3, possibly superseded by #13, unverified).
+3. Owner: switch the hosted pension type from net pay to salary sacrifice in Tax & Income, then record SLC's next balance and use "Checking SLC's figures" on the pending top-up.
+4. Owner: holiday LEFT charges a cross-year booking's whole count to its start year (29 Dec 26 – 8 Jan 27 charges 8 to 2026); split rule needed. The real "Christmas Holidays" row still stores 8 days ("Use 7" in its edit dialog).
+5. Owner decision: move Finance rows into the query cache, or keep `FinanceDataProvider` mounted (about 30 tables refetch on re-entry).
+6. Finish signed-in live flows, cross-theme and device checks, save/reload races and schema reproducibility; feature work stays in `REHAUL_PLAN.md`.
 
 ## Open risks (from the 2026-11-03 Opus review, shipped as risks)
 
