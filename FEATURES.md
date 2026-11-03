@@ -502,8 +502,8 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   legend gives each share at your income. **Compare with** adds one dashed line of
   take-home %: No student loan, No pension, Pension +£X (5% of your salary, as a fixed
   amount) or Pension by salary sacrifice. Each option appears only when it changes
-  something, and its share at your income is in the legend. This view counts the child
-  benefit charge, which the slices do not, and says so when children are entered.
+  something, and its share at your income is in the legend. With children entered, a
+  note says the child benefit charge is paid through Self Assessment, not the payslip.
 
   The marginal and take-home views also shade the child benefit clawback when children
   are entered, and draw the cliffs as dashed lines. A legend under the chart names the

@@ -218,8 +218,7 @@ export function TakeHomeShareChart({ input, chartMax, step, xTicks }: {
           Legend figures are at your {formatWholeGBP(input.income)}. Child benefit itself and childcare support are not
           pay, so they are left out.
           {shown.some(s => s.key === 'childBenefitCharge') && (
-            <> Unlike the slices above, this counts the child benefit charge, which is paid through Self Assessment
-            rather than from your payslip.</>
+            <> The child benefit charge is paid through Self Assessment rather than from your payslip.</>
           )}
         </p>
       )}
