@@ -8,6 +8,7 @@ import {
   adjustHolidayCountForBirthday,
   calculateWorkingDaysInRange,
   computeUkBankHolidaysForYear,
+  expectedLeaveCount,
   findBirthdayDayForHolidayRange,
   findHolidayCoveringDate,
   formatDatesToBookUk,
@@ -21,9 +22,11 @@ import {
   parseDays,
   parseEntryDays,
   planOptimalHolidays,
+  resolveBankHolidaysForRange,
   resolveBankHolidaysForYear,
   resolveBirthdayInYear,
   removeHolidayWithBirthdayRestoration,
+  summariseLeaveRange,
   type UserHoliday,
   validateBirthdayLeaveBooking,
 } from './holidays';
@@ -101,6 +104,153 @@ describe('calculateWorkingDaysInRange', () => {
     expect(calculateWorkingDaysInRange('', '2025-12-01', [])).toBe(0);
     expect(calculateWorkingDaysInRange('2025-12-07', '2025-12-01', [])).toBe(0);
     expect(calculateWorkingDaysInRange('not-a-date', '2025-12-01', [])).toBe(0);
+  });
+
+  it('completes a 2,000-year range against a three-year holiday list', () => {
+    // A mistyped year (0027 for 2027) makes the range ~730k days; a linear scan
+    // of the list per day made this take seconds, so the lookup must be a Set.
+    const list = resolveBankHolidaysForRange('2025-01-01', '2027-12-31');
+    const days = calculateWorkingDaysInRange('0027-01-01', '2026-12-31', list);
+    expect(typeof days).toBe('number');
+    expect(Number.isFinite(days)).toBe(true);
+    expect(days).toBeGreaterThan(0);
+  });
+});
+
+describe('summariseLeaveRange', () => {
+  const empty = { workingDays: 0, weekendDays: 0, bankHolidayDates: [] };
+
+  it('splits a range across New Year into working, weekend and bank holiday days (England & Wales)', () => {
+    // Mon 21 Dec 2026 to Fri 1 Jan 2027 is 12 days: 10 weekdays and one weekend
+    // (26-27 Dec). Three weekdays are bank holidays, leaving 7 working days.
+    const bankHolidays = resolveBankHolidaysForRange('2026-12-21', '2027-01-01');
+    expect(summariseLeaveRange('2026-12-21', '2027-01-01', bankHolidays)).toEqual({
+      workingDays: 7,
+      weekendDays: 2,
+      bankHolidayDates: ['2026-12-25', '2026-12-28', '2027-01-01'],
+    });
+  });
+
+  it('summarises a plain week with no bank holidays', () => {
+    expect(summariseLeaveRange('2026-03-09', '2026-03-15', [])).toEqual({
+      workingDays: 5,
+      weekendDays: 2,
+      bankHolidayDates: [],
+    });
+  });
+
+  it('counts a bank holiday on a weekend once, as a weekend day, and does not list it', () => {
+    // Sat 26 Dec 2026 is in the list; Fri 25 Dec is the only weekday holiday.
+    expect(summariseLeaveRange('2026-12-21', '2026-12-27', ['2026-12-25', '2026-12-26'])).toEqual({
+      workingDays: 4,
+      weekendDays: 2,
+      bankHolidayDates: ['2026-12-25'],
+    });
+  });
+
+  it('ignores a list that holds only weekend bank holidays', () => {
+    expect(summariseLeaveRange('2026-12-26', '2026-12-27', ['2026-12-26', '2026-12-27'])).toEqual({
+      workingDays: 0,
+      weekendDays: 2,
+      bankHolidayDates: [],
+    });
+  });
+
+  it('ignores out-of-range dates and lists each in-range bank holiday once, in ascending order', () => {
+    const list = [
+      '2026-12-25',
+      '2027-01-01', // after the range
+      '2026-12-24',
+      '2026-12-25', // duplicate
+      '2026-01-01', // before the range
+      'not-a-date',
+      '',
+    ];
+    expect(summariseLeaveRange('2026-12-21', '2026-12-25', list)).toEqual({
+      workingDays: 3,
+      weekendDays: 0,
+      bankHolidayDates: ['2026-12-24', '2026-12-25'],
+    });
+  });
+
+  it('includes a bank holiday on the first or last day of the range', () => {
+    expect(summariseLeaveRange('2026-12-25', '2026-12-28', ['2026-12-28', '2026-12-25'])).toEqual({
+      workingDays: 0,
+      weekendDays: 2,
+      bankHolidayDates: ['2026-12-25', '2026-12-28'],
+    });
+  });
+
+  it('summarises a single day of each kind', () => {
+    expect(summariseLeaveRange('2026-03-09', '2026-03-09', [])).toEqual({
+      workingDays: 1,
+      weekendDays: 0,
+      bankHolidayDates: [],
+    });
+    expect(summariseLeaveRange('2026-03-14', '2026-03-14', [])).toEqual({
+      workingDays: 0,
+      weekendDays: 1,
+      bankHolidayDates: [],
+    });
+    expect(summariseLeaveRange('2026-12-25', '2026-12-25', ['2026-12-25'])).toEqual({
+      workingDays: 0,
+      weekendDays: 0,
+      bankHolidayDates: ['2026-12-25'],
+    });
+  });
+
+  it('reads the leap day as a real day', () => {
+    // Mon 28 Feb to Wed 1 Mar 2028, via Tue 29 Feb.
+    expect(summariseLeaveRange('2028-02-28', '2028-03-01', ['2028-02-29'])).toEqual({
+      workingDays: 2,
+      weekendDays: 0,
+      bankHolidayDates: ['2028-02-29'],
+    });
+  });
+
+  it('returns zeros for an inverted range, even when its days are bank holidays', () => {
+    expect(summariseLeaveRange('2026-03-15', '2026-03-09', [])).toEqual(empty);
+    expect(summariseLeaveRange('2026-12-28', '2026-12-25', ['2026-12-25', '2026-12-28'])).toEqual(empty);
+  });
+
+  it('returns zeros for a missing or malformed range', () => {
+    expect(summariseLeaveRange('', '', [])).toEqual(empty);
+    expect(summariseLeaveRange('', '2026-03-09', [])).toEqual(empty);
+    expect(summariseLeaveRange('2026-03-09', '', [])).toEqual(empty);
+    expect(summariseLeaveRange('not-a-date', '2026-03-09', [])).toEqual(empty);
+    expect(summariseLeaveRange('2026-03-09', 'not-a-date', [])).toEqual(empty);
+    expect(summariseLeaveRange('2026-02-30', '2026-03-05', [])).toEqual(empty);
+  });
+
+  it('does not mutate the bank holiday list it is given', () => {
+    const list = Object.freeze(['2026-12-28', '2026-12-25', '2026-12-25']) as string[];
+    summariseLeaveRange('2026-12-21', '2026-12-31', list);
+    expect(list).toEqual(['2026-12-28', '2026-12-25', '2026-12-25']);
+  });
+
+  it('keeps workingDays equal to calculateWorkingDaysInRange and partitions every day of the range', () => {
+    const christmas = resolveBankHolidaysForRange('2026-12-21', '2027-01-01');
+    const cases: Array<[string, string, string[], number]> = [
+      // [start, end, bank holidays, calendar days in the range]
+      ['2026-12-21', '2027-01-01', christmas, 12],
+      ['2026-12-21', '2027-01-01', resolveBankHolidaysForYear(2026).dates, 12],
+      ['2026-03-09', '2026-03-15', [], 7],
+      ['2026-12-26', '2026-12-27', ['2026-12-26', '2026-12-27'], 2],
+      ['2026-12-25', '2026-12-25', ['2026-12-25'], 1],
+      ['2028-02-27', '2028-03-02', ['2028-02-29'], 5],
+      ['2026-01-01', '2026-12-31', resolveBankHolidaysForYear(2026).dates, 365],
+      ['2025-12-01', '2026-12-31', resolveBankHolidaysForRange('2025-12-01', '2026-12-31'), 396],
+      ['2026-03-15', '2026-03-09', [], 0],
+      ['', '2026-03-09', [], 0],
+      ['2026-02-30', '2026-03-05', [], 0],
+    ];
+    for (const [start, end, list, days] of cases) {
+      const summary = summariseLeaveRange(start, end, list);
+      expect(summary.workingDays).toBe(calculateWorkingDaysInRange(start, end, list));
+      expect(summary.workingDays + summary.weekendDays + summary.bankHolidayDates.length).toBe(days);
+      expect(summary.bankHolidayDates).toEqual([...new Set(summary.bankHolidayDates)].sort());
+      expect(summary.bankHolidayDates.every(d => d >= start && d <= end && list.includes(d))).toBe(true);
+    }
   });
 });
 
@@ -553,6 +703,81 @@ describe('computeUkBankHolidaysForYear & resolveBankHolidaysForYear', () => {
   });
 });
 
+describe('resolveBankHolidaysForRange', () => {
+  it('skips next year\'s New Year\'s Day on a range that crosses 31 Dec (England & Wales)', () => {
+    const range = resolveBankHolidaysForRange('2026-12-21', '2027-01-01', 'england-and-wales');
+    expect(range).toContain('2026-12-25');
+    expect(range).toContain('2026-12-28');
+    expect(range).toContain('2027-01-01');
+    expect(calculateWorkingDaysInRange('2026-12-21', '2027-01-01', range)).toBe(7);
+
+    // The single-year list is why this resolver exists: 1 Jan 2027 is not in it,
+    // so the same range wrongly counts a bank holiday as a working day.
+    const settingsYearOnly = resolveBankHolidaysForYear(2026).dates;
+    expect(settingsYearOnly).not.toContain('2027-01-01');
+    expect(calculateWorkingDaysInRange('2026-12-21', '2027-01-01', settingsYearOnly)).toBe(8);
+  });
+
+  it('moves Scottish 2nd January to Monday 4 Jan 2027 when it falls on a Saturday', () => {
+    const scotland = resolveBankHolidaysForRange('2026-12-31', '2027-01-04', 'scotland');
+    expect(scotland).toContain('2027-01-01');
+    expect(scotland).toContain('2027-01-04');
+    expect(scotland).not.toContain('2027-01-02');
+    // Thu 31 Dec is the only working day: Fri 1 Jan and Mon 4 Jan are holidays.
+    expect(calculateWorkingDaysInRange('2026-12-31', '2027-01-04', scotland)).toBe(1);
+
+    const england = resolveBankHolidaysForRange('2026-12-31', '2027-01-04', 'england-and-wales');
+    expect(calculateWorkingDaysInRange('2026-12-31', '2027-01-04', england)).toBe(2);
+  });
+
+  it('honours fetched dates for their own year and computes the years with none', () => {
+    const fetched = ['2026-01-01', '2026-06-15', '2026-12-25'];
+    const range = resolveBankHolidaysForRange(
+      '2026-06-01',
+      '2027-01-01',
+      'england-and-wales',
+      fetched,
+    );
+    // 2026 comes from the fetched list, one-off included, computed 2026 ignored.
+    expect(range).toContain('2026-06-15');
+    expect(range).not.toContain('2026-04-03');
+    expect(range).not.toContain('2026-12-28');
+    // 2027 has no fetched dates, so the computed list fills in.
+    expect(range).toContain('2027-01-01');
+  });
+
+  it('returns a single year\'s dates for a range inside that year, and for one day', () => {
+    expect(resolveBankHolidaysForRange('2026-03-01', '2026-09-30')).toEqual(
+      resolveBankHolidaysForYear(2026, 'england-and-wales').dates,
+    );
+    expect(resolveBankHolidaysForRange('2026-12-25', '2026-12-25')).toEqual(
+      resolveBankHolidaysForYear(2026, 'england-and-wales').dates,
+    );
+  });
+
+  it('returns every year it touches once, in ascending order', () => {
+    const range = resolveBankHolidaysForRange(
+      '2026-12-01',
+      '2028-01-31',
+      'england-and-wales',
+      ['2026-12-25', '2026-12-25', '2026-01-01'],
+    );
+    expect(range).toEqual([...new Set(range)].sort());
+    expect(range[0]).toBe('2026-01-01');
+    expect(range).toContain('2027-12-27');
+    expect(range).toContain('2028-01-03');
+    expect(range.filter(d => d.startsWith('2026-'))).toEqual(['2026-01-01', '2026-12-25']);
+  });
+
+  it('returns [] for an inverted range or malformed input', () => {
+    expect(resolveBankHolidaysForRange('2027-01-02', '2026-12-30')).toEqual([]);
+    expect(resolveBankHolidaysForRange('', '2026-12-30')).toEqual([]);
+    expect(resolveBankHolidaysForRange('2026-12-30', '')).toEqual([]);
+    expect(resolveBankHolidaysForRange('not-a-date', 'not-a-date')).toEqual([]);
+    expect(resolveBankHolidaysForRange('2026-02-30', '2026-03-05')).toEqual([]);
+  });
+});
+
 describe('planOptimalHolidays', () => {
   it('generates high-efficiency bridges for 2026 and future years', () => {
     const plan2026 = planOptimalHolidays({
@@ -934,6 +1159,42 @@ describe('adjustHolidayCountForBirthday', () => {
   it.each([0, -0.5, 0.25, 2, NaN, Infinity])('rejects invalid birthday count %s', birthdayCount => {
     expect(adjustHolidayCountForBirthday(3.5, birthdayCount, true)).toBeNull();
     expect(adjustHolidayCountForBirthday(3.5, birthdayCount, false)).toBeNull();
+  });
+});
+
+describe('expectedLeaveCount', () => {
+  const plain = { halfDay: false, useBirthday: false, birthdayCount: 1 };
+
+  it('charges the working days of a plain booking', () => {
+    expect(expectedLeaveCount({ ...plain, workingDays: 7 })).toBe(7);
+  });
+
+  it.each([
+    { workingDays: 7, useBirthday: false },
+    { workingDays: 7, useBirthday: true },
+    { workingDays: 1, useBirthday: true },
+    { workingDays: 0, useBirthday: false },
+  ])('charges half a day for a half day regardless of %j', ({ workingDays, useBirthday }) => {
+    expect(expectedLeaveCount({ workingDays, halfDay: true, useBirthday, birthdayCount: 1 })).toBe(0.5);
+  });
+
+  it('takes a Birthday Day Off from the working days', () => {
+    expect(expectedLeaveCount({ workingDays: 7, halfDay: false, useBirthday: true, birthdayCount: 1 })).toBe(6);
+  });
+
+  it('takes a half-day Birthday Day Off from the working days', () => {
+    expect(expectedLeaveCount({ workingDays: 7, halfDay: false, useBirthday: true, birthdayCount: 0.5 })).toBe(6.5);
+  });
+
+  it('never goes below 0 once a birthday is taken off', () => {
+    expect(expectedLeaveCount({ workingDays: 1, halfDay: false, useBirthday: true, birthdayCount: 1 })).toBe(0);
+    expect(expectedLeaveCount({ workingDays: 0, halfDay: false, useBirthday: true, birthdayCount: 1 })).toBe(0);
+    expect(expectedLeaveCount({ workingDays: 0, halfDay: false, useBirthday: true, birthdayCount: 0.5 })).toBe(0);
+  });
+
+  it('ignores birthdayCount when no birthday is used', () => {
+    expect(expectedLeaveCount({ workingDays: 7, halfDay: false, useBirthday: false, birthdayCount: 1 })).toBe(7);
+    expect(expectedLeaveCount({ workingDays: 7, halfDay: false, useBirthday: false, birthdayCount: 0.5 })).toBe(7);
   });
 });
 

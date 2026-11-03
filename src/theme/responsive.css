@@ -347,6 +347,26 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
   .schedule-card-actions { margin-left: auto; }
 }
 
+/* From 1024px the holiday tracker sits beside the pay table, narrower than a
+   phone, so its header and leave tiles follow the card's width rather than the
+   viewport's: four tiles side by side need about 26rem before "Allowance" runs
+   into "Left". */
+.holiday-tracker { container-type: inline-size; }
+.holiday-tracker-head { display: flex; flex-direction: column; gap: 0.75rem; }
+.holiday-tracker-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (min-width: 26rem) {
+  .holiday-tracker-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container (min-width: 34rem) {
+  .holiday-tracker-head { flex-direction: row; align-items: flex-start; justify-content: space-between; }
+}
+/* A calendar day fills its column instead of taking the 2.75rem touch width,
+   which would push it over its neighbours where a column is narrower; the row
+   height still carries the touch target. */
+@media (any-pointer: coarse), (hover: none) {
+  .app-shell .holiday-day, .glass-dialog .holiday-day { min-width: 0; width: 100%; }
+}
+
 /* The pay breakdown needs about 46rem for all five period columns. Narrower
    than that it shows the one picked in the switcher above it, so the table
    never scrolls sideways and the labels never need a sticky column. */

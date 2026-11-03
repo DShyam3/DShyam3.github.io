@@ -188,19 +188,47 @@ function* calendarDays(startStr: string, endStr: string): Generator<CalendarDay>
   }
 }
 
+export interface LeaveRangeSummary {
+  /** Weekdays in the range that are not bank holidays. */
+  workingDays: number;
+  /** Saturdays and Sundays in the range. */
+  weekendDays: number;
+  /** Bank holidays in the range that fall on a weekday, ascending. */
+  bankHolidayDates: string[];
+}
+
+/** What a `YYYY-MM-DD` range is made of, for explaining a leave count: working
+ *  days, weekend days, and the weekday bank holidays it skips. A bank holiday
+ *  on a weekend counts once, as a weekend day. `workingDays` is what
+ *  `calculateWorkingDaysInRange` returns. Everything is 0 or empty for a
+ *  missing, malformed or inverted range. */
+export const summariseLeaveRange = (
+  startStr: string,
+  endStr: string,
+  bankHolidays: string[],
+): LeaveRangeSummary => {
+  const holidays = new Set(bankHolidays);
+  let workingDays = 0;
+  let weekendDays = 0;
+  // Days arrive once each and in order, so this is already ascending and unique.
+  const bankHolidayDates: string[] = [];
+  for (const current of calendarDays(startStr, endStr)) {
+    if (current.weekend) weekendDays++;
+    else if (holidays.has(current.iso)) bankHolidayDates.push(current.iso);
+    else workingDays++;
+  }
+  return { workingDays, weekendDays, bankHolidayDates };
+};
+
 /** Working days between two `YYYY-MM-DD` dates, inclusive, excluding weekends
- *  and bank holidays. Returns 0 for a missing, malformed or inverted range. */
+ *  and bank holidays. Returns 0 for a missing, malformed or inverted range.
+ *  Shares `summariseLeaveRange`'s single pass, which looks each holiday up in a
+ *  `Set`: a long range against a multi-year list stays linear in the days. */
 export const calculateWorkingDaysInRange = (
   startStr: string,
   endStr: string,
   bankHolidays: string[],
-): number => {
-  let count = 0;
-  for (const current of calendarDays(startStr, endStr)) {
-    if (!current.weekend && !bankHolidays.includes(current.iso)) count++;
-  }
-  return count;
-};
+): number => summariseLeaveRange(startStr, endStr, bankHolidays).workingDays;
 
 export interface BookedDay {
   day: number;
@@ -626,6 +654,25 @@ export const adjustHolidayCountForBirthday = (
   return attach ? count - birthdayCount : count + birthdayCount;
 };
 
+/** The leave a booking's dates charge before any typed override: half a day
+ *  for a half day, otherwise its working days less a Birthday Day Off it
+ *  carries, never below 0. */
+export const expectedLeaveCount = ({
+  workingDays,
+  halfDay,
+  useBirthday,
+  birthdayCount,
+}: {
+  workingDays: number;
+  halfDay: boolean;
+  useBirthday: boolean;
+  birthdayCount: number;
+}): number => {
+  if (halfDay) return HALF_DAY;
+  if (useBirthday) return Math.max(0, workingDays - birthdayCount);
+  return workingDays;
+};
+
 /** Removing a birthday restores its charge to the first regular holiday host. */
 export const removeHolidayWithBirthdayRestoration = (
   holidays: UserHoliday[],
@@ -816,6 +863,30 @@ export const resolveBankHolidaysForYear = (
     dates: computed.map(e => e.date),
     map: computedMap,
   };
+};
+
+/** Bank holidays for every calendar year a `YYYY-MM-DD` range touches, so a
+ *  range that crosses New Year also skips the next year's holidays. Each year
+ *  prefers its own fetched GOV.UK dates and falls back to calculation, as
+ *  `resolveBankHolidaysForYear` does, so `fetchedDates` may cover one year
+ *  only. Returns [] for a missing, malformed or inverted range. */
+export const resolveBankHolidaysForRange = (
+  startIso: string,
+  endIso: string,
+  region: UkHolidayRegion = 'england-and-wales',
+  fetchedDates?: string[],
+): string[] => {
+  const first = calendarParts(startIso);
+  const last = calendarParts(endIso);
+  if (!first || !last || last.epoch < first.epoch) return [];
+
+  const dates = new Set<string>();
+  for (let year = first.year; year <= last.year; year++) {
+    for (const iso of resolveBankHolidaysForYear(year, region, fetchedDates).dates) {
+      dates.add(iso);
+    }
+  }
+  return [...dates].sort();
 };
 
 export type OptimalLeaveBias =

@@ -10,7 +10,8 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
 import { useFinanceData, type BreakdownRateMode } from '../FinanceDataContext';
 import { MONTH_NAMES, getPlanName } from '../finance-defaults';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Calendar as DayCalendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,7 +44,10 @@ import {
   isHalfDay,
   planOptimalHolidays,
   removeHolidayWithBirthdayRestoration,
+  resolveBankHolidaysForRange,
   resolveBankHolidaysForYear,
+  expectedLeaveCount,
+  summariseLeaveRange,
   toISODate,
   validateBirthdayLeaveBooking,
   type BirthdayLeaveRule,
@@ -71,6 +75,23 @@ const MAX_INLINE_BRIDGES = 5;
 
 const HALF_DAY_LABEL: Record<HalfDay, string> = { am: 'morning', pm: 'afternoon' };
 const HALF_DAY_BUTTON: Record<HalfDay, string> = { am: 'Morning', pm: 'Afternoon' };
+
+/** Past two years a range is a typo, not leave, and is counted as nothing. */
+const MAX_LEAVE_RANGE_DAYS = 731;
+
+/** A stored day as a local-midnight `Date`, for the booking calendar. */
+const isoToLocalDate = (iso: string): Date | undefined => {
+  const parts = calendarParts(iso);
+  return parts ? new Date(parts.year, parts.month - 1, parts.day) : undefined;
+};
+
+/** `25 Dec`: a day the reader already knows the year of. */
+const shortUkDate = (iso: string): string => {
+  const parts = calendarParts(iso);
+  return parts ? `${parts.day} ${MONTH_NAMES[parts.month - 1].slice(0, 3)}` : iso;
+};
+
+const countOf = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
 type Period = 'annual' | 'monthly' | 'weekly' | 'daily' | 'hourly';
 
@@ -321,6 +342,14 @@ export default function TaxIncomeSurface({
   const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
   const [inlineHalfDay, setInlineHalfDay] = useState<HalfDay | null>(null);
   const [inlineUseBirthdayDay, setInlineUseBirthdayDay] = useState<boolean>(false);
+  // The booking calendar: the month it shows, and whether the next click ends
+  // the range rather than starting a new one.
+  const [inlinePickerMonth, setInlinePickerMonth] = useState<Date>(() => new Date());
+  const [inlinePickingEnd, setInlinePickingEnd] = useState(false);
+  // Whether this booking should carry the Birthday Day Off once its range is
+  // long enough to: set when the dialog opens on a holiday that has one, and
+  // by the birthday toggle.
+  const [inlineBirthdayIntent, setInlineBirthdayIntent] = useState(false);
 
   // The leave year the tracker is showing. Browsing is local: settings.taxYear
   // also sets the bank-holiday and weekend counts behind the pay rates, so only
@@ -342,15 +371,29 @@ export default function TaxIncomeSurface({
       ),
     [currentTaxYear, settings.ukRegion, settingsYearBankHolidays, settingsYearBankHolidaysMap],
   );
+  // A range can cross New Year, so it skips the bank holidays of every year it
+  // touches, not only the year on screen. A date input passes through years
+  // like 0002 while one is typed; a range that long is not leave, so it counts
+  // nothing rather than walking two thousand years per keystroke.
+  const bankHolidaysForLeave = (start: string, end: string): string[] | null => {
+    const first = calendarParts(start);
+    const last = calendarParts(end);
+    if (!first || !last || first.year < 1900 || last.epoch - first.epoch > MAX_LEAVE_RANGE_DAYS) return null;
+    return resolveBankHolidaysForRange(start, end, settings.ukRegion || 'england-and-wales', settingsYearBankHolidays);
+  };
+  const workingDaysIn = (start: string, end: string) => {
+    const bankHolidays = bankHolidaysForLeave(start, end);
+    return bankHolidays ? calculateWorkingDaysInRange(start, end, bankHolidays) : 0;
+  };
   const todayIso = toISODate(new Date());
   const realCurrentYear = new Date().getFullYear();
   const realCurrentMonth = new Date().getMonth();
 
   const inlineIsSingleDay = !!inlineStartDate && inlineStartDate === inlineEndDate;
-  const inlineDayIsWorking = inlineIsSingleDay && calculateWorkingDaysInRange(inlineStartDate, inlineStartDate, bankHolidaysList) === 1;
+  const inlineDayIsWorking = inlineIsSingleDay && workingDaysIn(inlineStartDate, inlineStartDate) === 1;
   const inlineWorkingDays =
     inlineStartDate && inlineEndDate
-      ? calculateWorkingDaysInRange(inlineStartDate, inlineEndDate, bankHolidaysList)
+      ? workingDaysIn(inlineStartDate, inlineEndDate)
       : 0;
   const inlineEligibleBdayDate =
     settings.birthdayLeaveEnabled && inlineWorkingDays > 1 && inlineStartDate && inlineEndDate
@@ -368,8 +411,10 @@ export default function TaxIncomeSurface({
 
   // A half day survives a date change only while the booking is still one
   // working day; otherwise it becomes a count of whole working days.
-  const recountInline = (start: string, end: string) => {
-    const workingDays = calculateWorkingDaysInRange(start, end, bankHolidaysList);
+  // `wantBirthday` outlives a range too short to carry the birthday, so picking
+  // a new range on the calendar (one day, then the last) keeps it.
+  const recountInline = (start: string, end: string, wantBirthday = inlineUseBirthdayDay || inlineBirthdayIntent) => {
+    const workingDays = workingDaysIn(start, end);
     const keepHalf = !!inlineHalfDay && start === end && workingDays === 1;
     if (!keepHalf) setInlineHalfDay(null);
     const eligibleBday =
@@ -385,12 +430,48 @@ export default function TaxIncomeSurface({
             bankHolidaysList,
           )
         : null;
-    const keepBday = inlineUseBirthdayDay && Boolean(eligibleBday) && workingDays > 1;
-    if (!keepBday && inlineUseBirthdayDay) {
-      setInlineUseBirthdayDay(false);
-    }
-    setInlineCount(String(keepHalf ? HALF_DAY : keepBday ? Math.max(0, workingDays - inlineBirthdayCount) : workingDays));
+    const keepBday = wantBirthday && Boolean(eligibleBday) && workingDays > 1;
+    setInlineUseBirthdayDay(keepBday);
+    setInlineCount(
+      String(expectedLeaveCount({ workingDays, halfDay: keepHalf, useBirthday: keepBday, birthdayCount: inlineBirthdayCount })),
+    );
   };
+
+  // The first click starts a range, the second ends it; a second click before
+  // the start begins again from there.
+  const pickInlineDay = (day: Date) => {
+    const iso = toISODate(day);
+    if (inlinePickingEnd && inlineStartDate && iso >= inlineStartDate) {
+      setInlineEndDate(iso);
+      setInlinePickingEnd(false);
+      recountInline(inlineStartDate, iso);
+      return;
+    }
+    setInlineStartDate(iso);
+    setInlineEndDate(iso);
+    setInlinePickingEnd(true);
+    recountInline(iso, iso);
+  };
+
+  const inlineRangeBankHolidays = bankHolidaysForLeave(inlineStartDate, inlineEndDate);
+  const inlineRangeSummary =
+    inlineRangeBankHolidays && inlineEndDate >= inlineStartDate
+      ? summariseLeaveRange(inlineStartDate, inlineEndDate, inlineRangeBankHolidays)
+      : null;
+
+  // Bank holidays around the month the booking calendar shows, so either side
+  // of New Year is marked.
+  const pickerYear = inlinePickerMonth.getFullYear();
+  const pickerBankHolidays = useMemo(
+    () =>
+      resolveBankHolidaysForRange(
+        `${pickerYear - 1}-12-01`,
+        `${pickerYear + 1}-01-31`,
+        settings.ukRegion || 'england-and-wales',
+        settingsYearBankHolidays,
+      ).flatMap(iso => isoToLocalDate(iso) ?? []),
+    [pickerYear, settings.ukRegion, settingsYearBankHolidays],
+  );
 
   const chooseInlineLength = (half: HalfDay | null) => {
     setInlineHalfDay(half);
@@ -451,6 +532,22 @@ export default function TaxIncomeSurface({
     ? getBirthdayEntryInsideRange(inlineOriginalHoliday.startDate, inlineOriginalHoliday.endDate)
     : undefined;
   const inlineBirthdayCount = inlineAttachedBirthday?.count ?? 1;
+
+  // What the dates alone would charge. A count that differs is either typed on
+  // purpose or saved before the dates' bank holidays were known, so the form
+  // offers this one rather than overwriting it.
+  const inlineExpectedCount = expectedLeaveCount({
+    workingDays: inlineWorkingDays,
+    halfDay: Boolean(inlineHalfDay),
+    useBirthday: inlineUseBirthdayDay,
+    birthdayCount: inlineBirthdayCount,
+  });
+  // Not while a range is half picked: its count is about to change anyway.
+  const inlineCountDiffers =
+    inlineType !== 'birthday' &&
+    !inlinePickingEnd &&
+    Boolean(inlineRangeSummary) &&
+    (inlineCount.trim() === '' || Number(inlineCount) !== inlineExpectedCount);
 
   const birthdayWindow = useMemo(
     () =>
@@ -623,7 +720,7 @@ export default function TaxIncomeSurface({
 
       for (let i = 1; i < remainingWorkDays.length; i++) {
         const curIso = remainingWorkDays[i];
-        const workDaysBetween = calculateWorkingDaysInRange(prevIso, curIso, bankHolidaysList);
+        const workDaysBetween = workingDaysIn(prevIso, curIso);
         if (workDaysBetween === 2) {
           prevIso = curIso;
           runCount++;
@@ -754,6 +851,7 @@ export default function TaxIncomeSurface({
     setInlineCount('1');
     setInlineHalfDay(null);
     setInlineUseBirthdayDay(false);
+    setInlineBirthdayIntent(false);
   };
 
   const handleStartEditHoliday = (holiday: UserHoliday, monthIdx: number) => {
@@ -766,13 +864,18 @@ export default function TaxIncomeSurface({
     setInlineStartDate(holiday.startDate);
     setInlineEndDate(holiday.endDate);
     setInlineCount(holiday.count.toString());
+    setInlinePickerMonth(isoToLocalDate(holiday.startDate) ?? new Date());
+    setInlinePickingEnd(false);
     setInlineHalfDay(isHalfDay(holiday) ? holiday.halfDay ?? null : null);
-    setInlineUseBirthdayDay(
-      holType === 'holiday' ? Boolean(getBirthdayEntryInsideRange(holiday.startDate, holiday.endDate)) : false,
-    );
+    const carriesBirthday =
+      holType === 'holiday' && Boolean(getBirthdayEntryInsideRange(holiday.startDate, holiday.endDate));
+    setInlineUseBirthdayDay(carriesBirthday);
+    setInlineBirthdayIntent(carriesBirthday);
   };
 
-  const handleStartNewHoliday = (monthIdx: number, type: LeaveType = 'holiday') => {
+  // `fromDay` is a day clicked on the month grid: the booking starts there and
+  // the calendar's next click ends it.
+  const handleStartNewHoliday = (monthIdx: number, type: LeaveType = 'holiday', fromDay?: string) => {
     setInlineBookMonthIdx(monthIdx);
     setEditingHolidayId(null);
     setInlineType(type);
@@ -780,25 +883,53 @@ export default function TaxIncomeSurface({
     const pad = (n: number) => n.toString().padStart(2, '0');
     const monthPrefix = `${currentTaxYear}-${pad(monthIdx + 1)}-`;
     const defaultDate =
-      type === 'birthday' && birthdayWindow
+      fromDay ??
+      (type === 'birthday' && birthdayWindow
         ? birthdayWindow.eligibleDates.find(d => d.startsWith(monthPrefix)) ||
           (birthdayWindow.birthdayIso?.startsWith(monthPrefix) ? birthdayWindow.birthdayIso : `${monthPrefix}01`)
-        : `${monthPrefix}01`;
+        : `${monthPrefix}01`);
     setInlineStartDate(defaultDate);
     setInlineEndDate(defaultDate);
-    setInlineCount('1');
+    setInlineCount(String(workingDaysIn(defaultDate, defaultDate)));
+    setInlinePickerMonth(isoToLocalDate(defaultDate) ?? new Date());
+    setInlinePickingEnd(Boolean(fromDay));
     setInlineHalfDay(null);
     setInlineUseBirthdayDay(false);
+    setInlineBirthdayIntent(false);
   };
 
-  const handleSaveInlineHoliday = (monthIdx: number) => {
-    void monthIdx;
+  // A day on an expanded month: its entry opens for editing, a free day starts
+  // a booking. Birthday and sick days are more specific than the leave around them.
+  const entryOnDay = (dateStr: string): UserHoliday | undefined => {
+    const onDay = normalizedHolidaysAll.filter(h => h.startDate <= dateStr && h.endDate >= dateStr);
+    return onDay.find(h => h.type === 'birthday' || h.type === 'sick') ?? onDay[0];
+  };
+  const handleDayClick = (dateStr: string, monthIdx: number) => {
+    const entry = entryOnDay(dateStr);
+    if (entry) handleStartEditHoliday(entry, monthIdx);
+    else handleStartNewHoliday(monthIdx, 'holiday', dateStr);
+  };
+
+  // The header's Book leave starts on today in the current year, else on
+  // 1 January, and waits for a first click rather than an end.
+  const handleBookFromHeader = () => {
+    const startIso = currentTaxYear === realCurrentYear ? todayIso : `${currentTaxYear}-01-01`;
+    handleStartNewHoliday((calendarParts(startIso)?.month ?? 1) - 1, 'holiday', startIso);
+    setInlinePickingEnd(false);
+  };
+
+  const handleSaveInlineHoliday = () => {
     const countVal = inlineCount.trim() === '' ? NaN : Number(inlineCount);
     if (!inlineStartDate || !inlineEndDate) {
       toast({ title: 'Missing Dates', description: 'Start and end dates are required.', variant: 'destructive' });
       return;
     }
-    if (!Number.isFinite(countVal) || countVal < 0) {
+    if (inlineEndDate < inlineStartDate) {
+      toast({ title: 'Last day is before the first', description: 'Pick a last day on or after the first day.', variant: 'destructive' });
+      return;
+    }
+    // A Birthday Day Off is stored as one day or a half, whatever the field held.
+    if (inlineType !== 'birthday' && (!Number.isFinite(countVal) || countVal < 0)) {
       toast({ title: 'Invalid Days Count', description: 'Leave days count must be a non-negative number.', variant: 'destructive' });
       return;
     }
@@ -897,7 +1028,7 @@ export default function TaxIncomeSurface({
       coveringHoliday && coveringHoliday.id !== previousCoveringHoliday?.id ? coveringHoliday : undefined;
     if (
       birthdayHost &&
-      calculateWorkingDaysInRange(birthdayHost.startDate, birthdayHost.endDate, bankHolidaysList) < 2
+      workingDaysIn(birthdayHost.startDate, birthdayHost.endDate) < 2
     ) {
       toast({
         title: 'Day Already Booked as Leave',
@@ -1247,42 +1378,52 @@ export default function TaxIncomeSurface({
     {/* Right Side: Combined leave balances and holiday tracker */}
     <div className="lg:col-span-4 flex flex-col gap-6">
 
-      <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/30 pb-3">
+      <div className="holiday-tracker surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
+        <div className="holiday-tracker-head border-b border-border/30 pb-3">
           <div className="min-w-0">
             <h3 className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-primary shrink-0" /> Holiday Tracker
             </h3>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">Click a month card to expand details. Book leave inline or remove booked events easily.</p>
+            <p className="text-xs text-muted-foreground font-mono mt-0.5">Open a month, then click a day to book from it or edit what is there.</p>
           </div>
-          <div className="flex items-center gap-1 shrink-0 self-start bg-muted/20 border border-border/40 rounded-lg p-0.5 font-mono">
+          <div className="flex items-center gap-2 shrink-0 self-start">
             <Button
               type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => handleBrowseYear(currentTaxYear - 1)}
-              className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
-              title="Previous leave year"
+              size="sm"
+              onClick={handleBookFromHeader}
+              className="h-8 px-3 rounded-lg gap-1 bg-primary text-primary-foreground font-semibold font-mono text-xs"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" /> Book leave
             </Button>
-            <span className="px-2 text-xs font-mono font-bold tabular-nums text-foreground">
-              {currentTaxYear}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => handleBrowseYear(currentTaxYear + 1)}
-              className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
-              title="Next leave year"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
+            <div className="flex items-center gap-1 shrink-0 bg-muted/20 border border-border/40 rounded-lg p-0.5 font-mono">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => handleBrowseYear(currentTaxYear - 1)}
+                className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
+                title="Previous leave year"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="px-2 text-xs font-mono font-bold tabular-nums text-foreground">
+                {currentTaxYear}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => handleBrowseYear(currentTaxYear + 1)}
+                className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
+                title="Next leave year"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-border/30 pb-4">
+        <div className="holiday-tracker-tiles grid gap-2 border-b border-border/30 pb-4">
           <div className="rounded-lg bg-muted/20 border border-border/30 px-3 py-2 text-left font-mono">
             <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Allowance</span>
             <span className="mt-1 block text-sm font-bold text-foreground tabular-nums">
@@ -1774,6 +1915,10 @@ export default function TaxIncomeSurface({
                         bookedDay?.occasion ||
                         (isBookedSick ? 'Sick Leave' : isBookedBirthday ? 'Birthday Day Off' : 'Leave');
 
+                      // What a click on an open month's day edits: the same lookup
+                      // as the click, so a weekend inside a booking names it too.
+                      const dayEntry = isExpanded ? entryOnDay(dateStr) : undefined;
+
                       const isActualBirthday = birthdayWindow?.birthdayIso === dateStr;
                       const isInBirthdayWindow = Boolean(
                         settings.birthdayLeaveEnabled &&
@@ -1852,9 +1997,25 @@ export default function TaxIncomeSurface({
                       return (
                         <Tooltip key={dayNum}>
                           <TooltipTrigger asChild>
-                            <div className={cellClass}>
-                              {dayNum}
-                            </div>
+                            {/* A collapsed month opens on any click; an open one
+                                books or edits from the day clicked. */}
+                            {isExpanded ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDayClick(dateStr, monthIdx);
+                                }}
+                                aria-label={`${dayNum} ${month} ${currentTaxYear}: ${dayEntry ? `edit ${dayEntry.occasion}` : 'book leave from this day'}`}
+                                className={cn(cellClass, "holiday-day cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+                              >
+                                {dayNum}
+                              </button>
+                            ) : (
+                              <div className={cellClass}>
+                                {dayNum}
+                              </div>
+                            )}
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs p-2.5 rounded-lg bg-popover border border-border/60 shadow-md font-mono">
                             <p className="font-bold text-foreground mb-1">{dayNum} {month} {currentTaxYear}</p>
@@ -1896,7 +2057,7 @@ export default function TaxIncomeSurface({
                               const isBirthday = hol.type === 'birthday';
                               const isRegularHoliday = !isSick && !isBirthday;
                               const totalWorkingDays = isRegularHoliday
-                                ? calculateWorkingDaysInRange(hol.startDate, hol.endDate, bankHolidaysList)
+                                ? workingDaysIn(hol.startDate, hol.endDate)
                                 : 0;
                               const attachedBday = isRegularHoliday && totalWorkingDays > 1
                                 ? getBirthdayEntryInsideRange(hol.startDate, hol.endDate)
@@ -2009,246 +2170,31 @@ export default function TaxIncomeSurface({
                         )}
                       </div>
 
-                      {/* Add Holiday Button or Form */}
-                      {inlineBookMonthIdx === monthIdx ? (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className="bg-muted/30 border border-border/40 rounded-lg p-3 space-y-3 text-left font-mono"
+                      {/* Booking opens a dialog; these start one in this month. */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartNewHoliday(monthIdx, 'holiday');
+                          }}
+                          className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-border/40 hover:bg-muted/50 font-mono"
                         >
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span className="text-xs font-semibold uppercase tracking-wider block text-foreground">
-                              {editingHolidayId
-                                ? inlineType === 'sick'
-                                  ? 'Edit Sick Day'
-                                  : inlineType === 'birthday'
-                                    ? 'Edit Birthday Day Off'
-                                    : 'Edit Leave'
-                                : inlineType === 'sick'
-                                  ? 'Record Sick Day'
-                                  : inlineType === 'birthday'
-                                    ? 'Book Birthday Day Off'
-                                    : 'Book New Leave'}
-                            </span>
-                            {/* Type selector toggle */}
-                            <div className="flex items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40">
-                              <button
-                                type="button"
-                                onClick={() => setInlineType('holiday')}
-                                className={cn(
-                                  "px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors border",
-                                  inlineType === 'holiday'
-                                    ? "bg-positive/20 text-positive border-positive/40 font-semibold shadow-xs"
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                                )}
-                              >
-                                🌴 Holiday
-                              </button>
-                              {(settings.birthdayLeaveEnabled || inlineType === 'birthday') && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setInlineType('birthday');
-                                    setInlineUseBirthdayDay(false);
-                                    if (!inlineOccasion.trim()) {
-                                      setInlineOccasion('Birthday Day Off');
-                                    }
-                                    const pad = (n: number) => n.toString().padStart(2, '0');
-                                    const monthPrefix = `${currentTaxYear}-${pad(monthIdx + 1)}-`;
-                                    const eligibleInMonth = birthdayWindow?.eligibleDates.find(d => d.startsWith(monthPrefix));
-                                    if (eligibleInMonth) {
-                                      setInlineStartDate(eligibleInMonth);
-                                      setInlineEndDate(eligibleInMonth);
-                                      setInlineCount('1');
-                                      setInlineHalfDay(null);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors border",
-                                    inlineType === 'birthday'
-                                      ? "bg-primary/20 text-primary border-primary/40 font-semibold shadow-xs"
-                                      : "border-transparent text-muted-foreground hover:text-foreground"
-                                  )}
-                                >
-                                  🎂 Birthday
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setInlineType('sick');
-                                  setInlineUseBirthdayDay(false);
-                                }}
-                                className={cn(
-                                  "px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors border",
-                                  inlineType === 'sick'
-                                    ? "bg-chart-4/20 text-chart-4 border-chart-4/40 font-semibold shadow-xs"
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                                )}
-                              >
-                                🤒 Sick Day
-                              </button>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="space-y-0.5">
-                              <Label htmlFor="holiday-inline-occasion" className="text-xs text-muted-foreground font-mono">
-                                {inlineType === 'sick' ? 'Reason / Notes' : 'Occasion'}
-                              </Label>
-                              <Input
-                                id="holiday-inline-occasion"
-                                placeholder={inlineType === 'sick' ? 'e.g. Cold / Flu, Migraine, Doctor visit' : 'e.g. Skiing, Paris Trip'}
-                                value={inlineOccasion}
-                                onChange={(e) => setInlineOccasion(e.target.value)}
-                                className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-0.5">
-                                <Label htmlFor="holiday-inline-start" className="text-xs text-muted-foreground font-mono">Start Date</Label>
-                                <Input
-                                  id="holiday-inline-start"
-                                  type="date"
-                                  value={inlineStartDate}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setInlineStartDate(val);
-                                    if (inlineEndDate) recountInline(val, inlineEndDate);
-                                  }}
-                                  className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
-                                />
-                              </div>
-                              <div className="space-y-0.5">
-                                <Label htmlFor="holiday-inline-end" className="text-xs text-muted-foreground font-mono">End Date</Label>
-                                <Input
-                                  id="holiday-inline-end"
-                                  type="date"
-                                  value={inlineEndDate}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setInlineEndDate(val);
-                                    if (inlineStartDate) recountInline(inlineStartDate, val);
-                                  }}
-                                  className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
-                                />
-                              </div>
-                            </div>
-                            {inlineIsSingleDay && (
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <span id="holiday-inline-length-label" className="text-xs font-medium leading-snug text-muted-foreground font-mono">Length</span>
-                                <div role="group" aria-labelledby="holiday-inline-length-label" className="flex items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40">
-                                  {([null, 'am', 'pm'] as const).map(half => {
-                                    const selected = inlineHalfDay === half;
-                                    return (
-                                      <button
-                                        key={half ?? 'full'}
-                                        type="button"
-                                        aria-pressed={selected}
-                                        disabled={half !== null && !inlineDayIsWorking}
-                                        title={half !== null && !inlineDayIsWorking ? 'Not a working day' : undefined}
-                                        onClick={() => chooseInlineLength(half)}
-                                        className={cn(
-                                          "px-2 py-0.5 rounded text-xs font-mono font-medium transition-colors border disabled:opacity-40 disabled:pointer-events-none",
-                                          selected
-                                            ? "bg-primary/15 text-foreground border-primary/40 font-semibold shadow-xs"
-                                            : "border-transparent text-muted-foreground hover:text-foreground"
-                                        )}
-                                      >
-                                        {half ? HALF_DAY_BUTTON[half] : 'Full day'}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                            {inlineType === 'holiday' &&
-                              !inlineIsSingleDay &&
-                              inlineEligibleBdayDate &&
-                              (!yearBdayEntry ||
-                                (editingHolidayId &&
-                                  getBirthdayEntryInsideRange(inlineStartDate, inlineEndDate)?.id === yearBdayEntry.id)) && (
-                                <div className="rounded-lg border border-primary/30 bg-primary/10 p-2 flex items-center justify-between gap-2">
-                                  <span className="text-xs text-foreground">
-                                    🎂 Use Birthday Day Off on <span className="font-semibold">{formatUkDate(inlineEligibleBdayDate)}</span> (saves {inlineBirthdayCount}d annual leave)
-                                  </span>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={inlineUseBirthdayDay ? 'default' : 'outline'}
-                                    aria-pressed={inlineUseBirthdayDay}
-                                    onClick={() => {
-                                      const nextVal = !inlineUseBirthdayDay;
-                                      const count = inlineCount.trim() === '' ? null : adjustHolidayCountForBirthday(Number(inlineCount), inlineBirthdayCount, nextVal);
-                                      if (count === null) {
-                                        toast({ title: 'Check the leave count', description: 'Enter a valid annual leave count with at least one day available to attach birthday leave.', variant: 'destructive' });
-                                        return;
-                                      }
-                                      setInlineUseBirthdayDay(nextVal);
-                                      setInlineCount(String(count));
-                                    }}
-                                    className="h-7 px-2.5 rounded-lg text-xs font-mono shrink-0"
-                                  >
-                                    {inlineUseBirthdayDay ? `Included (-${inlineBirthdayCount}d)` : `Use +${inlineBirthdayCount}d 🎂`}
-                                  </Button>
-                                </div>
-                              )}
-                            <div className="space-y-0.5">
-                              <Label htmlFor="holiday-inline-count" className="text-xs text-muted-foreground font-mono">Days count (working days)</Label>
-                              <Input
-                                id="holiday-inline-count"
-                                type="number"
-                                step="0.5"
-                                min="0"
-                                value={inlineCount}
-                                disabled={!!inlineHalfDay}
-                                onChange={(e) => setInlineCount(e.target.value)}
-                                className="h-8 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex justify-end gap-1.5 pt-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={resetInlineHolidayForm}
-                              className="h-7 px-2.5 rounded-lg text-xs font-mono"
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => handleSaveInlineHoliday(monthIdx)}
-                              className="h-7 px-2.5 rounded-lg text-xs bg-primary text-primary-foreground font-mono"
-                            >
-                              {editingHolidayId ? 'Update' : 'Save'}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartNewHoliday(monthIdx, 'holiday');
-                            }}
-                            className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-border/40 hover:bg-muted/50 font-mono"
-                          >
-                            <Plus className="h-3 w-3" /> Book Leave
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartNewHoliday(monthIdx, 'sick');
-                            }}
-                            className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-border/40 hover:bg-muted/50 font-mono"
-                          >
-                            <Plus className="h-3 w-3" /> Record Sick Day
-                          </Button>
-                        </div>
-                      )}
+                          <Plus className="h-3 w-3" /> Book Leave
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartNewHoliday(monthIdx, 'sick');
+                          }}
+                          className="w-full h-8 rounded-lg text-xs gap-1 border-dashed border-border/40 hover:bg-muted/50 font-mono"
+                        >
+                          <Plus className="h-3 w-3" /> Record Sick Day
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2264,6 +2210,344 @@ export default function TaxIncomeSurface({
   </div>
 
 </div>
+<Dialog
+  open={inlineBookMonthIdx !== null}
+  onOpenChange={(open) => {
+    if (!open) resetInlineHolidayForm();
+  }}
+>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle className="text-base font-mono font-semibold text-foreground">
+        {editingHolidayId
+          ? inlineType === 'sick'
+            ? 'Edit sick day'
+            : inlineType === 'birthday'
+              ? 'Edit birthday day off'
+              : 'Edit leave'
+          : inlineType === 'sick'
+            ? 'Record sick day'
+            : inlineType === 'birthday'
+              ? 'Book birthday day off'
+              : 'Book leave'}
+      </DialogTitle>
+      <DialogDescription className="text-xs text-muted-foreground font-mono">
+        Click the first day, then the last. Weekends and bank holidays are not counted.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div className="space-y-3 font-mono text-left">
+      <div role="group" aria-label="Leave type" className="flex flex-wrap items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40 w-fit max-w-full">
+        <button
+          type="button"
+          aria-pressed={inlineType === 'holiday'}
+          onClick={() => setInlineType('holiday')}
+          className={cn(
+            "px-2.5 py-1 rounded text-xs font-mono font-medium whitespace-nowrap transition-colors border",
+            inlineType === 'holiday'
+              ? "bg-positive/20 text-positive border-positive/40 font-semibold shadow-xs"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          🌴 Holiday
+        </button>
+        {(settings.birthdayLeaveEnabled || inlineType === 'birthday') && (
+          <button
+            type="button"
+            aria-pressed={inlineType === 'birthday'}
+            onClick={() => {
+              setInlineType('birthday');
+              setInlineUseBirthdayDay(false);
+              setInlineBirthdayIntent(false);
+              if (!inlineOccasion.trim()) {
+                setInlineOccasion('Birthday Day Off');
+              }
+              const pad = (n: number) => n.toString().padStart(2, '0');
+              // The month on the calendar now, not the one the dialog opened on.
+              const monthPrefix = `${inlinePickerMonth.getFullYear()}-${pad(inlinePickerMonth.getMonth() + 1)}-`;
+              const eligibleInMonth = birthdayWindow?.eligibleDates.find(d => d.startsWith(monthPrefix));
+              if (eligibleInMonth) {
+                setInlineStartDate(eligibleInMonth);
+                setInlineEndDate(eligibleInMonth);
+                setInlineCount('1');
+                setInlineHalfDay(null);
+                setInlinePickerMonth(isoToLocalDate(eligibleInMonth) ?? inlinePickerMonth);
+                setInlinePickingEnd(false);
+              }
+            }}
+            className={cn(
+              "px-2.5 py-1 rounded text-xs font-mono font-medium whitespace-nowrap transition-colors border",
+              inlineType === 'birthday'
+                ? "bg-primary/20 text-primary border-primary/40 font-semibold shadow-xs"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            🎂 Birthday
+          </button>
+        )}
+        <button
+          type="button"
+          aria-pressed={inlineType === 'sick'}
+          onClick={() => {
+            setInlineType('sick');
+            setInlineUseBirthdayDay(false);
+            setInlineBirthdayIntent(false);
+          }}
+          className={cn(
+            "px-2.5 py-1 rounded text-xs font-mono font-medium whitespace-nowrap transition-colors border",
+            inlineType === 'sick'
+              ? "bg-chart-4/20 text-chart-4 border-chart-4/40 font-semibold shadow-xs"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          🤒 Sick day
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="holiday-inline-occasion" className="text-xs text-muted-foreground font-mono">
+          {inlineType === 'sick' ? 'Reason or notes' : 'Occasion'}
+        </Label>
+        <Input
+          id="holiday-inline-occasion"
+          placeholder={inlineType === 'sick' ? 'e.g. Cold / Flu, Migraine, Doctor visit' : 'e.g. Skiing, Paris Trip'}
+          value={inlineOccasion}
+          onChange={(e) => setInlineOccasion(e.target.value)}
+          className="h-9 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
+        />
+      </div>
+
+      <div className="rounded-lg border border-border/40 bg-background/40 flex flex-col items-center">
+        <DayCalendar
+          mode="range"
+          weekStartsOn={1}
+          month={inlinePickerMonth}
+          onMonthChange={setInlinePickerMonth}
+          selected={{ from: isoToLocalDate(inlineStartDate), to: isoToLocalDate(inlineEndDate) }}
+          onSelect={(_range, day) => pickInlineDay(day)}
+          showOutsideDays={false}
+          modifiers={{ bankHoliday: pickerBankHolidays, weekend: { dayOfWeek: [0, 6] } }}
+          // A bank holiday keeps its underline on a selected end, where its
+          // colour would sit on the solid fill; weekends stay muted in the band
+          // because they are not counted.
+          modifiersClassNames={{
+            bankHoliday: 'font-semibold underline decoration-2 underline-offset-4 decoration-chart-5 [&:not([aria-selected])]:text-chart-5 [&.day-range-middle]:!text-chart-5',
+            weekend: 'text-muted-foreground [&.day-range-middle]:!text-muted-foreground',
+          }}
+          // Colour and underline are not read out, so the day says it too. The
+          // icons repeat the Calendar's own, which `components` replaces.
+          components={{
+            IconLeft: () => <ChevronLeft className="h-4 w-4" />,
+            IconRight: () => <ChevronRight className="h-4 w-4" />,
+            DayContent: ({ date, activeModifiers }) => (
+              <>
+                {date.getDate()}
+                {activeModifiers.bankHoliday ? (
+                  <span className="sr-only">, bank holiday</span>
+                ) : activeModifiers.weekend ? (
+                  <span className="sr-only">, weekend</span>
+                ) : null}
+              </>
+            ),
+          }}
+          // Columns share the width rather than each taking 2.25rem, so the
+          // touch-size rule cannot push a day over its neighbour. The ends are
+          // solid; the days between sit on a quiet band in the body colour.
+          classNames={{
+            months: "flex w-full",
+            month: "w-full space-y-3",
+            table: "w-full max-w-[18rem] mx-auto border-collapse",
+            head_row: "flex",
+            head_cell: "flex-1 text-muted-foreground font-normal text-[0.8rem]",
+            row: "flex w-full mt-1.5",
+            cell: "flex-1 text-center text-sm p-0 relative focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-primary/15 [&:has(.day-range-start)]:rounded-l-md [&:has(.day-range-end)]:rounded-r-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+            day: cn(buttonVariants({ variant: 'ghost' }), "holiday-day h-9 w-full p-0 font-normal aria-selected:opacity-100"),
+            day_range_start: "day-range-start",
+            day_range_end: "day-range-end",
+            day_range_middle: "day-range-middle aria-selected:bg-transparent aria-selected:text-foreground hover:aria-selected:bg-primary/25",
+          }}
+          className="w-full p-2 font-mono"
+        />
+        <p aria-live="polite" className="pb-2 text-xs text-muted-foreground">
+          {inlinePickingEnd ? 'Now click the last day.' : 'Click the first day.'}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label htmlFor="holiday-inline-start" className="text-xs text-muted-foreground font-mono">First day</Label>
+          <Input
+            id="holiday-inline-start"
+            type="date"
+            value={inlineStartDate}
+            onChange={(e) => {
+              const val = e.target.value;
+              setInlineStartDate(val);
+              setInlinePickingEnd(false);
+              const asDate = isoToLocalDate(val);
+              if (asDate) setInlinePickerMonth(asDate);
+              if (inlineEndDate) recountInline(val, inlineEndDate);
+            }}
+            className="h-9 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="holiday-inline-end" className="text-xs text-muted-foreground font-mono">Last day</Label>
+          <Input
+            id="holiday-inline-end"
+            type="date"
+            value={inlineEndDate}
+            onChange={(e) => {
+              const val = e.target.value;
+              setInlineEndDate(val);
+              setInlinePickingEnd(false);
+              if (inlineStartDate) recountInline(inlineStartDate, val);
+            }}
+            className="h-9 rounded-lg text-xs border-border/40 bg-background/50 font-mono"
+          />
+        </div>
+      </div>
+
+      {inlineIsSingleDay && (
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span id="holiday-inline-length-label" className="text-xs font-medium leading-snug text-muted-foreground font-mono">Length</span>
+          <div role="group" aria-labelledby="holiday-inline-length-label" className="flex items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40">
+            {([null, 'am', 'pm'] as const).map(half => {
+              const selected = inlineHalfDay === half;
+              return (
+                <button
+                  key={half ?? 'full'}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={half !== null && !inlineDayIsWorking}
+                  title={half !== null && !inlineDayIsWorking ? 'Not a working day' : undefined}
+                  onClick={() => chooseInlineLength(half)}
+                  className={cn(
+                    "px-2.5 py-1 rounded text-xs font-mono font-medium transition-colors border disabled:opacity-40 disabled:pointer-events-none",
+                    selected
+                      ? "bg-primary/15 text-foreground border-primary/40 font-semibold shadow-xs"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {half ? HALF_DAY_BUTTON[half] : 'Full day'}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {inlineType === 'holiday' &&
+        !inlineIsSingleDay &&
+        inlineEligibleBdayDate &&
+        (!getBirthdayLeaveUsedEntry() ||
+          (editingHolidayId &&
+            getBirthdayEntryInsideRange(inlineStartDate, inlineEndDate)?.id === getBirthdayLeaveUsedEntry()?.id)) && (
+          <div className="rounded-lg border border-primary/30 bg-primary/10 p-2 flex items-center justify-between gap-2">
+            <span className="text-xs text-foreground">
+              🎂 Use Birthday Day Off on <span className="font-semibold">{formatUkDate(inlineEligibleBdayDate)}</span> (saves {inlineBirthdayCount}d annual leave)
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant={inlineUseBirthdayDay ? 'default' : 'outline'}
+              aria-pressed={inlineUseBirthdayDay}
+              onClick={() => {
+                const nextVal = !inlineUseBirthdayDay;
+                const count = inlineCount.trim() === '' ? null : adjustHolidayCountForBirthday(Number(inlineCount), inlineBirthdayCount, nextVal);
+                if (count === null) {
+                  toast({ title: 'Check the leave count', description: 'Enter a valid annual leave count with at least one day available to attach birthday leave.', variant: 'destructive' });
+                  return;
+                }
+                setInlineUseBirthdayDay(nextVal);
+                setInlineBirthdayIntent(nextVal);
+                setInlineCount(String(count));
+              }}
+              className="h-7 px-2.5 rounded-lg text-xs font-mono shrink-0"
+            >
+              {inlineUseBirthdayDay ? `Included (-${inlineBirthdayCount}d)` : `Use +${inlineBirthdayCount}d 🎂`}
+            </Button>
+          </div>
+        )}
+
+      {inlineType !== 'birthday' && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="holiday-inline-count" className="text-xs text-muted-foreground font-mono">Days counted</Label>
+            <Input
+              id="holiday-inline-count"
+              type="number"
+              step="0.5"
+              min="0"
+              value={inlineCount}
+              disabled={!!inlineHalfDay}
+              aria-describedby="holiday-inline-count-note"
+              onChange={(e) => setInlineCount(e.target.value)}
+              className="h-9 w-20 rounded-lg text-xs text-right tabular-nums border-border/40 bg-background/50 font-mono"
+            />
+          </div>
+          <div id="holiday-inline-count-note" className="space-y-1.5">
+            {inlineRangeSummary && !inlineHalfDay && (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {countOf(inlineRangeSummary.workingDays, 'working day')}
+                {(inlineRangeSummary.weekendDays > 0 || inlineRangeSummary.bankHolidayDates.length > 0) && (
+                  <>
+                    {', skipping '}
+                    {[
+                      inlineRangeSummary.weekendDays > 0 ? countOf(inlineRangeSummary.weekendDays, 'weekend day') : null,
+                      inlineRangeSummary.bankHolidayDates.length > 0
+                        ? `${countOf(inlineRangeSummary.bankHolidayDates.length, 'bank holiday')} (${inlineRangeSummary.bankHolidayDates.map(shortUkDate).join(', ')})`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' and ')}
+                  </>
+                )}
+                .
+              </p>
+            )}
+            {inlineCountDiffers && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-chart-5/40 bg-chart-5/10 px-2.5 py-1.5">
+                <span className="text-xs text-foreground">
+                  {editingHolidayId && inlineOriginalHoliday && Number(inlineCount) === inlineOriginalHoliday.count
+                    ? `Saved as ${inlineCount}; these dates count ${inlineExpectedCount}.`
+                    : `These dates count ${inlineExpectedCount}.`}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setInlineCount(String(inlineExpectedCount))}
+                  className="h-7 px-2.5 rounded-lg text-xs font-mono shrink-0"
+                >
+                  Use {inlineExpectedCount}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+
+    <DialogFooter className="pt-4 border-t border-border/40 gap-2">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={resetInlineHolidayForm}
+        className="rounded-lg font-mono text-xs h-8 px-4"
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        onClick={handleSaveInlineHoliday}
+        className="rounded-lg bg-primary text-primary-foreground font-semibold font-mono text-xs h-8 px-4"
+      >
+        {editingHolidayId ? 'Update' : 'Save'}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 <Dialog open={isBenefitsDialogOpen} onOpenChange={setIsBenefitsDialogOpen}>
   <DialogContent className="sm:rounded-lg border border-border/40 bg-card p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
     <DialogHeader>
