@@ -865,6 +865,25 @@ export const resolveBankHolidaysForYear = (
   };
 };
 
+/** Past two years a range is a typo, not leave. */
+export const MAX_LEAVE_RANGE_DAYS = 731;
+
+/** Whether a `YYYY-MM-DD` range is one leave could cover: both ends valid and
+ *  in order, from 1900, and at most `MAX_LEAVE_RANGE_DAYS` apart. A date field
+ *  passes through years like 0002 while one is typed, and counting that range
+ *  would walk two thousand years per keystroke. */
+export const isCountableLeaveRange = (startIso: string, endIso: string): boolean => {
+  const first = calendarParts(startIso);
+  const last = calendarParts(endIso);
+  return (
+    !!first &&
+    !!last &&
+    first.year >= 1900 &&
+    last.epoch >= first.epoch &&
+    last.epoch - first.epoch <= MAX_LEAVE_RANGE_DAYS
+  );
+};
+
 /** Bank holidays for every calendar year a `YYYY-MM-DD` range touches, so a
  *  range that crosses New Year also skips the next year's holidays. Each year
  *  prefers its own fetched GOV.UK dates and falls back to calculation, as

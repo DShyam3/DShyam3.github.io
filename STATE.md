@@ -43,7 +43,6 @@ Production check so far: anonymous home page only — loads, no console errors, 
 - Warm-up: every anonymous view sends about 30 reads, including the full watchlist library (about 7,600 episodes); payload unmeasured, and Save-Data exists only in Chromium.
 - Watchlist: an edit made during a background re-read of a stale library is overwritten when the read lands; a failed first read is cached as an empty library.
 - Recurring: "Show as suggestion again" deletes the row without confirming, losing edits on a once-active bill, and the toast can be wrong if detection no longer qualifies it.
-- Holiday: the 731-day / pre-1900 "counts 0" guard lives in `TaxIncomeSurface.tsx`, untested, and lets an over-long range save with 0.
 - `MerchantAvatar` uses an arbitrary `rounded-[0.5rem]`; the resolver lookup is duplicated in `DashboardSurface` and `TransactionsTab`.
 - Carried: four reference tables delete then insert; category edits during sync; stalled token refresh; schemas-only rebuild lacks composite-key objects; hosted sync, JWT config, `SITE_ORIGIN`, headers, cron/Edge/pg_net and HEIC uploads unverified; advisor warnings (`is_admin` callable by anon/authenticated, leaked-password protection off).
 - Student Loan approximation: pending income-linked interest accrues on the rebuilt balance, not SLC's; a phantom £12 lands October 2026 under net pay.

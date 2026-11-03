@@ -23,6 +23,8 @@ import {
   parseEntryDays,
   planOptimalHolidays,
   resolveBankHolidaysForRange,
+  isCountableLeaveRange,
+  MAX_LEAVE_RANGE_DAYS,
   resolveBankHolidaysForYear,
   resolveBirthdayInYear,
   removeHolidayWithBirthdayRestoration,
@@ -700,6 +702,34 @@ describe('computeUkBankHolidaysForYear & resolveBankHolidaysForYear', () => {
     const resolved2029 = resolveBankHolidaysForYear(2029, 'england-and-wales', ['2026-01-01']);
     expect(resolved2029.dates).toHaveLength(8);
     expect(resolved2029.dates[0]).toBe('2029-01-01');
+  });
+});
+
+describe('isCountableLeaveRange', () => {
+  it('accepts a single day and an ordinary range across New Year', () => {
+    expect(isCountableLeaveRange('2026-12-21', '2026-12-21')).toBe(true);
+    expect(isCountableLeaveRange('2026-12-21', '2027-01-01')).toBe(true);
+  });
+
+  it('accepts a range exactly MAX_LEAVE_RANGE_DAYS long and refuses one day more', () => {
+    expect(MAX_LEAVE_RANGE_DAYS).toBe(731);
+    // 2026 and 2027 have 365 days each, so 2026-01-01 + 731 days is 2028-01-02.
+    expect(isCountableLeaveRange('2026-01-01', '2028-01-02')).toBe(true);
+    expect(isCountableLeaveRange('2026-01-01', '2028-01-03')).toBe(false);
+  });
+
+  it('refuses a start before 1900, as a half-typed year gives', () => {
+    expect(isCountableLeaveRange('0002-12-21', '2027-01-01')).toBe(false);
+    expect(isCountableLeaveRange('1899-12-31', '1900-01-02')).toBe(false);
+    expect(isCountableLeaveRange('1900-01-01', '1900-01-02')).toBe(true);
+  });
+
+  it('refuses an inverted, empty or malformed range', () => {
+    expect(isCountableLeaveRange('2027-01-02', '2026-12-30')).toBe(false);
+    expect(isCountableLeaveRange('', '2026-12-30')).toBe(false);
+    expect(isCountableLeaveRange('2026-12-21', '')).toBe(false);
+    expect(isCountableLeaveRange('not-a-date', '2026-12-30')).toBe(false);
+    expect(isCountableLeaveRange('2026-02-30', '2026-03-02')).toBe(false);
   });
 });
 

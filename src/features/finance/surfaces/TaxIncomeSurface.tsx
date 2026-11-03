@@ -44,6 +44,7 @@ import {
   isHalfDay,
   planOptimalHolidays,
   removeHolidayWithBirthdayRestoration,
+  isCountableLeaveRange,
   resolveBankHolidaysForRange,
   resolveBankHolidaysForYear,
   expectedLeaveCount,
@@ -75,9 +76,6 @@ const MAX_INLINE_BRIDGES = 5;
 
 const HALF_DAY_LABEL: Record<HalfDay, string> = { am: 'morning', pm: 'afternoon' };
 const HALF_DAY_BUTTON: Record<HalfDay, string> = { am: 'Morning', pm: 'Afternoon' };
-
-/** Past two years a range is a typo, not leave, and is counted as nothing. */
-const MAX_LEAVE_RANGE_DAYS = 731;
 
 /** A stored day as a local-midnight `Date`, for the booking calendar. */
 const isoToLocalDate = (iso: string): Date | undefined => {
@@ -372,15 +370,12 @@ export default function TaxIncomeSurface({
     [currentTaxYear, settings.ukRegion, settingsYearBankHolidays, settingsYearBankHolidaysMap],
   );
   // A range can cross New Year, so it skips the bank holidays of every year it
-  // touches, not only the year on screen. A date input passes through years
-  // like 0002 while one is typed; a range that long is not leave, so it counts
-  // nothing rather than walking two thousand years per keystroke.
-  const bankHolidaysForLeave = (start: string, end: string): string[] | null => {
-    const first = calendarParts(start);
-    const last = calendarParts(end);
-    if (!first || !last || first.year < 1900 || last.epoch - first.epoch > MAX_LEAVE_RANGE_DAYS) return null;
-    return resolveBankHolidaysForRange(start, end, settings.ukRegion || 'england-and-wales', settingsYearBankHolidays);
-  };
+  // touches, not only the year on screen. One that is not leave (a half-typed
+  // year, more than two years long) counts nothing, and saving it is refused.
+  const bankHolidaysForLeave = (start: string, end: string): string[] | null =>
+    isCountableLeaveRange(start, end)
+      ? resolveBankHolidaysForRange(start, end, settings.ukRegion || 'england-and-wales', settingsYearBankHolidays)
+      : null;
   const workingDaysIn = (start: string, end: string) => {
     const bankHolidays = bankHolidaysForLeave(start, end);
     return bankHolidays ? calculateWorkingDaysInRange(start, end, bankHolidays) : 0;
@@ -926,6 +921,10 @@ export default function TaxIncomeSurface({
     }
     if (inlineEndDate < inlineStartDate) {
       toast({ title: 'Last day is before the first', description: 'Pick a last day on or after the first day.', variant: 'destructive' });
+      return;
+    }
+    if (!isCountableLeaveRange(inlineStartDate, inlineEndDate)) {
+      toast({ title: 'Check the dates', description: 'Pick dates from 1900 onwards, no more than two years apart.', variant: 'destructive' });
       return;
     }
     // A Birthday Day Off is stored as one day or a half, whatever the field held.
