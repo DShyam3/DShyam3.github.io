@@ -1,4 +1,4 @@
-import { useSupabaseTable } from './useSupabaseTable';
+import { useSupabaseTable, type TableReadOptions } from './useSupabaseTable';
 
 export interface Experience {
   id: string;
@@ -41,10 +41,19 @@ interface SiteContentRow {
   order: number;
 }
 
+/** The `site_content` reads behind the resume, exported for the background warm-up. */
+export const EXPERIENCE_READ: TableReadOptions = {
+  filter: { column: 'section', value: 'experience' },
+  orderBy: { column: 'order', ascending: true },
+};
+export const EDUCATION_READ: TableReadOptions = {
+  filter: { column: 'section', value: 'education' },
+  orderBy: { column: 'order', ascending: true },
+};
+
 export function useExperience() {
   const { data, loading, addItem, removeItem, updateItem } = useSupabaseTable<SiteContentRow>('site_content', {
-    filter: { column: 'section', value: 'experience' },
-    orderBy: { column: 'order', ascending: true },
+    ...EXPERIENCE_READ,
     primaryKey: 'key'
   });
   
@@ -74,8 +83,7 @@ export function useExperience() {
 
 export function useEducation() {
   const { data, loading, addItem, removeItem, updateItem } = useSupabaseTable<SiteContentRow>('site_content', {
-    filter: { column: 'section', value: 'education' },
-    orderBy: { column: 'order', ascending: true },
+    ...EDUCATION_READ,
     primaryKey: 'key'
   });
   

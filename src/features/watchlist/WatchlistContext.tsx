@@ -11,6 +11,7 @@ import React, {
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { persistWatchedProgress } from './up-next-query';
+import { watchedEpisodeKeys, watchlistLibraryQuery, type WatchlistLibrary } from './library-query';
 import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
@@ -287,15 +288,24 @@ const getNextAutoSync = () => {
 
 export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
-  const [favourites, setFavourites] = useState<FavouriteItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seeded from the cache when the site warm-up or an earlier visit has
+  // filled it, so the page renders its library without waiting on a read.
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>(
+    () => queryClient.getQueryData(watchlistLibraryQuery.queryKey)?.watchlist ?? [],
+  );
+  const [favourites, setFavourites] = useState<FavouriteItem[]>(
+    () => queryClient.getQueryData(watchlistLibraryQuery.queryKey)?.favourites ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => !queryClient.getQueryData(watchlistLibraryQuery.queryKey),
+  );
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<number | null>(0);
   const { until: syncAvailableAt, start: startSyncCooldown } = useCooldown('watchlist-sync');
-  const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(
-    new Set(),
-  );
+  const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(() => {
+    const cached = queryClient.getQueryData(watchlistLibraryQuery.queryKey);
+    return cached ? watchedEpisodeKeys(cached.watchlist) : new Set();
+  });
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [lastAutoSyncTime, setLastAutoSyncTime] = useState<string | null>(null);
   const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
@@ -323,182 +333,55 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const autoSyncEnabled = isAdmin;
   const { toast } = useToast();
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  /** Puts a library read into state. The lists are replaced, so per-show and
+   *  per-item detail loads start again. */
+  const applyLibrary = useCallback((library: WatchlistLibrary) => {
     loadedShowsRef.current.clear();
     loadedDescriptionsRef.current.clear();
+    setWatchlist(library.watchlist);
+    setFavourites(library.favourites);
+    setWatchedEpisodes(watchedEpisodeKeys(library.watchlist));
+  }, []);
+
+  /**
+   * `force` re-reads the database whatever the cache holds, which is what
+   * every call after a write needs. Without it -- the page mounting -- a
+   * cached library is shown at once and re-read only if it is older than the
+   * query client's staleTime, so returning to the page does not reload it.
+   */
+  const loadLibrary = useCallback(async (force: boolean) => {
+    if (force || !queryClient.getQueryData(watchlistLibraryQuery.queryKey)) {
+      setLoading(true);
+    }
     try {
-      // Each read is paged: the Data API stops at 1,000 rows without saying
-      // so, and a single title-ordered read would drop the end of the
-      // alphabet first. `id` breaks title ties so pages never overlap.
-      const [moviesResult, showsResult, favouritesResult] = await Promise.all([
-        // Every column except `overview`. Plot summaries are 218 kB of the
-        // movies table's 357 kB and are only read by the detail dialog, so
-        // they load per item in loadItemDescription instead.
-        selectAllPages((from, to) => supabase
-          .from('movies')
-          .select(
-            'id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime',
-            { count: 'exact' },
-          )
-          .order('title', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to), (movie) => String(movie.id)),
-        selectAllPages((from, to) => supabase
-          .from('tv_shows')
-          // Deliberately not `tv_show_episodes (*)`. Every mount of this page
-          // was pulling all ~7,600 episode rows in full (~474 kB) purely to
-          // render a grid of posters. The grid needs episode_number and
-          // watched, runtime for the watched total, and air dates for scheduling;
-          // episode titles load per show when a detail dialog opens.
-          // As above: no `overview` (62 kB of tv_shows' 108 kB).
-          .select(
-            `
-                    id, title, platform, genre, status, poster, release_date, tmdb_id,
-                    tv_show_seasons (
-                      id, season_number, release_date, watched,
-                      tv_show_episodes (id, episode_number, watched, runtime, release_date)
-                    )
-                `,
-            { count: 'exact' },
-          )
-          .order('title', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to), (show) => String(show.id)),
-        selectAllPages((from, to) => supabase
-          .from('favourites')
-          .select('*', { count: 'exact' })
-          .order('title', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, to), (favourite) => String(favourite.id)),
-      ]);
-
-      if (moviesResult.error) throw moviesResult.error;
-      if (showsResult.error) throw showsResult.error;
-      if (favouritesResult.error) throw favouritesResult.error;
-
-      const mappedMovies: WatchlistItem[] = (moviesResult.data || []).map(
-        (movie) => ({
-          id: movie.id.toString(),
-          title: movie.title,
-          category: 'Movies',
-          description: undefined,
-          descriptionLoaded: false,
-          year: movie.release_year || undefined,
-          runtime: movie.runtime || undefined,
-          genres: movie.genre
-            ? movie.genre.split(',').map((g) => g.trim())
-            : [],
-          image_url: movie.poster || undefined,
-          link: movie.tmdb_id
-            ? `https://www.themoviedb.org/movie/${movie.tmdb_id}`
-            : undefined,
-          tmdb_id: movie.tmdb_id || undefined,
-          release_date: movie.release_date || undefined,
-          created_at: movie.release_date
-            ? new Date(movie.release_date).toISOString()
-            : new Date().toISOString(),
-          streaming_platform: movie.platform,
-        }),
-      );
-
-      const mappedShows: WatchlistItem[] = (showsResult.data || []).map(
-        (show) => ({
-          id: show.id.toString(),
-          title: show.title,
-          category: 'TV Shows' as const,
-          status: show.status || 'Plan to Watch',
-          description: undefined,
-          descriptionLoaded: false,
-          year: releaseYear(show.release_date),
-          genres: show.genre
-            ? show.genre.split(',').map((g: string) => g.trim())
-            : [],
-          image_url: show.poster || undefined,
-          link: show.tmdb_id
-            ? `https://www.themoviedb.org/tv/${show.tmdb_id}`
-            : undefined,
-          tmdb_id: show.tmdb_id || undefined,
-          release_date: show.release_date || undefined,
-          created_at: show.release_date
-            ? new Date(show.release_date).toISOString()
-            : new Date().toISOString(),
-          streaming_platform: show.platform,
-          series_status: show.status as WatchlistItem['series_status'],
-          episodesLoaded: false,
-          seasons: (show.tv_show_seasons || [])
-            .sort((a, b) => a.season_number - b.season_number)
-            .map((season) => ({
-              id: season.id,
-              season_number: season.season_number,
-              release_date: season.release_date || undefined,
-              watched: season.watched,
-              episodes: (season.tv_show_episodes || [])
-                .sort(
-                  (a, b) =>
-                    (a.episode_number || 0) - (b.episode_number || 0),
-                )
-                .map((ep) => ({
-                  id: ep.id,
-                  episode_number: ep.episode_number,
-                  // Filled in by loadShowEpisodes.
-                  title: '',
-                  watched: ep.watched,
-                  runtime: ep.runtime ?? undefined,
-                  release_date: ep.release_date ?? undefined,
-                })),
-            })),
-        }),
-      );
-
-      setWatchlist([...mappedMovies, ...mappedShows]);
-
-      const mappedFavourites: FavouriteItem[] = (
-        favouritesResult.data || []
-      ).map((fav) => {
-        const facts: TmdbFacts = {
-          original_language: fav.original_language,
-          origin_country: fav.origin_country,
-          genre_ids: fav.genre_ids,
-        };
-        return {
-          id: fav.id.toString(),
-          title: fav.title,
-          poster: fav.poster || undefined,
-          // A plain text column; the union is this file's contract for
-          // what the add flows are allowed to write.
-          media_type: fav.media_type as FavouriteItem['media_type'],
-          tmdb_id: fav.tmdb_id || undefined,
-          created_at: fav.created_at || new Date().toISOString(),
-          // TMDB facts first, the stored string only as a fallback. A row
-          // synced from TMDB reclassifies itself when the rules improve; a
-          // row that predates the facts columns keeps whatever the old
-          // add-flow guessed, until the facts sync reaches it.
-          category: resolveFavouriteCategory(facts, fav.category),
-          facts,
-        };
-      });
-      setFavourites(mappedFavourites);
-
-      const newWatchedSet = new Set<string>();
-      mappedShows.forEach((show) => {
-        show.seasons?.forEach((season) => {
-          season.episodes.forEach((ep) => {
-            if (ep.watched) {
-              newWatchedSet.add(
-                `${show.id}-s${season.season_number}-e${ep.episode_number}`,
-              );
-            }
-          });
-        });
-      });
-      setWatchedEpisodes(newWatchedSet);
+      applyLibrary(await queryClient.fetchQuery(
+        force ? { ...watchlistLibraryQuery, staleTime: 0 } : watchlistLibraryQuery,
+      ));
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryClient, applyLibrary]);
+
+  const fetchData = useCallback(() => loadLibrary(true), [loadLibrary]);
+
+  // Write this provider's edits back into the cache entry it was seeded from,
+  // so leaving /watchlist and coming back shows the library as it was left
+  // rather than as it was last read. The entry keeps its read time: an edit
+  // is not a fresh read, and must not stop a stale library being re-read.
+  // News rows (watched flags, pins) are derived from the same tables, so they
+  // are marked stale too -- without refetching while the page is still open.
+  useEffect(() => {
+    if (loading) return;
+    const key = watchlistLibraryQuery.queryKey;
+    const cached = queryClient.getQueryData(key);
+    if (cached?.watchlist === watchlist && cached.favourites === favourites) return;
+    queryClient.setQueryData(key, { watchlist, favourites }, {
+      updatedAt: queryClient.getQueryState(key)?.dataUpdatedAt,
+    });
+    void queryClient.invalidateQueries({ queryKey: ['watchlist', 'news'], refetchType: 'none' });
+  }, [queryClient, loading, watchlist, favourites]);
 
   /**
    * Fetch one item's plot summary, which the list query deliberately skips.
@@ -647,9 +530,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         console.error('Failed to parse stored watched_episodes, ignoring:', e);
       }
     }
-    fetchData();
+    void loadLibrary(false);
     fetchSyncLog();
-  }, [fetchData, fetchSyncLog]);
+  }, [loadLibrary, fetchSyncLog]);
 
   const getAutoStatus = useCallback(
     (item: WatchlistItem) => {
@@ -1029,6 +912,25 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  /** Carries a watched toggle into the show's own episode rows. The Set alone
+   *  is not enough: it is rebuilt from those rows whenever a cached library is
+   *  applied, so only an edit to the rows reaches the cache write-back above. */
+  const markEpisodesWatched = (
+    showId: string,
+    seasonNumber: number,
+    episodeNumbers: ReadonlySet<number>,
+    watched: boolean,
+  ) => {
+    setWatchlist((prev) => prev.map((show) => show.id !== showId ? show : {
+      ...show,
+      seasons: show.seasons?.map((season) => season.season_number !== seasonNumber ? season : {
+        ...season,
+        episodes: season.episodes.map((ep) =>
+          episodeNumbers.has(ep.episode_number) ? { ...ep, watched } : ep),
+      }),
+    }));
+  };
+
   const toggleEpisodeWatched = async (
     showId: string,
     seasonNumber: number,
@@ -1048,6 +950,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         (e) => e.episode_number === episodeNumber,
       );
       await persistWatchedProgress(queryClient, [episode?.id], nextWatched);
+      markEpisodesWatched(showId, seasonNumber, new Set([episodeNumber]), nextWatched);
       setWatchedEpisodes((prev) => {
         const next = new Set(prev);
         if (nextWatched) next.add(episodeKey);
@@ -1087,6 +990,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       await persistWatchedProgress(queryClient, episodes.map((ep) => ep.id), nextWatched);
+      markEpisodesWatched(
+        showId, seasonNumber, new Set(episodes.map((ep) => ep.episode_number)), nextWatched,
+      );
       setWatchedEpisodes((prev) => {
         const next = new Set(prev);
         for (const ep of episodes) {

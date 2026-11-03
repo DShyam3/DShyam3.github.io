@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface VisitedCountry {
@@ -14,27 +15,35 @@ export function getFlagUrl(countryCode: string): string {
     return `https://flagcdn.com/w80/${countryCode.toLowerCase()}.png`;
 }
 
-export function useVisitedCountries() {
-    const [visitedCountries, setVisitedCountries] = useState<VisitedCountry[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const fetchCountries = useCallback(async () => {
-        try {
-            const { data, error } = await supabase.from('visited_countries')
-                .select('*')
-                .order('country_name', { ascending: true });
-            if (error) throw error;
-            setVisitedCountries(data || []);
-        } catch (err) {
-            console.error('Error fetching visited countries:', err);
-        } finally {
-            setLoading(false);
+/**
+ * In the query cache rather than component state, so the site warm-up can
+ * fetch it before Travel opens and a return visit renders without waiting.
+ */
+export const visitedCountriesQuery = queryOptions({
+    queryKey: ['travel', 'visited-countries'],
+    queryFn: async () => {
+        const { data, error } = await supabase.from('visited_countries')
+            .select('*')
+            .order('country_name', { ascending: true });
+        if (error) {
+            console.error('Error fetching visited countries:', error);
+            throw error;
         }
-    }, []);
+        const rows: VisitedCountry[] = data ?? [];
+        return rows;
+    },
+});
 
-    useEffect(() => {
-        fetchCountries();
-    }, [fetchCountries]);
+const NO_COUNTRIES: VisitedCountry[] = [];
+
+export function useVisitedCountries() {
+    const queryClient = useQueryClient();
+    const { data: visitedCountries = NO_COUNTRIES, isLoading: loading } = useQuery(visitedCountriesQuery);
+
+    const fetchCountries = useCallback(
+        () => queryClient.invalidateQueries({ queryKey: visitedCountriesQuery.queryKey }),
+        [queryClient],
+    );
 
     const addCountry = async (countryCode: string, countryName: string) => {
         try {

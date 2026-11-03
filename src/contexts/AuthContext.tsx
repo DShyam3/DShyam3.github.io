@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { mfaStepRequired } from '@/lib/auth-aal';
 
 interface AuthContextType {
@@ -34,6 +35,7 @@ const LOGIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 const ADMIN_CHECK_TIMEOUT_MS = 8000;
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+    const queryClient = useQueryClient();
     const [isAdmin, setIsAdmin] = useState(false);
     const [isAuthLoading, setIsAuthLoading] = useState(true);
     const [session, setSession] = useState<Session | null>(null);
@@ -78,7 +80,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // getSession response overwriting a newer sign-in or sign-out event.
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
+        } = supabase.auth.onAuthStateChange((event, session) => {
+            // The query cache lives for the tab (`gcTime: Infinity`), so rows
+            // read as admin would otherwise outlast the session that could
+            // read them. Covers expiry as well as the sign-out button.
+            if (event === 'SIGNED_OUT') queryClient.clear();
             setSession(session);
             // Read off the session itself, never by calling back into
             // `supabase.auth` from this callback, which can deadlock.
@@ -94,7 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [queryClient]);
 
     const login = useCallback(async (password: string): Promise<'signed-in' | 'needs-code' | 'failed'> => {
         if (!LOGIN_EMAIL) {

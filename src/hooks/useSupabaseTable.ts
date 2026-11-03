@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -14,23 +14,26 @@ export type TableRowInput = Record<string, unknown>;
 // client once, here, rather than casting at every call site below.
 const db = supabase as unknown as SupabaseClient;
 
-export function useSupabaseTable<T>(
-  tableName: string,
-  options?: {
-    /** PostgREST select list. Defaults to every column. */
-    columns?: string;
-    filter?: { column: string; value: FilterValue };
-    orderBy?: { column: string; ascending?: boolean };
-    primaryKey?: string;
-  }
-) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const pk = options?.primaryKey || 'id';
+/** Which rows of a table to read, and in what order. */
+export interface TableReadOptions {
+  /** PostgREST select list. Defaults to every column. */
+  columns?: string;
+  filter?: { column: string; value: FilterValue };
+  orderBy?: { column: string; ascending?: boolean };
+}
 
+/**
+ * The read behind `useSupabaseTable`, as plain query options.
+ *
+ * Split out so a page's rows can be fetched before the page mounts
+ * (`useSiteWarmup`) under exactly the key the page will read: built from the
+ * same function, the two cannot disagree about the key and leave the warm-up
+ * filling a cache entry nothing reads.
+ */
+export function supabaseTableQuery<T>(tableName: string, options?: TableReadOptions) {
   const columns = options?.columns ?? '*';
 
-  const query = useQuery({
+  return queryOptions({
     queryKey: [tableName, columns, options?.filter],
     queryFn: async () => {
       let q = db.from(tableName).select(columns);
@@ -56,6 +59,17 @@ export function useSupabaseTable<T>(
       return data as T[];
     },
   });
+}
+
+export function useSupabaseTable<T>(
+  tableName: string,
+  options?: TableReadOptions & { primaryKey?: string },
+) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const pk = options?.primaryKey || 'id';
+
+  const query = useQuery(supabaseTableQuery<T>(tableName, options));
 
   const addMutation = useMutation({
     mutationFn: async (newItem: TableRowInput) => {

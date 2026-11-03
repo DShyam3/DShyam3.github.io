@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { keepPreviousData, queryOptions, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { Json } from '@/integrations/supabase/types';
@@ -51,12 +51,9 @@ export interface PinnedTitle {
  * the app sets `pinned` yet and nothing enforces a single one, so this takes
  * one row from each table and prefers the show.
  */
-export function usePinnedTitle() {
-  const [pinned, setPinned] = useState<PinnedTitle | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const fetchPinned = useCallback(async () => {
+export const pinnedTitleQuery = queryOptions({
+  queryKey: ['watchlist', 'news', 'pinned-title'],
+  queryFn: async (): Promise<PinnedTitle | null> => {
     try {
       const [showResult, movieResult] = await Promise.all([
         supabase
@@ -77,10 +74,7 @@ export function usePinnedTitle() {
       if (movieResult.error) throw movieResult.error;
 
       const row = showResult.data || movieResult.data;
-      if (!row) {
-        setPinned(null);
-        return;
-      }
+      if (!row) return null;
 
       const mediaType: WatchlistNewsMediaType = showResult.data ? 'tv' : 'movie';
       let releaseDate: string | null = row.release_date;
@@ -99,29 +93,25 @@ export function usePinnedTitle() {
         if (nextEpisode?.release_date) releaseDate = nextEpisode.release_date;
       }
 
-      setPinned({
+      return {
         id: row.id,
         title: row.title,
         poster: row.poster,
         backdrop: row.backdrop,
         release_date: releaseDate,
         media_type: mediaType,
-      });
-      setFailed(false);
+      };
     } catch (error) {
       console.error('Error fetching pinned title:', error);
-      setPinned(null);
-      setFailed(true);
-    } finally {
-      setLoading(false);
+      throw error;
     }
-  }, []);
+  },
+  retry: false,
+});
 
-  useEffect(() => {
-    fetchPinned();
-  }, [fetchPinned]);
-
-  return { pinned, loading, failed };
+export function usePinnedTitle() {
+  const { data, isPending, isError } = useQuery(pinnedTitleQuery);
+  return { pinned: data ?? null, loading: isPending, failed: isError };
 }
 
 export interface WatchlistNewsEpisode {
@@ -160,51 +150,43 @@ function mapEpisodeRow(row): WatchlistNewsEpisode {
 const EPISODE_EMBED =
   'id, episode_number, title, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform))';
 
+const NO_EPISODES: WatchlistNewsEpisode[] = [];
+
+export const recentEpisodesQuery = (windowDays = 30) =>
+  queryOptions({
+    queryKey: ['watchlist', 'news', 'recent-episodes', windowDays],
+    queryFn: async (): Promise<WatchlistNewsEpisode[]> => {
+      try {
+        const today = new Date();
+        const cutoff = new Date(today);
+        cutoff.setDate(cutoff.getDate() - windowDays);
+
+        const { data, error } = await supabase
+          .from('tv_show_episodes')
+          .select(EPISODE_EMBED)
+          .gte('release_date', toDateStr(cutoff))
+          .lte('release_date', toDateStr(today))
+          .order('release_date', { ascending: false });
+
+        if (error) throw error;
+        return (data || []).map(mapEpisodeRow);
+      } catch (error) {
+        console.error('Error fetching recently released episodes:', error);
+        throw error;
+      }
+    },
+    retry: false,
+  });
+
 /** Episodes aired in the last 30 days, newest first, watched or not. */
 export function useRecentEpisodes(windowDays = 30) {
-  const [episodes, setEpisodes] = useState<WatchlistNewsEpisode[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const fetchEpisodes = useCallback(async () => {
-    try {
-      const today = new Date();
-      const cutoff = new Date(today);
-      cutoff.setDate(cutoff.getDate() - windowDays);
-
-      const { data, error } = await supabase
-        .from('tv_show_episodes')
-        .select(EPISODE_EMBED)
-        .gte('release_date', toDateStr(cutoff))
-        .lte('release_date', toDateStr(today))
-        .order('release_date', { ascending: false });
-
-      if (error) throw error;
-      setEpisodes((data || []).map(mapEpisodeRow));
-      setFailed(false);
-    } catch (error) {
-      console.error('Error fetching recently released episodes:', error);
-      setEpisodes([]);
-      setFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [windowDays]);
-
-  useEffect(() => {
-    fetchEpisodes();
-  }, [fetchEpisodes]);
-
-  return { episodes, loading, failed };
+  const { data, isPending, isError } = useQuery(recentEpisodesQuery(windowDays));
+  return { episodes: data ?? NO_EPISODES, loading: isPending, failed: isError };
 }
 
-/** Episodes with a future air date, nearest first. */
-export function useUpcomingEpisodes() {
-  const [episodes, setEpisodes] = useState<WatchlistNewsEpisode[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const fetchEpisodes = useCallback(async () => {
+export const upcomingEpisodesQuery = queryOptions({
+  queryKey: ['watchlist', 'news', 'upcoming-episodes'],
+  queryFn: async (): Promise<WatchlistNewsEpisode[]> => {
     try {
       const today = new Date();
 
@@ -217,22 +199,19 @@ export function useUpcomingEpisodes() {
         .range(from, to), (row) => String(row.id));
 
       if (error) throw error;
-      setEpisodes((data || []).map(mapEpisodeRow));
-      setFailed(false);
+      return (data || []).map(mapEpisodeRow);
     } catch (error) {
       console.error('Error fetching upcoming episodes:', error);
-      setEpisodes([]);
-      setFailed(true);
-    } finally {
-      setLoading(false);
+      throw error;
     }
-  }, []);
+  },
+  retry: false,
+});
 
-  useEffect(() => {
-    fetchEpisodes();
-  }, [fetchEpisodes]);
-
-  return { episodes, loading, failed };
+/** Episodes with a future air date, nearest first. */
+export function useUpcomingEpisodes() {
+  const { data, isPending, isError } = useQuery(upcomingEpisodesQuery);
+  return { episodes: data ?? NO_EPISODES, loading: isPending, failed: isError };
 }
 
 export interface WatchlistNewsMovie {
@@ -255,51 +234,43 @@ function mapMovieRow(row): WatchlistNewsMovie {
 
 const MOVIE_SELECT = 'id, title, poster, platform, release_date';
 
+const NO_MOVIES: WatchlistNewsMovie[] = [];
+
+export const recentMoviesQuery = (windowDays = 30) =>
+  queryOptions({
+    queryKey: ['watchlist', 'news', 'recent-movies', windowDays],
+    queryFn: async (): Promise<WatchlistNewsMovie[]> => {
+      try {
+        const today = new Date();
+        const cutoff = new Date(today);
+        cutoff.setDate(cutoff.getDate() - windowDays);
+
+        const { data, error } = await supabase
+          .from('movies')
+          .select(MOVIE_SELECT)
+          .gte('release_date', toDateStr(cutoff))
+          .lte('release_date', toDateStr(today))
+          .order('release_date', { ascending: false });
+
+        if (error) throw error;
+        return (data || []).map(mapMovieRow);
+      } catch (error) {
+        console.error('Error fetching recently released movies:', error);
+        throw error;
+      }
+    },
+    retry: false,
+  });
+
 /** Movies released within the last `windowDays` days, newest first. */
 export function useRecentMovies(windowDays = 30) {
-  const [movies, setMovies] = useState<WatchlistNewsMovie[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const fetchMovies = useCallback(async () => {
-    try {
-      const today = new Date();
-      const cutoff = new Date(today);
-      cutoff.setDate(cutoff.getDate() - windowDays);
-
-      const { data, error } = await supabase
-        .from('movies')
-        .select(MOVIE_SELECT)
-        .gte('release_date', toDateStr(cutoff))
-        .lte('release_date', toDateStr(today))
-        .order('release_date', { ascending: false });
-
-      if (error) throw error;
-      setMovies((data || []).map(mapMovieRow));
-      setFailed(false);
-    } catch (error) {
-      console.error('Error fetching recently released movies:', error);
-      setMovies([]);
-      setFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [windowDays]);
-
-  useEffect(() => {
-    fetchMovies();
-  }, [fetchMovies]);
-
-  return { movies, loading, failed };
+  const { data, isPending, isError } = useQuery(recentMoviesQuery(windowDays));
+  return { movies: data ?? NO_MOVIES, loading: isPending, failed: isError };
 }
 
-/** Movies with a future release date, nearest first. */
-export function useUpcomingMovies() {
-  const [movies, setMovies] = useState<WatchlistNewsMovie[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const fetchMovies = useCallback(async () => {
+export const upcomingMoviesQuery = queryOptions({
+  queryKey: ['watchlist', 'news', 'upcoming-movies'],
+  queryFn: async (): Promise<WatchlistNewsMovie[]> => {
     try {
       const today = new Date();
 
@@ -312,22 +283,19 @@ export function useUpcomingMovies() {
         .range(from, to), (row) => String(row.id));
 
       if (error) throw error;
-      setMovies((data || []).map(mapMovieRow));
-      setFailed(false);
+      return (data || []).map(mapMovieRow);
     } catch (error) {
       console.error('Error fetching upcoming movies:', error);
-      setMovies([]);
-      setFailed(true);
-    } finally {
-      setLoading(false);
+      throw error;
     }
-  }, []);
+  },
+  retry: false,
+});
 
-  useEffect(() => {
-    fetchMovies();
-  }, [fetchMovies]);
-
-  return { movies, loading, failed };
+/** Movies with a future release date, nearest first. */
+export function useUpcomingMovies() {
+  const { data, isPending, isError } = useQuery(upcomingMoviesQuery);
+  return { movies: data ?? NO_MOVIES, loading: isPending, failed: isError };
 }
 
 export type WatchlistEventEntityType = 'tv_show' | 'movie';
@@ -356,57 +324,46 @@ function eventPayload(value: Json): WatchlistEvent['payload'] {
   };
 }
 
-/**
- * Platform and status changes from `public.watchlist_events`
- * (REHAUL_PLAN.md 8.C-bis), newest first, over the last `windowDays` days.
- * Fetched over the widest window the Updates control offers (30 days) and
- * filtered client-side by `filterUpdatesByWindow`, so switching "This
- * week"/"Past month" never refetches. The table is written by a trigger on
- * `tv_shows`/`movies`. An event whose title has since been removed from the
- * watchlist is dropped: the row would have nothing to show and nothing to
- * open.
- */
-export function useWatchlistEvents(windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) {
-  const [events, setEvents] = useState<WatchlistEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+const NO_EVENTS: WatchlistEvent[] = [];
 
-  const fetchEvents = useCallback(async () => {
-    try {
-      const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();
-      const { data, error } = await supabase
-        .from('watchlist_events')
-        .select('id, entity_type, entity_id, kind, occurred_at, payload')
-        .gte('occurred_at', cutoff)
-        .order('occurred_at', { ascending: false });
+export const watchlistEventsQuery = (windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) =>
+  queryOptions({
+    queryKey: ['watchlist', 'news', 'watchlist-events', windowDays],
+    queryFn: async (): Promise<WatchlistEvent[]> => {
+      try {
+        const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+        const { data, error } = await supabase
+          .from('watchlist_events')
+          .select('id, entity_type, entity_id, kind, occurred_at, payload')
+          .gte('occurred_at', cutoff)
+          .order('occurred_at', { ascending: false });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const rows = data || [];
-      const tvIds = rows
-        .filter((row) => row.entity_type === 'tv_show')
-        .map((row) => row.entity_id);
-      const movieIds = rows
-        .filter((row) => row.entity_type === 'movie')
-        .map((row) => row.entity_id);
+        const rows = data || [];
+        const tvIds = rows
+          .filter((row) => row.entity_type === 'tv_show')
+          .map((row) => row.entity_id);
+        const movieIds = rows
+          .filter((row) => row.entity_type === 'movie')
+          .map((row) => row.entity_id);
 
-      const [showsResult, moviesResult] = await Promise.all([
-        tvIds.length
-          ? supabase.from('tv_shows').select('id, title, poster, platform').in('id', tvIds)
-          : Promise.resolve({ data: [], error: null }),
-        movieIds.length
-          ? supabase.from('movies').select('id, title, poster, platform').in('id', movieIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
+        const [showsResult, moviesResult] = await Promise.all([
+          tvIds.length
+            ? supabase.from('tv_shows').select('id, title, poster, platform').in('id', tvIds)
+            : Promise.resolve({ data: [], error: null }),
+          movieIds.length
+            ? supabase.from('movies').select('id, title, poster, platform').in('id', movieIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
 
-      if (showsResult.error) throw showsResult.error;
-      if (moviesResult.error) throw moviesResult.error;
+        if (showsResult.error) throw showsResult.error;
+        if (moviesResult.error) throw moviesResult.error;
 
-      const showsById = new Map((showsResult.data || []).map((row) => [row.id, row]));
-      const moviesById = new Map((moviesResult.data || []).map((row) => [row.id, row]));
+        const showsById = new Map((showsResult.data || []).map((row) => [row.id, row]));
+        const moviesById = new Map((moviesResult.data || []).map((row) => [row.id, row]));
 
-      setEvents(
-        rows.flatMap((row): WatchlistEvent[] => {
+        return rows.flatMap((row): WatchlistEvent[] => {
           const source =
             row.entity_type === 'tv_show'
               ? showsById.get(row.entity_id)
@@ -425,23 +382,28 @@ export function useWatchlistEvents(windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) {
             poster: source.poster ?? null,
             platform: source.platform ?? null,
           }];
-        }),
-      );
-      setFailed(false);
-    } catch (error) {
-      console.error('Error fetching watchlist events:', error);
-      setEvents([]);
-      setFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [windowDays]);
+        });
+      } catch (error) {
+        console.error('Error fetching watchlist events:', error);
+        throw error;
+      }
+    },
+    retry: false,
+  });
 
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
-
-  return { events, loading, failed };
+/**
+ * Platform and status changes from `public.watchlist_events`
+ * (REHAUL_PLAN.md 8.C-bis), newest first, over the last `windowDays` days.
+ * Fetched over the widest window the Updates control offers (30 days) and
+ * filtered client-side by `filterUpdatesByWindow`, so switching "This
+ * week"/"Past month" never refetches. The table is written by a trigger on
+ * `tv_shows`/`movies`. An event whose title has since been removed from the
+ * watchlist is dropped: the row would have nothing to show and nothing to
+ * open.
+ */
+export function useWatchlistEvents(windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) {
+  const { data, isPending, isError } = useQuery(watchlistEventsQuery(windowDays));
+  return { events: data ?? NO_EVENTS, loading: isPending, failed: isError };
 }
 
 // Rows that predate migration 20260912090000 carry a null created_at -- see
@@ -463,6 +425,100 @@ const ANNOUNCEMENT_WINDOW_DAYS = 7;
 // complete.
 const ANNOUNCEMENT_ROW_CAP = 1000;
 
+const NO_ANNOUNCEMENTS: AnnouncementCandidate[] = [];
+const NO_FIRST_SEEN = new Map<number, string | null>();
+
+export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) =>
+  queryOptions({
+    queryKey: ['watchlist', 'news', 'recent-announcements', windowDays],
+    queryFn: async () => {
+      try {
+        const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+
+        const [seasonsResult, episodesResult] = await Promise.all([
+          supabase
+            .from('tv_show_seasons')
+            .select('id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform)')
+            .gt('created_at', cutoff)
+            .order('created_at', { ascending: false })
+            .limit(ANNOUNCEMENT_ROW_CAP),
+          supabase
+            .from('tv_show_episodes')
+            .select(
+              'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform))',
+            )
+            .gt('created_at', cutoff)
+            .order('created_at', { ascending: false })
+            .limit(ANNOUNCEMENT_ROW_CAP),
+        ]);
+
+        if (seasonsResult.error) throw seasonsResult.error;
+        if (episodesResult.error) throw episodesResult.error;
+
+        const seasonItems: AnnouncementCandidate[] = (seasonsResult.data || []).map(
+          (row): AnnouncementCandidate => {
+            const show = unwrapEmbed(row.tv_shows) || {};
+            return {
+              kind: 'season',
+              tv_show_id: row.tv_show_id,
+              title: show.title ?? '',
+              poster: show.poster ?? null,
+              platform: show.platform ?? null,
+              season_number: row.season_number,
+              created_at: row.created_at,
+            };
+          },
+        );
+
+        const episodeItems: AnnouncementCandidate[] = (episodesResult.data || []).map(
+          (row): AnnouncementCandidate => {
+            const season = unwrapEmbed(row.tv_show_seasons) || {};
+            const show = unwrapEmbed(season.tv_shows) || {};
+            return {
+              kind: 'episode',
+              tv_show_id: season.tv_show_id,
+              title: show.title ?? '',
+              poster: show.poster ?? null,
+              platform: show.platform ?? null,
+              season_number: season.season_number,
+              episode_number: row.episode_number,
+              episode_title: row.title,
+              release_date: row.release_date,
+              created_at: row.created_at,
+            };
+          },
+        );
+
+        const candidates = [...seasonItems, ...episodeItems];
+        const showIds = Array.from(new Set(candidates.map((item) => item.tv_show_id)));
+
+        const allSeasonsResult = showIds.length
+          ? await selectAllPages((from, to) => supabase
+            .from('tv_show_seasons')
+            .select('id, tv_show_id, created_at', { count: 'exact' })
+            .in('tv_show_id', showIds)
+            .order('id', { ascending: true })
+            .range(from, to), (row) => String(row.id))
+          : { data: [], error: null };
+
+        if (allSeasonsResult.error) throw allSeasonsResult.error;
+
+        return {
+          announcements: candidates,
+          firstSeenByShow: computeFirstSeenAt(allSeasonsResult.data || []),
+          // Partial, not failed: the rows are real but the cap cut some off.
+          capped:
+            (seasonsResult.data?.length ?? 0) >= ANNOUNCEMENT_ROW_CAP ||
+            (episodesResult.data?.length ?? 0) >= ANNOUNCEMENT_ROW_CAP,
+        };
+      } catch (error) {
+        console.error('Error fetching watchlist announcements:', error);
+        throw error;
+      }
+    },
+    retry: false,
+  });
+
 /**
  * Seasons and episodes inserted within the window (candidates -- not every
  * one is an announcement, see `isAnnouncement` in watchlist-utils.ts), plus
@@ -473,104 +529,13 @@ const ANNOUNCEMENT_ROW_CAP = 1000;
  * back catalogue landing in one batch when it is first added.
  */
 export function useRecentAnnouncements(windowDays = ANNOUNCEMENT_WINDOW_DAYS) {
-  const [announcements, setAnnouncements] = useState<AnnouncementCandidate[]>([]);
-  const [firstSeenByShow, setFirstSeenByShow] = useState<Map<number, string | null>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const fetchAnnouncements = useCallback(async () => {
-    try {
-      const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();
-
-      const [seasonsResult, episodesResult] = await Promise.all([
-        supabase
-          .from('tv_show_seasons')
-          .select('id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform)')
-          .gt('created_at', cutoff)
-          .order('created_at', { ascending: false })
-          .limit(ANNOUNCEMENT_ROW_CAP),
-        supabase
-          .from('tv_show_episodes')
-          .select(
-            'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform))',
-          )
-          .gt('created_at', cutoff)
-          .order('created_at', { ascending: false })
-          .limit(ANNOUNCEMENT_ROW_CAP),
-      ]);
-
-      if (seasonsResult.error) throw seasonsResult.error;
-      if (episodesResult.error) throw episodesResult.error;
-
-      const seasonItems: AnnouncementCandidate[] = (seasonsResult.data || []).map(
-        (row): AnnouncementCandidate => {
-          const show = unwrapEmbed(row.tv_shows) || {};
-          return {
-            kind: 'season',
-            tv_show_id: row.tv_show_id,
-            title: show.title ?? '',
-            poster: show.poster ?? null,
-            platform: show.platform ?? null,
-            season_number: row.season_number,
-            created_at: row.created_at,
-          };
-        },
-      );
-
-      const episodeItems: AnnouncementCandidate[] = (episodesResult.data || []).map(
-        (row): AnnouncementCandidate => {
-          const season = unwrapEmbed(row.tv_show_seasons) || {};
-          const show = unwrapEmbed(season.tv_shows) || {};
-          return {
-            kind: 'episode',
-            tv_show_id: season.tv_show_id,
-            title: show.title ?? '',
-            poster: show.poster ?? null,
-            platform: show.platform ?? null,
-            season_number: season.season_number,
-            episode_number: row.episode_number,
-            episode_title: row.title,
-            release_date: row.release_date,
-            created_at: row.created_at,
-          };
-        },
-      );
-
-      const candidates = [...seasonItems, ...episodeItems];
-      const showIds = Array.from(new Set(candidates.map((item) => item.tv_show_id)));
-
-      const allSeasonsResult = showIds.length
-        ? await selectAllPages((from, to) => supabase
-          .from('tv_show_seasons')
-          .select('id, tv_show_id, created_at', { count: 'exact' })
-          .in('tv_show_id', showIds)
-          .order('id', { ascending: true })
-          .range(from, to), (row) => String(row.id))
-        : { data: [], error: null };
-
-      if (allSeasonsResult.error) throw allSeasonsResult.error;
-
-      setAnnouncements(candidates);
-      setFirstSeenByShow(computeFirstSeenAt(allSeasonsResult.data || []));
-      setFailed(
-        (seasonsResult.data?.length ?? 0) >= ANNOUNCEMENT_ROW_CAP ||
-          (episodesResult.data?.length ?? 0) >= ANNOUNCEMENT_ROW_CAP,
-      );
-    } catch (error) {
-      console.error('Error fetching watchlist announcements:', error);
-      setAnnouncements([]);
-      setFirstSeenByShow(new Map());
-      setFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [windowDays]);
-
-  useEffect(() => {
-    fetchAnnouncements();
-  }, [fetchAnnouncements]);
-
-  return { announcements, firstSeenByShow, loading, failed };
+  const { data, isPending, isError } = useQuery(recentAnnouncementsQuery(windowDays));
+  return {
+    announcements: data?.announcements ?? NO_ANNOUNCEMENTS,
+    firstSeenByShow: data?.firstSeenByShow ?? NO_FIRST_SEEN,
+    loading: isPending,
+    failed: isError || (data?.capped ?? false),
+  };
 }
 
 /** One (show, season) pair to check for `isSeasonFinished`. */
@@ -578,6 +543,45 @@ export interface PremiereSeasonKey {
   tv_show_id: number;
   season_number: number;
 }
+
+const NO_SEASON_EPISODES = new Map<string, SeasonEpisodeCandidate[]>();
+
+export const premiereSeasonEpisodesQuery = (seasonsKey: string) =>
+  queryOptions({
+    queryKey: ['watchlist', 'news', 'premiere-season-episodes', seasonsKey],
+    queryFn: async () => {
+      const wanted = new Set(seasonsKey.split(','));
+      const showIds = Array.from(
+        new Set(seasonsKey.split(',').map((pair) => Number(pair.split(':')[0]))),
+      );
+
+      try {
+        const { data, error } = await selectAllPages((from, to) => supabase
+          .from('tv_show_episodes')
+          .select('id, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id)', { count: 'exact' })
+          .in('tv_show_seasons.tv_show_id', showIds)
+          .order('id', { ascending: true })
+          .range(from, to), (row) => String(row.id));
+
+        if (error) throw error;
+
+        const map = new Map<string, SeasonEpisodeCandidate[]>();
+        for (const row of data || []) {
+          const season = unwrapEmbed(row.tv_show_seasons) || {};
+          const key = `${season.tv_show_id}:${season.season_number}`;
+          if (!wanted.has(key)) continue;
+          const list = map.get(key) ?? [];
+          list.push({ release_date: row.release_date, watched: !!row.watched });
+          map.set(key, list);
+        }
+        return map;
+      } catch (error) {
+        console.error('Error fetching premiere season episodes:', error);
+        throw error;
+      }
+    },
+    retry: false,
+  });
 
 /**
  * `watched`/`release_date` for every episode of a set of premiere seasons --
@@ -591,65 +595,23 @@ export interface PremiereSeasonKey {
  * check; empty with `failed` set when the query fails.
  */
 export function usePremiereSeasonEpisodes(seasons: PremiereSeasonKey[]) {
-  const [episodesBySeason, setEpisodesBySeason] = useState<
-    Map<string, SeasonEpisodeCandidate[]>
-  >(new Map());
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  // `seasons` is rebuilt on every render of the caller; the effect keys off
-  // its contents instead of its identity so it does not refetch every render.
+  // `seasons` is rebuilt on every render of the caller; the query key is built
+  // from its contents instead of its identity so it does not refetch every
+  // render.
   const seasonsKey = seasons
     .map((s) => `${s.tv_show_id}:${s.season_number}`)
     .sort()
     .join(',');
 
-  const fetchEpisodes = useCallback(async () => {
-    if (seasonsKey === '') {
-      setEpisodesBySeason(new Map());
-      setFailed(false);
-      setLoading(false);
-      return;
-    }
+  const { data, isLoading, isError } = useQuery({
+    ...premiereSeasonEpisodesQuery(seasonsKey),
+    enabled: seasons.length > 0,
+    // When the set of seasons changes, keep showing the last map until the
+    // new one lands rather than blanking the premieres in between.
+    placeholderData: keepPreviousData,
+  });
 
-    const wanted = new Set(seasonsKey.split(','));
-    const showIds = Array.from(
-      new Set(seasonsKey.split(',').map((pair) => Number(pair.split(':')[0]))),
-    );
-
-    try {
-      const { data, error } = await selectAllPages((from, to) => supabase
-        .from('tv_show_episodes')
-        .select('id, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id)', { count: 'exact' })
-        .in('tv_show_seasons.tv_show_id', showIds)
-        .order('id', { ascending: true })
-        .range(from, to), (row) => String(row.id));
-
-      if (error) throw error;
-
-      const map = new Map<string, SeasonEpisodeCandidate[]>();
-      for (const row of data || []) {
-        const season = unwrapEmbed(row.tv_show_seasons) || {};
-        const key = `${season.tv_show_id}:${season.season_number}`;
-        if (!wanted.has(key)) continue;
-        const list = map.get(key) ?? [];
-        list.push({ release_date: row.release_date, watched: !!row.watched });
-        map.set(key, list);
-      }
-      setEpisodesBySeason(map);
-      setFailed(false);
-    } catch (error) {
-      console.error('Error fetching premiere season episodes:', error);
-      setEpisodesBySeason(new Map());
-      setFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [seasonsKey]);
-
-  useEffect(() => {
-    fetchEpisodes();
-  }, [fetchEpisodes]);
-
-  return { episodesBySeason, loading, failed };
+  // `isLoading`, not `isPending`: a disabled query stays pending forever, and
+  // nothing to check is not a load in progress.
+  return { episodesBySeason: data ?? NO_SEASON_EPISODES, loading: isLoading, failed: isError };
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -8,9 +8,10 @@ import { ThemeProvider } from 'next-themes';
 import { DisplayModeProvider } from '@/contexts/DisplayModeContext';
 import { OpeningSequence } from '@/components/layout/OpeningSequence';
 import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
+import { useSiteWarmup } from '@/hooks/useSiteWarmup';
 
 import { WatchlistProvider } from './features/watchlist/WatchlistContext';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { DotMatrixProvider } from './contexts/DotMatrixContext';
 
 /**
@@ -29,7 +30,7 @@ import { DotMatrixProvider } from './contexts/DotMatrixContext';
  * navigating to them involves no network at all.
  *
  * Three are worth keeping out of the entry, and are prefetched on idle by
- * RoutePrefetch below so a click still does not wait on them.
+ * SiteWarmup below so a click still does not wait on them.
  */
 import Index from './pages/Index';
 import Inventory from './pages/Inventory';
@@ -49,31 +50,9 @@ const Finance = lazy(() => import('./features/finance/FinancePage'));
 const Travel = lazy(() => import('./features/travel/TravelPage'));
 const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
 
-/**
- * Warms the three split chunks once the browser is idle, so the click that
- * needs them is not the thing that fetches them. Finance is ~256 kB gzipped
- * and admin-only, so it is warmed only for the account that can open it.
- */
-function RoutePrefetch() {
-  const { isAdmin } = useAuth();
-
-  useEffect(() => {
-    const warm = () => {
-      void import('./features/travel/TravelPage');
-      void import('./features/watchlist/WatchlistPage');
-      if (isAdmin) void import('./features/finance/FinancePage');
-    };
-
-    if (typeof window.requestIdleCallback === 'function') {
-      const handle = window.requestIdleCallback(warm, { timeout: 4000 });
-      return () => window.cancelIdleCallback?.(handle);
-    }
-    // Safari has no requestIdleCallback. A plain timer after first paint is
-    // close enough for something this small.
-    const timer = window.setTimeout(warm, 2000);
-    return () => window.clearTimeout(timer);
-  }, [isAdmin]);
-
+/** Invisible component that warms every page's code and rows on idle (see useSiteWarmup). */
+function SiteWarmup() {
+  useSiteWarmup();
   return null;
 }
 
@@ -84,6 +63,11 @@ const queryClient = new QueryClient({
       // refetch every table on every window focus/remount by default.
       staleTime: 60_000,
       refetchOnWindowFocus: false,
+      // Kept for the life of the tab. SiteWarmup fills the cache for pages
+      // that have not been opened yet, and the five-minute default would
+      // discard those before the click they were fetched for. Stale entries
+      // still revalidate on mount; they just render instantly while they do.
+      gcTime: Infinity,
     },
   },
 });
@@ -106,7 +90,7 @@ const PageLoader = () => (
 const AppProviders = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>
     <DotMatrixProvider>
-      <RoutePrefetch />
+      <SiteWarmup />
       {children}
     </DotMatrixProvider>
   </AuthProvider>

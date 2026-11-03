@@ -19,19 +19,21 @@ import {
 } from './surfaces';
 import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
 import { useCoalescedSave } from './useCoalescedSave';
-const CashFlowSurface = lazy(() => import('./surfaces/CashFlowSurface'));
-const ForecastSurface = lazy(() => import('./surfaces/ForecastSurface'));
-const GoalsSurface = lazy(() => import('./surfaces/GoalsSurface'));
-const ScenariosSurface = lazy(() => import('./surfaces/ScenariosSurface'));
-const RetirementSurface = lazy(() => import('./surfaces/RetirementSurface'));
-const TransfersSurface = lazy(() => import('./surfaces/TransfersSurface'));
-const BudgetSurface = lazy(() => import('./surfaces/BudgetSurface'));
-const AccountsSurface = lazy(() => import('./surfaces/AccountsSurface'));
-const DebtsSurface = lazy(() => import('./surfaces/DebtsSurface'));
-const StudentLoanSurface = lazy(() => import('./surfaces/StudentLoanSurface'));
-const TaxIncomeSurface = lazy(() => import('./surfaces/TaxIncomeSurface'));
-const TaxCalculatorSurface = lazy(() => import('./surfaces/TaxCalculatorSurface'));
-const DashboardSurface = lazy(() => import('./surfaces/DashboardSurface'));
+import { sectionChunks, warmFinanceSections } from './section-chunks';
+import { prefersSavedData, whenIdle } from '@/lib/idle';
+const CashFlowSurface = lazy(sectionChunks['cash-flow']);
+const ForecastSurface = lazy(sectionChunks.forecast);
+const GoalsSurface = lazy(sectionChunks.goals);
+const ScenariosSurface = lazy(sectionChunks.scenarios);
+const RetirementSurface = lazy(sectionChunks.retirement);
+const TransfersSurface = lazy(sectionChunks.transfers);
+const BudgetSurface = lazy(sectionChunks.budget);
+const AccountsSurface = lazy(sectionChunks.accounts);
+const DebtsSurface = lazy(sectionChunks.debts);
+const StudentLoanSurface = lazy(sectionChunks['student-loan']);
+const TaxIncomeSurface = lazy(sectionChunks['tax-income']);
+const TaxCalculatorSurface = lazy(sectionChunks['tax-calculator']);
+const DashboardSurface = lazy(sectionChunks.dashboard);
 import { useTrueLayer } from './useTrueLayer';
 import { consumeTrueLayerOAuthState } from './truelayer-oauth';
 import { useSpendingLedger } from './useSpendingLedger';
@@ -54,10 +56,10 @@ import type {
   MockTransaction,
   RecurringBill,
 } from '@/features/finance/finance-types';
-const RecurringsTab = lazy(() => import('@/features/finance/tabs/RecurringsTab').then(m => ({ default: m.RecurringsTab })));
-const TimeSpentTab = lazy(() => import('@/features/finance/tabs/TimeSpentTab').then(m => ({ default: m.TimeSpentTab })));
-const TransactionsTab = lazy(() => import('@/features/finance/tabs/TransactionsTab').then(m => ({ default: m.TransactionsTab })));
-const InvestmentsTab = lazy(() => import('@/features/finance/tabs/InvestmentsTab').then(m => ({ default: m.InvestmentsTab })));
+const RecurringsTab = lazy(() => sectionChunks.recurrings().then(m => ({ default: m.RecurringsTab })));
+const TimeSpentTab = lazy(() => sectionChunks['time-spent']().then(m => ({ default: m.TimeSpentTab })));
+const TransactionsTab = lazy(() => sectionChunks.transactions().then(m => ({ default: m.TransactionsTab })));
+const InvestmentsTab = lazy(() => sectionChunks.investments().then(m => ({ default: m.InvestmentsTab })));
 import { AddRecurringDialog } from '@/features/finance/dialogs/AddRecurringDialog';
 import { EditRecurringDialog } from '@/features/finance/dialogs/EditRecurringDialog';
 import { TaxIncomeSettingsDialog } from '@/features/finance/dialogs/TaxIncomeSettingsDialog';
@@ -122,6 +124,14 @@ function FinanceView() {
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const figures = useHiddenFigures();
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
+
+  // Once the rows are in, fetch every other section's chunk in the
+  // background, so switching sections is a render rather than a round trip.
+  // Waiting for the load keeps the warm-up from competing with it.
+  useEffect(() => {
+    if (!hasLoaded || prefersSavedData()) return;
+    return whenIdle(warmFinanceSections);
+  }, [hasLoaded]);
 
   const [cfCustomStart, setCfCustomStart] = useState<string>(() => {
     const today = new Date();

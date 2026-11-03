@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface VisitedCity {
@@ -12,27 +13,32 @@ export interface VisitedCity {
     created_at: string;
 }
 
-export function useVisitedCities() {
-    const [visitedCities, setVisitedCities] = useState<VisitedCity[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const fetchCities = useCallback(async () => {
-        try {
-            const { data, error } = await supabase.from('visited_cities')
-                .select('*')
-                .order('city_name', { ascending: true });
-            if (error) throw error;
-            setVisitedCities(data || []);
-        } catch (err) {
-            console.error('Error fetching visited cities:', err);
-        } finally {
-            setLoading(false);
+/** In the query cache for the same reason as `visitedCountriesQuery`. */
+export const visitedCitiesQuery = queryOptions({
+    queryKey: ['travel', 'visited-cities'],
+    queryFn: async () => {
+        const { data, error } = await supabase.from('visited_cities')
+            .select('*')
+            .order('city_name', { ascending: true });
+        if (error) {
+            console.error('Error fetching visited cities:', error);
+            throw error;
         }
-    }, []);
+        const rows: VisitedCity[] = data ?? [];
+        return rows;
+    },
+});
 
-    useEffect(() => {
-        fetchCities();
-    }, [fetchCities]);
+const NO_CITIES: VisitedCity[] = [];
+
+export function useVisitedCities() {
+    const queryClient = useQueryClient();
+    const { data: visitedCities = NO_CITIES, isLoading: loading } = useQuery(visitedCitiesQuery);
+
+    const fetchCities = useCallback(
+        () => queryClient.invalidateQueries({ queryKey: visitedCitiesQuery.queryKey }),
+        [queryClient],
+    );
 
     /** Group cities by country code — memoized */
     const citiesByCountry = useMemo(() => {

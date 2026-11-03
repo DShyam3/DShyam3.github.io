@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -31,12 +31,9 @@ const DAYS = [
   'Sunday',
 ] as const;
 
-export function useSchedule() {
-  const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
-
-  const fetchSchedule = useCallback(async () => {
+export const scheduleQuery = queryOptions({
+  queryKey: ['watchlist', 'schedule'],
+  queryFn: async (): Promise<ScheduleItem[]> => {
     try {
       let { data, error } = await supabase.from('weekly_schedule').select('*');
 
@@ -57,7 +54,7 @@ export function useSchedule() {
 
       if (error) throw error;
 
-      const mapped: ScheduleItem[] = (data || []).map((item) => ({
+      return (data || []).map((item) => ({
         id: item.id.toString(),
         watchlistItemId: (item.tv_show_id || item.movie_id || '').toString(),
         day: item.day_of_week as ScheduleItem['day'],
@@ -65,18 +62,24 @@ export function useSchedule() {
         scheduledDate: item.scheduled_date ?? undefined,
         mode: item.schedule_mode === 'date' ? 'date' : 'weekly',
       }));
-
-      setSchedule(mapped);
     } catch (error) {
       console.error('Error fetching schedule:', error);
-    } finally {
-      setLoading(false);
+      throw error;
     }
-  }, []);
+  },
+  retry: false,
+});
 
-  useEffect(() => {
-    fetchSchedule();
-  }, [fetchSchedule]);
+const NO_SCHEDULE: ScheduleItem[] = [];
+
+export function useSchedule() {
+  const queryClient = useQueryClient();
+  // A failed fetch is logged and the schedule stays empty; there is no
+  // `failed` state to surface.
+  const { data, isPending } = useQuery(scheduleQuery);
+  const schedule = data ?? NO_SCHEDULE;
+  const loading = isPending;
+  const { toast } = useToast();
 
   const addToSchedule = async (item: Omit<ScheduleItem, 'id'>) => {
     try {
@@ -101,7 +104,7 @@ export function useSchedule() {
           ...item,
           id: data[0].id.toString(),
         };
-        setSchedule((prev) => [...prev, newItem]);
+        queryClient.setQueryData(scheduleQuery.queryKey, (prev = NO_SCHEDULE) => [...prev, newItem]);
       }
 
       toast({
@@ -127,7 +130,9 @@ export function useSchedule() {
 
       if (error) throw error;
 
-      setSchedule((prev) => prev.filter((item) => item.id !== id));
+      queryClient.setQueryData(scheduleQuery.queryKey, (prev = NO_SCHEDULE) =>
+        prev.filter((item) => item.id !== id),
+      );
 
       toast({
         title: 'Removed from schedule',
@@ -151,7 +156,7 @@ export function useSchedule() {
 
       if (error) throw error;
 
-      setSchedule((prev) =>
+      queryClient.setQueryData(scheduleQuery.queryKey, (prev = NO_SCHEDULE) =>
         prev.map((item) => (item.id === id ? { ...item, day: newDay } : item)),
       );
 

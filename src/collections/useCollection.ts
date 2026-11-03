@@ -1,8 +1,27 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useSupabaseTable } from '@/hooks/useSupabaseTable';
+import { supabaseTableQuery, useSupabaseTable, type TableReadOptions } from '@/hooks/useSupabaseTable';
 import type { CollectionConfig, CollectionRow, FacetDef } from './types';
 
 export const ALL = 'all';
+
+/** The read a collection's page makes. One function, so the warm-up asks for the same key. */
+function collectionRead<T extends CollectionRow, R>(config: CollectionConfig<T, R>): TableReadOptions {
+  return {
+    columns: config.columns,
+    ...(config.sortColumn
+      ? {
+          orderBy: {
+            column: config.sortColumn,
+            ascending: config.sortAscending ?? false,
+          },
+        }
+      : {}),
+  };
+}
+
+/** A collection's rows as query options, for fetching them before its page mounts. */
+export const collectionQuery = <T extends CollectionRow, R>(config: CollectionConfig<T, R>) =>
+  supabaseTableQuery<T>(config.table, collectionRead(config));
 
 /**
  * The option a facet starts on, and returns to when a resetsOthers facet
@@ -23,17 +42,7 @@ function defaultFor<T extends CollectionRow>(facet: FacetDef<T>): string {
 export function useCollection<T extends CollectionRow, R>(config: CollectionConfig<T, R>) {
   const { data, loading, addItem, updateItem, removeItem } = useSupabaseTable<T>(
     config.table,
-    {
-      columns: config.columns,
-      ...(config.sortColumn
-        ? {
-            orderBy: {
-              column: config.sortColumn,
-              ascending: config.sortAscending ?? false,
-            },
-          }
-        : {}),
-    },
+    collectionRead(config),
   );
 
   // One entry per facet. Most start at ALL (no filter); a facet that opts out
