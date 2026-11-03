@@ -35,6 +35,58 @@
         "--strictPort"
       ],
       "port": 4173
+    },
+    {
+      "name": "dev:test:8083",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:test",
+        "--",
+        "--port",
+        "8083",
+        "--strictPort"
+      ],
+      "port": 8083
+    },
+    {
+      "name": "dev:test:8084",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:test",
+        "--",
+        "--port",
+        "8084",
+        "--strictPort"
+      ],
+      "port": 8084
+    },
+    {
+      "name": "dev:test:8085",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:test",
+        "--",
+        "--port",
+        "8085",
+        "--strictPort"
+      ],
+      "port": 8085
+    },
+    {
+      "name": "dev:8086",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "8086",
+        "--strictPort"
+      ],
+      "port": 8086
     }
   ]
 }
