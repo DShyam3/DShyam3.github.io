@@ -17,7 +17,7 @@ import { MONTH_NAMES, getBudgetItemSpent, getDueDateText, isDueThisMonth } from 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatGBP, getCategoryDefaultEmoji } from '@/features/finance/utils/calculations';
+import { formatGBP } from '@/features/finance/utils/calculations';
 import { cn } from '@/lib/utils';
 import { formatCooldownEnd } from '@/hooks/useCooldown';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -31,8 +31,10 @@ import { WhatChangedCard } from '../components/WhatChangedCard';
 import { useSpendingLedger } from '../useSpendingLedger';
 import { useFinanceAlerts } from '../useFinanceAlerts';
 import { useTrueLayer } from '../useTrueLayer';
+import { useMerchantLogos } from '../useMerchantLogos';
+import { MerchantAvatar } from '../components/MerchantAvatar';
 import { pathForTab, type TabKey } from '../surfaces';
-import { deriveFinanceChangeSummary, toISODate } from '@/lib/finance';
+import { deriveFinanceChangeSummary, resolveMerchant, toISODate } from '@/lib/finance';
 import { paydayCountdown } from '../components/PaydaySummary';
 
 export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurringPaid: (id: string) => void }) {
@@ -57,6 +59,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
   // The local day: toISOString() is the UTC day, yesterday until 01:00 in BST.
   const alerts = useFinanceAlerts(toISODate(new Date()));
   const { trueLayerStatus, isSyncingTrueLayer, syncAvailableAt, syncTrueLayer } = useTrueLayer(fetchSupabaseData);
+  const merchantLogos = useMerchantLogos();
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const {
     results, breakdownRates, nextPayday, currentMonth, daysInMonth, todayDateObj,
@@ -725,9 +728,15 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                     title="Open in Transactions"
                     className="group flex items-center gap-3 min-w-0 flex-1 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="text-base shrink-0 p-1 rounded-md bg-muted/30">
-                      {getCategoryDefaultEmoji(tx.category)}
-                    </span>
+                    {/* Same mark the Transactions tab draws, so a row looks the
+                        same on both screens. */}
+                    <MerchantAvatar
+                      merchant={tx.merchant}
+                      fallbackName={tx.name}
+                      category={tx.category}
+                      isIncome={tx.amount < 0}
+                      cachedLogo={merchantLogos.get(resolveMerchant(tx.merchant || tx.name).slug)}
+                    />
                     <span className="block space-y-0.5 min-w-0">
                       <span className="flex items-center gap-1.5 flex-wrap">
                         <span className={cn("text-xs font-semibold block truncate text-foreground font-mono group-hover:underline underline-offset-2", tx.isReviewed && "line-through text-muted-foreground")}>

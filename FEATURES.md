@@ -304,8 +304,10 @@ Bank-synced transfers are labelled "Transfers" rather than a spending category, 
 
 The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown. Transfer links, transfer dismissals, one-sided transfers, transfers between profiles, payslips and their bank matches, net-worth history, goal contributions, investment activity and debt balance records also load in full, however many there are.
 
-Home's transaction list links to the Transactions tab: clicking a row's name opens
-that transaction with the row selected and scrolled into view. The list's
+Home's transaction list shows the same merchant mark as the Transactions tab: a logo
+where one is known, otherwise a coloured monogram. The list links to the Transactions
+tab: clicking a row's name opens that transaction with the row selected and scrolled
+into view. The list's
 "Transactions" heading opens the tab, carrying Home's current view: pending-only
 unless "View All" is on, plus the chosen account. Both views share the same data
 and filter logic; the navigation is read once and cleared.

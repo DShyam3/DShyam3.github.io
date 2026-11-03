@@ -43,8 +43,11 @@ export function MerchantAvatar({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
 
+  // A quarter of the tile, so it reads as a rounded square at any text size.
+  // `rounded-lg` follows `--radius` (14px), which on a 32px tile is all but a
+  // circle and fights the square brand icons it clips.
   const base = cn(
-    'h-8 w-8 rounded-lg shrink-0 flex items-center justify-center overflow-hidden',
+    'h-8 w-8 rounded-[0.5rem] shrink-0 flex items-center justify-center overflow-hidden',
     'font-bold text-xs uppercase shadow-sm border',
     className,
   );
@@ -74,12 +77,15 @@ export function MerchantAvatar({
   const logo = bundledMerchantLogo(slug) ?? cachedLogo;
 
   if (logo && !imageFailed) {
+    // Brand icons arrive as full-bleed squares carrying their own background,
+    // so the tile clips them to its own shape rather than padding a square
+    // inside it -- which read as two shapes fighting.
     return (
-      <div className={cn(base, 'bg-background border-border/60 p-1')}>
+      <div className={cn(base, 'bg-background border-border/60')}>
         <img
           src={logo}
           alt={label}
-          className="h-full w-full object-contain"
+          className="h-full w-full object-cover"
           loading="lazy"
           decoding="async"
           // A cached logo can go stale -- an object deleted from the bucket,
