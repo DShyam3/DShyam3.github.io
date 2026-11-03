@@ -175,3 +175,39 @@ describe('brand at the front of a branch description', () => {
     expect(m.initials).toBe('SY');
   });
 });
+
+describe('ledger spellings the directory has to catch', () => {
+  it.each([
+    ['CO-OP GROUP 380587REGENT ST', 'co-op'],
+    ['J D WETHERSPOON PLWATFORD', 'wetherspoon'],
+    ['JD WETHERSPOONS PLC WATFORD,', 'wetherspoon'],
+    ['CLUB LLOYDS FEE', 'lloyds'],
+    ['TRADING 212 UK LIM20529439', 'trading212'],
+    ['UBR* PENDING.UBER.COM LONDON GB', 'uber'],
+    ['COSTCO WHOLESALE #129 STEVENAGE GB', 'costco'],
+    ['T K MAXX PLYMOUTH', 'tk-maxx'],
+    ['WWW.HOSTELWORLD.COM DUBLIN IE', 'hostelworld'],
+    ['WWW.HOLIDAYEXTRAS.COM- HYTHE GB', 'holiday-extras'],
+    ['Charles Tyrwhitt - Reg London GB', 'charles-tyrwhitt'],
+    ['STEAMGAMES.COM 4259522 HAMBURG DE', 'steam'],
+  ])('%s is %s', (raw, slug) => {
+    const m = resolveMerchant(raw);
+    expect(m.known).toBe(true);
+    expect(m.slug).toBe(slug);
+  });
+
+  it('gives a Lloyds No.1 bar the pub chain, not the bank', () => {
+    expect(resolveMerchant('LLOYDS NO.1 BASINGSTOKE').slug).toBe('wetherspoon');
+    expect(resolveMerchant('LLOYDS NO 1, BASINGSTOK BASINGSTOKE').slug).toBe('wetherspoon');
+  });
+
+  it('drops a leading www, so the brand is the first word', () => {
+    expect(normaliseMerchant('WWW.HOSTELWORLD.COM DUBLIN IE')).toBe('hostelworld dublin ie');
+  });
+
+  it('leaves people and independent shops unmatched', () => {
+    for (const raw of ['DHYAN SHYAM CHASE', 'Ohayo Tea Manchester GB', 'SHERFIELD OAKS GOLF CL SEVENOAKS GB', 'THE BANK PLYMOUTH']) {
+      expect(resolveMerchant(raw).known, raw).toBe(false);
+    }
+  });
+});

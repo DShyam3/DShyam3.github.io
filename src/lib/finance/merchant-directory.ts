@@ -52,7 +52,7 @@ const ROWS: [string, string, ...string[]][] = [
   ['deliveroo', 'Deliveroo'],
   ['just-eat', 'Just Eat', 'justeat'],
   ['uber-eats', 'Uber Eats', 'ubereats'],
-  ['uber', 'Uber', 'uber-trip', 'uber-bv'],
+  ['uber', 'Uber', 'uber-trip', 'uber-bv', 'ubr'],
   ['bolt', 'Bolt', 'bolt-eu'],
   ['mcdonalds', "McDonald's", 'mcdonald-s', 'mc-donalds'],
   ['greggs', 'Greggs'],
@@ -82,7 +82,7 @@ const ROWS: [string, string, ...string[]][] = [
   ['spotify', 'Spotify', 'spotify-uk'],
   ['disney-plus', 'Disney+', 'disneyplus', 'disney'],
   ['youtube', 'YouTube', 'google-youtube', 'youtube-premium'],
-  ['steam', 'Steam', 'steam-games', 'valve'],
+  ['steam', 'Steam', 'steam-games', 'steamgames', 'valve'],
   ['playstation', 'PlayStation', 'playstation-network', 'sony-playstation'],
   ['nintendo', 'Nintendo'],
   ['audible', 'Audible'],
@@ -104,6 +104,38 @@ const ROWS: [string, string, ...string[]][] = [
   ['american-express', 'American Express', 'amex', 'americanexpress'],
   ['nhs', 'NHS', 'nhs-prescription'],
   ['royal-mail', 'Royal Mail', 'royalmail'],
+
+  // Chains and services from the owner's own ledger, 2026-11. Public brand
+  // names only: a person, or a one-off shop, never goes in this list.
+  ['costco', 'Costco', 'costco-wholesale'],
+  ['londis', 'Londis'],
+  ['budgens', 'Budgens'],
+  ['b-m', 'B&M', 'b-and-m'],
+  ['home-bargains', 'Home Bargains'],
+  ['wilko', 'Wilko', 'wilko-retail'],
+  ['primark', 'Primark'],
+  ['tk-maxx', 'TK Maxx', 't-k-maxx', 'tkmaxx'],
+  ['sports-direct', 'Sports Direct', 'sportsdirect'],
+  ['charles-tyrwhitt', 'Charles Tyrwhitt'],
+  // `LLOYDS NO.1` is a Wetherspoon bar. Listed here so the longer match wins
+  // and the bar does not wear the bank's logo.
+  ['wetherspoon', 'Wetherspoon', 'j-d-wetherspoon', 'jd-wetherspoon', 'jd-wetherspoons', 'wetherspoons', 'lloyds-no'],
+  ['popworld', 'Popworld'],
+  ['revolution-bars', 'Revolution', 'revolution-bar'],
+  ['papa-johns', "Papa John's", 'papajohns', 'papajohn-s'],
+  ['cineworld', 'Cineworld'],
+  ['vue', 'Vue', 'vue-cinemas', 'myvue'],
+  ['hostelworld', 'Hostelworld'],
+  ['holiday-extras', 'Holiday Extras', 'holidayextras'],
+  ['lloyds', 'Lloyds', 'lloyds-bank', 'club-lloyds'],
+  ['barclaycard', 'Barclaycard'],
+  // `TRADING 212` loses its digits to the normaliser, so the bank's spelling
+  // arrives as `trading-uk`.
+  ['trading212', 'Trading 212', 'trading-uk'],
+  ['freetrade', 'Freetrade'],
+  ['airbus', 'Airbus'],
+  ['capgemini', 'Capgemini'],
+  ['mytutor', 'MyTutor', 'mytutorweb'],
 ];
 
 export const MERCHANT_DIRECTORY: Record<string, MerchantDirectoryEntry> =

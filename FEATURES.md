@@ -276,8 +276,10 @@ membership tables scroll horizontally within their panels.
 ### Spending
 
 Transactions, budget, recurrings and transfers. At 1024px or wider and 720px or taller, the list scrolls with the page and the details panel stays in view beside it, with its own scroll. Smaller, the list keeps its own pane above the details, capped to the measured card height. Budgets build from preset groups
-rather than a blank form. Budget items and recurring bills can have an optional provider name (up to 60 characters), shown after the item name — for example, "Phone · O2". Logos are looked up for merchants across the whole ledger, through a server-side
-cache. Confirmed transfers are left out of spending and income everywhere figures are shown: Home, Budget history and Cash Flow. Transaction lists still show them.
+rather than a blank form. Budget items and recurring bills can have an optional provider name (up to 60 characters), shown after the item name — for example, "Phone · O2". Logos come from a fixed list of public
+brands and chains found in the ledger, looked up once through a server-side cache; people,
+transfers and independent shops get a coloured monogram instead, and their names are never
+sent to the logo service. Confirmed transfers are left out of spending and income everywhere figures are shown: Home, Budget history and Cash Flow. Transaction lists still show them.
 
 Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, monthly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. A payment dismissed as not recurring stays out of suggestions until you choose to show it as a suggestion again. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
 

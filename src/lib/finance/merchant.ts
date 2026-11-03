@@ -49,6 +49,9 @@ export const normaliseMerchant = (raw: string): string =>
     // suffix is the only part that carries nothing.
     .replace(/\b([a-z0-9-]+)\.(com|co\.uk|net|org|io|shop)\b/g, ' $1 ')
     .replace(/[^a-z0-9]+/g, ' ')
+    // `WWW.HOSTELWORLD.COM` leaves `www` in front of the brand, where it would
+    // be the word the directory matches first.
+    .replace(/^\s*www\s+/, '')
     // Any run of digits is a store, till or reference number. No UK high
     // street brand is identified by one, and leaving them in would give every
     // branch of the same shop its own colour.

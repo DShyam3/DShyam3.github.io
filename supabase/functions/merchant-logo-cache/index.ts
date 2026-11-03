@@ -52,6 +52,7 @@ const merchantSlug = (raw: string): string =>
     .replace(/['’ʼ]s\b/g, 's')
     .replace(/\b([a-z0-9-]+)\.(com|co\.uk|net|org|io|shop)\b/g, ' $1 ')
     .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/^\s*www\s+/, '')
     .replace(/\b\d+\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -79,7 +80,7 @@ const MERCHANT_ALIASES: Record<string, string> = {
   'currys-pc-world': 'currys', 'h-and-m': 'h-m', 'hennes-mauritz': 'h-m',
   'apple-store': 'apple', 'apple-bill': 'apple',
   'justeat': 'just-eat', 'ubereats': 'uber-eats',
-  'uber-trip': 'uber', 'uber-bv': 'uber', 'bolt-eu': 'bolt',
+  'uber-trip': 'uber', 'uber-bv': 'uber', 'ubr': 'uber', 'bolt-eu': 'bolt',
   'mcdonald-s': 'mcdonalds', 'mc-donalds': 'mcdonalds',
   'pret': 'pret-a-manger', 'costa-coffee': 'costa',
   'starbucks-coffee': 'starbucks', 'nando-s': 'nandos',
@@ -89,7 +90,7 @@ const MERCHANT_ALIASES: Record<string, string> = {
   'netflix-com': 'netflix', 'spotify-uk': 'spotify',
   'disneyplus': 'disney-plus', 'disney': 'disney-plus',
   'google-youtube': 'youtube', 'youtube-premium': 'youtube',
-  'steam-games': 'steam', 'valve': 'steam',
+  'steam-games': 'steam', 'steamgames': 'steam', 'valve': 'steam',
   'playstation-network': 'playstation', 'sony-playstation': 'playstation',
   'ee-limited': 'ee', 'o2-uk': 'o2', 'telefonica-o2': 'o2', 'h3g-uk': 'three',
   'bt-group': 'bt', 'sky-uk': 'sky', 'sky-digital': 'sky',
@@ -99,6 +100,15 @@ const MERCHANT_ALIASES: Record<string, string> = {
   'burgerking': 'burger-king', 'domino-s': 'dominos', 'dominos-pizza': 'dominos',
   'nhs-prescription': 'nhs', 'royalmail': 'royal-mail',
   'amex': 'american-express', 'americanexpress': 'american-express',
+  'costco-wholesale': 'costco', 'b-and-m': 'b-m', 'wilko-retail': 'wilko',
+  't-k-maxx': 'tk-maxx', 'tkmaxx': 'tk-maxx', 'sportsdirect': 'sports-direct',
+  'j-d-wetherspoon': 'wetherspoon', 'jd-wetherspoon': 'wetherspoon',
+  'jd-wetherspoons': 'wetherspoon', 'wetherspoons': 'wetherspoon',
+  'lloyds-no': 'wetherspoon', 'revolution-bar': 'revolution-bars',
+  'papajohns': 'papa-johns', 'papajohn-s': 'papa-johns',
+  'vue-cinemas': 'vue', 'myvue': 'vue', 'holidayextras': 'holiday-extras',
+  'lloyds-bank': 'lloyds', 'club-lloyds': 'lloyds', 'trading-uk': 'trading212',
+  'mytutorweb': 'mytutor',
 }
 
 // Canonical slugs the directory knows. Needed here as well as in the aliases
@@ -117,6 +127,11 @@ const MERCHANT_CANONICAL = new Set<string>([
   'playstation', 'nintendo', 'audible', 'vodafone', 'ee', 'o2', 'three', 'bt',
   'sky', 'virgin-media', 'octopus-energy', 'british-gas', 'thames-water',
   'tv-licensing', 'puregym', 'thegym', 'nhs', 'royal-mail', 'american-express',
+  'costco', 'londis', 'budgens', 'b-m', 'home-bargains', 'wilko', 'primark',
+  'tk-maxx', 'sports-direct', 'charles-tyrwhitt', 'wetherspoon', 'popworld',
+  'revolution-bars', 'papa-johns', 'cineworld', 'vue', 'hostelworld',
+  'holiday-extras', 'lloyds', 'barclaycard', 'trading212', 'freetrade',
+  'airbus', 'capgemini', 'mytutor',
 ])
 
 /**
@@ -155,6 +170,16 @@ const MERCHANT_DOMAIN_HINTS: Record<string, string> = {
   'steam': 'store.steampowered.com',
   'bolt': 'bolt.eu',
   'uber': 'uber.com',
+  // Search found a Polish coffee chain and an Italian furniture maker.
+  'costa': 'costa.co.uk',
+  'b-q': 'diy.com',
+  'lloyds': 'lloydsbank.com',
+  'b-m': 'bmstores.co.uk',
+  'vue': 'myvue.com',
+  'costco': 'costco.co.uk',
+  'wetherspoon': 'jdwetherspoon.com',
+  'trading212': 'trading212.com',
+  'mytutor': 'mytutor.co.uk',
 }
 
 /**
@@ -482,7 +507,7 @@ serve(async (req) => {
 
     const { data: known } = await supabaseAdmin
       .from('finance_merchant_logos')
-      .select('slug, storage_path')
+      .select('slug, storage_path, source_domain')
 
     // Reconcile first: anything cached under a slug the directory no longer
     // names is removed, index row and stored object together.
@@ -494,9 +519,19 @@ serve(async (req) => {
     // rather than linger until something happens to overwrite them, and making
     // it part of the normal run means the cache converges on whatever the
     // directory currently says instead of accumulating.
+    //
+    // A row resolved before its brand had a domain hint is stale too, when the
+    // domain it came from is not the hint: `co-op` was cached from a Kenyan
+    // bank and `b-q` from an Italian furniture maker, and a cached file is
+    // otherwise never looked at again. Purged here, the slug is eligible again
+    // in this same run and resolves through the hint.
     const stale = (known ?? [])
-      .map(row => row as { slug: string; storage_path: string | null })
-      .filter(row => !MERCHANT_CANONICAL.has(row.slug))
+      .map(row => row as { slug: string; storage_path: string | null; source_domain: string | null })
+      .filter(row => {
+        if (!MERCHANT_CANONICAL.has(row.slug)) return true
+        const hint = MERCHANT_DOMAIN_HINTS[row.slug]
+        return hint !== undefined && row.source_domain !== hint
+      })
 
     //
     // An index row goes only once its object is gone. Deleting the row
