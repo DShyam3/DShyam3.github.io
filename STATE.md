@@ -1,6 +1,6 @@
 # State
 
-Updated: 2026-11-03 · Branch: `main` · Head: `dec67110`, pushed and deployed (Pages run `41680495085`: success).
+Updated: 2026-11-03 · Branch: `main` · Head: `29ed4d85`, pushed and deployed (Pages run `41709041057`: success).
 Production check so far: anonymous home page only — loads, no console errors, 30 warm-up reads (sizes unreadable cross-origin). Everything else below is verified locally only.
 
 ## Pushed 2026-11-03 (`a7c892c7..dec67110`, rebased onto #13)
@@ -14,9 +14,11 @@ Production check so far: anonymous home page only — loads, no console errors, 
 - `dec67110` `.claude/launch.json` dev ports.
 - Local branch `backup/pre-rebase-2026-11-03` holds the pre-rebase commits; delete once production is checked.
 
-## Held back (uncommitted, in the tree)
+## Pushed later 2026-11-03 (`1b273019..29ed4d85`)
 
-- `src/features/finance/components/CashFlowSankey.tsx`: a Sankey restyle no session claimed and nobody reviewed. Opus flagged it as a blocker: labels at 10–11px and amounts at 10.5px break the 12px minimum, `cursor-pointer` with no click handler, unused `kind`, gradient id not scoped with `useId()`, drawn-from-savings links lost the hatch (colour-only now). Owner to decide: fix and ship, or drop.
+- `3fc1180d` Cash Flow Sankey restyle, fixed per the review at the owner's request: every name and amount at 12px, hub label sentence case, hatch restored on the "From balances" link, gradient ids scoped by `useId`, no pointer cursors. Checked on local `dev:test` (Demo): 18 text spans at 12px, 1 hatched link, 7 gradient links, no overlap. Lint 0/0, typecheck, 2,131 tests, build pass.
+- `29ed4d85` Holiday: refuse saving an implausible leave range (`isCountableLeaveRange` in `holidays.ts`, tested). Committed by the Holiday session for the owner to push; it went out with the Sankey push by mistake (a plain `git push` after it landed). Its session reports lint, typecheck, 2,131 tests, build and a local browser check. Keep or revert is the owner's call.
+- Demo-profile Cash Flow reads backwards (Rent and ISA on the left feeding "Spending" into "Income"): labels come from `lib/finance/cash-flow`, likely the Demo rows' signs. Not investigated.
 
 ## Checks
 
@@ -30,8 +32,8 @@ Production check so far: anonymous home page only — loads, no console errors, 
 
 ## Next
 
-1. Check on production signed in: Tax Calculator (light theme too), Student Loan figures, holiday booking, recurring undismiss, Home logos with real Brandfetch icons, watched-episode toggle surviving leave-and-return, sign-out.
-2. Owner: decide `CashFlowSankey.tsx` (above).
+1. Check on production signed in: Tax Calculator (light theme too), Student Loan figures, holiday booking, recurring undismiss, Home logos with real Brandfetch icons, watched-episode toggle surviving leave-and-return, sign-out, Cash Flow Sankey.
+2. Owner: keep or revert `29ed4d85` (above).
 3. Owner: other branches are unmerged and untouched: `claude/affectionate-lamarr-f2d2cb` (12 commits, admin assistant), `codex/assistant-integration-2026-11-02` (13), `origin/claude/net-take-home-tax-f2n71j` (3, possibly superseded by #13, unverified).
 4. Owner: switch the hosted pension type from net pay to salary sacrifice in Tax & Income, then record SLC's next balance and use "Checking SLC's figures" on the pending top-up.
 5. Owner: holiday LEFT charges a cross-year booking's whole count to its start year (29 Dec 26 – 8 Jan 27 charges 8 to 2026); split rule needed. The real "Christmas Holidays" row still stores 8 days ("Use 7" in its edit dialog).
