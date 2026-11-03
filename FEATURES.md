@@ -468,11 +468,33 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   rows are labelled as tax from cash pay. When the tax code already collects
   benefit-in-kind tax, the card says so.
 
-  A chart switches between the marginal rate across incomes from £0 to £200,000
-  (wider for higher incomes) and take-home against gross, with your income marked,
-  the child benefit clawback shaded when children are entered, and the cliffs
-  drawn as dashed lines. A legend under the chart names the shading and each cliff
-  line ("Child benefit clawback", "Childcare lost", "Marriage allowance lost").
+  A **Chart** switch shows one of three views. **Marginal rate** plots the rate on
+  the next pound across incomes from £0 to £200,000 (wider for higher incomes), with
+  your income marked. Under the chart, a list gives each stretch of income where the
+  rate holds still: its income range, the total rate, the rate each deduction takes
+  there (income tax, National Insurance, student loan, postgraduate loan and child
+  benefit charge), a sentence on what changed to make that step, and a "You" tag on
+  the step your income falls in. Hovering or focusing a step shades its range on the
+  chart. Notes under the list say how a pension (net pay, salary sacrifice or relief
+  at source) or benefits in kind move the steps away from the headline thresholds.
+
+  **Take-home** plots pay after every deduction against gross income, with the gross
+  line dashed and, when childcare support is entered, a second line for take-home
+  with that support.
+
+  **Take-home %** ("Where each pound goes") stacks the share of each pound across
+  incomes: take-home at the bottom, then pension, income tax, National Insurance,
+  student loan and child benefit charge, in the colours of the take-home slices. A
+  legend gives each share at your income. **Compare with** adds one dashed line of
+  take-home %: No student loan, No pension, Pension +£X (5% of your salary, as a fixed
+  amount) or Pension by salary sacrifice. Each option appears only when it changes
+  something, and its share at your income is in the legend. This view counts the child
+  benefit charge, which the slices do not, and says so when children are entered.
+
+  The marginal and take-home views also shade the child benefit clawback when children
+  are entered, and draw the cliffs as dashed lines. A legend under the chart names the
+  shading and each cliff line ("Child benefit clawback", "Childcare lost", "Marriage
+  allowance lost").
 
   It does not model savings, dividends, rent or gains, the pension annual
   allowance, employer National Insurance, Universal Credit or other benefits, or a

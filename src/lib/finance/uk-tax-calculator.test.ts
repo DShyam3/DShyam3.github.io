@@ -5,10 +5,17 @@ import {
   ukBenefitInKindTax,
   ukCashAfterTax,
   ukChildBenefitBand,
+  ukMarginalBands,
   ukMarginalRate,
+  ukMarginalRates,
   ukTakeHomeBySlice,
+  ukTakeHomeShareAt,
+  ukTakeHomeShareCurve,
   ukTaxCliffs,
   ukTaxCurve,
+  ukWhatIfs,
+  UK_ALLOWANCE_TAPER_RATE,
+  UK_ALLOWANCE_TAPER_START,
   UK_CHILDCARE_CUTOFF,
   UK_CHILD_BENEFIT_CHARGE_END,
   UK_CHILD_BENEFIT_CHARGE_START,
@@ -17,9 +24,14 @@ import {
   UK_STATUTORY_PERSONAL_ALLOWANCE,
   UK_TAX_YEAR_LABEL,
   type UkIncomeBand,
+  type UkIncomeTaxBandName,
+  type UkMarginalBand,
+  type UkMarginalRates,
   type UkPaySlice,
   type UkTaxBreakdown,
   type UkTaxInput,
+  type UkUndergradPlan,
+  type UkWhatIf,
 } from './uk-tax-calculator';
 
 const base: UkTaxInput = {
@@ -92,6 +104,24 @@ describe('the HICBC and childcare constants', () => {
     expect(kept(UK_CHILDCARE_CUTOFF)).toBe(5000);
     expect(kept(UK_CHILDCARE_CUTOFF + 1)).toBe(0);
     expect(ukTaxCliffs(input({ income: 50_000, childcareSupport: 5000 }))[0].atIncome).toBe(UK_CHILDCARE_CUTOFF);
+  });
+});
+
+describe('the allowance taper constants', () => {
+  it('state the £100,000 start and the £1-for-£2 rate the rule set is built from', () => {
+    expect(UK_ALLOWANCE_TAPER_START).toBe(100_000);
+    expect(UK_ALLOWANCE_TAPER_RATE).toBe(0.5);
+  });
+
+  it('drive the calculation: no allowance lost at the start, half a pound per pound above it, none left at the end', () => {
+    const allowance = (income: number): number => calculateUkTax(input({ income })).personalAllowance;
+    expect(allowance(UK_ALLOWANCE_TAPER_START)).toBe(UK_STATUTORY_PERSONAL_ALLOWANCE);
+    expect(allowance(UK_ALLOWANCE_TAPER_START + 10_000)).toBe(
+      UK_STATUTORY_PERSONAL_ALLOWANCE - UK_ALLOWANCE_TAPER_RATE * 10_000,
+    );
+    const end = UK_ALLOWANCE_TAPER_START + UK_STATUTORY_PERSONAL_ALLOWANCE / UK_ALLOWANCE_TAPER_RATE;
+    expect(allowance(end)).toBe(0);
+    expect(allowance(end - 2)).toBe(1);
   });
 });
 
@@ -587,6 +617,113 @@ describe('ukMarginalRate', () => {
   it('adds a plan 5 loan above £25,000 to basic-rate tax and NI', () => {
     // 20% tax + 8% NI above £12,570, plus 9% plan 5 above £25,000.
     expect(rate({ income: 30000, undergradPlan: 'plan5' })).toBeCloseTo(0.37, 6);
+  });
+});
+
+describe('ukMarginalRates', () => {
+  const rates = (over: Partial<UkTaxInput>) => ukMarginalRates(input(over));
+
+  it('splits a basic-rate employee at £50,000 into 20% income tax and 8% NI', () => {
+    const r = rates({ income: 50000 });
+    expect(r.incomeTax).toBeCloseTo(0.2, 6);
+    expect(r.nationalInsurance).toBeCloseTo(0.08, 6);
+    expect(r.studentLoan).toBe(0);
+    expect(r.postgradLoan).toBe(0);
+    expect(r.childBenefitCharge).toBe(0);
+    expect(r.total).toBeCloseTo(0.28, 6);
+  });
+
+  it('puts the allowance taper in income tax: 60% inside £100,000-£125,140, with NI 2% beside it', () => {
+    const r = rates({ income: 110000 });
+    expect(r.incomeTax).toBeCloseTo(0.6, 6);
+    expect(r.nationalInsurance).toBeCloseTo(0.02, 6);
+    expect(r.total).toBeCloseTo(0.62, 6);
+  });
+
+  it('keeps the undergraduate and postgraduate loans apart: 9% and 6% at £60,000', () => {
+    const r = rates({ income: 60000, undergradPlan: 'plan2', postgradLoan: true });
+    expect(r.studentLoan).toBeCloseTo(0.09, 6);
+    expect(r.postgradLoan).toBeCloseTo(0.06, 6);
+    expect(r.incomeTax).toBeCloseTo(0.4, 6);
+    expect(r.nationalInsurance).toBeCloseTo(0.02, 6);
+    expect(r.total).toBeCloseTo(0.57, 6);
+  });
+
+  it('reports the child benefit charge as its own steady slope across £60,000-£80,000', () => {
+    const r = rates({ income: 70000, children: 3, undergradPlan: 'plan2' });
+    expect(r.childBenefitCharge).toBeCloseTo(3331.05 / 20000, 6);
+    expect(r.incomeTax).toBeCloseTo(0.4, 6);
+    expect(r.total).toBeCloseTo(0.6765525, 6);
+    expect(rates({ income: 50000, children: 3 }).childBenefitCharge).toBe(0);
+    expect(rates({ income: 90000, children: 3 }).childBenefitCharge).toBe(0);
+  });
+
+  it('returns exactly the number ukMarginalRate returns as its total', () => {
+    const cases: Array<Partial<UkTaxInput>> = [
+      { income: 50000 },
+      { income: 110000, region: 'scotland' },
+      { income: 70000, children: 3, undergradPlan: 'plan2', postgradLoan: true },
+      { income: 55000, pensionContribution: 2750, pensionMethod: 'net-pay' },
+      { income: 20000, pensionContribution: 60000, pensionMethod: 'relief-at-source' },
+      { income: 50270, marriageAllowance: true },
+      { income: 0 },
+      { income: Number.NaN },
+    ];
+    for (const over of cases) {
+      expect(rates(over).total).toBe(ukMarginalRate(input(over)));
+    }
+  });
+
+  it('has five parts that add up to the total', () => {
+    for (const income of [5000, 20000, 40000, 55000, 70000, 110000, 150000]) {
+      const r = rates({ income, children: 2, undergradPlan: 'plan1', postgradLoan: true });
+      const parts = r.incomeTax + r.nationalInsurance + r.studentLoan + r.postgradLoan + r.childBenefitCharge;
+      expect(parts).toBeCloseTo(r.total, 9);
+    }
+  });
+
+  it('holds marriage allowance eligibility at the base income, as ukMarginalRate does', () => {
+    const r = rates({ income: 50270, marriageAllowance: true });
+    expect(r.incomeTax).toBeCloseTo(0.4, 6);
+    expect(r.nationalInsurance).toBeCloseTo(0.02, 6);
+  });
+
+  it('holds the pension at its capped pounds: pay is nil below the contribution, so no tax but NI still bites', () => {
+    // A £60,000 net-pay contribution at £20,000 income is capped at £20,000, so
+    // pay is nil. The next pound is pay again with the contribution unchanged:
+    // well inside the allowance, so untaxed, but NI is on `income` and net pay
+    // does not reduce it.
+    const r = rates({ income: 20000, pensionContribution: 60000, pensionMethod: 'net-pay' });
+    expect(r.incomeTax).toBe(0);
+    expect(r.nationalInsurance).toBeCloseTo(0.08, 6);
+  });
+
+  it('is zero in every part for no income and inside the allowance', () => {
+    const zero: UkMarginalRates = {
+      incomeTax: 0,
+      nationalInsurance: 0,
+      studentLoan: 0,
+      postgradLoan: 0,
+      childBenefitCharge: 0,
+      total: 0,
+    };
+    expect(rates({ income: 0 })).toEqual(zero);
+    expect(rates({ income: 5000, children: 2, undergradPlan: 'plan2', postgradLoan: true })).toEqual(zero);
+  });
+
+  it('is finite in every part for negative, non-finite and hostile input', () => {
+    const hostile: Array<Partial<UkTaxInput>> = [
+      { income: -10 },
+      { income: Number.NaN },
+      { income: Number.POSITIVE_INFINITY },
+      { income: 60000, pensionContribution: Number.NaN, benefitsInKind: Number.NEGATIVE_INFINITY, children: Number.NaN },
+      { income: 60000, children: Number.POSITIVE_INFINITY, personalAllowance: Number.NaN },
+    ];
+    for (const over of hostile) {
+      for (const value of Object.values(rates(over))) {
+        expect(Number.isFinite(value)).toBe(true);
+      }
+    }
   });
 });
 
@@ -2096,5 +2233,1121 @@ describe('ukTakeHomeBySlice', () => {
         money,
       );
     });
+  });
+});
+
+describe('ukMarginalBands', () => {
+  const maxIncome = 200_000;
+  const scenario = input({
+    income: 55000,
+    pensionContribution: 2750,
+    pensionMethod: 'net-pay',
+    undergradPlan: 'plan2',
+  });
+  const bands = (over: Partial<UkTaxInput>, max = maxIncome): UkMarginalBand[] =>
+    ukMarginalBands(input(over), { maxIncome: max });
+  const edges = (list: UkMarginalBand[]): number[] => [...list.map(b => b.from), list[list.length - 1].to];
+  const expectEdges = (list: UkMarginalBand[], expected: number[]): void => {
+    expect(list).toHaveLength(expected.length - 1);
+    edges(list).forEach((edge, i) => expect(edge).toBeCloseTo(expected[i], 6));
+  };
+  const expectRates = (
+    band: UkMarginalBand,
+    expected: Partial<Omit<UkMarginalRates, 'total'>>,
+  ): void => {
+    const full = {
+      incomeTax: 0,
+      nationalInsurance: 0,
+      studentLoan: 0,
+      postgradLoan: 0,
+      childBenefitCharge: 0,
+      ...expected,
+    };
+    expect(band.incomeTax).toBeCloseTo(full.incomeTax, 9);
+    expect(band.nationalInsurance).toBeCloseTo(full.nationalInsurance, 9);
+    expect(band.studentLoan).toBeCloseTo(full.studentLoan, 9);
+    expect(band.postgradLoan).toBeCloseTo(full.postgradLoan, 9);
+    expect(band.childBenefitCharge).toBeCloseTo(full.childBenefitCharge, 9);
+    expect(band.total).toBeCloseTo(
+      full.incomeTax + full.nationalInsurance + full.studentLoan + full.postgradLoan + full.childBenefitCharge,
+      9,
+    );
+  };
+
+  describe('the worked scenario', () => {
+    // rUK employee, £2,750 net pay, plan 2, nothing else, up to £200,000.
+    const list = ukMarginalBands(scenario, { maxIncome });
+
+    it('has exactly the eight bands, at the right edges', () => {
+      expectEdges(list, [0, 12570, 15320, 29385, 50270, 53020, 102750, 127890, 200000]);
+    });
+
+    it('has the right rates in each', () => {
+      expectRates(list[0], {});
+      expectRates(list[1], { nationalInsurance: 0.08 });
+      expectRates(list[2], { incomeTax: 0.2, nationalInsurance: 0.08 });
+      expectRates(list[3], { incomeTax: 0.2, nationalInsurance: 0.08, studentLoan: 0.09 });
+      expectRates(list[4], { incomeTax: 0.2, nationalInsurance: 0.02, studentLoan: 0.09 });
+      expectRates(list[5], { incomeTax: 0.4, nationalInsurance: 0.02, studentLoan: 0.09 });
+      expectRates(list[6], { incomeTax: 0.6, nationalInsurance: 0.02, studentLoan: 0.09 });
+      expectRates(list[7], { incomeTax: 0.45, nationalInsurance: 0.02, studentLoan: 0.09 });
+      expect(list[0].total).toBeCloseTo(0, 9);
+      expect(list[3].total).toBeCloseTo(0.37, 9);
+      expect(list[4].total).toBeCloseTo(0.31, 9);
+    });
+
+    it('names the income tax band of each, and none where no income tax is paid', () => {
+      expect(list.map(b => b.incomeTaxBand)).toEqual([
+        null,
+        null,
+        'basic',
+        'basic',
+        'basic',
+        'higher',
+        'higher',
+        'additional',
+      ]);
+    });
+
+    it('flags the allowance taper only from £102,750 to £127,890, where the 40% band reads 60%', () => {
+      expect(list.map(b => b.allowanceTapering)).toEqual([false, false, false, false, false, false, true, false]);
+      expect(list[6].from).toBeCloseTo(102750, 6);
+      expect(list[6].to).toBeCloseTo(127890, 6);
+      expect(list[6].incomeTax).toBeCloseTo(0.4 * (1 + UK_ALLOWANCE_TAPER_RATE), 9);
+    });
+
+    it('does not depend on the income the input happens to carry', () => {
+      expect(ukMarginalBands({ ...scenario, income: 0 }, { maxIncome })).toEqual(list);
+      expect(ukMarginalBands({ ...scenario, income: 180000 }, { maxIncome })).toEqual(list);
+    });
+
+    it('explains the line ukTaxCurve draws', () => {
+      const curve = ukTaxCurve(scenario, { maxIncome, step: 500 });
+      for (const point of curve) {
+        const band = list.find(b => b.from <= point.income && point.income < b.to);
+        if (band === undefined || band.to - point.income <= 1.01) continue;
+        expect(point.marginalRate).toBeCloseTo(band.total, 9);
+      }
+    });
+  });
+
+  describe('where the edges come from', () => {
+    it('keeps a small pension\'s narrow band: net pay of £300 holds the 2% NI dip from £50,270 to £50,570', () => {
+      const list = bands({ income: 55000, pensionContribution: 300, pensionMethod: 'net-pay' });
+      expectEdges(list, [0, 12570, 12870, 50270, 50570, 100300, 125440, 200000]);
+      expectRates(list[3], { incomeTax: 0.2, nationalInsurance: 0.02 });
+      expectRates(list[4], { incomeTax: 0.4, nationalInsurance: 0.02 });
+    });
+
+    it('moves NI, loan and tax thresholds up by a salary sacrifice, which is off pay for NI too', () => {
+      const list = bands({ pensionContribution: 5000, pensionMethod: 'salary-sacrifice', undergradPlan: 'plan2' });
+      expectEdges(list, [0, 17570, 34385, 55270, 105000, 130140, 200000]);
+      expectRates(list[1], { incomeTax: 0.2, nationalInsurance: 0.08 });
+      expectRates(list[2], { incomeTax: 0.2, nationalInsurance: 0.08, studentLoan: 0.09 });
+    });
+
+    it('moves only the tax thresholds under net pay: NI and loans are still on the full income', () => {
+      const list = bands({ pensionContribution: 5000, pensionMethod: 'net-pay', undergradPlan: 'plan2' });
+      expectEdges(list, [0, 12570, 17570, 29385, 50270, 55270, 105000, 130140, 200000]);
+      expectRates(list[1], { nationalInsurance: 0.08 });
+    });
+
+    it('stretches the bands and the taper start under relief at source, and leaves NI alone', () => {
+      const list = bands({ pensionContribution: 4000, pensionMethod: 'relief-at-source' });
+      expectEdges(list, [0, 12570, 50270, 54270, 104000, 129140, 200000]);
+      expectRates(list[2], { incomeTax: 0.2, nationalInsurance: 0.02 });
+      expectRates(list[3], { incomeTax: 0.4, nationalInsurance: 0.02 });
+    });
+
+    it('moves tax down by benefits in kind and leaves NI where it is', () => {
+      const list = bands({ benefitsInKind: 10000 });
+      expectEdges(list, [0, 2570, 12570, 40270, 50270, 90000, 115140, 200000]);
+      expectRates(list[1], { incomeTax: 0.2 });
+      expectRates(list[2], { incomeTax: 0.2, nationalInsurance: 0.08 });
+    });
+
+    it('uses Class 4 for a sole trader, who has no benefits in kind and cannot sacrifice', () => {
+      const plain = bands({ kind: 'self-employed' });
+      expectEdges(plain, [0, 12570, 50270, 100000, 125140, 200000]);
+      expectRates(plain[1], { incomeTax: 0.2, nationalInsurance: 0.06 });
+      expectRates(plain[2], { incomeTax: 0.4, nationalInsurance: 0.02 });
+      const ignored = bands({ kind: 'self-employed', benefitsInKind: 10000, pensionMethod: 'salary-sacrifice' });
+      expect(ignored).toEqual(plain);
+    });
+
+    it('follows the Scottish bands, with the 19% starter and the 42% and 45% steps', () => {
+      const list = bands({ region: 'scotland' });
+      expectEdges(list, [0, 12570, 16537, 29526, 43662, 50270, 75000, 100000, 125140, 200000]);
+      expect(list.map(b => b.incomeTax)).toEqual([
+        expect.closeTo(0, 9),
+        expect.closeTo(0.19, 9),
+        expect.closeTo(0.2, 9),
+        expect.closeTo(0.21, 9),
+        expect.closeTo(0.42, 9),
+        expect.closeTo(0.42, 9),
+        expect.closeTo(0.45, 9),
+        expect.closeTo(0.675, 9),
+        expect.closeTo(0.48, 9),
+      ]);
+    });
+
+    it('puts the child benefit charge in the same £60,000-£80,000 as ukChildBenefitBand', () => {
+      const i = input({ children: 2 });
+      const list = ukMarginalBands(i, { maxIncome });
+      const charged = list.filter(b => b.childBenefitCharge > 0);
+      const band = ukChildBenefitBand(i);
+      expect(band).not.toBeNull();
+      expect(charged).toHaveLength(1);
+      expect(charged[0].from).toBeCloseTo(band!.from, 6);
+      expect(charged[0].to).toBeCloseTo(band!.to, 6);
+      // £27.05 + £17.90 a week over 53 weeks, spread over the £20,000 range.
+      expect(charged[0].childBenefitCharge).toBeCloseTo(((27.05 + 17.9) * 53) / 20000, 9);
+    });
+
+    it('moves the child benefit band with the pension and benefits in kind, as ukChildBenefitBand does', () => {
+      for (const over of [
+        { pensionContribution: 5000, pensionMethod: 'salary-sacrifice' as const },
+        { pensionContribution: 5000, pensionMethod: 'relief-at-source' as const },
+        { benefitsInKind: 8000 },
+      ]) {
+        const i = input({ children: 2, ...over });
+        const charged = ukMarginalBands(i, { maxIncome }).filter(b => b.childBenefitCharge > 0);
+        const band = ukChildBenefitBand(i)!;
+        expect(charged[0].from).toBeCloseTo(band.from, 6);
+        expect(charged[charged.length - 1].to).toBeCloseTo(band.to, 6);
+      }
+    });
+
+    it('ends marriage allowance\'s absorbing of tax where tax before relief reaches £252', () => {
+      const list = bands({ marriageAllowance: true }, 40000);
+      expectEdges(list, [0, 12570, 13830, 40000]);
+      expectRates(list[1], { nationalInsurance: 0.08 });
+      expectRates(list[2], { incomeTax: 0.2, nationalInsurance: 0.08 });
+    });
+
+    it('starts tax at zero income for a stated allowance of nil', () => {
+      const list = bands({ personalAllowance: 0 }, 40000);
+      expectEdges(list, [0, 12570, 37700, 40000]);
+      expectRates(list[0], { incomeTax: 0.2 });
+      expectRates(list[2], { incomeTax: 0.4, nationalInsurance: 0.08 });
+    });
+
+    it('adds both loans at their own thresholds', () => {
+      const list = bands({ undergradPlan: 'plan1', postgradLoan: true }, 40000);
+      expectEdges(list, [0, 12570, 21000, 26900, 40000]);
+      expectRates(list[2], { incomeTax: 0.2, nationalInsurance: 0.08, postgradLoan: 0.06 });
+      expectRates(list[3], { incomeTax: 0.2, nationalInsurance: 0.08, studentLoan: 0.09, postgradLoan: 0.06 });
+    });
+
+    it('finds the Scottish starter band crossing under relief at source when a very large stated allowance is tapered by benefits in kind', () => {
+      // Adjusted net income is the benefits in kind (£101,000) for as long as the
+      // pension is still being made, so the allowance in force is the tapered
+      // £98,500, not the £99,000 stated: a case the totals-based thresholds miss.
+      const i = input({
+        region: 'scotland',
+        benefitsInKind: 101000,
+        pensionContribution: 200000,
+        pensionMethod: 'relief-at-source',
+        personalAllowance: 99000,
+      });
+      const list = ukMarginalBands(i, { maxIncome: 20000 });
+      expect(list.map(b => b.from)).toContain(1467);
+      expect(bandMismatches(i, list, steppedIncomes(7.7))).toEqual([]);
+    });
+  });
+
+  describe('the income tax band and the allowance taper of each band', () => {
+    const names = (list: UkMarginalBand[]): Array<UkIncomeTaxBandName | null> => list.map(b => b.incomeTaxBand);
+    const tapering = (list: UkMarginalBand[]): boolean[] => list.map(b => b.allowanceTapering);
+
+    it('walks the rUK bands for a plain input, with the taper inside the 40% band', () => {
+      const list = bands({});
+      expectEdges(list, [0, 12570, 50270, 100000, 125140, 200000]);
+      expect(names(list)).toEqual([null, 'basic', 'higher', 'higher', 'additional']);
+      expect(tapering(list)).toEqual([false, false, false, true, false]);
+    });
+
+    it('names the Scottish bands in order, and shows the starter band that rUK does not have', () => {
+      const list = bands({ region: 'scotland' });
+      expect(names(list)).toEqual([
+        null,
+        'starter',
+        'basic',
+        'intermediate',
+        'higher',
+        'higher',
+        'advanced',
+        'advanced',
+        'top',
+      ]);
+      const inOrder = names(list).filter((name, n, all) => name !== null && all.indexOf(name) === n);
+      expect(inOrder).toEqual(['starter', 'basic', 'intermediate', 'higher', 'advanced', 'top']);
+      expect(list[1].from).toBeCloseTo(12570, 6);
+      expect(list[1].to).toBeCloseTo(16537, 6);
+      expect(list[1].incomeTax).toBeCloseTo(0.19, 9);
+      // The taper falls in the advanced band and stops where the top band starts.
+      expect(tapering(list)).toEqual([false, false, false, false, false, false, false, true, false]);
+      expect(list[7].incomeTax).toBeCloseTo(0.45 * (1 + UK_ALLOWANCE_TAPER_RATE), 9);
+    });
+
+    it('never names a Scottish-only band for rUK, nor the additional band for Scotland', () => {
+      const uk = new Set(names(bands({})));
+      const scot = new Set(names(bands({ region: 'scotland' })));
+      for (const name of ['starter', 'intermediate', 'advanced', 'top'] as const) expect(uk.has(name)).toBe(false);
+      expect(scot.has('additional')).toBe(false);
+    });
+
+    it('has no band while marriage allowance relief still absorbs the tax, then names basic', () => {
+      const list = bands({ marriageAllowance: true }, 40000);
+      expectEdges(list, [0, 12570, 13830, 40000]);
+      expect(names(list)).toEqual([null, null, 'basic']);
+      expect(list[1].incomeTax).toBeCloseTo(0, 9);
+      // Without it there is no second null band.
+      expect(names(bands({}, 40000))).toEqual([null, 'basic']);
+    });
+
+    it('has the relief absorbed inside the Scottish starter band, so the band after it is the starter', () => {
+      const list = bands({ region: 'scotland', marriageAllowance: true }, 20000);
+      expect(names(list).slice(0, 3)).toEqual([null, null, 'starter']);
+      // £252 of relief at 19% is gone after £1,326.32 of taxable income.
+      expect(list[2].from).toBeCloseTo(12570 + 252 / 0.19, 6);
+    });
+
+    it('reads the band whose extended range holds the taxable income under relief at source', () => {
+      const list = bands({ pensionContribution: 4000, pensionMethod: 'relief-at-source' });
+      expectEdges(list, [0, 12570, 50270, 54270, 104000, 129140, 200000]);
+      // The £50,270 NI edge is still inside the 20% band, which now runs to £54,270.
+      expect(names(list)).toEqual([null, 'basic', 'basic', 'higher', 'higher', 'additional']);
+      expect(tapering(list)).toEqual([false, false, false, false, true, false]);
+    });
+
+    it('stretches Scotland\'s basic band under relief at source, and not its starter band', () => {
+      const list = bands({ region: 'scotland', pensionContribution: 4000, pensionMethod: 'relief-at-source' });
+      const startOf = (name: UkIncomeTaxBandName): number => list.find(b => b.incomeTaxBand === name)!.from;
+      expect(startOf('starter')).toBeCloseTo(12570, 6);
+      expect(startOf('basic')).toBeCloseTo(12570 + 3967, 6);
+      expect(startOf('intermediate')).toBeCloseTo(12570 + 16956 + 4000, 6);
+    });
+
+    it('puts additional-rate income inside the taper when a stated allowance of £15,000 pushes it there', () => {
+      const list = bands({ personalAllowance: 15000 });
+      expectEdges(list, [0, 12570, 15000, 50270, 52700, 100000, 126760, 130000, 200000]);
+      const inTaper = list.filter(b => b.allowanceTapering);
+      expect(inTaper.map(b => b.incomeTaxBand)).toEqual(['higher', 'additional']);
+      expect(inTaper[1].from).toBeCloseTo(126760, 6);
+      expect(inTaper[1].to).toBeCloseTo(130000, 6);
+      expect(inTaper[1].incomeTax).toBeCloseTo(0.45 * (1 + UK_ALLOWANCE_TAPER_RATE), 9);
+      // Once the allowance has all gone the 45% is no longer stretched.
+      expect(list[list.length - 1].incomeTaxBand).toBe('additional');
+      expect(list[list.length - 1].allowanceTapering).toBe(false);
+      expect(list[list.length - 1].incomeTax).toBeCloseTo(0.45, 9);
+    });
+
+    it('starts the basic band at £0 and never tapers for a stated allowance of nil', () => {
+      const list = bands({ personalAllowance: 0 });
+      expect(names(list)[0]).toBe('basic');
+      expect(list[0].from).toBe(0);
+      expect(list.some(b => b.allowanceTapering)).toBe(false);
+      expect(names(bands({ personalAllowance: 0 }, 40000))).toEqual(['basic', 'basic', 'higher']);
+    });
+
+    it('moves the taper and the bands with benefits in kind, which are taxed as income', () => {
+      const list = bands({ benefitsInKind: 10000 });
+      expectEdges(list, [0, 2570, 12570, 40270, 50270, 90000, 115140, 200000]);
+      expect(names(list)).toEqual([null, 'basic', 'basic', 'higher', 'higher', 'higher', 'additional']);
+      expect(tapering(list)).toEqual([false, false, false, false, false, true, false]);
+    });
+
+    it('is the same for a sole trader as for an employee with the same income tax position', () => {
+      expect(names(bands({ kind: 'self-employed' }))).toEqual(names(bands({})));
+      expect(tapering(bands({ kind: 'self-employed' }))).toEqual(tapering(bands({})));
+    });
+
+    it('explains every band: a tapering one reads its band rate times 1.5, any other its band rate', () => {
+      const statutory: Record<string, Record<string, number>> = {
+        rUK: { basic: 0.2, higher: 0.4, additional: 0.45 },
+        scotland: { starter: 0.19, basic: 0.2, intermediate: 0.21, higher: 0.42, advanced: 0.45, top: 0.48 },
+      };
+      for (const region of ['rUK', 'scotland'] as const) {
+        for (const over of [{}, { personalAllowance: 15000 }, { pensionContribution: 4000, pensionMethod: 'relief-at-source' as const }]) {
+          for (const b of bands({ region, ...over })) {
+            if (b.incomeTaxBand === null) {
+              expect(b.incomeTax).toBeCloseTo(0, 9);
+            } else {
+              const stretch = b.allowanceTapering ? 1 + UK_ALLOWANCE_TAPER_RATE : 1;
+              expect(b.incomeTax).toBeCloseTo(statutory[region][b.incomeTaxBand] * stretch, 9);
+            }
+          }
+        }
+      }
+    });
+  });
+
+  describe('the shape of the answer', () => {
+    it('returns nothing for a zero, negative or non-finite maximum', () => {
+      for (const max of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        expect(ukMarginalBands(scenario, { maxIncome: max })).toEqual([]);
+      }
+    });
+
+    it('is a single band when nothing changes before the maximum', () => {
+      const list = bands({}, 10000);
+      expect(list).toEqual([
+        {
+          from: 0,
+          to: 10000,
+          ...ukMarginalRates(input({ income: 5000 })),
+          incomeTaxBand: null,
+          allowanceTapering: false,
+        },
+      ]);
+    });
+
+    it('is a single band when the maximum is smaller than a pound', () => {
+      const list = bands({}, 0.5);
+      expect(list).toHaveLength(1);
+      expect(list[0].from).toBe(0);
+      expect(list[0].to).toBe(0.5);
+    });
+
+    it('ends exactly at the maximum, whichever it is', () => {
+      for (const max of [1, 12570, 12570.4, 50000, 60000.5, 200000, 1_000_000]) {
+        const list = bands({ undergradPlan: 'plan2', pensionContribution: 3000, pensionMethod: 'net-pay' }, max);
+        expect(list[0].from).toBe(0);
+        expect(list[list.length - 1].to).toBe(max);
+      }
+    });
+
+    it('cuts short at the maximum: no band, and no edge, lies beyond it', () => {
+      const list = bands({ undergradPlan: 'plan2' }, 20000);
+      expectEdges(list, [0, 12570, 20000]);
+    });
+
+    it('never has a negative, NaN or non-finite number in it, whatever the input', () => {
+      const hostile: Array<Partial<UkTaxInput>> = [
+        {},
+        { pensionContribution: Number.NaN, benefitsInKind: Number.POSITIVE_INFINITY, children: Number.NaN },
+        { pensionContribution: -5000, benefitsInKind: -1, children: -3, personalAllowance: -100 },
+        { income: Number.NaN, pensionContribution: Number.POSITIVE_INFINITY },
+        { personalAllowance: Number.POSITIVE_INFINITY, children: 1e9 },
+        { pensionContribution: 1e15, pensionMethod: 'relief-at-source', region: 'scotland', children: 3 },
+      ];
+      for (const over of hostile) {
+        const list = bands(over);
+        expect(list.length).toBeGreaterThan(0);
+        for (const b of list) {
+          for (const value of Object.values(b)) {
+            if (typeof value === 'number') expect(Number.isFinite(value)).toBe(true);
+          }
+          expect(b.incomeTaxBand === null || typeof b.incomeTaxBand === 'string').toBe(true);
+          expect(typeof b.allowanceTapering).toBe('boolean');
+        }
+      }
+    });
+  });
+
+  describe('across a grid of inputs', () => {
+    const methods = ['salary-sacrifice', 'net-pay', 'relief-at-source'] as const;
+    const loans = [
+      { undergradPlan: 'none', postgradLoan: false },
+      { undergradPlan: 'none', postgradLoan: true },
+      { undergradPlan: 'plan1', postgradLoan: false },
+      { undergradPlan: 'plan1', postgradLoan: true },
+      { undergradPlan: 'plan5', postgradLoan: false },
+      { undergradPlan: 'plan5', postgradLoan: true },
+    ] as const;
+
+    const grid = (): UkTaxInput[] => {
+      const out: UkTaxInput[] = [];
+      for (const kind of ['employed', 'self-employed'] as const) {
+        const employed = kind === 'employed';
+        for (const region of ['rUK', 'scotland'] as const) {
+          // A sole trader has no payroll and no benefits in kind: those fields would only repeat a case.
+          for (const pensionMethod of employed ? methods : (['relief-at-source'] as const)) {
+            for (const pensionContribution of [0, 300, 2750, 60000]) {
+              for (const loan of loans) {
+                for (const children of [0, 2]) {
+                  for (const benefitsInKind of employed ? [0, 15000] : [0]) {
+                    for (const marriageAllowance of [true, false]) {
+                      for (const personalAllowance of [undefined, 0]) {
+                        out.push(
+                          input({
+                            kind,
+                            region,
+                            pensionMethod,
+                            pensionContribution,
+                            ...loan,
+                            children,
+                            benefitsInKind,
+                            marriageAllowance,
+                            personalAllowance,
+                          }),
+                        );
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      return out;
+    };
+
+    const describeInput = (i: UkTaxInput): string =>
+      `${i.kind}/${i.region}/${i.pensionMethod}/pension ${i.pensionContribution}/${i.undergradPlan}` +
+      `${i.postgradLoan ? '+pg' : ''}/children ${i.children}/bik ${i.benefitsInKind}` +
+      `/ma ${i.marriageAllowance}/pa ${String(i.personalAllowance)}`;
+
+    it('has, in the band containing every sampled income, the rates ukMarginalRates reports there', () => {
+      const failures: string[] = [];
+      const inputs = grid();
+      for (const i of inputs) {
+        const list = ukMarginalBands(i, { maxIncome });
+        // Every ~£997, and just inside both edges of every band, where a misplaced edge shows.
+        const incomes = steppedIncomes(997);
+        for (const b of list) incomes.push(b.from + 0.25, b.to - 1.5);
+        for (const mismatch of bandMismatches(i, list, incomes)) {
+          failures.push(`${describeInput(i)}: ${mismatch}`);
+        }
+      }
+      expect(inputs.length).toBeGreaterThan(2000);
+      expect(failures.slice(0, 5)).toEqual([]);
+    });
+
+    it('has contiguous, increasing, finite bands from 0 to the maximum, and never two alike side by side', () => {
+      const failures: string[] = [];
+      for (const i of grid()) {
+        const list = ukMarginalBands(i, { maxIncome });
+        const fail = (why: string): number => failures.push(`${describeInput(i)}: ${why}`);
+        if (list.length === 0 || list.length > 200) fail(`${list.length} bands`);
+        if (list[0].from !== 0) fail(`starts at ${list[0].from}`);
+        if (list[list.length - 1].to !== maxIncome) fail(`ends at ${list[list.length - 1].to}`);
+        list.forEach((b, n) => {
+          if (!(b.from < b.to)) fail(`band ${n} is [${b.from}, ${b.to}]`);
+          const numbers = Object.values(b).filter((v): v is number => typeof v === 'number');
+          if (!numbers.every(Number.isFinite)) fail(`band ${n} has a non-finite number`);
+          if (typeof b.allowanceTapering !== 'boolean') fail(`band ${n} has no taper flag`);
+          const prev = list[n - 1];
+          if (prev === undefined) return;
+          if (prev.to !== b.from) fail(`gap between bands ${n - 1} and ${n}`);
+          if (
+            Math.abs(prev.incomeTax - b.incomeTax) <= 1e-9 &&
+            Math.abs(prev.nationalInsurance - b.nationalInsurance) <= 1e-9 &&
+            Math.abs(prev.studentLoan - b.studentLoan) <= 1e-9 &&
+            Math.abs(prev.postgradLoan - b.postgradLoan) <= 1e-9 &&
+            Math.abs(prev.childBenefitCharge - b.childBenefitCharge) <= 1e-9
+          ) {
+            fail(`bands ${n - 1} and ${n} have the same rates`);
+          }
+        });
+      }
+      expect(failures.slice(0, 5)).toEqual([]);
+    });
+  });
+});
+
+/** Incomes every `step` from a fractional start, so they land on no round-number threshold. */
+function steppedIncomes(step: number): number[] {
+  const out: number[] = [];
+  for (let x = 0.37; x < 199_000; x += step) out.push(x);
+  return out;
+}
+
+/**
+ * Where the band containing an income disagrees with `ukMarginalRates` there.
+ * Incomes within £1.01 below a band's end are skipped: the rate is a one-pound
+ * difference, so there it straddles the next band and belongs to neither.
+ */
+function bandMismatches(i: UkTaxInput, list: UkMarginalBand[], incomes: number[]): string[] {
+  const mismatches: string[] = [];
+  const parts = ['incomeTax', 'nationalInsurance', 'studentLoan', 'postgradLoan', 'childBenefitCharge', 'total'] as const;
+  for (const income of incomes) {
+    const band = list.find(b => b.from <= income && income < b.to);
+    if (band === undefined || band.to - income <= 1.01) continue;
+    const actual = ukMarginalRates({ ...i, income });
+    for (const part of parts) {
+      if (Math.abs(actual[part] - band[part]) > 1e-9) {
+        mismatches.push(
+          `${part} at ${income.toFixed(2)} is ${actual[part]} but the band [${band.from}, ${band.to}] has ${band[part]}`,
+        );
+      }
+    }
+    const flags = expectedBandFlags(i, income, actual.incomeTax);
+    if (flags.incomeTaxBand !== band.incomeTaxBand) {
+      mismatches.push(
+        `incomeTaxBand at ${income.toFixed(2)} is ${String(flags.incomeTaxBand)} but the band [${band.from}, ${band.to}] has ${String(band.incomeTaxBand)}`,
+      );
+    }
+    if (flags.allowanceTapering !== band.allowanceTapering) {
+      mismatches.push(
+        `allowanceTapering at ${income.toFixed(2)} is ${flags.allowanceTapering} but the band [${band.from}, ${band.to}] has ${band.allowanceTapering}`,
+      );
+    }
+  }
+  return mismatches;
+}
+
+/** The statutory rate of each income tax band, lowest first, by region. */
+const STATUTORY_BAND_RATES: Record<UkTaxInput['region'], Array<[UkIncomeTaxBandName, number]>> = {
+  rUK: [
+    ['basic', 0.2],
+    ['higher', 0.4],
+    ['additional', 0.45],
+  ],
+  scotland: [
+    ['starter', 0.19],
+    ['basic', 0.2],
+    ['intermediate', 0.21],
+    ['higher', 0.42],
+    ['advanced', 0.45],
+    ['top', 0.48],
+  ],
+};
+
+/**
+ * What a band's two flags should be at an income, worked out from the exported
+ * API alone and without ever looking at the band list. The taper is running
+ * when adjusted net income is over its start with allowance left, both read off
+ * `calculateUkTax`. The band is the one whose statutory rate, once un-stretched
+ * by the taper, is the income tax rate `ukMarginalRates` reports there: no rate
+ * is none, and no two bands of a region share one.
+ */
+function expectedBandFlags(
+  i: UkTaxInput,
+  income: number,
+  incomeTaxRate: number,
+): { incomeTaxBand: UkIncomeTaxBandName | null; allowanceTapering: boolean } {
+  const exact = calculateUkTax({ ...i, income });
+  const allowanceTapering = exact.adjustedNetIncome > UK_ALLOWANCE_TAPER_START && exact.personalAllowance > 0;
+  if (Math.abs(incomeTaxRate) <= 1e-9) return { incomeTaxBand: null, allowanceTapering };
+  const statutory = incomeTaxRate / (allowanceTapering ? 1 + UK_ALLOWANCE_TAPER_RATE : 1);
+  const match = STATUTORY_BAND_RATES[i.region].find(([, rate]) => Math.abs(rate - statutory) <= 1e-9);
+  return { incomeTaxBand: match === undefined ? null : match[0], allowanceTapering };
+}
+
+describe('ukTakeHomeShareCurve', () => {
+  const scenario = input({
+    income: 55000,
+    pensionContribution: 2750,
+    pensionMethod: 'net-pay',
+    undergradPlan: 'plan2',
+  });
+  const curve = (over: Partial<UkTaxInput>, maxIncome: number, step: number) =>
+    ukTakeHomeShareCurve(input(over), { maxIncome, step });
+
+  it('starts at one step rather than at zero and runs to the maximum inclusive', () => {
+    expect(curve({}, 1000, 250).map(p => p.income)).toEqual([250, 500, 750, 1000]);
+  });
+
+  it('stops at the last multiple not past the maximum', () => {
+    expect(curve({}, 1100, 250).map(p => p.income)).toEqual([250, 500, 750, 1000]);
+  });
+
+  it('is a single point when the maximum is one step', () => {
+    const points = curve({ pensionContribution: 0 }, 500, 500);
+    expect(points).toHaveLength(1);
+    expect(points[0].income).toBe(500);
+  });
+
+  it('is empty when the maximum is zero or below the first step', () => {
+    expect(curve({}, 0, 100)).toEqual([]);
+    expect(curve({}, 99, 100)).toEqual([]);
+  });
+
+  it('returns nothing for a zero, negative or non-finite step', () => {
+    expect(curve({}, 1000, 0)).toEqual([]);
+    expect(curve({}, 1000, -5)).toEqual([]);
+    expect(curve({}, 1000, Number.NaN)).toEqual([]);
+    expect(curve({}, 1000, Number.POSITIVE_INFINITY)).toEqual([]);
+  });
+
+  it('returns nothing for a negative or non-finite maximum', () => {
+    expect(curve({}, -1, 100)).toEqual([]);
+    expect(curve({}, Number.NaN, 100)).toEqual([]);
+    expect(curve({}, Number.POSITIVE_INFINITY, 100)).toEqual([]);
+  });
+
+  it('caps the number of points at 2,000, as ukTaxCurve does', () => {
+    const points = curve({}, 1_000_000, 1);
+    expect(points).toHaveLength(2000);
+    expect(points[0].income).toBe(1);
+    expect(points[1999].income).toBe(2000);
+  });
+
+  it('does not lose the last point to floating-point division', () => {
+    expect(curve({}, 0.3, 0.1)).toHaveLength(3);
+  });
+
+  it('agrees with ukTakeHomeBySlice at £55,000 with no children', () => {
+    const point = ukTakeHomeShareCurve(scenario, { maxIncome: 60000, step: 500 }).find(p => p.income === 55000);
+    const summary = ukTakeHomeBySlice(scenario);
+    expect(point).toBeDefined();
+    expect(point!.takeHome).toBeCloseTo(summary.takeHomeRate, 12);
+    expect(point!.takeHome).toBeCloseTo(0.70004, 4);
+    expect(point!.pension).toBeCloseTo(summary.shares.pension, 12);
+    expect(point!.incomeTax).toBeCloseTo(summary.shares.incomeTax, 12);
+    expect(point!.nationalInsurance).toBeCloseTo(summary.shares.nationalInsurance, 12);
+    expect(point!.studentLoan).toBeCloseTo(summary.shares.studentLoan, 12);
+    expect(point!.childBenefitCharge).toBe(0);
+  });
+
+  it('agrees with ukTakeHomeBySlice at every point for a mix of methods and loans', () => {
+    for (const over of [
+      { pensionContribution: 5000, pensionMethod: 'salary-sacrifice' as const, postgradLoan: true },
+      { pensionContribution: 8000, pensionMethod: 'relief-at-source' as const, region: 'scotland' as const },
+      { pensionContribution: 3000, pensionMethod: 'net-pay' as const, undergradPlan: 'plan1' as const },
+      { kind: 'self-employed' as const, undergradPlan: 'plan5' as const },
+    ]) {
+      for (const point of curve(over, 150000, 7500)) {
+        const summary = ukTakeHomeBySlice(input({ ...over, income: point.income }));
+        expect(point.takeHome).toBeCloseTo(summary.shares.takeHome, 12);
+        expect(point.pension).toBeCloseTo(summary.shares.pension, 12);
+        expect(point.incomeTax).toBeCloseTo(summary.shares.incomeTax, 12);
+        expect(point.nationalInsurance).toBeCloseTo(summary.shares.nationalInsurance, 12);
+        expect(point.studentLoan).toBeCloseTo(summary.shares.studentLoan, 12);
+      }
+    }
+  });
+
+  it('sends all of an income below the contribution to the pension and keeps none', () => {
+    const [first, second, third] = ukTakeHomeShareCurve(scenario, { maxIncome: 3000, step: 1000 });
+    expect(first.income).toBe(1000);
+    for (const p of [first, second]) {
+      expect(p.pension).toBe(1);
+      expect(p.takeHome).toBe(0);
+      expect(p.incomeTax).toBe(0);
+    }
+    // £3,000 is past the £2,750 contribution, so some of it is kept.
+    expect(third.pension).toBeCloseTo(2750 / 3000, 12);
+    expect(third.takeHome).toBeCloseTo(250 / 3000, 12);
+  });
+
+  it('takes 80p in the pound to the pension under relief at source for incomes below the contribution', () => {
+    const [point] = curve({ pensionContribution: 5000, pensionMethod: 'relief-at-source' }, 1000, 1000);
+    expect(point.pension).toBeCloseTo(0.8, 12);
+    expect(point.takeHome).toBeCloseTo(0.2, 12);
+  });
+
+  it('charges the child benefit charge with two children at about £70,000, as a share of income', () => {
+    const [point] = curve({ children: 2 }, 70000, 70000);
+    // Half the charge at £70,000: (£27.05 + £17.90) x 53 weeks x 50%.
+    expect(point.childBenefitCharge).toBeGreaterThan(0);
+    expect(point.childBenefitCharge).toBeCloseTo((((27.05 + 17.9) * 53) / 2) / 70000, 4);
+    const without = curve({ children: 0 }, 70000, 70000)[0];
+    expect(point.takeHome).toBeCloseTo(without.takeHome - point.childBenefitCharge, 12);
+  });
+
+  it('shows no charge up to £60,000 or with no children, and all of the child benefit from £80,000', () => {
+    for (const p of curve({ children: 2 }, 60000, 10000)) expect(p.childBenefitCharge).toBe(0);
+    for (const p of curve({ children: 0 }, 100000, 10000)) expect(p.childBenefitCharge).toBe(0);
+    const [full] = curve({ children: 2 }, 100000, 100000);
+    expect(full.childBenefitCharge).toBeCloseTo(((27.05 + 17.9) * 53) / 100000, 12);
+  });
+
+  it('leaves child benefit received and childcare support out: they are not pay', () => {
+    const plain = curve({}, 40000, 10000);
+    const claiming = curve({ children: 2, childcareSupport: 9000 }, 40000, 10000);
+    expect(claiming).toEqual(plain);
+  });
+
+  it('has shares in [0, 1] that sum to 1 once the income covers the contribution', () => {
+    for (const p of ukTakeHomeShareCurve({ ...scenario, children: 2 }, { maxIncome: 200000, step: 2500 })) {
+      for (const share of [p.takeHome, p.pension, p.incomeTax, p.nationalInsurance, p.studentLoan, p.childBenefitCharge]) {
+        expect(share).toBeGreaterThanOrEqual(0);
+        expect(share).toBeLessThanOrEqual(1);
+      }
+      if (p.income >= 2750) {
+        const sum = p.takeHome + p.pension + p.incomeTax + p.nationalInsurance + p.studentLoan + p.childBenefitCharge;
+        expect(sum).toBeCloseTo(1, 12);
+      }
+    }
+  });
+
+  it('takes each point from calculateUkTax with only income replaced', () => {
+    const i = input({ region: 'scotland', undergradPlan: 'plan2', postgradLoan: true, children: 2 });
+    for (const p of ukTakeHomeShareCurve(i, { maxIncome: 120000, step: 20000 })) {
+      const r = calculateUkTax({ ...i, income: p.income });
+      expect(p.incomeTax).toBe(r.incomeTax / p.income);
+      expect(p.nationalInsurance).toBe(r.nationalInsurance / p.income);
+      expect(p.studentLoan).toBe((r.studentLoan + r.postgradLoan) / p.income);
+      expect(p.childBenefitCharge).toBe(r.childBenefitCharge / p.income);
+    }
+  });
+
+  it('keeps every share finite and clamped for a contribution far beyond the income and for hostile input', () => {
+    const hostile: Array<Partial<UkTaxInput>> = [
+      { pensionContribution: 1e12, pensionMethod: 'net-pay' },
+      { pensionContribution: Number.NaN, benefitsInKind: Number.POSITIVE_INFINITY, children: Number.NaN },
+      { pensionContribution: -100, benefitsInKind: -100, children: -1, personalAllowance: -1 },
+    ];
+    for (const over of hostile) {
+      const points = curve(over, 100000, 25000);
+      expect(points).toHaveLength(4);
+      for (const p of points) {
+        for (const value of Object.values(p)) {
+          expect(Number.isFinite(value)).toBe(true);
+        }
+        for (const share of [p.takeHome, p.pension, p.incomeTax, p.nationalInsurance, p.studentLoan, p.childBenefitCharge]) {
+          expect(share).toBeGreaterThanOrEqual(0);
+          expect(share).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+});
+
+describe('ukTakeHomeShareAt', () => {
+  const scenario = input({
+    income: 55000,
+    pensionContribution: 2750,
+    pensionMethod: 'net-pay',
+    undergradPlan: 'plan2',
+  });
+  const zeros = {
+    income: 0,
+    takeHome: 0,
+    pension: 0,
+    incomeTax: 0,
+    nationalInsurance: 0,
+    studentLoan: 0,
+    childBenefitCharge: 0,
+  };
+  const shares = (p: ReturnType<typeof ukTakeHomeShareAt>): number[] => [
+    p.takeHome,
+    p.pension,
+    p.incomeTax,
+    p.nationalInsurance,
+    p.studentLoan,
+    p.childBenefitCharge,
+  ];
+
+  it('is all zeros at an income of 0, whatever else is entered', () => {
+    expect(ukTakeHomeShareAt(input({ income: 0 }))).toEqual(zeros);
+    expect(
+      ukTakeHomeShareAt(
+        input({
+          income: 0,
+          pensionContribution: 5000,
+          benefitsInKind: 20000,
+          children: 2,
+          undergradPlan: 'plan2',
+          postgradLoan: true,
+        }),
+      ),
+    ).toEqual(zeros);
+  });
+
+  it('is all zeros, income included, for a negative, NaN or infinite income, which count as 0', () => {
+    for (const income of [-1, -50000, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(ukTakeHomeShareAt({ ...scenario, income })).toEqual(zeros);
+    }
+  });
+
+  it('equals the point ukTakeHomeShareCurve gives at that income, for every point and a mix of inputs', () => {
+    for (const over of [
+      { pensionContribution: 2750, pensionMethod: 'net-pay' as const, undergradPlan: 'plan2' as const },
+      { pensionContribution: 8000, pensionMethod: 'relief-at-source' as const, region: 'scotland' as const, children: 2 },
+      { pensionContribution: 5000, pensionMethod: 'salary-sacrifice' as const, postgradLoan: true, benefitsInKind: 4000 },
+      { kind: 'self-employed' as const, undergradPlan: 'plan5' as const, marriageAllowance: true },
+      {},
+    ]) {
+      const points = ukTakeHomeShareCurve(input(over), { maxIncome: 150000, step: 7500 });
+      expect(points).toHaveLength(20);
+      for (const point of points) {
+        expect(ukTakeHomeShareAt(input({ ...over, income: point.income }))).toEqual(point);
+      }
+    }
+  });
+
+  it('takes the income from the curve rather than from the input the curve is given', () => {
+    const [point] = ukTakeHomeShareCurve({ ...scenario, income: 12345 }, { maxIncome: 55000, step: 55000 });
+    expect(point).toEqual(ukTakeHomeShareAt(scenario));
+  });
+
+  it('reports the income it is of', () => {
+    expect(ukTakeHomeShareAt(scenario).income).toBe(55000);
+  });
+
+  it('agrees with ukTakeHomeBySlice at £55,000 with no children', () => {
+    const point = ukTakeHomeShareAt(scenario);
+    const summary = ukTakeHomeBySlice(scenario);
+    expect(point.takeHome).toBeCloseTo(summary.shares.takeHome, 12);
+    expect(point.takeHome).toBeCloseTo(0.70004, 4);
+    expect(point.pension).toBe(summary.shares.pension);
+    expect(point.incomeTax).toBe(summary.shares.incomeTax);
+    expect(point.nationalInsurance).toBe(summary.shares.nationalInsurance);
+    expect(point.studentLoan).toBe(summary.shares.studentLoan);
+    expect(point.childBenefitCharge).toBe(0);
+  });
+
+  it('takes the deductions from calculateUkTax with only the income replaced', () => {
+    const i = input({ income: 90000, region: 'scotland', undergradPlan: 'plan2', postgradLoan: true, children: 2 });
+    const r = calculateUkTax(i);
+    const p = ukTakeHomeShareAt(i);
+    expect(p.pension).toBe(r.pensionFromPay / 90000);
+    expect(p.incomeTax).toBe(r.incomeTax / 90000);
+    expect(p.nationalInsurance).toBe(r.nationalInsurance / 90000);
+    expect(p.studentLoan).toBe((r.studentLoan + r.postgradLoan) / 90000);
+    expect(p.childBenefitCharge).toBe(r.childBenefitCharge / 90000);
+  });
+
+  it('treats a negative or NaN pension as no pension', () => {
+    const none = ukTakeHomeShareAt(input({ income: 30000 }));
+    expect(ukTakeHomeShareAt(input({ income: 30000, pensionContribution: -500 }))).toEqual(none);
+    expect(ukTakeHomeShareAt(input({ income: 30000, pensionContribution: Number.NaN }))).toEqual(none);
+  });
+
+  it('keeps every share finite and in [0, 1] for hostile input', () => {
+    const hostile: Array<Partial<UkTaxInput>> = [
+      { pensionContribution: 1e12, pensionMethod: 'net-pay' },
+      { pensionContribution: Number.NaN, benefitsInKind: Number.POSITIVE_INFINITY, children: Number.NaN },
+      { pensionContribution: -100, benefitsInKind: -100, children: -1, personalAllowance: -1 },
+      { benefitsInKind: 1e9 },
+    ];
+    for (const over of hostile) {
+      for (const income of [0, 1, 20000, 250000]) {
+        const p = ukTakeHomeShareAt(input({ ...over, income }));
+        for (const value of Object.values(p)) expect(Number.isFinite(value)).toBe(true);
+        for (const share of shares(p)) {
+          expect(share).toBeGreaterThanOrEqual(0);
+          expect(share).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  describe('where the shares sum to more than 1', () => {
+    it('sums to 1 whenever the deductions fit in the income, children or not', () => {
+      for (const income of [20000, 55000, 70000, 140000]) {
+        const p = ukTakeHomeShareAt({ ...scenario, children: 2, income });
+        expect(shares(p).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+      }
+    });
+
+    it('does so below a net-pay contribution: NI on full pay comes on top of a pension share of 1', () => {
+      const p = ukTakeHomeShareAt(input({ income: 20000, pensionContribution: 20000, pensionMethod: 'net-pay' }));
+      expect(p.pension).toBe(1);
+      expect(p.nationalInsurance).toBeCloseTo(((20000 - 12570) * 0.08) / 20000, 12);
+      expect(p.takeHome).toBe(0);
+      expect(shares(p).reduce((a, b) => a + b, 0)).toBeCloseTo(1 + p.nationalInsurance, 12);
+    });
+
+    it('does not below a salary-sacrifice contribution, which takes the NI with it', () => {
+      const p = ukTakeHomeShareAt(input({ income: 20000, pensionContribution: 20000, pensionMethod: 'salary-sacrifice' }));
+      expect(p.pension).toBe(1);
+      expect(p.nationalInsurance).toBe(0);
+      expect(shares(p).reduce((a, b) => a + b, 0)).toBe(1);
+    });
+
+    it('does so when benefits in kind are taxed more than the cash pay can cover', () => {
+      const p = ukTakeHomeShareAt(input({ income: 15000, benefitsInKind: 60000 }));
+      expect(p.incomeTax).toBe(1);
+      expect(p.nationalInsurance).toBeCloseTo(((15000 - 12570) * 0.08) / 15000, 12);
+      expect(p.takeHome).toBe(0);
+      expect(shares(p).reduce((a, b) => a + b, 0)).toBeGreaterThan(1);
+    });
+  });
+});
+
+describe('ukWhatIfs', () => {
+  // Every field carries a value of its own, so a field a what-if disturbs shows.
+  const rich: UkTaxInput = {
+    income: 55000,
+    kind: 'employed',
+    region: 'scotland',
+    benefitsInKind: 1234,
+    pensionContribution: 2750,
+    pensionMethod: 'net-pay',
+    undergradPlan: 'plan2',
+    postgradLoan: true,
+    children: 2,
+    childcareSupport: 3000,
+    marriageAllowance: true,
+    personalAllowance: 11000,
+  };
+  const keys = (over: Partial<UkTaxInput>): string[] => ukWhatIfs(input(over)).map(w => w.key);
+  const find = (list: UkWhatIf[], key: UkWhatIf['key']): UkWhatIf => {
+    const found = list.find(w => w.key === key);
+    if (found === undefined) throw new Error(`no ${key} what-if`);
+    return found;
+  };
+
+  it('offers all four, in order, to an employee on a net-pay pension with a loan', () => {
+    expect(ukWhatIfs(rich).map(w => w.key)).toEqual(['no-loan', 'no-pension', 'more-pension', 'salary-sacrifice']);
+  });
+
+  it('is empty for an empty input: nothing to remove, no income to add a pension to', () => {
+    expect(ukWhatIfs(input({}))).toEqual([]);
+  });
+
+  it('offers only more pension to a single row with an income and nothing else', () => {
+    expect(keys({ income: 30000 })).toEqual(['more-pension']);
+  });
+
+  it('adds 5% of £55,000, £2,750, to the entered £2,750, and no pension to any other what-if', () => {
+    const list = ukWhatIfs(rich);
+    expect(list.map(w => w.extraPension)).toEqual([0, 0, 2750, 0]);
+    expect(find(list, 'more-pension').input.pensionContribution).toBe(5500);
+  });
+
+  it('rounds the extra pension to the nearest pound', () => {
+    const extra = (income: number): number => find(ukWhatIfs(input({ income })), 'more-pension').extraPension;
+    expect(extra(12345)).toBe(617); // 617.25
+    expect(extra(12355)).toBe(618); // 617.75
+    expect(extra(10)).toBe(1); // 0.5
+    expect(extra(1_000_000)).toBe(50000);
+  });
+
+  it('makes only its own change in each what-if and leaves every other field as it was', () => {
+    const list = ukWhatIfs(rich);
+    const restore: Record<UkWhatIf['key'], Partial<UkTaxInput>> = {
+      'no-loan': { undergradPlan: rich.undergradPlan, postgradLoan: rich.postgradLoan },
+      'no-pension': { pensionContribution: rich.pensionContribution },
+      'more-pension': { pensionContribution: rich.pensionContribution },
+      'salary-sacrifice': { pensionMethod: rich.pensionMethod },
+    };
+    expect(list).toHaveLength(4);
+    for (const w of list) {
+      expect({ ...w.input, ...restore[w.key] }).toEqual(rich);
+    }
+    expect(find(list, 'no-loan').input).toMatchObject({ undergradPlan: 'none', postgradLoan: false });
+    expect(find(list, 'no-pension').input.pensionContribution).toBe(0);
+    expect(find(list, 'salary-sacrifice').input.pensionMethod).toBe('salary-sacrifice');
+  });
+
+  it('does not change the input it is given', () => {
+    const frozen = Object.freeze({ ...rich });
+    const list = ukWhatIfs(frozen);
+    expect(frozen).toEqual(rich);
+    for (const w of list) expect(w.input).not.toBe(frozen);
+  });
+
+  it('changes the result of the calculation for every what-if it offers', () => {
+    const before = calculateUkTax(rich).takeHome;
+    for (const w of ukWhatIfs(rich)) {
+      expect(calculateUkTax(w.input).takeHome).not.toBeCloseTo(before, 6);
+    }
+  });
+
+  describe('no-loan', () => {
+    it('is offered for an undergraduate plan alone, and sets plan none and postgrad false', () => {
+      const [w] = ukWhatIfs(input({ income: 40000, undergradPlan: 'plan1' }));
+      expect(w.key).toBe('no-loan');
+      expect(w.input).toEqual(input({ income: 40000, undergradPlan: 'none', postgradLoan: false }));
+    });
+
+    it('is offered for a postgraduate loan alone', () => {
+      const [w] = ukWhatIfs(input({ income: 40000, postgradLoan: true }));
+      expect(w.key).toBe('no-loan');
+      expect(w.input.postgradLoan).toBe(false);
+      expect(w.input.undergradPlan).toBe('none');
+    });
+
+    it('is not offered with no loan, or with an unknown plan, which counts as none', () => {
+      expect(keys({ income: 40000 })).not.toContain('no-loan');
+      expect(keys({ income: 40000, undergradPlan: 'plan9' as UkUndergradPlan })).not.toContain('no-loan');
+    });
+  });
+
+  describe('no-pension', () => {
+    it('is offered for any positive contribution and sets it to 0', () => {
+      const w = find(ukWhatIfs(input({ income: 40000, pensionContribution: 0.01 })), 'no-pension');
+      expect(w.input.pensionContribution).toBe(0);
+    });
+
+    it('is not offered for 0, a negative, NaN or infinite contribution, which count as 0', () => {
+      for (const pensionContribution of [0, -500, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        expect(keys({ income: 40000, pensionContribution })).not.toContain('no-pension');
+      }
+    });
+
+    it('is offered when the contribution is more than the income, which the curve holds in pounds at higher incomes', () => {
+      expect(keys({ income: 40000, pensionContribution: 60000 })).toContain('no-pension');
+      expect(keys({ income: 0, pensionContribution: 5000 })).toContain('no-pension');
+    });
+  });
+
+  describe('more-pension', () => {
+    it('is not offered for an income of 0, a negative one, NaN or infinity', () => {
+      for (const income of [0, -1000, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(keys({ income })).not.toContain('more-pension');
+      }
+    });
+
+    it('is not offered when 5% of the income rounds to nothing, because it would change nothing', () => {
+      expect(keys({ income: 9 })).toEqual([]);
+      expect(keys({ income: 0.5 })).toEqual([]);
+    });
+
+    it('adds to the contribution as sanitised: a negative or NaN one starts from 0', () => {
+      for (const pensionContribution of [-800, Number.NaN]) {
+        const w = find(ukWhatIfs(input({ income: 40000, pensionContribution })), 'more-pension');
+        expect(w.extraPension).toBe(2000);
+        expect(w.input.pensionContribution).toBe(2000);
+      }
+    });
+
+    it('adds to the contribution in full pounds, not as capped at the income', () => {
+      const w = find(ukWhatIfs(input({ income: 40000, pensionContribution: 60000 })), 'more-pension');
+      expect(w.input.pensionContribution).toBe(62000);
+    });
+
+    it('is offered to a sole trader, whose method is left as entered', () => {
+      const w = find(ukWhatIfs(input({ income: 40000, kind: 'self-employed', pensionMethod: 'relief-at-source' })), 'more-pension');
+      expect(w.input.kind).toBe('self-employed');
+      expect(w.input.pensionMethod).toBe('relief-at-source');
+    });
+  });
+
+  describe('salary-sacrifice', () => {
+    it('is offered to an employee with a contribution by net pay or by relief at source', () => {
+      for (const pensionMethod of ['net-pay', 'relief-at-source'] as const) {
+        expect(keys({ income: 40000, pensionContribution: 3000, pensionMethod })).toContain('salary-sacrifice');
+      }
+    });
+
+    it('is offered when the method is not one we know, which counts as relief at source', () => {
+      const pensionMethod = 'cash' as UkTaxInput['pensionMethod'];
+      expect(keys({ income: 40000, pensionContribution: 3000, pensionMethod })).toContain('salary-sacrifice');
+    });
+
+    it('is not offered when the pension is already by salary sacrifice, or there is no pension', () => {
+      expect(keys({ income: 40000, pensionContribution: 3000, pensionMethod: 'salary-sacrifice' })).not.toContain(
+        'salary-sacrifice',
+      );
+      expect(keys({ income: 40000, pensionContribution: 0, pensionMethod: 'net-pay' })).not.toContain('salary-sacrifice');
+      expect(keys({ income: 40000, pensionContribution: -3000, pensionMethod: 'net-pay' })).not.toContain(
+        'salary-sacrifice',
+      );
+    });
+
+    it('is never offered to a sole trader, whatever method was left on the input', () => {
+      for (const pensionMethod of ['salary-sacrifice', 'net-pay', 'relief-at-source'] as const) {
+        const list = ukWhatIfs(input({ income: 40000, kind: 'self-employed', pensionContribution: 3000, pensionMethod }));
+        expect(list.map(w => w.key)).toEqual(['no-pension', 'more-pension']);
+      }
+    });
+  });
+
+  it('never returns a NaN or an infinity, whatever the input', () => {
+    const hostile: Array<Partial<UkTaxInput>> = [
+      { income: Number.NaN, pensionContribution: Number.NaN, undergradPlan: 'plan9' as UkUndergradPlan },
+      { income: Number.POSITIVE_INFINITY, pensionContribution: Number.POSITIVE_INFINITY },
+      { income: -1, pensionContribution: -1, children: Number.NaN },
+      { income: 1e15, pensionContribution: 1e15, pensionMethod: 'net-pay' },
+    ];
+    for (const over of hostile) {
+      for (const w of ukWhatIfs(input(over))) {
+        expect(Number.isFinite(w.extraPension)).toBe(true);
+        expect(w.extraPension).toBeGreaterThanOrEqual(0);
+        // The two what-ifs that set the contribution set it to a sanitised number;
+        // the others pass the entered one through untouched, hostile or not.
+        if (w.key === 'no-pension' || w.key === 'more-pension') {
+          expect(Number.isFinite(w.input.pensionContribution)).toBe(true);
+        }
+      }
+    }
   });
 });

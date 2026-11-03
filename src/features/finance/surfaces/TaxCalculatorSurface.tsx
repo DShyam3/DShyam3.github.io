@@ -1,8 +1,9 @@
 /**
  * Tax Calculator — what any income takes home, and what the next pound keeps.
  *
- * Every figure comes from `calculateUkTax`, `ukMarginalRate`, `ukTaxCliffs` and
- * `ukTaxCurve`, which are pure and tested. The fields start from your own
+ * Every figure comes from `calculateUkTax`, `ukMarginalRate`, `ukTaxCliffs`,
+ * `ukTaxCurve`, `ukMarginalBands` and `ukTakeHomeShareCurve`, which are pure
+ * and tested. The fields start from your own
  * settings and stay a what-if: editing one never writes back, because a
  * calculator that quietly changes your payroll is not a calculator.
  *
@@ -30,6 +31,7 @@ import {
   UK_TAX_YEAR_LABEL,
   calculateUkTax,
   ukChildBenefitBand,
+  ukMarginalBands,
   ukMarginalRate,
   ukTaxCliffs,
   ukTaxCurve,
@@ -42,8 +44,10 @@ import {
 import { cn } from '@/lib/utils';
 import { useFinanceData } from '../FinanceDataContext';
 import { useFinanceTotals } from '../useFinanceTotals';
+import { MarginalSteps } from '../components/MarginalSteps';
 import { PillSwitch } from '../components/PillSwitch';
 import { SurfaceHero } from '../components/SurfaceHero';
+import { TakeHomeShareChart } from '../components/TakeHomeShareChart';
 import { TakeHomeSlices } from '../components/TakeHomeSlices';
 
 /** The form as typed. Amounts stay strings so a half-typed number survives. */
@@ -63,7 +67,7 @@ interface Draft {
   marriageAllowance: boolean;
 }
 
-type ChartMode = 'marginal' | 'net';
+type ChartMode = 'marginal' | 'net' | 'share';
 
 const SLIDER_MAX = 250_000;
 const CHART_POINTS = 400;
@@ -82,6 +86,7 @@ const REGIONS = [
 const CHART_MODES = [
   { key: 'marginal', label: 'Marginal rate' },
   { key: 'net', label: 'Take-home' },
+  { key: 'share', label: 'Take-home %' },
 ] as const satisfies readonly { key: ChartMode; label: string }[];
 
 const PENSION_METHODS: { key: UkPensionMethod; label: string }[] = [
@@ -209,6 +214,10 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
     () => ukTaxCurve(input, { maxIncome: chartMax, step: chartMax / CHART_POINTS }),
     [input, chartMax],
   );
+  const bands = useMemo(() => ukMarginalBands(input, { maxIncome: chartMax }), [input, chartMax]);
+  // Keyed by where the band starts, so a recompute while hovering cannot shade a different band.
+  const [highlightedBand, setHighlightedBand] = useState<number | null>(null);
+  const shownBand = chartMode === 'marginal' ? bands.find(b => b.from === highlightedBand) : undefined;
   // Round steps on both axes: recharts' own picks land on £35k and 70%.
   const xStep = X_TICK_STEPS.find(s => chartMax / s <= 8) ?? chartMax / 8;
   const xTicks = Array.from({ length: Math.floor(chartMax / xStep) + 1 }, (_, i) => i * xStep);
@@ -594,17 +603,25 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
           <div className="space-y-1 min-w-0">
             <h3 id="taxcalc-chart" className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary shrink-0" />
-              {chartMode === 'marginal' ? 'What the next pound loses' : 'Take-home against income'}
+              {chartMode === 'marginal'
+                ? 'What the next pound loses'
+                : chartMode === 'net' ? 'Take-home against income' : 'Where each pound goes'}
             </h3>
             <p className="text-xs text-muted-foreground">
               {chartMode === 'marginal'
-                ? 'Income tax, National Insurance, student loans and the child benefit charge on each extra pound, everything else held as entered.'
-                : `Pay after every deduction, everything else held as entered. The dashed line is gross income${showSupport ? '; the upper solid line adds the childcare support' : ''}.`}
+                ? 'Income tax, National Insurance, student loans and the child benefit charge on each extra pound, everything else held as entered. Each step is explained below the chart.'
+                : chartMode === 'net'
+                  ? `Pay after every deduction, everything else held as entered. The dashed line is gross income${showSupport ? '; the upper solid line adds the childcare support' : ''}.`
+                  : 'The share of salary kept as cash at the bottom, and what takes the rest above it, everything else held as entered.'}
             </p>
           </div>
           <PillSwitch label="Chart" options={CHART_MODES} value={chartMode} onChange={setChartMode} className="shrink-0 self-start" />
         </div>
 
+        {chartMode === 'share' ? (
+          <TakeHomeShareChart input={input} chartMax={chartMax} step={chartMax / CHART_POINTS} xTicks={xTicks} />
+        ) : (
+        <>
         <div className="mt-4 h-64 w-full sm:h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={curve} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
@@ -654,6 +671,15 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                   ifOverflow="hidden"
                   fill="hsl(var(--chart-4))"
                   fillOpacity={0.15}
+                />
+              )}
+              {shownBand && (
+                <ReferenceArea
+                  x1={shownBand.from}
+                  x2={shownBand.to}
+                  ifOverflow="hidden"
+                  fill="hsl(var(--chart-1))"
+                  fillOpacity={0.18}
                 />
               )}
               {shownCliffs.map(c => (
@@ -730,6 +756,24 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               </li>
             ))}
           </ul>
+        )}
+        {chartMode === 'marginal' && (
+          <MarginalSteps
+            bands={bands}
+            income={input.income}
+            ctx={{
+              kind: input.kind,
+              undergradPlan: input.undergradPlan,
+              pensionContribution: input.pensionContribution,
+              pensionMethod,
+              benefitsInKind: input.benefitsInKind,
+              marriageAllowance: input.marriageAllowance,
+            }}
+            highlighted={highlightedBand}
+            onHighlight={setHighlightedBand}
+          />
+        )}
+        </>
         )}
       </section>
 
