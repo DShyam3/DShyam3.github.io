@@ -8,17 +8,23 @@ import {
   inferCourseEnd,
   isBorrowing,
   normaliseRatePercent,
+  payslipLoanBasis,
+  payslipLoanPay,
   rateRowInForce,
   simulateStudentLoan,
   studentLoanBorrowed,
   studentLoanBorrowedGap,
   studentLoanInterestRate,
+  studentLoanLedger,
   studentLoanMonthlyRepayment,
+  studentLoanPay,
+  studentLoanWalk,
   STUDENT_LOAN_DEFAULT_ASSUMPTIONS,
   type StudentLoanAssumptions,
   type StudentLoanBorrowed,
   type StudentLoanDraw,
   type StudentLoanRateRow,
+  type StudentLoanSimInput,
 } from './student-loan';
 
 describe('studentLoanMonthlyRepayment', () => {
@@ -224,7 +230,9 @@ describe('slcTiming with an anchor partway through a tax year', () => {
       { effectiveFrom: '2026-04-06', rpi: 3.2, rateCap: null, plan2LowerThreshold: 29385, plan2UpperThreshold: 52885, bankRate: null },
       { effectiveFrom: '2026-09-01', rpi: 4.1, rateCap: 6, plan2LowerThreshold: 29385, plan2UpperThreshold: 52885, bankRate: null },
     ],
-    incomeByTaxYear: { 2026: 55000 },
+    // 2025-26 under the threshold: its top-up would land in October 2026,
+    // after the anchor, so it is seeded too -- as nothing.
+    incomeByTaxYear: { 2025: 14324.18, 2026: 55000 },
     anchor: { date: '2026-09-07', balance: 51052.24 },
     slcTiming: { confirmationLagMonths: 6 },
     today: '2026-09-23',
@@ -1222,7 +1230,7 @@ describe('simulateStudentLoan', () => {
   });
 
   describe('incomeByTaxYear override', () => {
-    it('uses the override for the Plan 2 rate and modelled repayments in its tax year, leaving other years to grow from salary', () => {
+    it('uses the override for the Plan 2 rate but charges a modelled repayment on the salary model from the salaryFrom tax year on', () => {
       const result = simulateStudentLoan({
         plan: 'plan2',
         draws: [{ date: '2015-09-01', amount: 5000 }],
@@ -1243,11 +1251,62 @@ describe('simulateStudentLoan', () => {
       // 52,885 is exactly the default upper threshold: full rate 7.1, capped to 6.
       expect(june2026.annualRate).toBeCloseTo(6, 6);
       expect(june2026.salary).toBe(52885);
-      expect(june2026.payment).toBeCloseTo(((52885 - 29385) * 0.09) / 12, 2);
+      // 2026 is after the tax year of salaryFrom (2018), so the payment follows
+      // the 30,000 salary model, not the 52,885 income.
+      expect(june2026.payment).toBeCloseTo(((30000 - 29385) * 0.09) / 12, 2);
 
       // A tax year with no override keeps growing from the flat salary model.
       const june2025 = result.months.find(m => m.date === '2025-06-01')!;
       expect(june2025.salary).toBe(30000);
+    });
+
+    it('uses the override for a modelled repayment in a tax year before the one containing salaryFrom', () => {
+      const result = simulateStudentLoan({
+        plan: 'plan2',
+        draws: [{ date: '2015-09-01', amount: 100000 }],
+        courseEnd: '2018-06-30',
+        salary: 30000,
+        salaryFrom: '2020-06-01',
+        salaryGrowth: 0,
+        threshold: 29385,
+        thresholdFrom: '2019-04-06',
+        repaymentRate: 9,
+        writeOffYears: 30,
+        assumptions: { ...STUDENT_LOAN_DEFAULT_ASSUMPTIONS, thresholdGrowth: 0 },
+        today: '2019-04-06',
+        incomeByTaxYear: { 2019: 52885, 2020: 52885 },
+      });
+
+      // 2019-20 is before salaryFrom's tax year (2020-21): the income entry pays.
+      const june2019 = result.months.find(m => m.date === '2019-06-01')!;
+      expect(june2019.paymentSource).toBe('modelled');
+      expect(june2019.payment).toBeCloseTo(((52885 - 29385) * 0.09) / 12, 2);
+      // 2020-21 is salaryFrom's own tax year: the salary model pays, though the
+      // income entry still sets the interest rate and the reported salary.
+      const june2020 = result.months.find(m => m.date === '2020-06-01')!;
+      expect(june2020.payment).toBeCloseTo(((30000 - 29385) * 0.09) / 12, 2);
+      expect(june2020.salary).toBe(52885);
+      expect(june2020.annualRate).toBeCloseTo(6, 6);
+    });
+
+    it('falls back to the salary model for a non-finite entry, for the rate and the payment alike', () => {
+      const params = {
+        plan: 'plan2' as const,
+        draws: [{ date: '2015-09-01', amount: 100000 }],
+        courseEnd: '2018-06-30',
+        salary: 40000,
+        salaryFrom: '2020-06-01',
+        salaryGrowth: 0,
+        threshold: 29385,
+        thresholdFrom: '2019-04-06',
+        repaymentRate: 9,
+        writeOffYears: 30,
+        assumptions: { ...STUDENT_LOAN_DEFAULT_ASSUMPTIONS, thresholdGrowth: 0 },
+        today: '2019-04-06',
+      };
+      const withNaN = simulateStudentLoan({ ...params, incomeByTaxYear: { 2019: Number.NaN } });
+      const without = simulateStudentLoan(params);
+      expect(withNaN.months).toEqual(without.months);
     });
   });
 
@@ -1622,5 +1681,1096 @@ describe('studentLoanBorrowedGap', () => {
 
   it('reports a zero balance as less than what was borrowed', () => {
     expect(studentLoanBorrowedGap(0, draws(27000))).toEqual({ amount: 27000, direction: 'less' });
+  });
+});
+
+/**
+ * The owner's real loan, reconciled to the penny by hand against SLC's
+ * account page: a balance of 51,052.24 on 7 September 2026, a 137 refund and
+ * two payroll deductions of 171 since, and a new job paying 55,000 from
+ * 3 November while the tax year's income so far averages 50,904.61.
+ */
+const ownerRow = (effectiveFrom: string, rpi: number, rateCap: number | null): StudentLoanRateRow => ({
+  effectiveFrom, rpi, rateCap, plan2LowerThreshold: 29385, plan2UpperThreshold: 52885, bankRate: null,
+});
+const ownerInput: StudentLoanSimInput = {
+  plan: 'plan2',
+  draws: [],
+  courseEnd: '2023-06-30',
+  writeOffYears: 30,
+  threshold: 29385,
+  thresholdFrom: '2026-04-06',
+  repaymentRate: 9,
+  salary: 55000,
+  salaryFrom: '2026-11-03',
+  salaryGrowth: 3,
+  today: '2026-11-03',
+  assumptions: STUDENT_LOAN_DEFAULT_ASSUMPTIONS,
+  slcTiming: { confirmationLagMonths: 6 },
+  // 2025-26 is the first job's real pay, under the threshold, so its top-up
+  // (seeded because it lands in October 2026, after the anchor) is nothing.
+  incomeByTaxYear: { 2025: 14324.18, 2026: 50904.61 },
+  anchor: { date: '2026-09-07', balance: 51052.24 },
+  extraPayments: [{ date: '2026-09-23', amount: -137 }],
+  knownPayments: [{ date: '2026-09-30', amount: 171 }, { date: '2026-10-31', amount: 171 }],
+  rateSchedule: [ownerRow('2026-04-06', 3.2, null), ownerRow('2026-09-01', 4.1, 6)],
+};
+/** The same loan with its borrowing on record, years before the anchor. */
+const ownerWithDraws: StudentLoanSimInput = {
+  ...ownerInput,
+  draws: academicYearDraws('2020-09-14', [
+    { tuition: 9250, maintenance: 4000 },
+    { tuition: 9250, maintenance: 4000 },
+    { tuition: 9250, maintenance: 4000 },
+  ]),
+};
+/** Flat 6% (0.5% a month), no cap, no salary: every balance is hand-checkable. */
+const flat6: StudentLoanSimInput = {
+  plan: 'plan5',
+  draws: [{ date: '2022-01-05', amount: 10000 }],
+  courseEnd: '2025-06-30',
+  salary: 0,
+  salaryFrom: '2022-01-01',
+  salaryGrowth: 0,
+  threshold: 27295,
+  thresholdFrom: '2022-01-01',
+  repaymentRate: 9,
+  writeOffYears: 40,
+  assumptions: { ...STUDENT_LOAN_DEFAULT_ASSUMPTIONS, rpi: 6, rateCap: 0 },
+  today: '2022-01-01',
+};
+
+/** Local mirror of the module's rounding, so an expected figure is derived rather than pasted. */
+const round2For = (n: number): number => Math.round(n * 100) / 100;
+
+describe('modelled repayments are charged on current pay, not the tax year income so far', () => {
+  const byDate = (input: StudentLoanSimInput, date: string) =>
+    simulateStudentLoan(input).months.find(m => m.date === date)!;
+
+  it("reproduces the owner's September and October balances, which the fix leaves alone", () => {
+    expect(byDate(ownerInput, '2026-09-01').balance).toBe(51152.33);
+    expect(byDate(ownerInput, '2026-10-01').balance).toBe(51156.1);
+  });
+
+  it("charges November's deduction on the 55,000 salary rather than the 50,904.61 income", () => {
+    const nov = byDate(ownerInput, '2026-11-01');
+    expect(nov.paymentSource).toBe('modelled');
+    // (55,000 - 29,385) x 9% / 12 = 192.1125. On the income it was 161.40.
+    expect(nov.payment).toBe(192.11);
+    // Nov is 51,330.88 before the payment, whichever pay the payment is on.
+    expect(nov.balance + nov.payment).toBeCloseTo(51330.88, 2);
+    expect(nov.balance).toBe(51138.77);
+    // The reported salary is still the income, the figure the rate slides on.
+    expect(nov.salary).toBe(50904.61);
+  });
+
+  it('keeps the pending top-up unchanged by the fix: 665.42 after September, 827.41 after November', () => {
+    expect(byDate(ownerInput, '2026-09-01').pendingTopUp).toBe(665.42);
+    expect(byDate(ownerInput, '2026-11-01').pendingTopUp).toBe(827.41);
+  });
+
+  it('charges every later month of the tax year the same, so a low-paid early month does not lower them', () => {
+    const { months } = simulateStudentLoan(ownerInput);
+    const modelled = months.filter(m => m.paymentSource === 'modelled' && m.date <= '2027-03-01');
+    expect(modelled.map(m => m.date)).toEqual(['2026-11-01', '2026-12-01', '2027-01-01', '2027-02-01', '2027-03-01']);
+    expect(modelled.every(m => m.payment === 192.11)).toBe(true);
+  });
+
+  it("still slides the Plan 2 rate on the year's income", () => {
+    // Income 40,000 sits partway up the 29,385 - 52,885 slide: 4.1 + 3 x 10,615 / 23,500.
+    const nov = byDate({ ...ownerInput, incomeByTaxYear: { 2026: 40000 } }, '2026-11-01');
+    expect(nov.annualRate).toBeCloseTo(4.1 + (3 * 10615) / 23500, 6);
+    expect(nov.salary).toBe(40000);
+    expect(nov.payment).toBe(192.11);
+  });
+
+  it('grows the pay repayments are charged on from the salaryFrom tax year, not from the income entry', () => {
+    // 2027-28 has an income entry of 20,000 but the model says 55,000 x 1.03.
+    const june2027 = byDate({ ...ownerInput, incomeByTaxYear: { 2026: 50904.61, 2027: 20000 } }, '2027-06-01');
+    expect(june2027.salary).toBe(20000);
+    expect(june2027.payment).toBe(round2For((55000 * 1.03 - 29385) * 0.09 / 12));
+  });
+});
+
+describe('chargedRate and topUpAccrued', () => {
+  const run = (input: StudentLoanSimInput) => simulateStudentLoan(input).months;
+
+  it('charges the provisional rate in a split Plan 2 repayment month, while annualRate stays the full rate', () => {
+    const months = run(ownerInput).filter(m => m.date <= '2027-03-01');
+    expect(months.length).toBeGreaterThan(0);
+    for (const m of months) {
+      // RPI 4.1 is the provisional rate; the full rate is capped at 6.
+      expect(m.chargedRate).toBeCloseTo(4.1, 9);
+      expect(m.annualRate).toBeCloseTo(6, 9);
+    }
+  });
+
+  it('equals annualRate when slcTiming is off', () => {
+    // Up to the write-off month, which is charged nothing.
+    const months = run({ ...ownerInput, slcTiming: undefined }).filter(m => m.date < '2054-04-01');
+    expect(months.length).toBeGreaterThan(0);
+    expect(months.every(m => m.chargedRate === m.annualRate)).toBe(true);
+    expect(months.every(m => m.topUpAccrued === 0)).toBe(true);
+  });
+
+  it('equals annualRate outside the repayment phase, and accrues no top-up there', () => {
+    const study = run(ownerWithDraws).filter(m => m.phase !== 'repayment');
+    expect(study.length).toBeGreaterThan(0);
+    expect(study.every(m => m.chargedRate === m.annualRate)).toBe(true);
+    expect(study.every(m => m.topUpAccrued === 0)).toBe(true);
+  });
+
+  it('equals annualRate for other plans even with slcTiming on', () => {
+    const months = run({ ...ownerInput, plan: 'plan5', rateSchedule: undefined });
+    expect(months.every(m => m.chargedRate === m.annualRate)).toBe(true);
+    expect(months.every(m => m.topUpAccrued === 0)).toBe(true);
+  });
+
+  it('is 0 in the write-off month, which still reports the rate that would have applied', () => {
+    const result = simulateStudentLoan({ ...ownerInput, salary: 20000, writeOffYears: 3, incomeByTaxYear: undefined });
+    expect(result.outcome).toBe('written_off');
+    const last = result.months[result.months.length - 1];
+    expect(last.chargedRate).toBe(0);
+    expect(last.annualRate).toBeGreaterThan(0);
+    expect(last.topUpAccrued).toBe(0);
+    // The month before it is an ordinary split month.
+    expect(result.months[result.months.length - 2].chargedRate).toBeGreaterThan(0);
+  });
+
+  it("accrues the whole anchor month's top-up on the post-refund balance: 51,189.24 x 1.9% / 12", () => {
+    const sept = run(ownerInput).find(m => m.date === '2026-09-01')!;
+    expect(sept.topUpAccrued).toBe(81.05);
+    const nov = run(ownerInput).find(m => m.date === '2026-11-01')!;
+    expect(nov.topUpAccrued).toBe(81);
+  });
+
+  it('moves the pending top-up by exactly what it accrues less what lands, month to month', () => {
+    // Up to the write-off month, where whatever is still pending is dropped.
+    const months = run(ownerWithDraws).filter(m => m.date < '2054-04-01');
+    expect(months.some(m => m.topUpApplied > 0)).toBe(true);
+    for (let i = 1; i < months.length; i++) {
+      const delta = months[i].pendingTopUp - months[i - 1].pendingTopUp;
+      // Three figures each rounded to pence, so a penny or two apart at most.
+      expect(Math.abs(delta - (months[i].topUpAccrued - months[i].topUpApplied))).toBeLessThan(0.02);
+    }
+  });
+});
+
+describe('anchorCheck', () => {
+  const check = (input: StudentLoanSimInput) => simulateStudentLoan(input).anchorCheck;
+
+  const anchoredFlat6 = (extra: Partial<StudentLoanSimInput> = {}): StudentLoanSimInput => ({
+    ...flat6,
+    anchor: { date: '2022-03-10', balance: 10200 },
+    ...extra,
+  });
+
+  it('rebuilds the balance on the anchor date for a loan drawn years before it', () => {
+    const result = simulateStudentLoan(ownerWithDraws);
+    expect(result.months[0].date).toBe('2020-09-01');
+    const found = result.anchorCheck!;
+    expect(found.date).toBe('2026-09-07');
+    expect(found.slcBalance).toBe(51052.24);
+    // August's closing balance plus 7/30 of a month at the 4.1% provisional rate.
+    const august = result.months.find(m => m.date === '2026-08-01')!;
+    expect(found.rebuiltBalance).toBeCloseTo(august.balance * (1 + (4.1 / 1200) * (7 / 30)), 1);
+    // The simulation was well short of SLC, which is what the check exposes.
+    expect(found.slcBalance - found.rebuiltBalance).toBeGreaterThan(1000);
+  });
+
+  it('charges the days up to and including the anchor day: 10100.25 x 0.5% x 10/31', () => {
+    // Jan 10,050.00, Feb 10,100.25 carried into March; 10 of its 31 days by the 10th.
+    expect(check(anchoredFlat6())).toEqual({ date: '2022-03-10', slcBalance: 10200, rebuiltBalance: 10116.54, gap: 83.46 });
+  });
+
+  describe('gap', () => {
+    it('is SLC minus the rebuilt balance, to the penny, so the UI never subtracts: 10,200 - 10,116.54', () => {
+      expect(check(anchoredFlat6())!.gap).toBe(83.46);
+    });
+
+    it('is negative when SLC shows less than the rebuilt balance', () => {
+      const found = check(anchoredFlat6({ anchor: { date: '2022-03-10', balance: 10000 } }))!;
+      expect(found.rebuiltBalance).toBe(10116.54);
+      expect(found.gap).toBe(-116.54);
+    });
+
+    it('is exactly 0, not -0, when the two agree', () => {
+      const found = check(anchoredFlat6({ anchor: { date: '2022-03-10', balance: 10116.54 } }))!;
+      expect(found.gap).toBe(0);
+    });
+
+    it('is rounded from the unrounded SLC figure, not carried as float noise', () => {
+      const found = check(anchoredFlat6({ anchor: { date: '2022-03-10', balance: 10200.004 } }))!;
+      expect(found.gap).toBe(83.46);
+    });
+
+    it("agrees with the two figures beside it for the owner's loan", () => {
+      const found = check(ownerWithDraws)!;
+      expect(found.gap).toBe(round2For(found.slcBalance - found.rebuiltBalance));
+      expect(found.gap).toBeGreaterThan(1000);
+    });
+  });
+
+  it('uses the provisional rate, not the full one, in a split Plan 2 repayment month', () => {
+    const result = simulateStudentLoan(ownerWithDraws);
+    const august = result.months.find(m => m.date === '2026-08-01')!;
+    const sept = result.months.find(m => m.date === '2026-09-01')!;
+    expect(sept.annualRate).toBeCloseTo(6, 9);
+    const atFullRate = august.balance * (1 + (6 / 1200) * (7 / 30));
+    expect(Math.abs(result.anchorCheck!.rebuiltBalance - atFullRate)).toBeGreaterThan(10);
+  });
+
+  it('counts draws and extra payments dated on or before the anchor date, and none after it', () => {
+    const found = check(anchoredFlat6({
+      draws: [
+        { date: '2022-01-05', amount: 10000 },
+        { date: '2022-03-04', amount: 1000 },
+        { date: '2022-03-20', amount: 2000 },
+      ],
+      extraPayments: [
+        { date: '2022-03-02', amount: -30 },
+        { date: '2022-03-08', amount: 100 },
+        { date: '2022-03-10', amount: 50 },
+        { date: '2022-03-20', amount: 70 },
+      ],
+    }));
+    // 10,100.25 + 1,000 - 100 - 50 + 30 = 10,980.25, then x (1 + 0.5% x 10/31).
+    expect(found!.rebuiltBalance).toBe(10997.96);
+  });
+
+  it('caps a voluntary payment at the balance, as the loop does', () => {
+    const found = check(anchoredFlat6({ extraPayments: [{ date: '2022-03-05', amount: 99999 }] }));
+    expect(found!.rebuiltBalance).toBe(0);
+  });
+
+  it('takes off known payments dated on or before the anchor date in a repayment month inside the window', () => {
+    const base = check(ownerWithDraws)!;
+    const found = check({
+      ...ownerWithDraws,
+      knownPayments: [...ownerWithDraws.knownPayments!, { date: '2026-09-05', amount: 171 }, { date: '2026-09-07', amount: 12.5 }],
+    })!;
+    expect(found.rebuiltBalance).toBeCloseTo(base.rebuiltBalance - 183.5, 2);
+  });
+
+  it('ignores known payments outside the known window', () => {
+    const base = check(ownerWithDraws)!;
+    const found = check({
+      ...ownerWithDraws,
+      knownPayments: [{ date: '2026-09-05', amount: 171 }, { date: '2026-10-31', amount: 171 }],
+      knownPaymentsFrom: '2026-10-01',
+    })!;
+    expect(found.rebuiltBalance).toBe(base.rebuiltBalance);
+  });
+
+  it('ignores known payments in a study month, where payroll deducts nothing', () => {
+    const found = check(anchoredFlat6({ knownPayments: [{ date: '2022-03-05', amount: 100 }] }));
+    expect(found!.rebuiltBalance).toBe(10116.54);
+  });
+
+  it('is absent when the grid starts at the anchor', () => {
+    const result = simulateStudentLoan(ownerInput);
+    expect(result.months[0].anchored).toBe(true);
+    expect(result.anchorCheck).toBeUndefined();
+    expect('anchorCheck' in result).toBe(false);
+  });
+
+  it('is absent when the earliest draw falls in the anchor month itself', () => {
+    expect(check(anchoredFlat6({ draws: [{ date: '2022-03-01', amount: 10000 }] }))).toBeUndefined();
+  });
+
+  it('is absent without an anchor', () => {
+    expect(check(flat6)).toBeUndefined();
+  });
+
+  it('is absent when every draw falls after the anchor month, so the anchor is never reached', () => {
+    expect(check(anchoredFlat6({ draws: [{ date: '2022-06-01', amount: 10000 }] }))).toBeUndefined();
+  });
+
+  it('does not change anything else about the run', () => {
+    const { anchorCheck, ...rest } = simulateStudentLoan(anchoredFlat6());
+    const { anchorCheck: none, ...without } = simulateStudentLoan(anchoredFlat6({ anchor: { date: '2022-03-10', balance: 10200 } }));
+    expect(anchorCheck).toBeDefined();
+    expect(none).toBeDefined();
+    expect(rest).toEqual(without);
+  });
+});
+
+describe('studentLoanLedger', () => {
+  const ledger = (input: StudentLoanSimInput) => studentLoanLedger(simulateStudentLoan(input));
+  /** A loan too poorly paid to repay, so it is written off in April 2027 with something to write off. */
+  const writtenOffInput: StudentLoanSimInput = { ...ownerInput, salary: 20000, writeOffYears: 3, incomeByTaxYear: undefined };
+
+  it('is empty for a run with nothing to simulate', () => {
+    expect(studentLoanLedger(simulateStudentLoan({ ...flat6, draws: [] }))).toEqual({ months: [], taxYears: [] });
+  });
+
+  it('maps the owner\'s anchor month: a refund, a known deduction, and interest split from the top-up it accrues', () => {
+    const sept = ledger(ownerInput).months[0];
+    expect(sept).toEqual({
+      date: '2026-09-01',
+      taxYear: 2026,
+      phase: 'repayment',
+      anchored: true,
+      paymentSource: 'known',
+      balance: 51152.33,
+      pendingTopUp: 665.42,
+      drawn: 0,
+      refunded: 137,
+      paidExtra: 0,
+      repaid: 171,
+      interestCharged: 134.09,
+      topUpLanded: 0,
+      topUpAccrued: 81.05,
+      interestAccrued: 215.14,
+      // 137 refunded - 171 repaid + 215.14 of interest, added or not.
+      owedChange: 181.14,
+      writtenOff: 0,
+    });
+  });
+
+  it('splits a voluntary payment out from a refund, each positive', () => {
+    const { months } = ledger({
+      ...ownerInput,
+      extraPayments: [{ date: '2026-09-23', amount: -137 }, { date: '2026-10-12', amount: 500 }],
+    });
+    expect(months[0]).toMatchObject({ refunded: 137, paidExtra: 0 });
+    expect(months[1]).toMatchObject({ refunded: 0, paidExtra: 500, repaid: 171 });
+    // Paying 500 and 171 off lowers what is owed by 671, before interest.
+    expect(months[1].owedChange).toBeCloseTo(-671 + months[1].interestAccrued, 2);
+  });
+
+  it('carries a negative draw as a negative drawn, lowering what is owed', () => {
+    const { months } = ledger({
+      ...flat6,
+      draws: [{ date: '2022-01-05', amount: 10000 }, { date: '2022-02-10', amount: -500 }],
+    });
+    // Feb: 10,050 - 500 = 9,550, plus 0.5% = 47.75.
+    expect(months[1]).toMatchObject({ date: '2022-02-01', drawn: -500, refunded: 0, paidExtra: 0, interestCharged: 47.75, owedChange: -452.25 });
+  });
+
+  it('numbers tax years from April, so March closes one and April opens the next', () => {
+    const { months, taxYears } = ledger({ ...flat6, draws: [{ date: '2022-02-01', amount: 10000 }] });
+    expect(months.map(m => [m.date, m.taxYear]).slice(0, 4)).toEqual([
+      ['2022-02-01', 2021], ['2022-03-01', 2021], ['2022-04-01', 2022], ['2022-05-01', 2022],
+    ]);
+    expect(taxYears[0]).toMatchObject({ taxYear: 2021, firstMonth: '2022-02-01', lastMonth: '2022-03-01', monthCount: 2 });
+    expect(taxYears[1]).toMatchObject({ taxYear: 2022, firstMonth: '2022-04-01', lastMonth: '2023-03-01', monthCount: 12 });
+  });
+
+  it('turns a single month into a single year', () => {
+    const result = simulateStudentLoan(ownerInput);
+    const one = studentLoanLedger({ ...result, months: result.months.slice(0, 1) });
+    expect(one.months).toHaveLength(1);
+    expect(one.taxYears).toHaveLength(1);
+    expect(one.taxYears[0]).toMatchObject({
+      taxYear: 2026, firstMonth: '2026-09-01', lastMonth: '2026-09-01', monthCount: 1,
+      repaid: 171, repaidKnown: 171, repaidModelled: 0, refunded: 137, owedChange: 181.14,
+      closingBalance: 51152.33, closingPending: 665.42, containsAnchor: true,
+    });
+  });
+
+  it('leaves the result it is given untouched', () => {
+    const result = simulateStudentLoan(ownerInput);
+    const before = JSON.stringify(result);
+    studentLoanLedger(result);
+    expect(JSON.stringify(result)).toBe(before);
+  });
+
+  it('accounts for every ordinary month: the balance moves by exactly what the ledger says, to the pence rounded', () => {
+    const result = simulateStudentLoan(ownerWithDraws);
+    const { months } = studentLoanLedger(result);
+    expect(months).toHaveLength(result.months.length);
+    expect(months.some(m => m.topUpLanded > 0)).toBe(true);
+    expect(months.some(m => m.paidExtra > 0 || m.refunded > 0)).toBe(true);
+
+    let checked = 0;
+    for (let i = 1; i < months.length; i++) {
+      const m = months[i];
+      if (m.anchored || m.writtenOff > 0 || m.date === result.endDate) continue;
+      const moved = m.balance - months[i - 1].balance;
+      const explained = m.drawn + m.refunded - m.paidExtra - m.repaid + m.interestCharged + m.topUpLanded;
+      // Balance twice, drawn/extra/payment/interest once each, every one rounded
+      // to pence: no more than 0.025 apart.
+      expect(Math.abs(moved - explained)).toBeLessThan(0.05);
+      checked++;
+    }
+    // Every month but the first (nothing before it), the anchor month and the write-off month.
+    expect(checked).toBe(months.length - 3);
+  });
+
+  it('accounts for what is owed, not just what is added: owedChange tracks the balance plus the pending top-up', () => {
+    const { months } = studentLoanLedger(simulateStudentLoan(ownerWithDraws));
+    for (let i = 1; i < months.length; i++) {
+      const m = months[i];
+      if (m.anchored || m.writtenOff > 0 || m.date >= '2054-04-01') continue;
+      const owedThen = months[i - 1].balance + months[i - 1].pendingTopUp;
+      const owedNow = m.balance + m.pendingTopUp;
+      expect(Math.abs(m.owedChange - (owedNow - owedThen))).toBeLessThan(0.05);
+    }
+  });
+
+  it('keeps interest added and interest accrued apart: a landing top-up is landed, not charged again', () => {
+    const result = simulateStudentLoan(ownerInput);
+    const { months } = studentLoanLedger(result);
+    const oct2027 = months.find(m => m.date === '2027-10-01')!;
+    const raw = result.months.find(m => m.date === '2027-10-01')!;
+    expect(oct2027.topUpLanded).toBe(raw.topUpApplied);
+    expect(oct2027.topUpLanded).toBeGreaterThan(1000);
+    expect(oct2027.interestCharged + oct2027.topUpLanded).toBeCloseTo(raw.interest, 2);
+    // What lands was already accrued, so it is not part of that month's cost.
+    expect(oct2027.interestAccrued).toBeCloseTo(oct2027.interestCharged + oct2027.topUpAccrued, 2);
+    expect(oct2027.interestAccrued).toBeLessThan(oct2027.interestCharged + oct2027.topUpLanded);
+  });
+
+  it('reports the write-off in the write-off month only', () => {
+    const result = simulateStudentLoan(writtenOffInput);
+    expect(result.outcome).toBe('written_off');
+    expect(result.writtenOff).toBeGreaterThan(0);
+    const { months } = studentLoanLedger(result);
+    const last = months[months.length - 1];
+    expect(last.date).toBe(result.endDate);
+    expect(last.writtenOff).toBe(result.writtenOff);
+    expect(last.balance).toBe(0);
+    expect(months.slice(0, -1).every(m => m.writtenOff === 0)).toBe(true);
+  });
+
+  it('reports no write-off for a loan that is cleared', () => {
+    const cleared = simulateStudentLoan({ ...ownerInput, anchor: { date: '2026-09-07', balance: 300 }, knownPayments: undefined });
+    expect(cleared.outcome).toBe('cleared');
+    expect(studentLoanLedger(cleared).months.every(m => m.writtenOff === 0)).toBe(true);
+  });
+
+  describe('tax years', () => {
+    const fields = [
+      'drawn', 'refunded', 'paidExtra', 'repaid', 'interestCharged', 'topUpLanded', 'topUpAccrued', 'interestAccrued', 'owedChange',
+    ] as const;
+
+    it('sum the months in them, field by field', () => {
+      const { months, taxYears } = studentLoanLedger(simulateStudentLoan(ownerWithDraws));
+      expect(taxYears.length).toBeGreaterThan(30);
+      for (const year of taxYears) {
+        const inYear = months.filter(m => m.taxYear === year.taxYear);
+        for (const field of fields) {
+          expect(year[field]).toBeCloseTo(inYear.reduce((total, m) => total + m[field], 0), 2);
+        }
+        expect(year.repaidKnown + year.repaidModelled).toBeCloseTo(year.repaid, 2);
+      }
+    });
+
+    it('cover every month once, in order, with the right bookends', () => {
+      const { months, taxYears } = studentLoanLedger(simulateStudentLoan(ownerWithDraws));
+      expect(taxYears.reduce((total, y) => total + y.monthCount, 0)).toBe(months.length);
+      expect(taxYears.map(y => y.taxYear)).toEqual([...taxYears.map(y => y.taxYear)].sort((a, b) => a - b));
+      expect(new Set(taxYears.map(y => y.taxYear)).size).toBe(taxYears.length);
+      for (const year of taxYears) {
+        const inYear = months.filter(m => m.taxYear === year.taxYear);
+        expect(year.firstMonth).toBe(inYear[0].date);
+        expect(year.lastMonth).toBe(inYear[inYear.length - 1].date);
+        expect(year.closingBalance).toBe(inYear[inYear.length - 1].balance);
+        expect(year.closingPending).toBe(inYear[inYear.length - 1].pendingTopUp);
+      }
+    });
+
+    it('flag the anchor in exactly one year', () => {
+      const { taxYears } = studentLoanLedger(simulateStudentLoan(ownerWithDraws));
+      expect(taxYears.filter(y => y.containsAnchor).map(y => y.taxYear)).toEqual([2026]);
+    });
+
+    it("split the owner's 2026-27 repayments into 342 known and five modelled months of 192.11", () => {
+      const { taxYears } = studentLoanLedger(simulateStudentLoan(ownerInput));
+      expect(taxYears[0]).toMatchObject({
+        taxYear: 2026,
+        firstMonth: '2026-09-01',
+        lastMonth: '2027-03-01',
+        monthCount: 7,
+        repaid: 1302.55,
+        repaidKnown: 342,
+        repaidModelled: 960.55,
+        refunded: 137,
+        paidExtra: 0,
+        containsAnchor: true,
+      });
+      expect(taxYears[1]).toMatchObject({ taxYear: 2027, firstMonth: '2027-04-01', monthCount: 12, repaidKnown: 0, containsAnchor: false });
+    });
+
+    it('agree with the simulation on what was drawn', () => {
+      const result = simulateStudentLoan(ownerWithDraws);
+      const { taxYears } = studentLoanLedger(result);
+      expect(taxYears.reduce((total, y) => total + y.drawn, 0)).toBeCloseTo(result.totalDrawn, 2);
+    });
+  });
+});
+
+describe('studentLoanWalk', () => {
+  const result = simulateStudentLoan(ownerInput);
+  const anchor = ownerInput.anchor!;
+
+  /** start + drawn + refunded - paidExtra - repaid + topUpLanded + interestCharged, which must be `end`. */
+  const added = (w: NonNullable<ReturnType<typeof studentLoanWalk>>): number =>
+    // `+ 0` turns the -0 that rounding a hair under zero leaves into 0.
+    round2For(w.start + w.drawn + w.refunded - w.paidExtra - w.repaidKnown - w.repaidModelled + w.topUpLanded + w.interestCharged) + 0;
+
+  it("walks the owner's balance from SLC's figure on 7 September to the end of November", () => {
+    expect(studentLoanWalk(result, anchor, '2026-11-03')).toEqual({
+      start: 51052.24,
+      startDate: '2026-09-07',
+      endMonth: '2026-11-01',
+      drawn: 0,
+      refunded: 137,
+      paidExtra: 0,
+      repaidKnown: 342,
+      knownThrough: '2026-10-01',
+      repaidModelled: 192.11,
+      modelledMonths: ['2026-11-01'],
+      topUpLanded: 0,
+      // The balancing figure; the three months' own interest is 134.09 + 174.77 + 174.78.
+      interestCharged: 483.64,
+      chargedRate: 4.1,
+      end: 51138.77,
+    });
+  });
+
+  describe('chargedRate', () => {
+    it('is the rate every month in the range was charged at: 4.1% from the anchor in September to November', () => {
+      expect(studentLoanWalk(result, anchor, '2026-11-03')!.chargedRate).toBe(4.1);
+      expect(studentLoanWalk(result, anchor, '2026-09-30')!.chargedRate).toBe(4.1);
+    });
+
+    // Rows of 3.2% from 6 April and 4.1% from 1 September, anchored on 10 July.
+    const july = { date: '2026-07-10', balance: 50000 };
+    const mixed = simulateStudentLoan({ ...ownerInput, anchor: july });
+
+    it('is the one rate when the range sits before a change of rate: 3.2% through August', () => {
+      expect(studentLoanWalk(mixed, july, '2026-07-31')!.chargedRate).toBe(3.2);
+      expect(studentLoanWalk(mixed, july, '2026-08-31')!.chargedRate).toBe(3.2);
+    });
+
+    it('is null once the range crosses the change: July to September, and on to November', () => {
+      expect(mixed.months.slice(0, 3).map(m => m.chargedRate)).toEqual([3.2, 3.2, 4.1]);
+      expect(studentLoanWalk(mixed, july, '2026-09-30')!.chargedRate).toBeNull();
+      expect(studentLoanWalk(mixed, july, '2026-11-03')!.chargedRate).toBeNull();
+    });
+
+    it('does not disturb the sums: the parts still add up to the end balance across the change', () => {
+      for (const toDate of ['2026-08-31', '2026-09-30', '2026-11-03']) {
+        const w = studentLoanWalk(mixed, july, toDate)!;
+        expect(added(w)).toBe(w.end);
+      }
+    });
+
+    it('is the rate of the one month when the range is only the anchored month', () => {
+      const w = studentLoanWalk(mixed, july, '2026-07-15')!;
+      expect(w.endMonth).toBe('2026-07-01');
+      expect(w.chargedRate).toBe(3.2);
+      // 50,000 x 3.2% / 12 x 21 of 31 days after the 10th.
+      expect(w.interestCharged).toBe(90.32);
+    });
+  });
+
+  it('reads toDate as a month: any day in November gives November\'s closing balance', () => {
+    const first = studentLoanWalk(result, anchor, '2026-11-01')!;
+    const last = studentLoanWalk(result, anchor, '2026-11-30')!;
+    expect(first).toEqual(last);
+    expect(first.end).toBe(51138.77);
+  });
+
+  it('adds up to the end balance exactly, for any end month', () => {
+    for (const toDate of ['2026-09-30', '2026-10-15', '2026-11-03', '2027-03-31', '2027-10-01', '2027-11-30']) {
+      const w = studentLoanWalk(result, anchor, toDate)!;
+      expect(w).toBeDefined();
+      expect(added(w)).toBe(w.end);
+    }
+  });
+
+  it('puts the balancing interest within 0.05 of the months\' own interest, less any top-up landed', () => {
+    for (const toDate of ['2026-09-30', '2026-10-15', '2026-11-03', '2027-03-31', '2027-10-01', '2027-11-30']) {
+      const w = studentLoanWalk(result, anchor, toDate)!;
+      const own = result.months
+        .filter(m => m.date >= '2026-09-01' && m.date <= w.endMonth)
+        .reduce((total, m) => total + m.interest - m.topUpApplied, 0);
+      expect(Math.abs(w.interestCharged - own)).toBeLessThan(0.05);
+    }
+  });
+
+  it('counts a top-up that lands in the range as landed, not as interest charged', () => {
+    const w = studentLoanWalk(result, anchor, '2027-11-30')!;
+    const landed = result.months.filter(m => m.date <= '2027-11-01').reduce((total, m) => total + m.topUpApplied, 0);
+    expect(w.topUpLanded).toBeGreaterThan(1000);
+    expect(w.topUpLanded).toBeCloseTo(landed, 2);
+    expect(w.modelledMonths).toHaveLength(13);
+    expect(w.modelledMonths[0]).toBe('2026-11-01');
+    expect(w.modelledMonths[12]).toBe('2027-11-01');
+    expect(w.knownThrough).toBe('2026-10-01');
+  });
+
+  it('covers just the anchored month when toDate falls in it', () => {
+    const w = studentLoanWalk(result, anchor, '2026-09-30')!;
+    expect(w).toMatchObject({
+      start: 51052.24, endMonth: '2026-09-01', refunded: 137, repaidKnown: 171, knownThrough: '2026-09-01',
+      repaidModelled: 0, modelledMonths: [], end: 51152.33,
+    });
+  });
+
+  it("leaves out the anchored month's own draw, which the anchor balance already holds, but counts later ones", () => {
+    const input: StudentLoanSimInput = {
+      ...flat6,
+      draws: [
+        { date: '2022-01-05', amount: 10000 },
+        { date: '2022-03-01', amount: 300 },
+        { date: '2022-05-10', amount: 2000 },
+      ],
+      anchor: { date: '2022-03-10', balance: 10200 },
+    };
+    const sim = simulateStudentLoan(input);
+    expect(sim.months.find(m => m.date === '2022-03-01')!.drawn).toBe(300);
+    const w = studentLoanWalk(sim, input.anchor!, '2022-05-31')!;
+    expect(w.drawn).toBe(2000);
+    expect(added(w)).toBe(w.end);
+    // Mar: 10,200 plus the 21 days after the 10th at 0.5% a month; then Apr, and May on 2,000 more.
+    const mar = 10200 * 0.005 * (21 / 31);
+    const apr = (10200 + mar) * 0.005;
+    const may = (10200 + mar + apr + 2000) * 0.005;
+    expect(w.interestCharged).toBeCloseTo(mar + apr + may, 1);
+    expect(w.end).toBeCloseTo(10200 + 2000 + mar + apr + may, 1);
+  });
+
+  it('counts a voluntary payment as paid, separate from a refund', () => {
+    const input = { ...ownerInput, extraPayments: [{ date: '2026-09-23', amount: -137 }, { date: '2026-10-12', amount: 500 }] };
+    const sim = simulateStudentLoan(input);
+    const w = studentLoanWalk(sim, anchor, '2026-11-03')!;
+    expect(w.refunded).toBe(137);
+    expect(w.paidExtra).toBe(500);
+    expect(added(w)).toBe(w.end);
+  });
+
+  it('has no known-through month and no modelled months when nothing is known and nothing is modelled', () => {
+    const input: StudentLoanSimInput = { ...ownerInput, knownPayments: undefined, salary: 20000, incomeByTaxYear: undefined };
+    const sim = simulateStudentLoan(input);
+    const w = studentLoanWalk(sim, anchor, '2026-11-03')!;
+    // Salary under the threshold: modelled, but nothing deducted, so not a modelled month.
+    expect(sim.months[2].paymentSource).toBe('modelled');
+    expect(w.knownThrough).toBeNull();
+    expect(w.repaidKnown).toBe(0);
+    expect(w.repaidModelled).toBe(0);
+    expect(w.modelledMonths).toEqual([]);
+    expect(added(w)).toBe(w.end);
+  });
+
+  it('ends at 0 on the month a loan clears', () => {
+    const cleared = simulateStudentLoan({ ...ownerInput, anchor: { date: '2026-09-07', balance: 300 }, knownPayments: undefined });
+    expect(cleared.outcome).toBe('cleared');
+    const w = studentLoanWalk(cleared, { date: '2026-09-07', balance: 300 }, cleared.endDate)!;
+    expect(w.end).toBe(0);
+    expect(added(w)).toBe(0);
+  });
+
+  describe('is undefined when there is no honest walk', () => {
+    it('with no anchored month', () => {
+      expect(studentLoanWalk(simulateStudentLoan({ ...ownerInput, anchor: undefined }), anchor, '2026-11-03')).toBeUndefined();
+    });
+
+    it('with an empty simulation', () => {
+      expect(studentLoanWalk(simulateStudentLoan({ ...flat6, draws: [] }), anchor, '2026-11-03')).toBeUndefined();
+    });
+
+    it('when toDate is before the anchored month', () => {
+      expect(studentLoanWalk(result, anchor, '2026-08-31')).toBeUndefined();
+      expect(studentLoanWalk(result, anchor, '2025-01-01')).toBeUndefined();
+    });
+
+    it('when toDate is in a month the simulation never reached', () => {
+      const cleared = simulateStudentLoan({ ...ownerInput, anchor: { date: '2026-09-07', balance: 300 }, knownPayments: undefined });
+      expect(studentLoanWalk(cleared, { date: '2026-09-07', balance: 300 }, '2030-01-01')).toBeUndefined();
+    });
+
+    it('when the range runs into the write-off month, where the balance falls by an amount the parts do not explain', () => {
+      const sim = simulateStudentLoan({ ...ownerInput, salary: 20000, writeOffYears: 3, incomeByTaxYear: undefined });
+      expect(sim.endDate).toBe('2027-04-01');
+      expect(studentLoanWalk(sim, anchor, '2027-03-31')).toBeDefined();
+      expect(studentLoanWalk(sim, anchor, '2027-04-30')).toBeUndefined();
+    });
+
+    it("when the anchor is not the one the simulation was anchored to", () => {
+      expect(studentLoanWalk(result, { date: '2026-10-07', balance: 51052.24 }, '2026-11-03')).toBeUndefined();
+    });
+
+    it('for a date or balance that is not usable', () => {
+      expect(studentLoanWalk(result, anchor, '')).toBeUndefined();
+      expect(studentLoanWalk(result, anchor, '2026-13-40')).toBeUndefined();
+      expect(studentLoanWalk(result, { date: 'soon', balance: 51052.24 }, '2026-11-03')).toBeUndefined();
+      expect(studentLoanWalk(result, { date: '2026-09-07', balance: Number.NaN }, '2026-11-03')).toBeUndefined();
+    });
+  });
+});
+
+describe('studentLoanPay', () => {
+  it('takes the sacrificed share off gross under salary sacrifice', () => {
+    expect(studentLoanPay(55000, 'salary_sacrifice', 5)).toBe(52250);
+    expect(studentLoanPay(40000, 'salary_sacrifice', 12.5)).toBe(35000);
+  });
+
+  it('leaves gross alone for net pay and relief at source', () => {
+    expect(studentLoanPay(55000, 'net_pay', 5)).toBe(55000);
+    expect(studentLoanPay(55000, 'relief_at_source', 5)).toBe(55000);
+  });
+
+  it('accepts the whole 0..100 range, ends included', () => {
+    expect(studentLoanPay(55000, 'salary_sacrifice', 0)).toBe(55000);
+    expect(studentLoanPay(55000, 'salary_sacrifice', 100)).toBe(0);
+  });
+
+  it('falls back to gross for a percent that is not finite or outside 0..100', () => {
+    for (const percent of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -0.01, 100.01, -5, 250]) {
+      expect(studentLoanPay(55000, 'salary_sacrifice', percent)).toBe(55000);
+    }
+  });
+
+  it('rounds to pence', () => {
+    // 33,333.33 x 0.93 = 30,999.9969.
+    expect(studentLoanPay(33333.33, 'salary_sacrifice', 7)).toBe(31000);
+  });
+
+  it('is 0 for a gross of 0', () => {
+    expect(studentLoanPay(0, 'salary_sacrifice', 5)).toBe(0);
+  });
+
+  it('scales a negative gross the same way rather than flooring it at 0', () => {
+    expect(studentLoanPay(-1000, 'salary_sacrifice', 10)).toBe(-900);
+    expect(studentLoanPay(-1000, 'net_pay', 10)).toBe(-1000);
+  });
+});
+
+describe('payslipLoanPay', () => {
+  const payslip = { gross: 4583.33, pensionEmployee: 229.17 };
+
+  it("is the owner's post-sacrifice pay under salary sacrifice, which is what payroll deducted 171 on", () => {
+    const pay = payslipLoanPay(payslip, 'salary_sacrifice');
+    expect(pay).toBe(4354.16);
+    // floor(9% x (4,354.16 - 29,385 / 12)) = floor(171.49)
+    expect(Math.floor(0.09 * (pay - 29385 / 12))).toBe(171);
+    // On gross it would have been 192, so the pension matters.
+    expect(Math.floor(0.09 * (payslip.gross - 29385 / 12))).toBe(192);
+  });
+
+  it('is gross for net pay and relief at source, whatever the pension figure', () => {
+    expect(payslipLoanPay(payslip, 'net_pay')).toBe(4583.33);
+    expect(payslipLoanPay(payslip, 'relief_at_source')).toBe(4583.33);
+  });
+
+  it('is gross when there is no pension under salary sacrifice', () => {
+    expect(payslipLoanPay({ gross: 4583.33, pensionEmployee: 0 }, 'salary_sacrifice')).toBe(4583.33);
+  });
+
+  it('rounds away floating point noise in the subtraction', () => {
+    // 3000.3 - 0.1 is 3000.2000000000003 in binary.
+    expect(3000.3 - 0.1).not.toBe(3000.2);
+    expect(payslipLoanPay({ gross: 3000.3, pensionEmployee: 0.1 }, 'salary_sacrifice')).toBe(3000.2);
+  });
+
+  it('gives NaN, not a made-up pay, for a pension figure that is not a number', () => {
+    expect(payslipLoanPay({ gross: 4583.33, pensionEmployee: Number.NaN }, 'salary_sacrifice')).toBeNaN();
+    expect(payslipLoanPay({ gross: 4583.33, pensionEmployee: Number.NaN }, 'net_pay')).toBe(4583.33);
+  });
+});
+
+describe('payslipLoanBasis', () => {
+  // The owner's October 2026 payslip: £171 is 9% over the Plan 2 threshold on
+  // pay after the £229.17 pension; on gross it would have been £192.
+  const october = { gross: 4583.33, pensionEmployee: 229.17, studentLoan: 171 };
+
+  it('reads a deduction taken after the pension as salary sacrifice', () => {
+    expect(payslipLoanBasis(october, 29385, 9)).toBe('after_pension');
+  });
+
+  it('reads a deduction taken on gross as gross', () => {
+    expect(payslipLoanBasis({ ...october, studentLoan: 192 }, 29385, 9)).toBe('gross');
+  });
+
+  it('allows a pound either way for payroll rounding', () => {
+    expect(payslipLoanBasis({ ...october, studentLoan: 172 }, 29385, 9)).toBe('after_pension');
+    expect(payslipLoanBasis({ ...october, studentLoan: 191 }, 29385, 9)).toBe('gross');
+  });
+
+  it('says nothing when the figure fits neither basis', () => {
+    expect(payslipLoanBasis({ ...october, studentLoan: 120 }, 29385, 9)).toBeUndefined();
+  });
+
+  it('says nothing when a small pension leaves both bases within a pound', () => {
+    expect(payslipLoanBasis({ ...october, pensionEmployee: 5, studentLoan: 191 }, 29385, 9)).toBeUndefined();
+  });
+
+  it('says nothing without a deduction, without a pension, or with a figure that is not a number', () => {
+    expect(payslipLoanBasis({ ...october, studentLoan: 0 }, 29385, 9)).toBeUndefined();
+    expect(payslipLoanBasis({ ...october, pensionEmployee: 0 }, 29385, 9)).toBeUndefined();
+    expect(payslipLoanBasis({ ...october, gross: Number.NaN }, 29385, 9)).toBeUndefined();
+    expect(payslipLoanBasis(october, Number.NaN, 9)).toBeUndefined();
+  });
+});
+
+describe('seeding the previous tax year\'s top-up', () => {
+  // An August 2027 statement predates the October 2027 landing of 2026-27's
+  // top-up, so SLC's figure leaves all of 2026-27 out and it must still land.
+  const august = (date: string): StudentLoanSimInput => ({
+    ...ownerInput,
+    today: '2027-08-20',
+    salaryFrom: '2027-08-20',
+    incomeByTaxYear: { 2026: 50904.61, 2027: 56000 },
+    anchor: { date, balance: 52000 },
+    extraPayments: [],
+    knownPayments: [],
+    rateSchedule: [ownerRow('2026-04-06', 3.2, null), ownerRow('2026-09-01', 4.1, 6)],
+  });
+
+  it('lands the year before the anchor in October when the anchor is in August', () => {
+    const result = simulateStudentLoan(august('2027-08-15'));
+    const october = result.months.find(m => m.date === '2027-10-01')!;
+    // 2026-27 on the anchor balance: five months at 3.2% charged against
+    // 3.2% + 3% x the income's share of the slide, seven at 4.1% against
+    // the 6% cap.
+    const slide = 3 * (50904.61 - 29385) / (52885 - 29385);
+    expect(october.topUpApplied).toBeCloseTo(52000 * (5 * slide + 7 * 1.9) / 100 / 12, 1);
+  });
+
+  it('does not seed it again once it has landed before the anchor', () => {
+    const result = simulateStudentLoan(august('2027-11-15'));
+    expect(result.months.every(m => m.topUpApplied === 0 || m.date >= '2028-10-01')).toBe(true);
+  });
+});
+
+describe("a top-up landing in the anchor's own month", () => {
+  // Lag 6 lands 2025-26's top-up in October 2026. SLC's figure on 15 October
+  // already holds it, so the simulation must not add it again, whether or not
+  // it ran from borrowing before the anchor. 2025-26 income of 40,000 sits
+  // partway up the Plan 2 slide, so there is a real top-up to double count.
+  const income = { 2025: 40000, 2026: 50904.61 };
+  const anchored = (base: StudentLoanSimInput): StudentLoanSimInput => ({
+    ...base,
+    incomeByTaxYear: income,
+    anchor: { date: '2026-10-15', balance: 40000 },
+  });
+  const october = (input: StudentLoanSimInput) =>
+    simulateStudentLoan(anchored(input)).months.find(m => m.date === '2026-10-01')!;
+
+  it('lands nothing in that month, with borrowing before the anchor or without: October topUpApplied is 0 either way', () => {
+    expect(october(ownerWithDraws).topUpApplied).toBe(0);
+    expect(october(ownerInput).topUpApplied).toBe(0);
+  });
+
+  it('reaches the same October balance with borrowing as without: 40,000 + 70.54 interest - 171 = 39,899.54', () => {
+    // 40,000 x 4.1% / 12 x 16 of 31 days after the 15th = 70.54; the 171 is the deduction on 31 October.
+    // Before the fix the draws run landed 682.28 on top of this: 40,583.02.
+    const withDraws = october(ownerWithDraws);
+    const without = october(ownerInput);
+    expect(without.balance).toBe(39899.54);
+    expect(without.interest).toBe(70.54);
+    expect(withDraws.balance).toBe(without.balance);
+    expect(withDraws.interest).toBe(without.interest);
+  });
+
+  it('carries on identically afterwards: November agrees too', () => {
+    const nov = (input: StudentLoanSimInput) =>
+      simulateStudentLoan(anchored(input)).months.find(m => m.date === '2026-11-01')!;
+    expect(nov(ownerWithDraws).balance).toBe(nov(ownerInput).balance);
+    expect(nov(ownerWithDraws).balance).toBe(39843.75);
+  });
+
+  describe('anchorCheck, which compares like with like', () => {
+    // September's closing balance, then the 15 days of October up to and including the anchor at 4.1% provisional.
+    const preLanding = (sim: ReturnType<typeof simulateStudentLoan>): number => {
+      const sept = sim.months.find(m => m.date === '2026-09-01')!;
+      return round2For(sept.balance * (1 + (4.1 / 1200) * (15 / 31)));
+    };
+    const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.02;
+
+    it('adds the landed top-up to the rebuilt balance: gap = SLC - (rebuilt before the landing + the landed amount)', () => {
+      const sim = simulateStudentLoan(anchored(ownerWithDraws));
+      const sept = sim.months.find(m => m.date === '2026-09-01')!;
+      // 2025-26's top-up, accrued before the anchor and due on 1 October 2026.
+      const due = sept.pendingByTaxYear.find(p => p.taxYear === 2025)!;
+      expect(due).toEqual({ taxYear: 2025, amount: 682.28, landsOn: '2026-10-01' });
+      const found = sim.anchorCheck!;
+      expect(near(found.rebuiltBalance, preLanding(sim) + due.amount)).toBe(true);
+      expect(found.rebuiltBalance).toBe(47449.12);
+      expect(found.gap).toBe(-7449.12);
+      expect(near(found.gap, 40000 - (preLanding(sim) + due.amount))).toBe(true);
+      // The same run without the landing would have left 682.28 more of gap.
+      expect(near(40000 - preLanding(sim) - found.gap, due.amount)).toBe(true);
+    });
+
+    it("adds nothing when the anchor's month is not a landing month: lag 7 lands in November", () => {
+      const sim = simulateStudentLoan(anchored({ ...ownerWithDraws, slcTiming: { confirmationLagMonths: 7 } }));
+      expect(near(sim.anchorCheck!.rebuiltBalance, preLanding(sim))).toBe(true);
+      expect(sim.anchorCheck!.rebuiltBalance).toBe(46763.79);
+    });
+
+    it('adds nothing when the year landing in the anchor month had no top-up to land', () => {
+      // 2025-26 income of 14,324.18 is under the threshold, so there is nothing pending for it.
+      const sim = simulateStudentLoan({
+        ...ownerWithDraws,
+        anchor: { date: '2026-10-15', balance: 40000 },
+      });
+      expect(sim.months.find(m => m.date === '2026-09-01')!.pendingByTaxYear.every(p => p.taxYear !== 2025)).toBe(true);
+      expect(near(sim.anchorCheck!.rebuiltBalance, preLanding(sim))).toBe(true);
+    });
+
+    it('does not change the anchor check when slcTiming is off, which has nothing to land', () => {
+      const sim = simulateStudentLoan(anchored({ ...ownerWithDraws, slcTiming: undefined }));
+      const sept = sim.months.find(m => m.date === '2026-09-01')!;
+      expect(near(sim.anchorCheck!.rebuiltBalance, sept.balance * (1 + (sept.annualRate / 1200) * (15 / 31)))).toBe(true);
+    });
+  });
+
+  it("leaves only the next year's top-up pending after the landing month, and it does not land again later", () => {
+    for (const input of [ownerWithDraws, ownerInput]) {
+      const { months } = simulateStudentLoan(anchored(input));
+      const after = months.find(m => m.date === '2026-10-01')!;
+      expect(after.pendingByTaxYear.map(p => p.taxYear)).toEqual([2026]);
+      expect(months.filter(m => m.date > '2026-10-01' && m.date < '2027-10-01').every(m => m.topUpApplied === 0)).toBe(true);
+      // 2026-27's own top-up, on its own October a year later.
+      expect(months.find(m => m.date === '2027-10-01')!.topUpApplied).toBeGreaterThan(0);
+    }
+  });
+
+  it('only affects the anchor month: an anchor before the landing month still lands the year in October', () => {
+    const august = simulateStudentLoan({
+      ...ownerWithDraws,
+      incomeByTaxYear: { 2026: 50904.61, 2027: 56000 },
+      anchor: { date: '2027-08-15', balance: 52000 },
+      extraPayments: [],
+      knownPayments: [],
+    });
+    expect(august.months.find(m => m.date === '2027-10-01')!.topUpApplied).toBeGreaterThan(1000);
+  });
+
+  it('lands a top-up whose landing month is after the anchor month, whatever the lag', () => {
+    // Lag 7 lands 2025-26 in November 2026, a month after the 15 October anchor.
+    const lag7 = simulateStudentLoan(anchored({ ...ownerWithDraws, slcTiming: { confirmationLagMonths: 7 } }));
+    expect(lag7.months.find(m => m.date === '2026-10-01')!.topUpApplied).toBe(0);
+    expect(lag7.months.find(m => m.date === '2026-11-01')!.topUpApplied).toBeGreaterThan(0);
+  });
+
+  // Documented on `simulateStudentLoan`, not corrected: the anchor tax year's
+  // pending top-up accrued on the rebuilt balance before the reset with
+  // borrowing, and is seeded on SLC's balance without it.
+  it('known approximation: the same anchor shows more pending top-up with borrowing, whose rebuilt balance ran above SLC\'s', () => {
+    const withDraws = october(ownerWithDraws);
+    const without = october(ownerInput);
+    expect(without.pendingTopUp).toBe(584.53);
+    expect(withDraws.pendingTopUp).toBeGreaterThan(without.pendingTopUp);
+    expect(simulateStudentLoan(anchored(ownerWithDraws)).anchorCheck!.gap).toBeLessThan(0);
+  });
+});
+
+describe('pendingByTaxYear', () => {
+  const sum = (m: { pendingByTaxYear: { amount: number }[] }): number =>
+    m.pendingByTaxYear.reduce((total, p) => total + p.amount, 0);
+  // The August 2027 statement of the seeding tests: 2026-27's top-up is still pending.
+  const augustInput = (date: string): StudentLoanSimInput => ({
+    ...ownerInput,
+    today: '2027-08-20',
+    salaryFrom: '2027-08-20',
+    incomeByTaxYear: { 2026: 50904.61, 2027: 56000 },
+    anchor: { date, balance: 52000 },
+    extraPayments: [],
+    knownPayments: [],
+  });
+  const at = (input: StudentLoanSimInput, date: string) =>
+    simulateStudentLoan(input).months.find(m => m.date === date)!;
+
+  it('splits an August anchor\'s pending in two: the year before, landing this October, and the anchor year, a year later', () => {
+    const august = at(augustInput('2027-08-15'), '2027-08-01');
+    // 2026-27 on SLC's 52,000: five months at 3.2% charged against 3.2% + 2.747% of slide
+    // (3 x (50,904.61 - 29,385) / 23,500), seven at 4.1% against the 6% cap:
+    // 52,000 x (5 x 2.747186 + 7 x 1.9)% / 12 = 1,171.56.
+    // 2027-28: April-July seeded plus August, five months at (6 - 4.1)% on 52,000: 5 x 82.33 = 411.67.
+    expect(august.pendingByTaxYear).toEqual([
+      { taxYear: 2026, amount: 1171.56, landsOn: '2027-10-01' },
+      { taxYear: 2027, amount: 411.67, landsOn: '2028-10-01' },
+    ]);
+    expect(august.pendingTopUp).toBe(1583.22);
+    expect(Math.abs(sum(august) - august.pendingTopUp)).toBeLessThan(0.02);
+  });
+
+  it("drops the year when it lands: October's top-up is the amount that was pending for it", () => {
+    const input = augustInput('2027-08-15');
+    const sept = at(input, '2027-09-01');
+    const oct = at(input, '2027-10-01');
+    expect(sept.pendingByTaxYear.map(p => p.taxYear)).toEqual([2026, 2027]);
+    expect(oct.topUpApplied).toBe(1171.56);
+    expect(sept.pendingByTaxYear[0]).toEqual({ taxYear: 2026, amount: 1171.56, landsOn: '2027-10-01' });
+    expect(oct.pendingByTaxYear.map(p => p.taxYear)).toEqual([2027]);
+    expect(oct.pendingByTaxYear[0].landsOn).toBe('2028-10-01');
+  });
+
+  it('is a single year for an anchor after the prior year has landed, and for the owner\'s September anchor', () => {
+    const november = at(augustInput('2027-11-15'), '2027-11-01');
+    expect(november.pendingByTaxYear).toEqual([{ taxYear: 2027, amount: 658.67, landsOn: '2028-10-01' }]);
+    // 2025-26 was under the threshold, so seeds nothing; 2026-27 is the one pending.
+    const sept = at(ownerInput, '2026-09-01');
+    expect(sept.pendingTopUp).toBe(665.42);
+    expect(sept.pendingByTaxYear).toEqual([{ taxYear: 2026, amount: 665.42, landsOn: '2027-10-01' }]);
+    expect(at(ownerInput, '2026-11-01').pendingByTaxYear).toEqual([{ taxYear: 2026, amount: 827.41, landsOn: '2027-10-01' }]);
+  });
+
+  it('starts a new year in April, oldest first, with two years pending between April and the landing month', () => {
+    const april = at(augustInput('2027-08-15'), '2028-04-01');
+    expect(april.pendingByTaxYear.map(p => p.taxYear)).toEqual([2027, 2028]);
+    expect(april.pendingByTaxYear.map(p => p.landsOn)).toEqual(['2028-10-01', '2029-10-01']);
+  });
+
+  it('sums to pendingTopUp, within 0.02, in every month of a long run', () => {
+    for (const input of [augustInput('2027-08-15'), ownerWithDraws, ownerInput]) {
+      const { months } = simulateStudentLoan(input);
+      expect(months.some(m => m.pendingByTaxYear.length > 1)).toBe(true);
+      for (const m of months) {
+        expect(Math.abs(sum(m) - m.pendingTopUp)).toBeLessThan(0.02);
+        const years = m.pendingByTaxYear.map(p => p.taxYear);
+        expect(years).toEqual([...years].sort((a, b) => a - b));
+        expect(new Set(years).size).toBe(years.length);
+        for (const p of m.pendingByTaxYear) {
+          expect(p.amount).toBe(round2For(p.amount));
+          expect(p.landsOn > m.date).toBe(true);
+          expect(p.landsOn.endsWith('-01')).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('is empty when slcTiming is off', () => {
+    const { months } = simulateStudentLoan({ ...ownerWithDraws, slcTiming: undefined });
+    expect(months.length).toBeGreaterThan(0);
+    expect(months.every(m => m.pendingByTaxYear.length === 0 && m.pendingTopUp === 0)).toBe(true);
+  });
+
+  it('is empty on another plan even with slcTiming on, and in study and pre-repayment months', () => {
+    const plan5 = simulateStudentLoan({ ...ownerWithDraws, plan: 'plan5', rateSchedule: undefined });
+    expect(plan5.months.every(m => m.pendingByTaxYear.length === 0)).toBe(true);
+    const study = simulateStudentLoan(ownerWithDraws).months.filter(m => m.phase !== 'repayment');
+    expect(study.length).toBeGreaterThan(0);
+    expect(study.every(m => m.pendingByTaxYear.length === 0)).toBe(true);
+  });
+
+  it('is empty when nothing is pending: a year whose income is under the threshold accrues no top-up', () => {
+    const { months } = simulateStudentLoan({
+      ...ownerInput,
+      incomeByTaxYear: { 2025: 14324.18, 2026: 20000 },
+      salary: 20000,
+    });
+    expect(months.slice(0, 8).every(m => m.pendingByTaxYear.length === 0 && m.pendingTopUp === 0)).toBe(true);
+  });
+
+  it('is empty in the write-off month, where whatever was pending is dropped and reported as forgone', () => {
+    // 35,000 sits partway up the slide, so a top-up accrues; writing off in April 2027 leaves 2026-27's undelivered.
+    const sim = simulateStudentLoan({ ...ownerInput, salary: 35000, writeOffYears: 3, incomeByTaxYear: undefined });
+    expect(sim.outcome).toBe('written_off');
+    const last = sim.months[sim.months.length - 1];
+    const before = sim.months[sim.months.length - 2];
+    expect(last.date).toBe('2027-04-01');
+    expect(last.pendingTopUp).toBe(0);
+    expect(last.pendingByTaxYear).toEqual([]);
+    // The month before still has it, and it is what the run reports as forgone.
+    expect(before.pendingByTaxYear.map(p => p.taxYear)).toEqual([2026]);
+    expect(before.pendingByTaxYear[0].amount).toBeGreaterThan(0);
+    expect(sim.forgoneTopUp).toBe(before.pendingTopUp);
   });
 });

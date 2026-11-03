@@ -345,9 +345,12 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 - **Student Loan** — SLC charges Plan 2 interest at RPI during the tax year; the
   income-linked part accrues monthly and lands in a later month (typically 6
   after the tax year ends, editable as "Income-linked interest lands"). The
-  headline shows SLC's balance at end-of-month plus accrued interest and how
-  much is pending. Income by tax year is derived from payslips and sets each
-  year's Plan 2 rate. Two views: your loan showing balance from latest SLC
+  headline builds the end-of-month figure from SLC's balance on its date, one
+  item at a time: borrowing, refunds, interest charged (with its rate when one
+  rate applied to every month), income-linked interest that has landed, payslip
+  deductions up to the latest payslip, and an estimate from pay for months with
+  no payslip. Income by tax year is derived from payslips and sets each year's
+  Plan 2 rate. Two views: your loan showing balance from latest SLC
   statement, accrued interest, and payslip deductions replacing modelled ones up
   to the latest payslip, plus how much you borrowed (summed from recorded
   borrowing, or the amount entered when none is recorded) and how far the current
@@ -365,6 +368,15 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   write-off date each show how they were determined. The course end date is
   inferred and carries the write-off boundary. Assumptions panel: inflation, RPI,
   income-linked landing lag, Plan 2 full-rate income threshold growth
+
+  Repayments are worked out from current pay, from the current tax year onward, so a low-paid month earlier in the year does not lower the deductions after it. The year's income still sets that year's Plan 2 interest rate. Loan pay is gross less salary sacrifice when your pay settings say salary sacrifice, both in the projection and for payslip income. A note appears when the latest payslip's deduction shows a different pay basis from the pension type in Tax & Income.
+
+  A Repaid and interest card shows, by month and by tax year, what was repaid, the interest added (including income-linked interest still to come), the net change in what is owed, and the balance. Estimated months and years carry an est. tag, and a lead sentence says what this month did.
+
+  Checking SLC's figures compares recorded SLC balances with the model. For each pair of balances it works out the rate SLC charged and sets it against the model's rate. When SLC's rate is higher, it says whether a payslip deduction HMRC has not yet passed on, or income-linked interest the model expected to land by then, explains the gap. When borrowing is recorded, it rebuilds the balance from that borrowing and compares it with SLC's figure.
+
+  Recording a balance shows the balance the model expects on that date, replayed from the previous reading, the gap against it, and the rate that gap implies.
+
 - **Investments** — profile-scoped holdings, optionally linked to a broker or
   exchange account. An investment account's balance is deliberately described
   as uninvested cash so positions and cash cannot be counted twice. The

@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   calculateDebtDrift,
   projectDebtBalance,
   rateInForce,
-  reconcileStudentLoanWithPayslips,
   STUDENT_LOAN_WRITE_OFF_YEARS,
 } from './debt';
 
@@ -566,90 +565,3 @@ describe('calculateDebtDrift', () => {
     expect(res.predictedBalance).toBe(10000);
   });
 });
-
-describe('reconcileStudentLoanWithPayslips', () => {
-  it('bridges SLC statement lag by applying post-statement payslip deductions', () => {
-    const observation = {
-      id: 'slc-1',
-      debtId: 'd_student',
-      observedOn: '2025-02-01',
-      statementDate: '2024-04-05',
-      balance: 30000,
-      source: 'statement' as const,
-    };
-
-    const payslips = [
-      // Prior to statement date: should be excluded
-      { payDate: '2024-03-28', studentLoan: 150 },
-      // Post statement date: should be included
-      { payDate: '2024-04-28', studentLoan: 150 },
-      { payDate: '2024-05-28', studentLoan: 150 },
-      { payDate: '2024-06-28', studentLoan: 200 },
-      // Zero deduction: excluded from count
-      { payDate: '2024-07-28', studentLoan: 0 },
-    ];
-
-    const result = reconcileStudentLoanWithPayslips(observation, payslips, '2024-12-31');
-    expect(result.statementBalance).toBe(30000);
-    expect(result.statementDate).toBe('2024-04-05');
-    expect(result.payslipsCount).toBe(3);
-    expect(result.payslipDeductionsTotal).toBe(500);
-    expect(result.adjustedBalance).toBe(29500);
-  });
-
-  it('never takes the balance below zero', () => {
-    const result = reconcileStudentLoanWithPayslips(
-      { id: 'o', debtId: 'd', observedOn: '2024-04-05', balance: 100, source: 'statement' as const },
-      [{ payDate: '2024-05-28', studentLoan: 150 }],
-      '2024-12-31',
-    );
-    expect(result.adjustedBalance).toBe(0);
-  });
-
-  it('applies nothing when there are no payslips', () => {
-    const result = reconcileStudentLoanWithPayslips(
-      { id: 'o', debtId: 'd', observedOn: '2024-04-05', balance: 30000, source: 'statement' as const },
-      [],
-      '2024-12-31',
-    );
-    expect(result).toMatchObject({ payslipsCount: 0, payslipDeductionsTotal: 0, adjustedBalance: 30000 });
-  });
-
-  describe('with no asOfDate it cuts off at the local day, not the UTC day', () => {
-    afterEach(() => vi.useRealTimers());
-
-    const observation = {
-      id: 'slc-1',
-      debtId: 'd_student',
-      observedOn: '2024-03-01',
-      statementDate: '2024-04-05',
-      balance: 30000,
-      source: 'statement' as const,
-    };
-    const payslips = [
-      { payDate: '2024-06-30', studentLoan: 100 },
-      { payDate: '2024-07-01', studentLoan: 100 },
-      { payDate: '2024-07-02', studentLoan: 100 },
-    ];
-
-    it('shortly after local midnight, the new day is already counted', () => {
-      // 00:30 local on 1 July is still 30 June in UTC in Europe/London (BST)
-      // and Pacific/Auckland.
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date(2024, 6, 1, 0, 30));
-      const result = reconcileStudentLoanWithPayslips(observation, payslips);
-      expect(result.payslipsCount).toBe(2);
-      expect(result.adjustedBalance).toBe(29800);
-    });
-
-    it('late in the local evening, the next day is not yet counted', () => {
-      // 23:30 local on 1 July is already 2 July in UTC in America/Los_Angeles.
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date(2024, 6, 1, 23, 30));
-      const result = reconcileStudentLoanWithPayslips(observation, payslips);
-      expect(result.payslipsCount).toBe(2);
-      expect(result.adjustedBalance).toBe(29800);
-    });
-  });
-});
-

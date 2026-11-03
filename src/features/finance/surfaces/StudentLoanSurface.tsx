@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { formatDayMonth } from '@/lib/format-date';
 import type { Debt } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
@@ -31,15 +32,21 @@ import {
   STUDENT_LOAN_WRITE_OFF_YEARS,
   academicYearDraws,
   balanceOnMonth,
+  expectedStudentLoanBalanceOn,
   firstRepaymentDue,
   incomeByTaxYear,
   inferCourseEnd,
-  reconcileStudentLoanWithPayslips,
+  payslipLoanBasis,
+  payslipLoanPay,
   simulateStudentLoan,
   studentLoanBorrowed,
   studentLoanBorrowedGap,
   studentLoanMonthlyRepayment,
+  studentLoanPay,
+  studentLoanReadingCheck,
+  studentLoanWalk,
   toISODate,
+  type BalanceReading,
   type StudentLoanAssumptions,
   type StudentLoanPlanKey,
   type StudentLoanSimInput,
@@ -52,6 +59,8 @@ import { useStudentLoanRules } from '../useStudentLoanRules';
 import { SurfaceHero } from '../components/SurfaceHero';
 import { DebtFormDialog } from '../components/DebtFormDialog';
 import { StudentLoanTimeline } from '../components/StudentLoanTimeline';
+import { StudentLoanLedger } from '../components/StudentLoanLedger';
+import { StudentLoanChecks, impliedRateNote } from '../components/StudentLoanChecks';
 import { BalanceRecords } from '../components/BalanceRecords';
 import { LoanMovements } from '../components/LoanMovements';
 import { PublishedRates } from '../components/PublishedRates';
@@ -70,6 +79,11 @@ const n = (s: string, fallback = 0) => {
 const monthYear = (date: string) => {
   const [y, m] = date.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+};
+
+const monthName = (date: string) => {
+  const [y, m] = date.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long' });
 };
 
 const outcomeLine = (r: StudentLoanSimResult) =>
@@ -136,7 +150,7 @@ export default function StudentLoanSurface() {
   // How long after a tax year ends SLC adds its income-linked interest. It
   // waits on HMRC, so this is a guess: change it once you see yours land.
   const [confirmLag, setConfirmLag] = useState('6');
-  const slcTiming = { confirmationLagMonths: Math.max(0, Math.round(n(confirmLag, 6))) };
+  const slcTiming = { confirmationLagMonths: Math.min(11, Math.max(0, Math.round(n(confirmLag, 6)))) };
   const assumptions: StudentLoanAssumptions = {
     rpi: n(a.rpi), rateCap: n(a.rateCap), baseRate: n(a.baseRate),
     upperInterestThreshold: n(a.upperInterestThreshold), inflation: n(a.inflation), thresholdGrowth: n(a.thresholdGrowth),
@@ -150,23 +164,37 @@ export default function StudentLoanSurface() {
 
   // --- Your loan -------------------------------------------------------------
   const salaryNow = settings.grossSalary || 0;
+  // Payroll charges the loan on pay after salary sacrifice, not on gross.
+  const loanPay = studentLoanPay(salaryNow, settings.pensionType, settings.personalPensionPercent);
   // SLC sets a tax year's Plan 2 rate from that year's total income, so the
   // payslips say more than today's salary does: actual sums for past years,
   // this year's pay so far plus today's salary for the months left.
   const incomes = useMemo(
-    () => incomeByTaxYear(payslips.map(p => ({ payDate: p.payDate, gross: p.gross })), salaryNow, today),
-    [payslips, salaryNow, today],
+    () => incomeByTaxYear(payslips.map(p => ({ payDate: p.payDate, gross: payslipLoanPay(p, settings.pensionType) })), loanPay, today),
+    [payslips, settings.pensionType, loanPay, today],
   );
   const taxYearNow = today >= `${today.slice(0, 4)}-04-06` ? Number(today.slice(0, 4)) : Number(today.slice(0, 4)) - 1;
-  const incomeNow = incomes.find(i => i.taxYear === taxYearNow)?.income ?? salaryNow;
+  const incomeNow = incomes.find(i => i.taxYear === taxYearNow)?.income ?? loanPay;
   const minePlan: StudentLoanPlanKey = loan?.studentLoanPlan
     ?? (settings.studentLoanPlan !== 'none' ? settings.studentLoanPlan : 'plan2');
-  const latestObs = useMemo(
-    () => [...(loan?.observations ?? [])].sort((x, y) =>
-      (x.statementDate || x.observedOn).localeCompare(y.statementDate || y.observedOn)).pop(),
+  // SLC's verified balances, oldest first, each on the date SLC shows.
+  const readings = useMemo<BalanceReading[]>(
+    () => (loan?.observations ?? [])
+      .map(o => ({ date: o.statementDate || o.observedOn, balance: o.balance }))
+      .sort((x, y) => x.date.localeCompare(y.date)),
     [loan],
   );
-  const live = latestObs ? reconcileStudentLoanWithPayslips(latestObs, payslips, today) : null;
+  const latestReading = readings[readings.length - 1];
+  const loanPayments = useMemo(
+    () => payslips.filter(p => p.studentLoan > 0).map(p => ({ date: p.payDate, amount: p.studentLoan })),
+    [payslips],
+  );
+  // Signed as the balance moves: borrowing and refunds raise it, payments you made lower it.
+  const adjustments = useMemo(
+    () => (loan?.draws ?? []).map(d => ({ date: d.date, amount: isBorrowing(d) || d.kind === 'refund' ? d.amount : -d.amount })),
+    [loan],
+  );
+  const firstPayslip = payslips.reduce<string | undefined>((first, p) => (first === undefined || p.payDate < first ? p.payDate : first), undefined);
   const borrowing = (loan?.draws ?? []).filter(isBorrowing);
   // Best evidence first: the date you saved, then the last borrowing, then a
   // three-year course from the start date. Which one was used is said on the
@@ -190,20 +218,20 @@ export default function StudentLoanSurface() {
     incomeByTaxYear: Object.fromEntries(incomes.map(i => [i.taxYear, i.income])),
     slcTiming,
     courseEnd: mineCourseEnd,
-    salary: settings.grossSalary || 0,
+    salary: loanPay,
     salaryFrom: today,
     salaryGrowth: n(salaryGrowth),
     ...planRules(minePlan),
     writeOffYears: loan.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[minePlan],
     assumptions,
-    anchor: latestObs
-      ? { date: latestObs.statementDate || latestObs.observedOn, balance: latestObs.balance }
-      : loan.balance > 0 ? { date: today, balance: loan.balance } : undefined,
+    anchor: latestReading ?? (loan.balance > 0 ? { date: today, balance: loan.balance } : undefined),
     // What payroll actually took since the statement, in place of the model,
     // up to the latest payslip -- not today, or a month whose payslip has not
     // arrived yet would count as nothing deducted. SLC lags HMRC by a year, so
     // these are the freshest figures there are.
-    knownPayments: payslips.filter(p => p.studentLoan > 0).map(p => ({ date: p.payDate, amount: p.studentLoan })),
+    knownPayments: loanPayments,
+    // Real deductions replace the model from the first payslip, so a loan with recorded borrowing rebuilds from them before the statement.
+    knownPaymentsFrom: firstPayslip,
     today,
   } : null;
 
@@ -233,6 +261,20 @@ export default function StudentLoanSurface() {
   // Stringified so the memo follows the values, not the object rebuilt each render.
   const inputKey = JSON.stringify(input);
   const result = useMemo(() => simulateStudentLoan(JSON.parse(inputKey) as StudentLoanSimInput), [inputKey]);
+  // The same run from another of SLC's balances, for the checks on your loan.
+  // Kept per balance until the inputs change, so the checks and the balance form
+  // share one run rather than each repeating it on every keystroke.
+  const simulateFrom = useMemo(() => {
+    const runs = new Map<string, StudentLoanSimResult>();
+    return (anchor: BalanceReading) => {
+      const key = `${anchor.date}|${anchor.balance}`;
+      const known = runs.get(key);
+      if (known) return known;
+      const run = simulateStudentLoan({ ...(JSON.parse(inputKey) as StudentLoanSimInput), anchor });
+      runs.set(key, run);
+      return run;
+    };
+  }, [inputKey]);
 
   const seedFromMine = () => {
     if (!loan) return;
@@ -247,7 +289,12 @@ export default function StudentLoanSurface() {
   // read off the same run the chart draws, so the two cannot disagree.
   const todayRow = balanceOnMonth(result, today);
 
-  const monthlyNow = studentLoanMonthlyRepayment(salaryNow, planRules(minePlan).threshold, planRules(minePlan).repaymentRate);
+  // The threshold the projection repays against: SLC's published Plan 2 figure
+  // when a rate row carries one, as `simulateStudentLoan` and `rateNow` read it.
+  const loanThreshold = minePlan === 'plan2' && rowNow?.plan2LowerThreshold != null
+    ? rowNow.plan2LowerThreshold
+    : planRules(minePlan).threshold;
+  const monthlyNow = studentLoanMonthlyRepayment(loanPay, loanThreshold, planRules(minePlan).repaymentRate);
   const mineLoan = mode === 'mine' ? loan : null;
   const balanceNow = mode === 'mine' && todayRow ? todayRow.balance : loan?.balance ?? 0;
   const borrowed = loan ? studentLoanBorrowed(loan) : null;
@@ -264,10 +311,24 @@ export default function StudentLoanSurface() {
 
   // The rate the rules give today, against the rate stored on the loan.
   const mineRate = rateNow(minePlan, mineCourseEnd, incomeNow);
-  const pendingNow = todayRow?.pendingTopUp ?? 0;
-  const landsOn = monthYear(toISODate(new Date(taxYearNow + 1, 3 + slcTiming.confirmationLagMonths, 1)));
+  // SLC's income-linked interest not yet added, by the tax year it belongs to and the month it should land.
+  const [firstPending, ...laterPending] = todayRow?.pendingByTaxYear ?? [];
+  const pendingNote = firstPending
+    ? ` About ${formatGBP(firstPending.amount)} more lands around ${monthYear(firstPending.landsOn)}${laterPending.map(p => ` and ${formatGBP(p.amount)} around ${monthYear(p.landsOn)}`).join('')}, ${laterPending.length > 0 ? "as HMRC confirms each year's income" : "once HMRC confirms that year's income"}.`
+    : '';
   const roundedRate = Math.round(mineRate.rate * 100) / 100;
   const storedRateStale = !!loan && Math.abs(loan.interestRate - roundedRate) >= 0.01;
+  // Which pay the latest payslip's deduction was worked out on, against what the pay settings assume.
+  const latestLoanSlip = payslips.filter(p => p.studentLoan > 0).sort((x, y) => y.payDate.localeCompare(x.payDate))[0];
+  const slipBasis = latestLoanSlip && latestLoanSlip.payDate >= `${taxYearNow}-04-06`
+    ? payslipLoanBasis(latestLoanSlip, loanThreshold, planRules(minePlan).repaymentRate)
+    : undefined;
+  const sacrifice = settings.pensionType === 'salary_sacrifice';
+  const payBasisNote = slipBasis === 'after_pension' && !sacrifice
+    ? `Your payslips take student loan after your pension, which is salary sacrifice, but your pay settings say ${settings.pensionType === 'net_pay' ? 'net pay' : 'relief at source'}. Change the pension type in Tax & Income so projections match payroll.`
+    : slipBasis === 'gross' && sacrifice
+      ? 'Your payslips take student loan on your full pay, so your pension is not salary sacrifice, but your pay settings say it is. Change the pension type in Tax & Income so projections match payroll.'
+      : null;
   const mineFirstDue = firstRepaymentDue(mineCourseEnd);
   const mineWriteOffYears = loan?.writeOffYears ?? STUDENT_LOAN_WRITE_OFF_YEARS[minePlan];
   const rateExplanation = (() => {
@@ -294,14 +355,33 @@ export default function StudentLoanSurface() {
     unknown: 'Course end not known. Set it in Edit',
   }[courseEndSource];
 
+  // SLC's last figure walked to the end of this month, part by part; the parts add up to the balance shown.
+  const walk = mineLoan && latestReading ? studentLoanWalk(result, latestReading, today) : undefined;
+  const heroDetail = (() => {
+    if (!latestReading) return 'As entered. Add the balance from your online account below to anchor it.';
+    if (!walk) return `Based on SLC's ${formatGBP(latestReading.balance)} on ${formatDayMonth(latestReading.date, { withYear: true })}.`;
+    const modelled = walk.modelledMonths.length === 1
+      ? `${monthName(walk.modelledMonths[0])}'s pay`
+      : `${walk.modelledMonths.length} months' pay not on a payslip yet`;
+    const parts = [
+      `SLC's ${formatGBP(walk.start)} on ${formatDayMonth(walk.startDate, { withYear: walk.startDate.slice(0, 4) !== today.slice(0, 4) })}`,
+      walk.drawn > 0 && `plus ${formatGBP(walk.drawn)} borrowed`,
+      walk.refunded > 0 && `plus ${formatGBP(walk.refunded)} refunded to you`,
+      walk.interestCharged > 0 && `plus ${formatGBP(walk.interestCharged)} interest${walk.chargedRate !== null ? ` at ${Number(walk.chargedRate.toFixed(2))}%` : ''}`,
+      walk.topUpLanded > 0 && `plus ${formatGBP(walk.topUpLanded)} income-linked interest added`,
+      walk.paidExtra > 0 && `less ${formatGBP(walk.paidExtra)} paid directly`,
+      walk.repaidKnown > 0 && `less ${formatGBP(walk.repaidKnown)} from payslips${walk.knownThrough ? ` to ${monthName(walk.knownThrough)}` : ''}`,
+      walk.repaidModelled > 0 && `less an estimated ${formatGBP(walk.repaidModelled)} from ${modelled}`,
+    ].filter(Boolean);
+    return `End of ${monthYear(walk.endMonth)}: ${parts.join(', ')}.${pendingNote}`;
+  })();
+
   const hero = mineLoan ? (
     <SurfaceHero
       loading={!hasLoaded}
       label="Student loan balance"
       value={formatGBP(balanceNow)}
-      detail={live
-        ? `What SLC should show at the end of ${monthYear(today)}: ${formatGBP(live.statementBalance)} on ${live.statementDate}, plus interest at the rate SLC charges during the year${live.payslipsCount > 0 ? `, less ${formatGBP(live.payslipDeductionsTotal)} from ${live.payslipsCount} payslips` : ''}.${pendingNow >= 1 ? ` About ${formatGBP(pendingNow)} more lands around ${landsOn}, once HMRC confirms this year's income.` : ''}`
-        : 'As entered. Add the balance from your online account below to anchor it.'}
+      detail={heroDetail}
       aside={
         <>
           <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">On current pay</p>
@@ -358,6 +438,21 @@ export default function StudentLoanSurface() {
     </div>
   );
 
+  // A typed balance is read against the verified one before it. With none before
+  // it, against the month's row of the run, so recorded borrowing still gives an expectation.
+  const priorReading = (date: string) => readings.filter(r => r.date < date).pop();
+  const expectedOn = (date: string) => {
+    const prior = priorReading(date);
+    if (!prior) return balanceOnMonth(result, date)?.balance;
+    return expectedStudentLoanBalanceOn({ from: prior, toDate: date, payments: loanPayments, adjustments, months: simulateFrom(prior).months });
+  };
+  const explain = (date: string, balance: number) => {
+    const prior = priorReading(date);
+    if (!prior) return undefined;
+    const check = studentLoanReadingCheck({ from: prior, to: { date, balance }, payments: loanPayments, adjustments, months: simulateFrom(prior).months });
+    return check.status === 'checked' ? impliedRateNote(prior, check) : undefined;
+  };
+
   const plan = mineLoan ? minePlan : simPlan;
 
   return (
@@ -394,33 +489,36 @@ export default function StudentLoanSurface() {
             </div>
           </section>
         ) : (
-          <section aria-label="Timeline" className="surface-card space-y-6 rounded-3xl border p-5 sm:p-6">
-            {mineLoan && loans.length > 1 && (
-              <div role="group" aria-label="Loan" className="flex flex-wrap gap-2">
-                {loans.map(l => (
-                  <Button key={l.id} size="sm" variant={l.id === mineLoan.id ? 'default' : 'outline'} aria-pressed={l.id === mineLoan.id} onClick={() => setLoanId(l.id)}>
-                    {l.name}
-                  </Button>
-                ))}
-              </div>
-            )}
-            <StudentLoanTimeline
-              key={mineLoan ? `mine-${mineLoan.id}` : 'sim'}
-              result={result}
-              realTerms={realTerms}
-              today={today}
-              courseEnd={input.courseEnd}
-            />
-            <dl className="grid grid-cols-2 gap-4 border-t border-border/40 pt-5 lg:grid-cols-4">
-              {readouts.map(r => (
-                <div key={r.label} className="min-w-0">
-                  <dt className="text-xs text-muted-foreground">{r.label}</dt>
-                  <dd className="mt-1 text-xl font-semibold tabular-nums">{formatGBP(r.value)}</dd>
-                  <dd className="text-xs text-muted-foreground">{r.note}</dd>
+          <>
+            <section aria-label="Timeline" className="surface-card space-y-6 rounded-3xl border p-5 sm:p-6">
+              {mineLoan && loans.length > 1 && (
+                <div role="group" aria-label="Loan" className="flex flex-wrap gap-2">
+                  {loans.map(l => (
+                    <Button key={l.id} size="sm" variant={l.id === mineLoan.id ? 'default' : 'outline'} aria-pressed={l.id === mineLoan.id} onClick={() => setLoanId(l.id)}>
+                      {l.name}
+                    </Button>
+                  ))}
                 </div>
-              ))}
-            </dl>
-          </section>
+              )}
+              <StudentLoanTimeline
+                key={mineLoan ? `mine-${mineLoan.id}` : 'sim'}
+                result={result}
+                realTerms={realTerms}
+                today={today}
+                courseEnd={input.courseEnd}
+              />
+              <dl className="grid grid-cols-2 gap-4 border-t border-border/40 pt-5 lg:grid-cols-4">
+                {readouts.map(r => (
+                  <div key={r.label} className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">{r.label}</dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums">{formatGBP(r.value)}</dd>
+                    <dd className="text-xs text-muted-foreground">{r.note}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+            {result.months.length > 0 && <StudentLoanLedger result={result} today={today} anchorDate={mineLoan ? latestReading?.date : undefined} />}
+          </>
         )}
 
         {mode === 'sim' && (
@@ -511,7 +609,7 @@ export default function StudentLoanSurface() {
               <div className="min-w-0">
                 <h3 className="text-lg font-semibold">{mineLoan.name}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {STUDENT_LOAN_PLAN_LABELS[minePlan]} · {formatGBP(monthlyNow)} a month from payroll on {formatGBP(salaryNow)}
+                  {STUDENT_LOAN_PLAN_LABELS[minePlan]} · {formatGBP(monthlyNow)} a month from payroll on {formatGBP(loanPay)}{loanPay !== salaryNow && ' after salary sacrifice'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -578,14 +676,28 @@ export default function StudentLoanSurface() {
               </p>
             )}
 
+            {payBasisNote && (
+              <p className="rounded-2xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">{payBasisNote}</p>
+            )}
+
             <div className="grid gap-8 border-t border-border/40 pt-5 md:grid-cols-2">
               <BalanceRecords
                 debt={mineLoan}
-                expectedOn={date => balanceOnMonth(result, date)?.balance}
+                expectedOn={expectedOn}
+                explain={explain}
                 hint="Your online account shows the balance and the date it is as of."
               />
               <LoanMovements loan={mineLoan} />
             </div>
+
+            <StudentLoanChecks
+              observations={readings}
+              payments={loanPayments}
+              adjustments={adjustments}
+              simulateFrom={simulateFrom}
+              anchorCheck={result.anchorCheck}
+              hasBorrowing={borrowing.length > 0}
+            />
           </section>
         )}
 

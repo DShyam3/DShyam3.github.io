@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Debt, DebtDraw } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { toISODate } from '@/lib/finance';
+import { formatDayMonth } from '@/lib/format-date';
 import { isBorrowing } from '@/lib/finance/student-loan';
 import { useDebtMutations } from '../useDebtMutations';
 
@@ -29,11 +30,6 @@ type Movement = 'refund' | 'payment';
 const KIND_LABEL: Record<Movement, string> = {
   refund: 'Refund to you',
   payment: 'Payment you made',
-};
-
-const shortDate = (date: string) => {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 export function LoanMovements({ loan }: { loan: Debt }) {
@@ -71,7 +67,7 @@ export function LoanMovements({ loan }: { loan: Debt }) {
           {movements.map(m => (
             <li key={m.id} className="flex items-center justify-between gap-3 py-2">
               <span className="min-w-0">
-                <span className="block">{shortDate(m.date)}</span>
+                <span className="block">{formatDayMonth(m.date, { withYear: true })}</span>
                 <span className="block text-xs text-muted-foreground">
                   {m.kind === 'refund' ? 'Refund to you, added back to the balance' : 'Payment you made'}
                 </span>
@@ -82,7 +78,7 @@ export function LoanMovements({ loan }: { loan: Debt }) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Remove the ${formatGBP(m.amount)} ${m.kind} from ${shortDate(m.date)}`}
+                  aria-label={`Remove the ${formatGBP(m.amount)} ${m.kind} from ${formatDayMonth(m.date, { withYear: true })}`}
                   className="text-muted-foreground hover:text-destructive"
                   onClick={() => save(draws.filter(d => d.id !== m.id))}
                 >
@@ -125,7 +121,7 @@ export function LoanMovements({ loan }: { loan: Debt }) {
           <ul className="divide-y divide-border/60 text-sm">
             {borrowing.map(d => (
               <li key={d.id} className="flex justify-between gap-3 py-2">
-                <span className="min-w-0 truncate text-muted-foreground">{d.label || 'Borrowing'} · {shortDate(d.date)}</span>
+                <span className="min-w-0 truncate text-muted-foreground">{d.label || 'Borrowing'} · {formatDayMonth(d.date, { withYear: true })}</span>
                 <span className="shrink-0 tabular-nums">{formatGBP(d.amount)}</span>
               </li>
             ))}

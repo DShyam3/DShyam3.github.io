@@ -20,6 +20,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import type { Debt, DebtObservation } from '@/features/finance/finance-types';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import { toISODate } from '@/lib/finance';
+import { formatDayMonth } from '@/lib/format-date';
 import { useFinanceData } from '../FinanceDataContext';
 
 const SOURCE_LABEL: Record<DebtObservation['source'], string> = {
@@ -28,19 +29,17 @@ const SOURCE_LABEL: Record<DebtObservation['source'], string> = {
   manual: 'Other',
 };
 
-const shortDate = (date: string) => {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
 export function BalanceRecords({
   debt,
   expectedOn,
+  explain,
   hint,
 }: {
   debt: Debt;
   /** What the model expected on a date, if it can say. */
   expectedOn?: (date: string) => number | undefined;
+  /** A line of reading for a figure typed but not yet saved, e.g. the rate it implies. */
+  explain?: (date: string, balance: number) => string | undefined;
   /** One line under the form, e.g. where to find the figure. */
   hint?: string;
 }) {
@@ -61,6 +60,7 @@ export function BalanceRecords({
   const entered = parseFloat(balance);
   const expected = Number.isFinite(entered) && asOf ? expectedOn?.(asOf) : undefined;
   const gap = expected !== undefined ? entered - expected : undefined;
+  const explained = Number.isFinite(entered) && asOf ? explain?.(asOf, entered) : undefined;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +93,7 @@ export function BalanceRecords({
           {records.map(r => (
             <li key={r.id} className="flex items-center justify-between gap-3 py-2">
               <span className="min-w-0">
-                <span className="block">{shortDate(r.statementDate || r.observedOn)}</span>
+                <span className="block">{formatDayMonth(r.statementDate || r.observedOn, { withYear: true })}</span>
                 <span className="block truncate text-xs text-muted-foreground">
                   {SOURCE_LABEL[r.source]}{r.note ? ` · ${r.note}` : ''}
                 </span>
@@ -104,7 +104,7 @@ export function BalanceRecords({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={`Delete the ${formatGBP(r.balance)} balance from ${shortDate(r.statementDate || r.observedOn)}`}
+                  aria-label={`Delete the ${formatGBP(r.balance)} balance from ${formatDayMonth(r.statementDate || r.observedOn, { withYear: true })}`}
                   className="text-muted-foreground hover:text-destructive"
                   onClick={() => askDelete({
                     title: 'Delete this balance?',
@@ -154,6 +154,9 @@ export function BalanceRecords({
               ? ', so this matches.'
               : <>, so this is <span className="tabular-nums text-foreground">{formatGBP(Math.abs(gap))}</span> {gap > 0 ? 'higher' : 'lower'}. A refund, a payment or interest timing usually explains it.</>}
           </p>
+        )}
+        {explained && (
+          <p className="col-span-full text-xs text-muted-foreground" aria-live="polite">{explained}</p>
         )}
         <div className="col-span-full flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">{hint}</p>

@@ -15,14 +15,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { formatGBP } from '@/features/finance/utils/calculations';
+import { formatDayMonth } from '@/lib/format-date';
 import { useFinanceData } from '../FinanceDataContext';
 
 const GOV_UK = 'https://www.gov.uk/repaying-your-student-loan/what-you-pay';
-
-const shortDate = (date: string) => {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-};
 
 const optional = (s: string): number | null => {
   const v = parseFloat(s);
@@ -100,7 +96,7 @@ export function PublishedRates() {
             <tbody className="divide-y divide-border/60">
               {rows.map(r => (
                 <tr key={r.id}>
-                  <th scope="row" className="py-2 pr-3 text-left font-normal">{shortDate(r.effectiveFrom)}</th>
+                  <th scope="row" className="py-2 pr-3 text-left font-normal">{formatDayMonth(r.effectiveFrom, { withYear: true })}</th>
                   <td className="py-2 text-right tabular-nums">{r.rpi}%</td>
                   <td className="py-2 text-right tabular-nums">{r.rateCap === null ? 'None' : `${r.rateCap}%`}</td>
                   <td className="py-2 text-right tabular-nums">{r.plan2LowerThreshold == null ? '—' : formatGBP(r.plan2LowerThreshold)}</td>
@@ -111,7 +107,7 @@ export function PublishedRates() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label={`Delete the rates from ${shortDate(r.effectiveFrom)}`}
+                      aria-label={`Delete the rates from ${formatDayMonth(r.effectiveFrom, { withYear: true })}`}
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() => askDelete({
                         title: 'Delete these rates?',

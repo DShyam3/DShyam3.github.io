@@ -193,6 +193,8 @@ when it lands. Consider whether the pending top-up should compound interest whil
 awaiting landing (~2–3% lifetime understatement versus full-rate accrual, currently
 documented approximation).
 
+The "Checking SLC's figures" rate check on the Student Loan tab is the tool for verifying this: once the owner records SLC's next balance, it shows the rate SLC charged against the model's, and whether pending income-linked interest explains a gap.
+
 ### Blocked on a model key — any provider
 
 The assistant is provider-agnostic by construction. There are not N vendor

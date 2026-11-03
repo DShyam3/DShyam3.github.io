@@ -53,6 +53,16 @@ export const formatMonthYear = (value: string | number | Date | null | undefined
   return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 };
 
+/** 7 Sept, or 7 Sept 2026 with `withYear`, for lists where the year is worth saying only sometimes. */
+export const formatDayMonth = (
+  value: string | number | Date | null | undefined,
+  { withYear }: { withYear?: boolean } = {},
+): string => {
+  const date = asDate(value);
+  if (!date) return '';
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
+};
+
 /** "just now" / "12m ago" / "2h ago" / "3d ago", then a plain date. */
 export const formatRelativeTime = (
   value: string | number | Date | null | undefined,

@@ -31,6 +31,7 @@ export * from './scenario';
 export * from './spend-history';
 export * from './statement-import';
 export * from './student-loan';
+export * from './student-loan-check';
 export * from './tools';
 export * from './transfers';
 export * from './uk-tax-calculator';

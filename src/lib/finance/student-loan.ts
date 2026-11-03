@@ -14,6 +14,9 @@ import type { StudentLoanPlanKey } from './debt';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+/** Pence, with a -0 from rounding a tiny negative turned back into 0. */
+const pence = (n: number): number => round2(n) + 0;
+
 /** Parses `YYYY-MM-DD` into a local-time `Date`, sidestepping UTC parsing. */
 const parseISODate = (iso: string): Date => {
   const [y, m, d] = iso.split('-').map(Number);
@@ -453,7 +456,10 @@ export interface StudentLoanSimInput {
   draws: StudentLoanDraw[];
   /** Last day of study, `YYYY-MM-DD`. */
   courseEnd: string;
-  /** Annual gross in the tax year containing `salaryFrom`. */
+  /**
+   * Annual gross in the tax year containing `salaryFrom`; modelled
+   * repayments are charged on it (grown by `salaryGrowth`) from that tax year.
+   */
   salary: number;
   salaryFrom: string;
   /** % a year, applied each April. */
@@ -521,9 +527,15 @@ export interface StudentLoanSimInput {
    * Actual or projected income by tax year (key = year the tax year starts,
    * e.g. 2026 for 2026-27, matching `taxYearOf`'s numbering — see
    * `incomeByTaxYear`, the helper that derives this from payslips). Where
-   * present it replaces the salary-growth model for that tax year, for both
-   * the Plan 2 rate and modelled repayments; other tax years keep growing
+   * present it replaces the salary-growth model for that tax year's Plan 2
+   * rate, which SLC sets on the year's income; other tax years keep growing
    * from `salary` as before.
+   *
+   * Modelled repayments use it only for tax years before the one containing
+   * `salaryFrom`. From that tax year on they follow the salary model instead:
+   * payroll deducts each month on that month's pay, and a year's income total
+   * carries its low-paid early months, which would pull every later
+   * deduction down.
    */
   incomeByTaxYear?: Record<number, number>;
 }
@@ -553,9 +565,20 @@ export interface StudentLoanMonth {
   extra: number;
   /** % in force this month. */
   annualRate: number;
+  /**
+   * The % a year actually added to the balance this month: the provisional
+   * rate where `slcTiming` splits a Plan 2 repayment month, `annualRate`
+   * otherwise, and 0 in the write-off month. The anchor month's pro-rata
+   * share of the days is not in it.
+   */
+  chargedRate: number;
   /** Whether `annualRate` came from a published `rateSchedule` row or from `assumptions`. */
   rateSource: 'published' | 'assumed';
-  /** Annual salary for this month's tax year. */
+  /**
+   * Annual income for this month's tax year, the figure the Plan 2 rate
+   * slides on (the `incomeByTaxYear` entry, else the salary model). A modelled
+   * repayment may be charged on a different figure; see `incomeByTaxYear`.
+   */
   salary: number;
   cumulativeDrawn: number;
   cumulativeInterest: number;
@@ -571,8 +594,22 @@ export interface StudentLoanMonth {
    * year's top-up is confirmed.
    */
   pendingTopUp: number;
+  /**
+   * `pendingTopUp` split by the tax year it belongs to, oldest first (`taxYear`
+   * numbered as in `taxYearOf`). `landsOn` is the `YYYY-MM-01` that tax year's
+   * top-up lands, from `slcTiming.confirmationLagMonths`. Amounts are to the
+   * penny, so they sum to `pendingTopUp` within a penny or two. Empty when
+   * nothing is pending, `slcTiming` is off, or for a non-Plan-2 loan.
+   */
+  pendingByTaxYear: { taxYear: number; amount: number; landsOn: string }[];
   /** A tax year's pending top-up landing this month, if any (`slcTiming` only; 0 otherwise). Included in `interest`. */
   topUpApplied: number;
+  /**
+   * This month's addition to the pending top-up: the interest above the
+   * provisional rate that SLC has yet to add (`slcTiming` only; 0 when the
+   * month is not split).
+   */
+  topUpAccrued: number;
 }
 
 export interface StudentLoanSimResult {
@@ -598,6 +635,21 @@ export interface StudentLoanSimResult {
    * pending rather than reported as forgone).
    */
   forgoneTopUp: number;
+  /**
+   * The simulation against SLC's own figure on the anchor's date. Present
+   * only with an anchor and a grid that began in an earlier month (borrowing
+   * draws before it); absent when the grid starts at the anchor. `rebuiltBalance`
+   * is what the simulation had reached on `anchor.date`, just before the
+   * reset: the balance carried into that month, plus its draws and extra
+   * payments dated on or before the anchor, plus interest at that month's
+   * charged rate for the days up to and including it, less known payments
+   * dated on or before it (inside the known window, repayment phase only).
+   * A top-up landing in that month is added to it, as the last step, because
+   * SLC's figure includes it (see `simulateStudentLoan`). `slcBalance` is
+   * `anchor.balance`; `gap` is `slcBalance - rebuiltBalance`, to the penny,
+   * positive when SLC's figure is the higher.
+   */
+  anchorCheck?: { date: string; slcBalance: number; rebuiltBalance: number; gap: number };
 }
 
 /** Days in the month that `date` falls in. */
@@ -646,6 +698,21 @@ const emptyResult = (today: string): StudentLoanSimResult => {
  *   write-off month is read as "not applied to the balance", not "not
  *   computed" — the rate that would have been in force is still reported for
  *   that row, only `interest` and `payment` are zero.
+ * - **A top-up landing in the anchor's own month is in SLC's figure.** With
+ *   `slcTiming`, any tax year's pending top-up whose landing month is the
+ *   anchor's month is dropped at the reset rather than landed on top of it,
+ *   whether the grid began earlier (draws) or at the anchor. This matches the
+ *   anchor-only seed, which leaves such a tax year out. `anchorCheck`'s
+ *   `rebuiltBalance` adds the dropped amount, after the rest is rebuilt, so
+ *   `gap` compares like with like rather than carrying that top-up.
+ * - **The anchor tax year's pending top-up depends on whether there are
+ *   draws.** The pending top-up survives the reset, but what it holds for the
+ *   anchor's tax year does not start from the same figure. With draws it
+ *   accrued month by month on the rebuilt balance up to the reset, which can
+ *   sit well away from SLC's; without draws it is seeded on SLC's own balance
+ *   (`anchor.balance`) for the months before the anchor. The same anchor can
+ *   therefore show different pending top-up with and without borrowing on
+ *   record. A known approximation, not corrected.
  *
  * `knownPayments` overrides the modelled repayment-phase payment with what
  * payroll actually deducted, for months inside a window: from the month of
@@ -689,9 +756,20 @@ const emptyResult = (today: string): StudentLoanSimResult => {
  *
  * `incomeByTaxYear` replaces the salary-growth model's figure for whichever
  * tax year it has an entry for (a non-finite entry is skipped, falling back
- * to the modelled figure, same as an omitted one) — both for the Plan 2 rate
- * and for a modelled repayment; a tax year with no entry keeps growing from
- * `salary` as before.
+ * to the modelled figure, same as an omitted one) — for the Plan 2 rate,
+ * which SLC sets on a year's income. A modelled repayment is charged on
+ * something else: payroll deducts each month on that month's pay, so from
+ * the tax year containing `salaryFrom` it follows the salary model, not the
+ * year's income total, whose low-paid early months would pull every later
+ * deduction down. Tax years before that have no current pay to follow and
+ * keep the income entry. A tax year with no entry keeps growing from
+ * `salary` as before; `StudentLoanMonth.salary` always reports the income
+ * figure.
+ *
+ * `anchorCheck` on the result compares the simulation with the anchor on its
+ * own date, when the grid began before it (see `StudentLoanSimResult`).
+ * `chargedRate` and `topUpAccrued` on each month expose the split that
+ * `slcTiming` makes, for `studentLoanLedger` to account for it.
  */
 export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimResult => {
   const {
@@ -788,6 +866,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
   let endDate = toISODate(startDate);
   let writtenOff = 0;
   let writtenOffReal = 0;
+  let anchorCheck: StudentLoanSimResult['anchorCheck'];
 
   /** Phase, rates and thresholds for a month; shared by the loop and the pre-grid seed below. */
   const monthRates = (at: Date) => {
@@ -809,7 +888,15 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
     // being treated as a known zero (AGENTS.md rule 4).
     const modelledSalaryTy = salary * Math.pow(1 + salaryGrowth / 100, taxYear - salaryBaseTaxYear);
     const incomeOverride = incomeByTaxYearInput?.[taxYear];
-    const salaryTy = incomeOverride !== undefined && Number.isFinite(incomeOverride) ? incomeOverride : modelledSalaryTy;
+    const hasIncomeOverride = incomeOverride !== undefined && Number.isFinite(incomeOverride);
+    const salaryTy = hasIncomeOverride ? incomeOverride : modelledSalaryTy;
+    // What a modelled repayment is charged on. Payroll deducts each month on
+    // that month's pay, so a tax year's income total -- which carries its
+    // low-paid early months -- would understate every later deduction. From
+    // the tax year of `salaryFrom` the repayment therefore follows the
+    // salary model; earlier tax years have no "current pay" to follow, so
+    // they keep the income override where there is one.
+    const repaymentPayTy = taxYear >= salaryBaseTaxYear || !hasIncomeOverride ? modelledSalaryTy : incomeOverride;
     // A published Plan 2 threshold is used as-is, like the upper one below,
     // for both repayments and the interest slide; other plans keep the
     // tax-config threshold, since the rows only carry Plan 2's.
@@ -821,7 +908,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
         ? rateRow.plan2UpperThreshold
         : assumptions.upperInterestThreshold * Math.pow(1 + assumptions.thresholdGrowth / 100, taxYear - thresholdBaseTaxYear);
     const rate = studentLoanInterestRate(plan, phase, salaryTy, thresholdTy, upperTy, monthAssumptions);
-    return { phase, rateRow, monthAssumptions, salaryTy, thresholdTy, upperTy, rate };
+    return { phase, rateRow, monthAssumptions, salaryTy, repaymentPayTy, thresholdTy, upperTy, rate };
   };
 
   // slcTiming: each tax year's accrued-but-not-yet-landed top-up, keyed by
@@ -830,13 +917,16 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
   const pendingTopUpByTaxYear = new Map<number, number>();
 
   // An anchor is the balance SLC shows, which leaves out every top-up of its
-  // tax year so far. When the grid starts at the anchor, the months of that
-  // tax year before it were never simulated, so their top-up is seeded here
+  // tax year so far -- and of the year before, when the anchor falls between
+  // April and the month that year's top-up lands. When the grid starts at the
+  // anchor, those months were never simulated, so their top-up is seeded here
   // on the anchor balance. A grid that starts earlier accrues it as it goes.
   if (slcTiming && plan === 'plan2' && anchor && anchorDate) {
     const anchorMonth = monthStart(anchorDate);
-    const taxYearStart = new Date(taxYearOf(anchorMonth), 3, 1);
-    for (let at = new Date(taxYearStart); at < anchorMonth && at < startDate; at = addMonths(at, 1)) {
+    const anchorTaxYear = taxYearOf(anchorMonth);
+    const priorLandsAfter = topUpLandingMonth(anchorTaxYear - 1, slcTiming.confirmationLagMonths) > anchorMonth;
+    const seedStart = new Date(priorLandsAfter ? anchorTaxYear - 1 : anchorTaxYear, 3, 1);
+    for (let at = new Date(seedStart); at < anchorMonth && at < startDate; at = addMonths(at, 1)) {
       const r = monthRates(at);
       if (r.phase !== 'repayment') continue;
       const provisional = studentLoanInterestRate(plan, r.phase, r.thresholdTy, r.thresholdTy, r.upperTy, r.monthAssumptions);
@@ -851,6 +941,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
     const monthKey = toISODate(cursor);
     const taxYear = taxYearOf(cursor);
     const deflator = Math.pow(1 + assumptions.inflation / 100, -monthsBetween(todayMonth, cursor) / 12);
+    const balanceCarried = balance;
 
     // 1. Draws dated this month.
     let drawn = 0;
@@ -862,6 +953,21 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
     // 2. Anchor.
     const anchored = anchorMonthKey !== undefined && monthKey === anchorMonthKey;
     if (anchored) balance = anchor!.balance;
+
+    // SLC's figure already includes a top-up that lands in the anchor's own
+    // month (the prior-year seed above leaves such a year out for the same
+    // reason), so one accrued by earlier simulated months is dropped here
+    // rather than landed on top of it in step 3. The amount is kept for the
+    // anchor check below, which compares like with like.
+    let landedAtAnchor = 0;
+    if (anchored && slcTiming && plan === 'plan2') {
+      for (const [ty, amount] of pendingTopUpByTaxYear) {
+        if (toISODate(topUpLandingMonth(ty, slcTiming.confirmationLagMonths)) === monthKey) {
+          landedAtAnchor += amount;
+          pendingTopUpByTaxYear.delete(ty);
+        }
+      }
+    }
 
     // 2b. Extra payments and refunds dated this month (see doc comment
     // above). A positive entry is a voluntary payment, capped so balance
@@ -877,12 +983,64 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
     cumulativePaid += extra;
     cumulativePaidRealAcc += extra * deflator;
 
-    const { phase, rateRow, monthAssumptions, salaryTy, thresholdTy, upperTy, rate } = monthRates(cursor);
+    const { phase, rateRow, monthAssumptions, salaryTy, repaymentPayTy, thresholdTy, upperTy, rate } = monthRates(cursor);
     const rateSource: StudentLoanMonth['rateSource'] = rateRow ? 'published' : 'assumed';
+    const isWriteOffMonth = cursor.getTime() === writeOffMonth.getTime();
+
+    // The rate actually added to the balance this month: slcTiming splits a
+    // Plan 2 repayment month into the provisional (RPI, capped) rate charged
+    // now and the rest accruing as a pending top-up; every other month is
+    // charged `rate` in full, and the write-off month nothing at all.
+    const splitMonth = slcTiming !== undefined && plan === 'plan2' && phase === 'repayment';
+    const provisionalRate = splitMonth
+      ? studentLoanInterestRate(plan, phase, thresholdTy, thresholdTy, upperTy, monthAssumptions)
+      : rate;
+    const chargedRate = isWriteOffMonth ? 0 : provisionalRate;
+
+    const inKnownWindow =
+      phase === 'repayment' &&
+      hasKnownPayments &&
+      knownPaymentsUntilMonth !== undefined &&
+      cursor.getTime() >= knownPaymentsFromMonth.getTime() &&
+      cursor.getTime() <= knownPaymentsUntilMonth.getTime();
+
+    // 2c. Anchor check: what the simulation had reached on the anchor's date,
+    // just before the reset above replaced it with SLC's figure. Same
+    // conventions as the rest of the loop -- the balance carried in, plus
+    // draws and extra payments dated on or before the anchor, plus interest
+    // for the days up to and including it, less known payments dated on or
+    // before it. Only meaningful when the grid began earlier than the anchor's
+    // month; a grid that starts at the anchor has nothing to disagree with.
+    // A top-up landing in this month is added once the rest is rebuilt, because
+    // SLC's figure includes it (the reset above dropped it from the pending
+    // amounts), so the two balances are compared like with like.
+    if (anchored && anchor && anchorDate && cursor.getTime() > startDate.getTime()) {
+      let rebuilt = balanceCarried;
+      for (const d of bucket ?? []) if (d.date <= anchor.date) rebuilt += d.amount;
+      for (const e of extraEntries) {
+        if (e.date > anchor.date) continue;
+        rebuilt -= e.amount > 0 ? Math.min(e.amount, Math.max(rebuilt, 0)) : e.amount;
+      }
+      rebuilt += rebuilt * (chargedRate / 100 / 12) * (anchorDate.getDate() / daysInMonth(cursor));
+      if (inKnownWindow && !isWriteOffMonth) {
+        const sum = (knownPaymentsByMonth.get(monthKey) ?? [])
+          .filter(e => e.date <= anchor.date)
+          .reduce((s, e) => s + e.amount, 0);
+        rebuilt -= Math.max(0, Math.min(sum, rebuilt));
+      }
+      rebuilt += landedAtAnchor;
+      const rebuiltBalance = round2(rebuilt);
+      anchorCheck = {
+        date: anchor.date,
+        slcBalance: anchor.balance,
+        rebuiltBalance,
+        gap: pence(anchor.balance - rebuiltBalance),
+      };
+    }
 
     // 5. Write-off: no interest, no payment; the balance carried in is what
     // is written off, and a final zero-balance month closes the loan.
-    if (cursor.getTime() === writeOffMonth.getTime()) {
+    if (isWriteOffMonth) {
       writtenOff = balance;
       writtenOffReal = round2(writtenOff * deflator);
       months.push({
@@ -894,6 +1052,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
         payment: 0,
         extra: round2(extra),
         annualRate: rate,
+        chargedRate: 0,
         rateSource,
         salary: round2(salaryTy),
         cumulativeDrawn: round2(cumulativeDrawn),
@@ -906,7 +1065,9 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
         // Written off this month, so any tax year's still-pending top-up
         // never lands — it's dropped, and reported in forgoneTopUp below.
         pendingTopUp: 0,
+        pendingByTaxYear: [],
         topUpApplied: 0,
+        topUpAccrued: 0,
       });
       outcome = 'written_off';
       endDate = monthKey;
@@ -925,6 +1086,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
 
     let interest: number;
     let topUpApplied = 0;
+    let topUpAccrued = 0;
     if (slcTiming && plan === 'plan2') {
       for (const [ty, amount] of pendingTopUpByTaxYear) {
         if (toISODate(topUpLandingMonth(ty, slcTiming.confirmationLagMonths)) === monthKey) {
@@ -938,11 +1100,11 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
       }
 
       if (phase === 'repayment') {
-        const provisionalRate = studentLoanInterestRate(plan, phase, thresholdTy, thresholdTy, upperTy, monthAssumptions);
         const provisionalInterest = balance * (provisionalRate / 100 / 12) * anchorShare;
         // The whole month's top-up accrues even in the anchor month: the
         // anchor is SLC's balance, which excludes every top-up so far.
         const topUpAccrual = balance * ((rate - provisionalRate) / 100 / 12);
+        topUpAccrued = topUpAccrual;
         if (topUpAccrual !== 0) {
           pendingTopUpByTaxYear.set(taxYear, (pendingTopUpByTaxYear.get(taxYear) ?? 0) + topUpAccrual);
         }
@@ -963,6 +1125,17 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
     }
 
     const pendingTopUp = round2(Array.from(pendingTopUpByTaxYear.values()).reduce((s, v) => s + v, 0));
+    // The same pending top-up, by tax year. The map only ever holds entries
+    // under slcTiming on Plan 2; one that rounds to nothing is left out.
+    const pendingByTaxYear: StudentLoanMonth['pendingByTaxYear'] = slcTiming
+      ? Array.from(pendingTopUpByTaxYear, ([ty, amount]) => ({
+          taxYear: ty,
+          amount: round2(amount),
+          landsOn: toISODate(topUpLandingMonth(ty, slcTiming.confirmationLagMonths)),
+        }))
+          .filter(p => p.amount !== 0)
+          .sort((a, b) => a.taxYear - b.taxYear)
+      : [];
 
     // 4. Repayment, in the repayment phase only. A known-payments window
     // (see doc comment above) replaces the salary-modelled figure with what
@@ -970,12 +1143,6 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
     let payment = 0;
     let paymentSource: StudentLoanMonth['paymentSource'] = 'none';
     if (phase === 'repayment') {
-      const inKnownWindow =
-        hasKnownPayments &&
-        knownPaymentsUntilMonth !== undefined &&
-        cursor.getTime() >= knownPaymentsFromMonth.getTime() &&
-        cursor.getTime() <= knownPaymentsUntilMonth.getTime();
-
       if (inKnownWindow) {
         paymentSource = 'known';
         const entries = knownPaymentsByMonth.get(monthKey) ?? [];
@@ -984,7 +1151,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
         payment = Math.max(0, Math.min(sum, balance));
       } else {
         paymentSource = 'modelled';
-        const raw = (Math.max(salaryTy - thresholdTy, 0) * (repaymentRate / 100)) / 12;
+        const raw = (Math.max(repaymentPayTy - thresholdTy, 0) * (repaymentRate / 100)) / 12;
         payment = Math.min(Math.max(raw, 0), balance);
       }
       balance -= payment;
@@ -1003,6 +1170,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
       payment: round2(payment),
       extra: round2(extra),
       annualRate: rate,
+      chargedRate,
       rateSource,
       salary: round2(salaryTy),
       cumulativeDrawn: round2(cumulativeDrawn),
@@ -1013,7 +1181,9 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
       anchored,
       paymentSource,
       pendingTopUp,
+      pendingByTaxYear,
       topUpApplied: round2(topUpApplied),
+      topUpAccrued: round2(topUpAccrued),
     };
     months.push(month);
 
@@ -1058,6 +1228,7 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
     peakDate,
     monthsRepaying,
     forgoneTopUp,
+    ...(anchorCheck ? { anchorCheck } : {}),
   };
 };
 
@@ -1069,4 +1240,314 @@ export const simulateStudentLoan = (input: StudentLoanSimInput): StudentLoanSimR
 export const balanceOnMonth = (result: StudentLoanSimResult, date: string): StudentLoanMonth | undefined => {
   const key = toISODate(monthStart(parseISODate(date)));
   return result.months.find(m => m.date === key);
+};
+
+export interface StudentLoanLedgerMonth {
+  /** `YYYY-MM-01`. */
+  date: string;
+  /** `taxYearOf`'s numbering, as in the simulation. */
+  taxYear: number;
+  phase: StudentLoanPhase;
+  anchored: boolean;
+  paymentSource: StudentLoanMonth['paymentSource'];
+  /** Balance after the month, as SLC would show it: pending top-up not in it. */
+  balance: number;
+  /** Accrued top-up not yet added to the balance, after the month. */
+  pendingTopUp: number;
+  drawn: number;
+  /** Refunds SLC paid back, added to the balance. Positive. */
+  refunded: number;
+  /** Voluntary payments outside payroll. Positive. */
+  paidExtra: number;
+  /** Payroll repayment. Positive. */
+  repaid: number;
+  /** Interest added to the balance this month, a landing top-up not included. */
+  interestCharged: number;
+  /** A tax year's pending top-up landing this month. */
+  topUpLanded: number;
+  /** Interest accrued towards the pending top-up this month, not yet added. */
+  topUpAccrued: number;
+  /** Interest the month has cost, added or not: `interestCharged + topUpAccrued`. */
+  interestAccrued: number;
+  /**
+   * The change in what is owed, including interest SLC has yet to add --
+   * which is why it counts the top-up accrued, not the top-up landed. The
+   * anchor month's reset and a write-off are not in it.
+   */
+  owedChange: number;
+  /** The amount written off, in the write-off month only; 0 otherwise. */
+  writtenOff: number;
+}
+
+export interface StudentLoanLedgerYear {
+  taxYear: number;
+  /** `YYYY-MM-01` of the first and last simulated month in the tax year. */
+  firstMonth: string;
+  lastMonth: string;
+  monthCount: number;
+  drawn: number;
+  refunded: number;
+  paidExtra: number;
+  repaid: number;
+  /** `repaid` from months where payroll's actual deductions replaced the model. */
+  repaidKnown: number;
+  /** `repaid` from months where the salary model produced the payment. */
+  repaidModelled: number;
+  interestCharged: number;
+  topUpLanded: number;
+  topUpAccrued: number;
+  interestAccrued: number;
+  owedChange: number;
+  /** From the year's last month. */
+  closingBalance: number;
+  closingPending: number;
+  /** Whether the anchor reset falls in this tax year. */
+  containsAnchor: boolean;
+}
+
+/**
+ * The simulation's months as a ledger: what moved the balance each month,
+ * and each tax year's totals. A pure transform of `result.months`; nothing is
+ * recomputed, so every figure is one the simulation already reported.
+ *
+ * Amounts that the simulation signs (`extra`: positive a payment, negative a
+ * refund) are split into two positive columns, and the interest in `interest`
+ * (which includes a landing top-up) into the part charged and the part
+ * landed. For an ordinary month, `balance - previous balance` is
+ * `drawn + refunded - paidExtra - repaid + interestCharged + topUpLanded`, to
+ * within the pence each reported figure was rounded to. The anchor month
+ * (the reset replaces the balance) and the write-off month (the balance goes
+ * to 0) are the exceptions.
+ */
+export const studentLoanLedger = (
+  result: StudentLoanSimResult,
+): { months: StudentLoanLedgerMonth[]; taxYears: StudentLoanLedgerYear[] } => {
+  const months: StudentLoanLedgerMonth[] = result.months.map(m => {
+    const refunded = Math.max(-m.extra, 0);
+    const paidExtra = Math.max(m.extra, 0);
+    const interestCharged = pence(m.interest - m.topUpApplied);
+    const interestAccrued = pence(interestCharged + m.topUpAccrued);
+    return {
+      date: m.date,
+      taxYear: taxYearOf(parseISODate(m.date)),
+      phase: m.phase,
+      anchored: m.anchored,
+      paymentSource: m.paymentSource,
+      balance: m.balance,
+      pendingTopUp: m.pendingTopUp,
+      drawn: m.drawn,
+      refunded,
+      paidExtra,
+      repaid: m.payment,
+      interestCharged,
+      topUpLanded: m.topUpApplied,
+      topUpAccrued: m.topUpAccrued,
+      interestAccrued,
+      owedChange: pence(m.drawn + refunded - paidExtra - m.payment + interestAccrued),
+      writtenOff: result.outcome === 'written_off' && m.date === result.endDate ? result.writtenOff : 0,
+    };
+  });
+
+  // Months run in date order, so a tax year's months are contiguous.
+  const byTaxYear = new Map<number, StudentLoanLedgerMonth[]>();
+  for (const m of months) {
+    const bucket = byTaxYear.get(m.taxYear);
+    if (bucket) bucket.push(m);
+    else byTaxYear.set(m.taxYear, [m]);
+  }
+
+  const taxYears: StudentLoanLedgerYear[] = Array.from(byTaxYear, ([taxYear, rows]) => {
+    const sum = (pick: (m: StudentLoanLedgerMonth) => number): number =>
+      pence(rows.reduce((total, m) => total + pick(m), 0));
+    const last = rows[rows.length - 1];
+    return {
+      taxYear,
+      firstMonth: rows[0].date,
+      lastMonth: last.date,
+      monthCount: rows.length,
+      drawn: sum(m => m.drawn),
+      refunded: sum(m => m.refunded),
+      paidExtra: sum(m => m.paidExtra),
+      repaid: sum(m => m.repaid),
+      repaidKnown: sum(m => (m.paymentSource === 'known' ? m.repaid : 0)),
+      repaidModelled: sum(m => (m.paymentSource === 'modelled' ? m.repaid : 0)),
+      interestCharged: sum(m => m.interestCharged),
+      topUpLanded: sum(m => m.topUpLanded),
+      topUpAccrued: sum(m => m.topUpAccrued),
+      interestAccrued: sum(m => m.interestAccrued),
+      owedChange: sum(m => m.owedChange),
+      closingBalance: last.balance,
+      closingPending: last.pendingTopUp,
+      containsAnchor: rows.some(m => m.anchored),
+    };
+  });
+
+  return { months, taxYears };
+};
+
+export interface StudentLoanWalk {
+  /** The anchor's balance and date: what SLC showed. */
+  start: number;
+  startDate: string;
+  /** `YYYY-MM-01` of the month `end` is the balance of. */
+  endMonth: string;
+  /** Borrowing after the anchor month; the anchor month's own is already in `start`. */
+  drawn: number;
+  refunded: number;
+  paidExtra: number;
+  /** Payroll deductions actually taken, from `knownPayments`. */
+  repaidKnown: number;
+  /** `YYYY-MM-01` of the last month whose deduction is known; null if none are. */
+  knownThrough: string | null;
+  /** Payroll deductions the salary model supplies for the months after. */
+  repaidModelled: number;
+  /** `YYYY-MM-01` of each month counted in `repaidModelled`. */
+  modelledMonths: string[];
+  /** Pending top-up that lands in the range. */
+  topUpLanded: number;
+  /** Interest added to the balance: the balancing figure; see `studentLoanWalk`. */
+  interestCharged: number;
+  /**
+   * The `chargedRate` (% a year) every month in the range was charged at, or
+   * null when the range spans a change of rate. The anchored month's
+   * pro-rata share of the days is not in it, as in `StudentLoanMonth`.
+   */
+  chargedRate: number | null;
+  end: number;
+}
+
+/**
+ * From the anchor, month by month to the end of `toDate`'s month: the sum
+ * that takes the balance SLC showed on the anchor to the balance it should
+ * show then. The parts add up exactly --
+ * `start + drawn + refunded - paidExtra - repaidKnown - repaidModelled +
+ * topUpLanded + interestCharged = end`, to the penny.
+ *
+ * To make that so, `interestCharged` is the balancing figure, `end - start -
+ * drawn - refunded + paidExtra + repaidKnown + repaidModelled - topUpLanded`,
+ * rather than the sum of the months' reported interest. The two differ only
+ * by the pence each month's figures were rounded to (a few at most over a
+ * handful of months); the balancing figure is the one that cannot leave a
+ * visible gap in the sentence it feeds.
+ *
+ * `chargedRate` lets a sentence about the interest name its rate without
+ * reading one month's: it is the months' `chargedRate` when every month in the
+ * range has the same one, and null when they differ (a new published rate row
+ * partway through, say).
+ *
+ * The range is the anchored month through `toDate`'s month inclusive. The
+ * anchored month's `drawn` is left out, since the anchor balance already
+ * holds it; its extra payments and known deductions are only those dated
+ * after the anchor, as the simulation applies them.
+ *
+ * `undefined` when there is nothing honest to report: no anchored month, an
+ * `anchor` whose month is not the anchored one, `toDate` before the anchored
+ * month or in a month the simulation never reached (the loan cleared first,
+ * or the grid ends), or a range that runs into the write-off month, where the
+ * balance falls to 0 by an amount the parts do not explain.
+ */
+export const studentLoanWalk = (
+  result: StudentLoanSimResult,
+  anchor: { date: string; balance: number },
+  toDate: string,
+): StudentLoanWalk | undefined => {
+  if (epochDay(anchor.date) === undefined || epochDay(toDate) === undefined || !Number.isFinite(anchor.balance)) {
+    return undefined;
+  }
+  const anchoredIndex = result.months.findIndex(m => m.anchored);
+  if (anchoredIndex < 0) return undefined;
+  if (result.months[anchoredIndex].date !== toISODate(monthStart(parseISODate(anchor.date)))) return undefined;
+
+  const endMonth = toISODate(monthStart(parseISODate(toDate)));
+  const endIndex = result.months.findIndex(m => m.date === endMonth);
+  if (endIndex < anchoredIndex) return undefined;
+
+  const range = result.months.slice(anchoredIndex, endIndex + 1);
+  if (result.outcome === 'written_off' && range.some(m => m.date === result.endDate)) return undefined;
+
+  const sum = (pick: (m: StudentLoanMonth) => number): number => pence(range.reduce((total, m) => total + pick(m), 0));
+  const start = pence(anchor.balance);
+  const end = range[range.length - 1].balance;
+  // The anchored month's balance is reset to the anchor, so its draws are in `start`.
+  const drawn = pence(range.slice(1).reduce((total, m) => total + m.drawn, 0));
+  const refunded = sum(m => Math.max(-m.extra, 0));
+  const paidExtra = sum(m => Math.max(m.extra, 0));
+  const repaidKnown = sum(m => (m.paymentSource === 'known' ? m.payment : 0));
+  const repaidModelled = sum(m => (m.paymentSource === 'modelled' ? m.payment : 0));
+  const topUpLanded = sum(m => m.topUpApplied);
+  const knownMonths = range.filter(m => m.paymentSource === 'known');
+  const chargedRate = range.every(m => m.chargedRate === range[0].chargedRate) ? range[0].chargedRate : null;
+
+  return {
+    start,
+    startDate: anchor.date,
+    endMonth,
+    drawn,
+    refunded,
+    paidExtra,
+    repaidKnown,
+    knownThrough: knownMonths.length > 0 ? knownMonths[knownMonths.length - 1].date : null,
+    repaidModelled,
+    modelledMonths: range.filter(m => m.paymentSource === 'modelled' && m.payment > 0).map(m => m.date),
+    topUpLanded,
+    interestCharged: pence(end - start - drawn - refunded + paidExtra + repaidKnown + repaidModelled - topUpLanded),
+    chargedRate,
+    end,
+  };
+};
+
+/** How a pension contribution is taken from pay: before tax and NI, or after. */
+export type StudentLoanPensionType = 'net_pay' | 'salary_sacrifice' | 'relief_at_source';
+
+/**
+ * The annual pay a student loan is charged on. Salary sacrifice comes off
+ * before payroll works out the deduction, so it is gross less the sacrificed
+ * share; net pay and relief at source leave it at gross. A percent that is
+ * not finite or outside 0..100 is not a usable share, so gross stands rather
+ * than a guess.
+ */
+export const studentLoanPay = (
+  annualGross: number,
+  pensionType: StudentLoanPensionType,
+  personalPensionPercent: number,
+): number => {
+  if (pensionType !== 'salary_sacrifice') return annualGross;
+  if (!Number.isFinite(personalPensionPercent) || personalPensionPercent < 0 || personalPensionPercent > 100) {
+    return annualGross;
+  }
+  return round2(annualGross * (1 - personalPensionPercent / 100));
+};
+
+/**
+ * The same, from one payslip: gross less the employee's pension for salary
+ * sacrifice, gross otherwise. A payslip whose `pensionEmployee` is not a
+ * number gives NaN under salary sacrifice rather than a pay figure that
+ * quietly treats it as 0.
+ */
+export const payslipLoanPay = (
+  p: { gross: number; pensionEmployee: number },
+  pensionType: StudentLoanPensionType,
+): number => (pensionType === 'salary_sacrifice' ? round2(p.gross - p.pensionEmployee) : p.gross);
+
+/**
+ * Which pay a monthly payslip's student loan deduction was worked out on, read
+ * back from the deduction itself: `'after_pension'` when it is the share of
+ * gross less the employee pension (salary sacrifice), `'gross'` when it is the
+ * share of gross (net pay, relief at source). Payroll rounds the deduction
+ * down to whole pounds, so each basis is allowed £1 either way. Undefined when
+ * there is no deduction, no pension to tell the two apart, or the figure fits
+ * both or neither -- a guess here would steer someone's settings.
+ */
+export const payslipLoanBasis = (
+  p: { gross: number; pensionEmployee: number; studentLoan: number },
+  annualThreshold: number,
+  ratePercent: number,
+): 'after_pension' | 'gross' | undefined => {
+  const inputs = [p.gross, p.pensionEmployee, p.studentLoan, annualThreshold, ratePercent];
+  if (!inputs.every(Number.isFinite) || p.studentLoan <= 0 || p.pensionEmployee <= 0) return undefined;
+  const deduction = (pay: number) => Math.max(0, Math.floor((pay - annualThreshold / 12) * (ratePercent / 100)));
+  const fitsAfter = Math.abs(p.studentLoan - deduction(p.gross - p.pensionEmployee)) <= 1;
+  const fitsGross = Math.abs(p.studentLoan - deduction(p.gross)) <= 1;
+  if (fitsAfter === fitsGross) return undefined;
+  return fitsAfter ? 'after_pension' : 'gross';
 };

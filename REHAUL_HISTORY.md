@@ -2807,3 +2807,11 @@ A cash item lowered take-home by its tax while its value never reached the page:
 The trade-off is that the tax moves with the salary, region and code, and there is no typed figure to override it. A wrong code gives a wrong benefit tax, as it already gives a wrong income tax. The legacy `annualTaxCost` field stays on stored rows so they still type-check and round-trip. No calculation reads it.
 
 Closure: `src/lib/finance/uk-tax-calculator.ts` (`ukBenefitInKindTax`, `ukCashAfterTax`), `src/features/finance/finance-calcs.ts`, `src/features/finance/finance-narrow.ts`, `src/features/finance/finance-types.ts`, `src/features/finance/surfaces/TaxIncomeSurface.tsx`. Status: in the working tree on `claude/finance-calculator-followups`, not committed, not deployed.
+
+### Student loan — repayments follow current pay, and a top-up's landing month is decided — 2026-11-03
+
+**Repayments are modelled on current pay, not the tax year's income.** Payroll works out each deduction on that pay period's pay. Taking the deduction from the tax year's income let an earlier low-paid month lower every later deduction, which payroll does not do. The year's income still sets that year's Plan 2 interest rate, because SLC sets the rate from it.
+
+**A top-up that lands in a reading's own month is inside SLC's figure.** The reading already carries it, so recording borrowing does not count it twice. The prior tax year's top-up is seeded when it lands after the reading.
+
+Closure: `src/lib/finance/student-loan.ts` (`simulateStudentLoan`, `incomeByTaxYear`) and `src/lib/finance/student-loan-check.ts`. Status: working tree, uncommitted, not deployed.

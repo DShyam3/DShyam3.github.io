@@ -12,7 +12,7 @@
  * `toISODate` does.
  */
 
-import { calendarParts, epochDay, localCalendarDay, toISODate } from './dates';
+import { calendarParts, epochDay, localCalendarDay } from './dates';
 
 export type StudentLoanPlanKey = 'plan1' | 'plan2' | 'plan4' | 'plan5' | 'postgrad';
 
@@ -440,57 +440,5 @@ export const calculateDebtDrift = (params: DebtDriftParams): DebtDriftResult => 
     drift,
     monthsElapsed: wholeMonths,
     impliedAnnualRate: impliedRate,
-  };
-};
-
-export interface StudentLoanPayslipItem {
-  payDate: string; // YYYY-MM-DD
-  studentLoan: number;
-}
-
-export interface StudentLoanReconcileResult {
-  statementBalance: number;
-  statementDate: string;
-  payslipDeductionsTotal: number;
-  payslipsCount: number;
-  adjustedBalance: number;
-}
-
-/**
- * Bridges the Student Loans Company (SLC) 12-18 month reporting lag (REHAUL_PLAN.md 7.N).
- *
- * HMRC collects student loan deductions monthly via PAYE, but transfers them to SLC
- * only once a year after the tax year ends. As a result, the balance on gov.uk is
- * stale by design.
- *
- * This function takes an SLC observation and applies captured payslip deductions
- * dated AFTER the observation's statementDate, giving a live, accurate figure.
- */
-export const reconcileStudentLoanWithPayslips = (
-  observation: DebtObservation,
-  payslips: StudentLoanPayslipItem[],
-  asOfDate?: string,
-): StudentLoanReconcileResult => {
-  const statementDate = observation.statementDate || observation.observedOn;
-  // The local day. `toISOString()` is the UTC day, a day out for the first or
-  // last hours of the day in any zone but UTC.
-  const cutoff = asOfDate || toISODate(new Date());
-
-  const relevantPayslips = payslips.filter(p => {
-    return p.payDate > statementDate && p.payDate <= cutoff && p.studentLoan > 0;
-  });
-
-  const totalDeductions = relevantPayslips.reduce((sum, p) => sum + p.studentLoan, 0);
-  const adjustedBalance = Math.max(
-    Math.round((observation.balance - totalDeductions) * 100) / 100,
-    0,
-  );
-
-  return {
-    statementBalance: observation.balance,
-    statementDate,
-    payslipDeductionsTotal: Math.round(totalDeductions * 100) / 100,
-    payslipsCount: relevantPayslips.length,
-    adjustedBalance,
   };
 };

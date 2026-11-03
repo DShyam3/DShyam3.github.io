@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDateLong, formatMonthYear } from './format-date';
+import { formatDate, formatDateLong, formatDayMonth, formatMonthYear } from './format-date';
 
 describe('formatDate', () => {
   it('writes day first, zero-padded', () => {
@@ -47,5 +47,34 @@ describe('formatDateLong and formatMonthYear', () => {
   it('are empty for a bad value too', () => {
     expect(formatDateLong('nonsense')).toBe('');
     expect(formatMonthYear(null)).toBe('');
+  });
+});
+
+describe('formatDayMonth', () => {
+  it('writes the day and a short month, with the year only when asked', () => {
+    expect(formatDayMonth('2026-08-07')).toBe('7 Aug');
+    expect(formatDayMonth('2026-08-07', { withYear: true })).toBe('7 Aug 2026');
+    expect(formatDayMonth('2026-12-31', { withYear: false })).toBe('31 Dec');
+  });
+
+  it('matches the local helper it replaces, whatever the runtime calls September', () => {
+    const old = (date: string) => {
+      const [y, m, d] = date.split('-').map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+    for (const date of ['2026-09-07', '2026-01-01', '2025-12-31', '2024-02-29']) {
+      expect(formatDayMonth(date, { withYear: true })).toBe(old(date));
+    }
+  });
+
+  it('reads a bare date as that calendar day, not as UTC midnight', () => {
+    expect(formatDayMonth('2026-01-01')).toBe('1 Jan');
+  });
+
+  it('accepts a Date and is empty for a bad value', () => {
+    expect(formatDayMonth(new Date(2026, 7, 7), { withYear: true })).toBe('7 Aug 2026');
+    for (const bad of [null, undefined, '', 'not a date', '2026-02-30']) {
+      expect(formatDayMonth(bad)).toBe('');
+    }
   });
 });
