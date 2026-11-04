@@ -426,8 +426,10 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   in the browser. A PDF attached in the add or edit form is read and parsed before
   saving; the date, employer and any blank or zero fields are filled from the PDF
   and employer logos matched from experience rows. Payslips can be deleted from the
-  detail or edit dialog. Tax-year totals and a model comparison for student loan. The
-  full history shows in the page, without a scroll box of its own.
+  detail or edit dialog. Tax-year totals, and a student loan line that sets the year's
+  deductions against what each payslip's own pay owes: the plan's rate on the pay
+  above a month's threshold, after salary sacrifice, rounded down to whole pounds.
+  The full history shows in the page, without a scroll box of its own.
 - **Time spent** — income seen as hours rather than pounds. Its summary shows the
   gross package beside the year's take-home.
 - **Tax calculator** — a what-if calculator for 2026/27 UK rules. Type any salary

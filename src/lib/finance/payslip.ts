@@ -12,6 +12,7 @@
  */
 
 import { localCalendarDay } from './dates';
+import { payslipLoanPay, studentLoanPayslipDeduction, type StudentLoanPensionType } from './student-loan';
 
 export interface Payslip {
   id: string;
@@ -205,6 +206,28 @@ export const inTaxYear = (slips: readonly Payslip[], taxYear: number): Payslip[]
  */
 export const studentLoanPaidInTaxYear = (slips: readonly Payslip[], taxYear: number): number =>
   inTaxYear(slips, taxYear).reduce((sum, p) => sum + p.studentLoan, 0);
+
+/**
+ * Student loan a tax year's payslips should have shown, each worked out on its
+ * own pay rather than today's salary times the payslip count: a lower-paid job
+ * earlier in the year owes less, and a month paid by two employers is two
+ * payslips each judged against a month's threshold. Salary sacrifice comes off
+ * first. Assumes monthly pay. Undefined when a payslip's figures are not
+ * numbers -- a total that quietly skipped one would read as a real gap.
+ */
+export const studentLoanExpectedInTaxYear = (
+  slips: readonly Payslip[],
+  taxYear: number,
+  rules: { annualThreshold: number; ratePercent: number; pensionType: StudentLoanPensionType },
+): number | undefined => {
+  let total = 0;
+  for (const p of inTaxYear(slips, taxYear)) {
+    const due = studentLoanPayslipDeduction(payslipLoanPay(p, rules.pensionType), rules.annualThreshold, rules.ratePercent);
+    if (!Number.isFinite(due)) return undefined;
+    total += due;
+  }
+  return total;
+};
 
 /**
  * A captured figure against the modelled one.

@@ -120,7 +120,7 @@ const yearsFromDraws = (debt: Debt): { courseStart: string; rows: YearRow[] } | 
 export default function StudentLoanSurface() {
   const { debts, settings, payslips, hasLoaded } = useFinanceData();
   const { saveDebt } = useDebtMutations();
-  const { rows: rateRows, rowNow, planRules, rateNow } = useStudentLoanRules();
+  const { rows: rateRows, rowNow, planRules, repaymentThreshold, rateNow } = useStudentLoanRules();
   const today = toISODate(new Date());
   const thisYear = new Date().getFullYear();
 
@@ -289,11 +289,8 @@ export default function StudentLoanSurface() {
   // read off the same run the chart draws, so the two cannot disagree.
   const todayRow = balanceOnMonth(result, today);
 
-  // The threshold the projection repays against: SLC's published Plan 2 figure
-  // when a rate row carries one, as `simulateStudentLoan` and `rateNow` read it.
-  const loanThreshold = minePlan === 'plan2' && rowNow?.plan2LowerThreshold != null
-    ? rowNow.plan2LowerThreshold
-    : planRules(minePlan).threshold;
+  // The threshold the projection repays against, as `simulateStudentLoan` reads it.
+  const loanThreshold = repaymentThreshold(minePlan);
   const monthlyNow = studentLoanMonthlyRepayment(loanPay, loanThreshold, planRules(minePlan).repaymentRate);
   const mineLoan = mode === 'mine' ? loan : null;
   const balanceNow = mode === 'mine' && todayRow ? todayRow.balance : loan?.balance ?? 0;

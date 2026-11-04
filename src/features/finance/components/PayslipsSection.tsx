@@ -9,6 +9,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
+import { useStudentLoanRules } from '../useStudentLoanRules';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useEducation, useExperience } from '@/hooks/useResume';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/features/finance/utils/calculations';
 import {
-  checkPayslip, compareToModel, findPayslipTransactionCandidates, studentLoanPaidInTaxYear, unambiguousPayslipMatches,
+  checkPayslip, compareToModel, findPayslipTransactionCandidates, studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear,
+  unambiguousPayslipMatches,
   sumPayslips, taxYearOf, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
@@ -100,7 +102,7 @@ const asPayslip = (d: Draft, id: string, storagePath?: string): Payslip => ({
   storagePath,
 });
 
-export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStudentLoanMonthly?: number }) {
+export function PayslipsSection() {
   const {
     payslips,
     payslipReconciliations,
@@ -111,7 +113,9 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
     savePayslipReconciliations,
     deletePayslipReconciliation,
     profileId,
+    settings,
   } = useFinanceData();
+  const { planRules, repaymentThreshold } = useStudentLoanRules();
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { toast } = useToast();
   const { experience } = useExperience();
@@ -247,13 +251,20 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
     ? `${currentTaxYear}/${String(currentTaxYear + 1).slice(2)}`
     : 'all time';
 
+  // Each payslip against what its own pay owes, not today's salary times the
+  // count: an earlier, lower-paid job and a month paid by two employers both
+  // owe less than that, and payroll got them right.
   const loanComparison = useMemo(() => {
     const actual = studentLoanPaidInTaxYear(payslips, currentTaxYear);
-    if (thisYear.length === 0 || modelledStudentLoanMonthly === undefined) {
-      return compareToModel(actual, null);
-    }
-    return compareToModel(actual, modelledStudentLoanMonthly * thisYear.length);
-  }, [payslips, currentTaxYear, modelledStudentLoanMonthly, thisYear.length]);
+    const plan = settings.studentLoanPlan;
+    if (thisYear.length === 0 || plan === 'none') return compareToModel(actual, null);
+    const expected = studentLoanExpectedInTaxYear(payslips, currentTaxYear, {
+      annualThreshold: repaymentThreshold(plan),
+      ratePercent: planRules(plan).repaymentRate,
+      pensionType: settings.pensionType,
+    });
+    return compareToModel(actual, expected ?? null);
+  }, [payslips, currentTaxYear, thisYear.length, settings.studentLoanPlan, settings.pensionType, planRules, repaymentThreshold]);
 
   const openNew = () => {
     setEditing(null);
@@ -456,7 +467,7 @@ export function PayslipsSection({ modelledStudentLoanMonthly }: { modelledStuden
             <div className="rounded-lg border border-border/40 bg-card/40 px-3 py-2 text-xs font-mono">
               <span className="text-muted-foreground">Student loan, {currentTaxYear}/{String(currentTaxYear + 1).slice(2)}: </span>
               <span className="font-semibold text-foreground tabular-nums">{formatGBP(loanComparison.actual)}</span>
-              <span className="text-muted-foreground"> deducted, against {formatGBP(loanComparison.modelled)} modelled</span>
+              <span className="text-muted-foreground"> deducted, against {formatGBP(loanComparison.modelled)} due on each payslip&apos;s pay</span>
               {Math.abs(loanComparison.difference) >= 1 && (
                 <span className={cn('ml-1 font-semibold', loanComparison.difference > 0 ? 'text-chart-4' : 'text-positive')}>
                   ({loanComparison.difference > 0 ? '+' : ''}{formatGBP(loanComparison.difference)})

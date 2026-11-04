@@ -1370,7 +1370,7 @@ export default function TaxIncomeSurface({
 
       {/* Captured payslips: the figures the deductions above are modelled
           from, as they actually landed (7.7). */}
-      <PayslipsSection modelledStudentLoanMonthly={breakdownRates.studentLoan.monthly} />
+      <PayslipsSection />
 
     </div>
 

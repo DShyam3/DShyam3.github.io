@@ -1530,6 +1530,15 @@ export const payslipLoanPay = (
 ): number => (pensionType === 'salary_sacrifice' ? round2(p.gross - p.pensionEmployee) : p.gross);
 
 /**
+ * What payroll deducts from one month's pay: the plan's share of pay over a
+ * month's threshold, rounded down to whole pounds as HMRC's tables do. Each
+ * employer works this out per pay period on that period's pay alone, so two
+ * part-month payslips can each fall under the threshold.
+ */
+export const studentLoanPayslipDeduction = (monthlyPay: number, annualThreshold: number, ratePercent: number): number =>
+  Math.max(0, Math.floor((monthlyPay - annualThreshold / 12) * (ratePercent / 100)));
+
+/**
  * Which pay a monthly payslip's student loan deduction was worked out on, read
  * back from the deduction itself: `'after_pension'` when it is the share of
  * gross less the employee pension (salary sacrifice), `'gross'` when it is the
@@ -1545,7 +1554,7 @@ export const payslipLoanBasis = (
 ): 'after_pension' | 'gross' | undefined => {
   const inputs = [p.gross, p.pensionEmployee, p.studentLoan, annualThreshold, ratePercent];
   if (!inputs.every(Number.isFinite) || p.studentLoan <= 0 || p.pensionEmployee <= 0) return undefined;
-  const deduction = (pay: number) => Math.max(0, Math.floor((pay - annualThreshold / 12) * (ratePercent / 100)));
+  const deduction = (pay: number) => studentLoanPayslipDeduction(pay, annualThreshold, ratePercent);
   const fitsAfter = Math.abs(p.studentLoan - deduction(p.gross - p.pensionEmployee)) <= 1;
   const fitsGross = Math.abs(p.studentLoan - deduction(p.gross)) <= 1;
   if (fitsAfter === fitsGross) return undefined;

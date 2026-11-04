@@ -34,6 +34,15 @@ export function useStudentLoanRules() {
   }), [taxConfig, today]);
 
   /**
+   * The threshold repayments are taken over today: SLC's published Plan 2
+   * figure when the row in force carries one, as `simulateStudentLoan` reads
+   * it, otherwise the tax config's.
+   */
+  const repaymentThreshold = useCallback((plan: StudentLoanPlanKey) => (
+    plan === 'plan2' && rowNow?.plan2LowerThreshold != null ? rowNow.plan2LowerThreshold : planRules(plan).threshold
+  ), [rowNow, planRules]);
+
+  /**
    * The annual rate for today: which phase the loan is in follows from when
    * the course ended, and on Plan 2 the rate then follows the tax year's
    * income. `provisional` is what SLC charges until HMRC confirms that income
@@ -44,15 +53,13 @@ export function useStudentLoanRules() {
       ? 'study'
       : today < firstRepaymentDue(courseEnd) ? 'pre_repayment' : 'repayment';
     const a = assumptionsFor(STUDENT_LOAN_DEFAULT_ASSUMPTIONS, rowNow);
-    const threshold = plan === 'plan2' && rowNow?.plan2LowerThreshold != null
-      ? rowNow.plan2LowerThreshold
-      : planRules(plan).threshold;
+    const threshold = repaymentThreshold(plan);
     const rate = studentLoanInterestRate(plan, phase, income, threshold, a.upperInterestThreshold, a);
     const provisional = plan === 'plan2' && phase === 'repayment'
       ? studentLoanInterestRate(plan, phase, 0, threshold, a.upperInterestThreshold, a)
       : rate;
     return { rate, provisional, phase, assumptions: a };
-  }, [today, rowNow, planRules]);
+  }, [today, rowNow, repaymentThreshold]);
 
-  return { today, rowNow, rows: studentLoanRates, planRules, rateNow };
+  return { today, rowNow, rows: studentLoanRates, planRules, repaymentThreshold, rateNow };
 }

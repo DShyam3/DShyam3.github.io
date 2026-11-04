@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkPayslip, compareToModel, deductionRate, effectiveTaxRate, formatPayslipLineLabel, inTaxYear,
-  studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
+  studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from './payslip';
 
 const slip = (over: Partial<Payslip> = {}): Payslip => ({
@@ -176,3 +176,43 @@ describe('formatPayslipLineLabel', () => {
   });
 });
 
+describe('studentLoanExpectedInTaxYear', () => {
+  // The owner's 2026/27 so far: two months at one job, a June paid by both
+  // employers, then the new job, with the pension sacrificed from August.
+  const owner = [
+    slip({ id: 'apr', payDate: '2026-04-30', gross: 3000, pensionEmployee: 120, studentLoan: 36 }),
+    slip({ id: 'may', payDate: '2026-05-31', gross: 3000, pensionEmployee: 120, studentLoan: 36 }),
+    slip({ id: 'jun-old', payDate: '2026-06-30', gross: 2173.84, pensionEmployee: 83.08, studentLoan: 0 }),
+    slip({ id: 'jun-new', payDate: '2026-06-30', gross: 1480.78, pensionEmployee: 0, studentLoan: 0 }),
+    slip({ id: 'jul', payDate: '2026-07-31', gross: 4583.33, pensionEmployee: 0, studentLoan: 192 }),
+    slip({ id: 'aug', payDate: '2026-08-31', gross: 4583.33, pensionEmployee: 229.17, studentLoan: 171 }),
+    slip({ id: 'sep', payDate: '2026-09-30', gross: 4583.33, pensionEmployee: 229.17, studentLoan: 171 }),
+    slip({ id: 'oct', payDate: '2026-10-31', gross: 4583.33, pensionEmployee: 229.17, studentLoan: 171 }),
+  ];
+  const plan2 = { annualThreshold: 29385, ratePercent: 9, pensionType: 'salary_sacrifice' as const };
+
+  it('judges each payslip on its own pay, not today\'s salary times the count', () => {
+    // 38 + 38 + 0 + 0 + 192 + 171 x 3. Today's £171.49 x 8 payslips would say
+    // £1,371.92 and call £777 deducted a £595 shortfall.
+    expect(studentLoanExpectedInTaxYear(owner, 2026, plan2)).toBe(781);
+    expect(studentLoanPaidInTaxYear(owner, 2026)).toBe(777);
+  });
+
+  it('owes nothing on a payslip under a month\'s threshold, even in a month with two', () => {
+    expect(studentLoanExpectedInTaxYear(owner.filter(p => p.id.startsWith('jun')), 2026, plan2)).toBe(0);
+  });
+
+  it('charges on gross when the pension is not salary sacrifice', () => {
+    // floor(9% x (4,583.33 - 2,448.75)) = 192 rather than 171.
+    expect(studentLoanExpectedInTaxYear([owner[5]], 2026, { ...plan2, pensionType: 'net_pay' })).toBe(192);
+  });
+
+  it('counts only the tax year asked for', () => {
+    expect(studentLoanExpectedInTaxYear(owner, 2025, plan2)).toBe(0);
+  });
+
+  it('gives no figure when a payslip is not a number, rather than skipping it', () => {
+    expect(studentLoanExpectedInTaxYear([...owner, slip({ id: 'bad', payDate: '2026-11-30', gross: Number.NaN })], 2026, plan2))
+      .toBeUndefined();
+  });
+});
