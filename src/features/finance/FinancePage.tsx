@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -99,6 +100,7 @@ function FinanceView() {
     saveDataToSupabase,
     currentLoadGenerations,
     registerBeforeLoadFlush,
+    refreshIfStale,
     setBankAccounts,
     setBudgetCategories,
     setInvestmentHoldings,
@@ -124,6 +126,15 @@ function FinanceView() {
   const setActiveTab = (tab: TabKey) => navigate(pathForTab(tab));
   const figures = useHiddenFigures();
   const activeSections = (SURFACES.find(su => su.key === activeSurface)?.tabs ?? []) as readonly TabKey[];
+
+  // The provider outlives this view (FinanceSession), so a return visit finds
+  // its rows already loaded. Re-read them behind the ones on screen if they
+  // are older than the query cache's staleTime, as the rest of the site does.
+  useEffect(() => {
+    refreshIfStale(60_000);
+    // Mount only: a return visit, not every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Once the rows are in, fetch every other section's chunk in the
   // background, so switching sections is a render rather than a round trip.
@@ -1103,10 +1114,19 @@ function FinanceView() {
   );
 }
 
-export default function Finance() {
+/**
+ * The provider and, while /finance is open, the view rendered into the
+ * route's mount point. Mounted by FinanceSession for the admin's session, so
+ * `target` is null on every other page and only the data stays alive.
+ */
+export default function FinanceHost({ target }: { target: HTMLElement | null }) {
+  // The route's mount point is cleared a commit after navigation. Without the
+  // match the view would re-render once for the new path in between, falling
+  // back to Dashboard and mounting it in a detached node.
+  const onFinance = useMatch('/finance/*') !== null;
   return (
     <FinanceDataProvider>
-      <FinanceView />
+      {target && onFinance && createPortal(<FinanceView />, target)}
     </FinanceDataProvider>
   );
 }

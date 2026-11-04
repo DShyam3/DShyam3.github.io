@@ -454,6 +454,8 @@ function useProvideFinanceData() {
   // The profile whose rows are on screen. A refresh of the same profile (after
   // a bank sync, an import) leaves its rows saveable; a switch does not.
   const lastLoadedProfileRef = useRef<string | null>(null);
+  // When that profile's rows last finished loading, for refreshIfStale.
+  const lastLoadedAtRef = useRef(0);
   // For the tables saved row by row: the row objects this page read from, or
   // last wrote to, the database, each with the number of the load it belongs
   // to. An edit replaces the row it changes with a copy, so a save writes
@@ -707,6 +709,8 @@ function useProvideFinanceData() {
       .order('date', { ascending: false })
       .order('id', { ascending: true })
       .range(from, to), row => row.id);
+    // Dropped if the switcher moved on while this read was in flight.
+    if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('transfers unavailable', error.message);
       return;
@@ -765,6 +769,8 @@ function useProvideFinanceData() {
       .order('pay_date', { ascending: false })
       .order('id', { ascending: true })
       .range(from, to), row => row.id);
+    // Dropped if the switcher moved on while this read was in flight.
+    if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('payslips unavailable', error.message);
       return;
@@ -871,6 +877,8 @@ function useProvideFinanceData() {
       .order('confirmed_at', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), row => row.id);
+    // Dropped if the switcher moved on while this read was in flight.
+    if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('payslip reconciliations unavailable');
       return;
@@ -914,6 +922,8 @@ function useProvideFinanceData() {
     /* Cleared rather than kept: the links held may belong to the profile the
        switcher just left, and a stale exclusion is invisible where a missing
        one is flagged. */
+    // Dropped if the switcher moved on while this read was in flight.
+    if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('transfer links unavailable');
       setTransferLinks([]);
@@ -953,6 +963,8 @@ function useProvideFinanceData() {
       .order('dismissed_at', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), row => row.id);
+    // Dropped if the switcher moved on while this read was in flight.
+    if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('transfer dismissals unavailable');
       setTransferDismissals([]);
@@ -1194,6 +1206,8 @@ function useProvideFinanceData() {
       .order('decided_at', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), row => row.id);
+    // Dropped if the switcher moved on while this read was in flight.
+    if (forProfile !== currentProfileRef.current) return;
     if (error) {
       console.warn('single-leg transfer decisions unavailable');
       setTransferSingleLegs([]);
@@ -1488,6 +1502,8 @@ function useProvideFinanceData() {
       .order('captured_on', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to), row => row.captured_on);
+    // Dropped if the switcher moved on while this read was in flight.
+    if (forProfile !== currentProfileRef.current) return;
     if (error) {
       // A missing series is not worth a toast: every other figure on the page
       // is current state and still correct without it.
@@ -2142,6 +2158,8 @@ function useProvideFinanceData() {
 
         blockedSaveKeysRef.current.set(profileId, blockedAfterLoad);
         lastLoadedProfileRef.current = profileId;
+        // A partial load does not count as fresh, so the next visit retries it.
+        lastLoadedAtRef.current = failedTables.length === 0 ? Date.now() : 0;
         if (seedPresets) saveDataToSupabase('budget_presets', ALL_PRESETS_FALLBACK);
       } catch (err) {
         console.error('Error fetching settings from Supabase:', err);
@@ -2179,6 +2197,39 @@ function useProvideFinanceData() {
     // profileId, so the whole ledger is a different set of rows (7.2d).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, profileId]);
+
+  /**
+   * Re-reads the ledger and every per-profile read when this profile's rows
+   * are older than `maxAgeMs`, or never finished loading.
+   *
+   * The provider outlives the finance page -- FinanceSession keeps it mounted
+   * for the admin's session -- so returning to /finance no longer remounts it
+   * and re-runs the effects above. This stands in for that: the page calls it
+   * on mount, the rows already on screen stay while it runs, and a load in
+   * flight is left to finish rather than superseded.
+   */
+  const refreshIfStale = (maxAgeMs: number) => {
+    if (!isAdmin) return;
+    // The profiles themselves failed -- possibly on an idle warm-up, from
+    // another page -- so retry them rather than show the error a fresh mount
+    // would have retried past.
+    if (profileLoadState === 'error') {
+      void loadProfiles();
+      return;
+    }
+    if (!profileId || loadingDb) return;
+    const loaded = lastLoadedProfileRef.current === profileId;
+    if (loaded && Date.now() - lastLoadedAtRef.current < maxAgeMs) return;
+    void fetchSupabaseData();
+    void fetchTransfers(profileId);
+    void fetchPayslips(profileId);
+    void fetchPayslipReconciliations(profileId);
+    void fetchTransferLinks(profileId);
+    void fetchTransferDismissals(profileId);
+    void fetchTransferSingleLegs(profileId);
+    void fetchNetWorthHistory(profileId);
+    void fetchStudentLoanRates();
+  };
 
   // Only tables still saved whole. A row-saved table (RowTable) is never
   // pruned: a list may predate rows a sync or another device added.
@@ -3056,6 +3107,7 @@ function useProvideFinanceData() {
     saveDataToSupabase,
     currentLoadGenerations,
     registerBeforeLoadFlush,
+    refreshIfStale,
     deleteFinanceRows,
     savingDb,
     selectedGoalId,

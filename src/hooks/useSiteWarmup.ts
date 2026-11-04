@@ -37,8 +37,8 @@ import { supabaseTableQuery } from './useSupabaseTable';
  *   `prefetchQuery` skips anything still fresh, so this never re-reads what a
  *   page has just loaded.
  *
- * Not warmed: Finance rows, which live in `FinanceDataProvider`'s own state
- * rather than the query cache, and Watchlist's premiere episodes, whose read
+ * Finance rows are not here: FinanceSession warms them by mounting the
+ * finance provider on idle. Nor are Watchlist's premiere episodes, whose read
  * depends on the announcements the page has already loaded.
  *
  * Waits for auth to settle: admin-only reads (Beliefs) and the finance code

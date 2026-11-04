@@ -9,6 +9,8 @@ import { DisplayModeProvider } from '@/contexts/DisplayModeContext';
 import { OpeningSequence } from '@/components/layout/OpeningSequence';
 import { useTimeBasedTheme } from '@/hooks/useTimeBasedTheme';
 import { useSiteWarmup } from '@/hooks/useSiteWarmup';
+import { PageLoader } from '@/components/layout/PageLoader';
+import { FinanceRoute, FinanceSession } from '@/features/finance/FinanceSession';
 
 import { WatchlistProvider } from './features/watchlist/WatchlistContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -30,7 +32,9 @@ import { DotMatrixProvider } from './contexts/DotMatrixContext';
  * navigating to them involves no network at all.
  *
  * Three are worth keeping out of the entry, and are prefetched on idle by
- * SiteWarmup below so a click still does not wait on them.
+ * SiteWarmup below so a click still does not wait on them. Finance is the
+ * third, loaded by FinanceSession rather than as a route element, so its data
+ * outlives the page.
  */
 import Index from './pages/Index';
 import Inventory from './pages/Inventory';
@@ -46,7 +50,6 @@ import WatchlistNews from './pages/WatchlistNews';
 import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
 
-const Finance = lazy(() => import('./features/finance/FinancePage'));
 const Travel = lazy(() => import('./features/travel/TravelPage'));
 const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
 
@@ -72,12 +75,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Loading fallback component
-const PageLoader = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-  </div>
-);
 
 // Flattened providers component
 // WatchlistProvider is deliberately NOT here: its data fetch is the
@@ -91,7 +88,7 @@ const AppProviders = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>
     <DotMatrixProvider>
       <SiteWarmup />
-      {children}
+      <FinanceSession>{children}</FinanceSession>
     </DotMatrixProvider>
   </AuthProvider>
 );
@@ -150,7 +147,7 @@ const App = () => {
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/finance/*" element={<Finance />} />
+                  <Route path="/finance/*" element={<FinanceRoute />} />
                   <Route path="/travel" element={<Travel />} />
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/links" element={<Links />} />

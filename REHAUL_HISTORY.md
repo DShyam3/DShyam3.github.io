@@ -2815,3 +2815,13 @@ Closure: `src/lib/finance/uk-tax-calculator.ts` (`ukBenefitInKindTax`, `ukCashAf
 **A top-up that lands in a reading's own month is inside SLC's figure.** The reading already carries it, so recording borrowing does not count it twice. The prior tax year's top-up is seeded when it lands after the reading.
 
 Closure: `src/lib/finance/student-loan.ts` (`simulateStudentLoan`, `incomeByTaxYear`) and `src/lib/finance/student-loan-check.ts`. Status: working tree, uncommitted, not deployed.
+
+### Finance data is kept for the admin's session, not refetched per visit — 2026-11-03
+
+**The decision:** `FinanceDataProvider` stays mounted for the admin's session. `FinanceSession` sits beside the routes, loads the provider on idle from whichever page the admin opened first (or at once on /finance), and the Finance view is portaled into the route. Signing out unmounts it and drops the rows. The alternative was to move finance rows into the react-query cache, as Watchlist does.
+
+**Why the provider was not moved into the cache:** its save safety is built on owning its state: load generations, blocked save keys, flushes before a load, and coalesced saves. Seeding it from a cache, or mirroring it back into one, would route writes around those guards. Keeping it mounted leaves them untouched, and turns a return visit into the refresh-while-open path that already existed.
+
+**The costs are accepted.** Finance rows are held in memory for the session, admin only and dropped on sign-out. The first load now runs on idle from any page, not only when Finance opens.
+
+Closure: `src/features/finance/FinanceSession.tsx`, `src/features/finance/FinanceDataContext.tsx` (`refreshIfStale`), `src/features/finance/FinancePage.tsx`. Status: committed on `main` 2026-11-04, not deployed. The owner reports the admin-session behaviour tested signed in.
