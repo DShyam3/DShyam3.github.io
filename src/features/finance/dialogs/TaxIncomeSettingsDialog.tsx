@@ -52,6 +52,7 @@ import {
 import {
   BIRTHDAY_LEAVE_RULES,
   BIRTHDAY_LEAVE_RULE_LABELS,
+  allowanceFromTaxCode,
   getDaysInMonth,
   type BirthdayLeaveRule,
 } from '@/lib/finance';
@@ -157,13 +158,10 @@ export function TaxIncomeSettingsDialog({
 
   const handleTaxCodeChange = (code: string) => {
     setTaxCodeInput(code);
-    const cleaned = code.trim().toUpperCase();
-    const match = cleaned.match(/^(\d+)L$/);
-    if (match) {
-      const numVal = parseInt(match[1], 10) * 10;
-      setAllowanceInput(formatNumberInput(numVal));
-    }
+    const parsed = allowanceFromTaxCode(code);
+    if (parsed) setAllowanceInput(formatNumberInput(parsed.allowance));
   };
+  const taxCodeNonCumulative = allowanceFromTaxCode(taxCodeInput)?.nonCumulative ?? false;
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -594,6 +592,12 @@ export function TaxIncomeSettingsDialog({
                       placeholder="1257L"
                       required
                     />
+                    {taxCodeNonCumulative && (
+                      <p className="text-xs text-muted-foreground">
+                        X, M1 or W1: each month is taxed on its own. Steady pay comes out the same; a year with a pay
+                        change can overpay until HMRC moves you back to a cumulative code.
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="allowance" className="text-xs font-medium text-muted-foreground">Personal allowance override</Label>

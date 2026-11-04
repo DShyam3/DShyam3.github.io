@@ -393,7 +393,10 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 - **Tax and income** — income tax, National Insurance and student loan repayments
   use the 2026/27 rules built into the site, the same rules the Tax Calculator
   uses. A Scottish profile gets Scotland's six bands. The personal allowance is
-  the one set in Settings, which can be 0 for a BR or 0T code. Under relief at
+  the one set in Settings. Typing a tax code fills it from the code's number: plain,
+  S or C prefixed, and L, M, N or T codes all do, including the X, M1 and W1 emergency
+  markers, which add a note that each month is taxed on its own. 0T is £0. K, BR, D0,
+  D1 and NT codes leave the allowance as typed, so it can be 0 for a BR code. Under relief at
   source, 80% of the pension contribution comes out of pay and every band from
   the basic rate up is widened by the whole contribution. The income tax and National
   Insurance figures do not use the bands saved in Settings, though the National
