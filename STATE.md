@@ -1,6 +1,6 @@
 # State
 
-Updated: 2026-11-02 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` `a7c892c7` merged in as `89a8a48a` (pushed) · Main: `a7c892c7`, deployed.
+Updated: 2026-11-04 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` `a7c892c7` merged in as `89a8a48a` (pushed) · Main: `3394e2e9`, deployed; the branch is 14 commits behind it.
 
 ## Landed (on the branch; not in main)
 
@@ -10,7 +10,7 @@ Updated: 2026-11-02 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` 
 - Seven conflicts resolved: header keeps main's socials-open fade plus the assistant `action` slot; the inventory spec parser stays in `src/collections/inventory-specs.ts` with main's `safeHref()` check; finance tool context keeps the branch's ledger and main's local-day alert dates; SECURITY.md lists the assistant's rate limit.
 - After review: the inventory tool uses main's `isInEdc` (`src/features/inventory/edc/categories.ts`, widened to take `is_edc`/`is_wishlist`); a duplicate, contradicting header paragraph was removed from FEATURES.md; phone-header heights re-measured on the merged header and unchanged.
 - Reviewer (Opus) found no high findings: Edge Function admin check, rate limit, CORS allowlist, provider-by-id and generic errors are correct; category rules and the tax engine do not drift from the screens.
-- Main, deployed: Pages run `41347059793` on `a7c892c7` (#13: the take-home-by-income-slice card counts the High Income Child Benefit Charge). Before it, `d895a224`; hosted migration `20261029230000` applied on `yvtiybyuifkiwyrnjebe`.
+- Main, deployed: Pages run `41800729607` on `3394e2e9`, not merged into this branch. Last merged in: `a7c892c7` (#13: the take-home-by-income-slice card counts the High Income Child Benefit Charge), Pages run `41347059793`. Before it, `d895a224`; hosted migration `20261029230000` applied on `yvtiybyuifkiwyrnjebe`.
 
 ## Checks
 
@@ -54,5 +54,5 @@ Updated: 2026-11-02 · Branch: `claude/affectionate-lamarr-f2d2cb`, with `main` 
 - Hosted authenticated sync, JWT configuration, `SITE_ORIGIN`, response headers, cron/Edge/pg_net checks and real HEIC uploads: unverified.
 - Advisor warnings: `is_admin` security-definer callable by anon/authenticated; leaked-password protection disabled.
 - Gemini was last observed stopped by quota; current activity unverified.
-- `origin/claude/net-take-home-tax-f2n71j` was squash-merged as #13 and its tree matches `main`; safe to delete (owner's call). The root checkout's `main` is still at `caff0df2`, one behind origin.
+- A local Codex branch, `codex/assistant-integration-2026-11-02` (worktree in `/private/tmp`, not pushed), builds two integration commits on this branch's `bdb17432`. A commit here diverges from it.
 - Keep the stash named `finance-reconciliation-backup-2026-10-29` until its backup is no longer needed (find it by name; the stack is shared).
