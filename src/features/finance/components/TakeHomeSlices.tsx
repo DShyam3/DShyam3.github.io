@@ -50,9 +50,12 @@ export function TakeHomeSlices({
       return `${formatWholeGBP(codedBenefitsInKind)} of benefits in kind are already taxed through your reduced personal allowance.`;
     }
     if (mode === 'after' && summary.pensionContribution === 0 && summary.benefitsInKind === 0) {
-      return 'No pension contributions or taxable benefits in kind are entered, so this matches salary only.';
+      // A pension on qualifying earnings is entered but pays nothing below their lower limit.
+      return (input.pensionShare ?? 0) > 0
+        ? 'No pension is paid at this income and no taxable benefits in kind are entered, so this matches salary only.'
+        : 'No pension contributions or taxable benefits in kind are entered, so this matches salary only.';
     }
-    if (mode === 'salary' && (input.pensionContribution > 0 || input.benefitsInKind > 0)) {
+    if (mode === 'salary' && (input.pensionContribution > 0 || (input.pensionShare ?? 0) > 0 || input.benefitsInKind > 0)) {
       return 'Showing gross pay before pension contributions and taxable benefits in kind.';
     }
     if (mode === 'after') {

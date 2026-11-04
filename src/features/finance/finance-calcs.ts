@@ -100,14 +100,18 @@ export const benefitValueOf = (benefit: PackageBenefit, grossSalary: number): nu
  */
 /**
  * The engine input the settings describe, salary only. The Tax Calculator
- * seeds from this too, so the two pages read the settings the same way.
+ * seeds its Yours view from this too, so the two pages read the settings the
+ * same way. The pension is a share of the whole salary, as the percentage in
+ * settings is, so a curve across incomes takes it afresh at each one.
  */
 export const ukTaxInputFromSettings = (settings: FinanceSettings): UkTaxInput => ({
   income: settings.grossSalary,
   kind: 'employed',
   region: settings.ukRegion === 'scotland' ? 'scotland' : 'rUK',
   benefitsInKind: 0,
-  pensionContribution: settings.grossSalary * (settings.personalPensionPercent / 100),
+  pensionContribution: 0,
+  pensionShare: settings.personalPensionPercent / 100,
+  pensionBasis: 'salary',
   pensionMethod: PENSION_METHOD[settings.pensionType] ?? 'net-pay',
   undergradPlan: settings.studentLoanPlan === 'postgrad' ? 'none' : settings.studentLoanPlan,
   postgradLoan: settings.studentLoanPlan === 'postgrad',

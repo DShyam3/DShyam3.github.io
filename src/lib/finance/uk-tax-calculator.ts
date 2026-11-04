@@ -27,6 +27,8 @@
 export type UkTaxRegion = 'rUK' | 'scotland';
 export type UkIncomeKind = 'employed' | 'self-employed';
 export type UkPensionMethod = 'salary-sacrifice' | 'net-pay' | 'relief-at-source';
+/** What a pension share is a share of: all of `income`, or the auto-enrolment qualifying earnings in it. */
+export type UkPensionBasis = 'salary' | 'qualifying';
 export type UkUndergradPlan = 'none' | 'plan1' | 'plan2' | 'plan4' | 'plan5';
 
 export interface UkTaxInput {
@@ -36,8 +38,21 @@ export interface UkTaxInput {
   region: UkTaxRegion;
   /** Taxable benefit-in-kind value, £/yr. Employed only; ignored otherwise. */
   benefitsInKind: number;
-  /** GROSS £/yr, whatever the method. Clamped to [0, income]. */
+  /**
+   * GROSS £/yr, whatever the method: a fixed sum, held in pounds at every
+   * income a curve visits. With `pensionShare`, the whole contribution is
+   * clamped to [0, income].
+   */
   pensionContribution: number;
+  /**
+   * GROSS share of `pensionBasis` paid in on top of `pensionContribution`,
+   * 0.05 for 5%. Unlike the fixed sum it moves with income, so a curve takes
+   * it afresh at every income. Omitted, negative or non-finite is 0; above 1
+   * is 1.
+   */
+  pensionShare?: number;
+  /** What `pensionShare` is a share of. Omitted or unknown is `salary`. */
+  pensionBasis?: UkPensionBasis;
   pensionMethod: UkPensionMethod;
   undergradPlan: UkUndergradPlan;
   postgradLoan: boolean;
@@ -135,7 +150,7 @@ export interface UkMarginalBand extends UkMarginalRates {
   to: number;
   /** The income tax band the next pound of taxable income falls in here; null when that pound pays no income tax (inside the allowance, or while marriage allowance relief still absorbs it). */
   incomeTaxBand: UkIncomeTaxBandName | null;
-  /** True while the £100,000 taper is withdrawing personal allowance here, so the band rate is stretched by 1 + taper rate. */
+  /** True while the £100,000 taper is withdrawing personal allowance here, so the band rate is stretched by 1 + taper rate (before any pension share's effect). */
   allowanceTapering: boolean;
 }
 
@@ -289,7 +304,44 @@ export const UK_ALLOWANCE_TAPER_START = 100_000;
 /** Pounds of personal allowance withdrawn for each pound of adjusted net income over the start. */
 export const UK_ALLOWANCE_TAPER_RATE = 0.5;
 
-/** What `ukWhatIfs` adds to the pension for `more-pension`: this share of the income, to the nearest pound. */
+/**
+ * Automatic enrolment for 2026/27, held at the 2025/26 figures: the earnings
+ * above which an employer must enrol a worker, the qualifying earnings band a
+ * minimum contribution is a share of, and the employee's minimum gross share
+ * of it (the employer adds at least 3%). The trigger is not modelled, so a
+ * pension on qualifying earnings is paid at every income, as if opted into.
+ */
+export const UK_AUTO_ENROLMENT = {
+  earningsTrigger: 10_000,
+  lowerQualifyingEarnings: 6_240,
+  upperQualifyingEarnings: 50_270,
+  minimumEmployeeShare: 0.05,
+} as const;
+
+/**
+ * The standard case, for someone with nothing unusual about their pay: an
+ * employee outside Scotland on the statutory allowance (tax code 1257L),
+ * paying the auto-enrolment minimum by relief at source, with no student
+ * loan, benefits in kind, children or marriage allowance. `income` is 0, for
+ * the caller to set.
+ */
+export const UK_STANDARD_TAX_INPUT: UkTaxInput = {
+  income: 0,
+  kind: 'employed',
+  region: 'rUK',
+  benefitsInKind: 0,
+  pensionContribution: 0,
+  pensionShare: UK_AUTO_ENROLMENT.minimumEmployeeShare,
+  pensionBasis: 'qualifying',
+  pensionMethod: 'relief-at-source',
+  undergradPlan: 'none',
+  postgradLoan: false,
+  children: 0,
+  childcareSupport: 0,
+  marriageAllowance: false,
+};
+
+/** What `ukWhatIfs` adds to the pension share for `more-pension`. */
 const WHAT_IF_EXTRA_PENSION_SHARE = 0.05;
 
 interface Band {
@@ -328,6 +380,7 @@ interface UkTaxRules {
   hicbcStepSize: number;
   hicbcFullAt: number;
   childcareCutoff: number;
+  qualifyingEarnings: { lower: number; upper: number };
   maxChildren: number;
   maxCurvePoints: number;
   maxMarginalBands: number;
@@ -369,6 +422,10 @@ const RULES: UkTaxRules = {
   hicbcStepSize: UK_CHILD_BENEFIT_CHARGE_STEP,
   hicbcFullAt: UK_CHILD_BENEFIT_CHARGE_END,
   childcareCutoff: UK_CHILDCARE_CUTOFF,
+  qualifyingEarnings: {
+    lower: UK_AUTO_ENROLMENT.lowerQualifyingEarnings,
+    upper: UK_AUTO_ENROLMENT.upperQualifyingEarnings,
+  },
   maxChildren: 20,
   maxCurvePoints: 2000,
   maxMarginalBands: 200,
@@ -397,7 +454,17 @@ interface Resolved {
   kind: UkIncomeKind;
   region: UkTaxRegion;
   bik: number;
+  /** Gross £/yr paid in at `income`: the pension as entered, capped at `income`. */
   contribution: number;
+  /**
+   * The pension as entered, for working at other incomes: a fixed sum in full
+   * pounds, uncapped, and a share of `pensionBasis`. For solving an income (a
+   * cliff, a band) the cap at the current income does not bind at the income
+   * being solved for.
+   */
+  pensionFixed: number;
+  pensionShare: number;
+  pensionBasis: UkPensionBasis;
   method: UkPensionMethod;
   plan: UkUndergradPlan;
   postgrad: boolean;
@@ -407,6 +474,25 @@ interface Resolved {
   /** Base personal allowance before the taper. */
   allowance: number;
 }
+
+/**
+ * The pounds of `income` a pension share is a share of: all of it, or the
+ * qualifying earnings, the part of it between the lower and upper limits.
+ */
+const pensionBasisOf = (basis: UkPensionBasis, income: number): number =>
+  basis === 'qualifying'
+    ? clamp(income - RULES.qualifyingEarnings.lower, 0, RULES.qualifyingEarnings.upper - RULES.qualifyingEarnings.lower)
+    : income;
+
+/** `pensionBasisOf` in linear pieces: from each `from` to the next, the basis grows by `slope` per pound of income. */
+const PENSION_BASIS_PIECES: Record<UkPensionBasis, readonly { from: number; slope: number }[]> = {
+  salary: [{ from: 0, slope: 1 }],
+  qualifying: [
+    { from: 0, slope: 0 },
+    { from: RULES.qualifyingEarnings.lower, slope: 1 },
+    { from: RULES.qualifyingEarnings.upper, slope: 0 },
+  ],
+};
 
 const resolve = (input: UkTaxInput): Resolved => {
   const income = nonNegative(input.income);
@@ -420,12 +506,18 @@ const resolve = (input: UkTaxInput): Resolved => {
       ? input.pensionMethod
       : 'relief-at-source';
   const plan: UkUndergradPlan = UNDERGRAD_PLANS.includes(input.undergradPlan) ? input.undergradPlan : 'none';
+  const pensionFixed = nonNegative(input.pensionContribution);
+  const pensionShare = Math.min(1, nonNegative(input.pensionShare ?? 0));
+  const pensionBasis: UkPensionBasis = input.pensionBasis === 'qualifying' ? 'qualifying' : 'salary';
   return {
     income,
     kind,
     region,
     bik: employed ? nonNegative(input.benefitsInKind) : 0,
-    contribution: Math.min(nonNegative(input.pensionContribution), income),
+    contribution: Math.min(pensionFixed + pensionShare * pensionBasisOf(pensionBasis, income), income),
+    pensionFixed,
+    pensionShare,
+    pensionBasis,
     method: employed ? requested : 'relief-at-source',
     plan,
     postgrad: input.postgradLoan === true,
@@ -436,15 +528,53 @@ const resolve = (input: UkTaxInput): Resolved => {
   };
 };
 
-/**
- * `resolve` with the pension contribution in full pounds rather than capped at
- * the income given. For solving an income (a cliff, a band) the cap at the
- * current income does not bind at the income being solved for.
- */
-const resolveUncapped = (input: UkTaxInput): Resolved => ({
-  ...resolve(input),
-  contribution: nonNegative(input.pensionContribution),
+/** What the pension as entered comes to at `income`, before the cap at income. */
+const uncappedContributionAt = (r: Resolved, income: number): number =>
+  r.pensionFixed + r.pensionShare * pensionBasisOf(r.pensionBasis, income);
+
+/** `r` at another income, with the contribution taken there as `resolve` takes it. */
+const resolvedAt = (r: Resolved, income: number): Resolved => ({
+  ...r,
+  income,
+  contribution: Math.min(uncappedContributionAt(r, income), income),
 });
+
+/**
+ * `r` a pound further up, for a one-pound difference: the pension's share is
+ * taken of the extra pound too, while the fixed sum is held at the pounds it
+ * came to, as a marginal rate has always held it.
+ */
+const onePoundMore = (r: Resolved): Resolved => {
+  const income = r.income + 1;
+  const growth = uncappedContributionAt(r, income) - uncappedContributionAt(r, r.income);
+  return { ...r, income, contribution: Math.min(r.contribution + growth, income) };
+};
+
+/**
+ * The income at which income less the pension as entered reaches `net`. That
+ * difference is pay under salary sacrifice or net pay, and adjusted net income
+ * less the benefits in kind under every method (relief at source takes its
+ * gross off there instead), so this is how a threshold on either is moved back
+ * onto income. With a fixed sum alone it is `net` plus the sum.
+ *
+ * The difference is continuous and never falls as income rises, so it is
+ * solved one linear piece of the basis at a time. A result below 0 is
+ * returned as it is, for the caller to judge; Infinity means no income
+ * reaches `net`, as when a share of 1 of the salary leaves nothing at any.
+ */
+const incomeLeaving = (net: number, r: Resolved): number => {
+  const pieces = PENSION_BASIS_PIECES[r.pensionBasis];
+  for (let i = 0; i < pieces.length; i++) {
+    const { from, slope } = pieces[i];
+    const to = i + 1 < pieces.length ? pieces[i + 1].from : Infinity;
+    const rise = 1 - r.pensionShare * slope;
+    if (rise > 0) {
+      const income = from + (net - (from - uncappedContributionAt(r, from))) / rise;
+      if (income <= to) return income;
+    }
+  }
+  return Infinity;
+};
 
 /** Amount that comes off pay before tax (and, for sacrifice only, before NI). */
 const sacrificeOf = (r: Resolved): number => (r.method === 'salary-sacrifice' ? r.contribution : 0);
@@ -636,8 +766,9 @@ export interface UkCashAfterTax {
  * at 40%), through the allowance taper at an effective 60% between £100,000 and
  * £125,140, and past the NI upper limit at 2%.
  *
- * The pension contribution is held at its sanitised pounds on both sides rather
- * than recapped at the larger income, so the bonus is not itself pensioned.
+ * The pension contribution is held at the pounds it comes to at `income` on
+ * both sides rather than recapped or re-shared at the larger income, so the
+ * bonus is not itself pensioned.
  * Not counted: the High Income Child Benefit Charge and the childcare-support
  * cliff, which the other inputs can trigger; `net` is cash less tax, NI and
  * loans only.
@@ -669,8 +800,10 @@ export const ukCashAfterTax = (input: UkTaxInput, cash: number): UkCashAfterTax 
  * held at the base income's state for both evaluations so they never distort
  * the rate; `ukTaxCliffs` reports them instead.
  *
- * The pension contribution is held at its sanitised pounds for both
- * evaluations. Never NaN.
+ * A fixed pension contribution is held at its sanitised pounds for both
+ * evaluations; a pension share is taken of the extra pound as well, so under
+ * salary sacrifice or net pay the next pound is taxed only on what the
+ * pension leaves of it. Never NaN.
  *
  * This is the total of `ukMarginalRates`, which splits the same difference by
  * deduction; the one function computes both so the headline rate and its parts
@@ -682,7 +815,7 @@ export const ukMarginalRate = (input: UkTaxInput): number => ukMarginalRates(inp
  * What each deduction takes of the next £1 of `income`, and all of them
  * together. The method is `ukMarginalRate`'s, once: two smooth-mode
  * calculations a pound apart, with marriage allowance eligibility pinned at the
- * base income and the pension held at its sanitised pounds, and every rate the
+ * base income and the pension taken as `ukMarginalRate` takes it, and every rate the
  * difference of that deduction between the two. So the allowance taper reads as
  * 60% of tax inside £100,000-£125,140 and the child benefit charge as a steady
  * slope across £60,000-£80,000, in `incomeTax` and `childBenefitCharge`
@@ -694,12 +827,34 @@ export const ukMarginalRate = (input: UkTaxInput): number => ukMarginalRates(inp
  */
 export const ukMarginalRates = (input: UkTaxInput): UkMarginalRates => readMarginal(input).rates;
 
+/** What `ukNextPound` reports, each a fraction of the next £1 of `income`. */
+export interface UkNextPound {
+  /** Left as cash: the pound less `ukMarginalRate` and less `pension`. May be negative. */
+  kept: number;
+  /** Paid from pay into the pension: a pension share's cut of the pound, 80% of it under relief at source. */
+  pension: number;
+}
+
+/**
+ * Where the next £1 of `income` goes, as cash: what is kept, and what leaves
+ * pay for the pension. Read from the same one-pound difference as
+ * `ukMarginalRates`, so `kept + pension + ukMarginalRate` is 1 to the bit
+ * (save for rounding). A fixed pension contribution is held, so it takes
+ * nothing of the next pound; a pension share takes its share. Never NaN.
+ */
+export const ukNextPound = (input: UkTaxInput): UkNextPound => {
+  const { rates, pensionFromPay } = readMarginal(input);
+  return { kept: 1 - rates.total - pensionFromPay, pension: pensionFromPay };
+};
+
 /** Two marginal rates are the same rate when they differ by no more than floating-point noise. */
 const RATE_TOLERANCE = 1e-9;
 
 /** What `ukMarginalRates` finds at one income, and which band and taper state it found it in. */
 interface MarginalReading {
   rates: UkMarginalRates;
+  /** What leaves pay for the pension of the same pound; not a deduction, so not in `rates`. */
+  pensionFromPay: number;
   incomeTaxBand: UkIncomeTaxBandName | null;
   allowanceTapering: boolean;
 }
@@ -724,7 +879,7 @@ const readMarginal = (input: UkTaxInput): MarginalReading => {
   const eligible = compute(base, { smooth: false }).marriageAllowanceEligible;
   const mode: Mode = { smooth: true, marriageAllowanceEligible: eligible };
   const now = compute(base, mode).breakdown;
-  const next = compute({ ...base, income: base.income + 1 }, mode).breakdown;
+  const next = compute(onePoundMore(base), mode).breakdown;
   const slope = (after: number, before: number): number => {
     const rate = after - before;
     return Number.isFinite(rate) ? rate : 0;
@@ -741,6 +896,7 @@ const readMarginal = (input: UkTaxInput): MarginalReading => {
   const holding = bands.find(band => now.taxableIncome < band.limit) ?? bands[bands.length - 1];
   return {
     rates,
+    pensionFromPay: slope(next.pensionFromPay, now.pensionFromPay),
     incomeTaxBand: Math.abs(rates.incomeTax) <= RATE_TOLERANCE ? null : holding.name,
     allowanceTapering: now.adjustedNetIncome > RULES.taperStart && now.personalAllowance > 0,
   };
@@ -750,46 +906,58 @@ const readMarginal = (input: UkTaxInput): MarginalReading => {
  * The step changes that a smooth curve hides: where a benefit is lost outright.
  *
  * `atIncome` is the last `income` at which the benefit is still held, solved
- * with every other input fixed. The pension contribution is taken in full
- * pounds, not capped at the income being modelled: `calculateUkTax` caps it at
- * the income it is given, but at the cliff income that cap no longer binds, so
- * capping at the current income would place the cliff too low whenever the
- * contribution exceeds it. Sorted by `atIncome`; a cliff the input can never
- * hold (benefits in kind alone already lose the benefit, so the solved income
- * would sit below the contribution or below zero) is omitted.
+ * with every other input fixed. The pension is taken as entered at the income
+ * solved for, a fixed sum in full pounds and a share of that income, not
+ * capped at the income being modelled: `calculateUkTax` caps it at the income
+ * it is given, but at the cliff income that cap no longer binds, so capping at
+ * the current income would place the cliff too low whenever the contribution
+ * exceeds it. Sorted by `atIncome`; a cliff the input can never hold (benefits
+ * in kind alone already lose the benefit, so the solved income would sit below
+ * where the pension is paid in full, or below zero) is omitted, as is one no
+ * income reaches.
  */
 export const ukTaxCliffs = (input: UkTaxInput): UkTaxCliff[] => {
-  const r = resolveUncapped(input);
-  // Income that leaves the given total income: undo the pre-tax deduction and
-  // the benefits in kind, which are in total income but not in `income`.
-  const incomeFor = (totalIncome: number): number => totalIncome + preTaxDeductionOf(r) - r.bik;
+  const r = resolve(input);
   const cliffs: UkTaxCliff[] = [];
 
+  // Both cliffs are on adjusted net income, or on taxable income while the
+  // allowance is whole, and each is income less the pension plus the benefits
+  // in kind under every method: relief at source stretches the bands by the
+  // gross it would otherwise have taken off pay.
   if (r.childcareSupport > 0) {
     cliffs.push({
       kind: 'childcare',
-      atIncome: incomeFor(RULES.childcareCutoff + rasGrossOf(r)),
+      atIncome: incomeLeaving(RULES.childcareCutoff - r.bik, r),
       cost: r.childcareSupport,
     });
   }
 
   if (r.marriageAllowance) {
-    const limit = marriageAllowanceLimit(r);
     // The personal allowance is still whole at these incomes (true while the
     // stated allowance plus the band ceiling is under the £100,000 taper
     // start, which holds for any allowance up to about £62,000), so taxable
-    // income of `limit` is total income of `limit` plus the stated allowance.
+    // income of the ceiling is total income of the ceiling plus the stated
+    // allowance.
+    const ceiling = RULES.bands[r.region][RULES.marriageAllowanceBand[r.region]].limit;
+    const atIncome = incomeLeaving(ceiling + r.allowance - r.bik, r);
+    const there = resolvedAt(r, atIncome);
     cliffs.push({
       kind: 'marriage-allowance',
-      atIncome: incomeFor(limit + r.allowance),
-      cost: Math.min(RULES.marriageAllowanceReduction, taxOnBands(limit, bandsFor(r.region, rasGrossOf(r)))),
+      atIncome,
+      cost: Math.min(
+        RULES.marriageAllowanceReduction,
+        taxOnBands(marriageAllowanceLimit(there), bandsFor(r.region, rasGrossOf(there))),
+      ),
     });
   }
 
-  // Below the contribution the cap binds and adjusted net income is just the
-  // benefits in kind, so a solved income under it means the benefit is lost
-  // at every income. With no contribution this is the same as `>= 0`.
-  return cliffs.filter(c => c.atIncome >= r.contribution).sort((a, b) => a.atIncome - b.atIncome);
+  // Until the pension is paid in full the cap binds and adjusted net income
+  // is just the benefits in kind, so a solved income under that point means
+  // the benefit is lost at every income. With no fixed sum this is `>= 0`.
+  const paidInFull = incomeLeaving(0, r);
+  return cliffs
+    .filter(c => Number.isFinite(c.atIncome) && c.atIncome >= paidInFull)
+    .sort((a, b) => a.atIncome - b.atIncome);
 };
 
 /**
@@ -798,27 +966,30 @@ export const ukTaxCliffs = (input: UkTaxInput): UkTaxCliff[] => {
  * Charge climbs from nothing to all of it. For shading a chart of `ukTaxCurve`.
  *
  * Adjusted net income as a function of income is flat at the benefits in kind
- * while income is below the pension contribution (pay is nil under salary
- * sacrifice or net pay, and relief at source is capped at income), then rises
- * pound for pound. So each end is the threshold less the benefits in kind plus
- * the contribution, or 0 where the benefits alone already reach the threshold.
- * As with `ukTaxCliffs` the contribution is taken in full pounds, because the
- * curve recomputes each point and the cap at the current income does not bind
- * where the band sits; the result therefore ignores `income` altogether.
+ * while a fixed pension contribution still takes all of income (pay is nil
+ * under salary sacrifice or net pay, and relief at source is capped at
+ * income), then rises by what the pension leaves of each pound. So each end is
+ * where income less the pension reaches the threshold less the benefits in
+ * kind, or 0 where the benefits alone already reach the threshold. As with
+ * `ukTaxCliffs` the pension is taken as entered at the income solved for,
+ * because the curve recomputes each point and the cap at the current income
+ * does not bind where the band sits; the result therefore ignores `income`
+ * altogether.
  *
  * `null` when no child benefit is claimed (the children count is sanitised as
- * in `calculateUkTax`), or when benefits in kind alone reach £80,000 so that
- * the charge is total at every income and there is no band to shade.
+ * in `calculateUkTax`), when benefits in kind alone reach £80,000 so that the
+ * charge is total at every income and there is no band to shade, or when the
+ * pension takes the whole of every pound so that no income reaches £80,000.
  */
 export const ukChildBenefitBand = (input: UkTaxInput): UkIncomeBand | null => {
-  const r = resolveUncapped(input);
+  const r = resolve(input);
   if (r.children === 0) return null;
 
   const incomeAt = (adjustedNetIncome: number): number =>
-    r.bik >= adjustedNetIncome ? 0 : adjustedNetIncome - r.bik + r.contribution;
+    r.bik >= adjustedNetIncome ? 0 : incomeLeaving(adjustedNetIncome - r.bik, r);
 
   const to = incomeAt(RULES.hicbcFullAt);
-  if (to <= 0) return null;
+  if (!Number.isFinite(to) || to <= 0) return null;
   return { from: incomeAt(RULES.hicbcStart), to };
 };
 
@@ -1103,9 +1274,10 @@ const buildSlice = (
  * total. That is fine for a slice average, but a slice's charge is not its
  * marginal rate times its width.
  *
- * When `opts.includePensionAndBenefits` is `false`, `pensionContribution` and
- * `benefitsInKind` are zeroed before computing so the caller can toggle between
- * salary-only and full-package views without doing arithmetic in a component.
+ * When `opts.includePensionAndBenefits` is `false`, the pension (its fixed sum
+ * and its share) and `benefitsInKind` are zeroed before computing so the
+ * caller can toggle between salary-only and full-package views without doing
+ * arithmetic in a component.
  */
 export const ukTakeHomeBySlice = (
   input: UkTaxInput,
@@ -1114,7 +1286,7 @@ export const ukTakeHomeBySlice = (
   const include = opts?.includePensionAndBenefits ?? true;
   const effectiveInput: UkTaxInput = include
     ? input
-    : { ...input, pensionContribution: 0, benefitsInKind: 0 };
+    : { ...input, pensionContribution: 0, pensionShare: 0, benefitsInKind: 0 };
   // Children stay in: the charge is a tax on income. Childcare support is a
   // cliff in what the household keeps, not pay, so it is dropped.
   const r = resolve({ ...effectiveInput, childcareSupport: 0 });
@@ -1256,7 +1428,8 @@ const sameReading = (band: UkMarginalBand, reading: MarginalReading): boolean =>
  * The ranges of `income`, from 0 up to `maxIncome`, across which every marginal
  * rate of `ukMarginalRates` is constant: the steps of the line `ukTaxCurve`
  * draws, said once instead of read back off a thousand sampled points. Only
- * `income` varies; everything else is held as entered, as the curve does.
+ * `income` varies, and a pension share with it; everything else is held as
+ * entered, as the curve does.
  * Bands are contiguous, the first starts at 0 and the last ends at
  * `maxIncome`; adjacent bands never match in all five component rates, income
  * tax band and taper state together.
@@ -1265,8 +1438,11 @@ const sameReading = (band: UkMarginalBand, reading: MarginalReading): boolean =>
  * where the next pound pays no income tax) and whether the £100,000 allowance
  * taper is running (`allowanceTapering`). Both are read at the very point the
  * rates are, by the same `readMarginal`, so a band cannot show a rate its flags
- * do not explain: a tapering band's income tax rate is its band's rate times
- * `1 + UK_ALLOWANCE_TAPER_RATE`. Both are part of what makes two adjacent
+ * do not explain: with no pension share, a tapering band's income tax rate is
+ * its band's rate times `1 + UK_ALLOWANCE_TAPER_RATE`. A share under salary
+ * sacrifice or net pay lowers every rate it reaches by the part of the pound
+ * it takes, and under relief at source moves that part of a higher-rate pound
+ * into the basic band. Both are part of what makes two adjacent
  * intervals one band.
  *
  * The breakpoints are found analytically, in income space, and the rates are
@@ -1274,23 +1450,35 @@ const sameReading = (band: UkMarginalBand, reading: MarginalReading): boolean =>
  * between them, so the bands cannot disagree with the rate the curve shows.
  * Intervals whose rates match are merged, which is what makes generating too
  * many breakpoints harmless and generating too few the bug to avoid. A
- * breakpoint is a threshold on something that moves one-for-one with income,
- * so each is shifted from the quantity it is a threshold on back to `income`:
+ * breakpoint is a threshold on income itself or on income less the pension
+ * (which `incomeLeaving` moves back onto income, a fixed sum by adding it and
+ * a share by undoing the share), so each is shifted from the quantity it is a
+ * threshold on back to `income`:
  *
  * - Income tax thresholds are on total income (pay plus benefits in kind), and
- *   pay is `income` less the pre-tax deduction (the contribution under salary
- *   sacrifice and net pay), so `income` is the threshold plus that deduction
- *   less the benefits in kind. Under relief at source the contribution does not
- *   come off pay but stretches the bands and moves the taper start, which
- *   `totalIncomeTaxThresholds` takes as its gross argument. Marriage allowance
- *   eligibility is pinned per income and can be either, so both sets are used.
+ *   pay is `income` less the pension under salary sacrifice and net pay, so
+ *   each is on income less the pension once the benefits in kind are taken
+ *   off. Under relief at source the contribution does not come off pay but
+ *   stretches the bands and moves the taper start by exactly as much, which
+ *   `totalIncomeTaxThresholds` takes as its gross argument for a fixed sum, so
+ *   the same holds less that stretch. The exceptions are the thresholds below
+ *   the first stretched band (the allowance, marriage allowance's reach and
+ *   Scotland's starter band), which relief at source leaves on income itself;
+ *   with a share they are added again, unshifted before the taper and, for a
+ *   stated allowance large enough to reach them inside it, solved there with
+ *   the allowance falling as the pension lowers adjusted net income. Marriage
+ *   allowance eligibility is pinned
+ *   per income and can be either, so both sets are used.
  * - National Insurance and student loan thresholds are on pay for contributions,
- *   which only salary sacrifice reduces, so each moves up by the sacrifice.
+ *   which only salary sacrifice reduces: on income less the pension under
+ *   sacrifice, and on income itself otherwise.
  * - The child benefit charge thresholds are on adjusted net income, which is
- *   total income less the relief-at-source gross.
- * - Below the contribution it is capped at `income`, so the pension is not the
+ *   income less the pension plus the benefits in kind under every method.
+ * - A pension share on qualifying earnings changes how much of each pound it
+ *   takes at the lower and upper limits, so both are breakpoints too.
+ * - Below the fixed sum it is capped at `income`, so the pension is not the
  *   one the thresholds above assume (the whole of it already made) and a second
- *   set is added: the contribution itself, the tax thresholds with nothing
+ *   set is added: where the pension is first paid in full, the tax thresholds with nothing
  *   shifted but the benefits in kind, and the NI and loan thresholds on income
  *   as it stands. The rate is continuous across the contribution, so these
  *   mostly repeat a threshold already found and the merge discards them. The
@@ -1316,29 +1504,59 @@ export const ukMarginalBands = (input: UkTaxInput, opts: { maxIncome: number }):
   const { maxIncome } = opts;
   if (!Number.isFinite(maxIncome) || maxIncome <= 0) return [];
 
-  const r = resolveUncapped(input);
-  const contribution = r.contribution;
-  const preTax = preTaxDeductionOf(r);
-  const rasGross = rasGrossOf(r);
-  const sacrifice = sacrificeOf(r);
+  const r = resolve(input);
+  const fixed = r.pensionFixed;
+  const ras = r.method === 'relief-at-source';
+  const rasFixed = ras ? fixed : 0;
 
   const taxThresholds = (gross: number): number[] =>
     [true, false].flatMap(eligible => totalIncomeTaxThresholds(r.allowance, gross, r.region, eligible));
 
-  // Once the whole contribution has been made.
+  // Once the whole contribution is being made. The tax thresholds come back
+  // on total income for the fixed sum alone, which under relief at source
+  // stretches the bands and the taper start by it; less that stretch, each
+  // is on income less the pension.
+  const tax = taxThresholds(rasFixed).map(total => total - rasFixed - r.bik);
   const candidates: number[] = [
-    ...taxThresholds(rasGross).map(total => total + preTax - r.bik),
-    ...niAndLoanThresholds(r).map(threshold => threshold + sacrifice),
+    ...tax.map(net => incomeLeaving(net, r)),
+    ...niAndLoanThresholds(r).map(threshold => (r.method === 'salary-sacrifice' ? incomeLeaving(threshold, r) : threshold)),
   ];
   if (r.children > 0) {
     for (const adjustedNetIncome of [RULES.hicbcStart, RULES.hicbcFullAt]) {
-      candidates.push(adjustedNetIncome + rasGross + preTax - r.bik);
+      candidates.push(incomeLeaving(adjustedNetIncome - r.bik, r));
+    }
+  }
+  if (r.pensionShare > 0) {
+    // Where the share's basis bends, the share of each pound changes.
+    candidates.push(...PENSION_BASIS_PIECES[r.pensionBasis].map(piece => piece.from));
+    // Under relief at source the allowance, marriage allowance's reach and
+    // Scotland's unstretched starter band are on income itself, which a share
+    // separates from income less the pension. Before the taper each is the
+    // allowance plus its target, less the benefits in kind. Inside it the
+    // allowance falls by the taper rate of adjusted net income, which the
+    // pension lowers, so income less that rate's share of the pension, over
+    // one plus the rate, is what reaches the target: `incomeLeaving` with the
+    // pension scaled by rate / (1 + rate).
+    if (ras) {
+      const targets = [
+        0,
+        taxableAtTax(RULES.marriageAllowanceReduction, bandsFor(r.region, 0)),
+        ...RULES.bands[r.region].slice(0, RULES.firstExtendedBand[r.region]).map(band => band.limit),
+      ];
+      const k = RULES.taperRate / (1 + RULES.taperRate);
+      const scaled: Resolved = { ...r, pensionFixed: r.pensionFixed * k, pensionShare: r.pensionShare * k };
+      candidates.push(...targets.map(target => r.allowance + target - r.bik));
+      candidates.push(
+        ...targets.map(target =>
+          incomeLeaving((target + r.allowance + RULES.taperRate * RULES.taperStart) / (1 + RULES.taperRate) - r.bik, scaled),
+        ),
+      );
     }
   }
 
   // While it is still being made, and where it is complete.
-  if (contribution > 0) {
-    candidates.push(contribution);
+  if (fixed > 0) {
+    candidates.push(incomeLeaving(0, r));
     candidates.push(...taxThresholds(0).map(total => total - r.bik));
     candidates.push(...niAndLoanThresholds(r));
     if (r.method === 'relief-at-source') {
@@ -1390,8 +1608,8 @@ export interface UkWhatIf {
   key: UkWhatIfKey;
   /** The input with only this change made. */
   input: UkTaxInput;
-  /** Gross £/yr the what-if adds to the pension; 0 unless `more-pension`. */
-  extraPension: number;
+  /** Share of the pension's basis the what-if adds to `pensionShare`; 0 unless `more-pension`. */
+  extraPensionShare: number;
 }
 
 /**
@@ -1401,54 +1619,57 @@ export interface UkWhatIf {
  *
  * - `no-loan`: no undergraduate plan and no postgraduate loan; offered when
  *   either is set.
- * - `no-pension`: a contribution of nothing; offered when there is one.
- * - `more-pension`: 5% of the income more pension, to the nearest pound
- *   (`extraPension`), on top of the contribution entered. It is a fixed number
- *   of pounds, held across the curve like the entered contribution, not a
- *   share that moves with the income. Offered when the income is above nothing
- *   and 5% of it rounds to at least £1.
+ * - `no-pension`: no fixed sum and no share; offered when there is either.
+ * - `more-pension`: a pension share 5 points higher (`extraPensionShare`), of
+ *   the same basis, with any fixed sum left as it is. Being a share it moves
+ *   with income across the curve, as a raised percentage would. Offered while
+ *   the share can rise that far without passing all of the basis.
  * - `salary-sacrifice`: the pension paid by salary sacrifice; offered to an
- *   employee with a contribution who is not already using it. A sole trader has
- *   no payroll to sacrifice from, so is never offered it.
+ *   employee with a pension who is not already using it. A sole trader has no
+ *   payroll to sacrifice from, so is never offered it.
  *
  * Sanitised as `resolve` does, so an unknown plan counts as none, an unknown
- * method as relief at source, and a negative or non-finite income or
- * contribution as 0. The contribution is taken in full pounds rather than
- * capped at the income given, as `ukTaxCliffs` and `ukMarginalBands` take it:
- * the what-ifs are compared across a curve of incomes, and the cap at this one
- * does not bind at the others. Nothing is computed from the tax rules here:
- * this says which inputs to compare, and the calculator does the rest.
+ * method as relief at source, and a negative or non-finite contribution or
+ * share as 0. The fixed sum is taken in full pounds rather than capped at the
+ * income given, as `ukTaxCliffs` and `ukMarginalBands` take it: the what-ifs
+ * are compared across a curve of incomes, and the cap at this one does not
+ * bind at the others. Nothing is computed from the tax rules here: this says
+ * which inputs to compare, and the calculator does the rest.
  */
 export const ukWhatIfs = (input: UkTaxInput): UkWhatIf[] => {
-  const r = resolveUncapped(input);
+  const r = resolve(input);
+  const hasPension = r.pensionFixed > 0 || r.pensionShare > 0;
   const whatIfs: UkWhatIf[] = [];
 
   if (r.plan !== 'none' || r.postgrad) {
     whatIfs.push({
       key: 'no-loan',
       input: { ...input, undergradPlan: 'none', postgradLoan: false },
-      extraPension: 0,
+      extraPensionShare: 0,
     });
   }
 
-  if (r.contribution > 0) {
-    whatIfs.push({ key: 'no-pension', input: { ...input, pensionContribution: 0 }, extraPension: 0 });
+  if (hasPension) {
+    whatIfs.push({
+      key: 'no-pension',
+      input: { ...input, pensionContribution: 0, pensionShare: 0 },
+      extraPensionShare: 0,
+    });
   }
 
-  const extraPension = Math.round(WHAT_IF_EXTRA_PENSION_SHARE * r.income);
-  if (extraPension > 0) {
+  if (r.pensionShare + WHAT_IF_EXTRA_PENSION_SHARE <= 1) {
     whatIfs.push({
       key: 'more-pension',
-      input: { ...input, pensionContribution: r.contribution + extraPension },
-      extraPension,
+      input: { ...input, pensionShare: r.pensionShare + WHAT_IF_EXTRA_PENSION_SHARE },
+      extraPensionShare: WHAT_IF_EXTRA_PENSION_SHARE,
     });
   }
 
-  if (r.kind === 'employed' && r.contribution > 0 && r.method !== 'salary-sacrifice') {
+  if (r.kind === 'employed' && hasPension && r.method !== 'salary-sacrifice') {
     whatIfs.push({
       key: 'salary-sacrifice',
       input: { ...input, pensionMethod: 'salary-sacrifice' },
-      extraPension: 0,
+      extraPensionShare: 0,
     });
   }
 

@@ -54,6 +54,9 @@ export const formatWholeGBP = (num: number) => {
   }).format(num);
 };
 
+/** A share as a percentage to at most one decimal, without a trailing ".0": 0.05 as "5%", 0.0717 as "7.2%". */
+export const formatShare = (share: number) => `${Number((share * 100).toFixed(1))}%`;
+
 export const stripNumberFormatting = (value: string) => value.replace(/,/g, '');
 
 export const formatNumberInput = (value: string | number) => {

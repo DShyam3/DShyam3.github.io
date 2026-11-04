@@ -9,13 +9,15 @@
  * stopped or changed, and to what. Nothing is computed for display.
  */
 
-import { formatWholeGBP } from '@/features/finance/utils/calculations';
+import { formatShare, formatWholeGBP } from '@/features/finance/utils/calculations';
 import {
   UK_ALLOWANCE_TAPER_RATE,
   UK_ALLOWANCE_TAPER_START,
+  UK_AUTO_ENROLMENT,
   UK_CHILD_BENEFIT_CHARGE_START,
   type UkIncomeKind,
   type UkMarginalBand,
+  type UkPensionBasis,
   type UkPensionMethod,
   type UkUndergradPlan,
 } from '@/lib/finance';
@@ -25,7 +27,9 @@ import { cn } from '@/lib/utils';
 export interface MarginalStepsContext {
   kind: UkIncomeKind;
   undergradPlan: UkUndergradPlan;
-  pensionContribution: number;
+  /** Gross share of `pensionBasis` paid in; 0 for no pension. */
+  pensionShare: number;
+  pensionBasis: UkPensionBasis;
   pensionMethod: UkPensionMethod;
   benefitsInKind: number;
   marriageAllowance: boolean;
@@ -53,26 +57,23 @@ const PLAN_LABELS: Record<UkUndergradPlan, string> = {
 const EPSILON = 1e-6;
 const same = (a: number, b: number) => Math.abs(a - b) < EPSILON;
 
-/** 0.08 as "8%", 0.0717 as "7.2%", 0.675 as "67.5%". */
-const pct = (rate: number) => `${Number((rate * 100).toFixed(1))}%`;
-
 const capitalised = (s: string) => `${s[0].toUpperCase()}${s.slice(1)}`;
 
 const TAPER = `above ${formatWholeGBP(UK_ALLOWANCE_TAPER_START)} of adjusted net income every £${Math.round(1 / UK_ALLOWANCE_TAPER_RATE)} removes £1 of personal allowance`;
 
 const incomeTaxSentence = (prev: UkMarginalBand, band: UkMarginalBand, ctx: MarginalStepsContext): string => {
   const name = band.incomeTaxBand;
-  const rate = pct(band.incomeTax);
+  const rate = formatShare(band.incomeTax);
   if (!name) return 'Income tax stops.';
   if (!prev.incomeTaxBand) {
     const marriage = ctx.marriageAllowance ? ' Marriage allowance’s tax reduction is used up below this point.' : '';
-    return `Income tax starts: ${name}-rate tax at ${rate}.${marriage}`;
+    return `Income tax starts at the ${name} rate: ${rate} of each pound.${marriage}`;
   }
   if (band.allowanceTapering && !prev.allowanceTapering) {
     return `The allowance taper: ${TAPER}, so ${name}-rate tax costs ${rate}.`;
   }
   if (prev.allowanceTapering && !band.allowanceTapering) {
-    return `The allowance is gone, so the taper ends: ${name}-rate tax at ${rate}.`;
+    return `The allowance is gone, so the taper ends: ${name}-rate tax takes ${rate}.`;
   }
   if (band.allowanceTapering) {
     return `The ${name}-rate band starts while the taper is still running, so it costs ${rate}.`;
@@ -84,25 +85,25 @@ const incomeTaxSentence = (prev: UkMarginalBand, band: UkMarginalBand, ctx: Marg
 const niSentence = (prev: number, next: number, ctx: MarginalStepsContext): string => {
   const ni = ctx.kind === 'self-employed' ? 'Class 4 National Insurance' : 'National Insurance';
   const limit = ctx.kind === 'self-employed' ? 'upper profits limit' : 'upper earnings limit';
-  if (same(prev, 0)) return `${ni} starts at ${pct(next)}.`;
+  if (same(prev, 0)) return `${ni} starts at ${formatShare(next)}.`;
   if (same(next, 0)) return `${ni} stops.`;
   return next < prev
-    ? `${ni} drops from ${pct(prev)} to ${pct(next)} above the ${limit}.`
-    : `${ni} rises to ${pct(next)}.`;
+    ? `${ni} drops from ${formatShare(prev)} to ${formatShare(next)} above the ${limit}.`
+    : `${ni} rises to ${formatShare(next)}.`;
 };
 
 const loanSentence = (label: string, prev: number, next: number): string => {
-  if (same(prev, 0)) return `${label} repayments start: ${pct(next)} of income over the threshold.`;
+  if (same(prev, 0)) return `${label} repayments start: ${formatShare(next)} of income over the threshold.`;
   if (same(next, 0)) return `${label} repayments stop.`;
-  return `${label} repayments change to ${pct(next)}.`;
+  return `${label} repayments change to ${formatShare(next)}.`;
 };
 
 const childBenefitSentence = (prev: number, next: number): string => {
   if (same(prev, 0)) {
-    return `The child benefit charge starts at ${formatWholeGBP(UK_CHILD_BENEFIT_CHARGE_START)} of adjusted net income, taking back ${pct(next)} of each extra pound.`;
+    return `The child benefit charge starts at ${formatWholeGBP(UK_CHILD_BENEFIT_CHARGE_START)} of adjusted net income, taking back ${formatShare(next)} of each extra pound.`;
   }
   if (same(next, 0)) return 'The child benefit charge has taken all of it back, so it stops.';
-  return `The child benefit charge now takes ${pct(next)}.`;
+  return `The child benefit charge now takes ${formatShare(next)}.`;
 };
 
 const NOTHING: Omit<UkMarginalBand, 'from' | 'to'> = {
@@ -138,19 +139,38 @@ const explain = (before: UkMarginalBand | undefined, band: UkMarginalBand, ctx: 
   return out;
 };
 
-/** Why the steps sit where they do for these inputs rather than at the headline thresholds. */
-const shiftNotes = (ctx: MarginalStepsContext): string[] => {
+const QUALIFYING = `pay between ${formatWholeGBP(UK_AUTO_ENROLMENT.lowerQualifyingEarnings)} and ${formatWholeGBP(UK_AUTO_ENROLMENT.upperQualifyingEarnings)}`;
+
+/** Bands whose income tax rate is above the basic rate: the ones a relief-at-source share stretches. */
+const BELOW_STRETCH: readonly (UkMarginalBand['incomeTaxBand'])[] = [null, 'starter', 'basic'];
+
+/**
+ * Why the steps sit where they do for these inputs rather than at the headline
+ * thresholds. The pension is a share, so it moves the steps by a different
+ * number of pounds at each one; the notes say which way, not by how much.
+ */
+const shiftNotes = (ctx: MarginalStepsContext, bands: UkMarginalBand[]): string[] => {
   const notes: string[] = [];
-  const c = ctx.pensionContribution;
-  if (c > 0) {
-    const amount = formatWholeGBP(c);
+  if (ctx.pensionShare > 0) {
+    const qualifying = ctx.pensionBasis === 'qualifying';
+    const of = qualifying ? QUALIFYING : ctx.kind === 'self-employed' ? 'profit' : 'salary';
+    const pension = `The pension, ${formatShare(ctx.pensionShare)} of ${of},`;
+    // Where the pension still grows with each pound, it takes a slice of the pound before the rates do.
+    const where = qualifying ? ` up to ${formatWholeGBP(UK_AUTO_ENROLMENT.upperQualifyingEarnings)}` : '';
     const method = ctx.kind === 'self-employed' ? 'relief-at-source' : ctx.pensionMethod;
     if (method === 'net-pay') {
-      notes.push(`Your ${amount} pension is paid from pay before income tax, so the income tax steps and the child benefit charge sit ${amount} higher. National Insurance and student loan steps don't move.`);
+      notes.push(`${pension} is paid from pay before income tax, so income tax only reaches what it leaves: the income tax steps and the child benefit charge sit higher than their headline thresholds, and${where} income tax rates sit a little under the headline ones. National Insurance and student loan steps don't move.`);
     } else if (method === 'salary-sacrifice') {
-      notes.push(`Your ${amount} salary sacrifice comes off before everything, so every step sits ${amount} higher.`);
+      notes.push(`${pension} is given up by salary sacrifice, so it comes off before everything: every step sits higher than its headline threshold, and${where} every rate a little under its headline one.`);
     } else {
-      notes.push(`Relief at source widens your basic-rate band by ${amount}, so higher-rate tax, the ${formatWholeGBP(UK_ALLOWANCE_TAPER_START)} taper and the child benefit charge start ${amount} later.`);
+      // Only while the pension still grows does it stretch the band under each
+      // extra pound: on qualifying earnings that is up to the upper limit,
+      // which a band above the basic rate reaches only in Scotland.
+      const stretched = bands.some(b =>
+        !BELOW_STRETCH.includes(b.incomeTaxBand)
+        && (!qualifying || b.from < UK_AUTO_ENROLMENT.upperQualifyingEarnings));
+      const under = stretched ? `, and${where} every rate above the basic rate sits a little under its headline one` : '';
+      notes.push(`${pension} is paid by relief at source, so income tax still starts at the personal allowance. The basic-rate band widens by the gross paid in, so higher-rate tax starts later${under}. Adjusted net income falls by it too, so the ${formatWholeGBP(UK_ALLOWANCE_TAPER_START)} taper and the child benefit charge start later.`);
     }
   }
   if (ctx.kind === 'employed' && ctx.benefitsInKind > 0) {
@@ -169,8 +189,9 @@ export function MarginalSteps({ bands, income, ctx, highlighted, onHighlight }: 
   onHighlight: (from: number | null) => void;
 }) {
   if (bands.length === 0) return null;
-  const notes = shiftNotes(ctx);
-  const yours = bands.findIndex(b => income >= b.from && income < b.to);
+  const notes = shiftNotes(ctx, bands);
+  // With no income typed there is nobody to mark.
+  const yours = income > 0 ? bands.findIndex(b => income >= b.from && income < b.to) : -1;
 
   return (
     <div className="mt-5 space-y-3">
@@ -197,7 +218,7 @@ export function MarginalSteps({ bands, income, ctx, highlighted, onHighlight }: 
                   {last ? `${formatWholeGBP(band.from)}+` : `${formatWholeGBP(band.from)} – ${formatWholeGBP(band.to)}`}
                   {isYours && <span className="ml-2 rounded bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">You</span>}
                 </span>
-                <span className="font-mono text-sm font-semibold text-foreground tabular-nums">{pct(band.total)}</span>
+                <span className="font-mono text-sm font-semibold text-foreground tabular-nums">{formatShare(band.total)}</span>
               </div>
               {parts.length > 0 && (
                 <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-mono" aria-label="Made up of">
@@ -205,7 +226,7 @@ export function MarginalSteps({ bands, income, ctx, highlighted, onHighlight }: 
                     <li key={c.key} className="flex items-center gap-1.5">
                       <span aria-hidden="true" className={cn('h-2 w-2 rounded-sm shrink-0', c.swatch)} />
                       <span className="text-muted-foreground">{c.label}</span>
-                      <span className="text-foreground tabular-nums">{pct(band[c.key])}</span>
+                      <span className="text-foreground tabular-nums">{formatShare(band[c.key])}</span>
                     </li>
                   ))}
                 </ul>

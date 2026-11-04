@@ -438,15 +438,24 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 - **Tax calculator** — a what-if calculator for 2026/27 UK rules. Type any salary
   or self-employed profit in the box, or drag the slider up to £250,000, and it
   shows take-home, effective rate, marginal rate and how many pence of the next
-  pound you keep. The inputs start from your Tax & Income settings (salary,
-  region, pension type and percentage, student loan plan). Changing them here
-  never changes those settings; **My settings** puts the inputs back to them.
-  While finance figures are hidden the salary and pension amount start empty,
-  since the chart marker and slider would otherwise show your salary; showing
-  figures fills them in.
+  pound you keep as cash, with the pence that go into a pension shown beneath it.
+  A **Start from** switch opens on **Standard**: an ordinary
+  employee with no salary filled in, on the standard tax code (1257L), the
+  auto-enrolment minimum pension, no student loan, and no benefits in kind,
+  children or marriage allowance. Standard shows only the salary, where you live
+  and the student loan fields. **Yours** fills every field from your Tax & Income
+  settings (salary, region, pension type and percentage, student loan plan,
+  benefits and the tax-code allowance), and every field stays editable.
+  Changing them here never changes those settings. Each view keeps its own edits;
+  **Reset** (Standard) or **My settings** (Yours) returns that view to its starting
+  point. While finance figures are hidden, Yours starts with no salary, pension or
+  benefits, since the chart marker and slider would otherwise show your salary;
+  showing figures fills them in. The **You** marker and the step badge appear only
+  once a salary is entered.
 
   The inputs are employed or self-employed; England, Wales & NI or Scotland, with
-  Scotland's six rate bands; a pension contribution paid by salary sacrifice, net
+  Scotland's six rate bands; a pension contribution, entered as a gross percentage
+  of pay and worked out afresh at each income, paid by salary sacrifice, net
   pay or relief at source (a self-employed profit has relief at source only); an
   undergraduate loan on Plan 1, 2, 4 or 5, and a postgraduate loan; benefits in
   kind for employees; the number of children claiming child benefit; childcare
@@ -503,14 +512,17 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   line dashed and, when childcare support is entered, a second line for take-home
   with that support.
 
-  **Take-home %** ("Where each pound goes") stacks the share of each pound across
-  incomes: take-home at the bottom, then pension, income tax, National Insurance,
-  student loan and child benefit charge, in the colours of the take-home slices. A
-  legend gives each share at your income. **Compare with** adds one dashed line of
-  take-home %: No student loan, No pension, Pension +£X (5% of your salary, as a fixed
-  amount) or Pension by salary sacrifice. Each option appears only when it changes
-  something, and its share at your income is in the legend. With children entered, a
-  note says the child benefit charge is paid through Self Assessment, not the payslip.
+  **Take-home %** (headed "Share of pay kept") is a single line: take-home as a
+  percentage of salary at each income, after the pension, tax, National Insurance
+  and loans. Hovering the line shows what takes the rest: pension, income tax,
+  National Insurance, student loan and child benefit charge. A legend gives each
+  share at the salary entered. **Compare
+  with** adds one dashed line of take-home %: No student loan, No pension, a pension
+  five points higher at every income (named by the share it comes to, such as
+  Pension at 10%) or Pension by salary
+  sacrifice. Each option appears only when it changes something, and its share at
+  your income is in the legend. With children entered, a note says the child benefit
+  charge is paid through Self Assessment, not the payslip.
 
   The marginal and take-home views also shade the child benefit clawback when children
   are entered, and draw the cliffs as dashed lines. A legend under the chart names the
@@ -519,10 +531,13 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
   It does not model savings, dividends, rent or gains, the pension annual
   allowance, employer National Insurance, Universal Credit or other benefits, or a
-  partner's income, and it does not check childcare eligibility. A personal
-  allowance field starts from the tax-code allowance in Settings (left empty, it
+  partner's income, and it does not check childcare eligibility. In Yours, the
+  personal allowance field starts from the tax-code allowance in Settings (left empty, it
   is the standard £12,570), so with the same inputs it agrees with Tax & Income.
-  Child benefit
+  Standard pays the auto-enrolment minimum (5% of pay between £6,240 and £50,270,
+  by relief at source) at every income, including below the £10,000 earnings
+  trigger, as if you had opted in; employer contributions are on top and not
+  shown. Child benefit
   counts the 53 benefit weeks in 2026/27. Its rules follow the Tax Policy
   Associates UK tax calculator. Its £ figures sit under the Show figures toggle
   like the rest of Finance.

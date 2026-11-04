@@ -3,11 +3,12 @@
  *
  * Every figure comes from `calculateUkTax`, `ukMarginalRate`, `ukTaxCliffs`,
  * `ukTaxCurve`, `ukMarginalBands` and `ukTakeHomeShareCurve`, which are pure
- * and tested. The fields start from your own
- * settings and stay a what-if: editing one never writes back, because a
- * calculator that quietly changes your payroll is not a calculator.
+ * and tested. It opens on Standard, `UK_STANDARD_TAX_INPUT` with a salary to
+ * type: what anyone on the ordinary terms keeps. Yours starts from your own
+ * settings instead. Both stay a what-if: editing a field never writes back,
+ * because a calculator that quietly changes your payroll is not a calculator.
  *
- * While finance figures are hidden the salary is not seeded. Painting over the
+ * While finance figures are hidden Yours seeds no salary. Painting over the
  * £ text is not enough here: the "You" marker on a fixed £0-£200k axis, the
  * slider thumb and the effective rate would each read it back.
  */
@@ -21,21 +22,25 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { formatGBP, formatWholeGBP } from '@/features/finance/utils/calculations';
+import { formatGBP, formatShare, formatWholeGBP } from '@/features/finance/utils/calculations';
 import {
+  UK_AUTO_ENROLMENT,
   UK_CHILDCARE_CUTOFF,
   UK_CHILD_BENEFIT_CHARGE_END,
   UK_CHILD_BENEFIT_CHARGE_START,
   UK_CHILD_BENEFIT_CHARGE_STEP,
   UK_CHILD_BENEFIT_WEEKS,
+  UK_STANDARD_TAX_INPUT,
   UK_TAX_YEAR_LABEL,
   calculateUkTax,
   ukChildBenefitBand,
   ukMarginalBands,
   ukMarginalRate,
+  ukNextPound,
   ukTaxCliffs,
   ukTaxCurve,
   type UkIncomeKind,
+  type UkPensionBasis,
   type UkPensionMethod,
   type UkTaxInput,
   type UkTaxRegion,
@@ -58,7 +63,9 @@ interface Draft {
   benefitsInKind: string;
   /** Empty means the statutory allowance; settings fill it from the tax code. */
   personalAllowance: string;
-  pensionContribution: string;
+  /** Gross percent of `pensionBasis`, so it moves with income across the charts. */
+  pensionPercent: string;
+  pensionBasis: UkPensionBasis;
   pensionMethod: UkPensionMethod;
   undergradPlan: UkUndergradPlan;
   postgradLoan: boolean;
@@ -68,6 +75,7 @@ interface Draft {
 }
 
 type ChartMode = 'marginal' | 'net' | 'share';
+type Profile = 'standard' | 'yours';
 
 const SLIDER_MAX = 250_000;
 const CHART_POINTS = 400;
@@ -88,6 +96,14 @@ const CHART_MODES = [
   { key: 'net', label: 'Take-home' },
   { key: 'share', label: 'Take-home %' },
 ] as const satisfies readonly { key: ChartMode; label: string }[];
+
+const PROFILES = [
+  { key: 'standard', label: 'Standard' },
+  { key: 'yours', label: 'Yours' },
+] as const satisfies readonly { key: Profile; label: string }[];
+
+/** What every chart holds still while income moves along it. */
+const HELD_AS_ENTERED = 'The pension is worked out afresh at each income; everything else is held as entered.';
 
 const PENSION_METHODS: { key: UkPensionMethod; label: string }[] = [
   { key: 'salary-sacrifice', label: 'Salary sacrifice' },
@@ -122,22 +138,33 @@ const amount = (text: string) => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
+/** A typed percentage as the share the engine takes, "5" or "5%" as 0.05. */
+const shareFrom = (text: string) => amount(text.replace('%', '')) / 100;
+
 /** Pounds as a field shows them: whole pounds without a trailing ".00". */
 const asField = (n: number) => (n > 0 ? String(Math.round(n * 100) / 100) : '');
 
 /**
- * The form as your settings fill it, from the same engine input Tax & Income
- * computes with, so the two pages agree. The pension percentage is the gross
- * amount paid in. Benefits in kind are added unless the tax code already
- * collects their tax, as Tax & Income does.
+ * A share as the percentage field shows it, exact but for float noise, so
+ * 5.125% in settings seeds 5.125 and Yours agrees with Tax & Income.
  */
-const draftFromSettings = (base: UkTaxInput): Draft => ({
+const asPercentField = (share: number) => (share > 0 ? String(Number((share * 100).toPrecision(12))) : '');
+
+/**
+ * The form an engine input fills: the standard case, or your settings through
+ * the same input Tax & Income computes with, so the two pages agree. The
+ * pension is a gross percentage. Benefits in kind are added unless the tax
+ * code already collects their tax, as Tax & Income does. The pension's fixed
+ * sum is not a field, and neither input carries one.
+ */
+const draftFrom = (base: UkTaxInput): Draft => ({
   income: asField(base.income),
   kind: 'employed',
   region: base.region,
   benefitsInKind: asField(base.benefitsInKind),
   personalAllowance: base.personalAllowance === undefined ? '' : String(base.personalAllowance),
-  pensionContribution: asField(base.pensionContribution),
+  pensionPercent: asPercentField(base.pensionShare ?? 0),
+  pensionBasis: base.pensionBasis ?? 'salary',
   pensionMethod: base.pensionMethod,
   undergradPlan: base.undergradPlan,
   postgradLoan: base.postgradLoan,
@@ -145,6 +172,9 @@ const draftFromSettings = (base: UkTaxInput): Draft => ({
   childcareSupport: '0',
   marriageAllowance: false,
 });
+
+/** Standard opens with no salary: there is nobody's to start from. */
+const STANDARD_DRAFT = draftFrom(UK_STANDARD_TAX_INPUT);
 
 const tooltipStyle = {
   background: 'hsl(var(--popover))',
@@ -157,31 +187,38 @@ const axisTick = { fontSize: 12, fill: 'hsl(var(--muted-foreground))' };
 export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden: boolean }) {
   const { hasLoaded } = useFinanceData();
 
-  // The seed follows your settings until you change a field; an edited field
-  // is an override and wins until Reset. While figures are hidden nothing is
-  // seeded from them: the salary, its pension and benefits, and the tax-code
-  // allowance all start empty.
+  // Yours follows your settings until you change a field; an edited field is
+  // an override and wins until Reset. Each view keeps its own edits, so
+  // switching between them loses neither. While figures are hidden nothing is
+  // seeded from settings: the salary, its pension and benefits, and the
+  // tax-code allowance all start empty.
   const { results } = useFinanceTotals();
-  const seed = useMemo(
+  const yoursSeed = useMemo(
     () =>
       figuresHidden
-        ? draftFromSettings({
+        ? draftFrom({
             ...results.taxInput,
             income: 0,
             benefitsInKind: 0,
             pensionContribution: 0,
+            pensionShare: 0,
             personalAllowance: undefined,
           })
-        : draftFromSettings(results.taxInput),
+        : draftFrom(results.taxInput),
     [results.taxInput, figuresHidden],
   );
-  const [overrides, setOverrides] = useState<Partial<Draft>>({});
+  const [profile, setProfile] = useState<Profile>('standard');
+  const standard = profile === 'standard';
+  const [overrides, setOverrides] = useState<Record<Profile, Partial<Draft>>>({ standard: {}, yours: {} });
   const [chartMode, setChartMode] = useState<ChartMode>('marginal');
 
-  const draft = useMemo<Draft>(() => ({ ...seed, ...overrides }), [seed, overrides]);
+  const draft = useMemo<Draft>(
+    () => ({ ...(profile === 'standard' ? STANDARD_DRAFT : yoursSeed), ...overrides[profile] }),
+    [profile, yoursSeed, overrides],
+  );
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
-    setOverrides(prev => ({ ...prev, [key]: value }));
-  const edited = Object.keys(overrides).length > 0;
+    setOverrides(prev => ({ ...prev, [profile]: { ...prev[profile], [key]: value } }));
+  const edited = Object.keys(overrides[profile]).length > 0;
 
   const employed = draft.kind === 'employed';
   // Salary sacrifice and net pay are payroll arrangements, so a self-employed
@@ -194,7 +231,9 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
     region: draft.region,
     benefitsInKind: amount(draft.benefitsInKind),
     personalAllowance: allowanceFrom(draft.personalAllowance),
-    pensionContribution: amount(draft.pensionContribution),
+    pensionContribution: 0,
+    pensionShare: shareFrom(draft.pensionPercent),
+    pensionBasis: draft.pensionBasis,
     pensionMethod: draft.pensionMethod,
     undergradPlan: draft.undergradPlan,
     postgradLoan: draft.postgradLoan,
@@ -205,6 +244,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
 
   const result = useMemo(() => calculateUkTax(input), [input]);
   const marginal = useMemo(() => ukMarginalRate(input), [input]);
+  const nextPound = useMemo(() => ukNextPound(input), [input]);
   const cliffs = useMemo(() => ukTaxCliffs(input), [input]);
 
   // Wide enough to show the 60% band and what lies past it, and always a
@@ -346,21 +386,29 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
     }] : []),
   ];
 
-  const field = (id: string, label: string, key: 'income' | 'benefitsInKind' | 'personalAllowance' | 'pensionContribution' | 'children', count = false) => (
+  const field = (
+    id: string,
+    label: string,
+    key: 'income' | 'benefitsInKind' | 'personalAllowance' | 'pensionPercent' | 'children',
+    unit: 'pounds' | 'percent' | 'count' = 'pounds',
+  ) => (
     <div className="space-y-1.5">
       <Label htmlFor={id} className="text-xs text-muted-foreground">{label}</Label>
       <div className="relative">
-        {!count && (
+        {unit === 'pounds' && (
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">£</span>
         )}
         <Input
           id={id}
-          inputMode={count ? 'numeric' : 'decimal'}
+          inputMode={unit === 'count' ? 'numeric' : 'decimal'}
           value={draft[key]}
           placeholder={key === 'personalAllowance' ? '12,570' : '0'}
           onChange={e => set(key, e.target.value)}
-          className={cn('h-9 font-mono text-sm tabular-nums', !count && 'pl-7')}
+          className={cn('h-9 font-mono text-sm tabular-nums', unit === 'pounds' && 'pl-7', unit === 'percent' && 'pr-7')}
         />
+        {unit === 'percent' && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+        )}
       </div>
     </div>
   );
@@ -373,10 +421,10 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
         label="Take-home"
         value={formatGBP(result.takeHome)}
         loading={!hasLoaded}
-        detail={<>
+        detail={input.income > 0 ? <>
           On {formatGBP(input.income)}{employed && input.benefitsInKind > 0 ? ' plus benefits' : ''},{' '}
           {formatGBP(result.takeHome / 12)} a month, {UK_TAX_YEAR_LABEL} rules.
-        </>}
+        </> : <>Type a salary to see what it takes home under {UK_TAX_YEAR_LABEL} rules.</>}
         aside={
         <dl className="grid grid-cols-3 gap-4 sm:gap-8">
           <div>
@@ -391,7 +439,12 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
           </div>
           <div>
             <dt className="text-xs font-mono uppercase text-muted-foreground">Next pound kept</dt>
-            <dd className="mt-1 font-mono text-lg font-bold tabular-nums text-foreground">{Math.round(100 * (1 - marginal))}p</dd>
+            <dd className="mt-1 font-mono text-lg font-bold tabular-nums text-foreground">{Math.round(100 * nextPound.kept)}p</dd>
+            {/* The pension is not lost, so it is not in the marginal rate, but
+                it is not cash either: say where the rest of the pound went. */}
+            {nextPound.pension > 0 && (
+              <dd className="mt-0.5 font-mono text-xs tabular-nums text-muted-foreground">+{Math.round(100 * nextPound.pension)}p to pension</dd>
+            )}
           </div>
         </dl>
         }
@@ -402,13 +455,31 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
         <section aria-labelledby="taxcalc-inputs" className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 sm:p-6 space-y-5">
           <div className="flex items-start justify-between gap-3">
             <h3 id="taxcalc-inputs" className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
-              <Calculator className="w-4 h-4 text-primary shrink-0" /> Your circumstances
+              <Calculator className="w-4 h-4 text-primary shrink-0" /> {standard ? 'Circumstances' : 'Your circumstances'}
             </h3>
             {edited && (
-              <Button variant="ghost" size="sm" className="h-7 -mt-1 gap-1.5 text-xs" onClick={() => setOverrides({})}>
-                <RotateCcw className="h-3.5 w-3.5" /> My settings
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 -mt-1 gap-1.5 text-xs"
+                onClick={() => setOverrides(prev => ({ ...prev, [profile]: {} }))}
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> {standard ? 'Reset' : 'My settings'}
               </Button>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <PillSwitch label="Start from" options={PROFILES} value={profile} onChange={setProfile} />
+            <p className="text-xs text-muted-foreground">
+              {standard
+                ? `An ordinary employee: the standard tax code (1257L), the auto-enrolment minimum pension of
+                  ${formatShare(UK_AUTO_ENROLMENT.minimumEmployeeShare)} of pay between
+                  ${formatWholeGBP(UK_AUTO_ENROLMENT.lowerQualifyingEarnings)} and
+                  ${formatWholeGBP(UK_AUTO_ENROLMENT.upperQualifyingEarnings)} by relief at source, and no benefits,
+                  children or marriage allowance. Yours starts from your settings and shows every field.`
+                : 'Filled in from your finance settings. Change anything here; it never writes back to them.'}
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -422,7 +493,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               value={[Math.min(input.income, SLIDER_MAX)]}
               onValueChange={([v]) => set('income', String(v))}
             />
-            {figuresHidden && overrides.income === undefined && (
+            {!standard && figuresHidden && overrides.yours.income === undefined && (
               <p className="text-xs text-muted-foreground">
                 Figures are hidden, so this starts empty. Show figures to start from your salary.
               </p>
@@ -430,18 +501,21 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div className="space-y-1.5">
-              <span className="block text-xs text-muted-foreground">Paid as</span>
-              <PillSwitch label="Paid as" options={KINDS} value={draft.kind} onChange={v => set('kind', v)} />
-            </div>
+            {!standard && (
+              <div className="space-y-1.5">
+                <span className="block text-xs text-muted-foreground">Paid as</span>
+                <PillSwitch label="Paid as" options={KINDS} value={draft.kind} onChange={v => set('kind', v)} />
+              </div>
+            )}
             <div className="space-y-1.5">
               <span className="block text-xs text-muted-foreground">Where you live</span>
               <PillSwitch label="Where you live" options={REGIONS} value={draft.region} onChange={v => set('region', v)} />
             </div>
           </div>
 
+          {!standard && (
           <div className="grid gap-4 sm:grid-cols-2">
-            {field('taxcalc-pension', 'Pension contribution (gross, a year)', 'pensionContribution')}
+            {field('taxcalc-pension', `Pension (% of ${employed ? 'salary' : 'profit'}, gross)`, 'pensionPercent', 'percent')}
             <div className="space-y-1.5">
               <Label htmlFor="taxcalc-pension-method" className="text-xs text-muted-foreground">Paid by</Label>
               <Select
@@ -458,6 +532,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               </Select>
             </div>
           </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -477,13 +552,14 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             </div>
           </div>
 
+          {!standard && (<>
           <div className="grid gap-4 sm:grid-cols-2">
             {field('taxcalc-allowance', 'Personal allowance (from tax code)', 'personalAllowance')}
             {employed && field('taxcalc-bik', 'Benefits in kind (company car, medical cover)', 'benefitsInKind')}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {field('taxcalc-children', 'Children claiming child benefit', 'children', true)}
+            {field('taxcalc-children', 'Children claiming child benefit', 'children', 'count')}
             <div className="space-y-1.5">
               <Label htmlFor="taxcalc-childcare" className="text-xs text-muted-foreground">Childcare support a year</Label>
               <Select value={draft.childcareSupport} onValueChange={v => set('childcareSupport', v)}>
@@ -509,6 +585,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             </Label>
             <Switch id="taxcalc-marriage" checked={draft.marriageAllowance} onCheckedChange={v => set('marriageAllowance', v)} />
           </div>
+          </>)}
         </section>
 
         {/* Breakdown */}
@@ -605,14 +682,14 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               <TrendingUp className="w-4 h-4 text-primary shrink-0" />
               {chartMode === 'marginal'
                 ? 'What the next pound loses'
-                : chartMode === 'net' ? 'Take-home against income' : 'Where each pound goes'}
+                : chartMode === 'net' ? 'Take-home against income' : 'Share of pay kept'}
             </h3>
             <p className="text-xs text-muted-foreground">
               {chartMode === 'marginal'
-                ? 'Income tax, National Insurance, student loans and the child benefit charge on each extra pound, everything else held as entered. Each step is explained below the chart.'
+                ? `Income tax, National Insurance, student loans and the child benefit charge on each extra pound. ${HELD_AS_ENTERED} Each step is explained below the chart.`
                 : chartMode === 'net'
-                  ? `Pay after every deduction, everything else held as entered. The dashed line is gross income${showSupport ? '; the upper solid line adds the childcare support' : ''}.`
-                  : 'The share of salary kept as cash at the bottom, and what takes the rest above it, everything else held as entered.'}
+                  ? `Pay after every deduction. ${HELD_AS_ENTERED} The dashed line is gross income${showSupport ? '; the upper solid line adds the childcare support' : ''}.`
+                  : `Take-home as a percentage of salary at each income, after the pension, tax, NI and loans. ${HELD_AS_ENTERED} Hover the line to see what takes the rest.`}
             </p>
           </div>
           <PillSwitch label="Chart" options={CHART_MODES} value={chartMode} onChange={setChartMode} className="shrink-0 self-start" />
@@ -690,11 +767,13 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                   strokeDasharray="4 4"
                 />
               ))}
-              <ReferenceLine
-                x={input.income}
-                stroke="hsl(var(--primary))"
-                label={{ value: 'You', position: 'top', fontSize: 12, fill: 'hsl(var(--primary))' }}
-              />
+              {input.income > 0 && (
+                <ReferenceLine
+                  x={input.income}
+                  stroke="hsl(var(--primary))"
+                  label={{ value: 'You', position: 'top', fontSize: 12, fill: 'hsl(var(--primary))' }}
+                />
+              )}
               {chartMode === 'marginal' ? (
                 <Line
                   type="stepAfter"
@@ -764,7 +843,8 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             ctx={{
               kind: input.kind,
               undergradPlan: input.undergradPlan,
-              pensionContribution: input.pensionContribution,
+              pensionShare: input.pensionShare ?? 0,
+              pensionBasis: draft.pensionBasis,
               pensionMethod,
               benefitsInKind: input.benefitsInKind,
               marriageAllowance: input.marriageAllowance,
@@ -795,8 +875,11 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
           entered counts at any income up to £100,000 of adjusted net income.
         </p>
         <p>
-          Your pension percentage from settings is read as the gross contribution. Child benefit
-          counts {UK_CHILD_BENEFIT_WEEKS} weeks, the Mondays in the {UK_TAX_YEAR_LABEL} tax year.
+          Standard pays the auto-enrolment minimum at every income, including below the
+          {' '}{formatWholeGBP(UK_AUTO_ENROLMENT.earningsTrigger)} at which an employer must enrol you, as if you had
+          opted in; employer contributions are on top and not shown. Yours reads the pension percentage
+          from settings as a gross share of the whole salary. Child benefit counts {UK_CHILD_BENEFIT_WEEKS} weeks,
+          the Mondays in the {UK_TAX_YEAR_LABEL} tax year.
         </p>
         <p>
           Rules follow the{' '}

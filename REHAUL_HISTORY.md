@@ -2825,3 +2825,15 @@ Closure: `src/lib/finance/student-loan.ts` (`simulateStudentLoan`, `incomeByTaxY
 **The costs are accepted.** Finance rows are held in memory for the session, admin only and dropped on sign-out. The first load now runs on idle from any page, not only when Finance opens.
 
 Closure: `src/features/finance/FinanceSession.tsx`, `src/features/finance/FinanceDataContext.tsx` (`refreshIfStale`), `src/features/finance/FinancePage.tsx`. Status: committed on `main` 2026-11-04, not deployed. The owner reports the admin-session behaviour tested signed in.
+
+### Tax calculator — the pension is a share at every income, and it starts from Standard — 2026-11-04
+
+**The decision:** a pension in the UK tax engine is a share of salary (or of auto-enrolment qualifying earnings) with an optional fixed £ sum. The curves recompute the share at every income. The calculator opens on **Standard**, a general ordinary employee, and the owner's own settings sit behind the **Yours** switch.
+
+Holding a fixed £ pension across incomes made the pension 61% of a £4,500 salary and moved the point where income tax starts to £15,320. That read as a bug in the engine, and it was the chart applying one pound figure to every salary. The share is the thing the user enters, so it is the thing the curves hold.
+
+The default is Standard because the calculator is meant for anyone on ordinary terms, not only the owner. The personal view is the Yours switch, one toggle away, and edits in either view never write back to settings.
+
+The £10,000 auto-enrolment trigger is deliberately not modelled. The owner chose to keep contributions starting at £6,240 (as if opted in), which keeps the contribution continuous across incomes.
+
+Closure: `src/lib/finance/uk-tax-calculator.ts`, `src/features/finance/finance-calcs.ts`, `src/features/finance/surfaces/TaxCalculatorSurface.tsx`, `src/features/finance/components/TakeHomeShareChart.tsx`. Status: local working tree, uncommitted, not deployed.
