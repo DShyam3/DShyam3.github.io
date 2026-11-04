@@ -159,7 +159,8 @@ const MERCHANT_DOMAIN_HINTS: Record<string, string> = {
   'bt': 'bt.com',
   'three': 'three.co.uk',
   'sky': 'sky.com',
-  'shell': 'shell.co.uk',
+  // shell.co.uk came back as Brandfetch's own mark: it holds no icon there.
+  'shell': 'shell.com',
   'esso': 'esso.co.uk',
   'boots': 'boots.com',
   'lidl': 'lidl.co.uk',
@@ -180,6 +181,9 @@ const MERCHANT_DOMAIN_HINTS: Record<string, string> = {
   'wetherspoon': 'jdwetherspoon.com',
   'trading212': 'trading212.com',
   'mytutor': 'mytutor.co.uk',
+  // Search found an unrelated app and the bar group's corporate mark.
+  'popworld': 'popworldparty.co.uk',
+  'revolution-bars': 'revolution-bars.co.uk',
 }
 
 /**
@@ -611,8 +615,12 @@ serve(async (req) => {
         const hinted = MERCHANT_DOMAIN_HINTS[slug]
         resolved = hinted ? { domain: hinted, icon: null } : await searchBrand(query, clientId)
         if (resolved) {
+          // `fallback/404` because the CDN's default for a brand with no icon
+          // is Brandfetch's own logo, served as a 200 -- which is how EE, Shell
+          // and Vue all came to wear the same black "B". A 404 is a miss, and a
+          // miss draws the monogram.
           const iconUrl = resolved.icon
-            ?? `https://${BRANDFETCH_CDN_HOST}/${encodeURIComponent(resolved.domain)}?c=${encodeURIComponent(clientId)}`
+            ?? `https://${BRANDFETCH_CDN_HOST}/${encodeURIComponent(resolved.domain)}/fallback/404/icon?c=${encodeURIComponent(clientId)}`
           image = await fetchImage(iconUrl)
         }
       } catch (err) {
