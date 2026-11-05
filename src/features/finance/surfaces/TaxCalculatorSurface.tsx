@@ -96,10 +96,11 @@ const PROFILES = [
 /** What every chart holds still while income moves along it. */
 const HELD_AS_ENTERED = 'The pension is worked out afresh at each income; everything else is held as entered.';
 
-const PENSION_METHODS: { key: UkPensionMethod; label: string }[] = [
-  { key: 'salary-sacrifice', label: 'Salary sacrifice' },
-  { key: 'net-pay', label: 'Net pay' },
-  { key: 'relief-at-source', label: 'Relief at source' },
+/** `inSentence` finishes "the pension is paid …" in Standard's description. */
+const PENSION_METHODS: { key: UkPensionMethod; label: string; inSentence: string }[] = [
+  { key: 'salary-sacrifice', label: 'Salary sacrifice', inSentence: 'by salary sacrifice' },
+  { key: 'net-pay', label: 'Net pay', inSentence: 'through net pay' },
+  { key: 'relief-at-source', label: 'Relief at source', inSentence: 'by relief at source' },
 ];
 
 const UNDERGRAD_PLANS: { key: UkUndergradPlan; label: string }[] = [
@@ -452,7 +453,8 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
                 ? `An ordinary employee: the standard tax code (1257L), the auto-enrolment minimum pension of
                   ${formatShare(UK_AUTO_ENROLMENT.minimumEmployeeShare)} of pay between
                   ${formatWholeGBP(UK_AUTO_ENROLMENT.lowerQualifyingEarnings)} and
-                  ${formatWholeGBP(UK_AUTO_ENROLMENT.upperQualifyingEarnings)} by relief at source, and no benefits,
+                  ${formatWholeGBP(UK_AUTO_ENROLMENT.upperQualifyingEarnings)} paid
+                  ${PENSION_METHODS.find(m => m.key === pensionMethod)?.inSentence ?? ''}, and no benefits,
                   children or marriage allowance. Yours starts from your settings and shows every field.`
                 : 'Filled in from your finance settings. Change anything here; it never writes back to them.'}
             </p>
@@ -489,11 +491,15 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             </div>
           </div>
 
-          {!standard && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {field('taxcalc-pension', `Pension (% of ${employed ? 'salary' : 'profit'}, gross)`, 'pensionPercent', 'percent')}
+          {/* Standard keeps the auto-enrolment minimum but lets its payment
+              method change: many larger employers pay it by salary sacrifice.
+              Alone there, it takes the whole row. */}
+          <div className={cn('grid gap-4', !standard && 'sm:grid-cols-2')}>
+            {!standard && field('taxcalc-pension', `Pension (% of ${employed ? 'salary' : 'profit'}, gross)`, 'pensionPercent', 'percent')}
             <div className="space-y-1.5">
-              <Label htmlFor="taxcalc-pension-method" className="text-xs text-muted-foreground">Paid by</Label>
+              <Label htmlFor="taxcalc-pension-method" className="text-xs text-muted-foreground">
+                {standard ? 'Pension paid by' : 'Paid by'}
+              </Label>
               <Select
                 value={pensionMethod}
                 onValueChange={v => set('pensionMethod', v as UkPensionMethod)}
@@ -508,7 +514,6 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
               </Select>
             </div>
           </div>
-          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">

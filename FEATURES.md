@@ -442,8 +442,9 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   A **Start from** switch opens on **Standard**: an ordinary
   employee with no salary filled in, on the standard tax code (1257L), the
   auto-enrolment minimum pension, no student loan, and no benefits in kind,
-  children or marriage allowance. Standard shows only the salary, where you live
-  and the student loan fields. **Yours** fills every field from your Tax & Income
+  children or marriage allowance. Standard shows only the salary, where you live,
+  how the pension is paid (relief at source to begin with, or salary sacrifice or
+  net pay) and the student loan fields. **Yours** fills every field from your Tax & Income
   settings (salary, region, pension type and percentage, student loan plan,
   benefits and the tax-code allowance), and every field stays editable.
   Changing them here never changes those settings. Each view keeps its own edits;
