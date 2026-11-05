@@ -15,6 +15,7 @@ Phase 7 did not touch — is opened in Part 3 and has not started.
 | `REHAUL_HISTORY.md` | the 2026-09-04 audit, phases 0-6, and every Phase 7 decision that has closed — including the reasoning behind the rules summarised in Part 1 |
 | `DESIGN_SYSTEM.md` | how the UI is built |
 | `SECURITY.md` | what is set, what cannot be, and why |
+| [MONEY_HUB_BLUEPRINT.md](MONEY_HUB_BLUEPRINT.md) | supporting specification for the city-based money hub; remaining scope, data sourcing and rollout beyond the jurisdiction-neutral comparison |
 
 **Section numbers are stable, the file they live in is not.** Code and
 migration comments cite `REHAUL_PLAN.md 7.B`, `7.C`, `7.D`, `7.N`, `7.P` and
@@ -308,6 +309,23 @@ The code no longer names the owner outside `src/config/site.json`
   migrations `20260904130000` and `20260911090000` carry the owner email; a
   fork needs its own `admin_users` seed step documented instead.
 - `BankAccountsSection.tsx` `providerLogoUris` is dead code.
+
+### Money hub — remaining scope
+
+[MONEY_HUB_BLUEPRINT.md](MONEY_HUB_BLUEPRINT.md) holds the supporting
+specification. What is left:
+
+- Optional scenario persistence (waiting on a schema and privacy decision) and
+  public access.
+- Calculators for additional tax jurisdictions beyond the UK, Germany and the
+  Netherlands, each with official reference cases, plus benefits, services and
+  protections for the 25 user-supplied jurisdictions.
+- Sourced comparable city budgets, with licensing and maintenance ownership.
+- Household and multi-year rules, which need supported rules and reference cases (8.H).
+
+Browser checks not yet run: keyboard, screen reader, dark theme and signed-in
+production. Private Finance placement is confirmed. Existing correctness and
+verification work retains its priority.
 
 ### CI runtime
 

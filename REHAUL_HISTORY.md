@@ -2826,6 +2826,23 @@ Closure: `src/lib/finance/student-loan.ts` (`simulateStudentLoan`, `incomeByTaxY
 
 Closure: `src/features/finance/FinanceSession.tsx`, `src/features/finance/FinanceDataContext.tsx` (`refreshIfStale`), `src/features/finance/FinancePage.tsx`. Status: committed on `main` 2026-11-04, not deployed. The owner reports the admin-session behaviour tested signed in.
 
+### Money Hub — private scenarios with explicit manual costs — 2026-11-04
+
+The owner chose private placement within Finance. The initial comparison lives
+under Income and uses isolated screen state rather than personal finance rows;
+leaving the screen or switching profiles clears the inputs. This bounds a
+comparison experiment without introducing persistence or changing saved records.
+
+The first slice uses manual costs and the existing deterministic England tax
+engine for a fixed 2026/27 full-year employee case. Blank costs remain unknown,
+so an incomplete basket cannot produce an apparently complete surplus. Manual
+costs are an implementation boundary, not an owner-approved data-source strategy:
+licensing, sourced presets, maintenance and wider tax-year coverage remain open.
+
+Closure: `src/lib/finance/money-hub.ts` and
+`src/features/finance/surfaces/MoneyHubSurface.tsx`, with Income navigation.
+Status: committed on `main` 2026-11-05 with the global rework below, not deployed.
+
 ### Tax calculator — the pension is a share at every income, and it starts from Standard — 2026-11-04
 
 **The decision:** a pension in the UK tax engine is a share of salary (or of auto-enrolment qualifying earnings) with an optional fixed £ sum. The curves recompute the share at every income. The calculator opens on **Standard**, a general ordinary employee, and the owner's own settings sit behind the **Yours** switch.
@@ -2837,3 +2854,54 @@ The default is Standard because the calculator is meant for anyone on ordinary t
 The £10,000 auto-enrolment trigger is deliberately not modelled. The owner chose to keep contributions starting at £6,240 (as if opted in), which keeps the contribution continuous across incomes.
 
 Closure: `src/lib/finance/uk-tax-calculator.ts`, `src/features/finance/finance-calcs.ts`, `src/features/finance/surfaces/TaxCalculatorSurface.tsx`, `src/features/finance/components/TakeHomeShareChart.tsx`. Status: local working tree, uncommitted, not deployed.
+
+### Money Hub — coverage is data, exchange rates are a dated snapshot — 2026-11-05
+
+The owner said Money Hub "was not meant to be just UK based". The four decisions
+below closed that change. The 2026-11-04 entry above is left as it was written;
+where this entry differs from it, this one applies.
+
+**The decision:** coverage is data. Each jurisdiction is a row in
+`money-hub-catalogue.ts` carrying its tax period, local-charges label, healthcare
+note, official links and whether pay is calculated. A jurisdiction is calculated
+only when a calculator in `money-hub-payroll.ts` covers it, with its own tests.
+England was the first calculated jurisdiction, not the product boundary, so
+Scotland, Wales, Northern Ireland, Germany and the Netherlands sit beside it as
+rows and calculators, not as UK exceptions. Every other city takes a user-supplied
+net figure.
+
+**The decision:** exchange rates are one dated snapshot against a chosen anchor.
+The user enters rates quoted per one unit of an anchor currency (GBP by default),
+all from one date. Any pair converts through the anchor, so a comparison needs one
+rate per currency it touches. Nothing is live or defaulted: a missing rate or date
+leaves conversions unknown and shows an alert. The display currency is presentation
+only. It does not change the rates or the arithmetic.
+
+**The decision:** a calculator declines what it does not model, and the page falls
+back to the user's net figure. Germany declines at or below €2,000 a month
+(Minijob and Midijob), and both calculators leave out the items FEATURES names as
+not modelled. A confident net figure for an unmodelled case is the failure this
+prevents, because a wrong number reads exactly like a right one.
+
+**The decision:** the German figure is an annual assessment, not monthly
+withholding. It estimates the year's income-tax assessment under §32a EStG and
+shows it per month. Payslip withholding (Lohnsteuer) is not modelled, so a monthly
+payslip can differ from this figure.
+
+An intermediate step, never committed, had Berlin, Munich and Amsterdam take
+user-supplied net only, solved equivalent gross only for English destinations and
+compared only EUR and GBP. Germany and the Netherlands now calculate pay (with a
+switch to the user's own net), solving covers the UK, Germany and the Netherlands,
+and any of the catalogue's currencies can be compared.
+
+Closure: `src/lib/finance/money-hub.ts`, `money-hub-catalogue.ts`, `money-hub-fx.ts`,
+`money-hub-payroll.ts`, `de-tax-calculator.ts` and `nl-tax-calculator.ts` (each with
+a paired test), and `src/features/finance/surfaces/MoneyHubSurface.tsx`.
+`money-hub-international.ts` and its test were superseded and moved out of the tree.
+Status: committed on `main` 2026-11-05, not deployed. Checked: German figures
+against the BMF calculator (Einkommensteuer exactly, Lohnsteuer within the expected
+withholding gap) and Dutch figures against ten rows of the Belastingdienst 2026 white
+monthly wage tax table, both held as reference tests; two `reviewer` passes, with
+their findings applied. Not verified: dark theme, keyboard and screen reader, and
+signed-in production. Three authority links (ftb.ca.gov, ato.gov.au, ird.gov.hk)
+could not be fetched by automation.

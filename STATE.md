@@ -1,27 +1,27 @@
 # State
 
-Updated: 2026-11-04 · Branch: `main` · HEAD `033a6583`.
-Money Hub is local, uncommitted and not deployed. The Tax Calculator rework (`6308e148`, Pages run `41902130209`) and its one-chart follow-up (`8113b70d`, run `41987157028`) are pushed and deployed; signed-in production is unchecked. The tax-code allowance fix (`5db86bd6`, Pages run `41896520385`), finance-session (`033a6583`, run `41895639334`), payslip fix (`3812d339`, run `41894364229`) and merchant-logo-cache v16 (`3394e2e9`, run `41800729607`, 67 cached logos) are pushed and deployed. Other sessions share this tree.
+Updated: 2026-11-05 · Branch: `main` · Money Hub committed locally on top of `1f43cf26` (see `git log`), not pushed.
+Money Hub is committed on `main`, not pushed and not deployed. The Tax Calculator rework (`6308e148`, Pages run `41902130209`), its one-chart follow-up (`8113b70d`, run `41987157028`), the Pension paid by choice (`cccfb9bd`, run `41987923144`) and the Marginal rate rename (`1f43cf26`, run `42089880935` attempt 2, after an Actions billing block was cleared) are pushed and deployed; signed-in production is unchecked. The tax-code allowance fix (`5db86bd6`, Pages run `41896520385`), finance-session (`033a6583`, run `41895639334`), payslip fix (`3812d339`, run `41894364229`) and merchant-logo-cache v16 (`3394e2e9`, run `41800729607`, 67 cached logos) are pushed and deployed. Other sessions share this tree.
 
 ## In progress
 
-- Money Hub (local, uncommitted, not deployed): manual four-city comparison under Finance → Income, housing share of take-home, largest monthly cost, equivalent gross salary against the baseline, and the England benefits, services and protections overview are in the tree (`FEATURES.md`). Still open: browser verification, sourced city presets/licensing/maintenance, richer employee/household/tax-year assumptions, saved scenarios, and international coverage (`MONEY_HUB_BLUEPRINT.md`, `REHAUL_PLAN.md`).
+- Money Hub (committed on `main`, not pushed, not deployed): jurisdiction-neutral comparison of 41 cities in 22 countries, 31 tax jurisdictions and 15 currencies. Pay is calculated for England, Scotland, Wales, Northern Ireland, Germany and the Netherlands; every other city takes a user-entered net figure. German tax matches the BMF official calculator at five zvE cases and sits €8 and €14 above BMF Lohnsteuer withholding at €50,000 and €120,000; Dutch tax matches ten rows of the Belastingdienst 2026 white monthly wage tax table within €0.30 a month (no row covers labour-credit segment 1); both are reference tests. Benefits, services and protections (19 entries) cover the six calculated jurisdictions where their sources apply (Wales and NI have no healthcare item; NI sick and parental pay not assessed); user-supplied jurisdictions state not assessed. Housing sensitivity and upfront relocation cash (deposits vs consumed expenses) are built. Two `reviewer` passes ran; findings applied, except de-duplicating the UK pension/loan option lists shared with Tax Calculator and Tax & Income files that carry other sessions' edits, and building provision prose figures from constants. Unverified: dark theme, keyboard and screen reader, signed-in production. Open: scenario persistence, more calculated jurisdictions, sourced city budgets, and whether to fold `MONEY_HUB_BLUEPRINT.md` into `REHAUL_PLAN.md`.
 - Tax Calculator: `6308e148` (Standard/Yours, pension as a share, reviewed by `reviewer`) and the one-chart follow-up (`TaxCurveChart.tsx`: share kept and next-pound loss on one % axis, take-home £ on hover, replacing the Marginal / Take-home / Take-home % switch) are pushed; not yet checked signed in on production. Standard now has a Pension paid by choice (relief at source by default).
-- Parallel sessions' `DebtFormDialog` and other edits remain in the working tree; no commit or deployment was performed by the Money Hub task.
+- Parallel sessions' `DebtFormDialog`, `PillSwitch` and other surface edits remain uncommitted in the working tree; the Money Hub commit left them out.
 - Finance-session behaviour was owner-tested as admin; automation has not exercised the failure boundary or Watchlist edit write-back.
 
 ## Checks
 
 | Check | Date | Evidence / result |
 |---|---|---|
-| Lint | 2026-11-04 | Pass, 0 errors and 0 warnings (`npm run lint`) |
-| Typecheck | 2026-11-04 | Pass (`tsc --noEmit -p tsconfig.app.json`) |
-| Functions typecheck | 2026-11-04 | Pass (`deno check` via `npm run typecheck:functions`) |
-| Tests | 2026-11-04 | `money-hub.test.ts` (33 tests) and `surfaces.test.ts` (12 tests) pass; earlier full run 2,191 tests across 64 files pass with `--maxWorkers=2` |
-| Build | 2026-11-04 | Pass (`vite build`) |
-| Ship-check | 2026-11-04 | 96/100, Beta, 0 blockers, 1 high: existing possible N+1 in `FinanceDataContext`; Semgrep + OSV ran; `glob`/`minimatch` dependency advisories remain |
-| Graphify | 2026-11-04 | Pass (2,153 nodes, 4,909 edges) |
-| Money Hub browser | 2026-11-04 | Unverified: requires connected browser extension |
+| Lint | 2026-11-05 | Pass, 0 errors and 0 warnings (`npm run lint`) |
+| Typecheck | 2026-11-05 | Pass (`npm run typecheck`) |
+| Functions typecheck | 2026-11-05 | Pass (`deno check` via `npm run typecheck:functions`) |
+| Tests | 2026-11-05 | 2,402 tests across 70 files pass (`npm test`) after the second review; lint 0/0, app typecheck and build pass |
+| Build | 2026-11-05 | Pass (`npm run build`) |
+| Ship-check | 2026-11-05 | 96/100, Beta, 0 blockers, 1 high: existing possible N+1 in `FinanceDataContext`; Semgrep + OSV ran; `glob`/`minimatch` dependency advisories remain |
+| Graphify | 2026-11-05 | Pass (`graphify update .`: 2,232 nodes, 5,126 edges, 114 communities) |
+| Money Hub browser | 2026-11-05 | Local dev:test stack, seed test admin, desktop 1280 and 375px phone (session-reported): London vs Berlin at £50,000 and 1.15 EUR/GBP gave London £3,293.30/month and Berlin €3,022.23/month on €57,500; New York with USD rate and user net; Berlin at €20,000 shows Midijob message and net input; no horizontal overflow at 375px; no Money Hub console errors. Local stack still lacks `finance_category_rules`. Not verified: dark theme, keyboard and screen reader, signed-in production |
 | Tax code allowance (`5db86bd6`, deployed) | 2026-11-04 | `tax-code` tests, lint and typecheck pass; local browser verified `1063LX` → £10,630 and emergency note |
 | Tax Calculator (session-reported) | 2026-11-05 | One-chart follow-up: lint 0/0, typecheck, 1,965 finance tests and build pass; local browser checked desktop dark and 375px light; signed-in production unverified |
 | Production | 2026-11-03 | Prior anonymous home check only: no console errors, 30 REST reads; signed-in flows unverified |
@@ -29,7 +29,7 @@ Money Hub is local, uncommitted and not deployed. The Tax Calculator rework (`63
 ## Next
 
 1. Tax Calculator: check Standard and Yours signed in on production.
-2. Verify Money Hub in a browser signed in (mobile/keyboard, both themes, missing inputs, equivalent salary states, England benefits/services cards, Hide Figures, leaving and profile switches), then scope Phase 0 data/licensing for sourced city budgets.
+2. Money Hub: push when the owner agrees, then run dark-theme, keyboard/screen-reader and signed-in production checks; decide on scenario persistence, more calculated jurisdictions and folding `MONEY_HUB_BLUEPRINT.md` into `REHAUL_PLAN.md`.
 3. Coordinate one committer across the shared checkout; keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
 4. Merchant logos: fix `popworld` (`popworld.cc` wrong icon) and check `revolution-bars` / `vue` in `supabase/functions/merchant-logo-cache/index.ts`, deploy, and run one manual sync.
 5. Signed-in verification: Tax Calculator on production, Student Loan, holiday booking, recurring undismiss, Home Brandfetch logos, Watchlist edits/watched toggles across leave-and-return, sign-out and Cash Flow (including demo Cash Flow reversed labels).

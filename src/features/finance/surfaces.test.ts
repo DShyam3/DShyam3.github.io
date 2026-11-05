@@ -14,8 +14,8 @@ const allTabs = SURFACES.flatMap(s => s.tabs) as TabKey[];
 
 describe('SURFACES', () => {
   it('covers every section exactly once', () => {
-    expect(allTabs).toHaveLength(17);
-    expect(new Set(allTabs).size).toBe(17);
+    expect(allTabs).toHaveLength(18);
+    expect(new Set(allTabs).size).toBe(18);
   });
 
   it('labels every section', () => {
@@ -38,6 +38,7 @@ describe('pathForTab', () => {
     expect(pathForTab('goals')).toBe('/finance/plan/goals');
     expect(pathForTab('time-spent')).toBe('/finance/income/time-spent');
     expect(pathForTab('tax-calculator')).toBe('/finance/income/tax-calculator');
+    expect(pathForTab('money-hub')).toBe('/finance/income/money-hub');
   });
 });
 

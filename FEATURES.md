@@ -390,6 +390,136 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
 ### Income
 
+- **Money Hub** — a private comparison under Finance → Income covering 41 cities
+  in 22 countries, grouped by country. A collapsible coverage list shows every
+  tax jurisdiction with its cities, currency, tax period and whether pay is
+  calculated. Choose a baseline and a destination city (initially London and
+  Berlin). Salary can be the same gross salary (starting at £50,000) converted
+  into local currency, the same number in local currency, or a separate offer in
+  local currency for each city. Each city has eight monthly budget categories
+  (housing, utilities and connectivity, groceries and household goods,
+  transport, healthcare, leisure, local taxes and household charges, and other
+  commitments); blank costs stay unknown and an explicit zero means no cost.
+  Complete budgets show monthly surplus or deficit, the difference against the
+  baseline, housing share of take-home (blank when salary is zero or missing)
+  and the largest monthly cost category (blank when all costs are zero). Each
+  jurisdiction names its local charges (Council Tax in Great Britain, Domestic
+  rates in Northern Ireland, and Local taxes & household charges elsewhere),
+  shows its healthcare note, and links its official tax-authority pages.
+
+  Six jurisdictions calculate take-home locally: England, Scotland, Wales,
+  Northern Ireland, Germany and the Netherlands. The UK uses the 2026/27 engine:
+  Scottish bands apply to Scottish cities, and Wales and Northern Ireland use
+  the England bands. Its settings are employee pension percentage (0%–100%),
+  pension method (salary sacrifice, net pay or relief at source), pension
+  earnings basis (full salary or qualifying earnings £6,240–£50,270),
+  undergraduate student loan plan (None, Plan 1, Plan 2, Plan 4 or Plan 5),
+  postgraduate loan toggle, and base personal allowance before the £100,000
+  taper (including £0 for BR/0T codes). Germany shows a 2026 annual income-tax
+  assessment estimate under §32a EStG, with the solidarity surcharge and
+  employee pension, unemployment, health and care insurance up to the 2026
+  ceilings, for a single adult without children; age (23 or over adds the
+  childless care surcharge) and the health fund's additional rate are options.
+  Children, church tax, private health insurance and payslip withholding
+  (Lohnsteuer) are not modelled, and at or below €2,000 a month the calculator
+  declines and asks for net pay. The German figure is an annual assessment
+  estimate, not monthly withholding. The Netherlands uses 2026 Belastingdienst
+  tables for income brackets and the general and labour tax credits, with the 8%
+  holiday allowance included in gross; the 30% ruling and occupational pension
+  are not modelled. Each calculated card lists that jurisdiction's own monthly
+  deductions and offers a `Use my own net figure instead` switch. Every other
+  city takes a monthly net figure you enter for the shown gross; changing the
+  gross clears it, and its deductions are not estimated.
+
+  Exchange rates are one dated snapshot of rates you enter, each quoted per one
+  unit of an anchor currency (GBP by default). Any of 15 currencies can be
+  compared: GBP, EUR, CHF, SEK, DKK, NOK, PLN, USD, CAD, AUD, NZD, SGD, HKD, JPY
+  and AED. The page asks only for the currencies the comparison touches. A
+  missing rate or date leaves conversions unknown and shows an alert. No rates
+  are live or built in. In `Same salary, converted` the rates set each city's
+  gross, and so the tax worked out on it; they also convert surpluses and the
+  target for the gross needed. Living costs come from each city's own budget,
+  not from the rates. The currency that results are shown in changes
+  presentation only.
+
+  `Gross needed to match <baseline>'s surplus` solves in any destination with
+  calculated pay (UK, Germany or the Netherlands): the gross salary between 0
+  and 10,000,000 a year in the destination's currency that funds the destination's monthly basket and matches
+  the baseline's surplus, with the baseline surplus converted at the rate
+  snapshot. It reports when the answer falls in a band the calculator does not
+  model, when it is outside the bound, when no gross reproduces the surplus
+  within 0.005 a month, or when the destination needs calculated pay. It also
+  states when a gross of 0 already leaves a smaller deficit than the baseline.
+
+  Each city card with a complete budget shows a collapsible housing sensitivity
+  breakdown: break-even monthly housing cost (take-home minus non-housing
+  costs), the destination housing cost that matches the baseline's monthly
+  surplus at the current exchange-rate snapshot, and ±10% / ±20% housing cost
+  cases holding non-housing costs constant, each with its resulting monthly
+  surplus or deficit and housing share of take-home. Each city card also
+  provides a collapsible upfront relocation cash & deposit calculator that
+  separates refundable deposits tied up (tenancy deposit and other utility or
+  key deposits) from one-off consumed moving expenses (visa and legal fees,
+  travel and shipping, agency and admin fees, and initial setup and furnishing),
+  showing total upfront cash required and how many months of positive monthly
+  surplus — and on non-baseline cards, how many months of positive monthly
+  surplus gain over the baseline — are needed to earn back the consumed moving
+  expenses.
+
+  Benefits, services and protections are assessed for all six calculated
+  jurisdictions — England, Scotland, Wales, Northern Ireland, Germany and the
+  Netherlands — across Employer package, Public benefits & services, and
+  Employment protections. Each item applies only where its source covers it. UK
+  cities share workplace auto-enrolment pensions, UK State Pension qualifying
+  years, Universal Credit and working-age cash benefits, and statutory 5.6-week
+  annual leave (noting 8 bank holidays in England and Wales, 9 in Scotland and
+  10 in Northern Ireland); statutory sick and parental leave covers Great
+  Britain, with Northern Ireland not assessed. Healthcare is NHS England for
+  English cities and NHS Scotland (with free prescriptions) for Scottish ones;
+  Wales and Northern Ireland have no healthcare item yet. Local charges are
+  Council Tax in England (bands A to H, 1991 values) and Wales (A to I, 2003
+  values), Scottish Council Tax with water and sewerage billed alongside it, and
+  Northern Ireland domestic rates assessed on 2005 capital values. Germany covers occupational pension (*Betriebliche Altersversorgung /
+  Entgeltumwandlung* with the 15% mandatory employer social-saving top-up),
+  statutory health and care insurance (*GKV & Pflegeversicherung*, included in
+  calculated deductions, with 2% and 1% annual co-payment caps), statutory
+  pension and unemployment insurance (*DRV & Arbeitslosenversicherung*, included
+  in calculated deductions), and statutory annual leave (*Bundesurlaubsgesetz*,
+  20 days for a 5-day week plus state-varying public holidays) and 6-week 100%
+  employer sick pay (*Entgeltfortzahlungsgesetz*). The Netherlands covers the
+  statutory 8% holiday allowance (*vakantiegeld*, included in annual gross),
+  second-pillar occupational pension (*CAO*, not assessed and not deducted, so
+  take-home is overstated for a scheme member), mandatory private basic health
+  insurance (*Zorgverzekeringswet / basisverzekering*, paid from net income and
+  entered in the Healthcare budget category, plus the €385 annual *eigen
+  risico*), AOW state pension and national insurance (*volksverzekeringen*,
+  included in calculated first-bracket deductions), and statutory leave (4×
+  weekly hours, 20 days for a 5-day week) and 104-week employer sick pay
+  (*loondoorbetaling bij ziekte*, at least 70% of wages). Each item shows its
+  eligibility state (`Included in estimate`, `Potentially eligible`, `Not
+  eligible under these assumptions` or `Not assessed`), statutory baseline,
+  employer comparison note, separate charges and limits, regional variation
+  note, and official source link. Local charges and Dutch basic health insurance
+  premiums are included only as you enter them in each city's budget; non-cash
+  entitlements and unassessed benefits are not added to take-home or surplus.
+  The remaining 25 user-supplied jurisdictions state that they are not yet
+  assessed.
+
+  A one-click `Copy my Tax & Income & Budget` button, available for a UK
+  baseline only, copies the active profile's Tax & Income settings (salary or
+  baseline offer, pension percentage, method and basis, student loan plan,
+  postgraduate loan and tax-code personal allowance). It maps active non-savings
+  Budget items into the baseline city's eight monthly cost categories, with
+  provenance badges (`Copied from Budget`, `0 from Budget` for unmatched
+  categories, `Manual` once edited). Each category copies the total the Budget
+  screen shows for it. `Reset to defaults` returns to the £50,000 London and
+  Berlin starting point. The button
+  is disabled while Hide Figures is on, and hiding figures after copying clears
+  the whole scenario back to its defaults. Hide Figures masks inputs and
+  outputs. Costs and exchange rates have no built-in market estimates. Inputs
+  clear when you leave the screen or switch profiles; they do not change your
+  saved finance records.
+
 - **Tax and income** — income tax, National Insurance and student loan repayments
   use the 2026/27 rules built into the site, the same rules the Tax Calculator
   uses. A Scottish profile gets Scotland's six bands. The personal allowance is

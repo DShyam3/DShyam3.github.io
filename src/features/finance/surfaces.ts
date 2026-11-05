@@ -18,7 +18,7 @@ export const SURFACES = [
   { key: 'spending', label: 'Spending', tabs: ['transactions', 'budget', 'recurrings', 'transfers'] },
   { key: 'plan', label: 'Plan', tabs: ['cash-flow', 'forecast', 'goals', 'scenarios'] },
   { key: 'wealth', label: 'Wealth', tabs: ['accounts', 'debts', 'student-loan', 'investments', 'retirement'] },
-  { key: 'income', label: 'Income', tabs: ['tax-income', 'time-spent', 'tax-calculator'] },
+  { key: 'income', label: 'Income', tabs: ['tax-income', 'time-spent', 'tax-calculator', 'money-hub'] },
 ] as const;
 
 export type SurfaceKey = (typeof SURFACES)[number]['key'];
@@ -43,6 +43,7 @@ export const TAB_LABELS: Record<TabKey, string> = {
   'tax-income': 'Tax & Income',
   'time-spent': 'Time Spent',
   'tax-calculator': 'Tax Calculator',
+  'money-hub': 'Money Hub',
 };
 
 export const DEFAULT_TAB: TabKey = 'dashboard';
@@ -85,9 +86,11 @@ export const surfaceForTab = (tab: TabKey): SurfaceKey => surfaceFor(tab).key;
  * pot, and stacking net worth on top of it puts two large unrelated figures in
  * the same eyeline and makes the reader choose which one matters. Debts and
  * Student Loan open on what is owed, for the same reason. The Tax Calculator
- * opens on the take-home of whatever salary you type, not the one you earn.
+ * opens on the take-home of whatever salary you type, not the one you earn,
+ * and Money Hub on a comparison of scenarios, where a figure about your own
+ * finances would answer a question nobody on that screen asked.
  */
-export const SECTIONS_WITH_OWN_HERO: readonly TabKey[] = ['retirement', 'transfers', 'debts', 'student-loan', 'tax-calculator'];
+export const SECTIONS_WITH_OWN_HERO: readonly TabKey[] = ['retirement', 'transfers', 'debts', 'student-loan', 'tax-calculator', 'money-hub'];
 
 export const showsSurfaceHero = (tab: TabKey): boolean =>
   !SECTIONS_WITH_OWN_HERO.includes(tab);

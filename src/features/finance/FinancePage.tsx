@@ -34,6 +34,7 @@ const DebtsSurface = lazy(sectionChunks.debts);
 const StudentLoanSurface = lazy(sectionChunks['student-loan']);
 const TaxIncomeSurface = lazy(sectionChunks['tax-income']);
 const TaxCalculatorSurface = lazy(sectionChunks['tax-calculator']);
+const MoneyHubSurface = lazy(sectionChunks['money-hub']);
 const DashboardSurface = lazy(sectionChunks.dashboard);
 import { useTrueLayer } from './useTrueLayer';
 import { consumeTrueLayerOAuthState } from './truelayer-oauth';
@@ -1060,6 +1061,7 @@ function FinanceView() {
               TAB 9: TAX CALCULATOR
               ========================================== */}
           {activeTab === 'tax-calculator' && <TaxCalculatorSurface figuresHidden={figures.hidden} />}
+          {activeTab === 'money-hub' && <MoneyHubSurface key={profileId} figuresHidden={figures.hidden} />}
 
           </Suspense>
           </FinanceSectionBoundary>

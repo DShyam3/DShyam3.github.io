@@ -28,6 +28,7 @@ export const sectionChunks = {
   'tax-income': () => import('./surfaces/TaxIncomeSurface'),
   'time-spent': () => import('./tabs/TimeSpentTab'),
   'tax-calculator': () => import('./surfaces/TaxCalculatorSurface'),
+  'money-hub': () => import('./surfaces/MoneyHubSurface'),
 } satisfies Record<TabKey, () => Promise<unknown>>;
 
 /** Fetches every section's chunk in the background. Already-loaded ones cost nothing. */
