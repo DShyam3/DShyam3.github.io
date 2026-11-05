@@ -14,7 +14,6 @@
  */
 
 import { useMemo, useState } from 'react';
-import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Calculator, RotateCcw, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,7 +37,6 @@ import {
   ukMarginalRate,
   ukNextPound,
   ukTaxCliffs,
-  ukTaxCurve,
   type UkIncomeKind,
   type UkPensionBasis,
   type UkPensionMethod,
@@ -52,7 +50,7 @@ import { useFinanceTotals } from '../useFinanceTotals';
 import { MarginalSteps } from '../components/MarginalSteps';
 import { PillSwitch } from '../components/PillSwitch';
 import { SurfaceHero } from '../components/SurfaceHero';
-import { TakeHomeShareChart } from '../components/TakeHomeShareChart';
+import { TaxCurveChart } from '../components/TaxCurveChart';
 import { TakeHomeSlices } from '../components/TakeHomeSlices';
 
 /** The form as typed. Amounts stay strings so a half-typed number survives. */
@@ -74,7 +72,6 @@ interface Draft {
   marriageAllowance: boolean;
 }
 
-type ChartMode = 'marginal' | 'net' | 'share';
 type Profile = 'standard' | 'yours';
 
 const SLIDER_MAX = 250_000;
@@ -90,12 +87,6 @@ const REGIONS = [
   { key: 'rUK', label: 'England, Wales & NI' },
   { key: 'scotland', label: 'Scotland' },
 ] as const satisfies readonly { key: UkTaxRegion; label: string }[];
-
-const CHART_MODES = [
-  { key: 'marginal', label: 'Marginal rate' },
-  { key: 'net', label: 'Take-home' },
-  { key: 'share', label: 'Take-home %' },
-] as const satisfies readonly { key: ChartMode; label: string }[];
 
 const PROFILES = [
   { key: 'standard', label: 'Standard' },
@@ -176,14 +167,6 @@ const draftFrom = (base: UkTaxInput): Draft => ({
 /** Standard opens with no salary: there is nobody's to start from. */
 const STANDARD_DRAFT = draftFrom(UK_STANDARD_TAX_INPUT);
 
-const tooltipStyle = {
-  background: 'hsl(var(--popover))',
-  border: '1px solid hsl(var(--border))',
-  borderRadius: 'var(--radius)',
-  fontSize: 12,
-};
-const axisTick = { fontSize: 12, fill: 'hsl(var(--muted-foreground))' };
-
 export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden: boolean }) {
   const { hasLoaded } = useFinanceData();
 
@@ -210,7 +193,6 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   const [profile, setProfile] = useState<Profile>('standard');
   const standard = profile === 'standard';
   const [overrides, setOverrides] = useState<Record<Profile, Partial<Draft>>>({ standard: {}, yours: {} });
-  const [chartMode, setChartMode] = useState<ChartMode>('marginal');
 
   const draft = useMemo<Draft>(
     () => ({ ...(profile === 'standard' ? STANDARD_DRAFT : yoursSeed), ...overrides[profile] }),
@@ -250,19 +232,13 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
   // Wide enough to show the 60% band and what lies past it, and always a
   // quarter beyond the income typed so the marker never sits on the edge.
   const chartMax = Math.max(200_000, Math.ceil((input.income * 1.25) / 10_000) * 10_000);
-  const curve = useMemo(
-    () => ukTaxCurve(input, { maxIncome: chartMax, step: chartMax / CHART_POINTS }),
-    [input, chartMax],
-  );
   const bands = useMemo(() => ukMarginalBands(input, { maxIncome: chartMax }), [input, chartMax]);
   // Keyed by where the band starts, so a recompute while hovering cannot shade a different band.
   const [highlightedBand, setHighlightedBand] = useState<number | null>(null);
-  const shownBand = chartMode === 'marginal' ? bands.find(b => b.from === highlightedBand) : undefined;
+  const shownBand = bands.find(b => b.from === highlightedBand);
   // Round steps on both axes: recharts' own picks land on £35k and 70%.
   const xStep = X_TICK_STEPS.find(s => chartMax / s <= 8) ?? chartMax / 8;
   const xTicks = Array.from({ length: Math.floor(chartMax / xStep) + 1 }, (_, i) => i * xStep);
-  const yTop = Math.max(0.6, Math.ceil(curve.reduce((top, p) => Math.max(top, p.marginalRate), 0) * 5) / 5);
-  const yTicks = Array.from({ length: Math.round(yTop / 0.2) + 1 }, (_, i) => i * 0.2);
   const showSupport = input.childcareSupport > 0;
 
   const taperGap = result.aboveTaperStart;
@@ -676,168 +652,26 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
 
       {/* Chart */}
       <section aria-labelledby="taxcalc-chart" className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1 min-w-0">
-            <h3 id="taxcalc-chart" className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-primary shrink-0" />
-              {chartMode === 'marginal'
-                ? 'What the next pound loses'
-                : chartMode === 'net' ? 'Take-home against income' : 'Share of pay kept'}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {chartMode === 'marginal'
-                ? `Income tax, National Insurance, student loans and the child benefit charge on each extra pound. ${HELD_AS_ENTERED} Each step is explained below the chart.`
-                : chartMode === 'net'
-                  ? `Pay after every deduction. ${HELD_AS_ENTERED} The dashed line is gross income${showSupport ? '; the upper solid line adds the childcare support' : ''}.`
-                  : `Take-home as a percentage of salary at each income, after the pension, tax, NI and loans. ${HELD_AS_ENTERED} Hover the line to see what takes the rest.`}
-            </p>
-          </div>
-          <PillSwitch label="Chart" options={CHART_MODES} value={chartMode} onChange={setChartMode} className="shrink-0 self-start" />
+        <div className="space-y-1 min-w-0">
+          <h3 id="taxcalc-chart" className="text-xs uppercase tracking-wider font-mono font-semibold text-foreground flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary shrink-0" />
+            What each salary keeps
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {`Two lines across incomes: the share of salary kept as cash after the pension, tax, NI and loans, and what the next pound loses to tax, NI, loans and the child benefit charge. ${HELD_AS_ENTERED} Each step of the next-pound line is explained below the chart.`}
+          </p>
         </div>
 
-        {chartMode === 'share' ? (
-          <TakeHomeShareChart input={input} chartMax={chartMax} step={chartMax / CHART_POINTS} xTicks={xTicks} />
-        ) : (
-        <>
-        <div className="mt-4 h-64 w-full sm:h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={curve} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis
-                dataKey="income"
-                type="number"
-                domain={[0, chartMax]}
-                ticks={xTicks}
-                tickFormatter={(v: number) => `£${Math.round(v / 1000)}k`}
-                tick={axisTick}
-                tickLine={false}
-                axisLine={false}
-              />
-              {chartMode === 'marginal' ? (
-                <YAxis
-                  domain={[0, yTop]}
-                  ticks={yTicks}
-                  tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
-                  tick={axisTick}
-                  tickLine={false}
-                  axisLine={false}
-                  width={40}
-                />
-              ) : (
-                <YAxis
-                  tickFormatter={(v: number) => `£${Math.round(v / 1000)}k`}
-                  tick={axisTick}
-                  tickLine={false}
-                  axisLine={false}
-                  width={48}
-                />
-              )}
-              <Tooltip
-                contentStyle={tooltipStyle}
-                labelFormatter={(v: number) => `${formatWholeGBP(v)} income`}
-                formatter={(v: number, name: string) => chartMode === 'marginal'
-                  ? [percent(v), 'Marginal rate']
-                  : [formatGBP(v), name]}
-              />
-              {/* Named in the legend below rather than on the plot: inline
-                  labels collide with each other and with "You" on a phone. */}
-              {shownChildBenefitBand && (
-                <ReferenceArea
-                  x1={shownChildBenefitBand.from}
-                  x2={Math.min(shownChildBenefitBand.to, chartMax)}
-                  ifOverflow="hidden"
-                  fill="hsl(var(--chart-4))"
-                  fillOpacity={0.15}
-                />
-              )}
-              {shownBand && (
-                <ReferenceArea
-                  x1={shownBand.from}
-                  x2={shownBand.to}
-                  ifOverflow="hidden"
-                  fill="hsl(var(--chart-1))"
-                  fillOpacity={0.18}
-                />
-              )}
-              {shownCliffs.map(c => (
-                <ReferenceLine
-                  key={c.kind}
-                  x={c.atIncome}
-                  stroke="hsl(var(--destructive))"
-                  strokeDasharray="4 4"
-                />
-              ))}
-              {input.income > 0 && (
-                <ReferenceLine
-                  x={input.income}
-                  stroke="hsl(var(--primary))"
-                  label={{ value: 'You', position: 'top', fontSize: 12, fill: 'hsl(var(--primary))' }}
-                />
-              )}
-              {chartMode === 'marginal' ? (
-                <Line
-                  type="stepAfter"
-                  dataKey="marginalRate"
-                  stroke="hsl(var(--chart-1))"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              ) : (
-                <>
-                  <Line
-                    type="linear"
-                    dataKey="income"
-                    name="Gross"
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeDasharray="4 4"
-                    strokeWidth={1}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="linear"
-                    dataKey="takeHome"
-                    name="Take-home"
-                    stroke="hsl(var(--chart-1))"
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  {showSupport && (
-                    <Line
-                      type="linear"
-                      dataKey="netWithSupport"
-                      name="With childcare"
-                      stroke="hsl(var(--chart-2))"
-                      strokeWidth={2}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  )}
-                </>
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        {(shownChildBenefitBand || shownCliffs.length > 0) && (
-          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-            {shownChildBenefitBand && (
-              <li className="flex items-center gap-1.5">
-                <span aria-hidden="true" className="h-3 w-3 rounded-sm bg-chart-4/15" />
-                Child benefit clawback
-              </li>
-            )}
-            {shownCliffs.map(c => (
-              <li key={c.kind} className="flex items-center gap-1.5">
-                <span aria-hidden="true" className="h-3 w-0 border-l-2 border-dashed border-destructive" />
-                {c.kind === 'childcare' ? 'Childcare lost' : 'Marriage allowance lost'}
-              </li>
-            ))}
-          </ul>
-        )}
-        {chartMode === 'marginal' && (
-          <MarginalSteps
+        <TaxCurveChart
+          input={input}
+          chartMax={chartMax}
+          step={chartMax / CHART_POINTS}
+          xTicks={xTicks}
+          highlighted={shownBand}
+          childBenefitBand={shownChildBenefitBand}
+          cliffs={shownCliffs}
+        />
+        <MarginalSteps
             bands={bands}
             income={input.income}
             ctx={{
@@ -852,9 +686,6 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             highlighted={highlightedBand}
             onHighlight={setHighlightedBand}
           />
-        )}
-        </>
-        )}
       </section>
 
       <section className="space-y-2 border-t border-border/40 pt-6 text-xs text-muted-foreground">

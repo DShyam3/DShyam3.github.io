@@ -498,36 +498,35 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   rows are labelled as tax from cash pay. When the tax code already collects
   benefit-in-kind tax, the card says so.
 
-  A **Chart** switch shows one of three views. **Marginal rate** plots the rate on
-  the next pound across incomes from £0 to £200,000 (wider for higher incomes), with
-  your income marked. Under the chart, a list gives each stretch of income where the
-  rate holds still: its income range, the total rate, the rate each deduction takes
+  One chart, **What each salary keeps**, plots two lines across incomes from £0 to
+  £200,000 (wider for higher incomes) on one percentage axis, with your income
+  marked: the share of salary kept as cash after the pension, tax, National
+  Insurance and loans (green), and what the next pound loses to tax, National
+  Insurance, loans and the child benefit charge (stepped, in ink). Each line is
+  named at its right-hand end. Hovering any income shows take-home in pounds a
+  year and a month, the share kept with what takes the rest (pension, income tax,
+  National Insurance, student loan and child benefit charge), and what the next
+  pound loses; with childcare support entered it also shows take-home with that
+  support. A legend gives both lines' figures at the salary entered, and a note
+  under it splits the rest at that salary.
+
+  **Compare with** adds one dashed line of the share kept: No student loan, No
+  pension, a pension five points higher at every income (named by the share it
+  comes to, such as Pension at 10%) or Pension by salary sacrifice. Each option
+  appears only when it changes something, and its share at your income is in the
+  legend. With children entered, the chart shades the child benefit clawback, and
+  cliffs are drawn as dashed lines; the legend names the shading and each cliff
+  line ("Child benefit clawback", "Childcare lost", "Marriage allowance lost"). A
+  note says the child benefit charge is paid through Self Assessment, not the
+  payslip.
+
+  Under the chart, a list gives each stretch of income where the next-pound rate
+  holds still: its income range, the total rate, the rate each deduction takes
   there (income tax, National Insurance, student loan, postgraduate loan and child
   benefit charge), a sentence on what changed to make that step, and a "You" tag on
   the step your income falls in. Hovering or focusing a step shades its range on the
   chart. Notes under the list say how a pension (net pay, salary sacrifice or relief
   at source) or benefits in kind move the steps away from the headline thresholds.
-
-  **Take-home** plots pay after every deduction against gross income, with the gross
-  line dashed and, when childcare support is entered, a second line for take-home
-  with that support.
-
-  **Take-home %** (headed "Share of pay kept") is a single line: take-home as a
-  percentage of salary at each income, after the pension, tax, National Insurance
-  and loans. Hovering the line shows what takes the rest: pension, income tax,
-  National Insurance, student loan and child benefit charge. A legend gives each
-  share at the salary entered. **Compare
-  with** adds one dashed line of take-home %: No student loan, No pension, a pension
-  five points higher at every income (named by the share it comes to, such as
-  Pension at 10%) or Pension by salary
-  sacrifice. Each option appears only when it changes something, and its share at
-  your income is in the legend. With children entered, a note says the child benefit
-  charge is paid through Self Assessment, not the payslip.
-
-  The marginal and take-home views also shade the child benefit clawback when children
-  are entered, and draw the cliffs as dashed lines. A legend under the chart names the
-  shading and each cliff line ("Child benefit clawback", "Childcare lost", "Marriage
-  allowance lost").
 
   It does not model savings, dividends, rent or gains, the pension annual
   allowance, employer National Insurance, Universal Credit or other benefits, or a

@@ -1,12 +1,12 @@
 # State
 
 Updated: 2026-11-04 · Branch: `main` · HEAD `033a6583`.
-Money Hub is local, uncommitted and not deployed. The Tax Calculator rework is committed on `main`, not pushed or deployed. The tax-code allowance fix (`5db86bd6`, Pages run `41896520385`), finance-session (`033a6583`, run `41895639334`), payslip fix (`3812d339`, run `41894364229`) and merchant-logo-cache v16 (`3394e2e9`, run `41800729607`, 67 cached logos) are pushed and deployed. Other sessions share this tree.
+Money Hub is local, uncommitted and not deployed. The Tax Calculator rework (`6308e148`, Pages run `41902130209`) and its one-chart follow-up are pushed; signed-in production is unchecked. The tax-code allowance fix (`5db86bd6`, Pages run `41896520385`), finance-session (`033a6583`, run `41895639334`), payslip fix (`3812d339`, run `41894364229`) and merchant-logo-cache v16 (`3394e2e9`, run `41800729607`, 67 cached logos) are pushed and deployed. Other sessions share this tree.
 
 ## In progress
 
 - Money Hub (local, uncommitted, not deployed): manual four-city comparison under Finance → Income, housing share of take-home, largest monthly cost, equivalent gross salary against the baseline, and the England benefits, services and protections overview are in the tree (`FEATURES.md`). Still open: browser verification, sourced city presets/licensing/maintenance, richer employee/household/tax-year assumptions, saved scenarios, and international coverage (`MONEY_HUB_BLUEPRINT.md`, `REHAUL_PLAN.md`).
-- Tax Calculator (committed on `main`, not pushed or deployed): Standard/Yours views, pension as a share in the engine, the take-home % line chart and the reviewer's fixes (next pound kept now nets the pension via `ukNextPound`, large-allowance relief-at-source bands, Scotland note, copy) are in the tree. Reviewed by `reviewer` (Opus); every finding applied.
+- Tax Calculator: `6308e148` (Standard/Yours, pension as a share, reviewed by `reviewer`) and the one-chart follow-up (`TaxCurveChart.tsx`: share kept and next-pound loss on one % axis, take-home £ on hover, replacing the Marginal / Take-home / Take-home % switch) are pushed; not yet checked signed in on production. Open question for the owner: Standard's pension method (add a Paid by choice, or default to salary sacrifice).
 - Parallel sessions' `DebtFormDialog` and other edits remain in the working tree; no commit or deployment was performed by the Money Hub task.
 - Finance-session behaviour was owner-tested as admin; automation has not exercised the failure boundary or Watchlist edit write-back.
 
@@ -23,12 +23,12 @@ Money Hub is local, uncommitted and not deployed. The Tax Calculator rework is c
 | Graphify | 2026-11-04 | Pass (2,153 nodes, 4,909 edges) |
 | Money Hub browser | 2026-11-04 | Unverified: requires connected browser extension |
 | Tax code allowance (`5db86bd6`, deployed) | 2026-11-04 | `tax-code` tests, lint and typecheck pass; local browser verified `1063LX` → £10,630 and emergency note |
-| Tax Calculator (session-reported) | 2026-11-04 | After review fixes: lint 0/0, typecheck, 1,943 finance tests and build pass; local browser checked Standard/Yours (desktop, 375px, Scotland); signed-in production unverified |
+| Tax Calculator (session-reported) | 2026-11-05 | One-chart follow-up: lint 0/0, typecheck, 1,965 finance tests and build pass; local browser checked desktop dark and 375px light; signed-in production unverified |
 | Production | 2026-11-03 | Prior anonymous home check only: no console errors, 30 REST reads; signed-in flows unverified |
 
 ## Next
 
-1. Tax Calculator: push, let Pages deploy, then check Standard and Yours signed in on production.
+1. Tax Calculator: check Standard and Yours signed in on production, and settle Standard's pension method.
 2. Verify Money Hub in a browser signed in (mobile/keyboard, both themes, missing inputs, equivalent salary states, England benefits/services cards, Hide Figures, leaving and profile switches), then scope Phase 0 data/licensing for sourced city budgets.
 3. Coordinate one committer across the shared checkout; keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
 4. Merchant logos: fix `popworld` (`popworld.cc` wrong icon) and check `revolution-bars` / `vue` in `supabase/functions/merchant-logo-cache/index.ts`, deploy, and run one manual sync.
