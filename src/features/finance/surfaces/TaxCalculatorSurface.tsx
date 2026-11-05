@@ -663,7 +663,7 @@ export default function TaxCalculatorSurface({ figuresHidden }: { figuresHidden:
             What each salary keeps
           </h3>
           <p className="text-xs text-muted-foreground">
-            {`Two lines across incomes: the share of salary kept as cash after the pension, tax, NI and loans, and what the next pound loses to tax, NI, loans and the child benefit charge. ${HELD_AS_ENTERED} Each step of the next-pound line is explained below the chart.`}
+            {`Two lines across incomes: the share of salary kept as cash after the pension, tax, NI and loans, and the marginal rate: what the next pound loses to tax, NI, loans and the child benefit charge. ${HELD_AS_ENTERED} Each step of the marginal rate is explained below the chart.`}
           </p>
         </div>
 

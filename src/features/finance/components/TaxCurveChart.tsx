@@ -1,7 +1,7 @@
 /**
  * What each salary keeps, across incomes, on one chart and one axis: the share
- * of salary kept as cash, and what the next pound loses to tax, NI, loans and
- * the child benefit charge. Both are percentages, so they share the axis; the
+ * of salary kept as cash, and the marginal rate, what the next pound loses to
+ * tax, NI, loans and the child benefit charge. Both are percentages, so they share the axis; the
  * take-home in pounds, and what takes the rest, are in the tooltip at any
  * income rather than on a second axis. One what-if (no student loan, no
  * pension, a bigger pension, salary sacrifice) can be laid over the kept line
@@ -137,7 +137,7 @@ function CurveTooltip({ active, payload, whatIfLabel, showSupport }: {
         </>
       )}
       <p className="mt-2 flex items-center justify-between gap-4 font-semibold">
-        <span className="flex items-center gap-1.5"><Swatch color="foreground" />Next pound loses</span>
+        <span className="flex items-center gap-1.5"><Swatch color="foreground" />Marginal rate</span>
         <span className="tabular-nums">{percent(point.marginalRate)}</span>
       </p>
       {whatIfLabel && point.whatIf !== undefined && (
@@ -268,12 +268,12 @@ export function TaxCurveChart({ input, chartMax, step, xTicks, highlighted, chil
             <Line
               type="stepAfter"
               dataKey="marginalRate"
-              name="Next pound loses"
+              name="Marginal rate"
               stroke={LOST}
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
-              label={endLabel('Next £1 loses', last, lostEnd <= keptEnd)}
+              label={endLabel('Marginal rate', last, lostEnd <= keptEnd)}
             />
             {whatIf && (
               <Line
@@ -300,7 +300,7 @@ export function TaxCurveChart({ input, chartMax, step, xTicks, highlighted, chil
           </li>
           <li className="flex items-center gap-1.5">
             <Swatch color="foreground" />
-            <span className="text-muted-foreground">Next pound loses</span>
+            <span className="text-muted-foreground">Marginal rate</span>
             {hasIncome && <span className="font-semibold tabular-nums text-foreground">{percent(yoursMarginal)}</span>}
           </li>
           {whatIf && (

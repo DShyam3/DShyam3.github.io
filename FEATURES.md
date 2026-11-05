@@ -502,12 +502,12 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   One chart, **What each salary keeps**, plots two lines across incomes from £0 to
   £200,000 (wider for higher incomes) on one percentage axis, with your income
   marked: the share of salary kept as cash after the pension, tax, National
-  Insurance and loans (green), and what the next pound loses to tax, National
-  Insurance, loans and the child benefit charge (stepped, in ink). Each line is
+  Insurance and loans (green), and the **marginal rate**, what the next pound loses
+  to tax, National Insurance, loans and the child benefit charge (stepped, in ink). Each line is
   named at its right-hand end. Hovering any income shows take-home in pounds a
   year and a month, the share kept with what takes the rest (pension, income tax,
-  National Insurance, student loan and child benefit charge), and what the next
-  pound loses; with childcare support entered it also shows take-home with that
+  National Insurance, student loan and child benefit charge), and the marginal
+  rate; with childcare support entered it also shows take-home with that
   support. A legend gives both lines' figures at the salary entered, and a note
   under it splits the rest at that salary.
 
@@ -521,7 +521,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   note says the child benefit charge is paid through Self Assessment, not the
   payslip.
 
-  Under the chart, a list gives each stretch of income where the next-pound rate
+  Under the chart, a list gives each stretch of income where the marginal rate
   holds still: its income range, the total rate, the rate each deduction takes
   there (income tax, National Insurance, student loan, postgraduate loan and child
   benefit charge), a sentence on what changed to make that step, and a "You" tag on
