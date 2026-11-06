@@ -167,7 +167,7 @@ serve(async (req) => {
       }
 
       // Store only a hash. The raw, 256-bit value is returned once to the
-      // browser, which keeps it in sessionStorage until the provider returns.
+      // browser, which keeps it in localStorage until the provider returns.
       const state = createOAuthState()
       const stateHash = await sha256Hex(state)
       const now = new Date()

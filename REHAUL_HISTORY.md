@@ -2905,3 +2905,36 @@ monthly wage tax table, both held as reference tests; two `reviewer` passes, wit
 their findings applied. Not verified: dark theme, keyboard and screen reader, and
 signed-in production. Three authority links (ftb.ca.gov, ato.gov.au, ird.gov.hk)
 could not be fetched by automation.
+
+### Bank linking — the browser's OAuth state is per browser, and phones stay in one tab — 2026-11-06
+
+**What was decided.** The browser no longer keeps its copy of the TrueLayer
+OAuth state in sessionStorage, which belongs to one tab. It now keeps one
+localStorage key per state. The key expires after the server's 10 minutes, and
+a callback clears only its own key. On a computer, "Connect Another Bank" runs
+the consent in a new tab. The first bank, and any bank on a phone or tablet,
+stays in the same tab.
+
+**Why.** On a phone, the bank's own app approves the link and hands the
+callback back to the browser, usually in a fresh tab. A copy held by one tab
+was missing there, so the browser rejected the link before the server ever saw
+it. The server's check is the binding one: the state is hashed, tied to the
+profile and the redirect URI, single-use, and expires after 10 minutes. That
+check is unchanged. So the browser's copy only has to tie the callback to the
+browser that started it, not to one tab.
+
+**Rejected.**
+- *One shared key.* Two links started in two tabs overwrite each other, and a
+  stray callback deletes a link still in progress (found by `reviewer`).
+- *A new tab on phones.* iOS may pause the starting tab while it is still
+  fetching the auth URL, which would leave the new tab blank. The bank's app
+  returns in a fresh tab anyway.
+
+Closure: `src/features/finance/truelayer-oauth.ts` (with its paired test),
+`useTrueLayer.ts`, the callback in `FinancePage.tsx`, and the "Connect Another
+Bank" button in `components/BankAccountsSection.tsx`.
+Status: uncommitted on `main` 2026-11-06. Checked: lint, typecheck,
+`typecheck:functions`, 200 finance tests and the build. Not verified: none of it
+has run in a browser. That covers the desktop new-tab round trip, the cross-tab
+refresh, Safari, and a phone link through the Barclaycard app; the phone check
+needs a deploy first.

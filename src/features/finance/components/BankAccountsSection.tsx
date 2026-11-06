@@ -300,7 +300,7 @@ export default function BankAccountsSection() {
 
                 <div className="border-t border-border/30 pt-3 flex flex-wrap items-center justify-between gap-3">
                   <Button
-                    onClick={connectTrueLayer}
+                    onClick={() => connectTrueLayer({ newTab: true })}
                     disabled={isConnectingTrueLayer}
                     variant="outline"
                     className="rounded-lg gap-1.5 text-xs h-8 px-3 font-mono border-border/60 hover:border-border"
@@ -311,6 +311,7 @@ export default function BankAccountsSection() {
                       <Plus className="h-3.5 w-3.5" />
                     )}
                     Connect Another Bank
+                    <span className="sr-only"> (opens in a new tab)</span>
                   </Button>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -343,7 +344,7 @@ export default function BankAccountsSection() {
                 </p>
                 <div className="flex items-center gap-3 shrink-0">
                   <Button
-                    onClick={connectTrueLayer}
+                    onClick={() => connectTrueLayer()}
                     disabled={isConnectingTrueLayer}
                     className="rounded-lg bg-primary text-primary-foreground gap-1.5 font-semibold text-xs h-8 px-4 font-mono"
                   >

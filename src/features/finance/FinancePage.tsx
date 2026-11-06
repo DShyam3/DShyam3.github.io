@@ -37,7 +37,7 @@ const TaxCalculatorSurface = lazy(sectionChunks['tax-calculator']);
 const MoneyHubSurface = lazy(sectionChunks['money-hub']);
 const DashboardSurface = lazy(sectionChunks.dashboard);
 import { useTrueLayer } from './useTrueLayer';
-import { consumeTrueLayerOAuthState } from './truelayer-oauth';
+import { announceTrueLayerLink, consumeTrueLayerOAuthState } from './truelayer-oauth';
 import { useSpendingLedger } from './useSpendingLedger';
 import { useRecurringEvidence } from './useRecurringEvidence';
 import { detectRecurringPayments, candidateMatchesBill, isRecurringPaidForPeriod, assignPaidPeriod, tickRecurring, untickRecurring, payRecurringEarly, coverageAfterEdit, type RecurringCandidate } from '@/lib/finance/recurring-detection';
@@ -290,7 +290,7 @@ function FinanceView() {
     callbackProcessed.current = true;
     setIsConnectingTrueLayer(true);
     try {
-      if (!consumeTrueLayerOAuthState(window.sessionStorage, state)) {
+      if (!consumeTrueLayerOAuthState(window.localStorage, state)) {
         throw new Error('This bank-link request has expired or did not match. Please start again.');
       }
 
@@ -301,14 +301,18 @@ function FinanceView() {
         state,
       });
 
+      // Before the sync, which can be a long history import: a tab closed
+      // partway through still leaves the starting tab knowing the bank linked.
+      announceTrueLayerLink('linked');
       toast({
         title: "Bank Linked Successfully",
         description: "Your bank has been connected. Initializing transaction sync...",
       });
-      
+
       window.history.replaceState({}, document.title, window.location.pathname);
       await checkTrueLayerConnection();
       await syncTrueLayer();
+      announceTrueLayerLink('synced');
     } catch (err: unknown) {
       console.error('Error in TrueLayer callback:', err);
       toast({

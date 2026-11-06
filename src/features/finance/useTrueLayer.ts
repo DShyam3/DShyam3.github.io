@@ -18,8 +18,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
 import type { TrueLayerStatus } from '@/features/finance/finance-types';
-import { rememberTrueLayerOAuthState } from './truelayer-oauth';
+import { onTrueLayerLink, rememberTrueLayerOAuthState } from './truelayer-oauth';
 import { BANK_SYNC_LOG_QUERY_KEY } from './useBankSyncLog';
+
+/**
+ * Set when this tab sends a bank link off to a tab of its own, so the ledger
+ * is refreshed once when that link's first sync finishes, not once per
+ * mounted instance. Module scope, because the instance that opened the tab
+ * may have unmounted by then.
+ */
+let awaitingLinkInAnotherTab = false;
+
+/**
+ * Phones and tablets stay in one tab. The bank's app returns the callback in
+ * a fresh tab anyway, and iOS may pause this tab while the auth URL is still
+ * being fetched, leaving the new one blank.
+ */
+function prefersSameTab(): boolean {
+  return window.matchMedia?.('(pointer: coarse)').matches === true;
+}
 
 /** A refused call, carrying the server's `retry_after` when it sent one. */
 class TrueLayerCallError extends Error {
@@ -92,21 +109,47 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     void checkTrueLayerConnection();
   }, [checkTrueLayerConnection]);
 
-  const connectTrueLayer = async () => {
+  // Every instance keeps its connection list current when a link lands in
+  // another tab; the ledger is refreshed once, by whichever hears it first.
+  useEffect(() => onTrueLayerLink(event => {
+    void checkTrueLayerConnection();
+    if (event === 'synced' && awaitingLinkInAnotherTab) {
+      awaitingLinkInAnotherTab = false;
+      void onSyncedRef.current();
+    }
+  }), [checkTrueLayerConnection]);
+
+  /**
+   * `newTab` runs the bank's consent in a tab of its own and leaves this one
+   * where it was. The tab is opened before the auth URL is fetched: opened
+   * after an await, the click's user activation has lapsed and Safari blocks
+   * it as a popup. A blocked popup falls back to the same tab rather than
+   * failing, and a phone always stays in the same tab (see prefersSameTab).
+   */
+  const connectTrueLayer = async ({ newTab = false }: { newTab?: boolean } = {}) => {
+    const tab = newTab && !prefersSameTab() ? window.open('', '_blank') : null;
     setIsConnectingTrueLayer(true);
     try {
       const redirectUri = `${window.location.origin}/finance`;
       const data = await callTrueLayerEdgeFunction('get_auth_url', {
         redirect_uri: redirectUri,
       });
-      
-      if (typeof data?.url === 'string' && typeof data?.state === 'string') {
-        rememberTrueLayerOAuthState(window.sessionStorage, data.state);
-        window.location.href = data.url;
-      } else {
+
+      if (typeof data?.url !== 'string' || typeof data?.state !== 'string') {
         throw new Error('Failed to get auth URL');
       }
+
+      rememberTrueLayerOAuthState(window.localStorage, data.state);
+      if (!tab) {
+        window.location.href = data.url;
+      } else if (!tab.closed) {
+        // The bank's pages have no business reaching back into this tab.
+        tab.opener = null;
+        tab.location.href = data.url;
+        awaitingLinkInAnotherTab = true;
+      }
     } catch (err) {
+      tab?.close();
       console.error('Error connecting to TrueLayer:', err);
       toast({
         title: "Connection Failed",

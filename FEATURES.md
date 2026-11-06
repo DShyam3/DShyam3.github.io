@@ -691,7 +691,11 @@ Four routes, in decreasing order of automation:
 
 1. **Open banking** — multiple banks connected simultaneously through
    TrueLayer, each with its own card, logo, consent countdown and individual
-   disconnect. Each connection's detail line also says how far its history
+   disconnect. On a computer, connecting a further bank opens its consent in a
+   new browser tab and leaves the current page where it is; when the link
+   finishes, open pages refresh their bank connections. Connecting the first
+   bank, or any bank on a phone or tablet, stays in the same tab. Each
+   connection's detail line also says how far its history
    import has got: "Importing history · checked to <month>" while older
    transactions are still being fetched, further back with each sync, then
    "History imported" once the bank has no older history to give. Balances,
