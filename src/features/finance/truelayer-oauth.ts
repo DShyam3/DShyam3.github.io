@@ -1,4 +1,11 @@
 const TRUE_LAYER_OAUTH_STATE_KEY_PREFIX = 'truelayer-oauth-state:';
+
+/**
+ * `/finance?connect_bank=1` starts a bank link as soon as the page loads. A
+ * link run in a tab of its own opens there, so the new tab fetches the auth
+ * URL itself, in the foreground, rather than waiting on the tab that opened it.
+ */
+export const TRUE_LAYER_CONNECT_PARAM = 'connect_bank';
 /** Matches the server's `OAUTH_STATE_TTL_MS` in `truelayer-sync`. */
 const TRUE_LAYER_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 

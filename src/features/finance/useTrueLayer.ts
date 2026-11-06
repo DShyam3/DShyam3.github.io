@@ -18,7 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
 import type { TrueLayerStatus } from '@/features/finance/finance-types';
-import { onTrueLayerLink, rememberTrueLayerOAuthState } from './truelayer-oauth';
+import { onTrueLayerLink, rememberTrueLayerOAuthState, TRUE_LAYER_CONNECT_PARAM } from './truelayer-oauth';
 import { BANK_SYNC_LOG_QUERY_KEY } from './useBankSyncLog';
 
 /**
@@ -28,15 +28,6 @@ import { BANK_SYNC_LOG_QUERY_KEY } from './useBankSyncLog';
  * may have unmounted by then.
  */
 let awaitingLinkInAnotherTab = false;
-
-/**
- * Phones and tablets stay in one tab. The bank's app returns the callback in
- * a fresh tab anyway, and iOS may pause this tab while the auth URL is still
- * being fetched, leaving the new one blank.
- */
-function prefersSameTab(): boolean {
-  return window.matchMedia?.('(pointer: coarse)').matches === true;
-}
 
 /** A refused call, carrying the server's `retry_after` when it sent one. */
 class TrueLayerCallError extends Error {
@@ -121,13 +112,24 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
 
   /**
    * `newTab` runs the bank's consent in a tab of its own and leaves this one
-   * where it was. The tab is opened before the auth URL is fetched: opened
-   * after an await, the click's user activation has lapsed and Safari blocks
-   * it as a popup. A blocked popup falls back to the same tab rather than
-   * failing, and a phone always stays in the same tab (see prefersSameTab).
+   * where it was. The tab opens at `/finance?connect_bank=1`, inside the
+   * click, and fetches the auth URL itself (FinancePage). Opened after an
+   * await, the click's user activation has lapsed and Safari blocks it as a
+   * popup; and filled in from here, iOS may pause this tab once the new one
+   * takes the screen, leaving it blank. A blocked popup falls back to the
+   * same tab rather than failing.
    */
   const connectTrueLayer = async ({ newTab = false }: { newTab?: boolean } = {}) => {
-    const tab = newTab && !prefersSameTab() ? window.open('', '_blank') : null;
+    if (newTab) {
+      const tab = window.open(`${window.location.origin}/finance?${TRUE_LAYER_CONNECT_PARAM}=1`, '_blank');
+      if (tab) {
+        // The bank's pages, which this tab goes on to, have no business
+        // reaching back into this one.
+        tab.opener = null;
+        awaitingLinkInAnotherTab = true;
+        return;
+      }
+    }
     setIsConnectingTrueLayer(true);
     try {
       const redirectUri = `${window.location.origin}/finance`;
@@ -140,16 +142,8 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
       }
 
       rememberTrueLayerOAuthState(window.localStorage, data.state);
-      if (!tab) {
-        window.location.href = data.url;
-      } else if (!tab.closed) {
-        // The bank's pages have no business reaching back into this tab.
-        tab.opener = null;
-        tab.location.href = data.url;
-        awaitingLinkInAnotherTab = true;
-      }
+      window.location.href = data.url;
     } catch (err) {
-      tab?.close();
       console.error('Error connecting to TrueLayer:', err);
       toast({
         title: "Connection Failed",
