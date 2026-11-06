@@ -6,6 +6,30 @@ const TRUE_LAYER_OAUTH_STATE_KEY_PREFIX = 'truelayer-oauth-state:';
  * URL itself, in the foreground, rather than waiting on the tab that opened it.
  */
 export const TRUE_LAYER_CONNECT_PARAM = 'connect_bank';
+
+const TRUE_LAYER_CONNECT_INTENT_KEY = 'truelayer-connect-intent';
+/** Long enough for a phone to load the new tab and resolve the admin check. */
+const TRUE_LAYER_CONNECT_INTENT_TTL_MS = 60 * 1000;
+
+/**
+ * Note that this browser has just asked for a link in a new tab, so the
+ * parameter alone, arriving from a link anywhere else, starts nothing.
+ */
+export function rememberTrueLayerConnectIntent(storage: StorageLike, now = Date.now()): void {
+  storage.setItem(TRUE_LAYER_CONNECT_INTENT_KEY, String(now));
+}
+
+/**
+ * Whether a tap here asked for the link this page was opened to start. Cleared
+ * either way, so the same address opened again starts nothing.
+ */
+export function consumeTrueLayerConnectIntent(storage: StorageLike, now = Date.now()): boolean {
+  const savedAt = storage.getItem(TRUE_LAYER_CONNECT_INTENT_KEY);
+  storage.removeItem(TRUE_LAYER_CONNECT_INTENT_KEY);
+  if (savedAt === null) return false;
+  const age = now - Number(savedAt);
+  return age >= 0 && age <= TRUE_LAYER_CONNECT_INTENT_TTL_MS;
+}
 /** Matches the server's `OAUTH_STATE_TTL_MS` in `truelayer-sync`. */
 const TRUE_LAYER_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 

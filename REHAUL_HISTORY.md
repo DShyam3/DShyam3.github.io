@@ -2938,3 +2938,59 @@ Status: uncommitted on `main` 2026-11-06. Checked: lint, typecheck,
 has run in a browser. That covers the desktop new-tab round trip, the cross-tab
 refresh, Safari, and a phone link through the Barclaycard app; the phone check
 needs a deploy first.
+
+### A bank link opens its own tab on phones too — 2026-11-06
+
+**What was decided.** "Connect Another Bank" opens the bank's consent in a new
+tab on every device, phones and tablets included. The tap opens that tab
+synchronously at `/finance?connect_bank=1`, and the new tab fetches its own
+TrueLayer auth URL in the foreground. The first bank still stays in the same
+tab. This reverses the phone rejection in the entry above.
+
+**Why.** The owner reported that on a phone, "Connect Another Bank" did not
+open a new page. The earlier rejection rested on iOS pausing the starting tab
+while it fetched the auth URL, but that only mattered because the opener filled
+in a blank tab after an await. Now the opener does no async work and returns at
+once, and the new tab makes the fetch itself, so a paused opener no longer
+matters. The new tab strips the parameter before it starts, so a reload or the
+back button does not start a second link. One path for every device also
+replaces a coarse-pointer guess, which misreads touch laptops and iPads with
+keyboards.
+
+**Rejected.**
+- *Keeping the coarse-pointer split, with the new mechanism on phones only.* It
+  means two paths to verify for no gain.
+- *Prefetching the auth URL before the tap.* It creates a server state row per
+  render, with a 10-minute TTL and single use.
+- *The parameter alone starting a link.* A link to `/finance?connect_bank=1`
+  from anywhere would send a signed-in admin to TrueLayer consent and create a
+  pending state row without a tap here (found by `reviewer`). Harmless, because
+  the server binds the state and consent is still required, but a GET should
+  not start an action. The tap now writes a localStorage intent first, and the
+  new tab starts only on an intent under a minute old, clearing it either way.
+
+**Costs accepted.** A phone can be left with a third tab parked on TrueLayer,
+because the bank's app returns in a fresh one. A paused starting tab may miss
+the BroadcastChannel message: coming back to it re-reads the connection list,
+but not the ledger, until a reload or the next sync. The new tab is the first to
+run the admin check without a cached answer, so an `is_admin` error or timeout
+sends it to `/` without a message while the starting tab waits.
+
+Closure: `src/features/finance/useTrueLayer.ts` (`connectTrueLayer`), the mount
+effect in `src/features/finance/FinancePage.tsx`, and
+`src/features/finance/truelayer-oauth.ts` (`TRUE_LAYER_CONNECT_PARAM`).
+Status: committed as `13cc7cc` plus a `reviewer` follow-up (the intent, the
+parameter stripped through the router rather than `history.replaceState`, and
+the re-read on return) on `claude/connect-banks-mobile-page-9ug9k1`, being
+pushed to `main`; the Pages deploy is not yet confirmed. Checked 2026-11-06:
+lint 0/0, `npm run typecheck`, 204 finance tests across 13 files, `npm run build`.
+Browser, by Playwright device emulation against a local dev server with Supabase
+and TrueLayer mocked: on iPhone 13 and Desktop Chrome the tap opened a second tab
+at `/finance?connect_bank=1` with opener null, which reached the TrueLayer URL
+with its state key stored, while the original tab stayed on Accounts and made no
+`get_auth_url` call; on Pixel 7 with `window.open` stubbed to null, the original
+tab navigated to TrueLayer; opening `/finance?connect_bank=1` directly made no
+`get_auth_url` call and cleared the parameter. Not verified: real iOS Safari and Android Chrome, the
+phone app-to-app round trip, whether a paused original tab on iOS receives the
+BroadcastChannel refresh when resumed, the desktop round trip against real
+TrueLayer, and signed-in production.

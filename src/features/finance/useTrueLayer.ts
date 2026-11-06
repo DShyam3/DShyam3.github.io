@@ -18,7 +18,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
 import type { TrueLayerStatus } from '@/features/finance/finance-types';
-import { onTrueLayerLink, rememberTrueLayerOAuthState, TRUE_LAYER_CONNECT_PARAM } from './truelayer-oauth';
+import {
+  onTrueLayerLink,
+  rememberTrueLayerConnectIntent,
+  rememberTrueLayerOAuthState,
+  TRUE_LAYER_CONNECT_PARAM,
+} from './truelayer-oauth';
 import { BANK_SYNC_LOG_QUERY_KEY } from './useBankSyncLog';
 
 /**
@@ -110,10 +115,22 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
     }
   }), [checkTrueLayerConnection]);
 
+  // A phone may pause this tab while the link runs in another, and a message
+  // sent meanwhile is not promised to arrive, so coming back re-reads the
+  // connections as well.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && awaitingLinkInAnotherTab) void checkTrueLayerConnection();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [checkTrueLayerConnection]);
+
   /**
    * `newTab` runs the bank's consent in a tab of its own and leaves this one
    * where it was. The tab opens at `/finance?connect_bank=1`, inside the
-   * click, and fetches the auth URL itself (FinancePage). Opened after an
+   * click, and fetches the auth URL itself (FinancePage), which it does only
+   * when this tab has just noted the intent. Opened after an
    * await, the click's user activation has lapsed and Safari blocks it as a
    * popup; and filled in from here, iOS may pause this tab once the new one
    * takes the screen, leaving it blank. A blocked popup falls back to the
@@ -121,9 +138,10 @@ export function useTrueLayer(onSynced: () => void | Promise<void>) {
    */
   const connectTrueLayer = async ({ newTab = false }: { newTab?: boolean } = {}) => {
     if (newTab) {
+      rememberTrueLayerConnectIntent(window.localStorage);
       const tab = window.open(`${window.location.origin}/finance?${TRUE_LAYER_CONNECT_PARAM}=1`, '_blank');
       if (tab) {
-        // The bank's pages, which this tab goes on to, have no business
+        // The bank's pages, which the new tab goes on to, have no business
         // reaching back into this one.
         tab.opener = null;
         awaitingLinkInAnotherTab = true;
