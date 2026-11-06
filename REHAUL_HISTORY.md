@@ -2981,8 +2981,8 @@ effect in `src/features/finance/FinancePage.tsx`, and
 `src/features/finance/truelayer-oauth.ts` (`TRUE_LAYER_CONNECT_PARAM`).
 Status: committed as `13cc7cc` plus a `reviewer` follow-up (the intent, the
 parameter stripped through the router rather than `history.replaceState`, and
-the re-read on return) on `claude/connect-banks-mobile-page-9ug9k1`, being
-pushed to `main`; the Pages deploy is not yet confirmed. Checked 2026-11-06:
+the re-read on return) (`60de9eb`), on `main` and deployed by Pages run
+`42301589737`; not yet checked on the live site. Checked 2026-11-06:
 lint 0/0, `npm run typecheck`, 204 finance tests across 13 files, `npm run build`.
 Browser, by Playwright device emulation against a local dev server with Supabase
 and TrueLayer mocked: on iPhone 13 and Desktop Chrome the tap opened a second tab
