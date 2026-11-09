@@ -123,8 +123,18 @@ header.app-header { padding-block: .75rem; }
    reflows while the links slide out. */
 .header-identity-text,
 .header-page-title { transition: opacity .15s, visibility .15s; }
+/* A phone's header and footer are one row each, so they are padded like
+   toolbars rather than like page bands. Below 360px the footer's three labels
+   drop a step to stay on their row. */
 @media (max-width: 699.98px) {
-  .app-header[data-socials-open] .header-identity-text { opacity: 0; visibility: hidden; }
+  header.app-header { padding-block: .5rem; }
+  /* The title shares its row with the avatar and three 44px controls, so it
+     scales with the width it is given: the longest one-word title,
+     "Inspiration", fits down to 320px. */
+  .app-header .header-page-title .dot-matrix-text-sm { font-size: min(1.15rem, 4.4vw); }
+}
+@media (max-width: 339.98px) {
+  .app-header .header-page-title .dot-matrix-text-sm { font-size: 3.8vw; }
 }
 @media (min-width: 700px) and (max-width: 1023.98px) {
   .app-header[data-socials-open] .header-page-title { opacity: 0; visibility: hidden; }
@@ -134,6 +144,12 @@ footer.app-footer { padding-block: .75rem; }
 .app-footer .dot-matrix-text-xs { font-size: 1.125rem; }
 @media (min-width: 640px) {
   .app-footer .dot-matrix-text-xs { font-size: 1.25rem; }
+}
+@media (max-width: 699.98px) {
+  footer.app-footer { padding-block: .25rem; }
+}
+@media (max-width: 359.98px) {
+  .app-footer .dot-matrix-text-xs { font-size: 1rem; }
 }
 .app-toolbar .dot-matrix-text-xs { font-size: 1rem; }
 .app-toolbar .nav-link { min-height: 2.75rem; display: inline-flex; align-items: center; }

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Type } from 'lucide-react';
 import { useSiteNavLinks } from './navLinks';
 import { cn } from '@/lib/utils';
+import { socialIcons } from '@/components/icons/SocialIcons';
+import { SITE } from '@/config/site';
 
 /**
  * The site nav, at every width.
@@ -84,7 +86,8 @@ export function NavMenu({ className }: { className?: string }) {
         aria-expanded={open}
         aria-controls={panelId}
         className={cn(
-          'nav-link flex flex-shrink-0 items-center gap-2 rounded px-2 py-1.5',
+          'nav-link flex flex-shrink-0 items-center justify-center gap-2 rounded',
+          'max-[699px]:h-11 max-[699px]:w-11 min-[700px]:px-2 min-[700px]:py-1.5',
           'ring-offset-background hover:bg-secondary/70 focus-visible:outline-none',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           // The fill alone marks the open state. `nav-link-active` also
@@ -97,10 +100,10 @@ export function NavMenu({ className }: { className?: string }) {
         )}
       >
         <DotMatrixIcon icon="menu" size="grid" />
-        {/* Labelled at every width, phones included. Bare, the glyph is a
-            3x3 of dots sitting next to the theme toggle's dot cluster, and
-            the pair read as two pieces of decoration rather than a control.
-            It costs about 47px on a phone, which the row has.
+        {/* Labelled from 700px. Below that the header is one row and has no
+            width for the word: the glyph alone is a 44px target between the
+            search and theme buttons, and the screen-reader text below still
+            names it.
 
             Both words occupy the same grid cell, so the button is always as
             wide as the longer of the two and only the text changes on open.
@@ -108,7 +111,7 @@ export function NavMenu({ className }: { className?: string }) {
             dragged the glyph left by the width of a character -- the one
             part of the control that should never move, since it is the same
             nine cells in both states. */}
-        <span className="grid">
+        <span className="grid max-[699px]:hidden">
           <DotMatrixText
             text="MENU"
             size="xs"
@@ -176,6 +179,25 @@ export function NavMenu({ className }: { className?: string }) {
             Display size: {largerDisplay ? 'Larger' : 'Standard'}
           </Button>
           <p className="text-sm text-muted-foreground">Adjust text, cards and controls for comfortable viewing.</p>
+        </div>
+        {/* The header's social button is hidden below 700px, so the links
+            live here on a phone. */}
+        <div className="mt-3 flex items-center gap-1 border-t pt-3 min-[700px]:hidden">
+          {SITE.socials.map(({ label, href, icon }) => {
+            const Icon = socialIcons[icon];
+            return (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={label}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded text-foreground transition-colors hover:bg-secondary/50"
+              >
+                <Icon className="h-5 w-5" />
+              </a>
+            );
+          })}
         </div>
       </div>
     </>

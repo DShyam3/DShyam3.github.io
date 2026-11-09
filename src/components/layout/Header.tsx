@@ -46,19 +46,21 @@ export function Header({
       className="app-header relative pt-5 pb-4 md:pt-6 md:pb-5 border-b border-border/50"
       data-socials-open={socialOpen || undefined}
     >
-      <div className="px-4 md:px-0">
-        {/* One row: identity on the left, page title and controls on the
-            right. The nav strip that used to sit underneath is now the menu
-            button in that right-hand cluster. */}
-        <div className="flex flex-col min-[700px]:flex-row min-[700px]:items-center min-[700px]:justify-between gap-3 flex-wrap">
+      <div>
+        {/* One row at every width: identity on the left, page title and
+            controls on the right.
+
+            Below 700px there is no room for the name, the page title and
+            three controls on one line, and stacking them cost 185px of an
+            812px screen. So a phone keeps the avatar (still the way home),
+            the page title and icon-only controls; the name, role, subtitle
+            and social button wait for 700px. The social links move into the
+            menu panel (NavMenu). */}
+        <div className="flex flex-row items-center justify-between gap-2 min-[700px]:gap-3 min-[700px]:flex-wrap">
           {/* Left side: Profile with social links */}
-          <div className="flex items-start md:items-center justify-between w-full min-[700px]:w-auto gap-2 md:gap-3">
-            {/* Below 700px the name may give way: at 320px the avatar, name
-                and the social button come to 278px in a 256px slot, and a
-                block that cannot shrink pushed the button past the gutter.
-                Shrinking lets a two-word role break between its words. */}
+          <div className="flex flex-none items-center justify-between gap-2 md:gap-3">
             <div
-              className="flex items-center gap-3 flex-shrink-0 max-[699px]:min-w-0 max-[699px]:flex-shrink cursor-pointer select-none transition-opacity hover:opacity-80 md:w-auto"
+              className="flex items-center gap-3 flex-shrink-0 cursor-pointer select-none transition-opacity hover:opacity-80"
               onClick={() => navigate('/')}
               role="button"
               tabIndex={0}
@@ -76,7 +78,7 @@ export function Header({
                 loading="eager"
               />
 
-              <div className="header-identity-text flex flex-col items-start gap-0.5 leading-none">
+              <div className="header-identity-text flex flex-col items-start gap-0.5 leading-none max-[699px]:hidden">
                 <DotMatrixText
                   text={SITE.name.toUpperCase()}
                   size="md"
@@ -90,7 +92,7 @@ export function Header({
               </div>
             </div>
 
-            <div className="relative flex items-center flex-shrink-0">
+            <div className="relative flex items-center flex-shrink-0 max-[699px]:hidden">
               <Button
                 type="button"
                 variant="ghost"
@@ -111,14 +113,12 @@ export function Header({
               </Button>
 
               {/* Social links, laid over the row rather than in it, so
-                  opening them reflows nothing. On a phone they open leftward
-                  from the button over the name; in the one-row header they
-                  open rightward, over the page title until lg. The neighbour
-                  they cover fades out (responsive.css). */}
+                  opening them reflows nothing. They open rightward, over the
+                  page title until lg, which fades out (responsive.css). */}
               <div
                 className={cn(
-                  'absolute top-1/2 -translate-y-1/2 right-full mr-1 min-[700px]:right-auto min-[700px]:left-full min-[700px]:mr-0 min-[700px]:ml-2 md:ml-3',
-                  'flex items-center gap-1 md:gap-2 overflow-hidden transition-[max-width,opacity] duration-200 justify-end min-[700px]:justify-start',
+                  'absolute top-1/2 -translate-y-1/2 left-full ml-2 md:ml-3',
+                  'flex items-center gap-1 md:gap-2 overflow-hidden transition-[max-width,opacity] duration-200 justify-start',
                   socialOpen ? 'max-w-[10rem] opacity-100' : 'max-w-0 opacity-0',
                 )}
               >
@@ -143,31 +143,16 @@ export function Header({
             </div>
           </div>
 
-          {/* `justify-between` is for the phone, where this cluster is its own
-              full-width row: the title takes the left edge and the two
-              controls the right, rather than all three bunching at the left
-              with the leftover width trailing off the end. From md the row is
-              only as wide as its contents and the property does nothing.
-
-              Full width has to be said, as the identity row above says it.
-              Left to size itself, the row grew to fit a long title on one
-              line -- the home page's 15-character title made it 356px in a
-              311px slot on a 375px phone -- and pushed the theme toggle past
-              the screen edge.
-
-              Held to the slot, the title takes what the controls leave and
-              wraps between words. Its narrowest is its longest word: where
-              even that does not fit beside the controls (most titles at
-              320px, "Inspiration" at 360px), the controls move to a line of
-              their own rather than overlap it or split the word. From 700px
-              none of this applies; the cluster is sized to its contents. */}
-          <div className="flex w-full items-center justify-between gap-3 max-[699px]:flex-wrap min-[700px]:w-auto md:gap-4">
+          {/* On a phone this cluster takes the width the avatar leaves: the
+              title has the left of it and wraps between words, the controls
+              keep the right edge. From 700px it is only as wide as its
+              contents. */}
+          <div className="flex items-center justify-between gap-2 max-[699px]:min-w-0 max-[699px]:flex-1 min-[700px]:gap-3 md:gap-4">
             {/* Two boxes on purpose. The outer one takes the row's free width
-                below 700px, so the title can wrap and the controls can drop;
-                the inner one is only as wide as the words, and only it opens
-                the sign-in page. One box doing both made every stray tap on
-                blank header space -- up to 212px of it -- open /auth. */}
-            <div className="header-page-title min-w-0 max-[699px]:min-w-min max-[699px]:flex-1 text-left md:text-right">
+                below 700px; the inner one is only as wide as the words, and
+                only it opens the sign-in page. One box doing both made every
+                stray tap on blank header space open /auth. */}
+            <div className="header-page-title min-w-0 max-[699px]:flex-1 max-[699px]:overflow-hidden text-left md:text-right">
               <div
                 className="w-fit max-w-full cursor-pointer select-none active:opacity-70 md:ml-auto"
                 onClick={handleTitleClick}
@@ -179,7 +164,7 @@ export function Header({
                     className="text-foreground justify-start md:justify-end"
                   />
                 </div>
-                <div>
+                <div className="max-[699px]:hidden">
                   <DotMatrixText
                     text={subtitle.toUpperCase()}
                     size="xs"
@@ -195,16 +180,16 @@ export function Header({
                 joins the only other control on this side, and the pair read
                 as a control cluster pinned to the right edge instead of one
                 label adrift in the whitespace. */}
-            <div className="flex flex-shrink-0 items-center gap-2 max-[699px]:ml-auto md:gap-4">
+            <div className="flex flex-shrink-0 items-center gap-1 min-[700px]:gap-2 md:gap-4">
               <button
                 type="button"
                 onClick={() => setCommandOpen(true)}
                 aria-label="Search sections and records"
-                className="nav-link flex flex-shrink-0 items-center gap-2 rounded px-2.5 py-1.5 text-xs hover:bg-secondary/70 transition-colors"
+                className="nav-link flex flex-shrink-0 items-center justify-center gap-2 rounded text-xs hover:bg-secondary/70 transition-colors max-md:h-11 max-md:w-11 md:px-2.5 md:py-1.5"
               >
-                <Search className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-                <span className="hidden sm:inline">Search</span>
-                <kbd className="rounded border border-border/70 bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                <Search className="h-4 w-4 text-primary shrink-0 md:h-3.5 md:w-3.5" aria-hidden="true" />
+                <span className="hidden md:inline">Search</span>
+                <kbd className="max-md:hidden rounded border border-border/70 bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                   ⌘K
                 </kbd>
               </button>

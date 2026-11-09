@@ -94,7 +94,9 @@ export function CommandDock() {
 
   return (
     <>
-      <div className="shrink-0 wide-container relative z-30 pb-1.5 pt-1">
+      {/* From md only: below it the header's search button opens the same
+          palette, and a second bar would cost a phone 68px. */}
+      <div className="hidden md:block shrink-0 wide-container relative z-30 pb-1.5 pt-1">
         <div className="flex items-center rounded-2xl border border-border/60 bg-card/75 px-3 py-1.5 backdrop-blur-md">
           <button
             type="button"
