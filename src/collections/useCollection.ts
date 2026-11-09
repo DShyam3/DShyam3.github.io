@@ -73,6 +73,29 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
   );
 
   /**
+   * Narrows the page to one row: searches for its title and sets each facet so
+   * the row is not filtered out. A facet with an All option goes to All; one
+   * without goes to the option the row belongs to.
+   */
+  const reveal = useCallback(
+    (row: T, title: string) => {
+      setSearch(title);
+      setFilters(
+        Object.fromEntries(
+          config.facets.map((facet) => {
+            if (facet.includeAll !== false) return [facet.key, ALL];
+            const option = facet.options.find((o) =>
+              facet.match ? facet.match(row, o.key) : String(row[facet.field]) === o.key,
+            );
+            return [facet.key, option?.key ?? defaultFor(facet)];
+          }),
+        ),
+      );
+    },
+    [config.facets],
+  );
+
+  /**
    * Applies every facet except one. Used both for the visible list (excluding
    * nothing) and for the option counts, where a facet's own selection must be
    * ignored or every unselected option would read zero.
@@ -167,6 +190,7 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
     setFilter,
     search,
     setSearch,
+    reveal,
     countFor,
     addItem,
     updateItem: (id: string, updates: Partial<T>) => updateItem({ id, updates }),

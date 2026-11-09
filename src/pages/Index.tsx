@@ -17,7 +17,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Sparkles,
   Eye,
 } from 'lucide-react';
 import './Index.css';
@@ -61,8 +60,6 @@ const Index = () => {
   const {
     target,
     selectTarget,
-    openCommandWithDraft,
-    setInspectorSheetOpen,
   } = useWorkspaceInspector();
   // The highlighted cluster or row is whichever record the inspector holds, so
   // closing the inspector clears the highlight too.
@@ -103,7 +100,9 @@ const Index = () => {
   const inventoryText = inventoryLoading
     ? 'Loading…'
     : `${inventoryItems.length} ${inventoryItems.length === 1 ? 'item' : 'items'}`;
-  const collectionsText = `${collections.length} collections`;
+  // Only the collections this visitor can open.
+  const openCollections = collections.filter((c) => !c.adminOnly || isAdmin).length;
+  const collectionsText = `${openCollections} collections`;
   const milestonesLoading = expLoading || eduLoading;
   const milestonesText = milestonesLoading
     ? 'Loading…'
@@ -326,50 +325,6 @@ const Index = () => {
                   {siteContent.about_me_1 || SITE.about[0]}
                 </p>
 
-                <div className="home-prompt-section">
-                  <span className="home-prompt-label">
-                    <Sparkles className="h-3 w-3 text-primary" aria-hidden="true" />
-                    Quick Command &amp; Inspection Prompts
-                  </span>
-                  <div className="home-prompt-chips">
-                    <button
-                      type="button"
-                      className="home-prompt-chip"
-                      onClick={() => {
-                        handleSelectCluster(clusters[1]);
-                        openCommandWithDraft('Where have I travelled recently?');
-                      }}
-                    >
-                      <span>&ldquo;Where have I travelled recently?&rdquo;</span>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                    </button>
-
-                    <button
-                      type="button"
-                      className="home-prompt-chip"
-                      onClick={() => {
-                        handleSelectCluster(clusters[2]);
-                        openCommandWithDraft('Show everyday carry gear');
-                      }}
-                    >
-                      <span>&ldquo;Show everyday carry gear&rdquo;</span>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                    </button>
-
-                    <button
-                      type="button"
-                      className="home-prompt-chip"
-                      onClick={() => {
-                        inspectExperienceTarget();
-                        setActiveMode('experience');
-                      }}
-                    >
-                      <span>&ldquo;Inspect experience &amp; CV&rdquo;</span>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                    </button>
-                  </div>
-                </div>
-
                 <div className="home-hero-footer">
                   <Button
                     variant="secondary"
@@ -405,7 +360,7 @@ const Index = () => {
             {/* 4-Tile "At a glance" Strip */}
             <section aria-label="At a glance metrics" className="home-glance-section">
               <div className="home-section-header">
-                <span className="home-section-eyebrow">AT A GLANCE · DETERMINISTIC INDEX</span>
+                <span className="home-section-eyebrow">AT A GLANCE</span>
                 <span className="home-section-sub">Click a tile to open or inspect</span>
               </div>
 
@@ -415,7 +370,6 @@ const Index = () => {
                   className="home-glance-tile ambient-card hud-corners text-left"
                   data-palette="sky"
                   onClick={() => {
-                    handleSelectCluster(clusters[1]);
                     navigate('/travel');
                   }}
                 >
@@ -432,7 +386,6 @@ const Index = () => {
                   className="home-glance-tile ambient-card hud-corners text-left"
                   data-palette="peach"
                   onClick={() => {
-                    handleSelectCluster(clusters[2]);
                     navigate('/inventory');
                   }}
                 >
@@ -449,7 +402,6 @@ const Index = () => {
                   className="home-glance-tile ambient-card hud-corners text-left"
                   data-palette="lavender"
                   onClick={() => {
-                    handleSelectCluster(clusters[3]);
                     navigate('/books');
                   }}
                 >
@@ -512,7 +464,6 @@ const Index = () => {
                           className="h-8 rounded-full px-3 text-xs gap-1.5"
                           onClick={() => {
                             selectTarget(row.inspector);
-                            setInspectorSheetOpen(true);
                           }}
                           aria-label={`Inspect ${row.title}`}
                         >
@@ -659,30 +610,13 @@ const Index = () => {
                           label: 'Period',
                           value: `${entry.item.start_date} – ${entry.item.end_date}`,
                         },
-                        {
-                          label: 'Location',
-                          value: entry.item.location || 'London',
-                        },
+                        ...(entry.item.location
+                          ? [{ label: 'Location', value: entry.item.location }]
+                          : []),
                         {
                           label: 'Type',
                           value: entryType,
                           tone: 'sky',
-                        },
-                      ],
-                      backlinks: [
-                        {
-                          id: 'bl-exp-inventory',
-                          code: 'INV',
-                          label: 'Hardware & Everyday Carry',
-                          to: '/inventory',
-                          meta: inventoryText,
-                        },
-                        {
-                          id: 'bl-exp-books',
-                          code: 'BKS',
-                          label: 'Books, Articles & Watchlist',
-                          to: '/books',
-                          meta: collectionsText,
                         },
                       ],
                     });

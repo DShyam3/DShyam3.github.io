@@ -132,7 +132,7 @@ const Travel = () => {
                     : 'No individual cities logged yet for this country.',
             rows: [
                 { label: 'ISO Code', value: selectedCountry.code, tone: 'accent' },
-                { label: 'Continent', value: continent ?? 'Territory' },
+                ...(continent ? [{ label: 'Continent', value: continent }] : []),
                 {
                     label: 'Status',
                     value: unMember ? 'UN Member State' : 'Territory / Dependency',
@@ -142,22 +142,6 @@ const Travel = () => {
                     label: 'Cities logged',
                     value: `${citiesForCountry.length} cities`,
                     tone: 'amber',
-                },
-            ],
-            backlinks: [
-                {
-                    id: 'bl-trv-photos',
-                    code: 'PHO',
-                    label: 'Field Photography Archive',
-                    to: '/photos',
-                    meta: 'Photos',
-                },
-                {
-                    id: 'bl-trv-recipes',
-                    code: 'RCP',
-                    label: 'Recipes & Kitchen Notes',
-                    to: '/recipes',
-                    meta: 'Collection',
                 },
             ],
         });

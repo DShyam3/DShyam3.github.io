@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useEffect, useRef, type CSSProperties } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { Library, Plus } from 'lucide-react';
 import { ActionButton } from '@/components/shared/ActionButton';
@@ -39,11 +39,24 @@ export function CollectionPage<T extends CollectionRow, R>({
     setFilter,
     search,
     setSearch,
+    reveal,
     countFor,
     addItem,
     updateItem,
     removeItem,
   } = useCollection(config);
+
+  // A record picked in the command palette arrives as router state. Once its
+  // row has loaded the page narrows to it, once per navigation.
+  const location = useLocation();
+  const revealId = (location.state as { revealId?: unknown } | null)?.revealId;
+  const revealRow = typeof revealId === 'string' ? all.find((row) => row.id === revealId) : undefined;
+  const revealedKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!revealRow || revealedKey.current === location.key) return;
+    revealedKey.current = location.key;
+    reveal(revealRow, config.card.title(revealRow));
+  }, [revealRow, location.key, reveal, config.card]);
 
   const layout = CARD_LAYOUT[config.card.variant];
   const CollectionIcon = config.card.fallbackIcon ?? Library;

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 export function WorkspaceRail() {
   const links = useSiteNavLinks();
   const location = useLocation();
-  const { openCommandWithDraft } = useWorkspaceInspector();
+  const { setCommandOpen } = useWorkspaceInspector();
   const { largerDisplay, toggleDisplaySize } = useDisplayMode();
 
   return (
@@ -85,22 +85,14 @@ export function WorkspaceRail() {
           </span>
         </button>
 
-        <div className="px-2 flex items-center justify-between text-xs text-muted-foreground tabular-nums">
-          <span>{links.length} routes · Local-first</span>
-          <span
-            aria-hidden="true"
-            className="h-1.5 w-1.5 rounded-full bg-primary/80"
-          />
-        </div>
-
         <button
           type="button"
-          onClick={() => openCommandWithDraft('')}
+          onClick={() => setCommandOpen(true)}
           className="w-full flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/60 px-2.5 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
         >
           <span className="flex items-center gap-1.5 truncate">
             <Terminal className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-            <span className="truncate">Command Dock</span>
+            <span className="truncate">Search</span>
           </span>
           <kbd className="rounded border border-border/70 bg-card/80 px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
             ⌘K

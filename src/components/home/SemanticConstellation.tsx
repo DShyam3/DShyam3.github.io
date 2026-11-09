@@ -23,6 +23,10 @@ export interface SemanticConstellationCounts {
   milestonesText: string;
 }
 
+/**
+ * The site's sections as constellation nodes. Each inspector row is a count
+ * read from data; a section with nothing to count has no rows.
+ */
 // eslint-disable-next-line react-refresh/only-export-components
 export function buildSemanticClusters(
   counts: SemanticConstellationCounts,
@@ -31,48 +35,19 @@ export function buildSemanticClusters(
     {
       id: 'cluster-home',
       code: '01',
-      label: 'Home / Identity',
-      shortLabel: 'Identity',
+      label: 'Home',
+      shortLabel: 'Home',
       colorVar: '--primary',
       coords: [0, 0.08, 0.12],
       radius: 7.5,
       inspector: {
         id: 'cluster-home',
-        eyebrow: 'Cluster 01 · Core Node',
-        title: 'Personal Index & Architecture',
-        summary:
-          'Root node of the personal operating system. Connects spatial logs, hardware inventory, reading archives, career milestones, and the deterministic ledger.',
-        rows: [
-          { label: 'Node ID', value: '01 · HOME-ROOT', tone: 'accent' },
-          { label: 'Location', value: 'London, United Kingdom' },
-          { label: 'Collections', value: counts.collectionsText },
-          { label: 'Time kind', value: 'Point-in-time + Historical' },
-        ],
-        backlinks: [
-          {
-            id: 'bl-home-travel',
-            code: 'TRV',
-            label: `Global Travel Atlas (${counts.countriesText})`,
-            to: '/travel',
-            meta: 'Spatial',
-          },
-          {
-            id: 'bl-home-inv',
-            code: 'INV',
-            label: 'Hardware & Everyday Carry',
-            to: '/inventory',
-            meta: counts.inventoryText,
-          },
-          {
-            id: 'bl-home-books',
-            code: 'BKS',
-            label: 'Reading Library & Watchlist',
-            to: '/books',
-            meta: 'Archive',
-          },
-        ],
-        primaryAction: { label: 'Explore Travel Atlas', to: '/travel' },
-        secondaryAction: { label: 'Browse Inventory', to: '/inventory' },
+        eyebrow: 'Section 01',
+        title: 'Home',
+        summary: 'Biography, experience, education and the sections of this site.',
+        rows: [{ label: 'Collections', value: counts.collectionsText, tone: 'accent' }],
+        primaryAction: { label: 'Open Travel', to: '/travel' },
+        secondaryAction: { label: 'Open Inventory', to: '/inventory' },
       },
     },
     {
@@ -85,38 +60,14 @@ export function buildSemanticClusters(
       radius: 6.5,
       inspector: {
         id: 'cluster-travel',
-        eyebrow: 'Cluster 02 · Spatial Atlas',
-        title: `Travel · ${counts.countriesText} & ${counts.citiesText}`,
-        summary:
-          'Interactive dot-matrix world projection tracking sovereign countries, territories, and city hubs across continents.',
+        eyebrow: 'Section 02',
+        title: 'Travel',
+        summary: 'Countries and cities visited, drawn on a dot-matrix globe.',
         rows: [
-          {
-            label: 'Coverage',
-            value: `${counts.countriesText} · ${counts.citiesText}`,
-            tone: 'sky',
-          },
-          { label: 'Source', value: 'visited_countries · visited_cities' },
-          { label: 'Time kind', value: 'Historical log' },
-          { label: 'Projection', value: 'Deterministic dot-matrix' },
+          { label: 'Countries', value: counts.countriesText, tone: 'sky' },
+          { label: 'Cities', value: counts.citiesText },
         ],
-        backlinks: [
-          {
-            id: 'bl-trv-photos',
-            code: 'PHO',
-            label: 'Field Photography Archive',
-            to: '/photos',
-            meta: 'Visual notes',
-          },
-          {
-            id: 'bl-trv-inv',
-            code: 'INV',
-            label: 'Travel & Camera Carry Rig',
-            to: '/inventory',
-            meta: counts.inventoryText,
-          },
-        ],
-        primaryAction: { label: 'Open Travel Atlas', to: '/travel' },
-        secondaryAction: { label: 'View Field Photos', to: '/photos' },
+        primaryAction: { label: 'Open Travel', to: '/travel' },
       },
     },
     {
@@ -129,33 +80,11 @@ export function buildSemanticClusters(
       radius: 6,
       inspector: {
         id: 'cluster-inventory',
-        eyebrow: 'Cluster 03 · Hardware Registry',
-        title: 'Everyday Carry & Desk Hardware',
-        summary:
-          'Catalogued tools, computing hardware, audio gear, and field instruments with specifications and acquisition provenance.',
-        rows: [
-          { label: 'Active items', value: counts.inventoryText, tone: 'amber' },
-          { label: 'Categories', value: 'Computing · Audio · EDC · Optics' },
-          { label: 'Time kind', value: 'Point-in-time' },
-        ],
-        backlinks: [
-          {
-            id: 'bl-inv-travel',
-            code: 'TRV',
-            label: `Field Tested Across ${counts.countriesText}`,
-            to: '/travel',
-            meta: 'Atlas',
-          },
-          {
-            id: 'bl-inv-links',
-            code: 'LNK',
-            label: 'Saved References & Tooling',
-            to: '/links',
-            meta: 'Links',
-          },
-        ],
+        eyebrow: 'Section 03',
+        title: 'Inventory',
+        summary: 'Everyday carry, desk and camera gear.',
+        rows: [{ label: 'Items', value: counts.inventoryText, tone: 'amber' }],
         primaryAction: { label: 'Open Inventory', to: '/inventory' },
-        secondaryAction: { label: 'Saved Links', to: '/links' },
       },
     },
     {
@@ -168,38 +97,10 @@ export function buildSemanticClusters(
       radius: 6,
       inspector: {
         id: 'cluster-library',
-        eyebrow: 'Cluster 04 · Cultural Archive',
-        title: 'Books, Articles, Thoughts & Watchlist',
-        summary:
-          'Long-form reading notes, essays, distilled beliefs, and film/series tracking synchronised with release schedules.',
-        rows: [
-          { label: 'Collections', value: counts.collectionsText, tone: 'accent' },
-          { label: 'Notes stream', value: 'Thoughts · Beliefs · Inspiration' },
-          { label: 'Time kind', value: 'Curated archive' },
-        ],
-        backlinks: [
-          {
-            id: 'bl-lib-books',
-            code: 'BKS',
-            label: 'Reading Library & Notes',
-            to: '/books',
-            meta: 'Books',
-          },
-          {
-            id: 'bl-lib-watchlist',
-            code: 'WTC',
-            label: 'Watchlist Radar & Library',
-            to: '/watchlist',
-            meta: 'Film & TV',
-          },
-          {
-            id: 'bl-lib-articles',
-            code: 'ART',
-            label: 'Long-Form Articles',
-            to: '/articles',
-            meta: 'Essays',
-          },
-        ],
+        eyebrow: 'Section 04',
+        title: 'Library',
+        summary: 'Books, articles, thoughts and the film and series watchlist.',
+        rows: [{ label: 'Collections', value: counts.collectionsText, tone: 'accent' }],
         primaryAction: { label: 'Open Books', to: '/books' },
         secondaryAction: { label: 'Open Watchlist', to: '/watchlist' },
       },
@@ -214,73 +115,27 @@ export function buildSemanticClusters(
       radius: 6,
       inspector: {
         id: 'cluster-experience',
-        eyebrow: 'Cluster 05 · Career Timeline',
-        title: 'Engineering Experience & Education',
-        summary:
-          'Chronological record of software engineering roles, academic degrees, and downloadable curriculum vitae.',
-        rows: [
-          { label: 'Milestones', value: counts.milestonesText, tone: 'accent' },
-          { label: 'Source', value: 'experience · education · cv.pdf' },
-          { label: 'Format', value: 'Structured timeline + PDF' },
-          { label: 'Time kind', value: 'Chronological' },
-        ],
-        backlinks: [
-          {
-            id: 'bl-exp-thoughts',
-            code: 'THO',
-            label: 'Engineering Notes & Thoughts',
-            to: '/thoughts',
-            meta: 'Stream',
-          },
-          {
-            id: 'bl-exp-beliefs',
-            code: 'BLF',
-            label: 'Operating Principles & Beliefs',
-            to: '/beliefs',
-            meta: 'Principles',
-          },
-        ],
-        primaryAction: { label: 'Read Thoughts', to: '/thoughts' },
-        secondaryAction: { label: 'View Beliefs', to: '/beliefs' },
+        eyebrow: 'Section 05',
+        title: 'Experience & Education',
+        summary: 'Roles and degrees in one timeline, with the CV to download.',
+        rows: [{ label: 'Milestones', value: counts.milestonesText, tone: 'accent' }],
       },
     },
     {
       id: 'cluster-treasury',
       code: '06',
-      label: 'Treasury · Pure Ledger',
-      shortLabel: 'Treasury',
+      label: 'Finance',
+      shortLabel: 'Finance',
       colorVar: '--peach',
       coords: [0.06, 0.64, -0.48],
       radius: 5.5,
       inspector: {
         id: 'cluster-treasury',
-        eyebrow: 'Cluster 06 · Deterministic Finance',
-        title: 'Treasury · Pure Calculation Modules',
-        summary:
-          'Anchored balances, UK tax bands, cash-flow projections, and merchant normalization computed 100% locally in TypeScript.',
-        rows: [
-          { label: 'Engine', value: 'src/lib/finance/* (pure functions)', tone: 'amber' },
-          { label: 'AI Boundary', value: 'Never computes · Allowlist only', tone: 'accent' },
-          { label: 'Access', value: 'Admin RLS gated' },
-        ],
-        backlinks: [
-          {
-            id: 'bl-fin-route',
-            code: 'FIN',
-            label: 'Open Treasury Workspace',
-            to: '/finance',
-            meta: 'Ledger',
-          },
-          {
-            id: 'bl-fin-inv',
-            code: 'INV',
-            label: 'Physical Asset Inventory',
-            to: '/inventory',
-            meta: counts.inventoryText,
-          },
-        ],
+        eyebrow: 'Section 06',
+        title: 'Finance',
+        summary: 'Balances, budgets and tax figures, computed from recorded rows.',
+        rows: [],
         primaryAction: { label: 'Open Finance', to: '/finance' },
-        secondaryAction: { label: 'Browse Inventory', to: '/inventory' },
       },
     },
   ];
@@ -318,17 +173,14 @@ const AMBIENT_PARTICLES: AmbientParticle[] = Array.from({ length: 68 }, (_, idx)
   };
 });
 
+// Home links to every section. No line joins two sections, because nothing
+// stores a relationship between them.
 const EDGES: [number, number][] = [
   [0, 1],
   [0, 2],
   [0, 3],
   [0, 4],
   [0, 5],
-  [1, 2],
-  [1, 3],
-  [2, 5],
-  [3, 4],
-  [4, 5],
 ];
 
 interface ProjectedCluster {
@@ -701,7 +553,7 @@ export function SemanticConstellation({
             aria-hidden="true"
           />
           <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground truncate">
-            SEMANTIC INDEX · {clusters.length} CLUSTERS
+            SITE INDEX · {clusters.length} SECTIONS
           </span>
         </div>
         <button
@@ -729,7 +581,7 @@ export function SemanticConstellation({
         <canvas
           ref={canvasRef}
           className="home-constellation-canvas"
-          aria-label="Interactive 3D semantic constellation of personal site clusters. Drag to rotate or select a cluster pill below."
+          aria-label="Interactive 3D map of the site's sections. Drag to rotate, or select a section below."
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -743,7 +595,7 @@ export function SemanticConstellation({
       <div
         className="home-constellation-pills"
         role="group"
-        aria-label="Semantic cluster nodes"
+        aria-label="Site sections"
       >
         {clusters.map((cluster) => {
           const active = cluster.id === selectedClusterId;

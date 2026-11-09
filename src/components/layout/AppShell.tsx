@@ -43,8 +43,8 @@ export function AppShell({
 }: AppShellProps) {
   const { pathname } = useLocation();
   const section = pathname.split('/')[1] || 'about';
-  const { hasCustomTarget, dockedDetail } = useWorkspaceInspector();
-  const inspectorOpen = hasCustomTarget || Boolean(dockedDetail);
+  const { target, dockedDetail } = useWorkspaceInspector();
+  const inspectorOpen = Boolean(target) || Boolean(dockedDetail);
   const mainRef = useRef<HTMLElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const hasToolbar = Boolean(toolbar);
