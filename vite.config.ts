@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import fs from "fs";
 import path from "path";
 import SITE from "./src/config/site.json" with { type: "json" };
 
@@ -131,6 +132,12 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "::",
       port: 8080,
+      fs: {
+        allow: [
+          import.meta.dirname,
+          fs.realpathSync(path.resolve(import.meta.dirname, "node_modules")),
+        ],
+      },
     },
     plugins: [
       react(),

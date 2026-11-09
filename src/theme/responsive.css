@@ -1,6 +1,6 @@
 /* Shared responsive contract: content widths, legibility and input capability. */
 :root {
-  --page-max: 100rem;
+  --page-max: 100vw;
   --page-gutter: clamp(1rem, 2vw, 2rem);
 }
 
@@ -11,6 +11,16 @@
    its inset, so the frame never doubles a phone's margins. The gutter lives
    inside the scroller there, which keeps edge focus rings unclipped. */
 .app-frame-slot { width: 100%; max-width: var(--page-max); margin-inline: auto; }
+.workspace-shell-grid {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.workspace-left-rail,
+.workspace-right-inspector {
+  display: none;
+}
 .app-frame {
   --frame-pad: var(--page-gutter);
   padding-inline: var(--frame-pad);
@@ -18,11 +28,28 @@
 }
 @media (min-width: 768px) {
   .app-frame-slot { padding: .75rem var(--page-gutter); }
+  .workspace-shell-grid {
+    display: grid;
+    grid-template-columns: 13.25rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: .75rem;
+  }
+  .workspace-left-rail {
+    display: flex;
+  }
   .app-frame {
     --frame-pad: clamp(1rem, 1.5vw, 1.5rem);
     border: 1px solid hsl(var(--border) / .55);
     border-radius: 1.5rem;
     background-color: hsl(var(--card) / .22);
+  }
+}
+@media (min-width: 1280px) and (min-height: 600px) {
+  .workspace-shell-grid[data-inspector="open"] {
+    grid-template-columns: 13.25rem minmax(0, 1fr) 19.5rem;
+  }
+  .workspace-shell-grid[data-inspector="open"] > .workspace-right-inspector {
+    display: flex;
   }
 }
 @media (max-height: 560px) {

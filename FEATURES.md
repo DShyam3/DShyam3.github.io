@@ -19,26 +19,32 @@ end, at the database rather than in the UI.
 
 ---
 
+## Workspace shell
+
+Every route runs inside a full-width (`100vw`) adaptive workspace frame between the fixed header and footer. By default, the frame is a two-column grid (`data-inspector="closed"`): the left section rail and the full-width `<main>` viewport. Selecting a card, poster, country, timeline milestone, or 3D node opens the third-column contextual inspector (`data-inspector="open"`), and pressing `×` or `Escape` closes the inspector and collapses the grid back to two columns:
+
+- **Left section rail (`WorkspaceRail`)** — from `768px`, a numbered list of the site's sections replaces the header `NavMenu`, rendering the `SECTIONS` heading, uppercase section labels, tabular numbers and badges in `Space Mono`. Visitors see `01` through `11`; signed in as admin, Finance (at `02`) and Beliefs are added and the list runs to `13`. The active section is marked. Below the list sit a `Display: Standard / Larger` size toggle, a route count, and a `Command Dock` (`⌘K`) button. Below `768px`, the header `NavMenu` drawer handles section navigation and display sizing.
+- **Centre viewport (`<main>`)** — the active route's content, taking the full remaining width when no record is selected and scrolling inside the middle card. Section toolbars pin to its top where the width and height allow.
+- **Right contextual inspector (`WorkspaceInspector`)** — hidden when idle so `<main>` spans the full width; opens as a third column at `1280px` wide and `600px` tall or more (`data-inspector="open"`), and as an on-demand modal sheet below that size, whenever a record is actively selected (closing and collapsing back to two columns with its `×` button, backdrop click on the sheet, or `Escape`):
+  - **Collection & EDC cards (`CardDetailDialog`)** — clicking any collection or EDC card opens the third column (or sheet) with its full artwork, title link, badge, description/metadata body, download link (for photo/content images), schedule action, and admin edit/delete actions, plus an "Ask about this record" button.
+  - **Watchlist items (`WatchlistDetailDialog`)** — clicking any poster, episode row, or News update row opens the third column (or sheet) with the title's poster, platform badge, status pill, runtime, collapsible synopsis, schedule/favourite/resync/delete controls, and interactive season picker and episode watched-state checklist.
+  - **Travel countries (`TravelPage`)** — selecting a country on the globe or country list opens the third column (or sheet) with its ISO code, continent, UN member vs territory status, count and list of logged cities, and connected backlinks; clearing the country closes the inspector.
+  - **Home 3D clusters, rows, and timeline milestones (`Index`)** — clicking a 3D constellation cluster, a "Continue exploring" row's `Inspect` button, or any experience/education timeline milestone opens the third column (or sheet) with that record's metadata readout, connected backlinks, primary/secondary links, and an "Ask about this record" prompt button.
+- **Command Dock (`CommandDock`)** — a bar above the footer, and a `⌘K` command palette opened from that bar, the rail's button, or the header's `Ask / Search` button. The palette has quick prompt chips on medium and wider screens, instant filtering of routes, and keyword filtering over six curated records (Travel, Inventory, Site architecture, Reading library, Resume & CV, and Finance for admins only). The best match's fixed summary appears under a "Curated summary" label, with an `Inspect & Open` button that selects the record and goes to its section.
+
+The site ships a web app manifest (`manifest.webmanifest`) that sets standalone display and dark theme and background colours.
+
 ## Home
 
 Dot-matrix identity rendered in real text — Doto as a variable font, where the
 dots are circles that fuse as weight increases, so the look is reached for with
-weight rather than font-size. A dot-matrix globe and clock sit beside it.
+weight rather than font-size. A dot-matrix globe and clock sit beside it in the footer.
 
-Experience and education appear as one timeline, newest first, roles and degrees
-interleaved by start date. Entries fill two compact, content-sized columns from left to right when the
-card is wide enough, and one column in narrower cards. Both are editable in place when signed in as admin,
-skeleton-loaded otherwise. The CV is a PDF in public storage, served from one
-fixed address that a new upload replaces; a file that is not a PDF is refused.
-Admins get a second add button for education.
+Home switches between three workspace views via a top tab bar (`01 · Overview`, `02 · Experience & CV`, and `03 · Biography & Projects`) with a persistent `Download CV` action:
 
-About stays within the page frame; experience and projects scroll inside their
-cards. Large screens show portrait and biography above the timeline, with
-projects alongside; the biography shows in full unless it would need more than
-about two-thirds of the height, and the timeline takes the rest. Smaller or shorter screens offer About, Experience and
-Projects buttons to select one full-size card, where the biography scrolls only
-if it cannot fit. Scroll regions support keyboard
-focus, and short screens scroll the whole selected card to keep controls reachable.
+- **Overview** — the default view. Opens with a split hero grid: on the left, an introduction card with the London status indicator, dot-matrix identity, biography lead, quick command and inspection prompt chips, and shortcuts to download the CV or open the timeline; on the right, the interactive 3D **Semantic Constellation** (`SemanticConstellation`), a canvas point-cloud graph of five domain clusters (`01` Home / Identity, `02` Travel, `03` Inventory, `04` Library, and `05` Experience) for everyone, plus `06` Treasury when signed in as admin, with drag-to-orbit rotation, auto-rotate pause/play, hover projection lines, and cluster pills that select the active cluster and load its live counts and connected backlinks into the contextual inspector. Below the hero sits a four-tile **At a glance** strip (Travel, Inventory, Reading & Watchlist, and Experience with live counts) and a **Continue exploring** record list where each row offers `Inspect` (opens the row's record in the inspector) and `Open` (goes to the row's section or Home tab). On narrow screens the tab bar keeps each tab's width and scrolls sideways.
+- **Experience & CV** — experience and education appear as one timeline, newest first, roles and degrees interleaved by start date. Clicking any role or degree loads its organization, period, location, type, and connected backlinks into the contextual inspector. Entries fill two compact, content-sized columns from left to right when the card is wide enough, and one column in narrower cards. Both are editable in place when signed in as admin, skeleton-loaded otherwise. The CV is a PDF in public storage, served from one fixed address that a new upload replaces; a file that is not a PDF is refused. Admins get a second add button for education.
+- **Biography & Projects** — shows the portrait and full biography alongside the projects panel, each scrolling within its card when needed.
 
 ## Collections
 
@@ -60,12 +66,7 @@ Media cards show the category badge on the artwork, truncating rather than overl
 Search and filter controls wrap into available space. Cards keep readable widths
 as the number of columns changes.
 
-Collection and EDC detail dialogs grow with the screen and their content, up to
-896px wide. On screens at least 640px wide, the image stays stationary beside
-the details; the details scroll independently only when they exceed the
-available height. Images fit the available space, and the details pane
-supports keyboard focus and scrolling. On phones, the image and details stack
-in one scrolling dialog.
+Clicking any collection or EDC card docks its full detail view (`CardDetailDialog`) directly into the third-column `WorkspaceInspector` on `>=1280px`×`600px` viewports (or opens the inspector sheet on smaller viewports), showing the artwork, title and external link, category badge, full description and metadata, download action for content images, and admin edit/delete controls.
 
 Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac.
 
@@ -173,15 +174,7 @@ Marking an episode or season watched or unwatched refreshes Watch Next to match
 the saved progress. Watched marks change only after the save succeeds. If a save
 fails, an error toast appears and the existing watched marks stay unchanged.
 
-Details place episodes below the poster and information on tablets, with a
-third column on wider screens. On tablets, information stays fixed above the
-episode area; the season picker and season details scroll with the episodes.
-On wider screens, the episode list scrolls independently below the
-season controls, and the close control shares the episode heading row without
-an empty strip above the content. TV details show a short synopsis preview;
-Read synopsis opens the full text separately. Tablet and desktop details place
-Delete in the header and ask for confirmation. The close control stays reachable.
-The first unwatched regular season opens by default.
+Details (`WatchlistDetailDialog`) dock directly inside the third-column `WorkspaceInspector` on `>=1280px`×`600px` viewports (or open in the inspector sheet below that size) rather than opening a centered popup dialog, showing the poster, title and external link, status pill, platform badge, runtime, expandable synopsis, schedule/favourite/resync/delete actions, and the season picker and episode checklist with the first unwatched regular season open by default.
 
 **Both views:**
 

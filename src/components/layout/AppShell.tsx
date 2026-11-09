@@ -2,6 +2,10 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { WorkspaceRail } from '@/components/layout/WorkspaceRail';
+import { WorkspaceInspector } from '@/components/layout/WorkspaceInspector';
+import { CommandDock } from '@/components/layout/CommandDock';
+import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 
 /** The largest share of the middle card a pinned toolbar may take. */
 const PIN_MAX_SHARE = 0.25;
@@ -39,6 +43,8 @@ export function AppShell({
 }: AppShellProps) {
   const { pathname } = useLocation();
   const section = pathname.split('/')[1] || 'about';
+  const { hasCustomTarget, dockedDetail } = useWorkspaceInspector();
+  const inspectorOpen = hasCustomTarget || Boolean(dockedDetail);
   const mainRef = useRef<HTMLElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const hasToolbar = Boolean(toolbar);
@@ -84,7 +90,14 @@ export function AppShell({
         <Header title={title} subtitle={subtitle} />
       </div>
 
-      <div className="app-frame-slot flex-1 min-h-0 flex flex-col">
+      {/* The inspector column exists only while a record is picked; otherwise
+          the centre takes its width. */}
+      <div
+        data-inspector={inspectorOpen ? 'open' : 'closed'}
+        className="app-frame-slot workspace-shell-grid flex-1 min-h-0"
+      >
+        <WorkspaceRail />
+
         <main
           ref={mainRef}
           id="main"
@@ -97,7 +110,11 @@ export function AppShell({
           <span id="content" tabIndex={-1} className="block outline-none" />
           {children}
         </main>
+
+        <WorkspaceInspector />
       </div>
+
+      <CommandDock />
 
       <div className="shrink-0 wide-container relative z-30 bg-background">
         <Footer />

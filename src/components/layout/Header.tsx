@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { NavMenu } from './NavMenu';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -9,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ASSETS_URL } from '@/lib/constants';
 import { SITE } from '@/config/site';
+import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 
 
 interface HeaderProps {
@@ -23,6 +25,7 @@ export function Header({
   const [socialOpen, setSocialOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { openCommandWithDraft } = useWorkspaceInspector();
 
   const socialLinks = useMemo(() => SITE.socials, []);
 
@@ -193,7 +196,19 @@ export function Header({
                 as a control cluster pinned to the right edge instead of one
                 label adrift in the whitespace. */}
             <div className="flex flex-shrink-0 items-center gap-2 max-[699px]:ml-auto md:gap-4">
-              <NavMenu />
+              <button
+                type="button"
+                onClick={() => openCommandWithDraft('')}
+                aria-label="Ask or search workspace"
+                className="nav-link flex flex-shrink-0 items-center gap-2 rounded px-2.5 py-1.5 text-xs hover:bg-secondary/70 transition-colors"
+              >
+                <Search className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+                <span className="hidden sm:inline">Ask / Search</span>
+                <kbd className="rounded border border-border/70 bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                  ⌘K
+                </kbd>
+              </button>
+              <NavMenu className="md:hidden" />
               <ThemeToggle />
             </div>
           </div>

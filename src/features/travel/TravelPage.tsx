@@ -15,6 +15,7 @@ import { Globe, MapPin, Search, Plus, X, Loader2, ChevronDown } from 'lucide-rea
 import { CountryCityPanel, type City } from '@/features/travel/CountryCityPanel';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import '@/pages/Index.css';
 
 /** The slice of restcountries.com's shape that `public/countries.json` is read for. */
@@ -28,6 +29,7 @@ type ViewMode = 'countries' | 'cities';
 const Travel = () => {
     const isMobile = useIsMobile();
     const { isAdmin } = useAuth();
+    const { selectTarget, resetTarget } = useWorkspaceInspector();
     const { visitedCountries, addCountry, removeCountry } = useVisitedCountries();
     const { askDelete, deleteDialog } = useDeleteConfirm();
     // Removing a country takes its cities with it, so it asks first.
@@ -107,6 +109,67 @@ const Travel = () => {
             loadCityMap();
         }
     }, [selectedCountry, cityMapLoaded, loadCityMap]);
+
+    // Sync selected country into the 3rd-column WorkspaceInspector
+    useEffect(() => {
+        if (!selectedCountry) {
+            resetTarget();
+            return;
+        }
+        const citiesForCountry = visitedCities.filter(
+            (c) => c.country_code === selectedCountry.code,
+        );
+        const continent = continentByCode[selectedCountry.code];
+        const unMember = sovereignCodes.has(selectedCountry.code);
+
+        selectTarget({
+            id: `travel-country-${selectedCountry.code}`,
+            eyebrow: 'Selected Country',
+            title: selectedCountry.name,
+            summary:
+                citiesForCountry.length > 0
+                    ? `Logged cities: ${citiesForCountry.map((c) => c.city_name).join(', ')}`
+                    : 'No individual cities logged yet for this country.',
+            rows: [
+                { label: 'ISO Code', value: selectedCountry.code, tone: 'accent' },
+                { label: 'Continent', value: continent ?? 'Territory' },
+                {
+                    label: 'Status',
+                    value: unMember ? 'UN Member State' : 'Territory / Dependency',
+                    tone: 'sky',
+                },
+                {
+                    label: 'Cities logged',
+                    value: `${citiesForCountry.length} cities`,
+                    tone: 'amber',
+                },
+            ],
+            backlinks: [
+                {
+                    id: 'bl-trv-photos',
+                    code: 'PHO',
+                    label: 'Field Photography Archive',
+                    to: '/photos',
+                    meta: 'Photos',
+                },
+                {
+                    id: 'bl-trv-recipes',
+                    code: 'RCP',
+                    label: 'Recipes & Kitchen Notes',
+                    to: '/recipes',
+                    meta: 'Collection',
+                },
+            ],
+        });
+    }, [
+        selectedCountry,
+        visitedCities,
+        visitedCountries,
+        continentByCode,
+        sovereignCodes,
+        selectTarget,
+        resetTarget,
+    ]);
 
     // Split: sovereign UN states vs territories/dependencies
     const sovereignVisited = visitedCountries.filter(c => sovereignCodes.size === 0 || sovereignCodes.has(c.country_code));

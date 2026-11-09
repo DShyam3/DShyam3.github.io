@@ -300,3 +300,11 @@ button:focus-visible,
 /* Dismiss immediately. Focus restoration must not wait for an exit animation
    in a background tab or on a device that suspends painting. */
 .glass-dialog[data-state='closed'], .dialog-overlay[data-state='closed'] { animation: none; }
+
+.workspace-left-rail,
+.workspace-right-inspector {
+  background-image: linear-gradient(145deg, hsl(var(--section-colour, var(--sage)) / 0.08), transparent 68%);
+  box-shadow: var(--shadow-card);
+}
+
+

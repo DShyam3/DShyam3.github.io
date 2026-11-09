@@ -1,11 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useState, useEffect, useId, useRef, useMemo } from 'react';
 import { ExternalLink, Trash2, CalendarDays, Calendar, Heart, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -15,6 +8,7 @@ import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDeta
 import { displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
+import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -61,8 +55,10 @@ export function WatchlistDetailDialog({
   onResync,
   syncing,
 }: WatchlistDetailDialogProps) {
+  const instanceId = useId();
+  const { setDockedDetail } = useWorkspaceInspector();
+  const wasOpenRef = useRef(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { loadShowEpisodes, loadItemDescription } = useWatchlist();
 
@@ -89,9 +85,9 @@ export function WatchlistDetailDialog({
   }, [open]);
 
   const isTVShow = item.category === 'TV Shows';
-  const hasSeasons = isTVShow && item.seasons && item.seasons.length > 0;
+  const hasSeasons = Boolean(isTVShow && item.seasons && item.seasons.length > 0);
 
-  const upcomingReleaseDate = (() => {
+  const upcomingReleaseDate = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
@@ -128,331 +124,68 @@ export function WatchlistDetailDialog({
       }
     }
     return null;
-  })();
+  }, [item.category, item.release_date, item.seasons]);
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        onCloseAutoFocus={onCloseAutoFocus}
-        className={cn(
-          // Series details keep their episode rail separate from the information panel.
-          'max-h-[85dvh] overflow-hidden p-0 rounded-lg items-start',
-          // Wider dialog for TV shows with seasons
-          hasSeasons ? 'watchlist-detail-with-seasons sm:max-w-3xl lg:max-w-4xl' : 'sm:max-w-2xl',
-        )}
-      >
-        <DialogDescription className="sr-only">
-          Details for {item.title}, including seasons, schedule, and watch status.
-        </DialogDescription>
-        {/* Mobile Layout - stacked */}
-        <div className="sm:hidden flex flex-col">
-          {item.image_url && (
-            <div className="w-full max-h-[40vh] shrink-0 relative overflow-hidden rounded-t-lg bg-background flex justify-center">
+  useEffect(() => {
+    if (!open) {
+      if (wasOpenRef.current) {
+        wasOpenRef.current = false;
+        setDockedDetail(null);
+      }
+      return;
+    }
+
+    wasOpenRef.current = true;
+    setDockedDetail({
+      id: `watchlist-${item.category}-${item.id}-${instanceId}`,
+      eyebrow: isTVShow ? 'TV Series Inspector' : 'Movie Inspector',
+      title: item.title,
+      onClose: () => {
+        onOpenChange(false);
+        onCloseAutoFocus?.(new Event('close'));
+      },
+      node: (
+        <div className="space-y-4">
+          {item.image_url ? (
+            <div className="flex justify-center rounded-xl border border-border/50 bg-background/50 p-2">
               <img
                 src={item.image_url}
                 alt={item.title}
-                className="h-auto max-h-[40vh] w-auto object-contain"
+                className="max-h-52 w-auto rounded-lg object-contain shadow-md"
               />
             </div>
-          )}
-          <div className="p-4 pb-8">
-            <DialogHeader className="text-left">
-              <DialogTitle className="font-serif text-lg font-medium pr-8">
-                {item.link ? (
-                  <a
-                    href={item.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-primary transition-colors inline-flex items-center gap-2"
-                  >
-                    {displayTitle(item.title, item.year)}
-                    <ExternalLink className="w-4 h-4 opacity-60" />
-                  </a>
-                ) : (
-                  displayTitle(item.title, item.year)
-                )}
-              </DialogTitle>
-              <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
-                <span className="uppercase tracking-wider text-xs font-medium">
-                  {isTVShow ? 'TV Show' : 'Movie'}
-                </span>
-                {item.year && <span>• {item.year}</span>}
-                {item.genres && item.genres.length > 0 && (
-                  <span>• {item.genres.join(', ')}</span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mt-3">
-                <PlatformBadge platform={item.streaming_platform} size={20} />
-                {status && (
-                  isUpcomingStatus(status) && upcomingReleaseDate ? (
-                    <div
-                      className={cn(
-                        'flex flex-col gap-0.5 px-2 py-1 rounded-lg',
-                        getStatusColor(status),
-                      )}
-                    >
-                      <span className="text-xs font-medium">{status}</span>
-                      <span className="text-xs opacity-70 flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {upcomingReleaseDate.toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  ) : (
-                    <span
-                      className={cn(
-                        'text-xs px-2 py-1 rounded-full font-medium',
-                        getStatusColor(status),
-                      )}
-                    >
-                      {status}
-                    </span>
-                  )
-                )}
-              </div>
-            </DialogHeader>
+          ) : null}
 
-            {item.description && (
-              <DetailDescription text={item.description} className="line-clamp-4" />
-            )}
-
-            {!isTVShow && item.runtime && (
-              <RuntimeRow runtime={item.runtime} className="mt-3 text-muted-foreground" />
-            )}
-
-            {isTVShow && item.series_status && (
-              <div className="mt-3">
-                <SeriesStatusPill status={item.series_status} className="px-2 py-1" />
-              </div>
-            )}
-
-            {/* Seasons for mobile */}
-            {hasSeasons && (
-              <div className="watchlist-episode-rail mt-4" role="region" aria-label="Episodes" tabIndex={0}>
-                <SeasonEpisodeList
-                  showId={item.id}
-                  seasons={item.seasons!}
-                  toggleEpisodeWatched={toggleEpisodeWatched}
-                  toggleSeasonWatched={toggleSeasonWatched}
-                  isEpisodeWatched={isEpisodeWatched}
-                  isSeasonWatched={isSeasonWatched}
-                />
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t pb-2">
-              {onSchedule && (
-                <Button
-                  variant={isScheduled ? 'secondary' : 'outline'}
-                  size="sm"
-                  onClick={
-                    isScheduled && onRemoveFromSchedule
-                      ? onRemoveFromSchedule
-                      : onSchedule
-                  }
-                  className="gap-1.5 flex-1 sm:flex-initial justify-center"
+          <div className="space-y-2">
+            <h2 className="font-serif text-base font-semibold text-foreground leading-snug">
+              {item.link ? (
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary transition-colors inline-flex items-center gap-1.5"
                 >
-                  <CalendarDays className="h-4 w-4" />
-                  {isScheduled ? 'Remove from Schedule' : 'Add to Schedule'}
-                </Button>
+                  <span>{displayTitle(item.title, item.year)}</span>
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                </a>
+              ) : (
+                displayTitle(item.title, item.year)
               )}
-              {onMoveToFavourites && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onMoveToFavourites}
-                  className="gap-1.5 flex-1 sm:flex-initial justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-                >
-                  <Heart className="h-4 w-4" />
-                  Move to Favourites
-                </Button>
-              )}
-              {onResync && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onResync}
-                  disabled={syncing}
-                  aria-label="Resync title"
-                      title="Resync this title's data from TMDB"
-                  className="gap-1.5 flex-1 sm:flex-initial justify-center"
-                >
-                  <RefreshCcw className={cn('h-4 w-4', syncing && 'animate-spin')} />
-                  Resync
-                </Button>
-              )}
-              {onDelete && (
-                <div className="flex-1 sm:flex-initial flex items-center gap-2">
-                  {isDeleting ? (
-                    <>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={onDelete}
-                        className="gap-1.5 flex-1 justify-center"
-                      >
-                        Confirm
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsDeleting(false)}
-                        className="flex-1 justify-center"
-                      >
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsDeleting(true)}
-                      className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-1 justify-center"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              )}
+            </h2>
+
+            <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-1.5">
+              <span className="uppercase tracking-wider font-medium">
+                {isTVShow ? 'TV Show' : 'Movie'}
+              </span>
+              {item.year ? <span>• {item.year}</span> : null}
+              {item.genres && item.genres.length > 0 ? (
+                <span>• {item.genres.join(', ')}</span>
+              ) : null}
             </div>
-          </div>
-        </div>
 
-        {/* Desktop Layout - side by side */}
-        <div className={cn(
-          'watchlist-detail-grid hidden sm:grid items-start min-h-0',
-          item.image_url ? 'sm:grid-cols-[auto_minmax(0,1fr)]' : 'sm:grid-cols-1',
-          hasSeasons && (item.image_url ? 'xl:grid-cols-[auto_minmax(0,1fr)_20rem]' : 'xl:grid-cols-[minmax(0,1fr)_20rem]'),
-        )}>
-          {/* Left: Poster - smaller for natural look */}
-          {item.image_url && (
-            <div className="watchlist-detail-poster shrink-0 p-4 flex items-start bg-secondary/5">
-              <img
-                src={item.image_url}
-                alt={item.title}
-                className="w-24 lg:w-32 h-auto rounded-lg shadow-lg"
-              />
-            </div>
-          )}
-
-          {/* Middle: Info */}
-          <div
-            tabIndex={hasSeasons ? 0 : undefined}
-            role={hasSeasons ? "region" : undefined}
-            aria-label={hasSeasons ? "Show details" : undefined}
-            className={cn(
-              'watchlist-detail-info p-4 min-w-0 flex flex-col',
-              hasSeasons && 'xl:border-r',
-            )}
-          >
-            <DialogHeader className="text-left">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <DialogTitle className="font-serif text-xl font-medium">
-                    {item.link ? (
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="hover:text-primary transition-colors inline-flex items-center gap-2"
-                      >
-                        {displayTitle(item.title, item.year)}
-                        <ExternalLink className="w-4 h-4 opacity-60" />
-                      </a>
-                    ) : (
-                      displayTitle(item.title, item.year)
-                    )}
-                  </DialogTitle>
-                  <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
-                    <span className="uppercase tracking-wider text-xs font-medium">
-                      {isTVShow ? 'TV Show' : 'Movie'}
-                    </span>
-                    {item.year && <span>• {item.year}</span>}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-1 mr-6">
-                  {onSchedule && (
-                    <Button
-                      variant={isScheduled ? 'secondary' : 'ghost'}
-                      size="icon"
-                      onClick={
-                        isScheduled && onRemoveFromSchedule
-                          ? onRemoveFromSchedule
-                          : onSchedule
-                      }
-                      className={cn(
-                        'h-11 w-11 flex-shrink-0',
-                        isScheduled
-                          ? 'text-foreground'
-                          : 'text-muted-foreground',
-                      )}
-                      aria-label={isScheduled ? 'Remove from schedule' : 'Add to schedule'}
-                      title={
-                        isScheduled ? 'Remove from schedule' : 'Add to schedule'
-                      }
-                    >
-                      <CalendarDays className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {onMoveToFavourites && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={onMoveToFavourites}
-                      className="h-11 w-11 flex-shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      aria-label="Move to favourites"
-                      title="Move to Favourites"
-                    >
-                      <Heart className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {onDelete && (
-                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      aria-label={`Delete ${item.title}`} title="Delete title"
-                      onClick={() => askDelete({ name: item.title, onConfirm: onDelete })}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {onResync && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={onResync}
-                      disabled={syncing}
-                      className="h-11 w-11 flex-shrink-0 text-muted-foreground"
-                      aria-label="Resync title"
-                      title="Resync this title's data from TMDB"
-                    >
-                      <RefreshCcw className={cn('h-4 w-4', syncing && 'animate-spin')} />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </DialogHeader>
-
-            {/* Genre pills */}
-            {item.genres && item.genres.length > 0 && (
-              <div className="watchlist-detail-genres flex flex-wrap gap-1.5 mt-3">
-                {item.genres.map((genre, idx) => (
-                  <span
-                    key={idx}
-                    className="text-xs px-2 py-0.5 rounded-full bg-secondary/50"
-                  >
-                    {genre}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Status and platform */}
-            <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <PlatformBadge platform={item.streaming_platform} size={20} />
-              {status && (
+              {status ? (
                 isUpcomingStatus(status) && upcomingReleaseDate ? (
                   <div
                     className={cn(
@@ -480,57 +213,163 @@ export function WatchlistDetailDialog({
                     {status}
                   </span>
                 )
-              )}
+              ) : null}
             </div>
-
-            {item.description && (
-              <div className="watchlist-detail-summary">
-                <DetailDescription text={item.description} className={hasSeasons ? 'line-clamp-3' : undefined} />
-                {hasSeasons && <Button variant="link" size="sm" className="h-auto px-0 py-1 text-xs" onClick={() => setSummaryOpen(true)}>Read synopsis</Button>}
-              </div>
-            )}
-
-            {!isTVShow && item.runtime && (
-              <RuntimeRow
-                runtime={item.runtime}
-                className="mt-4"
-                iconClassName="text-muted-foreground"
-              />
-            )}
-
-            {isTVShow && item.series_status && (
-              <div className="watchlist-detail-series-status mt-4">
-                <SeriesStatusPill status={item.series_status} className="px-3 py-1" />
-              </div>
-            )}
-
-
           </div>
 
-          {/* Right: Seasons (TV Shows only) */}
-          {hasSeasons && (
-            <div role="region" aria-label="Episodes" tabIndex={0} className={cn("watchlist-episode-rail xl:col-span-1 min-w-0 p-4 bg-muted/30 border-t xl:border-t-0", item.image_url && "col-span-2")}>
+          {item.description ? (
+            <DetailDescription text={item.description} />
+          ) : null}
+
+          {!isTVShow && item.runtime ? (
+            <RuntimeRow
+              runtime={item.runtime}
+              className="text-muted-foreground"
+              iconClassName="text-muted-foreground"
+            />
+          ) : null}
+
+          {isTVShow && item.series_status ? (
+            <div>
+              <SeriesStatusPill status={item.series_status} className="px-2.5 py-1" />
+            </div>
+          ) : null}
+
+          {hasSeasons && item.seasons ? (
+            <div
+              className="rounded-xl border border-border/50 bg-background/45 p-2.5"
+              role="region"
+              aria-label="Episodes"
+            >
               <SeasonEpisodeList
                 showId={item.id}
-                seasons={item.seasons!}
+                seasons={item.seasons}
                 toggleEpisodeWatched={toggleEpisodeWatched}
                 toggleSeasonWatched={toggleSeasonWatched}
                 isEpisodeWatched={isEpisodeWatched}
                 isSeasonWatched={isSeasonWatched}
               />
             </div>
-          )}
+          ) : null}
+
+          {(onSchedule || onMoveToFavourites || onResync || onDelete) ? (
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50">
+              {onSchedule ? (
+                <Button
+                  variant={isScheduled ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={
+                    isScheduled && onRemoveFromSchedule
+                      ? onRemoveFromSchedule
+                      : onSchedule
+                  }
+                  className="gap-1.5 text-xs flex-1 justify-center"
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {isScheduled ? 'Unschedule' : 'Schedule'}
+                </Button>
+              ) : null}
+
+              {onMoveToFavourites ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onMoveToFavourites}
+                  className="gap-1.5 text-xs flex-1 justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                >
+                  <Heart className="h-3.5 w-3.5" />
+                  Favourite
+                </Button>
+              ) : null}
+
+              {onResync ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onResync}
+                  disabled={syncing}
+                  aria-label="Resync title"
+                  title="Resync this title's data from TMDB"
+                  className="gap-1.5 text-xs flex-1 justify-center"
+                >
+                  <RefreshCcw className={cn('h-3.5 w-3.5', syncing && 'animate-spin')} />
+                  Resync
+                </Button>
+              ) : null}
+
+              {onDelete ? (
+                <div className="flex-1 flex items-center gap-1.5">
+                  {isDeleting ? (
+                    <>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => askDelete({ name: item.title, onConfirm: onDelete })}
+                        className="gap-1 text-xs flex-1 justify-center"
+                      >
+                        Confirm
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsDeleting(false)}
+                        className="text-xs flex-1 justify-center"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsDeleting(true)}
+                      className="gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-1 justify-center"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-      </DialogContent>
-      {deleteDialog}
-      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{item.title} — Synopsis</DialogTitle>
-            <DialogDescription>{item.description}</DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-    </Dialog>
-  );
+      ),
+    });
+  }, [
+    open,
+    instanceId,
+    isTVShow,
+    hasSeasons,
+    item,
+    status,
+    upcomingReleaseDate,
+    isScheduled,
+    syncing,
+    isDeleting,
+    onOpenChange,
+    onCloseAutoFocus,
+    onSchedule,
+    onRemoveFromSchedule,
+    onMoveToFavourites,
+    onResync,
+    onDelete,
+    askDelete,
+    toggleEpisodeWatched,
+    toggleSeasonWatched,
+    isEpisodeWatched,
+    isSeasonWatched,
+    setDockedDetail,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (wasOpenRef.current) {
+        wasOpenRef.current = false;
+        setDockedDetail(null);
+      }
+    };
+  }, [setDockedDetail]);
+
+  return <>{deleteDialog}</>;
 }

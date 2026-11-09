@@ -15,6 +15,7 @@ import { FinanceRoute, FinanceSession } from '@/features/finance/FinanceSession'
 import { WatchlistProvider } from './features/watchlist/WatchlistContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DotMatrixProvider } from './contexts/DotMatrixContext';
+import { WorkspaceInspectorProvider } from './contexts/WorkspaceInspectorContext';
 
 /**
  * Routing loads eagerly except where splitting actually pays for itself.
@@ -87,8 +88,10 @@ const queryClient = new QueryClient({
 const AppProviders = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>
     <DotMatrixProvider>
-      <SiteWarmup />
-      <FinanceSession>{children}</FinanceSession>
+      <WorkspaceInspectorProvider>
+        <SiteWarmup />
+        <FinanceSession>{children}</FinanceSession>
+      </WorkspaceInspectorProvider>
     </DotMatrixProvider>
   </AuthProvider>
 );

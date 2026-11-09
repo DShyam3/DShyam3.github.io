@@ -1,0 +1,16 @@
+{
+  "name": "Dhyan Shyam — Personal Workspace",
+  "short_name": "Dhyan",
+  "description": "Personal index, spatial atlas, reading library, and deterministic ledger.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080b0a",
+  "theme_color": "#080b0a",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

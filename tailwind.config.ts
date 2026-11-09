@@ -23,6 +23,7 @@ export default {
       fontFamily: {
         serif: ['"Space Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
         sans: ['"Space Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        mono: ['"Space Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
         matrix: ['Doto', 'monospace'],
       },
       colors: {

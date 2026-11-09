@@ -1,0 +1,1671 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Dhyan · Merged Phase 0 Workspace Wireframe</title>
+  <style>
+    @font-face {
+      font-family: 'Space Mono';
+      src: url('assets/space-mono-latin-400-normal.woff2') format('woff2');
+      font-weight: 400;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Doto';
+      src: url('assets/doto-latin-700-normal.woff2') format('woff2');
+      font-weight: 700;
+      font-display: swap;
+    }
+
+    /* ==========================================================================
+       COLOUR SCHEME FROM feat/redesign-phase0 + SURFACE accents from DESIGN_SYSTEM
+       ========================================================================== */
+    :root,
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --ground: #080b0a;
+      --panel: #0f1413;
+      --raised: #151d1b;
+      --ink: #f0f2ee;
+      --muted: #95a59f;
+      --line: rgba(255, 255, 255, 0.13);
+      --grid: rgba(207, 230, 142, 0.045);
+      --accent: #1eeb73;       /* HUD Phosphor Green */
+      --accent-ink: #06130b;
+      --amber: #f97324;        /* Tactical Amber */
+      --sky: #5cc4eb;          /* Atlas Sky */
+      --lavender: #c1a7ec;     /* Library Lavender */
+      --soft: #121917;
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --ground: #f5f4ef;
+      --panel: #ffffff;
+      --raised: #ecefe9;
+      --ink: #1b2522;
+      --muted: #4b5b55;
+      --line: rgba(27, 37, 34, 0.15);
+      --grid: rgba(50, 93, 75, 0.055);
+      --accent: #147a42;
+      --accent-ink: #ffffff;
+      --amber: #c04d0c;
+      --sky: #256e8e;
+      --lavender: #6c46a8;
+      --soft: #e9ede6;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--ground);
+      color: var(--ink);
+      font: 13px/1.65 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, a, input, select { font: inherit; color: inherit; }
+    button {
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      min-height: 44px;
+      padding: 10px 14px;
+      text-align: left;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+    button:hover { background: var(--raised); border-color: var(--muted); }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .skip {
+      position: absolute;
+      top: -80px;
+      left: 10px;
+      z-index: 20;
+      padding: 12px;
+      background: var(--panel);
+    }
+    .skip:focus { top: 8px; }
+
+    /* Subtle HUD corner bracket accent on primary panels */
+    .panel {
+      position: relative;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 26px;
+      border-radius: 14px;
+    }
+    .panel.hud-corners::before,
+    .panel.hud-corners::after {
+      content: "";
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      pointer-events: none;
+    }
+    .panel.hud-corners::before {
+      top: -1px; left: -1px;
+      border-top: 2px solid var(--accent);
+      border-left: 2px solid var(--accent);
+      border-top-left-radius: 4px;
+    }
+    .panel.hud-corners::after {
+      bottom: -1px; right: -1px;
+      border-bottom: 2px solid var(--accent);
+      border-right: 2px solid var(--accent);
+      border-bottom-right-radius: 4px;
+    }
+
+    /* Studio Preview Bar at very top (Device Width, Audience, Theme) */
+    .studio-bar {
+      background: var(--raised);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      font-size: 12px;
+    }
+    .studio-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .studio-pill {
+      min-height: 34px;
+      padding: 6px 11px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .studio-pill[aria-pressed="true"] {
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* Stage container. Presets set its width; the layout responds to the
+       stage's own width through container queries, so a real narrow window
+       and a preset produce the same layout. */
+    .stage-wrap {
+      container: stage / inline-size;
+      margin: 0 auto;
+      transition: max-width 0.2s ease;
+      max-width: 100%;
+      min-height: calc(100svh - 55px);
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      background: var(--ground);
+    }
+
+    /* ==========================================================================
+       CODEX/REDESIGN-PHASE-0 WORKSPACE SHELL & PROPORTIONS
+       ========================================================================== */
+    .topbar {
+      min-height: 74px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 20px;
+      padding: 12px 26px;
+      background: var(--panel);
+    }
+    .identity {
+      font: 700 35px 'Doto', monospace;
+      letter-spacing: -2px;
+      text-decoration: none;
+    }
+    .identity span:first-child { color: var(--muted); }
+    .identity .dot { color: var(--accent); }
+    .sys-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: var(--ground);
+    }
+    .sys-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .index-meta { color: var(--muted); }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 185px minmax(0, 1fr) 310px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* Left Navigation Rail (Codex proportions + domain counts) */
+    .rail {
+      padding: 26px 16px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: var(--panel);
+    }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+    .rail button {
+      border-color: transparent;
+      padding: 10px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .rail button .num {
+      color: var(--muted);
+      margin-right: 8px;
+    }
+    .rail button[aria-current="page"] {
+      background: var(--raised);
+      color: var(--accent);
+      border-color: var(--line);
+    }
+    .rail-bottom {
+      margin-top: auto;
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+    }
+    .rail-bottom p {
+      font-size: 12px;
+      line-height: 1.75;
+      color: var(--muted);
+      margin: 0 0 12px;
+    }
+    .badge {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 12px;
+      letter-spacing: 0.8px;
+      display: inline-block;
+      color: var(--muted);
+    }
+    .badge.phosphor {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(30, 235, 115, 0.08);
+    }
+    .badge.amber {
+      color: var(--amber);
+      border-color: var(--amber);
+      background: rgba(249, 115, 36, 0.1);
+    }
+
+    /* Main Center Column */
+    main {
+      padding: 32px 30px;
+      min-width: 0;
+      background-image:
+        linear-gradient(to right, var(--grid) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+    main:focus { outline: none; }
+    .page {
+      max-width: 1060px;
+      margin: 0 auto;
+    }
+    .page-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      font: 700 clamp(27px, 3vw, 40px)/1.18 'Doto', monospace;
+      margin: 0 0 10px;
+    }
+    h2 {
+      font-size: 18px;
+      line-height: 1.4;
+      margin: 0 0 12px;
+      font-weight: 400;
+    }
+    .intro {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0;
+    }
+
+    /* Hero Panel (Codex editorial copy on left + feat/redesign-phase0 3D Constellation on right) */
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr 1.15fr;
+      gap: 24px;
+      min-height: 310px;
+      position: relative;
+      overflow: hidden;
+      align-items: center;
+    }
+    .hero h2 {
+      font: 700 32px/1.2 'Doto', monospace;
+      margin-bottom: 14px;
+    }
+    .hero p:not(.eyebrow) {
+      max-width: 420px;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 22px;
+    }
+    .primary {
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-color: var(--accent);
+      font-weight: 700;
+      display: inline-flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+    }
+    .primary:hover {
+      background: var(--accent);
+      filter: brightness(0.92);
+    }
+
+    .constellation-box {
+      position: relative;
+      height: 270px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--ground);
+      overflow: hidden;
+    }
+    .constellation-hud {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .constellation-hud .hud-right {
+      display: grid;
+      justify-items: end;
+      gap: 6px;
+    }
+    .orbit-btn {
+      pointer-events: auto;
+      padding: 6px 10px;
+      font-size: 12px;
+      background: var(--panel);
+    }
+    #nexus-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+      touch-action: none;
+    }
+    #nexus-canvas:active { cursor: grabbing; }
+
+    /* Section Headings, Tiles & Record Rows (from codex/redesign-phase-0) */
+    .section-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: baseline;
+      margin: 28px 0 12px;
+      flex-wrap: wrap;
+    }
+    .section-heading h2 {
+      font-size: 14px;
+      margin: 0;
+    }
+    .section-heading > span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .tiles.four {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .tiles.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .tile {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--panel);
+      border-radius: 12px;
+      min-width: 0;
+    }
+    div.tile { border: 1px solid var(--line); }
+    .tile .eyebrow { margin: 0; }
+    .tile strong {
+      font-size: 17px;
+      line-height: 1.4;
+      font-weight: 700;
+    }
+    .tile > span:last-child {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: auto;
+    }
+    .tile b {
+      font-weight: 400;
+      color: var(--accent);
+    }
+
+    .record {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      border: none;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      width: 100%;
+      padding: 16px 8px;
+    }
+    .record > span:nth-child(2) { flex: 1; }
+    .record strong { display: block; font-size: 13px; font-weight: 400; }
+    .record small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .record-type {
+      font-size: 12px;
+      color: var(--accent);
+      width: 68px;
+      flex-shrink: 0;
+    }
+
+    /* Finance Grid (Codex layout + feat/redesign-phase0 interactive simulator & Money Hub) */
+    .finance-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 16px;
+    }
+    .amount {
+      font: 700 46px 'Doto', monospace;
+      color: var(--accent);
+      margin: 8px 0;
+    }
+    .baseline {
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0;
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+    .baseline button {
+      border: none;
+      padding: 0;
+      min-height: 24px;
+      font-size: 12px;
+      color: var(--accent);
+    }
+    .footnote {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* Travel Route Sketch + Telemetry (Codex + feat/redesign-phase0) */
+    .route-sketch {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 32px 0;
+      background-image: radial-gradient(var(--line) 1px, transparent 1px);
+      background-size: 14px 14px;
+      margin: 18px 0;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+    }
+    .stop { display: grid; justify-items: center; gap: 8px; }
+    .stop i {
+      display: block;
+      width: 15px;
+      height: 15px;
+      border: 3px solid var(--accent);
+      border-radius: 50%;
+      background: var(--panel);
+    }
+    .stop small { font-size: 12px; color: var(--muted); }
+    .connection {
+      border-bottom: 1px dashed var(--amber);
+      font-size: 12px;
+      padding-bottom: 10px;
+      color: var(--amber);
+    }
+    .travel-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+    }
+    .travel-meta span { font-size: 12px; color: var(--muted); }
+    .travel-meta strong { display: block; color: var(--ink); font-weight: 400; margin-top: 4px; }
+
+    /* Right Inspector Rail (Codex editorial framing + feat/redesign-phase0 live backlinks).
+       The same body renders into a dialog when the rail is not shown. */
+    .inspector {
+      border-left: 1px solid var(--line);
+      padding: 28px 22px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+    }
+    .inspector-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+    }
+    .insp-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .insp-head .eyebrow { margin: 0; }
+    .insp-title {
+      font: 700 24px/1.28 'Doto', monospace;
+      margin: 0;
+    }
+    .insp-copy {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0;
+    }
+    .inspector-body > .eyebrow { margin: 0; }
+    .inspector-rule {
+      border-top: 1px solid var(--line);
+    }
+    .insp-meta {
+      margin: 0;
+      font-size: 12px;
+      display: grid;
+      gap: 4px;
+    }
+    .insp-meta div {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .insp-meta dt { color: var(--muted); }
+    .insp-meta dd { margin: 0; font-weight: 700; text-align: right; }
+    .backlink-btn {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      background: var(--ground);
+      margin-bottom: 8px;
+    }
+    .backlink-btn span:last-child {
+      color: var(--accent);
+      font-size: 12px;
+      text-align: right;
+    }
+    .insp-ask {
+      width: 100%;
+      margin-top: auto;
+    }
+
+    /* Bottom Dock */
+    .dock {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      border-top: 1px solid var(--line);
+      padding: 14px 26px;
+      background: var(--panel);
+    }
+    .dock-label, .keyhint {
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: var(--muted);
+    }
+    .command {
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+      color: var(--ink);
+      background: var(--ground);
+      border-color: var(--line);
+    }
+    .command b { color: var(--accent); font-weight: 400; }
+
+    .mobile-nav { display: none; }
+
+    .prototype-note {
+      max-width: 1060px;
+      margin: 32px auto 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Dialogs (from codex/redesign-phase-0) */
+    dialog {
+      background: var(--panel);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 26px;
+      width: min(680px, calc(100% - 32px));
+      max-height: 85svh;
+      overflow: auto;
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+    }
+    .dialog-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .dialog-head .eyebrow { margin: 0; }
+    dialog h2 {
+      font: 700 28px/1.25 'Doto', monospace;
+      margin: 0 0 12px;
+    }
+    .ask-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0;
+    }
+    #answer {
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+    .answer-tag { color: var(--amber); }
+    .answer-heading {
+      font: 700 22px 'Doto', monospace;
+      margin: 6px 0 10px;
+    }
+    .answer-body { color: var(--muted); }
+    .answer-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+    .answer-cards > div {
+      border: 1px solid var(--line);
+      background: var(--ground);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .answer-cards .badge { margin-bottom: 8px; }
+    .answer-cards strong { display: block; margin-bottom: 4px; }
+    .answer-cards p { margin: 0; font-size: 12px; color: var(--muted); }
+    .answer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    [hidden] { display: none !important; }
+
+    /* Responsive layout, driven by the stage's width */
+    @container stage (max-width: 1199px) {
+      .workspace { grid-template-columns: 150px minmax(0, 1fr) 260px; }
+      main { padding: 28px 22px; }
+      .inspector { padding: 22px 16px; }
+      .index-meta { display: none; }
+      .hero { grid-template-columns: 1fr; }
+      .tiles.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @container stage (max-width: 899px) {
+      .workspace { grid-template-columns: 150px minmax(0, 1fr); }
+      .inspector { display: none; }
+    }
+    @container stage (max-width: 759px) {
+      .topbar { gap: 10px; padding: 12px 16px; min-height: 64px; }
+      .identity { font-size: 29px; }
+      .workspace { display: block; }
+      .rail, .dock { display: none; }
+      main { padding: 24px 16px; }
+      .panel { padding: 20px; }
+      .amount { font-size: 38px; }
+      .hero,
+      .tiles,
+      .tiles.four,
+      .tiles.two,
+      .finance-grid,
+      .travel-meta { grid-template-columns: 1fr; }
+      .route-sketch { gap: 12px; }
+      .travel-meta span { display: flex; justify-content: space-between; gap: 16px; }
+      .travel-meta strong { margin-top: 0; text-align: right; }
+      .mobile-nav {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        display: flex;
+        justify-content: space-around;
+        gap: 2px;
+        padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+        background: var(--panel);
+        border-top: 1px solid var(--line);
+      }
+      .mobile-nav button {
+        border: none;
+        padding: 8px 6px;
+        min-width: 52px;
+        font-size: 12px;
+        text-align: center;
+      }
+      .mobile-nav button[aria-current="page"] {
+        color: var(--accent);
+        background: var(--raised);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stage-wrap, button { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to workspace</a>
+
+  <!-- STUDIO CONTROLLER BAR -->
+  <div class="studio-bar" role="region" aria-label="Phase 0 prototype controls">
+    <div>
+      <strong>MERGED PHASE 0 WIREFRAME</strong>
+      <span style="color: var(--muted); margin-left: 8px;">Codex Feel &amp; Doto Typography + Tactical Phosphor/Amber Palette &amp; 3D Constellation</span>
+    </div>
+    <div class="studio-controls">
+      <button class="studio-pill" data-set-device="1440" aria-pressed="true">MacBook (1440)</button>
+      <button class="studio-pill" data-set-device="1024" aria-pressed="false">iPad Duo (1024)</button>
+      <button class="studio-pill" data-set-device="620" aria-pressed="false">iPad Split (620)</button>
+      <button class="studio-pill" data-set-device="400" aria-pressed="false">iPhone (400)</button>
+      <button class="studio-pill" id="audience-btn">Audience: Private (Admin)</button>
+      <button class="studio-pill" id="theme-btn">Theme: Obsidian</button>
+    </div>
+  </div>
+
+  <!-- WORKSPACE STAGE -->
+  <div class="stage-wrap" id="stage">
+
+    <!-- TOP SYSTEM BAR -->
+    <header class="topbar">
+      <a class="identity" href="#home" id="identity-link" aria-label="Workspace home">d<span>h</span>yan<span class="dot">.</span></a>
+      <span class="sys-pill"><i class="sys-dot"></i> SYS.ONLINE // <span id="active-node-badge">NEXUS.CORE</span></span>
+      <span class="badge" id="audience-label">ADMIN · SIGNED IN</span>
+      <div class="topbar-right">
+        <span class="badge amber">SYNTHETIC DATA</span>
+        <span class="index-meta">SAMPLE INDEX · 1,420 NODES · 384 LINKS</span>
+        <button id="figures-top-btn" class="private-only" style="padding: 6px 12px;">Figures: Hidden (••••)</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <!-- LEFT NAVIGATION RAIL (Codex clean numbered rail) -->
+      <nav class="rail" aria-label="Main navigation">
+        <p class="eyebrow">WORKSPACE</p>
+        <button data-route="home" aria-current="page"><span><span class="num">01</span> Home</span></button>
+        <button data-route="finance" class="private-only"><span><span class="num">02</span> Finance</span><span class="badge amber" aria-label="2 sample alerts">2</span></button>
+        <button data-route="travel"><span><span class="num">03</span> Travel</span><span class="badge" aria-label="24 countries">24</span></button>
+        <button data-route="library"><span><span class="num">04</span> Library</span><span class="badge" aria-label="9 collections">9</span></button>
+        <button data-ask><span><span class="num">05</span> Ask / Canvas</span><span class="badge">⌘K</span></button>
+
+        <div class="rail-bottom">
+          <p class="eyebrow">SEMANTIC INDEX</p>
+          <p>Connected records.<br>Deterministic figures.<br>Explicit provenance.</p>
+          <span class="badge">PROPOSED · NOT BUILT</span>
+        </div>
+      </nav>
+
+      <!-- CENTER WORKSPACE -->
+      <main id="main" tabindex="-1">
+
+        <!-- 01 // HOME (Codex editorial feel + Interactive 3D Point-Cloud Constellation) -->
+        <section id="home" class="page">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">YOUR WORKSPACE // NEXUS CORE</p>
+              <h1>A little more perspective.</h1>
+              <p class="intro">Every book, belief, trip, piece of gear and ledger metric—connected in one semantic graph.</p>
+            </div>
+            <span class="badge phosphor">BRIEFING + 3D GRAPH</span>
+          </div>
+
+          <section class="hero panel hud-corners">
+            <div>
+              <p class="eyebrow">PICK UP A THREAD</p>
+              <h2>Make room for<br>what comes next.</h2>
+              <p>A trip idea, a Stoic reading note, or a clearer view of your monthly surplus. Start with a question, rotate the constellation, or jump straight to a surface.</p>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                <button class="primary" data-ask><span id="hero-ask-label">Ask about my plans</span> <span>↗</span></button>
+                <button data-detail="meditations">Inspect @Meditations ↗</button>
+              </div>
+            </div>
+
+            <!-- Interactive 3D Semantic Constellation -->
+            <div class="constellation-box">
+              <div class="constellation-hud">
+                <span>DRAG TO ROTATE · CLICK A CLUSTER</span>
+                <span class="hud-right">
+                  <span style="color: var(--accent);">OP.MODE // 3D NEXUS</span>
+                  <button type="button" class="orbit-btn" id="orbit-btn">Pause orbit</button>
+                </span>
+              </div>
+              <canvas id="nexus-canvas" role="img" aria-label="Sample 3D constellation of record clusters. The same records are listed on this page."></canvas>
+            </div>
+          </section>
+
+          <div class="section-heading">
+            <h2>At a glance</h2>
+            <span>Sample values · production computes these from domain tables</span>
+          </div>
+          <div class="tiles four">
+            <button class="tile private-only" data-route="finance">
+              <span class="eyebrow">FINANCE · MTD</span>
+              <strong data-money="£1,420.50">••••</strong>
+              <span>Free to spend this month <b>↗</b></span>
+            </button>
+            <button class="tile" data-route="travel">
+              <span class="eyebrow">TRAVEL · ATLAS</span>
+              <strong>24 Countries · 68 Cities</strong>
+              <span>Japan in spring idea <b>↗</b></span>
+            </button>
+            <button class="tile" data-detail="meditations">
+              <span class="eyebrow">LIBRARY · 42 BOOKS</span>
+              <strong>Meditations</strong>
+              <span>2 confirmed backlinks <b>↗</b></span>
+            </button>
+            <button class="tile" data-detail="sony">
+              <span class="eyebrow">INVENTORY · EDC</span>
+              <strong>1.84 kg Carry</strong>
+              <span>59 owned items tracked <b>↗</b></span>
+            </button>
+          </div>
+
+          <div class="section-heading">
+            <h2>Continue exploring</h2>
+            <span>Source record → explicit semantic link</span>
+          </div>
+          <button class="record" data-detail="stoicism">
+            <span class="record-type">BELIEF</span>
+            <span>
+              <strong>Deterministic systems over guesswork</strong>
+              <small>beliefs.id #03 · confirmed link to @Meditations</small>
+            </span>
+            <span>Inspect ↗</span>
+          </button>
+          <button class="record" data-detail="trip">
+            <span class="record-type">TRIP</span>
+            <span>
+              <strong>Japan in spring (Tokyo → Kyoto)</strong>
+              <small>Idea · dates, leave and budget still to decide</small>
+            </span>
+            <span>Inspect ↗</span>
+          </button>
+          <button class="record" data-detail="sony">
+            <span class="record-type">EDC GEAR</span>
+            <span>
+              <strong>Sony A7C II + FE 35mm f/1.4 GM</strong>
+              <small>inventory_items.id #14 · inferred link to Tokyo photos via EXIF GPS</small>
+            </span>
+            <span>Inspect ↗</span>
+          </button>
+        </section>
+
+        <!-- 02 // FINANCE (Codex calm structure + Rivian/Treasury interactive simulator & Money Hub) -->
+        <section id="finance" class="page" hidden>
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">PRIVATE WORKSPACE // TACTICAL LEDGER</p>
+              <h1>Your money, in context.</h1>
+              <p class="intro">A clear deterministic position today. Explicit assumptions for tomorrow.</p>
+            </div>
+            <button id="figures-btn" class="primary">Reveal sample figures</button>
+          </div>
+
+          <div class="finance-grid">
+            <section class="panel hud-corners">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <p class="eyebrow" style="margin: 0;">FREE TO SPEND THIS MONTH</p>
+                <span class="badge phosphor">ON TRACK · 68%</span>
+              </div>
+              <div class="amount" data-money="£1,420.50">••••</div>
+              <p style="color: var(--muted); margin: 0 0 14px;">Calendar month-to-date surplus after bills &amp; confirmed transfers</p>
+              <div class="baseline">
+                <span>Modelled Net Income</span>
+                <strong data-money="£3,293.30">••••</strong>
+              </div>
+              <div class="baseline">
+                <span>60-Day Forecast Lowest Point</span>
+                <strong data-money="£810.00 (18 Nov)">••••</strong>
+              </div>
+              <div class="baseline">
+                <span>Derived Alert</span>
+                <button data-detail="barclaycard" style="color: var(--amber);">Barclaycard utilisation 34% (&gt;30%) ↗</button>
+              </div>
+            </section>
+
+            <!-- Interactive What-If Spend Simulator from feat/redesign-phase0 -->
+            <section class="panel hud-corners">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <p class="eyebrow" style="margin: 0;">WHAT-IF SPEND · THIS MONTH ONLY</p>
+                <span class="badge phosphor" id="sim-badge">WITHIN THIS MONTH</span>
+              </div>
+              <h2 style="margin-top: 12px;">Test a decision before making it.</h2>
+              <p style="color: var(--muted);">Tests a one-off spend against this month's free-to-spend. It is not a forecast for April—that needs the dates, expected income and committed outgoings.</p>
+
+              <div style="margin: 18px 0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span>Hypothetical Spend</span>
+                  <strong id="sim-spend" data-money="£600.00">••••</strong>
+                </div>
+                <input type="range" id="sim-slider" min="100" max="2200" step="50" value="600" style="width: 100%; accent-color: var(--accent); cursor: pointer;" aria-label="Hypothetical spend amount" />
+              </div>
+
+              <div class="baseline">
+                <span>Remaining This Month</span>
+                <strong id="sim-remaining" data-money="£820.50">••••</strong>
+              </div>
+              <div style="margin-top: 14px;">
+                <button class="primary" data-ask>Plan the Japan trip in Ask ↗</button>
+              </div>
+            </section>
+          </div>
+
+          <div class="section-heading">
+            <h2>Money Hub — 41-City Jurisdiction Engine</h2>
+            <span>UK 2026/27 vs Germany §32a EStG · FX Snapshot 1.15 EUR/GBP</span>
+          </div>
+          <div class="tiles two">
+            <button class="tile" data-detail="moneyhub">
+              <span class="eyebrow">BASELINE · LONDON (UK)</span>
+              <strong data-money="£3,293.30 / mo">••••</strong>
+              <span>Monthly surplus after 8-category basket: <b data-money="£1,140">••••</b> ↗</span>
+            </button>
+            <button class="tile" data-detail="berlin">
+              <span class="eyebrow">DESTINATION · BERLIN (DE)</span>
+              <strong data-money="€3,022.23 / mo">••••</strong>
+              <span>Equivalent gross solver &amp; statutory benefits <b>↗</b></span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 03 // TRAVEL (Codex calm route sketch + Agripilot/Atlas telemetry strip) -->
+        <section id="travel" class="page" hidden>
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">WORKSPACE // TRAVEL ATLAS</p>
+              <h1>Leave space for discovery.</h1>
+              <p class="intro">24 countries and 68 cities mapped, plus saved ideas and the practical details between them.</p>
+            </div>
+            <span class="badge phosphor">ATLAS + TRIP IDEA</span>
+          </div>
+
+          <div class="tiles four" style="margin-bottom: 18px;">
+            <div class="tile"><span class="eyebrow">UN COUNTRIES</span><strong>24 / 195</strong><span>12.3% coverage</span></div>
+            <div class="tile"><span class="eyebrow">CITIES LOGGED</span><strong>68 Dots</strong><span>Equal Earth &amp; 3D Globe</span></div>
+            <div class="tile"><span class="eyebrow">CONTINENTS</span><strong>5 / 7</strong><span>Visited regions</span></div>
+            <div class="tile private-only"><span class="eyebrow">ANNUAL LEAVE · THIS YEAR</span><strong>14.0 Days</strong><span>April 2027 falls in a later leave year</span></div>
+          </div>
+
+          <section class="panel hud-corners">
+            <div>
+              <p class="eyebrow">JAPAN // AN IDEA IN PROGRESS</p>
+              <h2 style="font: 700 34px/1.2 'Doto', monospace;">Tokyo to Kyoto.</h2>
+              <p style="color: var(--muted);">A route sketch, not a booking. Linked to saved neighbourhood notes and 18 camera photos.</p>
+            </div>
+            <div class="route-sketch" aria-label="Illustrative itinerary: Tokyo, a rail connection to decide, Kyoto">
+              <span class="stop"><i></i>Tokyo<small>35.67°N · 4 saved notes</small></span>
+              <span class="connection">RAIL // TO DECIDE</span>
+              <span class="stop"><i></i>Kyoto<small>35.01°N · Possible stop</small></span>
+            </div>
+            <div class="travel-meta">
+              <span>Dates <strong>April · year to confirm</strong></span>
+              <span>Trip Budget <strong>Not recorded</strong></span>
+              <span>Connected Gear <strong>@Sony A7C II (514g)</strong></span>
+            </div>
+          </section>
+
+          <div class="section-heading">
+            <h2>Connected records for Japan</h2>
+            <span>Select a record to inspect its provenance</span>
+          </div>
+          <button class="record" data-detail="tokyo">
+            <span class="record-type">PLACE</span>
+            <span>
+              <strong>Tokyo / neighbourhood &amp; ramen notes</strong>
+              <small>visited_cities #21 · linked to 18 photos and a walk note</small>
+            </span>
+            <span>Inspect ↗</span>
+          </button>
+          <button class="record" data-detail="trip">
+            <span class="record-type">TRIP</span>
+            <span>
+              <strong>Japan in spring</strong>
+              <small>Idea · nothing booked, nothing assumed</small>
+            </span>
+            <span>Inspect ↗</span>
+          </button>
+          <button class="record private-only" data-ask>
+            <span class="record-type">SCENARIO</span>
+            <span>
+              <strong>Could I take a week in Japan in April?</strong>
+              <small>Resolves the year first, then the leave year, funds before departure and missing budget</small>
+            </span>
+            <span>Run in Ask ↗</span>
+          </button>
+        </section>
+
+        <!-- 04 // LIBRARY (9 Curated Collections + Watchlist + Inventory EDC) -->
+        <section id="library" class="page" hidden>
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">WORKSPACE // LIBRARY &amp; ARCHIVE</p>
+              <h1>Nine collections, one system.</h1>
+              <p class="intro">Books, beliefs, thoughts, articles, recipes, photos, links, inspiration, inventory &amp; watchlist.</p>
+            </div>
+            <span class="badge">SHARED ENTITY CARDS</span>
+          </div>
+
+          <div class="tiles">
+            <button class="tile" data-detail="meditations">
+              <span class="eyebrow">BOOKS · 42</span>
+              <strong>Meditations — Marcus Aurelius</strong>
+              <span>Philosophy &amp; Spirituality · Completed <b>↗</b></span>
+            </button>
+            <button class="tile" data-detail="stoicism">
+              <span class="eyebrow">BELIEFS · 31</span>
+              <strong>Deterministic systems over guesswork</strong>
+              <span>Linked to @Meditations <b>↗</b></span>
+            </button>
+            <button class="tile" data-detail="sony">
+              <span class="eyebrow">INVENTORY / EDC · 59</span>
+              <strong>Sony A7C II + 35mm GM</strong>
+              <span>Tech EDC · 514g · 18 linked photos <b>↗</b></span>
+            </button>
+          </div>
+        </section>
+
+        <p class="prototype-note">Wireframe only. Every record, amount and count on this page is synthetic. No model, account or database is connected.</p>
+      </main>
+
+      <!-- RIGHT INSPECTOR RAIL (Codex calm typography + live vvd.world Connected Backlinks) -->
+      <aside class="inspector" id="inspector" aria-label="Selected record inspector">
+        <div class="inspector-body" id="inspector-body"></div>
+      </aside>
+    </div>
+
+    <!-- PERSISTENT BOTTOM COMMAND BAR -->
+    <footer class="dock">
+      <span class="dock-label">ASK / FIND / OPEN</span>
+      <button class="command" data-ask>
+        <span id="dock-question">Could I take a week in Japan in April?</span>
+        <b>Ask ↗</b>
+      </button>
+      <span class="keyhint">⌘ K</span>
+    </footer>
+
+    <!-- COMPACT NAVIGATION (narrow stages) -->
+    <nav class="mobile-nav" aria-label="Compact navigation">
+      <button data-route="home">Home</button>
+      <button data-ask>Ask</button>
+      <button data-route="finance" class="private-only">Finance</button>
+      <button data-route="travel">Travel</button>
+      <button data-route="library">Library</button>
+    </nav>
+  </div>
+
+  <!-- INSPECTOR DIALOG (used when the inspector rail is not shown) -->
+  <dialog id="inspector-dialog" aria-label="Selected record">
+    <div class="dialog-head">
+      <p class="eyebrow">RECORD // INSPECTOR</p>
+      <button data-close="inspector-dialog">Close ×</button>
+    </div>
+    <div class="inspector-body" id="inspector-dialog-body"></div>
+  </dialog>
+
+  <!-- ASK / vvd.world COMPARISON CANVAS DIALOG -->
+  <dialog id="ask-dialog" aria-labelledby="ask-title">
+    <div class="dialog-head">
+      <p class="eyebrow">ASK NEXUS // SCRIPTED PREVIEW</p>
+      <button data-close="ask-dialog">Close ×</button>
+    </div>
+    <h2 id="ask-title">A question becomes a workspace.</h2>
+    <p id="ask-description" style="color: var(--muted);">Choose a prompt to see how the assistant resolves records, states what is missing, and leaves every figure to a tested calculator.</p>
+    <div class="ask-prompts" id="ask-prompts"></div>
+    <div id="answer" aria-live="polite"></div>
+    <p class="footnote">The finished assistant would call authorised tools. Figures come from tested calculators, never from the model.</p>
+  </dialog>
+
+  <script>
+    let currentRoute = 'home';
+    let currentRecord = 'meditations';
+    let revealed = false;
+    let publicPreview = false;
+
+    const $ = id => document.getElementById(id);
+
+    // Builds an element with text-only content; never parses markup.
+    function el(tag, props = {}, ...children) {
+      const node = document.createElement(tag);
+      for (const [key, value] of Object.entries(props)) {
+        if (key === 'class') node.className = value;
+        else if (key === 'text') node.textContent = value;
+        else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+        else node.setAttribute(key, value);
+      }
+      node.append(...children.filter(child => child !== null && child !== undefined && child !== false));
+      return node;
+    }
+    const money = value => el('strong', { 'data-money': value }, '••••');
+
+    // vis: 'PUBLIC' or 'ADMIN ONLY'. A link is private when it says so or
+    // when its target is private, even if both ends are public records.
+    const RECORDS = {
+      meditations: {
+        eyebrow: 'BOOK // SEMANTIC NODE',
+        vis: 'PUBLIC',
+        title: 'Meditations — Marcus Aurelius',
+        copy: 'Personal reading notes on Stoic resilience, dichotomy of control, and maintaining clarity under operational pressure.',
+        source: 'books.id #08 (v1)',
+        time: 'OCCURRED · 2025-04',
+        links: [
+          { label: '@Deterministic Systems (Belief)', rel: 'inspired_by · CONFIRMED', target: 'stoicism' },
+          { label: '@Tokyo Late-Night Walk (Note)', rel: 'mentions · CONFIRMED', target: 'tokyo' }
+        ]
+      },
+      stoicism: {
+        eyebrow: 'BELIEF // SEMANTIC NODE',
+        vis: 'PUBLIC',
+        title: 'Deterministic Systems Over Guesswork',
+        copy: 'Anything reproducible—a balance, a tax band, a projection—must be rules over rows. A model may explain and navigate, never invent.',
+        source: 'beliefs.id #03 (v1)',
+        time: 'ONGOING · 2026-09',
+        links: [
+          { label: '@Meditations (Book)', rel: 'inspired_by · CONFIRMED', target: 'meditations' },
+          { label: '@Credit Utilisation Rule (Finance)', rel: 'same_topic · INFERRED', target: 'barclaycard', admin: true }
+        ]
+      },
+      sony: {
+        eyebrow: 'EDC GEAR // INVENTORY NODE',
+        vis: 'PUBLIC',
+        title: 'Sony A7C II + FE 35mm f/1.4 GM',
+        copy: 'Owned · Primary everyday-carry camera setup. Weight: 514g. Photo EXIF GPS suggests links to travel cities; they stay inferred until confirmed.',
+        source: 'inventory_items.id #14',
+        time: 'OCCURRED · 2024-11',
+        links: [
+          { label: '@Tokyo (18 Photos)', rel: 'located_in · INFERRED', target: 'tokyo' },
+          { label: '@Camera Purchase (Ledger)', rel: 'purchased_in · CONFIRMED', target: 'barclaycard', admin: true }
+        ]
+      },
+      tokyo: {
+        eyebrow: 'PLACE // TRAVEL ATLAS',
+        vis: 'PUBLIC',
+        title: 'Tokyo, Japan (35.67°N, 139.65°E)',
+        copy: 'Visited city in the Travel Atlas. Neighbourhood notes and 18 street photos link here.',
+        source: 'visited_cities #21',
+        time: 'OCCURRED · 2024-03 VISIT',
+        links: [
+          { label: '@Sony A7C II (18 Photos)', rel: 'located_in · INFERRED', target: 'sony' },
+          { label: '@Japan in Spring (Trip Idea)', rel: 'planned_for · CONFIRMED', target: 'trip' }
+        ]
+      },
+      trip: {
+        eyebrow: 'TRIP IDEA // PLANNED',
+        vis: 'PUBLIC',
+        title: 'Japan in Spring — Tokyo to Kyoto',
+        copy: 'An idea, not a booking. The year, dates, budget and leave year are unresolved, and nothing is assumed.',
+        source: 'trip idea (sample)',
+        time: 'PLANNED · APRIL, YEAR TO CONFIRM',
+        links: [
+          { label: '@Tokyo (Place)', rel: 'planned_for · CONFIRMED', target: 'tokyo' },
+          { label: '@Spend Scenario (Ledger)', rel: 'tested_against · ADMIN', target: 'scenario', admin: true }
+        ]
+      },
+      scenario: {
+        eyebrow: 'LEDGER // SPEND SCENARIO',
+        vis: 'ADMIN ONLY',
+        title: 'One-Off Spend Scenario',
+        copy: "Tests a hypothetical spend against this month's free-to-spend. It is a current observation, not a forecast for April.",
+        source: 'run_spend_scenario (proposed tool)',
+        time: 'CURRENT MONTH · NOV 2026',
+        links: [
+          { label: '@Japan in Spring (Trip Idea)', rel: 'tests · CONFIRMED', target: 'trip' },
+          { label: '@Barclaycard Alert', rel: 'shares_inputs · CONFIRMED', target: 'barclaycard' }
+        ]
+      },
+      barclaycard: {
+        eyebrow: 'LEDGER // PRIVATE ACCOUNT',
+        vis: 'ADMIN ONLY',
+        title: 'Barclaycard Platinum (TrueLayer)',
+        copy: 'Credit limit £8,000. Current balance £2,720 (34.0% utilisation — surfaces the >30% credit utilisation alert on Finance Home).',
+        source: 'finance_bank_accounts #02',
+        time: 'RECORDED · SAMPLE SYNC TIME',
+        links: [
+          { label: '@Deterministic Systems (Belief)', rel: 'same_topic · INFERRED', target: 'stoicism' },
+          { label: '@Spend Scenario', rel: 'shares_inputs · CONFIRMED', target: 'scenario' }
+        ]
+      },
+      moneyhub: {
+        eyebrow: 'LEDGER // MONEY HUB ENGINE',
+        vis: 'ADMIN ONLY',
+        title: 'London vs Berlin (2026 Reference Tax)',
+        copy: 'Compares net take-home and 8-category monthly surplus across 41 cities using tested UK 2026/27 and German §32a EStG calculators.',
+        source: 'src/lib/finance/money-hub.ts',
+        time: 'SNAPSHOT · 2026-11',
+        links: [
+          { label: '@Berlin (Destination)', rel: 'compares · CONFIRMED', target: 'berlin' }
+        ]
+      },
+      berlin: {
+        eyebrow: 'PLACE // MONEY HUB DESTINATION',
+        vis: 'ADMIN ONLY',
+        title: 'Berlin, Germany (52.52°N, 13.40°E)',
+        copy: 'Destination city in the Money Hub comparison. Net pay at the sample salary comes from the tested German §32a EStG calculator.',
+        source: 'src/lib/finance/money-hub.ts',
+        time: 'SNAPSHOT · 2026-11',
+        links: [
+          { label: '@London Baseline (Money Hub)', rel: 'compares · CONFIRMED', target: 'moneyhub' }
+        ]
+      }
+    };
+
+    const isPrivateRecord = key => RECORDS[key]?.vis === 'ADMIN ONLY';
+    const isPrivateLink = link => Boolean(link.admin) || isPrivateRecord(link.target);
+    const inspectorDocked = () => getComputedStyle($('inspector')).display !== 'none';
+
+    function syncMoneyDisplay() {
+      document.querySelectorAll('[data-money]').forEach(node => {
+        node.textContent = revealed ? node.dataset.money : '••••';
+      });
+      $('figures-top-btn').textContent = revealed ? 'Figures: Shown' : 'Figures: Hidden (••••)';
+      $('figures-btn').textContent = revealed ? 'Hide sample figures' : 'Reveal sample figures';
+    }
+
+    function renderInspector(root, record) {
+      const links = record.links.filter(link => !(publicPreview && isPrivateLink(link)));
+      root.replaceChildren(
+        el('div', { class: 'insp-head' },
+          el('p', { class: 'eyebrow', text: record.eyebrow }),
+          el('span', { class: 'badge ' + (record.vis === 'ADMIN ONLY' ? 'amber' : 'phosphor'), text: record.vis })
+        ),
+        el('h2', { class: 'insp-title', text: record.title }),
+        el('p', { class: 'insp-copy', text: record.copy }),
+        el('div', { class: 'inspector-rule' }),
+        el('p', { class: 'eyebrow', text: 'PROVENANCE & TIME' }),
+        el('dl', { class: 'insp-meta' },
+          el('div', {}, el('dt', { text: 'Source' }), el('dd', { text: record.source })),
+          el('div', {}, el('dt', { text: 'Time kind' }), el('dd', { text: record.time }))
+        ),
+        el('div', { class: 'inspector-rule' }),
+        el('p', { class: 'eyebrow', text: `CONNECTED NODES (${links.length})` }),
+        links.length
+          ? el('div', {}, ...links.map(link => el('button', {
+              class: 'backlink-btn',
+              type: 'button',
+              onclick: () => inspectRecord(link.target)
+            }, el('span', { text: link.label }), el('span', { text: link.rel + ' ↗' }))))
+          : el('p', { class: 'insp-copy', text: 'No connections visible in this view.' }),
+        el('button', { class: 'primary insp-ask', type: 'button', onclick: () => openAsk() },
+          'Ask about this record ', el('span', { text: '↗' }))
+      );
+    }
+
+    // reveal: open the dialog when the rail is not shown (a user selection,
+    // not a background refresh).
+    function inspectRecord(key, reveal = false) {
+      if (!RECORDS[key] || (publicPreview && isPrivateRecord(key))) return;
+      currentRecord = key;
+      renderInspector($('inspector-body'), RECORDS[key]);
+      renderInspector($('inspector-dialog-body'), RECORDS[key]);
+      syncMoneyDisplay();
+      const dialog = $('inspector-dialog');
+      if (reveal && !inspectorDocked() && !dialog.open) dialog.showModal();
+    }
+
+    function setRoute(route, focus = true) {
+      const allowed = ['home', 'finance', 'travel', 'library'];
+      const target = allowed.includes(route) ? route : 'home';
+      currentRoute = (publicPreview && target === 'finance') ? 'home' : target;
+
+      document.querySelectorAll('.page').forEach(page => { page.hidden = page.id !== currentRoute; });
+      document.querySelectorAll('.rail [data-route], .mobile-nav [data-route]').forEach(button => {
+        if (button.dataset.route === currentRoute) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+      });
+
+      const badgeMap = { home: 'NEXUS.CORE', finance: 'LEDGER.FINANCE', travel: 'ATLAS.TRAVEL', library: 'LIBRARY.ARCHIVE' };
+      $('active-node-badge').textContent = badgeMap[currentRoute];
+      if (focus) { $('main').focus({ preventScroll: true }); window.scrollTo(0, 0); }
+    }
+
+    const closeDialog = id => { const dialog = $(id); if (dialog.open) dialog.close(); };
+
+    const PROMPTS = {
+      japan: {
+        admin: true,
+        question: 'Could I take a week in Japan in April?',
+        heading: 'First, which April?',
+        body: () => [
+          "If you mean April 2027, it falls in a later leave year than today, so this year's ",
+          el('strong', { text: '14.0 days' }),
+          " can't be assumed. I'd check that year's allowance and bookings, and the funds available before departure. Today's free-to-spend (",
+          money('£1,420.50'),
+          ') is a current observation, not a forecast for April.'
+        ],
+        cards: [
+          { badge: 'DATES & LEAVE', tone: 'amber', title: 'Year not confirmed', text: 'Leave depends on the allowance year covering the dates, existing bookings and bank holidays.' },
+          { badge: 'TRIP BUDGET', tone: 'amber', title: 'Not recorded', text: 'Add your own estimate. Prices are never invented.' },
+          { badge: 'LINKED RECORDS', title: 'Tokyo + @Sony A7C II', text: '4 saved place notes and 18 photos.' }
+        ],
+        actions: [
+          { label: 'Open the trip workspace ↗', run: () => { closeDialog('ask-dialog'); setRoute('travel'); inspectRecord('trip'); } },
+          { label: 'Open the spend simulator ↗', admin: true, run: () => { closeDialog('ask-dialog'); setRoute('finance'); } }
+        ]
+      },
+      tokyo: {
+        question: 'Find public records about Tokyo',
+        heading: '3 public records mention Tokyo.',
+        body: () => ['Matched by title and full-text search, with no model involved. The public view never searches private plans, leave or budgets.'],
+        cards: [
+          { badge: 'PLACE', title: 'Tokyo, Japan', text: 'Visited · March 2024' },
+          { badge: 'NOTE', title: 'Tokyo late-night walk', text: 'Mentions @Meditations' },
+          { badge: 'TRIP IDEA', title: 'Japan in spring', text: 'Dates still to decide' }
+        ],
+        actions: [
+          { label: 'Inspect Tokyo ↗', run: () => { closeDialog('ask-dialog'); inspectRecord('tokyo', true); } },
+          { label: 'Open Travel ↗', run: () => { closeDialog('ask-dialog'); setRoute('travel'); inspectRecord('tokyo'); } }
+        ]
+      },
+      stoic: {
+        question: 'What connects my beliefs to Meditations?',
+        heading: '2 confirmed links connect @Meditations to your notes.',
+        body: () => ['Found by following confirmed links from the book record. Inferred links stay as suggestions until you confirm them.'],
+        cards: [
+          { badge: 'BELIEF', title: 'Deterministic systems over guesswork', text: 'inspired_by · confirmed' },
+          { badge: 'NOTE', title: 'Tokyo late-night walk', text: 'mentions · confirmed' }
+        ],
+        actions: [
+          { label: 'Inspect @Meditations ↗', run: () => { closeDialog('ask-dialog'); inspectRecord('meditations', true); } }
+        ]
+      }
+    };
+
+    function renderAsk(key) {
+      const available = Object.entries(PROMPTS).filter(([, prompt]) => !(publicPreview && prompt.admin));
+      const activeKey = available.some(([k]) => k === key) ? key : available[0][0];
+      const prompt = PROMPTS[activeKey];
+
+      $('ask-prompts').replaceChildren(...available.map(([k, p]) => el('button', {
+        class: 'studio-pill',
+        type: 'button',
+        'aria-pressed': String(k === activeKey),
+        onclick: () => renderAsk(k)
+      }, p.question)));
+
+      $('answer').replaceChildren(
+        el('p', { class: 'eyebrow answer-tag', text: 'SCRIPTED EXAMPLE // NO MODEL OR DATABASE CONNECTED' }),
+        el('h3', { class: 'answer-heading', text: prompt.heading }),
+        el('p', { class: 'answer-body' }, ...prompt.body()),
+        el('div', { class: 'answer-cards' }, ...prompt.cards.map(card => el('div', {},
+          el('span', { class: 'badge ' + (card.tone || ''), text: card.badge }),
+          el('strong', { text: card.title }),
+          el('p', { text: card.text })
+        ))),
+        el('div', { class: 'answer-actions' }, ...prompt.actions
+          .filter(action => !(publicPreview && action.admin))
+          .map((action, index) => el('button', { class: index === 0 ? 'primary' : '', type: 'button', onclick: action.run }, action.label)))
+      );
+      syncMoneyDisplay();
+    }
+
+    function openAsk(key) {
+      closeDialog('inspector-dialog');
+      renderAsk(key || (publicPreview ? 'tokyo' : 'japan'));
+      const dialog = $('ask-dialog');
+      if (!dialog.open) dialog.showModal();
+    }
+
+    // Event bindings
+    document.querySelectorAll('[data-route]').forEach(button => button.addEventListener('click', () => setRoute(button.dataset.route)));
+    document.querySelectorAll('[data-detail]').forEach(button => button.addEventListener('click', () => inspectRecord(button.dataset.detail, true)));
+    document.querySelectorAll('[data-ask]').forEach(button => button.addEventListener('click', () => openAsk()));
+    document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => closeDialog(button.dataset.close)));
+    $('identity-link').addEventListener('click', event => { event.preventDefault(); setRoute('home'); });
+
+    $('figures-top-btn').addEventListener('click', () => { revealed = !revealed; syncMoneyDisplay(); });
+    $('figures-btn').addEventListener('click', () => { revealed = !revealed; syncMoneyDisplay(); });
+
+    $('sim-slider').addEventListener('input', event => {
+      const spend = Number(event.target.value);
+      const remaining = 1420.50 - spend;
+      const gbp = value => '£' + value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      $('sim-spend').dataset.money = gbp(spend);
+      $('sim-remaining').dataset.money = remaining < 0 ? '−' + gbp(Math.abs(remaining)) : gbp(remaining);
+      const badge = $('sim-badge');
+      if (remaining < 0) {
+        badge.textContent = 'EXCEEDS THIS MONTH';
+        badge.className = 'badge amber';
+      } else {
+        badge.textContent = 'WITHIN THIS MONTH';
+        badge.className = 'badge phosphor';
+      }
+      syncMoneyDisplay();
+    });
+
+    // Studio Bar Controls (Width presets, Theme, Audience)
+    document.querySelectorAll('[data-set-device]').forEach(button => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('[data-set-device]').forEach(other => other.setAttribute('aria-pressed', 'false'));
+        button.setAttribute('aria-pressed', 'true');
+        const width = Number(button.dataset.setDevice);
+        $('stage').style.maxWidth = width === 1440 ? '100%' : width + 'px';
+      });
+    });
+
+    $('theme-btn').addEventListener('click', event => {
+      const root = document.documentElement;
+      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      event.target.textContent = next === 'dark' ? 'Theme: Obsidian' : 'Theme: Daylight';
+      readPalette();
+    });
+
+    $('audience-btn').addEventListener('click', event => {
+      publicPreview = !publicPreview;
+      document.querySelectorAll('.private-only').forEach(node => { node.hidden = publicPreview; });
+      $('audience-label').textContent = publicPreview ? 'PUBLIC PREVIEW (ANON)' : 'ADMIN · SIGNED IN';
+      event.target.textContent = publicPreview ? 'Audience: Public' : 'Audience: Private (Admin)';
+      $('dock-question').textContent = publicPreview ? 'Find public records about Tokyo' : 'Could I take a week in Japan in April?';
+      $('hero-ask-label').textContent = publicPreview ? 'Search public records' : 'Ask about my plans';
+      closeDialog('inspector-dialog');
+      closeDialog('ask-dialog');
+      setRoute(currentRoute, false);
+      inspectRecord(publicPreview && isPrivateRecord(currentRecord) ? 'meditations' : currentRecord);
+    });
+
+    document.addEventListener('keydown', event => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        if (!$('ask-dialog').open) openAsk();
+      }
+    });
+
+    // =========================================================================
+    // 3D SEMANTIC CONSTELLATION CANVAS (From feat/redesign-phase0, styled for Codex)
+    // =========================================================================
+    const canvas = $('nexus-canvas');
+    const ctx = canvas.getContext('2d');
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let rotY = 0.35, rotX = 0.18, dragging = false, moved = 0, lx = 0, ly = 0;
+    let orbitPaused = motionQuery.matches;
+    let palette = {};
+
+    const CLUSTERS = [
+      { name: 'PLACES (24)', colorVar: '--sky', cx: -0.42, cy: -0.22, cz: 0.2, key: 'tokyo' },
+      { name: 'BOOKS (42)', colorVar: '--lavender', cx: 0.42, cy: -0.18, cz: -0.2, key: 'meditations' },
+      { name: 'PLANS & LEDGER', colorVar: '--accent', cx: 0.0, cy: 0.36, cz: 0.3, key: 'scenario', admin: true },
+      { name: 'EDC GEAR (59)', colorVar: '--amber', cx: -0.32, cy: 0.24, cz: -0.32, key: 'sony' },
+      { name: 'BELIEFS (31)', colorVar: '--accent', cx: 0.34, cy: 0.22, cz: 0.12, key: 'stoicism' }
+    ];
+
+    // Seeded so the sample layout is identical on every load.
+    function mulberry32(seed) {
+      return function () {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+    const rand = mulberry32(20261108);
+
+    const POINTS = [];
+    CLUSTERS.forEach(cluster => {
+      for (let i = 0; i < 36; i++) {
+        const r = 0.17 * Math.cbrt(rand());
+        const theta = rand() * Math.PI * 2;
+        const phi = Math.acos(2 * rand() - 1);
+        POINTS.push({
+          x: cluster.cx + r * Math.sin(phi) * Math.cos(theta),
+          y: cluster.cy + r * Math.sin(phi) * Math.sin(theta),
+          z: cluster.cz + r * Math.cos(phi),
+          colorVar: cluster.colorVar,
+          isHub: i === 0,
+          label: i === 0 ? cluster.name : null,
+          key: cluster.key,
+          admin: Boolean(cluster.admin)
+        });
+      }
+    });
+
+    let projectedHubs = [];
+
+    function readPalette() {
+      const styles = getComputedStyle(document.documentElement);
+      ['--sky', '--lavender', '--accent', '--amber', '--muted'].forEach(name => {
+        palette[name] = styles.getPropertyValue(name).trim();
+      });
+    }
+
+    function syncOrbitButton() {
+      $('orbit-btn').textContent = orbitPaused ? 'Resume orbit' : 'Pause orbit';
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+    }
+
+    canvas.addEventListener('pointerdown', event => {
+      dragging = true;
+      moved = 0;
+      lx = event.clientX;
+      ly = event.clientY;
+    });
+    window.addEventListener('pointermove', event => {
+      if (!dragging) return;
+      moved += Math.abs(event.clientX - lx) + Math.abs(event.clientY - ly);
+      rotY += (event.clientX - lx) * 0.007;
+      rotX = Math.max(-0.9, Math.min(0.9, rotX + (event.clientY - ly) * 0.007));
+      lx = event.clientX;
+      ly = event.clientY;
+    });
+    window.addEventListener('pointerup', event => {
+      if (!dragging) return;
+      dragging = false;
+      if (moved > 6) return; // a drag, not a click
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const px = (event.clientX - rect.left) * dpr;
+      const py = (event.clientY - rect.top) * dpr;
+      for (const hub of projectedHubs) {
+        if (Math.hypot(hub.sx - px, hub.sy - py) < 28 * dpr) {
+          inspectRecord(hub.key, true);
+          break;
+        }
+      }
+    });
+
+    $('orbit-btn').addEventListener('click', () => { orbitPaused = !orbitPaused; syncOrbitButton(); });
+    motionQuery.addEventListener('change', () => { orbitPaused = motionQuery.matches; syncOrbitButton(); });
+
+    function drawConstellation() {
+      if (!dragging && !orbitPaused) rotY += 0.002;
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.width, H = canvas.height;
+      if (W && H) {
+        ctx.clearRect(0, 0, W, H);
+        const scale = Math.min(W, H) * 0.43;
+        const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+        const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+
+        const projected = POINTS
+          .filter(point => !(publicPreview && point.admin))
+          .map(point => {
+            const x1 = point.x * cosY - point.z * sinY;
+            const z1 = point.x * sinY + point.z * cosY;
+            const y2 = point.y * cosX - z1 * sinX;
+            const z2 = point.y * sinX + z1 * cosX;
+            return { ...point, sx: W / 2 + x1 * scale, sy: H / 2 + y2 * scale, sz: z2 };
+          })
+          .sort((a, b) => a.sz - b.sz);
+
+        projectedHubs = projected.filter(point => point.isHub);
+
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = palette['--muted'];
+        ctx.lineWidth = 1 * dpr;
+        ctx.beginPath();
+        for (let i = 0; i < projectedHubs.length; i++) {
+          for (let j = i + 1; j < projectedHubs.length; j++) {
+            ctx.moveTo(projectedHubs[i].sx, projectedHubs[i].sy);
+            ctx.lineTo(projectedHubs[j].sx, projectedHubs[j].sy);
+          }
+        }
+        ctx.stroke();
+
+        projected.forEach(point => {
+          ctx.globalAlpha = Math.max(0.2, Math.min(1, 0.6 + point.sz * 0.45));
+          ctx.fillStyle = palette[point.colorVar];
+          ctx.beginPath();
+          ctx.arc(point.sx, point.sy, (point.isHub ? 5.5 : 2.1) * dpr, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (point.isHub && point.label) {
+            ctx.globalAlpha = 0.95;
+            ctx.font = `700 ${10.5 * dpr}px "Space Mono", monospace`;
+            ctx.fillText(point.label, point.sx + 9 * dpr, point.sy + 3.5 * dpr);
+          }
+        });
+        ctx.globalAlpha = 1;
+      }
+      requestAnimationFrame(drawConstellation);
+    }
+
+    readPalette();
+    syncOrbitButton();
+    setRoute('home', false);
+    inspectRecord('meditations');
+    syncMoneyDisplay();
+    new ResizeObserver(resizeCanvas).observe(canvas);
+    requestAnimationFrame(drawConstellation);
+  </script>
+</body>
+</html>

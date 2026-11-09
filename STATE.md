@@ -1,53 +1,41 @@
 # State
 
-Updated: 2026-11-06 · Branch: `main` · HEAD `ea8b9640` (Money Hub), pushed to origin/main.
-Money Hub (`ea8b9640`, Pages run `42102041607`) is pushed and deployed; the live bundle ships its chunk, and signed-in production is unchecked. The Tax Calculator rework (`6308e148`, Pages run `41902130209`), its one-chart follow-up (`8113b70d`, run `41987157028`), the Pension paid by choice (`cccfb9bd`, run `41987923144`) and the Marginal rate rename (`1f43cf26`, run `42089880935` attempt 2, after an Actions billing block was cleared) are pushed and deployed; signed-in production is unchecked. The tax-code allowance fix (`5db86bd6`, Pages run `41896520385`), finance-session (`033a6583`, run `41895639334`), payslip fix (`3812d339`, run `41894364229`) and merchant-logo-cache v16 (`3394e2e9`, run `41800729607`, 67 cached logos) are pushed and deployed. Other sessions share this tree.
+Updated: 2026-11-09 · Branch: `feat/redesign-phase0` · Worktree: `/tmp/dhyan-redesign-phase0` · Base `e64741b2` (`origin/main`) · Nothing committed, pushed or deployed.
+
+Phase 1 of the workspace redesign is in the worktree tree, uncommitted: full-width (`--page-max: 100vw`) adaptive workspace shell that is 2 columns by default (`WorkspaceRail` replacing `NavMenu` on `>=768px` with `Space Mono` section headings/labels and display-size toggle + full-width `<main>`, `data-inspector="closed"`) and opens the 3rd column (`WorkspaceInspector`, `data-inspector="open"` on `>=1280px`×`600px` or modal sheet below) only when a card, poster, country, timeline milestone, or 3D node is actively selected, collapsing back to 2 columns on `×` or `Escape`; plus `CommandDock` (`⌘K`), `Space Mono` mapped to `fontFamily.mono` in `tailwind.config.ts`, standalone PWA manifest, and Home `Overview` mode (`SemanticConstellation` 3D cluster graph, 4-tile "At a glance" strip, and "Continue exploring" record rows alongside `Experience & CV` and `Biography & Projects` tabs).
+
+## Closed 2026-11-09 (in tree, uncommitted)
+
+- **On-demand 3rd-column `WorkspaceInspector` (`data-inspector="open"` / `"closed"`) & `Space Mono` rail typography**: The workspace grid defaults to 2 columns (`WorkspaceRail` at `13.25rem` + full-width `<main>`) when idle (`!hasCustomTarget && !dockedDetail`). `WorkspaceRail` renders its `SECTIONS` heading and uppercase section labels in `Space Mono`, and `tailwind.config.ts` maps `fontFamily.mono` to `Space Mono`. Clicking any Collection or EDC card (`CardDetailDialog`), Watchlist item (`WatchlistDetailDialog`), Travel country (`TravelPage`), Home timeline milestone, or 3D cluster node (`Index`) opens `WorkspaceInspector` in the 3rd column on `>=1280px`×`600px` (or as a modal sheet below that size) instead of a centered popup dialog, and pressing `×` or `Escape` clears the selection and collapses the grid back to 2 columns.
+- **Worktree font loading**: `vite.config.ts` adds the resolved `node_modules` path to `server.fs.allow`. The worktree's `node_modules` is a symlink to the main checkout, and Vite was refusing every `@fontsource` `.woff2`, so Doto and Space Mono both fell back to system Menlo on `:8081`. Both now return HTTP 200 (curl-checked). This only affects the dev server; `npm run build` bundles the fonts either way.
 
 ## In progress
 
-- New-tab bank connection (uncommitted, not pushed, not deployed, browser-unverified): on a computer, "Connect Another Bank" opens TrueLayer consent in a new tab (`connectTrueLayer({ newTab })` in `useTrueLayer.ts`), falling back to same-tab when the popup is blocked. Phones and tablets (`(pointer: coarse)`) and the first bank always use the same tab, since the bank app returns in a fresh tab and iOS may pause the starting tab (decision recorded in `REHAUL_HISTORY.md`). OAuth state is one localStorage key per state (`truelayer-oauth-state:<state>`), pruned at 10 minutes on save, and a callback removes only its own key; the server check (hashed, profile-bound, single-use, 10-minute TTL) is unchanged. The callback announces `linked` after the code exchange and `synced` after the first sync on BroadcastChannel; every `useTrueLayer` instance listens for its lifetime, and the ledger refetch runs once per tab. A reviewer pass found no bugs and four risks, all four fixed. Checks 2026-11-06: lint 0/0, typecheck, `typecheck:functions` and build pass; 200 tests across 13 finance files pass (`truelayer-oauth.test.ts` now 6). Full `npm test` and ship-check not run. `truelayer-sync` has a comment-only edit, so no redeploy is needed. Unverified: desktop new-tab round trip, cross-tab refresh, Safari, phone app-to-app (Barclaycard). The function accepts only the production origin or localhost as redirect URI, so the phone check needs a deploy first.
-- Money Hub (`ea8b9640`, pushed and deployed via Pages run `42102041607`; signed-in production unchecked): jurisdiction-neutral comparison of 41 cities in 22 countries, 31 tax jurisdictions and 15 currencies. Pay is calculated for England, Scotland, Wales, Northern Ireland, Germany and the Netherlands; every other city takes a user-entered net figure. German tax matches the BMF official calculator at five zvE cases and sits €8 and €14 above BMF Lohnsteuer withholding at €50,000 and €120,000; Dutch tax matches ten rows of the Belastingdienst 2026 white monthly wage tax table within €0.30 a month (no row covers labour-credit segment 1); both are reference tests. Benefits, services and protections (19 entries) cover the six calculated jurisdictions where their sources apply (Wales and NI have no healthcare item; NI sick and parental pay not assessed); user-supplied jurisdictions state not assessed. Housing sensitivity and upfront relocation cash (deposits vs consumed expenses) are built. Two `reviewer` passes ran; findings applied, except de-duplicating the UK pension/loan option lists shared with Tax Calculator and Tax & Income files that carry other sessions' edits, and building provision prose figures from constants. Unverified: dark theme, keyboard and screen reader, signed-in production. Open: scenario persistence, more calculated jurisdictions, sourced city budgets, and whether to fold `MONEY_HUB_BLUEPRINT.md` into `REHAUL_PLAN.md`.
-- Tax Calculator: `6308e148` (Standard/Yours, pension as a share, reviewed by `reviewer`) and the one-chart follow-up (`TaxCurveChart.tsx`: share kept and next-pound loss on one % axis, take-home £ on hover, replacing the Marginal / Take-home / Take-home % switch) are pushed; not yet checked signed in on production. Standard now has a Pension paid by choice (relief at source by default).
-- Parallel sessions' `DebtFormDialog`, `PillSwitch` and other surface edits remain uncommitted in the working tree; the Money Hub commit left them out.
-- Finance-session behaviour was owner-tested as admin; automation has not exercised the failure boundary or Watchlist edit write-back.
+- **Redesign Phase 1 (uncommitted in `/tmp/dhyan-redesign-phase0`, not pushed, not deployed)**: `AppShell`, `Header`, `Footer`, `WorkspaceRail`, `WorkspaceInspector`, `CommandDock`, `WorkspaceInspectorContext`, `SemanticConstellation`, `CardDetailDialog`, `WatchlistDetailDialog`, `TravelPage`, `Index.tsx`, `Index.css`, `index.css`, `tailwind.config.ts`, `src/theme/responsive.css`, `src/theme/surfaces.css`, and `public/manifest.webmanifest`.
+- **Finance edits in main checkout (`/Users/dhyanshyam/Projects/DShyam3.github.io`, uncommitted)**: `useTrueLayer.ts` new-tab bank connection with `truelayer-oauth.test.ts`, `DebtFormDialog`, `PillSwitch`, and other surface edits from parallel sessions remain untouched in the main checkout.
+- **Money Hub (`ea8b9640`) & Tax Calculator (`6308e148`, `8113b70d`, `cccfb9bd`, `1f43cf26`)**: live on `main`; signed-in production verification still open.
 
 ## Checks
 
 | Check | Date | Evidence / result |
 |---|---|---|
-| Lint | 2026-11-06 | Pass, 0 errors and 0 warnings (`npm run lint`) |
-| Typecheck | 2026-11-06 | Pass (`npm run typecheck`) |
-| Functions typecheck | 2026-11-06 | Pass (`deno check` via `npm run typecheck:functions`) |
-| Tests | 2026-11-05 | 2,402 tests across 70 files pass (`npm test`) after the second review; lint 0/0, app typecheck and build pass |
-| Build | 2026-11-06 | Pass (`npm run build`) |
-| Ship-check | 2026-11-05 | 96/100, Beta, 0 blockers, 1 high: existing possible N+1 in `FinanceDataContext`; Semgrep + OSV ran; `glob`/`minimatch` dependency advisories remain |
-| Graphify | 2026-11-05 | Pass (`graphify update .`: 2,232 nodes, 5,126 edges, 114 communities) |
-| Money Hub browser | 2026-11-05 | Local dev:test stack, seed test admin, desktop 1280 and 375px phone (session-reported): London vs Berlin at £50,000 and 1.15 EUR/GBP gave London £3,293.30/month and Berlin €3,022.23/month on €57,500; New York with USD rate and user net; Berlin at €20,000 shows Midijob message and net input; no horizontal overflow at 375px; no Money Hub console errors. Local stack still lacks `finance_category_rules`. Not verified: dark theme, keyboard and screen reader, signed-in production |
-| Tax code allowance (`5db86bd6`, deployed) | 2026-11-04 | `tax-code` tests, lint and typecheck pass; local browser verified `1063LX` → £10,630 and emergency note |
-| Tax Calculator (session-reported) | 2026-11-05 | One-chart follow-up: lint 0/0, typecheck, 1,965 finance tests and build pass; local browser checked desktop dark and 375px light; signed-in production unverified |
-| Production | 2026-11-03 | Prior anonymous home check only: no console errors, 30 REST reads; signed-in flows unverified |
+| Lint | 2026-11-09 | Pass, 0 errors and 0 warnings (`npm run lint` in `/tmp/dhyan-redesign-phase0`) |
+| Typecheck | 2026-11-09 | Pass (`npm run typecheck` in `/tmp/dhyan-redesign-phase0`) |
+| Functions typecheck | 2026-11-08 | Pass, 19 Deno files (`npm run typecheck:functions` in `/tmp/dhyan-redesign-phase0`) |
+| Tests | 2026-11-09 | Pass, 2,406 tests across 70 test files (`npm test` in `/tmp/dhyan-redesign-phase0`) |
+| Build | 2026-11-09 | Pass (`npm run build` in `/tmp/dhyan-redesign-phase0`) |
+| Ship-check | 2026-11-05 | 96/100, Beta, 0 blockers, 1 high: existing possible N+1 in `FinanceDataContext`; `glob`/`minimatch` advisories remain |
+| Browser | 2026-11-09 | Fonts confirmed served (HTTP 200) after the `server.fs.allow` fix. The 2-column idle state, `Space Mono` rail labels, and on-demand 3rd-column `WorkspaceInspector` (`CardDetailDialog`, `WatchlistDetailDialog`, `TravelPage` country selection, 3D cluster nodes) still need checking in a live browser |
 
 ## Next
 
-1. Commit, push and Pages-deploy the new-tab bank connection (coordinate the shared tree first). Then: on a phone, open the production site, sign in, Connect Another Bank (same tab), choose Barclaycard, approve in the Barclaycard app, and confirm the card appears; on desktop (local or production), link a second bank via "Connect Another Bank", confirm the new tab completes the TrueLayer consent and sync, and the original tab's bank connections refresh without a reload. Both are unverified until this runs.
-2. Tax Calculator: check Standard and Yours signed in on production.
-3. Money Hub: check it signed in on production (cross-currency comparison, Berlin and Amsterdam calculated figures, Hide Figures, a phone width), plus dark theme and keyboard/screen reader; then decide on scenario persistence, more calculated jurisdictions and folding `MONEY_HUB_BLUEPRINT.md` into `REHAUL_PLAN.md`.
-4. Coordinate one committer across the shared checkout; keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
-5. Merchant logos: fix `popworld` (`popworld.cc` wrong icon) and check `revolution-bars` / `vue` in `supabase/functions/merchant-logo-cache/index.ts`, deploy, and run one manual sync.
-6. Signed-in verification: Tax Calculator on production, Student Loan, holiday booking, recurring undismiss, Home Brandfetch logos, Watchlist edits/watched toggles across leave-and-return, sign-out and Cash Flow (including demo Cash Flow reversed labels).
-7. Owner: set hosted pension to salary sacrifice, record SLC's next balance and check the pending top-up; check `1063LX` breakdown in the HMRC app and whether taxable benefits starting November 2026 are payrolled. Cross-year holiday allocation still needs a split rule.
-8. Finish save/reload races and schema reproducibility (`schemas/` composite-key objects). Leave untouched branches alone (`claude/affectionate-lamarr-f2d2cb`, `codex/assistant-integration-2026-11-02`, `origin/claude/net-take-home-tax-f2n71j`).
+1. Verify the 2-column default workspace grid, `Space Mono` section rail labels, and on-demand 3rd-column `WorkspaceInspector` (`data-inspector="open"` on selection, collapse to 2 columns on `×` or `Escape`) across desktop (`>=1280px`×`600px`) and mobile/tablet sheet viewports in a browser, then checkpoint-commit Phase 1 on `feat/redesign-phase0`.
+2. Build Redesign Phase 2 on `feat/redesign-phase0`:
+   - Polymorphic `entity_links` backlink table + RLS migration (`(SELECT public.is_admin())` for writes, public read for non-finance entities) and `@mention` autocomplete when linking records.
+   - Port the `/assistant` SSE edge function and strict allowlist context builder (`assistant-context.ts`) from `codex/assistant-integration-2026-11-02`, wiring optional streaming synthesis into `CommandDock` while keeping local-first search and deterministic readouts working without an API key.
+3. Reconcile and commit the separate uncommitted Finance UI work in `/Users/dhyanshyam/Projects/DShyam3.github.io` (`useTrueLayer.ts`, `DebtFormDialog`, `PillSwitch`) and verify signed-in production flows.
 
 ## Blockers
 
-- Parallel sessions share one checkout: coordinate file ownership before committing. Browser verification requires a connected browser extension.
-- Local stack still lacks the `finance_category_rules` migration (shows load toast locally).
-
-## Open risks
-
-- Warm-up sends ~30 reads on anonymous load, including the full watchlist library (~7,600 episodes); payload unmeasured; `Save-Data` is Chromium-only.
-- Watchlist background re-read can overwrite a concurrent edit; failed first read caches an empty library.
-- Recurring "Show as suggestion again" deletes without confirmation; `MerchantAvatar` uses `rounded-[0.5rem]` and duplicates resolver lookup in `DashboardSurface` and `TransactionsTab`.
-- Carried: four reference tables delete-then-insert; category edits during sync; stalled token refresh; schemas-only rebuild missing composite-key objects; hosted sync, JWT config, `SITE_ORIGIN`, headers, cron/Edge/pg_net and HEIC uploads unverified; advisor warnings (`is_admin` callable by anon/authenticated, leaked-password protection off).
-- Revolut linked 2026-11-06: first sync checked back to 2024-11-16 (not complete), 36 transactions, oldest 2026-07-10; owner to confirm whether the account predates July 2026.
-- Student Loan approximation: pending income-linked interest accrues on the rebuilt balance, not SLC's; a phantom £12 lands October 2026 under net pay. Local `supabase/seed.sql` has 2026/27 Plan 2 threshold at 28,470 vs 29,385 hosted, and a local test profile has `personal_pension_percent = 5`. Keep stash `finance-reconciliation-backup-2026-10-29`.
+- Parallel sessions share `/Users/dhyanshyam/Projects/DShyam3.github.io` and `/tmp/dhyan-redesign-phase0`; coordinate one editor/committer before committing.
+- Local Supabase stack still lacks the `finance_category_rules` migration.
