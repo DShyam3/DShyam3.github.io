@@ -1,12 +1,13 @@
 # State
 
-Updated 2026-11-10 · Branch `main` · HEAD is the "A year in hours" commit, on top of `29630878` (redesign shell merged with origin's phone bank-link fixes). `29630878` is pushed and deployed (Pages run `42827511318`, success). Whether this latest commit is pushed and deployed is **not confirmed in this file** — check `git status -sb` and the Pages run.
+Updated 2026-11-10 · Branch `main` · HEAD is the Beliefs fix `1af8c1b9` plus this docs commit, **committed locally, not pushed**. Origin is at `023f1733` ("A year in hours"), pushed and deployed (Pages run `42829590634`, success), on top of `29630878` (redesign shell). The working tree also holds other sessions' files.
 
 ## In progress
 
 - Redesign shell (7 commits to `85a6f70b`, plus `4b08d53d`) is on `main`, pushed and deployed in `29630878`: workspace rail, inspector, ⌘K palette, one-row phone header and footer, focus return, home-screen icons, logo and broken-image handling. Checked anonymously on the live site 2026-11-10: rail, palette, Links logo plates, touch and manifest icons.
 - Public hub, first piece: Finance's Time Spent moved to Thoughts as "A year in hours" (`/thoughts/year-in-hours`, `src/lib/year-hours.ts`, pinned card via `pinnedCards`); removed from Finance, old address falls back to Tax & Income. Reads no stored data. `reviewer` found no blockers; fixes applied. Unverified: dark theme, screen reader, real phone; slider labels crowd their values at 375px. Not changed: a stale comment in another session's `TaxIncomeSurface.tsx:67`.
-- Public hub, found and open: `beliefs` allows anonymous SELECT in the database (private only in the page; 0 rows on 2026-11-10); Projects has no table, Home shows a placeholder; the biography has no edit form; Thoughts has no stored rows.
+- Beliefs is admin-only in the database, applied to hosted production (`supabase/migrations/20261110120000_beliefs_admin_only_read.sql`, `supabase/schemas/16_beliefs.sql`: public read policy replaced by admin-only, anonymous SELECT revoked). Verified at the database: anonymous REST to `beliefs` returns 401 (42501); `books` still 200; policies and grants read back; migration history shows `20261110120000`. The client gate in `CollectionPage.tsx` is committed (`1af8c1b9`) but **not pushed, not deployed**: the deployed site still runs the old gate, so a signed-out visitor to `/beliefs` sends one refused request, then is redirected. Unverified: the admin's own view of `/beliefs` in a browser (checked at the database only).
+- Public hub, found and open: Projects has no table, Home shows a placeholder; the biography has no edit form; Thoughts has no stored rows. Still to do: visibility controls per collection, new Home/About, Tools/Homelab, Thoughts merge with Beliefs as a private category.
 - Shell unverified: dark theme; real phone and "Add to Home Screen"; screen reader; a real Enter keypress opening the palette from a button; Watchlist episode ticks and image-collection cards signed in; Larger display mode; signed-in production.
 - Shell known and left: ⌘K opens the palette behind the opening splash on `/`; an Inventory row with an unknown category stays hidden after a palette pick; Watchlist posters and EDC cards show no broken-image notice; manifest and `theme-color` are dark (`#080b0a`) while the site opens light; Finance date fields default to "today" in UTC, the wrong day 00:00–01:00 in British Summer Time (GoalsSurface, CreditReportsSection, TransfersSurface, CashFlowSurface, TransactionsTab).
 - Bank link (`e64741b2`, then `13cc7cca` and review follow-up `60de9ebf`, deployed via Pages run `42301589737`): "Connect Another Bank" opens TrueLayer consent in a new tab on computers, phones and tablets (via `/finance?connect_bank=1` plus a one-minute connect intent); the first bank stays in the same tab. Checked only by Playwright emulation against mocks. Unverified on the live site: desktop round trip, cross-tab refresh, Safari, phone app-to-app (Barclaycard).
@@ -20,11 +21,12 @@ Updated 2026-11-10 · Branch `main` · HEAD is the "A year in hours" commit, on 
 
 | Check | Date | Evidence / result |
 |---|---|---|
-| Lint | 2026-11-10 | 0 errors, 0 warnings, clean checkout of the "A year in hours" commit |
-| Typecheck | 2026-11-10 | Pass, same checkout |
+| Lint | 2026-11-10 | 0 errors, 0 warnings, tree as committed in `1af8c1b9` |
+| Typecheck | 2026-11-10 | Pass |
 | Functions typecheck | 2026-11-10 | Pass on `29630878`; not rerun after (no function changed) |
-| Tests | 2026-11-10 | 2,427 tests across 72 files pass, same checkout as Lint |
-| Build | 2026-11-10 | Pass, same checkout as Lint |
+| Tests | 2026-11-10 | 2,427 tests across 72 files pass |
+| Build | 2026-11-10 | Pass |
+| Migration `20261110120000` | 2026-11-10 | `supabase db push` to hosted production; verified by anonymous REST (401, 42501), `books` still 200, policy and grant read-back |
 | Shell browser | 2026-11-10 | Local preview at 1440, 900 and 375px; anonymous on hosted data and signed in as the seed admin on the local stack. Palette keys, focus trap and return, inspector sheet, add and delete a link with a dead icon URL (notice on card and detail), no console errors from the shell (session-reported) |
 | Ship-check | 2026-11-06 | 96/100, Beta, 0 blockers, 1 high: possible N+1 in `FinanceDataContext`. Not rerun for the shell |
 | Graphify | 2026-11-05 | Pass, `graphify update .` (2,232 nodes, 5,126 edges, 114 communities). Not rerun for the shell |
@@ -32,8 +34,8 @@ Updated 2026-11-10 · Branch `main` · HEAD is the "A year in hours" commit, on 
 
 ## Next
 
-1. Confirm the "A year in hours" commit is pushed and deployed, then open `/thoughts` on the live site.
-2. Check the shell signed in on production, on a real phone (including Add to Home Screen), and in dark theme. Then the public hub: owner decides on making `beliefs` admin-only in the database, and on Projects' fields and content.
+1. Push `main` once the owner agrees (carries the Beliefs client gate); after Pages deploys, check `/beliefs` signed out (redirect, no request to `beliefs`) and as the admin in a browser. Then open `/thoughts` on the live site.
+2. Check the shell signed in on production, on a real phone (including Add to Home Screen), and in dark theme. Then the public hub: Projects' fields and content, and visibility controls per collection.
 3. Supabase dashboard: leaked-password protection is still off.
 4. Bank link: on a phone, open production, sign in, tap Connect Another Bank, confirm a new tab reaches TrueLayer, approve in the Barclaycard app, and confirm the card appears and the original tab refreshes; on desktop, the same.
 5. Tax Calculator and Money Hub: check signed in on production. Money Hub: cross-currency, Berlin and Amsterdam figures, Hide Figures, phone width. Then decide scenario persistence and more calculated jurisdictions.

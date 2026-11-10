@@ -112,9 +112,10 @@ same as a record that never had one. An admin also sees "Image no longer loads.
 Edit to replace it." on the card and in the detail. Watchlist posters and EDC
 cards do not show this notice.
 
-Beliefs is private: a visitor who opens it is sent to Home. An admin who reloads
-on Beliefs stays there, because the page waits for the session to load before it
-decides.
+Beliefs is private: only the signed-in administrator can open the page or read
+its entries. The database enforces this as well as the page. A visitor who opens
+it is sent to Home. An admin who reloads on Beliefs stays there, because the page
+waits for the session to load before it decides.
 
 ## Thoughts
 
