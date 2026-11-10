@@ -1,3 +1,4 @@
+import { YearInHoursCard } from '@/features/thoughts/YearInHoursCard';
 import { PenLine } from 'lucide-react';
 import { DetailSection } from '@/components/cards/CardDetailDialog';
 import { uploadPhoto } from '@/lib/storage';
@@ -48,6 +49,9 @@ export const thoughtsCollection: CollectionConfig<ThoughtRow> = {
   },
 
   uploadFile: uploadPhoto,
+
+  // The one thought that is something to use rather than something to read.
+  pinnedCards: () => <YearInHoursCard key="year-in-hours" />,
 
   fields: [
     { name: 'title', label: 'Title', type: 'text', required: true },

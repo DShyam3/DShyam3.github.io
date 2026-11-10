@@ -9,7 +9,7 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { CardGrid } from '@/components/shared/CardGrid';
 import { CountLabel } from '@/components/shared/CountLabel';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCollection } from '../useCollection';
+import { ALL, useCollection } from '../useCollection';
 import { FilterBar } from './FilterBar';
 import { EntityCard, CARD_LAYOUT } from './EntityCard';
 import { EntityFormDialog } from './EntityFormDialog';
@@ -85,6 +85,11 @@ export function CollectionPage<T extends CollectionRow, R>({
   }
 
   const count = items.length;
+  // Pinned cards are not rows, so no search or filter can match them: they
+  // show only when the reader is looking at everything.
+  const narrowed =
+    Boolean(search.trim()) || Object.values(filters).some((value) => value && value !== ALL);
+  const pinnedCards = narrowed ? null : (config.pinnedCards?.() ?? null);
   const noun = count === 1 ? config.noun.singular : config.noun.plural;
 
   const customViewContent = config.customView?.({
@@ -186,6 +191,8 @@ export function CollectionPage<T extends CollectionRow, R>({
                 <Skeleton key={i} className={layout.skeleton} />
               ))}
             </CardGrid>
+          ) : count === 0 && pinnedCards ? (
+            <CardGrid>{pinnedCards}</CardGrid>
           ) : count === 0 ? (
             <div className="py-20 text-center">
               <p className="text-muted-foreground font-serif text-lg italic">
@@ -197,6 +204,7 @@ export function CollectionPage<T extends CollectionRow, R>({
             </div>
           ) : groups ? (
             <div className="space-y-8 pb-4">
+              {pinnedCards ? <CardGrid>{pinnedCards}</CardGrid> : null}
               {groups.map((group) => (
                 <section key={group.key}>
                   <div className="flex items-center gap-4 mb-5">
@@ -211,7 +219,10 @@ export function CollectionPage<T extends CollectionRow, R>({
               ))}
             </div>
           ) : (
-            <CardGrid>{cardsFor(items)}</CardGrid>
+            <CardGrid>
+              {pinnedCards}
+              {cardsFor(items)}
+            </CardGrid>
           )}
         </div>
       )}

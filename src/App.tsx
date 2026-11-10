@@ -52,6 +52,7 @@ import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
 
 const Travel = lazy(() => import('./features/travel/TravelPage'));
+const YearInHours = lazy(() => import('./pages/YearInHours'));
 const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
 
 /** Invisible component that warms every page's code and rows on idle (see useSiteWarmup). */
@@ -157,6 +158,7 @@ const App = () => {
                   <Route path="/books" element={<Books />} />
                   <Route path="/beliefs" element={<Beliefs />} />
                   <Route path="/thoughts" element={<Thoughts />} />
+                  <Route path="/thoughts/year-in-hours" element={<YearInHours />} />
                   <Route element={<WatchlistLayout />}>
                     <Route path="/watchlist" element={<WatchlistNews />} />
                     <Route path="/watchlist/library" element={<Watchlist />} />

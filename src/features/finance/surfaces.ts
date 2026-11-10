@@ -4,7 +4,8 @@
  * Ten top-level tabs was the other half of why finance read as a different
  * product bolted to the site. Nothing is deleted -- the tabs become sections
  * inside a surface, so Budget stops being a destination and becomes part of
- * Spending, and Time Spent becomes a lens on Income.
+ * Spending. (Time Spent has since left Finance for Thoughts, as "A year in
+ * hours": it never read a figure from the ledger.)
  *
  * Each surface is a route, so a view is linkable and the back button works.
  * Code splitting per surface is not here yet -- the page is still one
@@ -18,7 +19,7 @@ export const SURFACES = [
   { key: 'spending', label: 'Spending', tabs: ['transactions', 'budget', 'recurrings', 'transfers'] },
   { key: 'plan', label: 'Plan', tabs: ['cash-flow', 'forecast', 'goals', 'scenarios'] },
   { key: 'wealth', label: 'Wealth', tabs: ['accounts', 'debts', 'student-loan', 'investments', 'retirement'] },
-  { key: 'income', label: 'Income', tabs: ['tax-income', 'time-spent', 'tax-calculator', 'money-hub'] },
+  { key: 'income', label: 'Income', tabs: ['tax-income', 'tax-calculator', 'money-hub'] },
 ] as const;
 
 export type SurfaceKey = (typeof SURFACES)[number]['key'];
@@ -41,7 +42,6 @@ export const TAB_LABELS: Record<TabKey, string> = {
   investments: 'Investments',
   retirement: 'Retirement',
   'tax-income': 'Tax & Income',
-  'time-spent': 'Time Spent',
   'tax-calculator': 'Tax Calculator',
   'money-hub': 'Money Hub',
 };

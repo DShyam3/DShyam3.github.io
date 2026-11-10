@@ -26,7 +26,6 @@ export const sectionChunks = {
   investments: () => import('./tabs/InvestmentsTab'),
   retirement: () => import('./surfaces/RetirementSurface'),
   'tax-income': () => import('./surfaces/TaxIncomeSurface'),
-  'time-spent': () => import('./tabs/TimeSpentTab'),
   'tax-calculator': () => import('./surfaces/TaxCalculatorSurface'),
   'money-hub': () => import('./surfaces/MoneyHubSurface'),
 } satisfies Record<TabKey, () => Promise<unknown>>;

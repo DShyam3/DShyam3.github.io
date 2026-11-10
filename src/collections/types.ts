@@ -279,6 +279,14 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
   /** Extra content in the row above the grid, e.g. a total valuation. */
   summary?: (items: T[], isAdmin: boolean) => ReactNode;
 
+  /**
+   * Cards that are not stored rows, drawn first in the grid: a thought that is
+   * a page of its own, say. Not counted, searched or filtered, so the page
+   * shows them only while no search or filter is narrowing it. Return null
+   * for none.
+   */
+  pinnedCards?: () => ReactNode | null;
+
   /** Contents of the detail dialog, below the shared chrome. */
   renderDetail?: (item: T) => ReactNode;
 

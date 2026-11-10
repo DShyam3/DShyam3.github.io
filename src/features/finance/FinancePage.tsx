@@ -59,7 +59,6 @@ import type {
   RecurringBill,
 } from '@/features/finance/finance-types';
 const RecurringsTab = lazy(() => sectionChunks.recurrings().then(m => ({ default: m.RecurringsTab })));
-const TimeSpentTab = lazy(() => sectionChunks['time-spent']().then(m => ({ default: m.TimeSpentTab })));
 const TransactionsTab = lazy(() => sectionChunks.transactions().then(m => ({ default: m.TransactionsTab })));
 const InvestmentsTab = lazy(() => sectionChunks.investments().then(m => ({ default: m.InvestmentsTab })));
 import { AddRecurringDialog } from '@/features/finance/dialogs/AddRecurringDialog';
@@ -109,9 +108,7 @@ function FinanceView() {
     setMockTransactions,
     setProfileId,
     setRecurrings,
-    setTimeSpentInputs,
     settings,
-    timeSpentInputs,
     profiles,
     netWorthHistory,
   } = useFinanceData();
@@ -807,18 +804,9 @@ function FinanceView() {
           value={formatGBP(results.netTakeHome)}
           tone="neutral"
           detail={`${formatGBP(monthlyIncome)} a month after tax, pension and student loan, modelled from your salary settings`}
-          // Tax & Income shows the package in full just below, so its slot
-          // carries payday instead; Time Spent has no other home for either.
-          aside={
-            activeTab === 'tax-income' ? (
-              <PaydaySummary settings={settings} nextPayday={nextPayday} />
-            ) : (
-              <>
-                <p className="font-sans text-xs uppercase tracking-wider text-muted-foreground">Gross package</p>
-                <p className="font-sans text-lg font-bold tabular-nums">{formatGBP(results.totalPackage)}</p>
-              </>
-            )
-          }
+          // Tax & Income shows the package in full just below, so this slot
+          // carries payday. The other Income sections draw their own hero.
+          aside={<PaydaySummary settings={settings} nextPayday={nextPayday} />}
         />
       );
     }
@@ -1053,18 +1041,6 @@ function FinanceView() {
               onImportHoldings={handleImportHoldings}
               formatGBP={formatGBP}
               bankAccounts={bankAccounts}
-            />
-          )}
-
-          {/* ==========================================
-              TAB 8: TIME SPENT
-              ========================================== */}
-          {activeTab === 'time-spent' && (
-            <TimeSpentTab
-              settings={settings}
-              timeSpentInputs={timeSpentInputs}
-              setTimeSpentInputs={setTimeSpentInputs}
-              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           )}
 

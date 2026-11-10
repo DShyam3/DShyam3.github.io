@@ -256,17 +256,6 @@ export interface CreditBureauConfig {
   gradient: string;
 }
 
-export interface TimeSpentInputs {
-  sleepHoursPerDay: number;
-  commuteDaysPerWeek: number;
-  commuteHoursPerDay: number;
-  gettingReadyHoursPerDay: number;
-  gymDaysPerWeek: number;
-  gymHoursPerSession: number;
-  learningHoursPerWeek: number;
-  friendsHoursPerWeek: number;
-}
-
 export interface TrueLayerConnection {
   id: string;
   provider_id: string;

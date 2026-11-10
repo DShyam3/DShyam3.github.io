@@ -78,7 +78,6 @@ import type {
   RecurringBill,
   RecurringTemplate,
   TaxConfig,
-  TimeSpentInputs,
   UserHoliday,
 } from '@/features/finance/finance-types';
 import {
@@ -260,19 +259,6 @@ function useProvideFinanceData() {
 
   // Data States
   const [settings, setSettings] = useState<FinanceSettings>(() => createDefaultFinanceSettings(ALL_SAVINGS_IDS));
-
-  const [timeSpentInputs, setTimeSpentInputs] = useState(() => {
-    return {
-      sleepHoursPerDay: 8.0,
-      commuteDaysPerWeek: 0,
-      commuteHoursPerDay: 0,
-      gettingReadyHoursPerDay: 1.0,
-      gymDaysPerWeek: 0,
-      gymHoursPerSession: 0,
-      learningHoursPerWeek: 0,
-      friendsHoursPerWeek: 0,
-    };
-  });
 
   const [goals, setGoals] = useState<Goal[]>(() => {
     return [];
@@ -3146,11 +3132,9 @@ function useProvideFinanceData() {
     setSettings,
     setTaxConfig,
     resetTaxConfigs,
-    setTimeSpentInputs,
     settings,
     taxConfig,
     taxConfigs,
-    timeSpentInputs,
   };
 
   return value;
