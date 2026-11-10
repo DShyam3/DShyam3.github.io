@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { consumeTrueLayerOAuthState, rememberTrueLayerOAuthState } from './truelayer-oauth';
+import {
+  consumeTrueLayerConnectIntent,
+  consumeTrueLayerOAuthState,
+  rememberTrueLayerConnectIntent,
+  rememberTrueLayerOAuthState,
+} from './truelayer-oauth';
 
 function createStorage() {
   const values = new Map<string, string>();
@@ -72,5 +77,34 @@ describe('TrueLayer OAuth callback state', () => {
 
     expect(storage.length).toBe(1);
     expect(consumeTrueLayerOAuthState(storage, 'fresh', T0 + 11 * MINUTE)).toBe(true);
+  });
+});
+
+describe('TrueLayer connect intent', () => {
+  it('starts a link once, for a tap in this browser', () => {
+    const storage = createStorage();
+    rememberTrueLayerConnectIntent(storage, T0);
+
+    expect(consumeTrueLayerConnectIntent(storage, T0 + 5_000)).toBe(true);
+    expect(consumeTrueLayerConnectIntent(storage, T0 + 5_000)).toBe(false);
+  });
+
+  it('starts nothing for the address alone', () => {
+    expect(consumeTrueLayerConnectIntent(createStorage(), T0)).toBe(false);
+  });
+
+  it('starts nothing for a tap more than a minute old, and clears it', () => {
+    const storage = createStorage();
+    rememberTrueLayerConnectIntent(storage, T0);
+
+    expect(consumeTrueLayerConnectIntent(storage, T0 + MINUTE + 1)).toBe(false);
+    expect(storage.length).toBe(0);
+  });
+
+  it('starts nothing for a tap dated in the future', () => {
+    const storage = createStorage();
+    rememberTrueLayerConnectIntent(storage, T0 + MINUTE);
+
+    expect(consumeTrueLayerConnectIntent(storage, T0)).toBe(false);
   });
 });

@@ -37,7 +37,7 @@ const TaxCalculatorSurface = lazy(sectionChunks['tax-calculator']);
 const MoneyHubSurface = lazy(sectionChunks['money-hub']);
 const DashboardSurface = lazy(sectionChunks.dashboard);
 import { useTrueLayer } from './useTrueLayer';
-import { announceTrueLayerLink, consumeTrueLayerOAuthState } from './truelayer-oauth';
+import { announceTrueLayerLink, consumeTrueLayerConnectIntent, consumeTrueLayerOAuthState, TRUE_LAYER_CONNECT_PARAM } from './truelayer-oauth';
 import { useSpendingLedger } from './useSpendingLedger';
 import { useRecurringEvidence } from './useRecurringEvidence';
 import { detectRecurringPayments, candidateMatchesBill, isRecurringPaidForPeriod, assignPaidPeriod, tickRecurring, untickRecurring, payRecurringEarly, coverageAfterEdit, type RecurringCandidate } from '@/lib/finance/recurring-detection';
@@ -332,6 +332,13 @@ function FinanceView() {
     const code = urlParams.get('code');
     if (code) {
       handleTrueLayerCallback(code, urlParams.get('state'));
+    } else if (urlParams.has(TRUE_LAYER_CONNECT_PARAM)) {
+      // A tab opened by "Connect Another Bank" (useTrueLayer). The parameter
+      // goes through the router, so no later navigation brings it back, and
+      // the link starts only when a tap in this browser asked for it.
+      navigate(window.location.pathname, { replace: true });
+      if (consumeTrueLayerConnectIntent(window.localStorage)) void connectTrueLayer();
+      else checkTrueLayerConnection();
     } else {
       checkTrueLayerConnection();
     }
