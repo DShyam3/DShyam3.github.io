@@ -19,8 +19,8 @@ import type { CollectionConfig, CollectionRow } from './types';
  * Adding a collection: write `src/collections/<name>.tsx`, add it here, add a
  * route in App.tsx, and add the schema file in `supabase/schemas/`.
  *
- * The pages import their own config directly. The one reader is
- * `useSiteWarmup`, which prefetches every collection listed here -- so a
+ * The pages import their own config directly. The registry is read by Home,
+ * the command palette and `useSiteWarmup`, which prefetches every collection listed here -- so a
  * collection left out of this list loads cold on its first visit.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- the registry holds

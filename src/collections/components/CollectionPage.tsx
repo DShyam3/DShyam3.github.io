@@ -22,11 +22,27 @@ interface CollectionPageProps<T extends CollectionRow, R> {
 /**
  * The whole page for any collection: header, filter bar, count, add button,
  * grid, footer. Pages in src/pages/ become a one-line render of this.
+ *
+ * An admin-only collection (Beliefs) is gated here, before the page and its
+ * query mount: the database refuses that read to anyone else, so a visitor
+ * who is about to be redirected must not send it. While the session is still
+ * being read, nobody is an admin yet: redirecting then sent a signed-in admin
+ * home on every reload of the page.
  */
 export function CollectionPage<T extends CollectionRow, R>({
   config,
 }: CollectionPageProps<T, R>) {
   const { isAdmin, isAuthLoading } = useAuth();
+  if (config.adminOnly && !isAdmin) {
+    return isAuthLoading ? null : <Navigate to="/" replace />;
+  }
+  return <CollectionPageView config={config} />;
+}
+
+function CollectionPageView<T extends CollectionRow, R>({
+  config,
+}: CollectionPageProps<T, R>) {
+  const { isAdmin } = useAuth();
   const {
     items,
     groups,
@@ -76,13 +92,6 @@ export function CollectionPage<T extends CollectionRow, R>({
         onRemove={isAdmin ? removeItem : undefined}
       />
     ));
-
-  // Beliefs is private. Hooks run first so this stays a valid hook order.
-  // While the session is still being read, nobody is an admin yet: redirecting
-  // then sent a signed-in admin home on every reload of the page.
-  if (config.adminOnly && !isAdmin) {
-    return isAuthLoading ? null : <Navigate to="/" replace />;
-  }
 
   const count = items.length;
   // Pinned cards are not rows, so no search or filter can match them: they

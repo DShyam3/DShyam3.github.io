@@ -16,15 +16,16 @@ CREATE POLICY "Admin insert" ON "public"."beliefs" FOR INSERT TO "authenticated"
 
 CREATE POLICY "Admin update" ON "public"."beliefs" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Public Read Access" ON "public"."beliefs" FOR SELECT USING (true);
+-- Unlike the other content tables, beliefs has no public read. It is a private
+-- collection and its page is admin-only; hiding it in the UI alone left the
+-- rows readable with the publishable key.
+CREATE POLICY "Admin read" ON "public"."beliefs" FOR SELECT TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
 ALTER TABLE "public"."beliefs" ENABLE ROW LEVEL SECURITY;
 
 -- Grants
 
 REVOKE ALL ON TABLE "public"."beliefs" FROM "anon";
-
-GRANT SELECT ON TABLE "public"."beliefs" TO "anon";
 
 REVOKE ALL ON TABLE "public"."beliefs" FROM "authenticated";
 
