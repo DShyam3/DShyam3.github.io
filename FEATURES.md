@@ -75,12 +75,13 @@ The tiles open their section, and a list gives each section one row with
 Inspect and Open. Finance is in the constellation for an admin only.
 
 Three tabs switch the Home views: Overview, Experience & CV, and Biography &
-Projects. The last holds the biography with its portrait and the projects panel.
+Projects. The last holds the biography with its portrait and a panel that opens
+Projects.
 
 ## Collections
 
-Nine lists — links, books, articles, inspirations, recipes, photos, inventory,
-beliefs, thoughts — that share one card system, one filter model and one data
+Ten lists — projects, links, books, articles, inspirations, recipes, photos,
+inventory, beliefs, thoughts — that share one card system, one filter model and one data
 hook. A collection is defined end to end in a single file under
 `src/collections/`, and `registry.ts` is the one place that answers "what does
 this site list?" without opening the router.
@@ -90,7 +91,8 @@ compact toolbar as the Watchlist Library. Categories use a dropdown with counts;
 search fills the available space and has a clear button. Additional filters
 open from Filters, and collections with multiple sort orders have a sort
 dropdown. Search and filters appear where the collection supports them. Admins
-can add, edit and remove items; Inventory’s EDC view keeps its Edit EDC action.
+can add, edit and remove items; Inventory’s EDC view keeps its Edit EDC action. Emptying
+an optional field in the edit form removes its value.
 
 Media cards show the category badge on the artwork, truncating rather than overlaying text. Admin edit and delete buttons sit in a row beneath the card text, shown on hover or focus with a mouse and always on touch.
 
@@ -116,6 +118,15 @@ Beliefs is private: only the signed-in administrator can open the page or read
 its entries. The database enforces this as well as the page. A visitor who opens
 it is sent to Home. An admin who reloads on Beliefs stays there, because the page
 waits for the session to load before it decides.
+
+## Projects
+
+Projects lists what has been built, what is being built and what is planned.
+Each project has a status of Done, In progress or Planned, shown as a badge on
+its card and used as the filter. A project can carry a summary, a link, an
+image and a line of skills, which sit under its title. Search covers the title,
+summary and skills. Opening a card shows the summary, and the title links out
+when the project has a link.
 
 ## Thoughts
 
