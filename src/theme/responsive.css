@@ -45,8 +45,11 @@
   }
 }
 @media (min-width: 1280px) and (min-height: 600px) {
+  /* The inspector grows with the window: 19.5rem until 1560px, a fifth of
+     the viewport after, capped at 32rem from 2560px. A fixed 19.5rem left it
+     narrower than a single News column on a wide screen. */
   .workspace-shell-grid[data-inspector="open"] {
-    grid-template-columns: 13.25rem minmax(0, 1fr) 19.5rem;
+    grid-template-columns: 13.25rem minmax(0, 1fr) clamp(19.5rem, 20vw, 32rem);
   }
   .workspace-shell-grid[data-inspector="open"] > .workspace-right-inspector {
     display: flex;
@@ -272,8 +275,6 @@ footer.app-footer { padding-block: .75rem; }
 .watchlist-news-workspace .news-pane-your-week .news-agenda {
   grid-template-columns: minmax(0, 1fr) !important;
 }
-.news-column .news-agenda > div { display: block; }
-.news-column .news-agenda > div > div:first-child { flex-direction: row; flex-wrap: wrap; justify-content: space-between; margin-bottom: .5rem; }
 /* Distance viewing is opted into, not inferred from the screen's pixel count. */
 html[data-display="larger"] { font-size: 125%; }
 html[data-display="larger"] .card-grid { --card-min: 12rem; }

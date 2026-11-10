@@ -1,6 +1,6 @@
 import { useState, type ComponentProps } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Film, Tv } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
@@ -72,20 +72,38 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
     ? `${event.unreleased ? 'Releases' : 'Released'} ${new Date(`${event.releaseDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
     : 'Release date unknown';
 
+  // One segment per event, split from the next by a hairline: the card, then
+  // its own captions, then its actions -- so a caption can never read as the
+  // heading of the card below it. A suggestion's release date is the day it
+  // sits under, so it is only repeated when the two differ.
   const renderEvent = (event: CalendarEvent) => (
-    <div key={event.id} className={cn('min-w-0 space-y-1', event.unreleased && 'opacity-60')}>
+    <div key={event.id} className={cn('min-w-0 space-y-1.5 py-2.5 first:pt-0 last:pb-0', event.unreleased && 'opacity-60')}>
       {event.kind === 'plan' && event.schedule ? (
         <ScheduleItem {...actions} item={event.item} scheduleItem={event.schedule} updateScheduleDay={event.schedule.mode === 'date' ? undefined : actions.updateScheduleDay} />
       ) : (
-        <div className="rounded-md border border-dashed border-border p-2">
-          <p className="text-xs text-muted-foreground">Suggested release</p>
-          <Button variant="ghost" className="h-auto w-full justify-start whitespace-normal px-0 py-1 text-left text-xs" onClick={() => setSelectedEvent(event)}>{event.item.title}</Button>
-          {actions.addToSchedule && <Button variant="link" size="sm" className="h-auto whitespace-normal px-0 py-1 text-xs" onClick={() => setScheduleEvent(event)}>Add to schedule</Button>}
-          <Button variant="ghost" size="sm" className="ml-1 text-xs" aria-label={`Decline suggested release: ${event.item.title}, ${event.label}`} onClick={() => declineRelease(event)}>Decline</Button>
+        <button
+          type="button"
+          className="flex w-full min-w-0 items-center gap-2 rounded-md border border-dashed border-border p-1.5 text-left transition-colors duration-200 hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => setSelectedEvent(event)}
+        >
+          <span className="flex h-10 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
+            {event.item.image_url
+              ? <img src={event.item.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+              : event.item.category === 'TV Shows' ? <Tv className="h-3 w-3 opacity-40" /> : <Film className="h-3 w-3 opacity-40" />}
+          </span>
+          <span className="line-clamp-2 min-w-0 flex-1 break-words text-xs font-medium leading-tight">{event.item.title}</span>
+        </button>
+      )}
+      <div className="space-y-0.5 px-1.5 text-xs text-muted-foreground">
+        <p>{event.kind === 'plan' ? 'Planned' : 'Suggested'} · {event.label}</p>
+        {(event.kind === 'plan' || event.releaseDate !== event.date) && <p>{releaseCaption(event)}</p>}
+      </div>
+      {event.kind === 'suggestion' && (
+        <div className="flex flex-wrap items-center gap-x-3 px-1.5">
+          {actions.addToSchedule && <Button variant="link" size="sm" className="h-8 px-0 text-xs" onClick={() => setScheduleEvent(event)}>Add to schedule</Button>}
+          <Button variant="link" size="sm" className="h-8 px-0 text-xs text-muted-foreground hover:text-foreground" aria-label={`Decline suggested release: ${event.item.title}, ${event.label}`} onClick={() => declineRelease(event)}>Decline</Button>
         </div>
       )}
-      <p className="px-1.5 text-xs text-muted-foreground">{event.kind === 'plan' ? 'Planned · ' : ''}{event.label}</p>
-      <p className="px-1.5 text-xs text-muted-foreground">{releaseCaption(event)}</p>
     </div>
   );
 
@@ -107,11 +125,13 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
           if ((compact && !isToday || month) && dayEvents.length === 0) return null;
           return (
             <div key={key} className={cn('grid min-w-0 gap-2 rounded-lg border p-3', compact ? 'grid-cols-1' : 'grid-cols-[6rem_minmax(0,1fr)]', !compact && !month && 'xl:block', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card/40')}>
-              <div className={cn('flex gap-1 text-sm', compact ? 'flex-row justify-between' : 'flex-col', !compact && !month && 'xl:mb-2 xl:flex-row xl:flex-wrap xl:items-baseline xl:justify-between')}>
-                <span className="font-medium">{date.toLocaleDateString('en-GB', { weekday: 'short' })} {isToday && <span className="text-xs text-primary">Today</span>}</span>
+              {/* Compact: "Wed 11 Nov" reads as one label, Today at the end. */}
+              <div className={cn('flex gap-1 text-sm', compact ? 'flex-row flex-wrap items-baseline gap-x-1.5' : 'flex-col', !compact && !month && 'xl:mb-2 xl:flex-row xl:flex-wrap xl:items-baseline xl:justify-between')}>
+                <span className="font-medium">{date.toLocaleDateString('en-GB', { weekday: 'short' })}{isToday && !compact && <>{' '}<span className="text-xs text-primary">Today</span></>}</span>
                 <span className="text-xs text-muted-foreground">{date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                {isToday && compact && <span className="ml-auto text-xs text-primary">Today</span>}
               </div>
-              <div className="min-w-0 space-y-2">
+              <div className="min-w-0 divide-y divide-border/50">
                 {dayEvents.length === 0 && <p className="text-xs text-muted-foreground">No plans</p>}
                 {dayEvents.map(renderEvent)}
               </div>

@@ -32,7 +32,8 @@ From 768px wide, a left rail lists the numbered sections, with a Display toggle
 (Standard or Larger) and a Search button. A search bar sits above the footer.
 
 From 1280px wide and 600px tall, a selected record opens in an inspector column
-to the right of the page. Below that size it opens as a sheet over the page.
+to the right of the page. The column widens on large screens, so its details have
+more room. Below that size it opens as a sheet over the page.
 
 **Search** opens with ⌘K (Ctrl+K elsewhere) or any search button. It lists the
 sections. From two characters it also lists records, matched on the fields that
@@ -229,6 +230,11 @@ proxy so the API key never reaches the browser.
   their release date changes; another season remains a separate suggestion.
   Restore declined suggestions brings them all back. These choices do not sync
   across devices, and a failed save displays an error.
+  Each release is a separate block in the agenda, with its captions and actions
+  under its card. A suggested release shows a poster thumbnail and repeats its
+  release date only when that date differs from the day it sits under. In the
+  compact column each day reads as one label, such as "Wed 11 Nov", with "Today"
+  at its end.
   Month view uses a seven-column grid on wider screens and an agenda on narrow
   screens. The calendar header and controls stay visible while its body scrolls.
   The former Schedule view opens News.

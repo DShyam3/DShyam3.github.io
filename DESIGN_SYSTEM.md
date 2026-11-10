@@ -339,6 +339,10 @@ brands, in portrait and landscape.
   temporary overlays. A capped list inside a scrolling page is not one; the
   one exception left is the Transactions list below 1024×720, capped to the
   measured card height until its inspector opens as a sheet.
+- The shell's right inspector column, from 1280×600, is
+  `clamp(19.5rem, 20vw, 32rem)`: fixed below 1560px, a fifth of the window
+  after, capped from 2560px. A fixed width left it narrower than a single
+  News column on wide screens.
 - Section toolbars open the card and never scroll on their own. From 768px
   they pin as a frosted band while they take at most a quarter of the card's
   height; otherwise they scroll with the content. `AppShell` measures this
@@ -405,8 +409,12 @@ brands, in portrait and landscape.
   are sticky except at heights of 600px or less. Upcoming contains Countdown.
   Out Now and Upcoming use 56px poster-and-text rows with separate schedule
   actions and missing-art fallbacks. Watch Next uses vertical rows without
-  rail arrows. Compact calendar days place dates above content; explanatory
-  text lives in a details disclosure.
+  rail arrows. Compact calendar days place dates above content, weekday and
+  date read together with Today at the end; explanatory text lives in a
+  details disclosure. Each calendar event is one segment, split from the next
+  by a hairline: its card (planned solid, suggested dashed, both with a poster
+  thumbnail), then its own captions, then its actions. A suggestion does not
+  repeat a release date equal to the day it sits under.
 
 Validate both orientations, short landscape windows, large monitors and both
 reading sizes. Browser viewport checks do not replace physical device tests.
