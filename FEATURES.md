@@ -116,6 +116,21 @@ Beliefs is private: a visitor who opens it is sent to Home. An admin who reloads
 on Beliefs stays there, because the page waits for the session to load before it
 decides.
 
+## Thoughts
+
+Thoughts holds written pieces, filtered by category, and one piece that is
+something to use rather than read. **A year in hours** has its own page, opened
+from a card marked Interactive that sits first on Thoughts while nothing is
+being searched or filtered. Sliders set sleep, getting ready, commuting, the
+gym, learning and time with friends, and the working year: weekend days, bank
+holidays, leave and hours a day. From those it shows where the year's 8,760
+hours go: a ring of the shares; free time, sleep, work and everything else as four figures; an average day as a
+24-hour strip, and a table by day, week and year. Free time is whatever is left.
+Entering more than a year holds brings a warning with the excess. Reset returns
+every slider to its starting value. The page uses only what the visitor enters:
+it starts from a five-day week with eight bank holidays and twenty days' leave,
+reads nothing stored, and keeps nothing.
+
 ## Books
 
 Books have separate subject and reading-status filters. Reading status offers
@@ -608,8 +623,6 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   deductions against what each payslip's own pay owes: the plan's rate on the pay
   above a month's threshold, after salary sacrifice, rounded down to whole pounds.
   The full history shows in the page, without a scroll box of its own.
-- **Time spent** — income seen as hours rather than pounds. Its summary shows the
-  gross package beside the year's take-home.
 - **Tax calculator** — a what-if calculator for 2026/27 UK rules. Type any salary
   or self-employed profit in the box, or drag the slider up to £250,000, and it
   shows take-home, effective rate, marginal rate and how many pence of the next

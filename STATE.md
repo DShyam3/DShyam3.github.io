@@ -1,10 +1,12 @@
 # State
 
-Updated 2026-11-10 · Branch `main` · HEAD is the merge of origin/main `da272fc6` (phone bank-link fixes) into the redesign shell (`85a6f70b`, `4b08d53d`, docs `7d7d8bc5`). The merge was made to be pushed the same day; the shell's deploy and live behaviour are **not confirmed in this file** — check `git status -sb` and the Pages run.
+Updated 2026-11-10 · Branch `main` · HEAD is the "A year in hours" commit, on top of `29630878` (redesign shell merged with origin's phone bank-link fixes). `29630878` is pushed and deployed (Pages run `42827511318`, success). Whether this latest commit is pushed and deployed is **not confirmed in this file** — check `git status -sb` and the Pages run.
 
 ## In progress
 
-- Redesign shell merged locally: `main` fast-forwarded `e64741b2` to `85a6f70b` (7 commits, formerly `feat/redesign-phase0`). Adds the workspace rail, inspector, ⌘K palette, one-row phone header and footer, focus return, home-screen icons, logo and broken-image handling. FEATURES.md and this file updated 2026-11-10.
+- Redesign shell (7 commits to `85a6f70b`, plus `4b08d53d`) is on `main`, pushed and deployed in `29630878`: workspace rail, inspector, ⌘K palette, one-row phone header and footer, focus return, home-screen icons, logo and broken-image handling. Checked anonymously on the live site 2026-11-10: rail, palette, Links logo plates, touch and manifest icons.
+- Public hub, first piece: Finance's Time Spent moved to Thoughts as "A year in hours" (`/thoughts/year-in-hours`, `src/lib/year-hours.ts`, pinned card via `pinnedCards`); removed from Finance, old address falls back to Tax & Income. Reads no stored data. `reviewer` found no blockers; fixes applied. Unverified: dark theme, screen reader, real phone; slider labels crowd their values at 375px. Not changed: a stale comment in another session's `TaxIncomeSurface.tsx:67`.
+- Public hub, found and open: `beliefs` allows anonymous SELECT in the database (private only in the page; 0 rows on 2026-11-10); Projects has no table, Home shows a placeholder; the biography has no edit form; Thoughts has no stored rows.
 - Shell unverified: dark theme; real phone and "Add to Home Screen"; screen reader; a real Enter keypress opening the palette from a button; Watchlist episode ticks and image-collection cards signed in; Larger display mode; signed-in production.
 - Shell known and left: ⌘K opens the palette behind the opening splash on `/`; an Inventory row with an unknown category stays hidden after a palette pick; Watchlist posters and EDC cards show no broken-image notice; manifest and `theme-color` are dark (`#080b0a`) while the site opens light; Finance date fields default to "today" in UTC, the wrong day 00:00–01:00 in British Summer Time (GoalsSurface, CreditReportsSection, TransfersSurface, CashFlowSurface, TransactionsTab).
 - Bank link (`e64741b2`, then `13cc7cca` and review follow-up `60de9ebf`, deployed via Pages run `42301589737`): "Connect Another Bank" opens TrueLayer consent in a new tab on computers, phones and tablets (via `/finance?connect_bank=1` plus a one-minute connect intent); the first bank stays in the same tab. Checked only by Playwright emulation against mocks. Unverified on the live site: desktop round trip, cross-tab refresh, Safari, phone app-to-app (Barclaycard).
@@ -18,11 +20,11 @@ Updated 2026-11-10 · Branch `main` · HEAD is the merge of origin/main `da272fc
 
 | Check | Date | Evidence / result |
 |---|---|---|
-| Lint | 2026-11-10 | 0 errors, 0 warnings (session-reported; clean checkout of `85a6f70b`, not this tree) |
-| Typecheck | 2026-11-10 | Pass, `npm run typecheck` (session-reported, same checkout) |
-| Functions typecheck | 2026-11-10 | Pass, `npm run typecheck:functions` (session-reported, same checkout) |
-| Tests | 2026-11-10 | 2,414 tests across 71 files pass, `npm test` (session-reported, same checkout) |
-| Build | 2026-11-10 | Pass, `npm run build` (session-reported, same checkout) |
+| Lint | 2026-11-10 | 0 errors, 0 warnings, clean checkout of the "A year in hours" commit |
+| Typecheck | 2026-11-10 | Pass, same checkout |
+| Functions typecheck | 2026-11-10 | Pass on `29630878`; not rerun after (no function changed) |
+| Tests | 2026-11-10 | 2,427 tests across 72 files pass, same checkout as Lint |
+| Build | 2026-11-10 | Pass, same checkout as Lint |
 | Shell browser | 2026-11-10 | Local preview at 1440, 900 and 375px; anonymous on hosted data and signed in as the seed admin on the local stack. Palette keys, focus trap and return, inspector sheet, add and delete a link with a dead icon URL (notice on card and detail), no console errors from the shell (session-reported) |
 | Ship-check | 2026-11-06 | 96/100, Beta, 0 blockers, 1 high: possible N+1 in `FinanceDataContext`. Not rerun for the shell |
 | Graphify | 2026-11-05 | Pass, `graphify update .` (2,232 nodes, 5,126 edges, 114 communities). Not rerun for the shell |
@@ -30,8 +32,8 @@ Updated 2026-11-10 · Branch `main` · HEAD is the merge of origin/main `da272fc
 
 ## Next
 
-1. Confirm the push of this merge deployed (Pages run), then check the shell on the live site.
-2. After deploy: check the shell signed in on production, on a real phone (including Add to Home Screen), and in dark theme.
+1. Confirm the "A year in hours" commit is pushed and deployed, then open `/thoughts` on the live site.
+2. Check the shell signed in on production, on a real phone (including Add to Home Screen), and in dark theme. Then the public hub: owner decides on making `beliefs` admin-only in the database, and on Projects' fields and content.
 3. Supabase dashboard: leaked-password protection is still off.
 4. Bank link: on a phone, open production, sign in, tap Connect Another Bank, confirm a new tab reaches TrueLayer, approve in the Barclaycard app, and confirm the card appears and the original tab refreshes; on desktop, the same.
 5. Tax Calculator and Money Hub: check signed in on production. Money Hub: cross-currency, Berlin and Amsterdam figures, Hide Figures, phone width. Then decide scenario persistence and more calculated jurisdictions.
