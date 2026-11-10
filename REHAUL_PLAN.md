@@ -16,6 +16,7 @@ Phase 7 did not touch — is opened in Part 3 and has not started.
 | `DESIGN_SYSTEM.md` | how the UI is built |
 | `SECURITY.md` | what is set, what cannot be, and why |
 | [MONEY_HUB_BLUEPRINT.md](MONEY_HUB_BLUEPRINT.md) | supporting specification for the city-based money hub; remaining scope, data sourcing and rollout beyond the jurisdiction-neutral comparison |
+| [TRAVEL_BLUEPRINT.md](TRAVEL_BLUEPRINT.md) | supporting specification for Travel (8.F): counting, privacy, import review and acceptance rules for the city journal |
 
 **Section numbers are stable, the file they live in is not.** Code and
 migration comments cite `REHAUL_PLAN.md 7.B`, `7.C`, `7.D`, `7.N`, `7.P` and
@@ -483,11 +484,54 @@ onto free-text ingredients without re-entering them.
 
 ### 8.F Travel
 
-Trips are the prerequisite: cities grouped into dated trips, which every other
-item below depends on. Then route lines between a trip's stops (visual only, no
-new data), statistics for 8.D — countries, continents, furthest point, distance
-— a next-trip countdown from 8.D, city notes, and passport and visa expiry
-against the same countdown. A flight log is worth it only at volume.
+The detailed specification is [TRAVEL_BLUEPRINT.md](TRAVEL_BLUEPRINT.md):
+searchable visited countries, a third-column city journal, dated trips and
+confirmed city visits, reviewed Flighty file imports, favourites, city and trip
+photos, and a portable backup. Flight records serve as import evidence, not a
+standalone flight-statistics product; a connection never becomes a city visit
+automatically. Undated legacy history is preserved. New imports stay private
+until explicitly published.
+
+The journal is in the tree but not yet live: four `travel_*` tables
+(`31_travel_journal.sql`, migrations `20261110190000` and `20261110190100`),
+the `travel-photo` function, CSV / Flighty / `.ics` import, and archive export
+and restore. Left before it ships:
+
+- Apply both migrations, deploy `travel-photo`, and verify the public/private
+  read boundary on a live stack.
+- Regenerate the Supabase types so `useTravelJournal.ts` stops casting the
+  client; the cast hides column-name typos, payload shapes and the
+  `travel_restore` signature.
+- An imported `.ics` event is always `kind: 'activity'`, so a flight from a
+  calendar export can be published even though the flights-never-public check
+  keys on `kind`. Classify flight-like events as flights, or refuse publishing
+  imported rows until the owner sets the kind.
+- `travel-photo/jpeg.ts` strips metadata by denylist (APPn, COM). Restore
+  sends archive bytes through it without the browser re-encode, so make it an
+  allowlist (DQT, DHT, SOF0-2, DRI, SOS) and reject anything else.
+- `supabase/tests/travel_journal.sql` is plain SQL, not pgTAP, so
+  `supabase test db` would fail on it. Convert it, or move it and give it a
+  script.
+
+Left after it ships:
+
+- Orphaned photos. Removing or replacing a photo memory, or a restore that
+  fails after uploading, leaves the file in storage, where nothing can list,
+  relink or delete it. Add a `travel-photo` delete route that removes a path
+  under the caller's prefix only when no memory references it.
+- Thumbnails (blueprint): tiles load the full derivative, each signing its own
+  URL; `createSignedUrls` would batch them.
+- One CSV parser (`journal-import.ts` duplicates `parseDelimitedRows` in
+  `statement-import.ts`) and one link validator (four copies disagree; the
+  editor accepts a bare `/` that the database rejects).
+- Country search lists every match with its flag image; cap it with "show more".
+
+From the blueprint: a keyboard-accessible photo lightbox;
+typed links to existing records (a book read on the trip, a recipe tried
+there) in place of the free-text link field; flight time zones, which the
+Flighty export does not carry; and PDF itinerary templates, only once real
+documents justify them. Passport and visa reminders, route lines and distance
+statistics remain deferred.
 
 ### 8.G Inventory and EDC
 

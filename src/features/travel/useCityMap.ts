@@ -30,11 +30,12 @@ async function fetchCityMap(): Promise<CityMapData> {
     if (loadPromise) return loadPromise;
 
     loadPromise = fetch(`${ASSETS_URL}/dot-city-map.json`)
-        .then(res => res.json())
+        .then(res => { if (!res.ok) throw new Error('City map unavailable'); return res.json(); })
         .then((data: CityMapData) => {
+            if (!data.index || typeof data.index !== 'object') throw new Error('Invalid city map');
             cachedCityMap = data;
             return data;
-        });
+        }).catch(error => { loadPromise = null; throw error; });
 
     return loadPromise;
 }

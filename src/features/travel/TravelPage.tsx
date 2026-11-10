@@ -11,11 +11,17 @@ import { CONTINENT_ORDER } from '@/features/travel/continents';
 import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
-import { Globe, MapPin, Search, Plus, X, Loader2, ChevronDown } from 'lucide-react';
+import { Globe, MapPin, Search, X, Loader2, ChevronDown } from 'lucide-react';
 import { CountryCityPanel, type City } from '@/features/travel/CountryCityPanel';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
+import { useTravelJournal } from './useTravelJournal';
+import { TravelJournalPanel } from './TravelJournalPanel';
+import { TravelJournalWorkspace } from './TravelJournalWorkspace';
+import { TravelImportDialog } from './TravelImportDialog';
+import { TravelBackupDialog } from './TravelBackupDialog';
+import { cityIdentity, type CityIdentity } from './journal-types';
 import '@/pages/Index.css';
 
 /** The slice of restcountries.com's shape that `public/countries.json` is read for. */
@@ -26,10 +32,16 @@ interface RestCountry {
 
 type ViewMode = 'countries' | 'cities';
 
-const Travel = () => {
+const TravelContent = () => {
     const isMobile = useIsMobile();
     const { isAdmin } = useAuth();
-    const { selectTarget, resetTarget } = useWorkspaceInspector();
+    const { selectTarget, resetTarget, setDockedDetail } = useWorkspaceInspector();
+    const journal = useTravelJournal();
+    const [section, setSection] = useState<'places' | 'trips'>('places');
+    const [selectedCity, setSelectedCity] = useState<CityIdentity | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
+    const [backupOpen, setBackupOpen] = useState(false);
+    const [countryError, setCountryError] = useState('');
     const { visitedCountries, addCountry, removeCountry } = useVisitedCountries();
     const { askDelete, deleteDialog } = useDeleteConfirm();
     // Removing a country takes its cities with it, so it asks first.
@@ -67,7 +79,7 @@ const Travel = () => {
     const [showCountryResults, setShowCountryResults] = useState(false);
 
     useEffect(() => {
-        if (isAdmin && allCountries.length === 0) {
+        if (allCountries.length === 0) {
             const fetchAll = async () => {
                 try {
                     const res = await fetch('/countries.json');
@@ -83,16 +95,15 @@ const Travel = () => {
             };
             fetchAll();
         }
-    }, [isAdmin, allCountries.length]);
+    }, [allCountries.length]);
 
     const filteredSearchCountries = useMemo(() => {
         if (!countrySearch.trim()) return [];
-        const searchLower = countrySearch.toLowerCase();
+        const searchLower = countrySearch.trim().toLowerCase();
         return allCountries.filter(c => 
-            (c.name.toLowerCase().includes(searchLower) || c.code.toLowerCase().includes(searchLower)) &&
-            !visitedCodes.includes(c.code)
-        ).slice(0, 10);
-    }, [countrySearch, allCountries, visitedCodes]);
+            c.name.toLowerCase().includes(searchLower) || c.code.toLowerCase().includes(searchLower)
+        ).sort((a, b) => Number(b.name.toLowerCase() === searchLower || b.code.toLowerCase() === searchLower) - Number(a.name.toLowerCase() === searchLower || a.code.toLowerCase() === searchLower) || a.name.localeCompare(b.name));
+    }, [countrySearch, allCountries]);
 
     const [focusTrigger, setFocusTrigger] = useState(0);
 
@@ -112,6 +123,7 @@ const Travel = () => {
 
     // Sync selected country into the 3rd-column WorkspaceInspector
     useEffect(() => {
+        if (selectedCity) return;
         if (!selectedCountry) {
             resetTarget();
             return;
@@ -147,6 +159,7 @@ const Travel = () => {
         });
     }, [
         selectedCountry,
+        selectedCity,
         visitedCities,
         visitedCountries,
         continentByCode,
@@ -266,28 +279,23 @@ const Travel = () => {
      * this drops straight into that country's city list rather than leaving
      * the row sitting there with no detail.
      */
-    const handleAddCountry = useCallback(
-        (country: { code: string; name: string }) => {
-            addCountry(country.code, country.name);
-            setCountrySearch('');
-            setShowCountryResults(false);
-            setViewMode('cities');
-            setSelectedCountry({
-                code: country.code,
-                name: country.name,
-                flagUrl: `https://flagcdn.com/w80/${country.code.toLowerCase()}.png`,
-            });
-            setFocusTrigger((prev) => prev + 1);
-        },
-        [addCountry],
-    );
+    const handleAddCountry = useCallback(async (country: { code: string; name: string }) => {
+        setCountryError('');
+        if (!visitedCodes.includes(country.code) && !await addCountry(country.code, country.name)) {
+            setCountryError('Could not mark this country visited. Please try again.');
+        }
+    }, [addCountry, visitedCodes]);
 
     // Handle clicking a country row to drill into cities
     const handleCountryClick = useCallback((code: string, name: string) => {
         const flagUrl = `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+        setSelectedCity(null);
+        setDockedDetail(null);
+        setCountrySearch('');
+        setShowCountryResults(false);
         setSelectedCountry({ code, name, flagUrl });
         setFocusTrigger(prev => prev + 1);
-    }, []);
+    }, [setDockedDetail]);
 
     const onGlobeCountryClick = useCallback((code: string, name: string) => {
         handleCountryClick(code, name);
@@ -295,18 +303,46 @@ const Travel = () => {
 
     const handleCityPanelBack = useCallback(() => {
         const code = selectedCountry?.code;
+        setSelectedCity(null);
+        setDockedDetail(null);
         setSelectedCountry(null);
         requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-country="${code}"]`)?.focus());
-    }, [selectedCountry]);
+    }, [selectedCountry, setDockedDetail]);
+
+    const journalCities = useMemo(() => [...new Map([
+        ...visitedCities.map(cityIdentity), ...journal.data.visits, ...journal.data.memories,
+    ].map(city => [city.city_key, { city_key: city.city_key, city_name: city.city_name, country_code: city.country_code }])).values()], [visitedCities, journal.data.visits, journal.data.memories]);
+
+    useEffect(() => {
+        if (!selectedCity) return;
+        setDockedDetail({
+            id: `travel-city-${selectedCity.city_key}`,
+            eyebrow: 'City journal', title: selectedCity.city_name,
+            onClose: () => setSelectedCity(null),
+            node: <TravelJournalPanel key={selectedCity.city_key} city={selectedCity} journal={journal} isAdmin={isAdmin} legacyVisited={visitedCities.some(c => cityIdentity(c).city_key === selectedCity.city_key)} />,
+        });
+    }, [selectedCity, journal, isAdmin, visitedCities, setDockedDetail]);
+    useEffect(() => () => setDockedDetail(null), [setDockedDetail]);
 
     // Total visited cities count
     const totalCitiesVisited = visitedCities.length;
 
     return (
-        <AppShell title="Travel" subtitle="Where I've been" layout="workspace">
+        <AppShell title="Travel" subtitle="Where I've been" layout={section === 'places' ? 'workspace' : 'content'}>
             <div className="flex-1 min-h-0 flex flex-col">
                 <div className="flex-1 min-h-0 flex flex-col px-4 md:px-0 py-4">
 
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
+                        <div className="flex gap-1" aria-label="Travel view">
+                            <Button variant={section === 'places' ? 'secondary' : 'ghost'} aria-pressed={section === 'places'} onClick={() => setSection('places')}>Places</Button>
+                            <Button variant={section === 'trips' ? 'secondary' : 'ghost'} aria-pressed={section === 'trips'} onClick={() => setSection('trips')}>Trips & memories</Button>
+                        </div>
+                        {isAdmin && <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" disabled={journal.loading || !!journal.error} onClick={() => setImportOpen(true)}>Import itinerary</Button>
+                            <Button size="sm" variant="ghost" disabled={journal.loading || !!journal.error} onClick={() => setBackupOpen(true)}>Backup & restore</Button>
+                        </div>}
+                    </div>
+                    {section === 'trips' ? <TravelJournalWorkspace journal={journal} isAdmin={isAdmin} cities={journalCities} onSelectCity={setSelectedCity} /> : <>
                     {/* WHERE I'VE BEEN */}
                     <div className="w-full flex-1 min-h-0 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
                         <div className="travel-layout">
@@ -413,16 +449,23 @@ const Travel = () => {
                                             onAddCity={(city) => handleAddCity(city)}
                                             onRemoveCity={async (id: string) => { await removeCity(Number(id)); }}
                                             onBack={handleCityPanelBack}
+                                            onSelectCity={(city) => setSelectedCity(cityIdentity(city))}
+                                            journalCities={journalCities.filter(city => city.country_code === selectedCountry.code)}
+                                            onSelectJournalCity={setSelectedCity}
+                                            countryVisited={visitedCodes.includes(selectedCountry.code)}
+                                            onMarkCountryVisited={() => { void handleAddCountry(selectedCountry); }}
+                                            countryError={countryError}
                                         />
                                     ) : (
                                         <>
-                                            {isAdmin && !selectedCountry && (
+                                            {!selectedCountry && (
                                                 <div className="p-3 border-b border-border/30 relative bg-muted/10">
                                                     <div className="relative">
                                                         <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                                                         <Input
                                                             type="text"
-                                                            placeholder="ADD COUNTRY..."
+                                                            placeholder="SEARCH COUNTRIES..."
+                                                            aria-label="Search countries"
                                                             className="pl-8 h-8 text-xs uppercase bg-background"
                                                             value={countrySearch}
                                                             onChange={(e) => {
@@ -433,13 +476,14 @@ const Travel = () => {
                                                         />
                                                     </div>
 
+                                                    {showCountryResults && countrySearch.trim() && filteredSearchCountries.length === 0 && <p role="status" className="p-2 text-xs text-muted-foreground">No matching countries. Your visited map is unchanged.</p>}
                                                     {showCountryResults && filteredSearchCountries.length > 0 && (
                                                         <div className="absolute top-full left-3 right-3 bg-popover border rounded-md shadow-lg z-50 mt-1 max-h-48 overflow-y-auto">
                                                             {filteredSearchCountries.map((country) => (
                                                                 <button
                                                                     key={country.code}
-                                                                    className="w-full text-left px-3 py-2 text-xs hover:bg-accent flex items-center justify-between group"
-                                                                    onClick={() => handleAddCountry(country)}
+                                                                    className={`w-full text-left px-3 py-2 text-xs hover:bg-accent flex items-center justify-between gap-2 ${visitedCodes.includes(country.code) ? 'bg-muted/50 text-muted-foreground' : ''}`}
+                                                                    onClick={() => handleCountryClick(country.code, country.name)}
                                                                 >
                                                                     <span className="flex items-center gap-2 uppercase">
                                                                         <img 
@@ -460,7 +504,7 @@ const Travel = () => {
                                                                             </span>
                                                                         )}
                                                                     </span>
-                                                                    <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100" />
+                                                                    <span className="shrink-0">{visitedCodes.includes(country.code) ? '✓ Visited' : 'Not visited'}</span>
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -646,13 +690,17 @@ const Travel = () => {
 
                         </div>
                     </div>
-
+                    </>}
                 </div>
             </div>
-
+            <TravelImportDialog open={importOpen} onOpenChange={setImportOpen} existing={journal.data.itinerary} trips={journal.data.trips} onImport={journal.importItinerary} />
+            <TravelBackupDialog open={backupOpen} onOpenChange={setBackupOpen} journal={journal} />
             {deleteDialog}
         </AppShell>
     );
 };
 
-export default Travel;
+export default function Travel() {
+    const { session, isAdmin } = useAuth();
+    return <TravelContent key={`${session?.user.id ?? 'public'}-${isAdmin}`} />;
+}

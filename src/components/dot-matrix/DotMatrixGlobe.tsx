@@ -44,7 +44,10 @@ let cachedCountryNames: Record<string, string> = {};
 async function loadDotData(): Promise<DotData> {
     if (cachedDotData) return cachedDotData;
     const res = await fetch(`${ASSETS_URL}/dot-world-map.json`);
-    cachedDotData = await res.json();
+    if (!res.ok) throw new Error('Map unavailable');
+    const data = await res.json();
+    if (!Array.isArray(data.dots) || !Number.isFinite(data.cols) || !Number.isFinite(data.rows) || data.cols <= 0 || data.rows <= 0) throw new Error('Invalid map data');
+    cachedDotData = data;
     return cachedDotData!;
 }
 
@@ -96,6 +99,7 @@ export function DotMatrixGlobe({
 }: DotMatrixGlobeProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [dotData, setDotData] = useState<DotData | null>(null);
+    const [mapError, setMapError] = useState(false);
     const [countryNames, setCountryNames] = useState<Record<string, string>>({});
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
     const visitedSet = useMemo(() => new Set(visitedCountryCodes), [visitedCountryCodes]);
@@ -178,7 +182,7 @@ export function DotMatrixGlobe({
         Promise.all([loadDotData(), loadCountryNames()]).then(([dots, names]) => {
             setDotData(dots);
             setCountryNames(names);
-        });
+        }).catch(() => setMapError(true));
     }, []);
 
     const optimizedDots = useMemo(() => {
@@ -1103,6 +1107,8 @@ export function DotMatrixGlobe({
         selectAtPoint(e.clientX, e.clientY);
     }, [selectAtPoint]);
 
+
+    if (mapError) return <div role="status" className="flex min-h-64 items-center justify-center rounded-xl border border-border p-6 text-center text-sm text-muted-foreground">The map is unavailable. You can still explore countries and city journals from the list.</div>;
 
     return (
         // The box used to be sized to the grid's ratio so the flat map would

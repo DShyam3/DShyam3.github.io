@@ -16,17 +16,21 @@ Updated 2026-11-10 · Branch `main` · The phone detail-drag fix `4c3ed14a` is p
 - Money Hub (`ea8b9640`, deployed): 41 cities, six calculated jurisdictions. Unverified: signed-in production, dark theme, keyboard and screen reader. Open: scenario persistence, more calculated jurisdictions.
 - Tax Calculator (`6308e148`, `8113b70d`, `cccfb9bd`, `1f43cf26`, deployed): signed-in production unverified. Finance-session behaviour was owner-tested as admin; the failure boundary and Watchlist edit write-back are unchecked.
 - Other sessions in this tree, uncommitted and not ours: nine finance files, `.claude/launch.json`, a two-line `REHAUL_HISTORY.md` edit, and `SITE_PLAN.md` (untracked; proposes the site's order of work, not folded into `REHAUL_PLAN.md`).
-- Branch `feat/redesign-phase0` is fully merged. Its worktree `/private/tmp/dhyan-redesign-phase0` holds an unknown writer's uncommitted travel journal work. Deliberately not merged; it does not typecheck there (missing `./journal-summary`).
+- Travel journal (written by Codex in `/private/tmp/dhyan-redesign-phase0`) is ported onto `main`, uncommitted, not pushed, not deployed (this session). Files: 4 modified (`DotMatrixGlobe.tsx`, `CountryCityPanel.tsx`, `TravelPage.tsx`, `useCityMap.ts`) plus new `src/features/travel/` journal files, `TRAVEL_BLUEPRINT.md`, `supabase/schemas/31_travel_journal.sql`, migrations `20261110190000_travel_journal.sql` and `20261110190100_travel_city_cover.sql` (renamed from Codex's 135610/184848 so they sort after the applied `20261110140000`), `supabase/functions/travel-photo/`, `supabase/tests/travel_journal.sql`. The Codex worktree still holds the original copies under the old migration names; do not port again.
+- `reviewer` found no blockers. Fixed: itinerary `source_key`/`source_name` no longer granted to anon (column-level grant; hook reads a public column list when not admin); delete copy no longer claims removed photos stay in backups; one `sort_order` range (0–1,000,000) across editor, validator and DB; legacy visited cities read "Visited · dates not recorded"; import dialog has one scroller; "Metadata only" backup gated on load, copy says 10,000 records. Still open before ship: REHAUL_PLAN 8.F (regenerate Supabase types to drop the client cast; `.ics` flights saved as `activity` can be published; `travel-photo/jpeg.ts` strips by denylist; SQL test file is not pgTAP).
+- Local stack only, not hosted: Codex had hand-applied the tables without recording them; they were empty, so dropped and rebuilt from the migration files; both apply cleanly; `supabase/tests/travel_journal.sql` passes via psql. Local browser (dev:test, port 8084): anonymous `/travel` loads with no console errors and reads itinerary without source columns (200); anon REST asking for `source_key` gets 42501; signed in as seed admin, a trip saved private and anon REST returned none (test row deleted); 390px no sideways scroll. Unverified: photo upload and `travel-photo` (never invoked), CSV/Flighty/.ics import, backup/restore, country search (no local visited data), dark theme, real phone. Not applied to hosted production; `travel-photo` not deployed.
+- Local auth returned 500 ("error finding user: unexpected EOF") until its container was restarted; works since.
 
 ## Checks
 
 | Check | Date | Evidence / result |
 |---|---|---|
-| Lint | 2026-11-10 | 0 errors, 0 warnings, on the current tree including the four phone-fix files |
+| Lint | 2026-11-10 | 0 errors, 0 warnings, on the current tree including the travel port |
 | Typecheck, build | 2026-11-10 | Both pass, current tree |
-| Functions typecheck | 2026-11-10 | Pass on `29630878`; not rerun after (no function changed) |
-| Tests | 2026-11-10 | Full suite: 2,427 tests across 72 files pass (earlier tree). Phone-fix: `vitest related` on the three TSX files, 6 tests in 1 file pass; full suite not rerun |
+| Functions typecheck | 2026-11-10 | Pass, current tree, including `travel-photo` |
+| Tests | 2026-11-10 | Full suite: 2,455 tests across 76 files pass, current tree |
 | Migration `20261110120000` | 2026-11-10 | `supabase db push` to hosted production; verified by anonymous REST (401, 42501), `books` still 200, policy and grant read-back |
+| Travel migrations `20261110190000`, `20261110190100` | 2026-11-10 | Local stack only, applied from files; `supabase/tests/travel_journal.sql` passes via psql; hosted not applied |
 | Shell browser | 2026-11-10 | Local preview at 1440, 900, 390 and 375px; anonymous on hosted data and signed in as the seed admin locally. Palette, focus trap and return, inspector sheet, link add and delete, phone detail drag (above). No console errors (session-reported) |
 | Ship-check | 2026-11-06 | 96/100, Beta, 0 blockers, 1 high: possible N+1 in `FinanceDataContext`. Not rerun for the shell or the phone fix |
 | Graphify | 2026-11-10 | Pass, `graphify update .` on the current tree |
@@ -34,16 +38,17 @@ Updated 2026-11-10 · Branch `main` · The phone detail-drag fix `4c3ed14a` is p
 
 ## Next
 
-1. On a real iPhone, open a collection card's detail on the live site and drag it sideways (should not move), then open a signed-in edit dialog. Open, not done: `responsive.css` rules for `dialog-flush`, `collection-detail-dialog` and `watchlist-detail-with-seasons` match no element in `src`, and DESIGN_SYSTEM.md still describes those dialogs; an episode's "Next up" pill wraps at its space in the 310px inspector (predates the fix).
-2. Owner opens `/beliefs` signed in on the live site (not checked by automation). Check the shell signed in on production, on a real phone (including Add to Home Screen), and in dark theme. Then the public hub: Projects' fields and content from the owner, and visibility controls per collection.
-3. Supabase dashboard: leaked-password protection is still off.
-4. Bank link: on a phone, open production, sign in, tap Connect Another Bank, confirm a new tab reaches TrueLayer, approve in the Barclaycard app, and confirm the card appears and the original tab refreshes; on desktop, the same.
-5. Tax Calculator and Money Hub: check signed in on production. Money Hub: cross-currency, Berlin and Amsterdam figures, Hide Figures, phone width. Then decide scenario persistence and more calculated jurisdictions.
-6. Coordinate one committer across the shared checkout. Keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
-7. Merchant logos: fix `popworld`; check `revolution-bars` and `vue` in `supabase/functions/merchant-logo-cache/index.ts`; deploy; run one manual sync.
-8. Signed-in checks: Student Loan, holiday booking, recurring undismiss, Home Brandfetch logos, Watchlist edits and watched toggles across leave-and-return, sign-out, Cash Flow.
-9. Owner: set hosted pension to salary sacrifice; record SLC's next balance and check the pending top-up; check `1063LX` in the HMRC app; check whether benefits from November 2026 are payrolled. Cross-year holiday allocation needs a split rule.
-10. Finish save/reload races and schema reproducibility (`schemas/` composite-key objects). Leave `claude/affectionate-lamarr-f2d2cb`, `codex/assistant-integration-2026-11-02` and `origin/claude/net-take-home-tax-f2n71j` alone.
+1. Commit the travel port once one committer is agreed (it touches the database, 30+ files). Then clear the before-ship items in REHAUL_PLAN 8.F, then, with the owner's go-ahead, `supabase db push` the two travel migrations and deploy `travel-photo`, and check `/travel` signed out and signed in on production.
+2. On a real iPhone, open a collection card's detail on the live site and drag it sideways (should not move), then open a signed-in edit dialog. Open, not done: `responsive.css` rules for `dialog-flush`, `collection-detail-dialog` and `watchlist-detail-with-seasons` match no element in `src`, and DESIGN_SYSTEM.md still describes those dialogs; an episode's "Next up" pill wraps at its space in the 310px inspector (predates the fix).
+3. Owner opens `/beliefs` signed in on the live site (not checked by automation). Check the shell signed in on production, on a real phone (including Add to Home Screen), and in dark theme. Then the public hub: Projects' fields and content from the owner, and visibility controls per collection.
+4. Supabase dashboard: leaked-password protection is still off.
+5. Bank link: on a phone, open production, sign in, tap Connect Another Bank, confirm a new tab reaches TrueLayer, approve in the Barclaycard app, and confirm the card appears and the original tab refreshes; on desktop, the same.
+6. Tax Calculator and Money Hub: check signed in on production. Money Hub: cross-currency, Berlin and Amsterdam figures, Hide Figures, phone width. Then decide scenario persistence and more calculated jurisdictions.
+7. Coordinate one committer across the shared checkout. Keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
+8. Merchant logos: fix `popworld`; check `revolution-bars` and `vue` in `supabase/functions/merchant-logo-cache/index.ts`; deploy; run one manual sync.
+9. Signed-in checks: Student Loan, holiday booking, recurring undismiss, Home Brandfetch logos, Watchlist edits and watched toggles across leave-and-return, sign-out, Cash Flow.
+10. Owner: set hosted pension to salary sacrifice; record SLC's next balance and check the pending top-up; check `1063LX` in the HMRC app; check whether benefits from November 2026 are payrolled. Cross-year holiday allocation needs a split rule.
+11. Finish save/reload races and schema reproducibility (`schemas/` composite-key objects). Leave `claude/affectionate-lamarr-f2d2cb`, `codex/assistant-integration-2026-11-02` and `origin/claude/net-take-home-tax-f2n71j` alone.
 
 ## Blockers
 
