@@ -492,15 +492,12 @@ standalone flight-statistics product; a connection never becomes a city visit
 automatically. Undated legacy history is preserved. New imports stay private
 until explicitly published.
 
-The journal is in the tree but not yet live: four `travel_*` tables
-(`31_travel_journal.sql`, migrations `20261110190000` and `20261110190100`),
-the `travel-photo` function, CSV / Flighty / `.ics` import, and archive export
-and restore. Left before it ships:
+Open now that it is live:
 
 - Verify the public/private read boundary on production with a real
   published and a real private row, and one signed-in photo upload through
-  `travel-photo` (migrations applied and the function deployed; only empty
-  tables and unauthenticated requests have been probed).
+  `travel-photo`, checking the stored file has no EXIF or GPS (so far only
+  signed-out requests and unauthenticated probes have run on production).
 - Regenerate the Supabase types so `useTravelJournal.ts` stops casting the
   client; the cast hides column-name typos, payload shapes and the
   `travel_restore` signature.
@@ -515,7 +512,7 @@ and restore. Left before it ships:
   `supabase test db` would fail on it. Convert it, or move it and give it a
   script.
 
-Left after it ships:
+Later:
 
 - Orphaned photos. Removing or replacing a photo memory, or a restore that
   fails after uploading, leaves the file in storage, where nothing can list,

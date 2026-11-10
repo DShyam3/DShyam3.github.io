@@ -281,6 +281,20 @@ membership and region groupings.
 
 At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list. Each country row keeps its UN marker and city count in fixed columns, so they line up down the list whether or not a row has either.
 
+The page has two tabs. Places shows the visited map and the country list. Search matches every country and territory by name or code, marks each result "✓ Visited" or "Not visited", and opens that country's details when chosen. A search with no match says the visited map is unchanged.
+
+Trips & memories lists published trips for visitors, each with its dates, status, notes, city stays, linked memories and unassigned itinerary items. Search covers trips, cities and memories.
+
+The owner adds, edits and deletes trips (title, dates, planned, completed or cancelled, notes, published or private), city visits, memories, favourites and photos. Choosing a city opens its city journal in the side panel, with Overview, Visits, Favourites and Photos tabs. Its visit count includes only confirmed visits: transit and planned visits are left out, and so are visits on planned or cancelled trips. A city marked visited before any dates were recorded, with no counted visit, reads "Visited · dates not recorded".
+
+Photos are JPEG, PNG or WebP, up to 20 MB. Each is resized to at most 2,400 px on its longest side, saved as a JPEG, and uploaded with its metadata stripped. A city has one cover photo. Photos stay private until their memory is published.
+
+The owner imports itinerary from a Flighty CSV, a structured itinerary CSV or an .ics calendar file (up to 5 MB and 2,000 rows). Rows are reviewed and chosen before saving. Everything is saved private, flight records create no city visits, and rows already imported are skipped rather than saved twice.
+
+Backup & restore is owner-only. A complete archive holds the resized photos (up to 60 MB); a metadata-only export lists photo paths without image files. Both cover up to 10,000 records. Restore adds the records with their publication settings and refuses any record whose ID already exists.
+
+Visitors receive only published trips, visits, memories and itinerary items. Flight records stay private, and the source identifiers of imported bookings are never sent to visitors.
+
 ## Inventory and EDC
 
 Inventory opens on EDC: selected everyday-carry items from the inventory,
