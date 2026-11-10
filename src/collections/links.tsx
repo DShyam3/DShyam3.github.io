@@ -54,8 +54,8 @@ export const linksCollection: CollectionConfig<LinkRow> = {
     variant: 'media',
     // Favicons, square and never cropped.
     aspect: '1 / 1',
-    // Favicons are logos, not artwork -- fit them whole rather than cropping.
-    imageFit: 'contain',
+    // Favicons are logos, not artwork -- fit them whole, on a logo's plate.
+    imageFit: 'logo',
     title: (link) => link.name,
     subtitle: (link) => labelFor(link.category),
     image: (link) => link.icon ?? undefined,

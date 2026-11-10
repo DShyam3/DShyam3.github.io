@@ -7,7 +7,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { cn } from '@/lib/utils';
 import { EntityFormDialog } from './EntityFormDialog';
 import { safeHref } from '@/lib/safe-url';
-import type { CardVariant, CollectionConfig, CollectionRow } from '../types';
+import type { CardVariant, CollectionConfig, CollectionRow, ImageFit } from '../types';
 
 /**
  * Every variant sits in the same grid -- CardGrid, one wall for the whole
@@ -22,7 +22,7 @@ export const CARD_LAYOUT: Record<CardVariant, { skeleton: string }> = {
 interface FaceProps {
   /** Shown when an item has no image. Comes from the collection's config. */
   Fallback: LucideIcon;
-  imageFit: 'cover' | 'contain';
+  imageFit: ImageFit;
   aspect: string;
   title: string;
   subtitle?: string;
@@ -36,7 +36,16 @@ interface FaceProps {
   onOpen: () => void;
   /** False when the collection has no detail dialog worth opening. */
   openable: boolean;
+  /** True for whoever can fix the record; they are told when its image breaks. */
+  canEdit: boolean;
 }
+
+/** How the image sits in its box, per `imageFit`. */
+const IMAGE_FIT_CLASS: Record<ImageFit, string> = {
+  cover: 'object-cover',
+  contain: 'object-contain p-4',
+  logo: 'object-contain p-6 no-outline',
+};
 
 /**
  * Props that make a clickable card reachable without a mouse.
@@ -76,7 +85,7 @@ function openableProps(openable: boolean, title: string, onOpen: () => void) {
  * neighbours and the wall lost its rhythm.
  */
 function MediaFace({
-  Fallback, imageFit, aspect, title, subtitle, image, excerpt, badge, meta, href, actions, onOpen, openable,
+  Fallback, imageFit, aspect, title, subtitle, image, excerpt, badge, meta, href, actions, onOpen, openable, canEdit,
 }: FaceProps) {
   // Stored image URLs go stale -- a cover moves, a shop takes a product photo
   // down -- and a broken <img> renders as alt text on a grey box. Falling back
@@ -85,6 +94,9 @@ function MediaFace({
   const [failedImage, setFailedImage] = useState<string | null>(null);
   const [loadedImage, setLoadedImage] = useState<string | null>(null);
   const showImage = image && image !== failedImage;
+  // A visitor sees the same tile as a record that never had an image. Only
+  // the person who can replace it is told the stored one has stopped loading.
+  const brokenImage = canEdit && Boolean(image) && image === failedImage;
 
   return (
     <div
@@ -95,7 +107,12 @@ function MediaFace({
       {...openableProps(openable, title, onOpen)}
     >
       <div
-        className="bg-muted relative overflow-hidden shrink-0"
+        className={cn(
+          'relative overflow-hidden shrink-0',
+          // White only once the logo is showing: the loading caption is
+          // written for the muted tile and is unreadable on white in dark theme.
+          imageFit === 'logo' && showImage && loadedImage === image ? 'bg-white' : 'bg-muted',
+        )}
         style={{ aspectRatio: aspect }}
       >
         {showImage && loadedImage !== image && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground" role="status"><Fallback className="h-8 w-8" aria-hidden="true" /><span className="text-xs">Loading artwork…</span></div>}
@@ -106,7 +123,7 @@ function MediaFace({
             className={cn(
               'w-full h-full relative',
               loadedImage !== image && 'opacity-0',
-              imageFit === 'contain' ? 'object-contain p-4' : 'object-cover',
+              IMAGE_FIT_CLASS[imageFit],
             )}
             loading="lazy"
             onLoad={() => setLoadedImage(image || null)}
@@ -116,7 +133,13 @@ function MediaFace({
           <div className="missing-art w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
             <Fallback className="h-9 w-9 text-primary" aria-hidden="true" />
             <span className="text-sm font-medium line-clamp-3">{title}</span>
-            <span className="text-xs text-muted-foreground">No artwork available</span>
+            {brokenImage ? (
+              <span className="text-xs font-medium text-destructive">
+                Image no longer loads. Edit to replace it.
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">No artwork available</span>
+            )}
           </div>
         )}
 
@@ -334,6 +357,7 @@ export function EntityCard<T extends CollectionRow, R>({
           meta={meta}
           href={href}
           actions={onUpdate || onRemove ? actions : null}
+          canEdit={Boolean(onUpdate)}
           openable={openable}
           onOpen={() => setDetailOpen(true)}
         />
@@ -353,6 +377,8 @@ export function EntityCard<T extends CollectionRow, R>({
         link={href}
         badge={badge}
         imageIsContent={card.imageIsContent}
+        imageIsLogo={card.imageFit === 'logo'}
+        canEdit={Boolean(onUpdate)}
         downloadName={title}
         editAction={editAction}
         onDelete={

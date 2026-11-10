@@ -89,6 +89,9 @@ export interface SortOptionDef<T> {
   hiddenWhen?: (filters: Record<string, string>) => boolean;
 }
 
+/** How a card's image sits in its box. See `card.imageFit`. */
+export type ImageFit = 'cover' | 'contain' | 'logo';
+
 /** Field types the generated add/edit form knows how to render. */
 export type FieldType = 'text' | 'textarea' | 'url' | 'select' | 'image' | 'file';
 
@@ -221,9 +224,12 @@ export interface CollectionConfig<T extends CollectionRow, R = never> {
     fallbackIcon?: LucideIcon;
     /**
      * `cover` fills the box and crops; `contain` fits the whole image in, for
-     * logos and favicons that would look wrong cropped.
+     * covers and product shots that would look wrong cropped. `logo` is
+     * `contain` on a white plate with no outline: a mark drawn in black, or
+     * exported on white, reads the same in both themes, and the hairline the
+     * site draws round photographs does not box a transparent logo in.
      */
-    imageFit?: 'cover' | 'contain';
+    imageFit?: ImageFit;
     /**
      * CSS aspect-ratio for the image box, e.g. '2 / 3' for book covers or
      * '1 / 1' for product shots. Match it to the source images and `cover`

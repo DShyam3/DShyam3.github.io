@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { ExternalLink, Trash2, CalendarDays, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,10 @@ interface CardDetailDialogProps {
   imageIsContent?: boolean;
   /** Filename offered when downloading. Defaults to the title. */
   downloadName?: string;
+  /** Sit the image on a logo's white plate, without the photo hairline. */
+  imageIsLogo?: boolean;
+  /** Whoever can fix the record is told when its image has stopped loading. */
+  canEdit?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCloseAutoFocus?: (event: Event) => void;
@@ -46,6 +50,8 @@ export function CardDetailDialog({
   badge,
   imageIsContent,
   downloadName,
+  imageIsLogo,
+  canEdit,
   editAction,
   onDelete,
   onSchedule,
@@ -77,13 +83,15 @@ export function CardDetailDialog({
       node: (
         <div className="space-y-4">
           {imageUrl ? (
-            <div className="flex justify-center rounded-xl border border-border/50 bg-background/50 p-2">
-              <img
-                src={imageUrl}
-                alt={title}
-                className="max-h-56 w-auto object-contain rounded-lg"
-              />
-            </div>
+            // Keyed by URL so a replaced image starts clean rather than
+            // inheriting the last one's failure.
+            <DetailImage
+              key={imageUrl}
+              src={imageUrl}
+              alt={title}
+              logo={Boolean(imageIsLogo)}
+              canEdit={Boolean(canEdit)}
+            />
           ) : null}
 
           <div className="space-y-1.5">
@@ -173,6 +181,8 @@ export function CardDetailDialog({
     children,
     imageIsContent,
     downloadName,
+    imageIsLogo,
+    canEdit,
     editAction,
     onDelete,
     onSchedule,
@@ -192,6 +202,49 @@ export function CardDetailDialog({
   }, [setDockedDetail]);
 
   return null;
+}
+
+/**
+ * The record's image in the detail view. A stored URL that has stopped
+ * loading leaves no broken-image box: a visitor sees nothing, and whoever can
+ * edit the record is told to replace it.
+ */
+function DetailImage({
+  src,
+  alt,
+  logo,
+  canEdit,
+}: {
+  src: string;
+  alt: string;
+  logo: boolean;
+  canEdit: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return canEdit ? (
+      <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        Image no longer loads. Edit to replace it.
+      </p>
+    ) : null;
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex justify-center rounded-xl border border-border/50 p-2',
+        logo ? 'bg-white' : 'bg-background/50',
+      )}
+    >
+      <img
+        src={src}
+        alt={alt}
+        onError={() => setFailed(true)}
+        className={cn('max-h-56 w-auto object-contain rounded-lg', logo && 'no-outline')}
+      />
+    </div>
+  );
 }
 
 function DownloadLink({ href, name }: { href: string; name: string }) {
