@@ -33,8 +33,10 @@ const SheetOverlay = React.forwardRef<
 ));
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
+// overflow-x-hidden: overflow-y-auto alone makes the x axis scroll too, so a
+// pixel of overflow let a phone drag the sheet sideways. See dialog.tsx.
 const sheetVariants = cva(
-  "fixed z-50 max-h-[100dvh] max-w-full overflow-y-auto gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+  "fixed z-50 max-h-[100dvh] max-w-full overflow-y-auto overflow-x-hidden gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
   {
     variants: {
       side: {

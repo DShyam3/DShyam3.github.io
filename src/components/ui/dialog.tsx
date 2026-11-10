@@ -59,8 +59,11 @@ const DialogContent = React.forwardRef<
       {/* minmax(0, 1fr), not the implicit auto column: an auto column grows to
           fit its widest child, and on a phone the EDC builder's widened to
           861px inside a 343px dialog, running its header under the close
-          button and off the edge. */}
-      <div className="dialog-body app-scroll min-h-0 overflow-y-auto grid grid-cols-[minmax(0,1fr)] gap-4">{children}</div>
+          button and off the edge. `overflow-x-hidden` because `overflow-y-auto`
+          alone sets the x axis to auto too: a pixel of overflow, and a phone
+          drags the whole body sideways. Wide content brings its own
+          `overflow-x-auto` wrapper (the finance tables do). */}
+      <div className="dialog-body app-scroll min-h-0 overflow-y-auto overflow-x-hidden grid grid-cols-[minmax(0,1fr)] gap-4">{children}</div>
       {/* The shared top inset reserves this close target outside the body
           scroller, including when fields are scrolled to its upper edge.
           `dialog-flush` drops the inset; see src/theme/responsive.css. */}

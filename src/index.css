@@ -402,6 +402,16 @@
     border-bottom: 1px solid hsl(var(--primary) / 0.45);
     border-right: 1px solid hsl(var(--primary) / 0.45);
   }
+
+  /* A scroller is the wrong host for the ::after. At rest it is clipped,
+     since its strokes lie on the border, outside the padding box. Once
+     scrolled, it moves with the content, so its bottom stroke rides up into
+     the middle of the panel. And hung a pixel past the right and bottom
+     edges, it made the inspector a pixel wider and taller than its box:
+     enough for a phone to drag every card's detail sideways. */
+  .hud-corners.app-scroll::after {
+    content: none;
+  }
 }
 
 /* ─── Scroll areas ──────────────────────────────────────────────────────

@@ -48,7 +48,12 @@ function DockedDetailBody({ detail, onClose }: DockedDetailBodyProps) {
         </button>
       </div>
 
-      <div className="space-y-4">{detail.node}</div>
+      {/* The panel no longer scrolls sideways, so a long URL or word in a
+          record has to wrap rather than run off under the edge. break-word,
+          not anywhere: it is inherited, and anywhere would lower the
+          min-content of every flex item below, splitting short pills such as
+          an episode's "Not released" mid-word. */}
+      <div className="space-y-4 break-words">{detail.node}</div>
     </div>
   );
 }
@@ -195,11 +200,15 @@ export function WorkspaceInspector() {
     }
   };
 
+  // Both scrollers below pin `overflow-x-hidden`. `overflow-y-auto` alone
+  // turns the x axis to auto as well, so a single stray pixel (it was the
+  // `.hud-corners::after` bracket; see src/index.css) let a phone drag every
+  // card's detail sideways.
   return (
     <>
       <aside
         aria-label="Contextual inspector"
-        className="workspace-right-inspector flex-col justify-between rounded-2xl border border-border/60 bg-popover/75 p-4 app-scroll overflow-y-auto hud-corners min-h-0"
+        className="workspace-right-inspector flex-col justify-between rounded-2xl border border-border/60 bg-popover/75 p-4 app-scroll overflow-y-auto overflow-x-hidden hud-corners min-h-0"
       >
         {dockedDetail ? (
           <DockedDetailBody detail={dockedDetail} onClose={handleCloseDocked} />
@@ -225,7 +234,7 @@ export function WorkspaceInspector() {
             onOpenAutoFocus={returnFocus.remember}
             onCloseAutoFocus={returnFocus.restore}
             onPointerDownOutside={ignoreOverlayPointerDown()}
-            className="!fixed inset-x-3 bottom-3 z-50 mx-auto flex max-h-[85dvh] max-w-md flex-col justify-between rounded-2xl border border-border/75 bg-popover/95 p-4 shadow-xl app-scroll overflow-y-auto hud-corners focus:outline-none sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2"
+            className="!fixed inset-x-3 bottom-3 z-50 mx-auto flex max-h-[85dvh] max-w-md flex-col justify-between rounded-2xl border border-border/75 bg-popover/95 p-4 shadow-xl app-scroll overflow-y-auto overflow-x-hidden hud-corners focus:outline-none sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2"
           >
             <DialogPrimitive.Title className="sr-only">
               {dockedDetail?.title ?? target?.title ?? 'Inspector'}

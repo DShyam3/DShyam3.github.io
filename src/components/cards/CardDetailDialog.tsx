@@ -96,7 +96,10 @@ export function CardDetailDialog({
 
           <div className="space-y-1.5">
             <div className="flex items-start justify-between gap-2">
-              <h2 className="font-serif text-base font-semibold text-foreground leading-snug">
+              {/* A flex item keeps its longest word as a floor, so a title that
+                  is one long word or URL would run past the panel, which no
+                  longer scrolls sideways. Same pattern as DialogTitle. */}
+              <h2 className="min-w-0 [overflow-wrap:anywhere] font-serif text-base font-semibold text-foreground leading-snug">
                 {link ? (
                   <a
                     href={link}
