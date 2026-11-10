@@ -5,6 +5,7 @@ import { inspirationsCollection } from './inspirations';
 import { inventoryCollection } from './inventory';
 import { linksCollection } from './links';
 import { photosCollection } from './photos';
+import { projectsCollection } from './projects';
 import { recipesCollection } from './recipes';
 import { thoughtsCollection } from './thoughts';
 import type { CollectionConfig, CollectionRow } from './types';
@@ -26,6 +27,7 @@ import type { CollectionConfig, CollectionRow } from './types';
 /* eslint-disable @typescript-eslint/no-explicit-any -- the registry holds
    configs with different row and search-result types. */
 export const collections: CollectionConfig<any, any>[] = [
+  projectsCollection,
   linksCollection,
   booksCollection,
   articlesCollection,

@@ -24,6 +24,7 @@
 
 [data-section='inspiration'],
 [data-section='thoughts'],
+[data-section='projects'],
 [data-palette='peach'] {
   --section-colour: var(--peach);
 }

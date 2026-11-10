@@ -40,6 +40,7 @@ import { WorkspaceInspectorProvider } from './contexts/WorkspaceInspectorContext
 import Index from './pages/Index';
 import Inventory from './pages/Inventory';
 import Links from './pages/Links';
+import Projects from './pages/Projects';
 import Books from './pages/Books';
 import Beliefs from './pages/Beliefs';
 import Thoughts from './pages/Thoughts';
@@ -151,6 +152,7 @@ const App = () => {
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
+                  <Route path="/projects" element={<Projects />} />
                   <Route path="/finance/*" element={<FinanceRoute />} />
                   <Route path="/travel" element={<Travel />} />
                   <Route path="/inventory" element={<Inventory />} />

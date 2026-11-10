@@ -766,28 +766,26 @@ const Index = () => {
               </div>
             </div>
 
-            <div
+            <button
+              type="button"
               id="about-projects"
-              tabIndex={0}
-              role="region"
-              aria-label="Projects portfolio"
+              onClick={() => navigate('/projects')}
               data-palette="peach"
               className="about-pane about-projects ambient-card bg-card/40 backdrop-blur-sm rounded-[1.5rem] p-6 flex flex-col items-center justify-center text-center transition-[background-color] duration-200 hover:bg-card/50 group"
               style={{ boxShadow: 'var(--shadow-border)' }}
             >
-              <div className="bg-background/50 p-4 rounded-full mb-5 group-hover:scale-110 transition-transform duration-500">
+              <span className="block bg-background/50 p-4 rounded-full mb-5 group-hover:scale-110 transition-transform duration-500">
                 <FolderGit2 className="w-8 h-8 text-primary/70" />
-              </div>
+              </span>
               <DotMatrixText
-                text="PROJECTS PORTFOLIO"
+                text="PROJECTS"
                 size="md"
                 className="text-foreground mb-3 font-bold"
               />
-              <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Curating my life&apos;s work. A collection of physical and digital creations is
-                coming soon.
-              </p>
-            </div>
+              <span className="block max-w-xs text-sm leading-relaxed text-muted-foreground">
+                What I have built, what I am building, and what is planned.
+              </span>
+            </button>
           </div>
         )}
       </div>

@@ -2310,6 +2310,39 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          created_at: string
+          id: string
+          image: string | null
+          skills: string | null
+          status: string
+          summary: string | null
+          title: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image?: string | null
+          skills?: string | null
+          status?: string
+          summary?: string | null
+          title: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image?: string | null
+          skills?: string | null
+          status?: string
+          summary?: string | null
+          title?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
       rate_limits: {
         Row: {
           count: number

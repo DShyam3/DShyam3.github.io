@@ -357,13 +357,15 @@ export function EntityFormDialog<T extends CollectionRow, R>({
       }
     }
 
-    // Empty optional fields are sent as undefined rather than '' so the column
-    // stays null instead of collecting blank strings.
+    // An empty optional field never stores ''. On add it is left out, so the
+    // column takes its default. On edit it is sent as null: left out, the
+    // update would keep the old value and a field could never be cleared.
+    const empty = mode === 'edit' ? null : undefined;
     setSaving(true);
     try {
       await onSubmit({
         ...(Object.fromEntries(
-          config.fields.map((f) => [f.name, values[f.name]?.trim() || undefined]),
+          config.fields.map((f) => [f.name, values[f.name]?.trim() || empty]),
         ) as FormValues),
         ...uploaded,
       });

@@ -8,6 +8,7 @@ export interface SiteNavLink {
 
 const ALL_LINKS: SiteNavLink[] = [
   { to: '/', label: 'About' },
+  { to: '/projects', label: 'Projects' },
   { to: '/finance', label: 'Finance', requiresAuth: true },
   { to: '/travel', label: 'Travel' },
   { to: '/inventory', label: 'Inventory' },
