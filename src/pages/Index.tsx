@@ -304,7 +304,7 @@ const Index = () => {
             <div className="home-hero-grid">
               {/* Left Editorial Hero Card */}
               <section
-                aria-label="Introduction and quick prompts"
+                aria-label="Introduction"
                 className="home-hero-card ambient-card hud-corners"
                 data-palette="sage"
               >
@@ -433,9 +433,9 @@ const Index = () => {
             </section>
 
             {/* "Continue exploring" Record List */}
-            <section aria-label="Continue exploring records" className="home-records-section">
+            <section aria-label="Continue exploring sections" className="home-records-section">
               <div className="home-section-header">
-                <span className="home-section-eyebrow">CONTINUE EXPLORING · CONNECTED RECORDS</span>
+                <span className="home-section-eyebrow">CONTINUE EXPLORING · SECTIONS</span>
                 <span className="home-section-sub">Inspect metadata or open section</span>
               </div>
 
