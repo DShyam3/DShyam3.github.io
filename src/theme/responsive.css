@@ -430,7 +430,10 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
   overflow: hidden;
 }
 .watchlist-detail-with-seasons .watchlist-episode-rail > * { flex: 1; min-height: 0; }
-[data-episode-scroll] {
+/* Scoped: an unbounded list with overscroll containment swallows the wheel
+   once it reaches its end, so the shell inspector would stop scrolling. */
+.watchlist-detail-with-seasons [data-episode-scroll] {
+  overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scroll-padding-block: 1rem;

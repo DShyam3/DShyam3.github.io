@@ -70,7 +70,9 @@ export function SeasonEpisodeList({
 
   return (
     // The season picker and its season-level controls stay put; only the
-    // episode list below them scrolls.
+    // episode list below them scrolls -- but only inside a height-bounded
+    // frame (.watchlist-detail-with-seasons). In the unbounded inspector the
+    // list must not be its own scroller, or it traps the wheel.
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 space-y-2 pb-2">
         <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground" data-season-heading>
@@ -158,7 +160,7 @@ export function SeasonEpisodeList({
       {currentSeason && (
         <div
           data-episode-scroll
-          className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pt-1"
+          className="min-h-0 flex-1 space-y-1.5 pt-1"
         >
           {currentSeason.episodes.map((episode) => {
             const watched = isEpisodeWatched(
