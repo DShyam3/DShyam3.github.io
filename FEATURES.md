@@ -19,26 +19,63 @@ end, at the database rather than in the UI.
 
 ---
 
+## Workspace shell
+
+Every page sits in one frame: the header, the page in a middle card, and the
+footer. The frame gains parts as the window grows.
+
+On a phone, below 768px, the header and footer are each one row. The header
+keeps the avatar, which returns to Home, the page title, a search button, the
+theme toggle and the menu. The social links sit in the menu panel below 700px.
+
+From 768px wide, a left rail lists the numbered sections, with a Display toggle
+(Standard or Larger) and a Search button. A search bar sits above the footer.
+
+From 1280px wide and 600px tall, a selected record opens in an inspector column
+to the right of the page. Below that size it opens as a sheet over the page.
+
+**Search** opens with ⌘K (Ctrl+K elsewhere) or any search button. It lists the
+sections. From two characters it also lists records, matched on the fields that
+each collection's own search box uses, and only in collections the visitor can
+open. Photos and Beliefs have no search box, so they are not searched. Picking a
+record opens its collection with the search and filters set so the record is on
+screen. Search reads stored rows only and answers no questions.
+
+In the palette, Tab stays within it and typing stays in the search field. Up
+and Down move a highlight
+through the sections and then the records, wrapping at either end. Enter opens
+the highlighted result and Escape closes the palette. Closing the palette or the
+inspector sheet returns focus to whatever opened it.
+
+**Inspector.** A collection card's detail opens in the inspector rather than a
+dialog. An admin sees the card's Edit and Delete actions there. Escape, or the
+close button, clears the selection.
+
+**Install.** The site has a home-screen icon on iOS. Its web manifest gives
+installable icons at 192px and 512px, and a maskable 512px icon.
+
 ## Home
 
-Dot-matrix identity rendered in real text — Doto as a variable font, where the
-dots are circles that fuse as weight increases, so the look is reached for with
-weight rather than font-size. A dot-matrix globe and clock sit beside it.
+The name is set in dot-matrix text: Doto as a variable font, where the dots are
+circles that fuse as weight increases, so the look is reached for with weight
+rather than font-size. Beside it sit a Download CV button and an Experience &
+Education button, which opens the timeline.
 
 Experience and education appear as one timeline, newest first, roles and degrees
 interleaved by start date. Entries fill two compact, content-sized columns from left to right when the
 card is wide enough, and one column in narrower cards. Both are editable in place when signed in as admin,
 skeleton-loaded otherwise. The CV is a PDF in public storage, served from one
 fixed address that a new upload replaces; a file that is not a PDF is refused.
-Admins get a second add button for education.
+Admins also get Add experience, Add education and Upload CV buttons.
 
-About stays within the page frame; experience and projects scroll inside their
-cards. Large screens show portrait and biography above the timeline, with
-projects alongside; the biography shows in full unless it would need more than
-about two-thirds of the height, and the timeline takes the rest. Smaller or shorter screens offer About, Experience and
-Projects buttons to select one full-size card, where the biography scrolls only
-if it cannot fit. Scroll regions support keyboard
-focus, and short screens scroll the whole selected card to keep controls reachable.
+The Overview shows a 3D constellation of the sections, which can be dragged to
+rotate and paused, and four tiles of counts: countries, items, collections and
+milestones. Selecting a section shows its summary and counts in the inspector.
+The tiles open their section, and a list gives each section one row with
+Inspect and Open. Finance is in the constellation for an admin only.
+
+Three tabs switch the Home views: Overview, Experience & CV, and Biography &
+Projects. The last holds the biography with its portrait and the projects panel.
 
 ## Collections
 
@@ -60,16 +97,24 @@ Media cards show the category badge on the artwork, truncating rather than overl
 Search and filter controls wrap into available space. Cards keep readable widths
 as the number of columns changes.
 
-Collection and EDC detail dialogs grow with the screen and their content, up to
-896px wide. On screens at least 640px wide, the image stays stationary beside
-the details; the details scroll independently only when they exceed the
-available height. Images fit the available space, and the details pane
-supports keyboard focus and scrolling. On phones, the image and details stack
-in one scrolling dialog.
+A collection card's detail, and an EDC card's, opens in the workspace inspector
+(see Workspace shell). The image sits above the details, no taller than 14rem,
+and the details scroll within the inspector. Admins edit and delete a collection
+record from its detail as well as from the card.
 
 Links are organised into categories: All, Dev Setup, Websites, iPhone, iPad, Mac.
+Link icons show whole on a white plate, with no outline.
 
 A link field in an admin form takes only an `http`, `https` or `mailto` address, and the form refuses any other value. A saved address of another kind shows without a link. Images uploaded to a collection must be JPEG, PNG, GIF, WebP or HEIC files, judged by their contents rather than their name.
+
+A stored image that stops loading shows the collection's placeholder tile, the
+same as a record that never had one. An admin also sees "Image no longer loads.
+Edit to replace it." on the card and in the detail. Watchlist posters and EDC
+cards do not show this notice.
+
+Beliefs is private: a visitor who opens it is sent to Home. An admin who reloads
+on Beliefs stays there, because the page waits for the session to load before it
+decides.
 
 ## Books
 
@@ -739,7 +784,7 @@ the page between palettes over 350ms; other browsers switch the palette immediat
 The moon rises smoothly into place without overshooting. Reduced-motion
 preferences skip the animation.
 
-The header's "+" button opens social links beside it. From 700px they open to its right; between 700 and 1023px the page title fades out to make room. Below 700px they open to its left and the name fades out instead. On phones the page title wraps between words, and the menu and theme controls move to a line of their own when the title's longest word cannot sit beside them.
+From 700px the header's "+" button opens the social links to its right; between 700 and 1023px the page title fades out to make room. Below 700px there is no social button, and the links sit at the foot of the menu panel. On phones the header stays one row: the page title wraps between words beside the avatar and the controls.
 
 Every route's content sits in one "middle card" between the fixed header and footer. The card is the page's only vertical scroller. From 768px wide it has a fine border, 24px corners and a quiet tint. Below 768px there is no frame and the ordinary page gutter is the inset.
 
