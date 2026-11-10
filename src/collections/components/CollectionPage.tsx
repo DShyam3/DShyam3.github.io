@@ -26,7 +26,7 @@ interface CollectionPageProps<T extends CollectionRow, R> {
 export function CollectionPage<T extends CollectionRow, R>({
   config,
 }: CollectionPageProps<T, R>) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isAuthLoading } = useAuth();
   const {
     items,
     groups,
@@ -78,7 +78,11 @@ export function CollectionPage<T extends CollectionRow, R>({
     ));
 
   // Beliefs is private. Hooks run first so this stays a valid hook order.
-  if (config.adminOnly && !isAdmin) return <Navigate to="/" replace />;
+  // While the session is still being read, nobody is an admin yet: redirecting
+  // then sent a signed-in admin home on every reload of the page.
+  if (config.adminOnly && !isAdmin) {
+    return isAuthLoading ? null : <Navigate to="/" replace />;
+  }
 
   const count = items.length;
   const noun = count === 1 ? config.noun.singular : config.noun.plural;
