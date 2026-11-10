@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { ArrowUpRight, X } from 'lucide-react';
 import {
   useWorkspaceInspector,
@@ -7,7 +8,10 @@ import {
   type InspectorMetadataRow,
   type WorkspaceInspectorTarget,
 } from '@/contexts/WorkspaceInspectorContext';
+import { DialogOverlay } from '@/components/ui/dialog';
+import { ignoreOverlayPointerDown } from '@/components/ui/dismiss-on-release';
 import { cn } from '@/lib/utils';
+import { useReturnFocus } from './useReturnFocus';
 
 function getRowToneClass(tone?: InspectorMetadataRow['tone']): string {
   switch (tone) {
@@ -157,6 +161,7 @@ export function WorkspaceInspector() {
   } = useWorkspaceInspector();
 
   const hasSelection = Boolean(target) || Boolean(dockedDetail);
+  const returnFocus = useReturnFocus();
 
   useEffect(() => {
     // While the search palette is open, Escape belongs to it. A dialog that
@@ -182,6 +187,14 @@ export function WorkspaceInspector() {
     setDockedDetail(null);
   };
 
+  const handleCloseSheet = () => {
+    if (dockedDetail) {
+      handleCloseDocked();
+    } else {
+      resetTarget();
+    }
+  };
+
   return (
     <>
       <aside
@@ -195,32 +208,36 @@ export function WorkspaceInspector() {
         ) : null}
       </aside>
 
-      {inspectorSheetOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-background/75 backdrop-blur-sm p-3 sm:p-4"
-          onClick={() => {
-            if (dockedDetail) {
-              handleCloseDocked();
-            } else {
-              resetTarget();
-            }
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Inspector"
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md max-h-[85dvh] flex flex-col justify-between rounded-2xl border border-border/75 bg-popover/95 p-4 shadow-xl app-scroll overflow-y-auto hud-corners"
+      {/* Below the width that gives the inspector a column it is a modal
+          sheet. Radix traps focus in it and closes it on Escape; focus then
+          returns to the card that opened it. `!fixed` because `.hud-corners`
+          sets `position: relative` later in the same layer. */}
+      <DialogPrimitive.Root
+        open={inspectorSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) handleCloseSheet();
+        }}
+      >
+        <DialogPrimitive.Portal>
+          <DialogOverlay className="bg-background/75" />
+          <DialogPrimitive.Content
+            aria-describedby={undefined}
+            onOpenAutoFocus={returnFocus.remember}
+            onCloseAutoFocus={returnFocus.restore}
+            onPointerDownOutside={ignoreOverlayPointerDown()}
+            className="!fixed inset-x-3 bottom-3 z-50 mx-auto flex max-h-[85dvh] max-w-md flex-col justify-between rounded-2xl border border-border/75 bg-popover/95 p-4 shadow-xl app-scroll overflow-y-auto hud-corners focus:outline-none sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2"
           >
+            <DialogPrimitive.Title className="sr-only">
+              {dockedDetail?.title ?? target?.title ?? 'Inspector'}
+            </DialogPrimitive.Title>
             {dockedDetail ? (
               <DockedDetailBody detail={dockedDetail} onClose={handleCloseDocked} />
             ) : target ? (
               <InspectorBody target={target} onNavigate={resetTarget} onClose={resetTarget} />
             ) : null}
-          </div>
-        </div>
-      ) : null}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </>
   );
 }
