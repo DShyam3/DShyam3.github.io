@@ -98,6 +98,7 @@ Server-side Deno functions, deployed independently of the frontend — **pushing
 | `tmdb-proxy` | Proxies TMDB API calls so the TMDB key never reaches the browser. Endpoint allow-listed (only the shapes the app actually uses) to stop it being used as a free generic proxy. Rate-limited to 60 requests a minute per IP in the `rate_limits` table; passes TMDB's status code through. | `TMDB_API_KEY` | Public (needed for anonymous visitors browsing the Watchlist page), origin-restricted CORS |
 | `truelayer-sync` | Finance page's bank connection: OAuth exchange, balance/transaction sync via TrueLayer, using the service role key to write `finance_*` tables directly (bypasses RLS, which is fine since the function itself checks the caller is the admin). OAuth state is generated server-side, hash-stored against the profile with a 10-minute expiry, exact-redirect allow-listed and consumed before token exchange; the browser keeps its own copy per state in localStorage, so a callback that returns in a fresh tab (a bank's app on a phone) still matches. A manual sync is refused (429) within 15 minutes of the last one; linking a bank clears that. | `TRUELAYER_CLIENT_ID`, `TRUELAYER_CLIENT_SECRET` (+ auto-injected `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`) | Admin session (`is_admin()`) or the service role for the scheduled sync |
 | `watchlist-cron-sync` | The watchlist sync (see below). Refreshes status, episodes, seasons, streaming platform from TMDB for every watchlist item, or for one title when the body names `{ category, id }`. A manual full sync is refused (429) within 10 minutes of the last; single-title resyncs are capped at 20 a minute. | `TMDB_API_KEY` (+ auto-injected Supabase vars) | Service role key (pg_cron) or an admin session (the Sync buttons) |
+| `travel-photo` | Travel journal photo upload. Accepts one JPEG up to 8 MB (checked by magic bytes), strips EXIF, GPS and other metadata, and stores it under a UUID name in the private `travel-photos` bucket, which browsers cannot write to directly. | `SITE_ORIGIN` (+ auto-injected Supabase vars) | Admin session (`is_admin()`), origin-restricted CORS |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically into every edge function's environment by the platform — never set those manually. Everything else needs:
 
@@ -106,6 +107,7 @@ supabase secrets set TMDB_API_KEY=... TRUELAYER_CLIENT_ID=... TRUELAYER_CLIENT_S
 supabase functions deploy tmdb-proxy
 supabase functions deploy truelayer-sync
 supabase functions deploy watchlist-cron-sync
+supabase functions deploy travel-photo
 ```
 
 ### One watchlist sync, server-side

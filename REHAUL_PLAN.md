@@ -285,8 +285,8 @@ checked, and how, is in `SECURITY.md`.
 **Unverified.** Not checked, and not to be read as passed: a real authenticated
 run of `truelayer-sync` v48 and `watchlist-cron-sync` v14 (the 2026-10-25 probes
 had no admin session); the `verify_jwt` setting on `truelayer-sync` v48 (read
-back before v48 was deployed; the deploy flags keep it false); whether
-`SITE_ORIGIN` is set on hosted; live response headers; a signed-in upload or
+back before v48 was deployed; the deploy flags keep it false); live response
+headers; a signed-in upload or
 saved link on the live site (checked on the local stack only); a real HEIC file
 (the tests use synthetic `ftyp` boxes). Since the Postgres 17 upgrade
 (2026-10-25): the first scheduled cron runs (the next is 02:10 UTC), the edge
@@ -497,9 +497,10 @@ The journal is in the tree but not yet live: four `travel_*` tables
 the `travel-photo` function, CSV / Flighty / `.ics` import, and archive export
 and restore. Left before it ships:
 
-- Deploy `travel-photo`, and verify the public/private read boundary on
-  production with a real published and a real private row (the migrations are
-  applied; only empty tables have been probed).
+- Verify the public/private read boundary on production with a real
+  published and a real private row, and one signed-in photo upload through
+  `travel-photo` (migrations applied and the function deployed; only empty
+  tables and unauthenticated requests have been probed).
 - Regenerate the Supabase types so `useTravelJournal.ts` stops casting the
   client; the cast hides column-name typos, payload shapes and the
   `travel_restore` signature.
