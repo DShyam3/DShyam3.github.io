@@ -497,8 +497,9 @@ The journal is in the tree but not yet live: four `travel_*` tables
 the `travel-photo` function, CSV / Flighty / `.ics` import, and archive export
 and restore. Left before it ships:
 
-- Apply both migrations, deploy `travel-photo`, and verify the public/private
-  read boundary on a live stack.
+- Deploy `travel-photo`, and verify the public/private read boundary on
+  production with a real published and a real private row (the migrations are
+  applied; only empty tables have been probed).
 - Regenerate the Supabase types so `useTravelJournal.ts` stops casting the
   client; the cast hides column-name typos, payload shapes and the
   `travel_restore` signature.
