@@ -8,8 +8,8 @@
  * has no plan or course dates.
  */
 
-import { useEffect, useId, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { useEffect, useId, useState, type KeyboardEvent } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -138,6 +138,14 @@ export function DebtFormDialog({
     }
     set('draws', [...form.draws, { id: `dw_${Date.now()}`, date: draw.date, amount, label: draw.label || undefined }]);
     setDraw({ date: '', amount: '', label: '' });
+  };
+
+  // Enter in a borrowing field adds the row once any of it is filled in. In
+  // an empty row it falls through and submits the dialog, as it always did.
+  const onDrawKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing || !(draw.date || draw.amount || draw.label)) return;
+    e.preventDefault();
+    addDraw();
   };
 
   const submit = (e: React.FormEvent) => {
@@ -319,11 +327,46 @@ export function DebtFormDialog({
                 ))}
               </ul>
             )}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]">
-              <Input type="date" aria-label="Borrowing date" value={draw.date} onChange={e => setDraw({ ...draw, date: e.target.value })} className="h-10" />
-              <Input inputMode="decimal" aria-label="Borrowing amount" placeholder="Amount (£)" value={draw.amount} onChange={e => setDraw({ ...draw, amount: e.target.value })} className="h-10 tabular-nums" />
-              <Input aria-label="Borrowing label" placeholder={kind === 'student' ? 'e.g. Year 1 tuition' : 'Label'} value={draw.label} onChange={e => setDraw({ ...draw, label: e.target.value })} className="h-10" />
-              <Button type="button" variant="outline" onClick={addDraw} className="h-10">Add</Button>
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Input
+                  type="date"
+                  aria-label="Borrowing date"
+                  value={draw.date}
+                  onChange={e => setDraw({ ...draw, date: e.target.value })}
+                  onKeyDown={onDrawKeyDown}
+                  className="h-10"
+                />
+                <Input
+                  inputMode="decimal"
+                  aria-label="Borrowing amount"
+                  placeholder="Amount (£)"
+                  value={draw.amount}
+                  onChange={e => setDraw({ ...draw, amount: e.target.value })}
+                  onKeyDown={onDrawKeyDown}
+                  className="h-10 tabular-nums"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  aria-label="Borrowing label"
+                  placeholder={kind === 'student' ? 'e.g. Year 1 tuition' : 'e.g. Further advance'}
+                  value={draw.label}
+                  onChange={e => setDraw({ ...draw, label: e.target.value })}
+                  onKeyDown={onDrawKeyDown}
+                  className="h-10 flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addDraw}
+                  aria-label="Add borrowing"
+                  className="h-10 shrink-0 gap-1.5 px-3.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
             </div>
           </fieldset>
 
