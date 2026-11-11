@@ -303,5 +303,8 @@ export function buildTravelBackup(data: TravelJournal): string {
 }
 
 export function importedRowMatches(existing: TravelItinerary, incoming: JournalDraft<TravelItinerary>): boolean {
-  return (['kind', 'title', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'arrival_time_zone', 'origin', 'destination', 'status'] as const).every(field => existing[field] === incoming[field]);
+  // Status is the owner's call at review (planned or completed), so a re-import
+  // never reads it as a change; a journey newly cancelled at the source is news.
+  if (incoming.status === 'cancelled' && existing.status !== 'cancelled') return false;
+  return (['kind', 'title', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'arrival_time_zone', 'origin', 'destination'] as const).every(field => existing[field] === incoming[field]);
 }

@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useVisitedCountries } from '@/features/travel/useVisitedCountries';
 import { useVisitedCities } from '@/features/travel/useVisitedCities';
 import { useCityMap } from '@/features/travel/useCityMap';
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { CONTINENT_ORDER } from '@/features/travel/continents';
 import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -21,7 +21,9 @@ import { TravelJournalPanel } from './TravelJournalPanel';
 import { TravelJournalWorkspace } from './TravelJournalWorkspace';
 import { TravelImportDialog } from './TravelImportDialog';
 import { TravelBackupDialog } from './TravelBackupDialog';
-import { cityIdentity, type CityIdentity } from './journal-types';
+import { TravelItineraryDetail } from './TravelItineraryDetail';
+import { countryFlightRows, countryFlightSummary, useAirportCountries } from './journal-flights';
+import { cityIdentity, type CityIdentity, type TravelItinerary } from './journal-types';
 import '@/pages/Index.css';
 
 /** The slice of restcountries.com's shape that `public/countries.json` is read for. */
@@ -35,10 +37,15 @@ type ViewMode = 'countries' | 'cities';
 const TravelContent = () => {
     const isMobile = useIsMobile();
     const { isAdmin } = useAuth();
-    const { selectTarget, resetTarget, setDockedDetail } = useWorkspaceInspector();
+    const { target, selectTarget, resetTarget, setDockedDetail } = useWorkspaceInspector();
     const journal = useTravelJournal();
     const [section, setSection] = useState<'places' | 'trips'>('places');
     const [selectedCity, setSelectedCity] = useState<CityIdentity | null>(null);
+    // The inspector shows one journal record at a time: a city or an itinerary item.
+    const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+    const selectedItem = selectedItemId ? journal.data.itinerary.find(item => item.id === selectedItemId) : undefined;
+    const selectCity = useCallback((city: CityIdentity) => { setSelectedItemId(null); setSelectedCity(city); }, []);
+    const selectItem = useCallback((item: TravelItinerary) => { setSelectedCity(null); setSelectedItemId(item.id); }, []);
     const [importOpen, setImportOpen] = useState(false);
     const [backupOpen, setBackupOpen] = useState(false);
     const [countryError, setCountryError] = useState('');
@@ -121,21 +128,38 @@ const TravelContent = () => {
         }
     }, [selectedCountry, cityMapLoaded, loadCityMap]);
 
-    // Sync selected country into the 3rd-column WorkspaceInspector
+    // The airport table is wanted only where a flight's airports or a country's flights are shown.
+    const airports = useAirportCountries(Boolean(selectedCountry || selectedItem?.kind === 'flight') && journal.data.itinerary.some(item => item.kind === 'flight'));
+
+    // What the inspector holds, read by the effect below without re-running it on every selection.
+    const inspectorTargetId = useRef<string | null>(null);
+    useEffect(() => { inspectorTargetId.current = target?.id ?? null; }, [target]);
+    // The country this page last put in the inspector. A data refresh updates it in place,
+    // but never reopens a column the visitor has closed.
+    const shownCountry = useRef<string | null>(null);
+
+    // Sync selected country into the 3rd-column WorkspaceInspector. Places only:
+    // the country belongs to the map, and Trips has its own selections.
     useEffect(() => {
-        if (selectedCity) return;
-        if (!selectedCountry) {
+        if (selectedCity || selectedItem) { shownCountry.current = null; return; }
+        if (section !== 'places' || !selectedCountry) {
+            shownCountry.current = null;
             resetTarget();
             return;
         }
+        const id = `travel-country-${selectedCountry.code}`;
+        if (shownCountry.current === selectedCountry.code && inspectorTargetId.current !== id) return;
+        shownCountry.current = selectedCountry.code;
         const citiesForCountry = visitedCities.filter(
             (c) => c.country_code === selectedCountry.code,
         );
         const continent = continentByCode[selectedCountry.code];
         const unMember = sovereignCodes.has(selectedCountry.code);
+        // Read from airport codes, so it waits on the airport table and covers flights only.
+        const flightRows = airports ? countryFlightRows(countryFlightSummary(journal.data.itinerary, selectedCountry.code, airports)) : [];
 
         selectTarget({
-            id: `travel-country-${selectedCountry.code}`,
+            id,
             eyebrow: 'Selected Country',
             title: selectedCountry.name,
             summary:
@@ -155,11 +179,16 @@ const TravelContent = () => {
                     value: `${citiesForCountry.length} cities`,
                     tone: 'amber',
                 },
+                ...flightRows,
             ],
         });
     }, [
+        section,
         selectedCountry,
         selectedCity,
+        selectedItem,
+        airports,
+        journal.data.itinerary,
         visitedCities,
         visitedCountries,
         continentByCode,
@@ -290,11 +319,14 @@ const TravelContent = () => {
     const handleCountryClick = useCallback((code: string, name: string) => {
         const flagUrl = `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
         setSelectedCity(null);
+        setSelectedItemId(null);
         setDockedDetail(null);
         setCountrySearch('');
         setShowCountryResults(false);
         setSelectedCountry({ code, name, flagUrl });
         setFocusTrigger(prev => prev + 1);
+        // Choosing a country, even the same one again, always opens its details.
+        shownCountry.current = null;
     }, [setDockedDetail]);
 
     const onGlobeCountryClick = useCallback((code: string, name: string) => {
@@ -304,6 +336,7 @@ const TravelContent = () => {
     const handleCityPanelBack = useCallback(() => {
         const code = selectedCountry?.code;
         setSelectedCity(null);
+        setSelectedItemId(null);
         setDockedDetail(null);
         setSelectedCountry(null);
         requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-country="${code}"]`)?.focus());
@@ -322,6 +355,23 @@ const TravelContent = () => {
             node: <TravelJournalPanel key={selectedCity.city_key} city={selectedCity} journal={journal} isAdmin={isAdmin} legacyVisited={visitedCities.some(c => cityIdentity(c).city_key === selectedCity.city_key)} />,
         });
     }, [selectedCity, journal, isAdmin, visitedCities, setDockedDetail]);
+    useEffect(() => {
+        if (!selectedItemId) return;
+        // Removed elsewhere, e.g. in another tab: nothing is left to show, and a
+        // restore that brings the same id back must not reopen it unasked.
+        if (!selectedItem) { if (!journal.loading) { setSelectedItemId(null); setDockedDetail(null); } return; }
+        setDockedDetail({
+            id: `travel-item-${selectedItem.id}`,
+            eyebrow: ({ flight: 'Flight', train: 'Train', stay: 'Stay', activity: 'Activity' } as const)[selectedItem.kind], title: selectedItem.title,
+            onClose: () => setSelectedItemId(null),
+            node: <TravelItineraryDetail key={selectedItem.id} item={selectedItem} journal={journal} isAdmin={isAdmin} airports={airports} onDeleted={() => {
+                setSelectedItemId(null);
+                setDockedDetail(null);
+                // The row and its detail are gone, so focus would fall to the page body.
+                requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-travel-heading]')?.focus());
+            }} />,
+        });
+    }, [selectedItemId, selectedItem, journal, isAdmin, airports, setDockedDetail]);
     useEffect(() => () => setDockedDetail(null), [setDockedDetail]);
 
     // Total visited cities count
@@ -342,7 +392,7 @@ const TravelContent = () => {
                             <Button size="sm" variant="ghost" disabled={journal.loading || !!journal.error} onClick={() => setBackupOpen(true)}>Backup & restore</Button>
                         </div>}
                     </div>
-                    {section === 'trips' ? <TravelJournalWorkspace journal={journal} isAdmin={isAdmin} cities={journalCities} onSelectCity={setSelectedCity} /> : <>
+                    {section === 'trips' ? <TravelJournalWorkspace journal={journal} isAdmin={isAdmin} cities={journalCities} onSelectCity={selectCity} selectedItemId={selectedItem ? selectedItem.id : null} onSelectItem={selectItem} /> : <>
                     {/* WHERE I'VE BEEN */}
                     <div className="w-full flex-1 min-h-0 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
                         <div className="travel-layout">
@@ -449,9 +499,9 @@ const TravelContent = () => {
                                             onAddCity={(city) => handleAddCity(city)}
                                             onRemoveCity={async (id: string) => { await removeCity(Number(id)); }}
                                             onBack={handleCityPanelBack}
-                                            onSelectCity={(city) => setSelectedCity(cityIdentity(city))}
+                                            onSelectCity={(city) => selectCity(cityIdentity(city))}
                                             journalCities={journalCities.filter(city => city.country_code === selectedCountry.code)}
-                                            onSelectJournalCity={setSelectedCity}
+                                            onSelectJournalCity={selectCity}
                                             countryVisited={visitedCodes.includes(selectedCountry.code)}
                                             onMarkCountryVisited={() => { void handleAddCountry(selectedCountry); }}
                                             countryError={countryError}

@@ -489,7 +489,11 @@ searchable visited countries, a third-column city journal, dated trips and
 confirmed city visits, reviewed Flighty file imports, favourites, city and trip
 photos, and a portable backup. Flight records serve as import evidence, not a
 standalone flight-statistics product; a connection never becomes a city visit
-automatically. Undated legacy history is preserved. New imports stay private
+automatically. One exception, at the owner's request (2026-11-11): a country's
+details show the owner four flight rows (flown and planned, most used
+airports, first and latest flight), computed from airport codes through a
+bundled OurAirports table. That is a readout on a record already selected, not
+a flights page, leaderboard or badge, so the statistics rule otherwise holds. Undated legacy history is preserved. New imports stay private
 until explicitly published.
 
 Open now that it is live:
@@ -524,6 +528,7 @@ Later:
   `statement-import.ts`) and one link validator (four copies disagree; the
   editor accepts a bare `/` that the database rejects).
 - Country search lists every match with its flag image; cap it with "show more".
+- Declined import rows are not remembered: a flight the owner leaves unticked in the import preview is offered again as new on every re-import, since an export always repeats the whole history. Record declined source keys (owner-only) so the preview can hide them too.
 
 From the blueprint: a keyboard-accessible photo lightbox;
 typed links to existing records (a book read on the trip, a recipe tried

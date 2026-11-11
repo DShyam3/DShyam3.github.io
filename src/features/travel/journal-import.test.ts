@@ -61,6 +61,13 @@ describe('travel CSV import', () => {
     expect(importedRowMatches(stored, parsed.rows[0])).toBe(true);
     expect(importedRowMatches({ ...stored, title: 'Owner corrected title' }, parsed.rows[0])).toBe(false);
   });
+  it('treats the status chosen at review as the owner\'s, but a newly cancelled journey as a change', () => {
+    const parsed = parseTravelCsv('date,title,id\n2026-01-01,Walk,one');
+    const stored = { ...base, id: memoryId, ...parsed.rows[0], status: 'completed' } as TravelItinerary;
+    expect(importedRowMatches(stored, parsed.rows[0])).toBe(true);
+    expect(importedRowMatches(stored, { ...parsed.rows[0], status: 'cancelled' })).toBe(false);
+    expect(importedRowMatches({ ...stored, status: 'cancelled' }, { ...parsed.rows[0], status: 'cancelled' })).toBe(true);
+  });
   it('caps file and row counts', () => {
     expect(() => parseTravelCsv('x'.repeat(5 * 1024 * 1024 + 1))).toThrow('5 MB');
     expect(() => parseTravelCsv(`date,title\n${'2026-01-01,Walk\n'.repeat(2001)}`)).toThrow('2,000');

@@ -1,4 +1,14 @@
-import type { TravelTrip, TravelVisit } from './journal-types';
+import type { TravelItinerary, TravelTrip, TravelVisit } from './journal-types';
+
+type Timed = Pick<TravelItinerary, 'start_date' | 'start_time' | 'title'>;
+const startKey = (item: Timed) => `${item.start_date ?? '9999-12-31'}T${item.start_time ?? '99:99'}`;
+
+/** Earliest first by recorded local date, then time; undated items last, ties by title. */
+export function compareItineraryStart(a: Timed, b: Timed): number {
+  const left = startKey(a);
+  const right = startKey(b);
+  return left < right ? -1 : left > right ? 1 : a.title.localeCompare(b.title);
+}
 
 /** Summarises only recorded stays. Callers supply rows already filtered by RLS. */
 export function citySummary(visits: readonly TravelVisit[], cityKey: string, trips?: readonly TravelTrip[]) {

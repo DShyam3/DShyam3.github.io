@@ -10,7 +10,7 @@ Travel should answer: Where have I been? When was I there? What did I love? What
 
 The globe is the overview; the third column becomes the personal journal for whatever is selected. Trips connect places over time. Cities collect memories across trips. Flight imports supply evidence and save typing, without deciding which places count as visits.
 
-Keep the visual character of phase 0. Use one strong map, quiet readable panels, existing tokens, Doto and Space Mono. Photographs bring warmth and personal character. Do not add more decorative telemetry or crowd the page with statistics.
+Keep the visual character of phase 0. Use one strong map, quiet readable panels, existing tokens, Doto and Space Mono. Photographs bring warmth and personal character. Do not add more decorative telemetry or crowd the page with statistics. The one exception, asked for by the owner: a selected country's details list its flights for the owner (flown and planned, most used airports, first and latest flight), read from airport codes. There is still no flights page.
 
 ## Current baseline
 

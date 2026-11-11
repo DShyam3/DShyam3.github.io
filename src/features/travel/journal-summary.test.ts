@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { citySummary } from './journal-summary';
-import type { TravelTrip, TravelVisit } from './journal-types';
+import { citySummary, compareItineraryStart } from './journal-summary';
+import type { TravelItinerary, TravelTrip, TravelVisit } from './journal-types';
 
 const visit = (id: string, changes: Partial<TravelVisit> = {}): TravelVisit => ({
   id, owner_id: 'owner', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
@@ -52,5 +52,20 @@ describe('citySummary', () => {
 
   it('returns an empty summary when there are no recorded stays', () => {
     expect(citySummary([], city, [])).toEqual({ count: 0, first: null, last: null });
+  });
+});
+
+describe('compareItineraryStart', () => {
+  const item = (title: string, start_date: string | null, start_time: string | null = null) =>
+    ({ title, start_date, start_time }) satisfies Pick<TravelItinerary, 'title' | 'start_date' | 'start_time'>;
+
+  it('orders by date then time, earliest first, whatever the file order', () => {
+    const rows = [item('Late', '2021-05-05', '21:00'), item('Same day early', '2021-05-05', '06:00'), item('Old', '2019-01-01', '12:00')];
+    expect([...rows].sort(compareItineraryStart).map(row => row.title)).toEqual(['Old', 'Same day early', 'Late']);
+  });
+
+  it('puts untimed items after timed ones on the same day, undated items last, and ties by title', () => {
+    const rows = [item('Undated', null), item('B all day', '2026-01-01'), item('A all day', '2026-01-01'), item('Morning', '2026-01-01', '09:00')];
+    expect([...rows].sort(compareItineraryStart).map(row => row.title)).toEqual(['Morning', 'A all day', 'B all day', 'Undated']);
   });
 });
