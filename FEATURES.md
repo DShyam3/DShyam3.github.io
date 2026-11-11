@@ -241,7 +241,7 @@ proxy so the API key never reaches the browser.
   The former Schedule view opens News.
 
 Library has a compact category picker, search field, Filters popover and text-only
-sort choices. Sync opens a popover whose history list scrolls independently.
+sort choices. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the category picker.
 Library uses compact poster cards with aligned title, subtitle, platform and
 status rows. News release rows place text beside small posters. Both keep
 scheduling actions separate from title details. Titles show up to two lines;

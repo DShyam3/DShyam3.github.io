@@ -615,12 +615,14 @@ const Watchlist = () => {
 
   const toolbar = (
     <div className="watchlist-toolbar watchlist-library-toolbar space-y-2 py-2">
-      <div className="flex min-w-0 items-center justify-between gap-2">
+      {/* Wraps rather than overflowing: past the viewport edge it widens the
+          whole page on a phone. ml-auto keeps the actions right if they drop. */}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <nav aria-label="Watchlist" className="flex items-center gap-1">
           <Button asChild variant="ghost" className="gap-2"><Link to="/watchlist"><Newspaper className="h-4 w-4" />News</Link></Button>
           <Button asChild variant="secondary" className="gap-2"><Link to="/watchlist/library" aria-current="page"><Library className="h-4 w-4" />Library</Link></Button>
         </nav>
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1">
         {isAdmin && selectedCategory === 'Favourites' && (
           <div className="flex items-center gap-2">
             <TmdbSearchDialog
@@ -704,7 +706,7 @@ const Watchlist = () => {
               <PopoverTrigger asChild>
                 <Button variant="ghost" className="gap-2" aria-label={syncing ? (syncProgress === null ? 'Syncing' : `Syncing ${syncProgress}%`) : 'Sync'}>
                   <SyncHistoryIcon spinning={syncing} className="h-4 w-4" />
-                  <span>{syncing ? (syncProgress === null ? 'Syncing…' : `${syncProgress}%`) : 'Sync'}</span>
+                  <span className="sr-only sm:not-sr-only">{syncing ? (syncProgress === null ? 'Syncing…' : `${syncProgress}%`) : 'Sync'}</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" collisionPadding={12} className="flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-3 overflow-hidden" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Sync history">
@@ -885,9 +887,10 @@ const Watchlist = () => {
           </SelectContent>
         </Select>
         {selectedCategory !== 'Favourites' && <>
-          <div className="relative min-w-[150px] flex-1">
+          {/* 12rem holds the whole placeholder; narrower, the box drops below the category picker. */}
+          <div className="relative min-w-[12rem] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input aria-label={`Search ${selectedCategory.toLowerCase()}`} placeholder="Search library…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="h-11 w-full pl-9 pr-10" />
+            <Input aria-label={`Search ${selectedCategory.toLowerCase()}`} placeholder="Search library…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')} />
             {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => setSearchQuery('')}><X className="h-4 w-4" /></Button>}
           </div>
           <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>

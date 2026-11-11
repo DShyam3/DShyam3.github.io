@@ -80,7 +80,10 @@ export function TmdbSearchDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <ActionButton icon={Plus} label={triggerLabel} />
+        {/* Icon-only below sm: on a phone the Library toolbar holds News, Library,
+            Add and Sync on one row, and four labels do not fit. The label stays
+            in the accessibility tree, so the button keeps its name. */}
+        <ActionButton icon={Plus} label={triggerLabel} labelClassName="sr-only sm:not-sr-only" />
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-3xl h-[600px] max-h-[90dvh] flex flex-col p-0">
