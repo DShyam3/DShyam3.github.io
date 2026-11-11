@@ -198,6 +198,7 @@ const Watchlist = () => {
   const [showSyncLog, setShowSyncLog] = useState(false);
   const [selectedSyncEntry, setSelectedSyncEntry] = useState<DisplaySyncLogEntry | null>(null);
   const displaySyncLog = useMemo(() => buildDisplaySyncLog(syncLog), [syncLog]);
+  const showSyncPercent = syncing && syncProgress !== null;
   const [visibleCount, setVisibleCount] = useState(48);
   const observerTarget = useRef<HTMLDivElement>(null);
 
@@ -704,9 +705,13 @@ const Watchlist = () => {
           {isAdmin && (
             <Popover open={showSyncLog} onOpenChange={setShowSyncLog}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" className="gap-2" aria-label={syncing ? (syncProgress === null ? 'Syncing' : `Syncing ${syncProgress}%`) : 'Sync'}>
-                  <SyncHistoryIcon spinning={syncing} className="h-4 w-4" />
-                  <span className="sr-only sm:not-sr-only">{syncing ? (syncProgress === null ? 'Syncing…' : `${syncProgress}%`) : 'Sync'}</span>
+                {/* Below sm the icon stands in for "Sync" and "Syncing…". Once
+                    a percentage is known it takes the icon's place instead:
+                    beside the icon it would push the actions onto a second
+                    line at 375px for as long as the sync runs. */}
+                <Button variant="ghost" className="gap-2 px-3 sm:px-4" aria-label={syncing ? (syncProgress === null ? 'Syncing' : `Syncing ${syncProgress}%`) : 'Sync'}>
+                  <SyncHistoryIcon spinning={syncing} className={cn('h-4 w-4', showSyncPercent && 'max-sm:hidden')} />
+                  <span className={showSyncPercent ? 'tabular-nums' : 'sr-only sm:not-sr-only'}>{syncing ? (syncProgress === null ? 'Syncing…' : `${syncProgress}%`) : 'Sync'}</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" collisionPadding={12} className="flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-3 overflow-hidden" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Sync history">
