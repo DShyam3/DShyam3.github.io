@@ -2824,7 +2824,7 @@ Closure: `src/lib/finance/student-loan.ts` (`simulateStudentLoan`, `incomeByTaxY
 
 **The costs are accepted.** Finance rows are held in memory for the session, admin only and dropped on sign-out. The first load now runs on idle from any page, not only when Finance opens.
 
-Closure: `src/features/finance/FinanceSession.tsx`, `src/features/finance/FinanceDataContext.tsx` (`refreshIfStale`), `src/features/finance/FinancePage.tsx`. Status: committed on `main` 2026-11-04, not deployed. The owner reports the admin-session behaviour tested signed in.
+Closure: `src/features/finance/FinanceSession.tsx`, `src/features/finance/FinanceDataContext.tsx` (`refreshIfStale`), `src/features/finance/FinancePage.tsx`. Status: deployed as `033a6583`, 2026-11-04 (Pages run `41895639334`). The owner reports the admin-session behaviour tested signed in.
 
 ### Money Hub — private scenarios with explicit manual costs — 2026-11-04
 
@@ -2933,11 +2933,12 @@ browser that started it, not to one tab.
 Closure: `src/features/finance/truelayer-oauth.ts` (with its paired test),
 `useTrueLayer.ts`, the callback in `FinancePage.tsx`, and the "Connect Another
 Bank" button in `components/BankAccountsSection.tsx`.
-Status: uncommitted on `main` 2026-11-06. Checked: lint, typecheck,
+Status: committed as `e64741b2` and deployed 2026-11-06 (Pages run `42295536086`);
+follow-ups `13cc7cca` and `60de9ebf` deployed the same day (Pages run
+`42301589737`). Checked: lint, typecheck,
 `typecheck:functions`, 200 finance tests and the build. Not verified: none of it
 has run in a browser. That covers the desktop new-tab round trip, the cross-tab
-refresh, Safari, and a phone link through the Barclaycard app; the phone check
-needs a deploy first.
+refresh, Safari, and a phone link through the Barclaycard app.
 
 ### A bank link opens its own tab on phones too — 2026-11-06
 
