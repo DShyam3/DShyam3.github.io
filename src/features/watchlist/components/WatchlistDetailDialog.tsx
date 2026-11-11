@@ -253,7 +253,11 @@ export function WatchlistDetailDialog({
           ) : null}
 
           {(onSchedule || onMoveToFavourites || onResync || onDelete) ? (
-            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50">
+            // Two by two: the inspector and the sheet are never wide enough for
+            // four in a row, and a 0-basis flex row squeezed them until the
+            // labels spilled out. A last action left alone on its row (News
+            // passes only Schedule) takes the full width, as InspectorBody does.
+            <div className="grid grid-cols-2 items-start gap-2 border-t border-border/50 pt-3 [&>:last-child:nth-child(odd)]:col-span-2">
               {onSchedule ? (
                 <Button
                   variant={isScheduled ? 'secondary' : 'outline'}
@@ -263,7 +267,7 @@ export function WatchlistDetailDialog({
                       ? onRemoveFromSchedule
                       : onSchedule
                   }
-                  className="gap-1.5 text-xs flex-1 justify-center"
+                  className="gap-1.5 text-xs justify-center"
                 >
                   <CalendarDays className="h-3.5 w-3.5" />
                   {isScheduled ? 'Unschedule' : 'Schedule'}
@@ -275,7 +279,7 @@ export function WatchlistDetailDialog({
                   variant="outline"
                   size="sm"
                   onClick={onMoveToFavourites}
-                  className="gap-1.5 text-xs flex-1 justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                  className="gap-1.5 text-xs justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
                 >
                   <Heart className="h-3.5 w-3.5" />
                   Favourite
@@ -290,7 +294,7 @@ export function WatchlistDetailDialog({
                   disabled={syncing}
                   aria-label="Resync title"
                   title="Resync this title's data from TMDB"
-                  className="gap-1.5 text-xs flex-1 justify-center"
+                  className="gap-1.5 text-xs justify-center"
                 >
                   <RefreshCcw className={cn('h-3.5 w-3.5', syncing && 'animate-spin')} />
                   Resync
@@ -298,14 +302,15 @@ export function WatchlistDetailDialog({
               ) : null}
 
               {onDelete ? (
-                <div className="flex-1 flex items-center gap-1.5">
+                // Confirm and Cancel wrap inside the cell rather than spill out of it.
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                   {isDeleting ? (
                     <>
                       <Button
                         variant="destructive"
                         size="sm"
                         onClick={() => askDelete({ name: item.title, onConfirm: onDelete })}
-                        className="gap-1 text-xs flex-1 justify-center"
+                        className="gap-1 text-xs flex-auto justify-center"
                       >
                         Confirm
                       </Button>
@@ -313,7 +318,7 @@ export function WatchlistDetailDialog({
                         variant="ghost"
                         size="sm"
                         onClick={() => setIsDeleting(false)}
-                        className="text-xs flex-1 justify-center"
+                        className="text-xs flex-auto justify-center"
                       >
                         Cancel
                       </Button>
