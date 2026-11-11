@@ -128,7 +128,7 @@ export function PublishedRates() {
         <p className="text-xs text-muted-foreground">None stored, so every month uses the assumptions above.</p>
       )}
 
-      <form onSubmit={submit} className="grid grid-cols-1 gap-3 rounded-2xl bg-muted/40 p-4 sm:grid-cols-3 [&>*]:min-w-0">
+      <form onSubmit={submit} className="grid grid-cols-1 gap-3 rounded-2xl bg-muted/40 p-4 sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
         {field('from', 'From', from, setFrom, { type: 'date', inputMode: undefined, required: true })}
         {field('rpi', 'RPI (%)', rpi, setRpi, { required: true })}
         {field('cap', 'Cap (%)', cap, setCap, { placeholder: 'None' })}

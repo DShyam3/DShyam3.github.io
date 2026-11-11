@@ -572,7 +572,7 @@ export default function GoalsSurface() {
             {/* Contribution Logging Form */}
             <form onSubmit={(e) => handleAddContribution(e, goal.id)} className="space-y-3 pt-2 font-mono">
               <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Log New Contribution</span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <Input
                   type="number"
                   placeholder="Amount (£)"

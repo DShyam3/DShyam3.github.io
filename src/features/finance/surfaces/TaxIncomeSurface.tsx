@@ -1211,7 +1211,7 @@ export default function TaxIncomeSurface({
   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
     {/* Left Side: Payroll breakdown rate tables */}
-    <div className="lg:col-span-8 flex flex-col gap-4">
+    <div className="lg:col-span-8 min-w-0 flex flex-col gap-4">
 
       {/* Total Compensation Summary Card */}
       <div className="surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
@@ -1375,7 +1375,7 @@ export default function TaxIncomeSurface({
     </div>
 
     {/* Right Side: Combined leave balances and holiday tracker */}
-    <div className="lg:col-span-4 flex flex-col gap-6">
+    <div className="lg:col-span-4 min-w-0 flex flex-col gap-6">
 
       <div className="holiday-tracker surface-card rounded-lg border border-border/40 bg-card/50 p-5 hover:border-border/80 transition-colors space-y-4">
         <div className="holiday-tracker-head border-b border-border/30 pb-3">
@@ -1674,7 +1674,7 @@ export default function TaxIncomeSurface({
                   }))}
                   value={maximiserBias}
                   onChange={setMaximiserBias}
-                  className="w-full sm:w-full"
+                  className="grid grid-cols-2 sm:w-full"
                 />
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   {OPTIMAL_LEAVE_BIAS_LABELS[maximiserBias].description}
@@ -2372,7 +2372,7 @@ export default function TaxIncomeSurface({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 [&>*]:min-w-0">
         <div className="space-y-1">
           <Label htmlFor="holiday-inline-start" className="text-xs text-muted-foreground font-mono">First day</Label>
           <Input
