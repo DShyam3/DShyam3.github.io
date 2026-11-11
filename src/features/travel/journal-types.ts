@@ -83,3 +83,12 @@ export const EMPTY_JOURNAL: TravelJournal = { trips: [], visits: [], memories: [
 export function cityIdentity(city: { country_code: string; city_name: string; lat: number; lon: number }): CityIdentity {
   return { country_code: city.country_code, city_name: city.city_name, city_key: `${city.country_code}:${city.lat.toFixed(4)},${city.lon.toFixed(4)}` };
 }
+
+/** The coordinates `cityIdentity` wrote into a key; null for a key of any other shape. */
+export function cityKeyPoint(cityKey: string): { lat: number; lon: number } | null {
+  const match = /^[^:]+:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(cityKey);
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lon = Number(match[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+}

@@ -23,7 +23,7 @@ import { TravelImportDialog } from './TravelImportDialog';
 import { TravelBackupDialog } from './TravelBackupDialog';
 import { TravelItineraryDetail } from './TravelItineraryDetail';
 import { countryFlightRows, countryFlightSummary, useAirportCountries } from './journal-flights';
-import { cityIdentity, type CityIdentity, type TravelItinerary } from './journal-types';
+import { cityIdentity, cityKeyPoint, type CityIdentity, type TravelItinerary } from './journal-types';
 import '@/pages/Index.css';
 
 /** The slice of restcountries.com's shape that `public/countries.json` is read for. */
@@ -44,7 +44,9 @@ const TravelContent = () => {
     // The inspector shows one journal record at a time: a city or an itinerary item.
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const selectedItem = selectedItemId ? journal.data.itinerary.find(item => item.id === selectedItemId) : undefined;
-    const selectCity = useCallback((city: CityIdentity) => { setSelectedItemId(null); setSelectedCity(city); }, []);
+    // Bumped on every pick, so choosing the same country or city again turns back to it after a drag.
+    const [focusTrigger, setFocusTrigger] = useState(0);
+    const selectCity = useCallback((city: CityIdentity) => { setSelectedItemId(null); setSelectedCity(city); setFocusTrigger(prev => prev + 1); }, []);
     const selectItem = useCallback((item: TravelItinerary) => { setSelectedCity(null); setSelectedItemId(item.id); }, []);
     const [importOpen, setImportOpen] = useState(false);
     const [backupOpen, setBackupOpen] = useState(false);
@@ -69,6 +71,15 @@ const TravelContent = () => {
     // City tracking
     const { visitedCities, citiesByCountry, visitedDotKeys, addCity, removeCity } = useVisitedCities();
     const { loaded: cityMapLoaded, loading: cityMapLoading, loadCityMap, getCitiesForCountry } = useCityMap();
+    // The globe turns to the city whose journal is open and marks its dot. A
+    // journal-only city has no stored dot, so its key's coordinates stand in.
+    const focusedCity = useMemo(() => {
+        if (!selectedCity) return null;
+        const visited = visitedCities.find(city => cityIdentity(city).city_key === selectedCity.city_key);
+        if (visited) return { lat: visited.lat, lon: visited.lon, countryCode: visited.country_code, dotKey: `${visited.dot_col},${visited.dot_row}` };
+        const point = cityKeyPoint(selectedCity.city_key);
+        return point && { ...point, countryCode: selectedCity.country_code };
+    }, [selectedCity, visitedCities]);
 
     // View mode toggle
     const [viewMode, setViewMode] = useState<ViewMode>('countries');
@@ -112,7 +123,15 @@ const TravelContent = () => {
         ).sort((a, b) => Number(b.name.toLowerCase() === searchLower || b.code.toLowerCase() === searchLower) - Number(a.name.toLowerCase() === searchLower || a.code.toLowerCase() === searchLower) || a.name.localeCompare(b.name));
     }, [countrySearch, allCountries]);
 
-    const [focusTrigger, setFocusTrigger] = useState(0);
+
+    // Cyprus, Luxembourg and other small places have no dots on the map grid,
+    // so the globe turns to the largest city instead, once the city map is in.
+    const focusedCountryPoint = useMemo(() => {
+        if (!selectedCountry) return null;
+        const cities = getCitiesForCountry(selectedCountry.code);
+        const largest = cities.reduce<(typeof cities)[number] | null>((best, city) => !best || city.pop > best.pop ? city : best, null);
+        return largest && { lat: largest.lat, lon: largest.lon };
+    }, [selectedCountry, getCitiesForCountry]);
 
     // Pre-load city map data when switching to cities mode
     useEffect(() => {
@@ -732,6 +751,8 @@ const TravelContent = () => {
                                     viewMode={viewMode}
                                     focusedCountryCode={selectedCountry?.code}
                                     focusTrigger={focusTrigger}
+                                    focusedCity={focusedCity}
+                                    focusedCountryPoint={focusedCountryPoint}
                                     onCountryHover={handleCountryHover}
                                     onCountryClick={onGlobeCountryClick}
                                 />

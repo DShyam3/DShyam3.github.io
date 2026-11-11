@@ -33,7 +33,21 @@ interface DotMatrixGlobeProps {
     onCountryClick?: (code: string, name: string) => void;
     focusedCountryCode?: string | null;
     focusTrigger?: number;
+    /** A city to turn to and mark, in degrees. `dotKey` names its dot where the caller knows it. */
+    focusedCity?: { lat: number; lon: number; countryCode: string; dotKey?: string } | null;
+    /** Where to turn, in degrees, for a selected country too small to have dots of its own. */
+    focusedCountryPoint?: { lat: number; lon: number } | null;
 }
+
+/**
+ * After this long untouched, with nothing selected, the globe turns on its own
+ * again -- easing up to speed over the ramp rather than lurching off.
+ */
+const IDLE_SPIN_DELAY_MS = 12000;
+const IDLE_SPIN_RAMP_MS = 4000;
+
+/** How close each kind of selection is brought in. */
+const FOCUS_ZOOM = { country: { '3d': 2.5, '2d': 4 }, city: { '3d': 3.5, '2d': 6 } } as const;
 
 // Cache the loaded data globally so it's only fetched once
 let cachedDotData: DotData | null = null;
@@ -79,6 +93,32 @@ function rubberDelta(pan: number, delta: number, limit: number): number {
     return pullingFurtherOut ? delta * 0.35 : delta;
 }
 
+interface FocusTargets {
+    targetRotation: number | null;
+    targetOffsetLat: number | null;
+    targetPanXNorm: number | null;
+    targetPanYNorm: number | null;
+}
+
+/** Let go of a selection's resting place: the user has taken the map. */
+function releaseTargets(drag: FocusTargets) {
+    drag.targetRotation = null;
+    drag.targetOffsetLat = null;
+    drag.targetPanXNorm = null;
+    drag.targetPanYNorm = null;
+}
+
+/**
+ * Past this many pixels from where it went down, a press is a drag. Below it,
+ * a click or tap leaves the selection where it is (the same threshold the
+ * click handler uses to tell the two apart).
+ */
+const DRAG_THRESHOLD = 5;
+
+function movedPastThreshold(drag: { startX: number; startY: number }, x: number, y: number) {
+    return Math.hypot(x - drag.startX, y - drag.startY) > DRAG_THRESHOLD;
+}
+
 /** One frame of spring-back towards the allowed range; a no-op inside it. */
 function settlePan(pan: number, limit: number): number {
     const inRange = Math.max(-limit, Math.min(limit, pan));
@@ -96,7 +136,15 @@ export function DotMatrixGlobe({
     onCountryClick,
     focusedCountryCode,
     focusTrigger,
+    focusedCity,
+    focusedCountryPoint,
 }: DotMatrixGlobeProps) {
+    const focusLat = focusedCity?.lat;
+    const focusLon = focusedCity?.lon;
+    const focusCityCountry = focusedCity?.countryCode;
+    const focusCityDotKey = focusedCity?.dotKey;
+    const countryPointLat = focusedCountryPoint?.lat;
+    const countryPointLon = focusedCountryPoint?.lon;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [dotData, setDotData] = useState<DotData | null>(null);
     const [mapError, setMapError] = useState(false);
@@ -104,6 +152,15 @@ export function DotMatrixGlobe({
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
     const visitedSet = useMemo(() => new Set(visitedCountryCodes), [visitedCountryCodes]);
     const [mode, setMode] = useState<'2d' | '3d'>('3d');
+    // Read per frame rather than as state: it changes how far each easing step
+    // goes, not what is drawn, so it never needs a render of its own.
+    const reducedMotionRef = useRef(typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    useEffect(() => {
+        const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const onChange = () => { reducedMotionRef.current = query.matches; };
+        query.addEventListener('change', onChange);
+        return () => query.removeEventListener('change', onChange);
+    }, []);
 
     // Drag to rotate state
     const dragRef = useRef({
@@ -128,6 +185,12 @@ export function DotMatrixGlobe({
         targetOffsetLat: null as number | null,
         targetPanXNorm: null as number | null,
         targetPanYNorm: null as number | null,
+        // True while a country or city is selected: the globe stays on it
+        // rather than drifting off on the idle spin.
+        holding: false,
+        // The fitted map width last frame. Pan is held in pixels, so a resize
+        // has to scale it or the view slides off what it was showing.
+        lastMapW: 0,
         // Pan limits for the current zoom, written each frame by `draw` so the
         // pointer handlers can apply edge resistance without recomputing them.
         boundX: 0,
@@ -229,51 +292,136 @@ export function DotMatrixGlobe({
         });
     }, [dotData]);
 
-    // Handle focusing on a specific country
-    useEffect(() => {
-        if (focusedCountryCode && dotData) {
-            const countryDots = dotData.dots.filter(d => d[2] === focusedCountryCode);
-            if (countryDots.length > 0) {
-                let sumCol = 0;
-                let sumRow = 0;
-                for (const d of countryDots) {
-                    sumCol += d[0];
-                    sumRow += d[1];
-                }
-                const avgCol = (sumCol / countryDots.length) + 0.5;
-                const avgRow = (sumRow / countryDots.length) + 0.5;
+    /** Which country owns each "col,row" cell. */
+    const dotCodes = useMemo(() => new Map(dotData?.dots.map(([col, row, code]) => [`${col},${row}`, code])), [dotData]);
 
-                const lon = (avgCol / dotData.cols) * 2 * Math.PI - Math.PI;
-                const lat = Math.PI / 2 - (avgRow / dotData.rows) * Math.PI;
+    // The selected country's centre, in radians: the mean of its dots or, for a
+    // country too small for the grid (Cyprus, Luxembourg), the caller's point.
+    const countryFocus = useMemo(() => {
+        if (!focusedCountryCode || !dotData) return null;
+        let sumCol = 0;
+        let sumRow = 0;
+        let count = 0;
+        for (const [col, row, code] of dotData.dots) {
+            if (code !== focusedCountryCode) continue;
+            sumCol += col;
+            sumRow += row;
+            count++;
+        }
+        if (count > 0) {
+            const avgCol = (sumCol / count) + 0.5;
+            const avgRow = (sumRow / count) + 0.5;
+            return {
+                lon: (avgCol / dotData.cols) * 2 * Math.PI - Math.PI,
+                lat: Math.PI / 2 - (avgRow / dotData.rows) * Math.PI,
+                dotless: false,
+            };
+        }
+        if (countryPointLat === undefined || countryPointLon === undefined) return null;
+        return { lon: (countryPointLon * Math.PI) / 180, lat: (countryPointLat * Math.PI) / 180, dotless: true };
+    }, [focusedCountryCode, dotData, countryPointLat, countryPointLon]);
 
-                dragRef.current.targetRotation = lon;
-                dragRef.current.targetOffsetLat = -lat;
-
-                // The flat map is not a straight col/row scale, so the pan
-                // target has to go through the projection too or 2D focus
-                // lands beside the country instead of on it.
-                const flatCentre = projectEqualEarth(lon, lat);
-                dragRef.current.targetPanXNorm = flatCentre.nx;
-                dragRef.current.targetPanYNorm = flatCentre.ny;
-
-                dragRef.current.targetZoom = mode === '3d' ? 2.5 : 4.0;
-                dragRef.current.lastInteractionTime = performance.now();
-                
-                requestRef.current = requestAnimationFrame((t) => {
-                    animRef.current.lastTime = t;
-                    drawRef.current(t);
-                });
+    // The chosen city's dot: the caller's when its own country owns it,
+    // otherwise that country's dot nearest the city. A stored dot can belong to
+    // a neighbour -- a city in a country with no dots was snapped to the
+    // nearest dot anywhere, a border city sometimes across the line -- and
+    // ringing that would mark the wrong country. Null where the country has no dots.
+    const focusedDotKey = useMemo(() => {
+        if (focusLat === undefined || focusLon === undefined || !dotData) return null;
+        if (focusCityDotKey && dotCodes.get(focusCityDotKey) === focusCityCountry) return focusCityDotKey;
+        const col = ((focusLon + 180) / 360) * dotData.cols - 0.5;
+        const row = ((90 - focusLat) / 180) * dotData.rows - 0.5;
+        let best: string | null = null;
+        let bestDistance = Infinity;
+        for (const [dotCol, dotRow, code] of dotData.dots) {
+            if (code !== focusCityCountry) continue;
+            // Columns wrap at the antimeridian (Fiji, Chukotka).
+            const colGap = Math.abs(dotCol - col);
+            const distance = Math.min(colGap, dotData.cols - colGap) ** 2 + (dotRow - row) ** 2;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = `${dotCol},${dotRow}`;
             }
         }
-    }, [focusedCountryCode, focusTrigger, dotData, mode]);
+        return best;
+    }, [focusCityDotKey, focusLat, focusLon, focusCityCountry, dotData, dotCodes]);
+
+    // With no dot to ring, the ring goes on the place itself, in radians: a
+    // city in a country with no dots, or such a country with no city chosen.
+    const markerPoint = useMemo(() => {
+        if (focusLat !== undefined && focusLon !== undefined) {
+            return focusedDotKey ? null : { lon: (focusLon * Math.PI) / 180, lat: (focusLat * Math.PI) / 180 };
+        }
+        return countryFocus?.dotless ? { lon: countryFocus.lon, lat: countryFocus.lat } : null;
+    }, [focusLat, focusLon, focusedDotKey, countryFocus]);
+
+    // Turn to the selected city, or else the selected country, and hold there.
+    // Clearing the selection zooms back out; the idle spin then eases in later.
+    const countryLon = countryFocus?.lon;
+    const countryLat = countryFocus?.lat;
+    const wasFocusedRef = useRef(false);
+    useEffect(() => {
+        if (!dotData) return;
+        let lon: number | null = null;
+        let lat: number | null = null;
+        let zoom = 1;
+        if (focusLat !== undefined && focusLon !== undefined) {
+            lon = (focusLon * Math.PI) / 180;
+            lat = (focusLat * Math.PI) / 180;
+            zoom = FOCUS_ZOOM.city[mode];
+        } else if (countryLon !== undefined && countryLat !== undefined) {
+            lon = countryLon;
+            lat = countryLat;
+            zoom = FOCUS_ZOOM.country[mode];
+        } else if (focusedCountryCode) {
+            // Selected, but too small for the grid and its point not in yet
+            // (or never coming, for an uninhabited island): stay put and
+            // hold, rather than reading it as a deselect and zooming out.
+            dragRef.current.holding = true;
+            return;
+        }
+
+        const drag = dragRef.current;
+        const focusing = lon !== null && lat !== null;
+        drag.holding = focusing;
+        if (!focusing && !wasFocusedRef.current) return;
+        wasFocusedRef.current = focusing;
+
+        drag.targetZoom = zoom;
+        drag.lastInteractionTime = performance.now();
+        // A selection zooms about the middle of the view, so the per-frame
+        // zoom correction has to anchor there, not wherever the wheel last was.
+        drag.zoomCursorX = 0;
+        drag.zoomCursorY = 0;
+        if (lon !== null && lat !== null) {
+            drag.targetRotation = lon;
+            drag.targetOffsetLat = -lat;
+            // The flat map is not a straight col/row scale, so the pan
+            // target has to go through the projection too or 2D focus
+            // lands beside the country instead of on it.
+            const flatCentre = projectEqualEarth(lon, lat);
+            drag.targetPanXNorm = flatCentre.nx;
+            drag.targetPanYNorm = flatCentre.ny;
+        } else {
+            drag.targetRotation = null;
+            drag.targetOffsetLat = null;
+            drag.targetPanXNorm = null;
+            drag.targetPanYNorm = null;
+        }
+
+        // Cancel the pending frame before asking for another: two requests
+        // would leave two loops running, and every easing would run twice.
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        requestRef.current = requestAnimationFrame((t) => {
+            animRef.current.lastTime = t;
+            drawRef.current(t);
+        });
+    }, [focusTrigger, focusLat, focusLon, countryLon, countryLat, focusedCountryCode, dotData, mode]);
 
     const borderSegments = useMemo(() => {
         if (!dotData) return [];
         const { cols, rows, dots } = dotData;
-        const grid = new Map();
-        for (const [col, row, code] of dots) {
-            grid.set(`${col},${row}`, code);
-        }
+        const grid = dotCodes;
 
         const segments = [];
 
@@ -343,7 +491,7 @@ export function DotMatrixGlobe({
             }
         }
         return segments;
-    }, [dotData]);
+    }, [dotData, dotCodes]);
 
     // Draw the map
     const draw = useCallback((time: number) => {
@@ -365,6 +513,10 @@ export function DotMatrixGlobe({
         }
 
 
+        // With reduced motion every easing lands in one step.
+        const reduced = reducedMotionRef.current;
+        const step = reduced ? 1 : 0.08;
+
         if (animRef.current.progress > 0) {
             // Apply momentum / velocity if not dragging
             if (!dragRef.current.isDragging) {
@@ -373,8 +525,8 @@ export function DotMatrixGlobe({
                     while (diff > Math.PI) diff -= Math.PI * 2;
                     while (diff < -Math.PI) diff += Math.PI * 2;
                     
-                    animRef.current.rotation += diff * 0.08;
-                    dragRef.current.offsetLat += (dragRef.current.targetOffsetLat - dragRef.current.offsetLat) * 0.08;
+                    animRef.current.rotation += diff * step;
+                    dragRef.current.offsetLat += (dragRef.current.targetOffsetLat - dragRef.current.offsetLat) * step;
                     
                     if (Math.abs(diff) < 0.001 && Math.abs(dragRef.current.targetOffsetLat - dragRef.current.offsetLat) < 0.001) {
                         dragRef.current.targetRotation = null;
@@ -383,13 +535,16 @@ export function DotMatrixGlobe({
                 } else if (Math.abs(dragRef.current.velocityX) > 0.0001) {
                     animRef.current.rotation += dragRef.current.velocityX;
                     dragRef.current.velocityX *= 0.95; // friction
-                } else if (time - dragRef.current.lastInteractionTime > 12000) {
-                    // Constant slow spin resumes after 12.0s of inactivity
-                    animRef.current.rotation += dt * 0.00008 * animRef.current.progress;
+                } else if (!reduced && !dragRef.current.holding && time - dragRef.current.lastInteractionTime > IDLE_SPIN_DELAY_MS) {
+                    // The slow spin comes up to speed over the ramp, so it
+                    // drifts off rather than lurching away at full speed.
+                    const ramp = Math.min(1, (time - dragRef.current.lastInteractionTime - IDLE_SPIN_DELAY_MS) / IDLE_SPIN_RAMP_MS);
+                    const ease = ramp * ramp * (3 - 2 * ramp);
+                    animRef.current.rotation += dt * 0.00008 * animRef.current.progress * ease;
 
-                    // Spring back latitude offset towards 0 gently
+                    // Spring back latitude offset towards 0 gently, on the same ramp
                     if (Math.abs(dragRef.current.offsetLat) > 0.001) {
-                        dragRef.current.offsetLat *= 0.985;
+                        dragRef.current.offsetLat -= dragRef.current.offsetLat * 0.015 * ease;
                     } else {
                         dragRef.current.offsetLat = 0;
                     }
@@ -410,11 +565,24 @@ export function DotMatrixGlobe({
         const mapW = Math.min(W, H * EQUAL_EARTH_ASPECT);
         const mapH = mapW / EQUAL_EARTH_ASPECT;
 
+        // Opening the inspector beside the map narrows the canvas. Pan is in
+        // pixels, so it scales with the map or the view slides off its place.
+        // A frame with no size (a hidden parent, mid-layout) is skipped, or
+        // the pan would be multiplied by nothing and never come back.
+        const lastMapW = dragRef.current.lastMapW;
+        if (mapW > 0) {
+            if (lastMapW > 0 && mapW !== lastMapW) {
+                dragRef.current.panX *= mapW / lastMapW;
+                dragRef.current.panY *= mapW / lastMapW;
+            }
+            dragRef.current.lastMapW = mapW;
+        }
+
         const isDark = document.documentElement.classList.contains('dark');
 
         // Smooth zoom interpolation with cursor-centered pan correction
         const prevZoom = dragRef.current.zoom;
-        dragRef.current.zoom += (dragRef.current.targetZoom - dragRef.current.zoom) * 0.1;
+        dragRef.current.zoom += (dragRef.current.targetZoom - dragRef.current.zoom) * (reduced ? 1 : 0.1);
         const curZoom = dragRef.current.zoom;
 
         // Apply cursor-centered pan correction for this frame's zoom delta (2D only)
@@ -425,24 +593,28 @@ export function DotMatrixGlobe({
             dragRef.current.panY += (dragRef.current.zoomCursorY - dragRef.current.panY) * factor;
         }
 
+        // Whether the flat map has come to rest, so the loop can stop.
+        let panSettled = true;
         // Clamp 2D pan to prevent wandering infinitely offscreen
         if (mode === '2d') {
             if (!dragRef.current.isDragging && dragRef.current.targetPanXNorm !== null && dragRef.current.targetPanYNorm !== null) {
                 const targetPanX = mapW * curZoom * (0.5 - dragRef.current.targetPanXNorm);
                 const targetPanY = mapH * curZoom * (0.5 - dragRef.current.targetPanYNorm);
                 
-                dragRef.current.panX += (targetPanX - dragRef.current.panX) * 0.08;
-                dragRef.current.panY += (targetPanY - dragRef.current.panY) * 0.08;
-                
-                if (Math.abs(targetPanX - dragRef.current.panX) < 1 && Math.abs(targetPanY - dragRef.current.panY) < 1) {
-                    dragRef.current.targetPanXNorm = null;
-                    dragRef.current.targetPanYNorm = null;
-                }
+                dragRef.current.panX += (targetPanX - dragRef.current.panX) * step;
+                dragRef.current.panY += (targetPanY - dragRef.current.panY) * step;
+                panSettled = Math.abs(targetPanX - dragRef.current.panX) < 0.5 && Math.abs(targetPanY - dragRef.current.panY) < 0.5;
+                // The target is kept as the resting place, not dropped on
+                // arrival: past the map's edge (France at this zoom is above
+                // the limit) the spring-back would otherwise pull the
+                // selection off centre. A drag, the wheel or deselecting
+                // releases it.
             }
 
             // Rubber band rather than a hard stop: a drag may pull the map past
-            // its edge, but nothing rests there. The moment the finger lifts the
-            // excess springs back, so there is no way to park the map off-centre.
+            // its edge, and the moment the finger lifts the excess springs
+            // back. The one thing that rests past the edge is a held
+            // selection, above, so that it can sit in the middle.
             const maxPanX = Math.max(0, (mapW * curZoom - W) / 2);
             const maxPanY = Math.max(0, (mapH * curZoom - H) / 2);
             dragRef.current.boundX = maxPanX;
@@ -456,6 +628,7 @@ export function DotMatrixGlobe({
             } else if (dragRef.current.targetPanXNorm === null && dragRef.current.targetPanYNorm === null) {
                 dragRef.current.panX = settlePan(dragRef.current.panX, maxPanX);
                 dragRef.current.panY = settlePan(dragRef.current.panY, maxPanY);
+                panSettled = Math.abs(dragRef.current.panX) <= maxPanX && Math.abs(dragRef.current.panY) <= maxPanY;
             }
         }
 
@@ -564,6 +737,18 @@ export function DotMatrixGlobe({
         const cosLatOffset = Math.cos(dragRef.current.offsetLat);
         const sinLatOffset = Math.sin(dragRef.current.offsetLat);
 
+        /** A point on the unit sphere, turned and tilted onto the globe. `z` is -1 (back) to 1 (front). */
+        const toGlobe = (p: UnitVector) => {
+            const x3d = R * p.ux;
+            const y3d = R * p.uy;
+            const z3d = R * p.uz;
+            const x_rot = x3d * cosRot - z3d * sinRot;
+            const z_rot = x3d * sinRot + z3d * cosRot;
+            const y_tilt = y3d * cosLatOffset - z_rot * sinLatOffset;
+            const z_tilt = y3d * sinLatOffset + z_rot * cosLatOffset;
+            return { x: W_half + x_rot, y: H_half + y_tilt, z: z_tilt / R };
+        };
+
         // --- Render Grid-Based Borders ---
         if (borderSegments.length > 0) {
             let borderAlpha = 0.15;
@@ -600,22 +785,8 @@ export function DotMatrixGlobe({
                     let zNorm1 = 1, zNorm2 = 1;
 
                     if (progress > 0) {
-                        const projectP = (p: UnitVector) => {
-                            const x3d = R * p.ux;
-                            const y3d = R * p.uy;
-                            const z3d = R * p.uz;
-                            const x_rot = x3d * cosRot - z3d * sinRot;
-                            const z_rot = x3d * sinRot + z3d * cosRot;
-                            const y_tilt = y3d * cosLatOffset - z_rot * sinLatOffset;
-                            const z_tilt = y3d * sinLatOffset + z_rot * cosLatOffset;
-                            return {
-                                x: W_half + x_rot,
-                                y: H_half + y_tilt,
-                                z: z_tilt / R
-                            };
-                        };
-                        const p1Proj = projectP(seg.p1);
-                        const p2Proj = projectP(seg.p2);
+                        const p1Proj = toGlobe(seg.p1);
+                        const p2Proj = toGlobe(seg.p2);
                         
                         x1 = x1 + (p1Proj.x - x1) * progress;
                         y1 = y1 + (p1Proj.y - y1) * progress;
@@ -665,6 +836,7 @@ export function DotMatrixGlobe({
         const newProjected: ProjectedDot[] = [];
         const backDots: ProjectedDot[] = [];
         const frontDots: ProjectedDot[] = [];
+        let focusedProjected: ProjectedDot | null = null;
 
         for (const dot of optimizedDots) {
             // Drop dots only in the last few degrees, where even shrinking
@@ -747,6 +919,7 @@ export function DotMatrixGlobe({
             };
 
             newProjected.push(pDot);
+            if (dot.dotKey === focusedDotKey) focusedProjected = pDot;
             if (isBack && progress > 0.5) {
                 backDots.push(pDot);
             } else {
@@ -765,7 +938,12 @@ export function DotMatrixGlobe({
             let color: string;
             let emphasis = 1;
 
-            if (isCityMode) {
+            if (p.dotKey === focusedDotKey) {
+                // The chosen city: brighter and larger than any visited dot,
+                // and ringed once every dot is down.
+                color = 'rgba(255, 200, 50, 1)';
+                emphasis = 1.7;
+            } else if (isCityMode) {
                 // City view mode: highlight only dots with visited cities
                 if (isCityDot && isHovered) {
                     color = 'rgba(255, 200, 50, 1)';
@@ -811,14 +989,51 @@ export function DotMatrixGlobe({
         for (const p of backDots) drawDot(p);
         for (const p of frontDots) drawDot(p);
 
+        // Ring the chosen city's dot or, with no dot to ring, the place itself,
+        // unless the globe has turned it away.
+        let ring: { x: number; y: number; r: number; opacity: number } | null = null;
+        const ringed = focusedProjected;
+        if (ringed) {
+            if (!(ringed.isBack && progress > 0.5)) ring = { x: ringed.x, y: ringed.y, r: Math.max(ringed.rx, ringed.ry) * 3.2, opacity: ringed.opacity };
+        } else if (markerPoint) {
+            // The same flat-to-globe morph the dots go through, for one point.
+            const flat = projectEqualEarth(markerPoint.lon, markerPoint.lat);
+            let x = flat.nx * W_zoom + W_offset;
+            let y = flat.ny * H_zoom + H_offset;
+            let zNorm = 1;
+            if (progress > 0) {
+                const onGlobe = toGlobe({
+                    ux: Math.cos(markerPoint.lat) * Math.sin(markerPoint.lon),
+                    uy: -Math.sin(markerPoint.lat),
+                    uz: Math.cos(markerPoint.lat) * Math.cos(markerPoint.lon),
+                });
+                x += (onGlobe.x - x) * progress;
+                y += (onGlobe.y - y) * progress;
+                zNorm = onGlobe.z;
+            }
+            // Faded towards the globe's edge exactly as a dot there would be.
+            const opacity = (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
+            if (!(zNorm < 0 && progress > 0.5)) ring = { x, y, r: baseRadius * 3.2, opacity };
+        }
+        if (ring) {
+            ctx.globalAlpha = ring.opacity;
+            ctx.beginPath();
+            ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(218, 165, 32, 0.9)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+
         if (progress > 0 || animRef.current.progress !== target) {
             requestRef.current = requestAnimationFrame((t) => draw(t));
-        } else if (mode === '2d' && (Math.abs(dragRef.current.targetZoom - curZoom) > 0.01 || Math.abs(panX) > 1 || Math.abs(panY) > 1)) {
-            // keep 2D drawing alive ONLY if it's currently actively zooming/panning
+        } else if (mode === '2d' && (dragRef.current.isDragging || Math.abs(dragRef.current.targetZoom - curZoom) > 0.01 || !panSettled)) {
+            // Keep 2D drawing alive only while it is zooming, panning or
+            // springing back -- not for a selection that has come to rest.
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars]);
+    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, focusedDotKey, markerPoint]);
 
     drawRef.current = draw;
 
@@ -897,11 +1112,7 @@ export function DotMatrixGlobe({
             if (!dotData) return;
             e.preventDefault();
             dragRef.current.lastInteractionTime = performance.now();
-            // Clear targets on user interaction
-            dragRef.current.targetRotation = null;
-            dragRef.current.targetOffsetLat = null;
-            dragRef.current.targetPanXNorm = null;
-            dragRef.current.targetPanYNorm = null;
+            releaseTargets(dragRef.current);
 
             const zoomDelta = e.deltaY * -0.001;
             const minZ = mode === '2d' ? 1.0 : 0.98;
@@ -930,12 +1141,11 @@ export function DotMatrixGlobe({
                 dragRef.current.startY = e.touches[0].clientY;
                 dragRef.current.velocityX = 0;
                 dragRef.current.lastInteractionTime = performance.now();
-                // Clear targets on user interaction
-                dragRef.current.targetRotation = null;
-                dragRef.current.targetOffsetLat = null;
-                dragRef.current.targetPanXNorm = null;
-                dragRef.current.targetPanYNorm = null;
+                // A selection is let go only once the finger moves: a tap
+                // must not drop it (see touchmove).
             } else if (e.touches.length === 2) {
+                // Two fingers are a pinch, which a held selection would fight.
+                releaseTargets(dragRef.current);
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
                 dragRef.current.pinchDist = Math.sqrt(dx * dx + dy * dy);
@@ -948,6 +1158,7 @@ export function DotMatrixGlobe({
 
             if (e.touches.length === 1 && dragRef.current.isDragging) {
                 dragRef.current.lastInteractionTime = performance.now();
+                if (movedPastThreshold(dragRef.current, e.touches[0].clientX, e.touches[0].clientY)) releaseTargets(dragRef.current);
                 const dx = e.touches[0].clientX - dragRef.current.lastX;
                 const dy = e.touches[0].clientY - dragRef.current.lastY;
                 dragRef.current.lastX = e.touches[0].clientX;
@@ -1035,11 +1246,8 @@ export function DotMatrixGlobe({
         dragRef.current.startY = e.clientY;
         dragRef.current.velocityX = 0;
         dragRef.current.lastInteractionTime = performance.now();
-        // Clear targets on user interaction
-        dragRef.current.targetRotation = null;
-        dragRef.current.targetOffsetLat = null;
-        dragRef.current.targetPanXNorm = null;
-        dragRef.current.targetPanYNorm = null;
+        // A still click leaves a selection held; moving past the threshold
+        // lets it go (see handleMouseMove).
     }, [dotData]);
 
     const handleMouseUp = useCallback(() => {
@@ -1053,6 +1261,7 @@ export function DotMatrixGlobe({
         // Handle dragging map
         if (dragRef.current.isDragging) {
             dragRef.current.lastInteractionTime = performance.now();
+            if (movedPastThreshold(dragRef.current, e.clientX, e.clientY)) releaseTargets(dragRef.current);
             const dx = e.clientX - dragRef.current.lastX;
             const dy = e.clientY - dragRef.current.lastY;
             dragRef.current.lastX = e.clientX;
@@ -1072,8 +1281,9 @@ export function DotMatrixGlobe({
                 dragRef.current.panY += rubberDelta(dragRef.current.panY, dy, dragRef.current.boundY);
             }
 
-            // Re-draw immediately without waiting for hover logic frame
-            // but still do hover logic!
+            // A resting flat map has stopped its loop, so a drag wakes it.
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            requestRef.current = requestAnimationFrame((t) => drawRef.current(t));
         }
 
         const { code: foundCode, dotKey: foundDotKey } = countryAtPoint(e.clientX, e.clientY);
