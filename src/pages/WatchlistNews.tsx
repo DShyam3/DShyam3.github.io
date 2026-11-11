@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Library, Newspaper, Tv } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -381,6 +381,38 @@ const WatchlistNews = () => {
     );
 
   const openDetail = useCallback((ref: EntityRef) => setSelectedRef(ref), []);
+
+  // Opening the inspector narrows the News row, and past the column floor it
+  // scrolls sideways (responsive.css), which can leave the column just
+  // clicked out of view. Track the last column clicked, and when the row
+  // resizes, scroll it back in.
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const lastColumnRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace || typeof ResizeObserver === 'undefined') return;
+    let width = workspace.clientWidth;
+    const observer = new ResizeObserver(() => {
+      // Only a change of width can push a column out; a height change (rows
+      // loading, the window growing taller) leaves the user's scroll alone.
+      if (workspace.clientWidth === width) return;
+      width = workspace.clientWidth;
+      const column = lastColumnRef.current;
+      if (!column || workspace.scrollWidth <= workspace.clientWidth) return;
+      const row = workspace.getBoundingClientRect();
+      const box = column.getBoundingClientRect();
+      if (box.left < row.left) workspace.scrollLeft -= row.left - box.left;
+      else if (box.right > row.right) workspace.scrollLeft += box.right - row.right;
+    });
+    observer.observe(workspace);
+    return () => observer.disconnect();
+  }, []);
+  // Clicks in a portaled dialog reach this handler too, from outside any
+  // column; they keep the last column rather than clearing it.
+  const rememberColumn = (event: React.MouseEvent) => {
+    const column = event.target instanceof Element ? event.target.closest<HTMLElement>('.news-column') : null;
+    if (column) lastColumnRef.current = column;
+  };
   const scheduleFor = useCallback((entityType: EntityRef['entityType'], entityId: number, title: string, date: string): React.ComponentProps<typeof NewsPosterCard>['schedule'] => {
     if (!isAdmin) return undefined;
     const watchlistItemId = String(entityId);
@@ -583,7 +615,7 @@ const WatchlistNews = () => {
           <option value="updates">Updates</option>
         </select>
       </div>
-      <div className="watchlist-news-workspace" data-active-panel={newsPanel}>
+      <div ref={workspaceRef} className="watchlist-news-workspace" data-active-panel={newsPanel} onClickCapture={rememberColumn}>
         <div className="news-column" data-panel="next">
         <UpNextRail
           items={upNext}

@@ -204,7 +204,7 @@ proxy so the API key never reaches the browser.
   release weekday, while films default to a one-off calendar date; either mode
  can be selected in the schedule dialog. Known episode release dates suggest the weekday; when no date is available, a day must be chosen. Episode rows keep names visible, mark
   the next unwatched released episode as "Next up", and disable episodes whose
- release date has not arrived. News keeps its page frame and middle workspace fixed. On large, tall screens, Watch Next, Your Week, Out Now, Upcoming and Updates form five independently scrolling columns. Smaller or shorter screens use a selector to show one column. Headings stay visible except in short windows. Calendar days place their date above their content, with an expandable explanation. Empty Watch Next and Out Now sections remain visible. When a News section fails to load, it says "Could not load …" instead of
+ release date has not arrived. News keeps its page frame and middle workspace fixed. On large, tall screens, Watch Next, Your Week, Out Now, Upcoming and Updates form five independently scrolling columns. When the five columns don't fit, such as with the inspector open on a laptop, the row scrolls sideways. In narrow columns, cards put the poster above the text. Smaller or shorter screens use a selector to show one column. Headings stay visible except in short windows. Calendar days place their date above their content, with an expandable explanation. Empty Watch Next and Out Now sections remain visible. When a News section fails to load, it says "Could not load …" instead of
   showing an empty "Nothing this week"; Watch Next keeps showing the rows it
   last loaded. Announcements are ordered by recency, capped at 1,000 and marked
   partial when capped. Events for titles that have been removed from the
@@ -243,7 +243,7 @@ proxy so the API key never reaches the browser.
 Library has a compact category picker, search field, Filters popover and text-only
 sort choices. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the category picker.
 Library uses compact poster cards with aligned title, subtitle, platform and
-status rows. News release rows place text beside small posters. Both keep
+status rows. News release rows place text beside small posters, or below them in narrow columns. Both keep
 scheduling actions separate from title details. Titles show up to two lines;
 the full title is available in the tooltip, accessible label and details.
 News details support scheduling and episode watched-state controls for admins.

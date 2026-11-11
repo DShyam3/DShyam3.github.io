@@ -247,8 +247,22 @@ footer.app-footer { padding-block: .75rem; }
 .news-panel-switcher { display: flex; align-items: center; gap: .75rem; flex-shrink: 0; padding-top: .5rem; }
 .news-panel-switcher select { min-height: 2.75rem; }
 .app-shell[data-section="watchlist"] .app-frame[data-layout="workspace"] > .app-toolbar { flex-shrink: 0; position: static; }
+/* Five columns, each with a floor. Where they cannot all fit -- 1280px with
+   the inspector open leaves about 640px for five -- the row scrolls sideways
+   instead of squeezing every column until titles break a letter per line.
+   The floor is in rem so Larger display raises it with the type. No scroll
+   snap: the row is only a column or two wider than the view, so snap points
+   pulled every short swipe back to where it started. */
 @media (min-width: 1280px) and (min-height: 600px) {
-  .watchlist-news-workspace { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .watchlist-news-workspace {
+    grid-template-columns: repeat(5, minmax(11rem, 1fr));
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  /* The columns fill the row, so a sideways swipe always starts over one.
+     Contained on x, it would stop there and never reach the row. */
+  .watchlist-news-workspace > .news-column { overscroll-behavior-x: auto; }
   .news-panel-switcher { display: none; }
 }
 @media not all and (min-width: 1280px) and (min-height: 600px) {
@@ -274,6 +288,18 @@ footer.app-footer { padding-block: .75rem; }
 }
 .watchlist-news-workspace .news-pane-your-week .news-agenda {
   grid-template-columns: minmax(0, 1fr) !important;
+}
+/* A narrow column stacks the poster above the text, so a title gets the
+   card's whole width rather than what is left beside a 3.5rem poster. */
+.watchlist-news-workspace > .news-column { container: news-column / inline-size; }
+@container (max-width: 13rem) {
+  .watchlist-news-workspace .item-card > button { flex-direction: column; align-items: flex-start; }
+}
+@container news-column (max-width: 15rem) {
+  .news-column .news-update-row { grid-template-columns: minmax(0, 1fr); }
+  /* span:last-child is listed to outrank the wide layout's date placement. */
+  .news-column .news-update-row > *,
+  .news-column .news-update-row > span:last-child { grid-column: 1; grid-row: auto; }
 }
 /* Distance viewing is opted into, not inferred from the screen's pixel count. */
 html[data-display="larger"] { font-size: 125%; }

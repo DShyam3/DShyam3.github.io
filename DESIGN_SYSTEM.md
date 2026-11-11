@@ -406,11 +406,17 @@ brands, in portrait and landscape.
   News uses a fixed middle workspace: five equal, independently scrolling
   columns at widths of at least 1280px and heights of at least 600px, ordered
   Watch Next, Your Week, Out Now, Upcoming, Updates. Elsewhere, a compact
-  selector shows one column. The workspace itself never scrolls. Headings
-  are sticky except at heights of 600px or less. Upcoming contains Countdown.
-  Out Now and Upcoming use 56px poster-and-text rows with separate schedule
-  actions and missing-art fallbacks. Watch Next uses vertical rows without
-  rail arrows. Compact calendar days place dates above content, weekday and
+  selector shows one column. Each column has an `11rem` floor; where five do
+  not fit (1280px with the inspector open leaves about 640px), the row
+  scrolls sideways instead of squeezing, without snap points, and the column
+  last clicked is scrolled back into view when the row's width changes. The
+  workspace never scrolls vertically. Headings are sticky except at heights
+  of 600px or less. Upcoming contains Countdown. Out Now and Upcoming use
+  56px poster-and-text rows with separate schedule actions and missing-art
+  fallbacks. In any column, a card under `13rem` (Watch Next, Out Now,
+  Upcoming) stacks its poster above the text, and an Updates row in a column
+  under `15rem` stacks the same way; at 1280px both stack with the inspector
+  closed too. Watch Next uses vertical rows without rail arrows. Compact calendar days place dates above content, weekday and
   date read together with Today at the end; explanatory text lives in a
   details disclosure. Each calendar event is one segment, split from the next
   by a hairline: its card (planned filled, suggested dashed, both with a
