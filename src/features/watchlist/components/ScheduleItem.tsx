@@ -17,7 +17,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Tv, Film, Clock, Calendar, ArrowRightLeft, MoreHorizontal, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
@@ -122,7 +121,7 @@ export function ScheduleItem({
         className="schedule-card group relative bg-secondary/20 hover:bg-secondary/40 border border-transparent hover:border-border rounded-md overflow-hidden transition-[background-color,border-color] duration-200 cursor-pointer"
         onClick={() => setDetailOpen(true)}
       >
-        <div className={cn('flex items-center p-1.5 gap-2', (updateScheduleDay || removeFromSchedule) && 'schedule-card-row')}>
+        <div className="schedule-card-row flex items-center p-1.5 gap-2">
           {item.image_url ? (
             <div className="h-10 w-8 flex-shrink-0 rounded overflow-hidden">
               <img

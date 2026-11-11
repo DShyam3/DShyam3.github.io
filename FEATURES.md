@@ -231,10 +231,11 @@ proxy so the API key never reaches the browser.
   Restore declined suggestions brings them all back. These choices do not sync
   across devices, and a failed save displays an error.
   Each release is a separate block in the agenda, with its captions and actions
-  under its card. A suggested release shows a poster thumbnail and repeats its
-  release date only when that date differs from the day it sits under. In the
-  compact column each day reads as one label, such as "Wed 11 Nov", with "Today"
-  at its end.
+  under its card. A suggested release shows a poster thumbnail and says "Out
+  today" or "Not out yet" rather than repeating its day's date; a planned
+  episode shows its release date. In a narrow column a card's title takes its
+  own line under the poster. In the compact column each day reads as one label,
+  such as "Wed 11 Nov", with "Today" at its end.
   Month view uses a seven-column grid on wider screens and an agenda on narrow
   screens. The calendar header and controls stay visible while its body scrolls.
   The former Schedule view opens News.

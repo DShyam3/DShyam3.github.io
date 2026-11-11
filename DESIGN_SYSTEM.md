@@ -340,9 +340,10 @@ brands, in portrait and landscape.
   one exception left is the Transactions list below 1024×720, capped to the
   measured card height until its inspector opens as a sheet.
 - The shell's right inspector column, from 1280×600, is
-  `clamp(19.5rem, 20vw, 32rem)`: fixed below 1560px, a fifth of the window
-  after, capped from 2560px. A fixed width left it narrower than a single
-  News column on wide screens.
+  `clamp(19.5rem, 20vw, 32rem)`. At Standard size that is fixed below 1560px,
+  a fifth of the window after, and capped from 2560px; at Larger (125% root)
+  the rem bounds scale, so `20vw` takes over from 1950px and caps at 3200px.
+  A fixed width left it narrower than a single News column on wide screens.
 - Section toolbars open the card and never scroll on their own. From 768px
   they pin as a frosted band while they take at most a quarter of the card's
   height; otherwise they scroll with the content. `AppShell` measures this
@@ -412,9 +413,13 @@ brands, in portrait and landscape.
   rail arrows. Compact calendar days place dates above content, weekday and
   date read together with Today at the end; explanatory text lives in a
   details disclosure. Each calendar event is one segment, split from the next
-  by a hairline: its card (planned solid, suggested dashed, both with a poster
-  thumbnail), then its own captions, then its actions. A suggestion does not
-  repeat a release date equal to the day it sits under.
+  by a hairline: its card (planned filled, suggested dashed, both with a
+  poster thumbnail), then its own captions, then its actions. Only the card
+  dims for an unreleased event; captions and actions keep full contrast. A
+  suggestion states "Out today" or "Not out yet" in words instead of repeating
+  its day's date, and its button's accessible name carries title, kind, label
+  and status. Below a `12.5rem` card width the title takes its own line under
+  the poster (`schedule-card` container query). The compact day header wraps.
 
 Validate both orientations, short landscape windows, large monitors and both
 reading sizes. Browser viewport checks do not replace physical device tests.

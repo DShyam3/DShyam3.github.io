@@ -382,8 +382,9 @@ html[data-display="larger"] .app-shell[data-section="watchlist"] .card-grid { --
 .watchlist-poster-card:hover { transform: none; }
 .watchlist-updates-scroll { scrollbar-gutter: stable; scrollbar-width: thin; }
 
-/* A week column is too narrow for a schedule card's title to share its row
-   with the actions menu, so the title takes a line of its own beneath them. */
+/* A narrow week column is too tight for a card's title to share its row with
+   the poster and actions menu, so the title takes a line of its own beneath
+   them. Used by planned schedule cards and Your Week's suggestion cards. */
 .schedule-card { container-type: inline-size; }
 @container (max-width: 12.5rem) {
   .schedule-card-row { flex-wrap: wrap; }
