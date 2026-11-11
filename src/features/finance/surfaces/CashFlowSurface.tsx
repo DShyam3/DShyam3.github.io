@@ -444,7 +444,7 @@ return (
 
       <div className="h-[220px] sm:h-[280px] w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={cfMonthlyData} margin={{ top: 10, right: 4, left: -16, bottom: 30 }}>
+          <BarChart data={cfMonthlyData} margin={{ top: 10, right: 4, left: 0, bottom: 30 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
             <XAxis
               dataKey="name"
@@ -454,6 +454,7 @@ return (
               interval={0}
             />
             <YAxis
+              width={56}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `£${v >= 0 ? '' : '-'}${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}K` : Math.abs(v)}`}
@@ -507,7 +508,7 @@ return (
         </div>
         <div className="h-[180px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
+            <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: 0, bottom: 30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
                 dataKey="name"
@@ -517,6 +518,7 @@ return (
                 interval={0}
               />
               <YAxis
+                width={44}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}
@@ -547,7 +549,7 @@ return (
         </div>
         <div className="h-[180px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: -20, bottom: 30 }}>
+            <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: 0, bottom: 30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
                 dataKey="name"
@@ -557,6 +559,7 @@ return (
                 interval={0}
               />
               <YAxis
+                width={44}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`}

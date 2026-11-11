@@ -762,7 +762,7 @@ return (
           {/* Recharts Bar Chart over past 24 months */}
           <div className="h-28 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={multiMonthChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={multiMonthChartData} margin={{ top: 10, right: 10, left: 4, bottom: 0 }}>
                 <XAxis
                   dataKey="tickLabel"
                   interval={0}

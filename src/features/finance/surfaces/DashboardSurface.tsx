@@ -442,7 +442,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
       {/* Recharts Cumulative spending chart */}
       <div className="h-[200px] w-full mt-4 min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={dashboardSpendChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <AreaChart data={dashboardSpendChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="progressGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={progressGradientColor} stopOpacity={0.2} />
@@ -457,6 +457,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
               tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
             />
             <YAxis
+              width={56}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `£${v}`}
