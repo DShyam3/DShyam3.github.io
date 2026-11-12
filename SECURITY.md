@@ -32,6 +32,12 @@ Current allowances worth knowing about:
 - `style-src` and `font-src` allow no third-party host. Doto and Space Mono are
   bundled from `@fontsource` (`src/theme/fonts.ts`), so a visit sends no request
   to Google Fonts.
+- `frame-src` allows only `https://www.youtube-nocookie.com`, for Watchlist
+  trailers. The iframe is mounted only after the trailer button is pressed,
+  its video id is checked against `^[A-Za-z0-9_-]{6,20}$` in the browser and
+  by a database constraint, and it is sandboxed (`TrailerButton.tsx`).
+  Pressing the button sends the visitor's IP and this site's origin (as
+  Referer) to Google, and the player may then write to its own storage.
 - `img-src https:` is deliberately broad — book covers, posters and flags come
   from user-supplied URLs stored in the database.
 

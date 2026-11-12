@@ -270,6 +270,13 @@ The first unwatched regular season opens by default.
 - Status, episode, season and platform refreshed from TMDB on a daily
   server-side schedule, so the data is current whether or not anyone has the
   page open — and on demand from the page itself
+- Trailers: a title's details show Watch trailer when TMDB lists a YouTube
+  trailer for it, and the season picker shows a trailer button for a season
+  that has its own. The trailer plays in a dialog in YouTube's privacy-enhanced
+  player, which loads only once the button is pressed, with a link to open it
+  on YouTube. The sync picks each trailer, English or without a language,
+  trailers before teasers, official first, newest first; a title added by hand
+  has its trailer at once
 
 **Sync:**
 

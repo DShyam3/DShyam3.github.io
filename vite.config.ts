@@ -48,7 +48,9 @@ const cspPlugin = (supabaseUrl: string | undefined, umamiScriptUrl: string | nul
       "https://www.gov.uk",
     ].join(" "),
     "object-src 'none'",
-    "frame-src 'none'",
+    // Watchlist trailers only (TrailerButton). The privacy-enhanced YouTube
+    // host, and only it: trailer.ts builds every embed URL on this host.
+    "frame-src https://www.youtube-nocookie.com",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     "base-uri 'self'",

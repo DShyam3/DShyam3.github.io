@@ -49,9 +49,25 @@ export interface TMDBEpisode {
   runtime?: number | null;
 }
 
+/** One entry of an `append_to_response: 'videos'` block. */
+export interface TMDBVideo {
+  key?: string;
+  site?: string;
+  type?: string;
+  official?: boolean;
+  iso_639_1?: string | null;
+  published_at?: string;
+}
+
+/** `append_to_response: 'videos'` payload. */
+export interface TMDBVideos {
+  results?: TMDBVideo[];
+}
+
 /** `tv/{id}/season/{n}` -- the only place episodes come from. */
 export interface TMDBSeasonDetails {
   episodes?: TMDBEpisode[];
+  videos?: TMDBVideos;
 }
 
 /** `movie/{id}` or `tv/{id}`. Movie-only and TV-only fields are both optional. */
@@ -75,6 +91,7 @@ export interface TMDBDetails {
   status?: string;
   seasons?: TMDBSeasonSummary[];
   'watch/providers'?: TMDBWatchProviders;
+  videos?: TMDBVideos;
 }
 
 /** One row of `search/movie` or `search/tv`. */

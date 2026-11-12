@@ -2544,6 +2544,8 @@ export type Database = {
           release_date: string | null
           release_year: number | null
           season_number: number
+          trailer_checked_at: string | null
+          trailer_key: string | null
           tv_show_id: number | null
           watched: boolean | null
         }
@@ -2553,6 +2555,8 @@ export type Database = {
           release_date?: string | null
           release_year?: number | null
           season_number: number
+          trailer_checked_at?: string | null
+          trailer_key?: string | null
           tv_show_id?: number | null
           watched?: boolean | null
         }
@@ -2562,6 +2566,8 @@ export type Database = {
           release_date?: string | null
           release_year?: number | null
           season_number?: number
+          trailer_checked_at?: string | null
+          trailer_key?: string | null
           tv_show_id?: number | null
           watched?: boolean | null
         }

@@ -6,6 +6,7 @@ import type {
     TMDBSearchResponse,
 } from './tmdb-types';
 import { getPlatform } from './sync-logic';
+import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import { releaseYear } from './watchlist-utils';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
@@ -84,7 +85,10 @@ export function useTMDB() {
     const getMovieDetails = useCallback(async (id: number, type: 'movie' | 'tv') => {
         setLoading(true);
         try {
-            const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, { append_to_response: 'watch/providers' });
+            const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, {
+                append_to_response: 'watch/providers,videos',
+                ...TRAILER_VIDEO_PARAMS,
+            });
 
             // Extract platform based on UK (GB) region. Same allowlist and
             // same precedence as the sync path, so an item added by hand and
@@ -102,6 +106,9 @@ export function useTMDB() {
                 genres: data.genres?.map((g) => g.name) || [],
                 tmdb_id: data.id,
                 platform: platform,
+                // Same pick as the sync, so the title has its trailer from
+                // the moment it is added rather than from the next sync.
+                trailer_key: pickTrailerKey(data.videos?.results),
             };
         } catch (error) {
             console.error('TMDB Detail Error:', error);

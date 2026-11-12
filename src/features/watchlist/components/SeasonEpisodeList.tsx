@@ -4,6 +4,11 @@ import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Season } from '@/features/watchlist/useWatchlist';
 import { daysUntil } from '@/features/watchlist/watchlist-utils';
+import { TrailerButton } from './TrailerButton';
+
+const seasonLabel = (seasonNumber: number) =>
+  seasonNumber === 0 ? 'Specials' : `Season ${seasonNumber}`;
+
 interface SeasonEpisodeListProps {
   seasons: Season[];
   showId: string;
@@ -19,6 +24,8 @@ interface SeasonEpisodeListProps {
     episodeNumber: number,
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
+  /** Names the season's trailer dialog, e.g. "Severance, Season 2". */
+  showTitle?: string;
 }
 
 export function SeasonEpisodeList({
@@ -28,6 +35,7 @@ export function SeasonEpisodeList({
   toggleSeasonWatched,
   isEpisodeWatched,
   isSeasonWatched,
+  showTitle,
 }: SeasonEpisodeListProps) {
   const initialSeason = useMemo(() => {
     const regularSeasons = seasons.filter((season) => season.season_number > 0);
@@ -116,6 +124,13 @@ export function SeasonEpisodeList({
                 {currentSeason.episodes.length} episodes
               </span>
             </div>
+
+            <TrailerButton
+              trailerKey={currentSeason.trailer_key}
+              title={`${showTitle ? `${showTitle}, ` : ''}${seasonLabel(currentSeason.season_number)}`}
+              label={`${seasonLabel(currentSeason.season_number)} trailer`}
+              className="w-full"
+            />
 
             {/* Mark Season Complete button */}
             {toggleSeasonWatched && currentSeason.episodes.length > 0 && (

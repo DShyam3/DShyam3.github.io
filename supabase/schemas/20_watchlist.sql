@@ -125,7 +125,9 @@ CREATE TABLE IF NOT EXISTS "public"."tv_show_seasons" (
     "release_year" integer,
     "watched" boolean DEFAULT false,
     "release_date" "date",
-    "created_at" timestamp with time zone DEFAULT "now"()
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "trailer_key" "text",
+    "trailer_checked_at" timestamp with time zone
 );
 
 ALTER TABLE "public"."tv_show_seasons" OWNER TO "postgres";
@@ -236,6 +238,9 @@ ALTER TABLE ONLY "public"."favourites"
 ALTER TABLE ONLY "public"."movies"
     ADD CONSTRAINT "movies_pkey" PRIMARY KEY ("id");
 
+ALTER TABLE ONLY "public"."movies"
+    ADD CONSTRAINT "movies_trailer_key_format" CHECK ((trailer_key IS NULL OR trailer_key ~ '^[A-Za-z0-9_-]{6,20}$'));
+
 ALTER TABLE ONLY "public"."tv_show_seasons"
     ADD CONSTRAINT "seasons_unique_match" UNIQUE ("tv_show_id", "season_number");
 
@@ -248,8 +253,14 @@ ALTER TABLE ONLY "public"."tv_show_episodes"
 ALTER TABLE ONLY "public"."tv_show_seasons"
     ADD CONSTRAINT "tv_show_seasons_pkey" PRIMARY KEY ("id");
 
+ALTER TABLE ONLY "public"."tv_show_seasons"
+    ADD CONSTRAINT "tv_show_seasons_trailer_key_format" CHECK ((trailer_key IS NULL OR trailer_key ~ '^[A-Za-z0-9_-]{6,20}$'));
+
 ALTER TABLE ONLY "public"."tv_shows"
     ADD CONSTRAINT "tv_shows_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."tv_shows"
+    ADD CONSTRAINT "tv_shows_trailer_key_format" CHECK ((trailer_key IS NULL OR trailer_key ~ '^[A-Za-z0-9_-]{6,20}$'));
 
 ALTER TABLE ONLY "public"."tv_show_episodes"
     ADD CONSTRAINT "unique_episode_per_season" UNIQUE ("season_id", "episode_number");
@@ -657,6 +668,12 @@ COMMENT ON COLUMN "public"."tv_shows"."trailer_key" IS
 
 COMMENT ON COLUMN "public"."movies"."trailer_key" IS
     'A YouTube video key from TMDB''s videos append (e.g. "dQw4w9WgXcQ"), not a URL -- the player builds the embed URL client-side.';
+
+COMMENT ON COLUMN "public"."tv_show_seasons"."trailer_key" IS
+    'A YouTube video key from TMDB''s season videos append (e.g. "dQw4w9WgXcQ"), not a URL -- the player builds the embed URL client-side.';
+
+COMMENT ON COLUMN "public"."tv_show_seasons"."trailer_checked_at" IS
+    'When the sync last asked TMDB for this season''s videos. Null means never asked, so the sync will fetch it once (backfill).';
 
 COMMENT ON COLUMN "public"."tv_shows"."backdrop" IS
     'Full TMDB backdrop image URL at w1280 (e.g. https://image.tmdb.org/t/p/w1280/abc.jpg), the landscape counterpart of poster. Written by watchlist-cron-sync (only while still null) and the client add flow. Null until one of them fills it; never backfilled in SQL, because the value only exists in TMDB.';

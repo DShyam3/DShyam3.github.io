@@ -277,6 +277,7 @@ const Watchlist = () => {
           tmdb_id: details.tmdb_id,
           release_date: details.release_date,
           streaming_platform: details.platform,
+          trailer_key: details.trailer_key ?? undefined,
         });
         setAddedItems((prev) => new Set(prev).add(result.id));
       } finally {

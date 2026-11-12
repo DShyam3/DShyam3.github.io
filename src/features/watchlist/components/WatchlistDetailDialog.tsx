@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
+import { TrailerButton } from './TrailerButton';
 import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
 import { displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { PlatformBadge } from './PlatformLogo';
@@ -224,6 +225,8 @@ export function WatchlistDetailDialog({
             <DetailDescription text={item.description} />
           ) : null}
 
+          <TrailerButton trailerKey={item.trailer_key} title={item.title} className="w-full" />
+
           {!isTVShow && item.runtime ? (
             <RuntimeRow
               runtime={item.runtime}
@@ -246,6 +249,7 @@ export function WatchlistDetailDialog({
             >
               <SeasonEpisodeList
                 showId={item.id}
+                showTitle={item.title}
                 seasons={item.seasons}
                 toggleEpisodeWatched={toggleEpisodeWatched}
                 toggleSeasonWatched={toggleSeasonWatched}

@@ -84,8 +84,20 @@ interface TMDBEpisode {
   air_date?: string | null
   runtime?: number | null
 }
+interface TMDBVideo {
+  key?: string
+  site?: string
+  type?: string
+  official?: boolean
+  iso_639_1?: string | null
+  published_at?: string
+}
+interface TMDBVideos {
+  results?: TMDBVideo[]
+}
 interface TMDBSeasonDetails {
   episodes?: TMDBEpisode[]
+  videos?: TMDBVideos
 }
 interface TMDBDetails {
   id?: number
@@ -100,7 +112,29 @@ interface TMDBDetails {
   status?: string
   seasons?: TMDBSeasonSummary[]
   'watch/providers'?: { results?: Record<string, TMDBRegionProviders | undefined> }
+  videos?: TMDBVideos
 }
+
+/**
+ * Trailers come from TMDB's `videos`, English and language-less ones only. A
+ * title with only, say, a Japanese trailer gets none: the embed is for
+ * watching, and an untranslated trailer is a worse result than a blank.
+ * Mirror of TRAILER_VIDEO_PARAMS in src/features/watchlist/trailer.ts.
+ */
+const VIDEO_PARAMS = { include_video_language: 'en,null' }
+/**
+ * A settled season is never re-read, so one never asked for its videos is
+ * asked once through `season/{n}/videos` -- a few hundred bytes, not the
+ * episode payload. Queued during the sync and drained after it (see the end
+ * of the handler), at most this many per run, this many at a time: a pool
+ * keeps the backfill out of the sync's parallel burst and under TMDB's rate
+ * limit. Shard and single-title runs only; a whole-library manual run is
+ * already near the CPU budget (see parseShard). A nightly shard holds ~240
+ * seasons, so the whole library fills on the first night; anything the time
+ * ceiling cuts off stays unchecked for the next.
+ */
+const MAX_TRAILER_BACKFILL_PER_RUN = 300
+const TRAILER_BACKFILL_CONCURRENCY = 8
 
 /** A TMDB episode that survived the "has an air date" filter. */
 type AiredEpisode = TMDBEpisode & { air_date: string }
@@ -127,6 +161,7 @@ interface SeasonRow {
   id: number
   season_number: number
   release_date: string | null
+  trailer_checked_at: string | null
   tv_show_episodes: EpisodeRow[] | null
 }
 interface ShowRow {
@@ -146,6 +181,8 @@ interface SyncSeason {
   id: number
   season_number: number
   release_date?: string
+  /** When TMDB was last asked for this season's videos; unset means never. */
+  trailer_checked_at?: string
   episodes: { episode_number: number; watched: boolean | null }[]
 }
 
@@ -233,6 +270,38 @@ function getPlatform(providers: TMDBRegionProviders | undefined): string {
     }
   }
   return 'Online'
+}
+
+// Mirror of src/features/watchlist/trailer.ts. Deno cannot import from src/,
+// so this is a hand-maintained copy -- change both together.
+const YOUTUBE_KEY = /^[A-Za-z0-9_-]{6,20}$/
+const TRAILER_TYPE_RANK: Record<string, number> = { Trailer: 2, Teaser: 1 }
+function pickTrailerKey(videos: TMDBVideo[] | undefined | null): string | null {
+  let best: TMDBVideo | null = null
+  let bestScore: number[] = []
+  for (const video of videos ?? []) {
+    if (video.site !== 'YouTube' || typeof video.key !== 'string' || !YOUTUBE_KEY.test(video.key)) continue
+    const typeRank = TRAILER_TYPE_RANK[video.type ?? '']
+    if (!typeRank) continue
+    const published = Date.parse(video.published_at ?? '')
+    const score = [
+      typeRank,
+      video.official ? 1 : 0,
+      video.iso_639_1 === 'en' ? 1 : 0,
+      Number.isNaN(published) ? 0 : published,
+    ]
+    const better = !best || (() => {
+      for (let i = 0; i < score.length; i++) {
+        if (score[i] !== bestScore[i]) return score[i] > bestScore[i]
+      }
+      return false
+    })()
+    if (better) {
+      best = video
+      bestScore = score
+    }
+  }
+  return best?.key ?? null
 }
 
 serve(async (req) => {
@@ -340,7 +409,7 @@ serve(async (req) => {
     // top-level rows; seasons and episodes stay embedded. A single-title
     // resync reads only that title's row and skips the other table outright.
     const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, release_year'
-    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, status, tv_show_seasons (id, season_number, release_date, tv_show_episodes (episode_number, watched))'
+    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, status, tv_show_seasons (id, season_number, release_date, trailer_checked_at, tv_show_episodes (episode_number, watched))'
     const none = { data: [], error: null }
     const [moviesResult, showsResult] = await Promise.all([
       !target
@@ -390,6 +459,7 @@ serve(async (req) => {
         id: season.id,
         season_number: season.season_number,
         release_date: season.release_date || undefined,
+        trailer_checked_at: season.trailer_checked_at || undefined,
         episodes: (season.tv_show_episodes || []).map((ep) => ({
           episode_number: ep.episode_number,
           watched: ep.watched,
@@ -419,6 +489,8 @@ serve(async (req) => {
     const chunkSize = 50
     const MAX_EXECUTION_TIME_MS = 100_000
     let hitCeiling = false
+    const backfillTrailers = Boolean(shard || target)
+    const trailerBackfill: { seasonId: number; tmdbId: number; seasonNumber: number; title: string }[] = []
     loopStarted = true
 
     for (let i = 0; i < itemsToSync.length; i += chunkSize) {
@@ -434,7 +506,7 @@ serve(async (req) => {
         chunk.map(async (item) => {
           try {
             const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie'
-            const data = await fetchTMDB<TMDBDetails>(`${tmdbType}/${item.tmdb_id}`, { append_to_response: 'watch/providers' })
+            const data = await fetchTMDB<TMDBDetails>(`${tmdbType}/${item.tmdb_id}`, { append_to_response: 'watch/providers,videos', ...VIDEO_PARAMS })
             if (!data?.id) return
 
             const commonUpdates: Record<string, unknown> = {}
@@ -444,6 +516,9 @@ serve(async (req) => {
             if (data.release_date || data.first_air_date) commonUpdates.release_date = data.release_date || data.first_air_date
             if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g) => g.name).join(', ')
             commonUpdates.platform = getPlatform(data['watch/providers']?.results?.GB)
+            // Rewritten every run, like platform: the append costs no extra
+            // call, and a trailer TMDB has since removed should go too.
+            commonUpdates.trailer_key = pickTrailerKey(data.videos?.results)
 
             if (item.category === 'Movies') {
               const movieUpdates = { ...commonUpdates }
@@ -511,52 +586,72 @@ serve(async (req) => {
                       const localEpisodeCount = localSeason?.episodes?.length || 0
                       const hasEpisodeCountChanged = localEpisodeCount !== s.episode_count
                       const shouldUpdateEpisodes = !seasonReleaseDate || seasonReleaseDate >= ninetyDaysAgo || isShowCurrentlyAiring || hasEpisodeCountChanged
+                      if (!shouldUpdateEpisodes) {
+                        if (
+                          backfillTrailers && item.tmdb_id && !localSeason?.trailer_checked_at &&
+                          trailerBackfill.length < MAX_TRAILER_BACKFILL_PER_RUN
+                        ) {
+                          trailerBackfill.push({ seasonId: dbS.id, tmdbId: item.tmdb_id, seasonNumber: s.season_number, title: item.title })
+                        }
+                        return
+                      }
 
-                      if (shouldUpdateEpisodes) {
-                        const sDetails = await fetchTMDB<TMDBSeasonDetails>(`tv/${item.tmdb_id}/season/${s.season_number}`)
-                        const validEpisodes = (sDetails?.episodes || []).filter(hasAirDate)
+                      // Re-read for its episodes anyway, so the season's
+                      // trailer rides along on the same call.
+                      const sDetails = await fetchTMDB<TMDBSeasonDetails>(
+                        `tv/${item.tmdb_id}/season/${s.season_number}`,
+                        { append_to_response: 'videos', ...VIDEO_PARAMS },
+                      )
+                      const validEpisodes = (sDetails?.episodes || []).filter(hasAirDate)
 
-                        if (validEpisodes.length > 0) {
-                          if (validEpisodes.length > localEpisodeCount) {
-                            changes.push(
-                              `${item.title}: +${validEpisodes.length - localEpisodeCount} new episode(s) (S${s.season_number})`,
-                            )
-                          }
-                          // Checked: an unread watched map would upsert every
-                          // episode back to unwatched.
-                          const { data: existingEps } = check(await supabaseAdmin
-                            .from('tv_show_episodes')
-                            .select('episode_number, watched')
-                            .eq('season_id', dbS.id))
-                          const watchedMap = new Map<number, boolean>(
-                            ((existingEps || []) as EpisodeRow[]).map((e) => [e.episode_number, e.watched ?? false]),
+                      if (validEpisodes.length > 0) {
+                        if (validEpisodes.length > localEpisodeCount) {
+                          changes.push(
+                            `${item.title}: +${validEpisodes.length - localEpisodeCount} new episode(s) (S${s.season_number})`,
                           )
+                        }
+                        // Checked: an unread watched map would upsert every
+                        // episode back to unwatched.
+                        const { data: existingEps } = check(await supabaseAdmin
+                          .from('tv_show_episodes')
+                          .select('episode_number, watched')
+                          .eq('season_id', dbS.id))
+                        const watchedMap = new Map<number, boolean>(
+                          ((existingEps || []) as EpisodeRow[]).map((e) => [e.episode_number, e.watched ?? false]),
+                        )
 
-                          const eps = validEpisodes.map((v) => ({
-                            season_id: dbS.id,
-                            episode_number: v.episode_number,
-                            title: v.name || `Episode ${v.episode_number}`,
-                            runtime: v.runtime || data.episode_run_time?.[0] || null,
-                            release_date: v.air_date,
-                            watched: watchedMap.get(v.episode_number) ?? false,
-                          }))
-                          check(await supabaseAdmin.from('tv_show_episodes').upsert(eps, { onConflict: 'season_id,episode_number' }))
+                        const eps = validEpisodes.map((v) => ({
+                          season_id: dbS.id,
+                          episode_number: v.episode_number,
+                          title: v.name || `Episode ${v.episode_number}`,
+                          runtime: v.runtime || data.episode_run_time?.[0] || null,
+                          release_date: v.air_date,
+                          watched: watchedMap.get(v.episode_number) ?? false,
+                        }))
+                        check(await supabaseAdmin.from('tv_show_episodes').upsert(eps, { onConflict: 'season_id,episode_number' }))
 
-                          const validEpisodeNumbers = validEpisodes.map((v) => v.episode_number)
-                          const { data: existingEpisodes } = check(await supabaseAdmin
-                            .from('tv_show_episodes')
-                            .select('id, episode_number')
-                            .eq('season_id', dbS.id))
-                          const toDelete = ((existingEpisodes || []) as EpisodeRow[]).filter((e) => !validEpisodeNumbers.includes(e.episode_number))
-                          if (toDelete.length > 0) {
-                            check(await supabaseAdmin.from('tv_show_episodes').delete().in('id', toDelete.map((e) => e.id)))
-                          }
-                        } else {
-                          const localS = item.seasons?.find((ls) => ls.season_number === s.season_number)
-                          const hasWatched = localS?.episodes.some((ep) => watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`))
-                          if (!hasWatched) {
-                            check(await supabaseAdmin.from('tv_show_seasons').delete().eq('id', dbS.id))
-                          }
+                        const validEpisodeNumbers = validEpisodes.map((v) => v.episode_number)
+                        const { data: existingEpisodes } = check(await supabaseAdmin
+                          .from('tv_show_episodes')
+                          .select('id, episode_number')
+                          .eq('season_id', dbS.id))
+                        const toDelete = ((existingEpisodes || []) as EpisodeRow[]).filter((e) => !validEpisodeNumbers.includes(e.episode_number))
+                        if (toDelete.length > 0) {
+                          check(await supabaseAdmin.from('tv_show_episodes').delete().in('id', toDelete.map((e) => e.id)))
+                        }
+
+                        // After the episodes and unchecked: a failed trailer
+                        // write must not fail a title whose episodes are fine.
+                        const { error: trailerError } = await supabaseAdmin
+                          .from('tv_show_seasons')
+                          .update({ trailer_key: pickTrailerKey(sDetails?.videos?.results), trailer_checked_at: new Date().toISOString() })
+                          .eq('id', dbS.id)
+                        if (trailerError) console.warn(`Trailer write failed for "${item.title}" S${s.season_number}:`, trailerError)
+                      } else {
+                        const localS = item.seasons?.find((ls) => ls.season_number === s.season_number)
+                        const hasWatched = localS?.episodes.some((ep) => watchedEpisodes.has(`${item.id}-s${s.season_number}-e${ep.episode_number}`))
+                        if (!hasWatched) {
+                          check(await supabaseAdmin.from('tv_show_seasons').delete().eq('id', dbS.id))
                         }
                       }
                     } catch (e) {
@@ -588,6 +683,35 @@ serve(async (req) => {
           }
         }),
       )
+    }
+
+    // Season trailer backfill, after the sync proper so it can neither fail a
+    // title nor spend the time a title needs. Best effort: a season that
+    // fails here, or that the ceiling cuts off, stays unchecked for next run.
+    let trailersBackfilled = 0
+    let nextBackfill = 0
+    await Promise.all(
+      Array.from({ length: Math.min(TRAILER_BACKFILL_CONCURRENCY, trailerBackfill.length) }, async () => {
+        while (nextBackfill < trailerBackfill.length && Date.now() - startTime < MAX_EXECUTION_TIME_MS) {
+          const season = trailerBackfill[nextBackfill++]
+          try {
+            const videos = await fetchTMDB<TMDBVideos>(
+              `tv/${season.tmdbId}/season/${season.seasonNumber}/videos`,
+              VIDEO_PARAMS,
+            )
+            check(await supabaseAdmin
+              .from('tv_show_seasons')
+              .update({ trailer_key: pickTrailerKey(videos?.results), trailer_checked_at: new Date().toISOString() })
+              .eq('id', season.seasonId))
+            trailersBackfilled++
+          } catch (e) {
+            console.warn(`Trailer backfill failed for "${season.title}" S${season.seasonNumber}:`, e)
+          }
+        }
+      }),
+    )
+    if (trailerBackfill.length > 0) {
+      console.log(`[Sync ${runLabel}] Season trailers backfilled: ${trailersBackfilled}/${trailerBackfill.length}.`)
     }
 
     const durationMs = Date.now() - startTime

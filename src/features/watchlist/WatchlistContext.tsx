@@ -17,6 +17,7 @@ import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
+import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import {
   resolveFavouriteCategory,
   type FavouriteCategory,
@@ -115,6 +116,8 @@ export interface Season {
   release_date?: string;
   episodes: Episode[];
   watched?: boolean;
+  /** YouTube key of this season's trailer. Loaded with the episodes. */
+  trailer_key?: string;
 }
 
 export interface WatchlistItem {
@@ -142,6 +145,11 @@ export interface WatchlistItem {
    * because the sync uses a missing description as a signal.
    */
   descriptionLoaded?: boolean;
+  /**
+   * YouTube key of the title's trailer, picked from TMDB's videos by the
+   * sync. Loaded with the description, since only the detail view shows it.
+   */
+  trailer_key?: string;
   // TMDB returns the US spelling ('Canceled'); 'Cancelled' is kept for any
   // pre-existing stored rows using the British spelling.
   series_status?:
@@ -393,7 +401,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
     const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
     const { data, error } = await supabase.from(table)
-      .select('overview')
+      .select('overview, trailer_key')
       .eq('id', parseInt(item.id))
       .maybeSingle();
 
@@ -407,7 +415,12 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     setWatchlist((prev) =>
       prev.map((i) =>
         i.id === item.id
-          ? { ...i, description: data?.overview || '', descriptionLoaded: true }
+          ? {
+            ...i,
+            description: data?.overview || '',
+            trailer_key: data?.trailer_key || undefined,
+            descriptionLoaded: true,
+          }
           : i,
       ),
     );
@@ -427,7 +440,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const { data, error } = await supabase
       .from('tv_show_seasons')
       .select(
-        'id, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)',
+        'id, trailer_key, tv_show_episodes (id, episode_number, title, release_date, runtime, watched)',
       )
       .eq('tv_show_id', parseInt(showId));
 
@@ -448,6 +461,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
     // season id -> its full episode rows, keyed by episode number
     const bySeason = new Map<number, Map<number, LoadedEpisode>>();
+    // season id -> its trailer's YouTube key
+    const trailerBySeason = new Map<number, string>();
     (data || []).forEach((season) => {
       bySeason.set(
         season.id,
@@ -455,6 +470,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           (season.tv_show_episodes || []).map((ep) => [ep.episode_number, ep]),
         ),
       );
+      if (season.trailer_key) trailerBySeason.set(season.id, season.trailer_key);
     });
 
     setWatchlist((prev) =>
@@ -468,6 +484,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             if (!full) return season;
             return {
               ...season,
+              trailer_key: season.id ? trailerBySeason.get(season.id) : undefined,
               episodes: season.episodes.map((ep) => {
                 const row = full.get(ep.episode_number);
                 if (!row) return ep;
@@ -664,6 +681,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             release_date: item.release_date || null,
             runtime: item.runtime || null,
             release_year: item.year || null,
+            trailer_key: item.trailer_key || null,
           });
           if (error) throw error;
           await fetchData();
@@ -688,6 +706,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               tmdb_id: item.tmdb_id || null,
               release_date: item.release_date || null,
               status: item.series_status || 'Returning Series',
+              trailer_key: item.trailer_key || null,
             })
             .select()
             .single();
@@ -718,21 +737,22 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             const results = await Promise.all(
               validSeasons.map(async (s) => {
                 try {
-                  const [{ data: season, error: sErr }, sDetails] =
-                    await Promise.all([
-                      supabase
-                        .from('tv_show_seasons')
-                        .insert({
-                          tv_show_id: show.id,
-                          season_number: s.season_number,
-                          release_date: s.air_date || null,
-                        })
-                        .select()
-                        .single(),
-                      fetchTMDBProxy<TMDBSeasonDetails>(
-                        `tv/${item.tmdb_id}/season/${s.season_number}`,
-                      ),
-                    ]);
+                  const sDetails = await fetchTMDBProxy<TMDBSeasonDetails>(
+                    `tv/${item.tmdb_id}/season/${s.season_number}`,
+                    { append_to_response: 'videos', ...TRAILER_VIDEO_PARAMS },
+                  );
+                  const { data: season, error: sErr } = await supabase
+                    .from('tv_show_seasons')
+                    .insert({
+                      tv_show_id: show.id,
+                      season_number: s.season_number,
+                      release_date: s.air_date || null,
+                      trailer_key: pickTrailerKey(sDetails.videos?.results),
+                      // Checked, so the sync's trailer backfill skips it.
+                      trailer_checked_at: new Date().toISOString(),
+                    })
+                    .select()
+                    .single();
                   if (sErr) return false;
 
                   // Filter out TBA episodes (episodes with no air date)
