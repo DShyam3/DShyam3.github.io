@@ -53,7 +53,9 @@ function DockedDetailBody({ detail, onClose }: DockedDetailBodyProps) {
           not anywhere: it is inherited, and anywhere would lower the
           min-content of every flex item below, splitting short pills such as
           an episode's "Not released" mid-word. */}
-      <div className="space-y-4 break-words">{detail.node}</div>
+      {/* Keyed by record: one dialog moving to another title must not carry
+          over state from the last one, such as the season it had picked. */}
+      <div key={detail.id} className="space-y-4 break-words">{detail.node}</div>
     </div>
   );
 }
@@ -160,7 +162,7 @@ export function WorkspaceInspector() {
     target,
     resetTarget,
     dockedDetail,
-    setDockedDetail,
+    dismissDockedDetail,
     inspectorSheetOpen,
     commandOpen,
   } = useWorkspaceInspector();
@@ -175,26 +177,20 @@ export function WorkspaceInspector() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (dockedDetail) {
-        dockedDetail.onClose();
-        setDockedDetail(null);
+        dismissDockedDetail();
       } else {
         resetTarget();
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [hasSelection, commandOpen, dockedDetail, resetTarget, setDockedDetail]);
+  }, [hasSelection, commandOpen, dockedDetail, resetTarget, dismissDockedDetail]);
 
   if (!hasSelection) return null;
 
-  const handleCloseDocked = () => {
-    dockedDetail?.onClose();
-    setDockedDetail(null);
-  };
-
   const handleCloseSheet = () => {
     if (dockedDetail) {
-      handleCloseDocked();
+      dismissDockedDetail();
     } else {
       resetTarget();
     }
@@ -211,7 +207,7 @@ export function WorkspaceInspector() {
         className="workspace-right-inspector flex-col justify-between rounded-2xl border border-border/60 bg-popover/75 p-4 app-scroll overflow-y-auto overflow-x-hidden hud-corners min-h-0"
       >
         {dockedDetail ? (
-          <DockedDetailBody detail={dockedDetail} onClose={handleCloseDocked} />
+          <DockedDetailBody detail={dockedDetail} onClose={dismissDockedDetail} />
         ) : target ? (
           <InspectorBody target={target} onClose={resetTarget} />
         ) : null}
@@ -240,7 +236,7 @@ export function WorkspaceInspector() {
               {dockedDetail?.title ?? target?.title ?? 'Inspector'}
             </DialogPrimitive.Title>
             {dockedDetail ? (
-              <DockedDetailBody detail={dockedDetail} onClose={handleCloseDocked} />
+              <DockedDetailBody detail={dockedDetail} onClose={dismissDockedDetail} />
             ) : target ? (
               <InspectorBody target={target} onNavigate={resetTarget} onClose={resetTarget} />
             ) : null}

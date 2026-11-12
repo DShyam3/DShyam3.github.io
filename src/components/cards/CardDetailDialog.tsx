@@ -58,7 +58,7 @@ export function CardDetailDialog({
   isScheduled,
 }: CardDetailDialogProps) {
   const instanceId = useId();
-  const { setDockedDetail } = useWorkspaceInspector();
+  const { claimDockedDetail, updateDockedDetail, releaseDockedDetail } = useWorkspaceInspector();
   const wasOpenRef = useRef(false);
   const link = safeHref(rawLink);
 
@@ -66,13 +66,15 @@ export function CardDetailDialog({
     if (!open) {
       if (wasOpenRef.current) {
         wasOpenRef.current = false;
-        setDockedDetail(null);
+        releaseDockedDetail(instanceId);
       }
       return;
     }
 
+    // Claim only on opening; see claimDockedDetail.
+    const dock = wasOpenRef.current ? updateDockedDetail : claimDockedDetail;
     wasOpenRef.current = true;
-    setDockedDetail({
+    dock(instanceId, {
       id: instanceId,
       eyebrow: badge || 'Collection Record',
       title,
@@ -80,6 +82,7 @@ export function CardDetailDialog({
         onOpenChange(false);
         onCloseAutoFocus?.(new Event('close'));
       },
+      onReplaced: () => onOpenChange(false),
       node: (
         <div className="space-y-4">
           {imageUrl ? (
@@ -192,17 +195,19 @@ export function CardDetailDialog({
     isScheduled,
     onOpenChange,
     onCloseAutoFocus,
-    setDockedDetail,
+    claimDockedDetail,
+    updateDockedDetail,
+    releaseDockedDetail,
   ]);
 
   useEffect(() => {
     return () => {
       if (wasOpenRef.current) {
         wasOpenRef.current = false;
-        setDockedDetail(null);
+        releaseDockedDetail(instanceId);
       }
     };
-  }, [setDockedDetail]);
+  }, [instanceId, releaseDockedDetail]);
 
   return null;
 }

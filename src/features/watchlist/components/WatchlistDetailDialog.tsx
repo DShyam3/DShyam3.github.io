@@ -56,7 +56,7 @@ export function WatchlistDetailDialog({
   syncing,
 }: WatchlistDetailDialogProps) {
   const instanceId = useId();
-  const { setDockedDetail } = useWorkspaceInspector();
+  const { claimDockedDetail, updateDockedDetail, releaseDockedDetail } = useWorkspaceInspector();
   const wasOpenRef = useRef(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const { askDelete, deleteDialog } = useDeleteConfirm();
@@ -130,13 +130,15 @@ export function WatchlistDetailDialog({
     if (!open) {
       if (wasOpenRef.current) {
         wasOpenRef.current = false;
-        setDockedDetail(null);
+        releaseDockedDetail(instanceId);
       }
       return;
     }
 
+    // Claim only on opening; see claimDockedDetail.
+    const dock = wasOpenRef.current ? updateDockedDetail : claimDockedDetail;
     wasOpenRef.current = true;
-    setDockedDetail({
+    dock(instanceId, {
       id: `watchlist-${item.category}-${item.id}-${instanceId}`,
       eyebrow: isTVShow ? 'TV Series Inspector' : 'Movie Inspector',
       title: item.title,
@@ -144,6 +146,7 @@ export function WatchlistDetailDialog({
         onOpenChange(false);
         onCloseAutoFocus?.(new Event('close'));
       },
+      onReplaced: () => onOpenChange(false),
       node: (
         <div className="space-y-4">
           {item.image_url ? (
@@ -364,17 +367,19 @@ export function WatchlistDetailDialog({
     toggleSeasonWatched,
     isEpisodeWatched,
     isSeasonWatched,
-    setDockedDetail,
+    claimDockedDetail,
+    updateDockedDetail,
+    releaseDockedDetail,
   ]);
 
   useEffect(() => {
     return () => {
       if (wasOpenRef.current) {
         wasOpenRef.current = false;
-        setDockedDetail(null);
+        releaseDockedDetail(instanceId);
       }
     };
-  }, [setDockedDetail]);
+  }, [instanceId, releaseDockedDetail]);
 
   return <>{deleteDialog}</>;
 }

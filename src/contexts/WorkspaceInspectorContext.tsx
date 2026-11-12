@@ -37,10 +37,17 @@ export interface WorkspaceInspectorTarget {
 }
 
 export interface DockedInspectorDetail {
+  /** The record shown. The content remounts when it changes. */
   id: string;
   eyebrow: string;
   title: string;
+  /** The user dismissed the detail: close, and return focus. */
   onClose: () => void;
+  /**
+   * Another record took the inspector: close, but leave focus where the click
+   * that opened the other record put it. Falls back to onClose.
+   */
+  onReplaced?: () => void;
   node: ReactNode;
 }
 
@@ -50,13 +57,30 @@ interface WorkspaceInspectorContextValue {
   selectTarget: (next: WorkspaceInspectorTarget) => void;
   resetTarget: () => void;
   dockedDetail: DockedInspectorDetail | null;
+  /** Show a detail, or clear it, whoever holds the inspector. */
   setDockedDetail: (detail: DockedInspectorDetail | null) => void;
+  /** The user closed the docked detail: its onClose runs, then it clears. */
+  dismissDockedDetail: () => void;
+  /**
+   * For a dialog several of which can be open at once -- every card owns its
+   * own. `owner` names the dialog instance. Claim on opening: the dialog that
+   * held the inspector is told it was replaced. Update while open: ignored once
+   * another dialog has claimed it, so a stale dialog re-rendering cannot take
+   * it back. Release on closing: only the owner's own detail is cleared.
+   */
+  claimDockedDetail: (owner: string, detail: DockedInspectorDetail) => void;
+  updateDockedDetail: (owner: string, detail: DockedInspectorDetail) => void;
+  releaseDockedDetail: (owner: string) => void;
   inspectorSheetOpen: boolean;
   commandOpen: boolean;
   setCommandOpen: (open: boolean) => void;
 }
 
 const WorkspaceInspectorContext = createContext<WorkspaceInspectorContextValue | null>(null);
+
+// Whether a detail is docked, apart from the detail itself, for the pages that
+// may not call useWorkspaceInspector (see there).
+const DockedDetailOpenContext = createContext(false);
 
 /** Whether the inspector has its own column, rather than opening as a sheet. */
 const isRightRailVisible = () =>
@@ -71,49 +95,91 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
   const [inspectorSheetOpen, setInspectorSheetOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
 
-  // A selection belongs to the page it was made on.
-  useEffect(() => {
-    setTarget(null);
-    setDockedDetailState(null);
-    setInspectorSheetOpen(false);
-  }, [pathname]);
-
   // What the inspector holds now, readable from callbacks without making them
-  // change identity on every selection.
+  // change identity on every selection. The docked detail and its owner are
+  // written in the same call that changes them, not after the render: two
+  // dialogs claiming in one commit must each see the other's claim.
   const targetRef = useRef(target);
-  const dockedRef = useRef(dockedDetail);
+  const dockedRef = useRef<DockedInspectorDetail | null>(null);
+  const ownerRef = useRef<string | null>(null);
   useEffect(() => {
     targetRef.current = target;
-    dockedRef.current = dockedDetail;
-  }, [target, dockedDetail]);
+  }, [target]);
+
+  const writeDocked = useCallback((detail: DockedInspectorDetail | null, owner: string | null) => {
+    dockedRef.current = detail;
+    ownerRef.current = detail ? owner : null;
+    setDockedDetailState(detail);
+  }, []);
+
+  // Tell the dialog that holds the docked detail it has been replaced. Every
+  // path that drops a detail calls this first: dropping it silently leaves
+  // that dialog open in its own state, so clicking its card again changes
+  // nothing and the inspector never comes back to it.
+  const replaceDocked = useCallback(() => {
+    const previous = dockedRef.current;
+    (previous?.onReplaced ?? previous?.onClose)?.();
+  }, []);
+
+  // A selection belongs to the page it was made on. Only a dialog's claimed
+  // detail is told; Travel's ownerless details clear as they always have.
+  useEffect(() => {
+    if (ownerRef.current !== null) replaceDocked();
+    setTarget(null);
+    writeDocked(null, null);
+    setInspectorSheetOpen(false);
+  }, [pathname, replaceDocked, writeDocked]);
 
   const selectTarget = useCallback((next: WorkspaceInspectorTarget) => {
-    // Tell the dialog that owns the docked detail it has closed. Dropping the
-    // detail silently leaves that dialog open in its own state, and its later
-    // cleanup would then close an inspector it no longer owns.
-    dockedRef.current?.onClose();
-    setDockedDetailState(null);
+    replaceDocked();
+    writeDocked(null, null);
     setTarget(next);
     if (!isRightRailVisible()) {
       setInspectorSheetOpen(true);
     }
-  }, []);
+  }, [replaceDocked, writeDocked]);
 
   const resetTarget = useCallback(() => {
+    if (ownerRef.current !== null) replaceDocked();
     setTarget(null);
-    setDockedDetailState(null);
+    writeDocked(null, null);
     setInspectorSheetOpen(false);
-  }, []);
+  }, [replaceDocked, writeDocked]);
 
-  const setDockedDetail = useCallback((detail: DockedInspectorDetail | null) => {
-    setDockedDetailState(detail);
+  const showDocked = useCallback((detail: DockedInspectorDetail | null, owner: string | null) => {
+    writeDocked(detail, owner);
     if (!detail) {
       // The sheet stays if it has moved on to showing a selected record.
       if (!targetRef.current) setInspectorSheetOpen(false);
     } else if (!isRightRailVisible()) {
       setInspectorSheetOpen(true);
     }
-  }, []);
+  }, [writeDocked]);
+
+  // Travel's own details carry no owner and keep their old behaviour; only a
+  // dialog's claimed detail needs telling.
+  const setDockedDetail = useCallback((detail: DockedInspectorDetail | null) => {
+    if (ownerRef.current !== null) replaceDocked();
+    showDocked(detail, null);
+  }, [replaceDocked, showDocked]);
+
+  const dismissDockedDetail = useCallback(() => {
+    dockedRef.current?.onClose();
+    showDocked(null, null);
+  }, [showDocked]);
+
+  const claimDockedDetail = useCallback((owner: string, detail: DockedInspectorDetail) => {
+    if (ownerRef.current !== owner) replaceDocked();
+    showDocked(detail, owner);
+  }, [replaceDocked, showDocked]);
+
+  const updateDockedDetail = useCallback((owner: string, detail: DockedInspectorDetail) => {
+    if (ownerRef.current === owner) showDocked(detail, owner);
+  }, [showDocked]);
+
+  const releaseDockedDetail = useCallback((owner: string) => {
+    if (ownerRef.current === owner) showDocked(null, null);
+  }, [showDocked]);
 
   const value = useMemo<WorkspaceInspectorContextValue>(
     () => ({
@@ -122,6 +188,10 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
       resetTarget,
       dockedDetail,
       setDockedDetail,
+      dismissDockedDetail,
+      claimDockedDetail,
+      updateDockedDetail,
+      releaseDockedDetail,
       inspectorSheetOpen,
       commandOpen,
       setCommandOpen,
@@ -132,6 +202,10 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
       resetTarget,
       dockedDetail,
       setDockedDetail,
+      dismissDockedDetail,
+      claimDockedDetail,
+      updateDockedDetail,
+      releaseDockedDetail,
       inspectorSheetOpen,
       commandOpen,
     ],
@@ -139,11 +213,20 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
 
   return (
     <WorkspaceInspectorContext.Provider value={value}>
-      {children}
+      <DockedDetailOpenContext.Provider value={dockedDetail !== null}>
+        {children}
+      </DockedDetailOpenContext.Provider>
     </WorkspaceInspectorContext.Provider>
   );
 }
 
+/**
+ * The inspector's state and setters. Its value changes on every dock, so an
+ * ancestor of a card's detail dialog must not call this, whatever it reads:
+ * the re-render hands the open dialog new props, which docks again -- an
+ * endless render loop that also starves route changes. Such a page uses
+ * useDockedDetailOpen.
+ */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useWorkspaceInspector(): WorkspaceInspectorContextValue {
   const ctx = useContext(WorkspaceInspectorContext);
@@ -151,4 +234,10 @@ export function useWorkspaceInspector(): WorkspaceInspectorContextValue {
     throw new Error('useWorkspaceInspector must be used inside WorkspaceInspectorProvider');
   }
   return ctx;
+}
+
+/** Whether a docked detail is showing. Re-renders only when that changes. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useDockedDetailOpen(): boolean {
+  return useContext(DockedDetailOpenContext);
 }
