@@ -27,6 +27,8 @@ import { SmartScheduleDialog, scheduleReleaseDate } from './SmartScheduleDialog'
 
 interface WatchlistCardProps {
   item: WatchlistItem;
+  /** Time left to watch, shown in place of year and genre while the library is sorted by it. */
+  timeLeft?: string;
   onRemove?: (id: string) => void;
   toggleEpisodeWatched?: (
     showId: string,
@@ -51,6 +53,7 @@ interface WatchlistCardProps {
 
 export const WatchlistCard = React.memo(function WatchlistCard({
   item,
+  timeLeft,
   onRemove,
   toggleEpisodeWatched,
   toggleSeasonWatched,
@@ -135,7 +138,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         title={displayTitle(item.title, item.year)}
         poster={item.image_url}
         onOpen={() => setDetailOpen(true)}
-        subtitle={<>{item.year}{item.year && item.genres?.length ? ' · ' : ''}{item.genres?.[0]}</>}
+        subtitle={timeLeft ?? <>{item.year}{item.year && item.genres?.length ? ' · ' : ''}{item.genres?.[0]}</>}
         meta={<>
             {watchUrl ? (
               <a

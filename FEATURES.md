@@ -243,6 +243,23 @@ proxy so the API key never reaches the browser.
 
 Library has a compact category picker, search field, Filters popover and text-only
 sort choices. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the category picker; while Refresh favourite details runs, Sync shows its percentage in place of the icon. Library details end with Schedule, Favourite, Resync and Delete for admins, two by two.
+The Library sort picker, shown for TV Shows, Movies and Currently Watching,
+offers Latest releases, and for shows Quickest to finish and Quickest season;
+for films it offers Shortest first. Quickest to finish ranks shows by the
+runtime of every aired episode not yet watched, across all regular seasons;
+watched seasons and episodes count for nothing. Quickest season ranks shows by
+the earliest season that still has an aired, unwatched episode. Specials and
+episodes that have not aired yet are left out. An episode with no stored
+runtime counts as the show's median episode runtime, and a total that includes
+one is marked "~". While a time order is picked, each card's line under the
+title shows what it is ranked by, such as "8 eps · 6h 40m" or
+"S2 · 6 eps · ~5h 10m". A show with nothing aired left reads "Up to date", and
+one with nothing aired at all reads "Not aired yet". Those shows, and shows with
+no runtime to go on, sort after the rest. Films under Shortest first sort by
+runtime and show it on the card. On Currently Watching, Latest releases orders
+by each show's latest season date. While a title's detail is open the order
+holds still, and it catches up when the detail closes.
+
 Library uses compact poster cards with aligned title, subtitle, platform and
 status rows. News release rows place text beside small posters, or below them in narrow columns. Both keep
 scheduling actions separate from title details. Titles show up to two lines;

@@ -77,12 +77,28 @@ import { Filter } from 'lucide-react';
 import { SyncHistoryIcon } from '@/components/shared/SyncHistoryIcon';
 import { WatchlistCard } from '@/features/watchlist/components/WatchlistCard';
 import { CardGrid } from '@/components/shared/CardGrid';
+import { useDockedDetailOpen } from '@/contexts/WorkspaceInspectorContext';
+import {
+  compareTimeToFinish,
+  timeToFinish,
+  timeToFinishLabel,
+  type FinishScope,
+  type TimeToFinish,
+} from '@/features/watchlist/time-to-finish';
+import { formatRuntime } from '@/features/watchlist/watchlist-utils';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   PlatformLogo,
   hasPlatformLogo,
 } from '@/features/watchlist/components/PlatformLogo';
+
+/**
+ * Library sort orders. The two `finish-` orders rank by time left to watch:
+ * the whole show, or only the season to watch next. A film has no seasons,
+ * so for Movies both mean its runtime.
+ */
+type LibrarySort = 'alphabetical' | 'recent' | 'finish-show' | 'finish-season';
 
 const CATEGORIES = [
   'TV Shows',
@@ -183,9 +199,25 @@ const Watchlist = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<'alphabetical' | 'recent'>(
-    'alphabetical',
-  );
+  const [sortOrder, setSortOrder] = useState<LibrarySort>('alphabetical');
+  // Upcoming has its own date order and Favourites its own shelf; neither
+  // shows the sort picker, so neither takes the picked order.
+  const sortable =
+    selectedCategory === 'TV Shows' ||
+    selectedCategory === 'Movies' ||
+    selectedCategory === 'Currently Watching';
+  // Movies offer one time order; a season pick carried over from TV means it.
+  const effectiveSort: LibrarySort =
+    selectedCategory === 'Movies' && sortOrder === 'finish-season'
+      ? 'finish-show'
+      : sortOrder;
+  const finishScope: FinishScope | null = !sortable
+    ? null
+    : effectiveSort === 'finish-show'
+      ? 'show'
+      : effectiveSort === 'finish-season'
+        ? 'season'
+        : null;
   const [title, setTitle] = useState('');
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
   // Covers the whole click-to-completion span, including the getMovieDetails
@@ -450,6 +482,42 @@ const Watchlist = () => {
   const getGenreCount = (genre: string) => genreCounts[genre] || 0;
   const getStatusCount = (status: string) => statusCounts[status] || 0;
 
+  // Time left per show, built only while a time order is picked.
+  // isEpisodeWatched is a stable callback, so this does not rebuild on its
+  // account: it rebuilds because a watched toggle replaces the watchlist
+  // array, and categoryItems with it.
+  const finishTimes = useMemo(() => {
+    const times = new Map<string, TimeToFinish>();
+    if (!finishScope) return times;
+    const today = new Date();
+    for (const item of categoryItems) {
+      if (item.category !== 'TV Shows') continue;
+      times.set(
+        item.id,
+        timeToFinish(
+          item.seasons,
+          (seasonNumber, episodeNumber) =>
+            isEpisodeWatched(item.id, seasonNumber, episodeNumber),
+          today,
+        ),
+      );
+    }
+    return times;
+  }, [categoryItems, finishScope, isEpisodeWatched]);
+
+  // The order is held while a title's detail is open. Marking episodes
+  // watched there would otherwise re-rank the grid under it, and a card
+  // pushed past the rendered page unmounts and closes its own detail. The
+  // labels stay live; the order catches up when the detail closes, or at
+  // once if the sort or category changes.
+  const detailOpen = useDockedDetailOpen();
+  const rankKey = `${selectedCategory}|${finishScope ?? ''}`;
+  const [ranking, setRanking] = useState({ key: rankKey, times: finishTimes });
+  if (ranking.times !== finishTimes && (!detailOpen || ranking.key !== rankKey)) {
+    setRanking({ key: rankKey, times: finishTimes });
+  }
+  const rankTimes = ranking.times;
+
   const filteredWatchlist = useMemo(() => {
     let result = categoryItems;
     if (selectedPlatform)
@@ -483,9 +551,21 @@ const Watchlist = () => {
     }
     if (selectedCategory !== 'Upcoming') {
       result = [...result].sort((a, b) => {
-        if (sortOrder === 'alphabetical') return a.title.localeCompare(b.title);
-        if (sortOrder === 'recent') {
-          if (selectedCategory === 'TV Shows') {
+        if (effectiveSort === 'alphabetical') return a.title.localeCompare(b.title);
+        if (finishScope) {
+          const ta = rankTimes.get(a.id) ?? finishTimes.get(a.id);
+          const tb = rankTimes.get(b.id) ?? finishTimes.get(b.id);
+          if (ta && tb) {
+            return compareTimeToFinish(ta, tb, finishScope) || a.title.localeCompare(b.title);
+          }
+          // Films, by runtime; one with no runtime goes last.
+          const ra = a.runtime || Infinity;
+          const rb = b.runtime || Infinity;
+          if (ra !== rb) return ra < rb ? -1 : 1;
+          return a.title.localeCompare(b.title);
+        }
+        if (effectiveSort === 'recent') {
+          if (selectedCategory !== 'Movies') {
             const getLatestSeasonDate = (item: WatchlistItem) => {
               if (!item.seasons || item.seasons.length === 0)
                 return item.release_date
@@ -514,7 +594,10 @@ const Watchlist = () => {
     searchQuery,
     selectedCategory,
     hideCompleted,
-    sortOrder,
+    effectiveSort,
+    finishScope,
+    finishTimes,
+    rankTimes,
     getAutoStatus,
   ]);
 
@@ -611,6 +694,14 @@ const Watchlist = () => {
   const visibleWatchlist = useMemo(() => {
     return filteredWatchlist.slice(0, visibleCount);
   }, [filteredWatchlist, visibleCount]);
+
+  // While a time order is picked, each card says what it is ranked by.
+  const timeLeftLabel = (item: WatchlistItem): string | undefined => {
+    if (!finishScope) return undefined;
+    const finish = finishTimes.get(item.id);
+    if (finish) return timeToFinishLabel(finish, finishScope);
+    return item.runtime ? formatRuntime(item.runtime) : undefined;
+  };
 
   const activeFilterCount = [selectedPlatform, selectedGenre, selectedStatus].filter(Boolean).length
     + (selectedCategory === 'TV Shows' && !hideCompleted ? 1 : 0);
@@ -1032,9 +1123,20 @@ const Watchlist = () => {
 
             </PopoverContent>
           </Popover>
-          {(selectedCategory === 'Movies' || selectedCategory === 'TV Shows') && <Select value={sortOrder} onValueChange={value => setSortOrder(value as 'alphabetical' | 'recent')}>
-            <SelectTrigger aria-label="Sort library" className="h-11 w-[168px] shrink-0"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="alphabetical">Title: A–Z</SelectItem><SelectItem value="recent">Latest releases</SelectItem></SelectContent>
+          {sortable && <Select value={effectiveSort} onValueChange={value => setSortOrder(value as LibrarySort)}>
+            <SelectTrigger aria-label="Sort library" className="h-11 w-[208px] shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="alphabetical">Title: A–Z</SelectItem>
+              <SelectItem value="recent">Latest releases</SelectItem>
+              {selectedCategory === 'Movies' ? (
+                <SelectItem value="finish-show">Shortest first</SelectItem>
+              ) : (
+                <>
+                  <SelectItem value="finish-show">Quickest to finish</SelectItem>
+                  <SelectItem value="finish-season">Quickest season</SelectItem>
+                </>
+              )}
+            </SelectContent>
           </Select>}
         </>}
       </div>
@@ -1227,6 +1329,7 @@ const Watchlist = () => {
                   <WatchlistCard
                     key={item.id}
                     item={item}
+                    timeLeft={timeLeftLabel(item)}
                     onRemove={
                       isAdmin ? removeWatchlistItemAndSchedule : undefined
                     }
