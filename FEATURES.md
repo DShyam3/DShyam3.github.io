@@ -71,10 +71,18 @@ fixed address that a new upload replaces; a file that is not a PDF is refused.
 Admins also get Add experience, Add education and Upload CV buttons.
 
 The Overview shows a 3D constellation of the sections, which can be dragged to
-rotate and paused, and four tiles of counts: countries, items, collections and
-milestones. Selecting a section shows its summary and counts in the inspector.
-The tiles open their section, and a list gives each section one row with
-Inspect and Open. Finance is in the constellation for an admin only.
+rotate and paused. Selecting a section shows its summary and counts in the
+inspector. Finance is in the constellation for an admin only.
+
+Fact cards each give one specific fact and open the section it comes from. They
+show the countries visited out of 195 UN states, with cities, continents and any
+territories (opens the Travel map); a favourite film and a favourite series; the
+book being read now, or the last one finished; the current role (opens Experience
+& CV); the latest project, when there are projects; and the inventory count. When
+signed in as admin, the admin picks the film and the series from their favourites,
+and can return either to the daily pick. Otherwise the favourite changes each day,
+labelled as today's pick. A card with nothing to show is left out. On a phone the
+cards are one swipeable row; from 640px they form a grid.
 
 Three tabs switch the Home views: Overview, Experience & CV, and Biography &
 Projects. The last holds the biography with its portrait and a panel that opens
@@ -242,7 +250,7 @@ proxy so the API key never reaches the browser.
   The former Schedule view opens News.
 
 Library has a compact category picker, search field, Filters popover and text-only
-sort choices. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the category picker; while Refresh favourite details runs, Sync shows its percentage in place of the icon. Library details end with Schedule, Favourite, Resync and Delete for admins, two by two.
+sort choices. `/watchlist/library?category=favourites` opens Library on the Favourites category. Sync opens a popover whose history list scrolls independently. On a phone, the Add and Sync buttons show only their icons, and the search field drops below the category picker; while Refresh favourite details runs, Sync shows its percentage in place of the icon. Library details end with Schedule, Favourite, Resync and Delete for admins, two by two.
 The Library sort picker, shown for TV Shows, Movies and Currently Watching,
 offers Latest releases, and for shows Quickest to finish and Quickest season;
 for films it offers Shortest first. Quickest to finish ranks shows by the
@@ -312,6 +320,8 @@ Countries and cities visited, rendered as maps by continent and by city, with
 membership and region groupings.
 
 At 1024px wide and 600px tall, the map sits beside the country list, which scrolls on its own. Narrower or shorter, the map sits above the list in one scroll. Stacked, the city list's header scrolls with the list. Each country row keeps its UN marker and city count in fixed columns, so they line up down the list whether or not a row has either.
+
+Stacked, on a phone or a short window, each continent folds to one row showing its flags, and opens on tap. On a phone the flat map fills the height of its box and drags sideways. While the map is not zoomed in, a vertical swipe over it scrolls the page. A legend on the map says what gold means: Visited and Not yet, or in the Cities view City and Country, where visited countries are tinted. A place too small for a dot of its own, such as Gibraltar, is ringed on its grid square's dot.
 
 The page has two tabs. Places shows the visited map and the country list. Search matches every country and territory by name or code, marks each result "✓ Visited" or "Not visited", and opens that country's details when chosen. A search with no match says the visited map is unchanged.
 
