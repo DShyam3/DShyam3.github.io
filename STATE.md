@@ -43,7 +43,6 @@ Updated 2026-11-13 · Branch `main` · Head `523e67f` (the docs commit after it,
 ## Blockers
 
 - Parallel sessions share one checkout: coordinate file ownership and one committer; keep `backup/pre-rebase-2026-11-03` until signed-in production is verified. Browser checks need a connected browser extension.
-- Not merged: main lacks the About cards and travel phone work until item 1 is done.
 - Left out of commits on purpose: `.claude/launch.json`; `SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md` (absent here).
 
 ## Open risks
