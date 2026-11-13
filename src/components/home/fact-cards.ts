@@ -57,6 +57,7 @@ export interface TravelFacts {
   total: number;
   /** Visited places that are not UN states, such as Gibraltar. */
   territories: number;
+  /** Continents with a visited UN state in them, as the Travel page's continent sections count. */
   continents: number;
 }
 
@@ -75,7 +76,7 @@ export function travelFacts(
   if (!un) return null;
   const unique = [...new Set(visitedCodes)];
   const countries = countMembers(un, unique);
-  const continents = new Set(unique.map((code) => continentByCode[code]).filter(Boolean)).size;
+  const continents = new Set(unique.filter((code) => un.members.has(code)).map((code) => continentByCode[code]).filter(Boolean)).size;
   return { countries, total: un.total, territories: unique.length - countries, continents };
 }
 

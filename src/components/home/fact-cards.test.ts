@@ -67,6 +67,10 @@ describe('travelFacts', () => {
     expect(travelFacts(['FR'], new Set(), continents)).toBeNull();
   });
 
+  it('counts a continent only for its UN states, not for a territory there', () => {
+    expect(travelFacts(['FR', 'PR'], sovereign, { ...continents, PR: 'North America' })).toMatchObject({ territories: 1, continents: 1 });
+  });
+
   it('reads zero with no visits', () => {
     expect(travelFacts([], sovereign, continents)).toEqual({ countries: 0, total: 195, territories: 0, continents: 0 });
   });
