@@ -190,12 +190,14 @@ const Watchlist = () => {
   );
 
   const [open, setOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] =
-    useState<(typeof CATEGORIES)[number]>('TV Shows');
+  const [viewParams] = useSearchParams();
+  // ?category=favourites opens on that tab: the About page's favourite cards link here.
+  const [selectedCategory, setSelectedCategory] = useState<(typeof CATEGORIES)[number]>(
+    () => CATEGORIES.find((c) => c.toLowerCase().replace(/\s+/g, '-') === viewParams.get('category')) ?? 'TV Shows',
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(true);
-  const [viewParams] = useSearchParams();
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);

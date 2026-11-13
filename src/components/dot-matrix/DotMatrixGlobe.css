@@ -37,6 +37,9 @@
     display: block;
     width: 100%;
     height: 100%;
+    /* The page keeps vertical swipes until the map is zoomed in; the draw
+       loop switches this to none then (see the component). */
+    touch-action: pan-y;
 }
 
 /* Loading state */
@@ -280,4 +283,66 @@
     font-size: 0.75rem;
     color: hsl(var(--muted-foreground));
     font-family: var(--font-sans);
+}
+
+/* Legend: the same colours the draw loop uses (DOT_PALETTE), as swatches. */
+.dot-matrix-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border) / 0.5);
+    background: hsl(var(--background) / 0.8);
+    backdrop-filter: blur(12px);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+    cursor: default;
+}
+
+.dot-matrix-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.dot-matrix-legend-swatch {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: rgba(40, 52, 90, 0.3);
+}
+
+.dark .dot-matrix-legend-swatch {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.dot-matrix-legend-swatch--visited,
+.dot-matrix-legend-swatch--city {
+    background: rgb(214, 132, 0);
+}
+
+.dark .dot-matrix-legend-swatch--visited {
+    background: rgb(255, 186, 38);
+}
+
+.dot-matrix-legend-swatch--city {
+    background: rgb(196, 84, 0);
+    box-shadow: 0 0 0 2px rgba(214, 132, 0, 0.34);
+}
+
+.dark .dot-matrix-legend-swatch--city {
+    background: rgb(255, 222, 120);
+    box-shadow: 0 0 0 2px rgba(255, 186, 38, 0.38);
+}
+
+.dot-matrix-legend-swatch--tint {
+    background: rgba(214, 132, 0, 0.34);
+}
+
+.dark .dot-matrix-legend-swatch--tint {
+    background: rgba(255, 186, 38, 0.38);
 }

@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useVisitedCountries } from '@/features/travel/useVisitedCountries';
 import { useVisitedCities } from '@/features/travel/useVisitedCities';
 import { useCityMap } from '@/features/travel/useCityMap';
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { CONTINENT_ORDER } from '@/features/travel/continents';
 import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -33,6 +33,18 @@ interface RestCountry {
 }
 
 type ViewMode = 'countries' | 'cities';
+
+/** The query AppShell and responsive.css use for the side-by-side layout. */
+const SIDE_BY_SIDE = '(min-width: 1024px) and (min-height: 600px)';
+const subscribeSideBySide = (onChange: () => void) => {
+    const query = window.matchMedia(SIDE_BY_SIDE);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+};
+/** True where the map and the list are stacked down the page rather than side by side. */
+function useStackedLayout() {
+    return useSyncExternalStore(subscribeSideBySide, () => !window.matchMedia(SIDE_BY_SIDE).matches, () => true);
+}
 
 const TravelContent = () => {
     const isMobile = useIsMobile();
@@ -396,6 +408,105 @@ const TravelContent = () => {
     // Total visited cities count
     const totalCitiesVisited = visitedCities.length;
 
+    // Stacked (a phone, or a short window) the list follows the map down the
+    // page, and every country at once was several screens of scrolling. There
+    // each continent folds to one row, its flags showing what is inside.
+    const stacked = useStackedLayout();
+    const [openSections, setOpenSections] = useState<Set<string>>(() => new Set());
+    const toggleSection = useCallback((key: string) => setOpenSections(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    }), []);
+
+    const renderCountryRow = (country: (typeof visitedCountries)[number], showUn: boolean) => {
+        const flag = country.flag_url || `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`;
+        const isHighlighted = (selectedCountry?.code || hovered?.code) === country.country_code;
+        const cityCount = citiesByCountry[country.country_code]?.length ?? 0;
+        return (
+            <li
+                key={country.country_code}
+                className={`travel-country-row${isHighlighted ? ' travel-country-row--active' : ''}`}
+                data-country={country.country_code}
+                role="button"
+                tabIndex={0}
+                aria-label={`Explore ${country.country_name}`}
+                onKeyDown={(event) => {
+                    if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleCountryClick(country.country_code, country.country_name); }
+                }}
+                onClick={() => handleCountryClick(country.country_code, country.country_name)}
+                style={{ cursor: 'pointer' }}
+            >
+                <div className="travel-flag">
+                    <img src={flag} alt={`${country.country_name} flag`} className="travel-flag-img"
+                        onError={(e) => { (e.target as HTMLImageElement).src = `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`; }}
+                    />
+                </div>
+                <span className="travel-country-name">{country.country_name}</span>
+                {/* Fixed-width columns, always rendered, so the UN marker
+                    and the city count line up whether or not either is set. */}
+                <span className="travel-un-col">
+                    {showUn && sovereignCodes.has(country.country_code) && (
+                        <span className="travel-un-badge" title="UN member or observer state">UN</span>
+                    )}
+                </span>
+                <span className="travel-city-col">
+                    {cityCount > 0 && (
+                        <>
+                            <MapPin className="w-2.5 h-2.5" />
+                            {cityCount}
+                        </>
+                    )}
+                </span>
+                {isAdmin && (
+                    <button
+                        className="travel-remove-btn"
+                        onClick={(e) => { e.stopPropagation(); confirmRemoveCountry(country.country_code, country.country_name); }}
+                        title={`Remove ${country.country_name}`}
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                )}
+            </li>
+        );
+    };
+
+    const renderSection = (key: string, label: ReactNode, stats: string, countries: typeof visitedCountries, showUn: boolean) => {
+        const territory = key === 'territories';
+        const sectionClass = `travel-continent-section${territory ? ' travel-territories-section' : ''}`;
+        const labelClass = `travel-continent-name${territory ? ' travel-territories-label' : ''}`;
+        if (!stacked) {
+            return (
+                <div key={key} className={sectionClass}>
+                    <div className="travel-continent-header">
+                        <span className={labelClass}>{label}</span>
+                        <span className="travel-continent-stats">{stats}</span>
+                    </div>
+                    <ul className="travel-country-list">{countries.map(country => renderCountryRow(country, showUn))}</ul>
+                </div>
+            );
+        }
+        const open = openSections.has(key);
+        const listId = `travel-section-${key.replace(/\W+/g, '-').toLowerCase()}`;
+        return (
+            <div key={key} className={sectionClass}>
+                <button type="button" className="travel-continent-header travel-continent-toggle" aria-expanded={open} aria-controls={listId} onClick={() => toggleSection(key)}>
+                    <span className={labelClass}>{label}</span>
+                    {!open && (
+                        <span className="travel-continent-flags" aria-hidden="true">
+                            {countries.slice(0, 5).map(country => (
+                                <img key={country.country_code} src={`https://flagcdn.com/w40/${country.country_code.toLowerCase()}.png`} alt="" loading="lazy" decoding="async" />
+                            ))}
+                        </span>
+                    )}
+                    <span className="travel-continent-stats">{stats}</span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform${open ? ' rotate-180' : ''}`} aria-hidden="true" />
+                </button>
+                {open && <ul id={listId} className="travel-country-list">{countries.map(country => renderCountryRow(country, showUn))}</ul>}
+            </div>
+        );
+    };
+
     return (
         <AppShell title="Travel" subtitle="Where I've been" layout={section === 'places' ? 'workspace' : 'content'}>
             <div className="flex-1 min-h-0 flex flex-col">
@@ -588,132 +699,22 @@ const TravelContent = () => {
                                             ) : (
                                                 <>
                                                     {allContinentsToShow.map(continent => {
-                                                const countries = byContinent[continent];
-                                                const total = continentTotals[continent] ?? '?';
-                                                const pct = typeof total === 'number'
-                                                    ? Math.round((countries.length / total) * 100)
-                                                    : 0;
-                                                return (
-                                                    <div key={continent} className="travel-continent-section">
-                                                        <div className="travel-continent-header">
-                                                            <span className="travel-continent-name"><DotMatrixText text={continent.toUpperCase()} size="xs" /></span>
-                                                            <span className="travel-continent-stats">
-                                                                {countries.length}/{total} · {pct}%
-                                                            </span>
-                                                        </div>
-                                                        <ul className="travel-country-list">
-                                                            {countries.map((country) => {
-                                                                const flag = country.flag_url || `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`;
-                                                                const isHighlighted = (selectedCountry?.code || hovered?.code) === country.country_code;
-                                                                const cityCount = citiesByCountry[country.country_code]?.length ?? 0;
-                                                                return (
-                                                                    <li
-                                                                        key={country.country_code}
-                                                                        className={`travel-country-row${isHighlighted ? ' travel-country-row--active' : ''}`}
-                                                                        data-country={country.country_code}
-                                                                        role="button"
-                                                                        tabIndex={0}
-                                                                        aria-label={`Explore ${country.country_name}`}
-                                                                        onKeyDown={(event) => {
-                                                                            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleCountryClick(country.country_code, country.country_name); }
-                                                                        }}
-                                                                        onClick={() => handleCountryClick(country.country_code, country.country_name)}
-                                                                        style={{ cursor: 'pointer' }}
-                                                                    >
-                                                                        <div className="travel-flag">
-                                                                            <img src={flag} alt={`${country.country_name} flag`} className="travel-flag-img"
-                                                                                onError={(e) => { (e.target as HTMLImageElement).src = `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`; }}
-                                                                            />
-                                                                        </div>
-                                                                        <span className="travel-country-name">{country.country_name}</span>
-                                                                        {/* Fixed-width columns, always rendered, so the UN marker
-                                                                            and the city count line up whether or not either is set. */}
-                                                                        <span className="travel-un-col">
-                                                                            {sovereignCodes.has(country.country_code) && (
-                                                                                <span className="travel-un-badge" title="UN member or observer state">UN</span>
-                                                                            )}
-                                                                        </span>
-                                                                        <span className="travel-city-col">
-                                                                            {cityCount > 0 && (
-                                                                                <>
-                                                                                    <MapPin className="w-2.5 h-2.5" />
-                                                                                    {cityCount}
-                                                                                </>
-                                                                            )}
-                                                                        </span>
-                                                                        {isAdmin && (
-                                                                            <button
-                                                                                className="travel-remove-btn"
-                                                                                onClick={(e) => { e.stopPropagation(); confirmRemoveCountry(country.country_code, country.country_name); }}
-                                                                                title={`Remove ${country.country_name}`}
-                                                                            >
-                                                                                <X className="w-3 h-3" />
-                                                                            </button>
-                                                                        )}
-                                                                    </li>
-                                                                );
-                                                            })}
-                                                        </ul>
-                                                    </div>
-                                                );
-                                            })}
+                                                        const countries = byContinent[continent];
+                                                        const total = continentTotals[continent];
+                                                        const stats = typeof total === 'number'
+                                                            ? `${countries.length}/${total} · ${Math.round((countries.length / total) * 100)}%`
+                                                            : `${countries.length}/?`;
+                                                        return renderSection(continent, <DotMatrixText text={continent.toUpperCase()} size="xs" />, stats, countries, true);
+                                                    })}
 
-                                            {/* Territories section — shown but never counted in stats */}
-                                            {territoriesSorted.length > 0 && (
-                                                <div className="travel-continent-section travel-territories-section">
-                                                    <div className="travel-continent-header">
-                                                        <span className="travel-continent-name travel-territories-label"><DotMatrixText text="TERRITORIES AND DEPENDENCIES" size="xs" /></span>
-                                                        <span className="travel-continent-stats">{territoriesSorted.length} visited</span>
-                                                    </div>
-                                                    <ul className="travel-country-list">
-                                                        {territoriesSorted.map((country) => {
-                                                            const flag = country.flag_url || `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`;
-                                                            const isHighlighted = (selectedCountry?.code || hovered?.code) === country.country_code;
-                                                            const cityCount = citiesByCountry[country.country_code]?.length ?? 0;
-                                                            return (
-                                                                <li
-                                                                    key={country.country_code}
-                                                                    className={`travel-country-row${isHighlighted ? ' travel-country-row--active' : ''}`}
-                                                                    data-country={country.country_code}
-                                                                        role="button"
-                                                                        tabIndex={0}
-                                                                        aria-label={`Explore ${country.country_name}`}
-                                                                        onKeyDown={(event) => {
-                                                                            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleCountryClick(country.country_code, country.country_name); }
-                                                                        }}
-                                                                        onClick={() => handleCountryClick(country.country_code, country.country_name)}
-                                                                    style={{ cursor: 'pointer' }}
-                                                                >
-                                                                    <div className="travel-flag">
-                                                                        <img src={flag} alt={`${country.country_name} flag`} className="travel-flag-img"
-                                                                            onError={(e) => { (e.target as HTMLImageElement).src = `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`; }}
-                                                                        />
-                                                                    </div>
-                                                                    <span className="travel-country-name">{country.country_name}</span>
-                                                                    <span className="travel-un-col" />
-                                                                    <span className="travel-city-col">
-                                                                        {cityCount > 0 && (
-                                                                            <>
-                                                                                <MapPin className="w-2.5 h-2.5" />
-                                                                                {cityCount}
-                                                                            </>
-                                                                        )}
-                                                                    </span>
-                                                                    {isAdmin && (
-                                                                        <button
-                                                                            className="travel-remove-btn"
-                                                                            onClick={(e) => { e.stopPropagation(); confirmRemoveCountry(country.country_code, country.country_name); }}
-                                                                            title={`Remove ${country.country_name}`}
-                                                                        >
-                                                                            <X className="w-3 h-3" />
-                                                                        </button>
-                                                                    )}
-                                                                </li>
-                                                            );
-                                                       })}
-                                                    </ul>
-                                                </div>
-                                            )}
+                                                    {/* Territories section — shown but never counted in stats */}
+                                                    {territoriesSorted.length > 0 && renderSection(
+                                                        'territories',
+                                                        <DotMatrixText text="TERRITORIES AND DEPENDENCIES" size="xs" />,
+                                                        `${territoriesSorted.length} visited`,
+                                                        territoriesSorted,
+                                                        false,
+                                                    )}
                                                 </>
                                             )}
                                         </>

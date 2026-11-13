@@ -49,6 +49,37 @@ const IDLE_SPIN_RAMP_MS = 4000;
 /** How close each kind of selection is brought in. */
 const FOCUS_ZOOM = { country: { '3d': 2.5, '2d': 4 }, city: { '3d': 3.5, '2d': 6 } } as const;
 
+/**
+ * Dot colours, one set per theme. Visited has to read at a glance against not
+ * visited, so the two differ in hue, strength and size, never by alpha alone:
+ * a faint gold over a faint grey was indistinguishable in either theme. Light
+ * uses a deeper amber, because the dark theme's gold washes out on cream.
+ */
+const DOT_PALETTE = {
+    dark: {
+        unvisited: 'rgba(255, 255, 255, 0.2)',
+        unvisitedHovered: 'rgba(255, 255, 255, 0.6)',
+        visited: 'rgba(255, 186, 38, 1)',
+        visitedHovered: 'rgba(255, 222, 120, 1)',
+        // Cities view: the country is still marked, so its cities stand out of
+        // a tinted patch rather than out of the same grey as everywhere else.
+        visitedTint: 'rgba(255, 186, 38, 0.38)',
+        city: 'rgba(255, 222, 120, 1)',
+        selected: 'rgba(255, 236, 170, 1)',
+        ring: 'rgba(255, 210, 90, 0.95)',
+    },
+    light: {
+        unvisited: 'rgba(40, 52, 90, 0.18)',
+        unvisitedHovered: 'rgba(40, 60, 130, 0.65)',
+        visited: 'rgba(214, 132, 0, 1)',
+        visitedHovered: 'rgba(170, 92, 0, 1)',
+        visitedTint: 'rgba(214, 132, 0, 0.34)',
+        city: 'rgba(196, 84, 0, 1)',
+        selected: 'rgba(150, 60, 0, 1)',
+        ring: 'rgba(170, 82, 0, 0.95)',
+    },
+} as const;
+
 // Cache the loaded data globally so it's only fetched once
 let cachedDotData: DotData | null = null;
 
@@ -165,6 +196,13 @@ export function DotMatrixGlobe({
     // Drag to rotate state
     const dragRef = useRef({
         isDragging: false,
+        /**
+         * What a one-finger touch turned out to be. At rest the canvas lets the
+         * page scroll vertically (touch-action: pan-y), so a mostly vertical
+         * swipe is the page's and a sideways one is the map's; which, is only
+         * known once the finger has moved.
+         */
+        touchGesture: 'idle' as 'idle' | 'undecided' | 'drag' | 'scroll',
         startX: 0,
         startY: 0,
         lastX: 0,
@@ -354,6 +392,22 @@ export function DotMatrixGlobe({
         }
         return countryFocus?.dotless ? { lon: countryFocus.lon, lat: countryFocus.lat } : null;
     }, [focusLat, focusLon, focusedDotKey, countryFocus]);
+
+    // A place with no dot of its own -- Gibraltar, a city in a country too
+    // small for the grid -- is ringed on the grid cell it falls in, so the ring
+    // always sits round a dot: the cell's own, shown as selected, or one drawn
+    // there. Ringed at its true position it fell between dots, round nothing.
+    const markerCell = useMemo(() => {
+        if (!markerPoint || !dotData) return null;
+        const { cols, rows } = dotData;
+        const col = Math.min(cols - 1, Math.max(0, Math.floor(((markerPoint.lon + Math.PI) / (2 * Math.PI)) * cols)));
+        const row = Math.min(rows - 1, Math.max(0, Math.floor(((Math.PI / 2 - markerPoint.lat) / Math.PI) * rows)));
+        const key = `${col},${row}`;
+        return dotCodes.has(key)
+            ? { key, lon: 0, lat: 0, hasDot: true }
+            : { key, lon: ((col + 0.5) / cols) * 2 * Math.PI - Math.PI, lat: Math.PI / 2 - ((row + 0.5) / rows) * Math.PI, hasDot: false };
+    }, [markerPoint, dotData, dotCodes]);
+    const ringKey = focusedDotKey ?? (markerCell?.hasDot ? markerCell.key : null);
 
     // Turn to the selected city, or else the selected country, and hold there.
     // Clearing the selection zooms back out; the idle spin then eases in later.
@@ -552,6 +606,10 @@ export function DotMatrixGlobe({
             }
         }
         const dpr = window.devicePixelRatio || 1;
+        // At rest a vertical swipe over the map scrolls the page, so the map
+        // never traps a phone's scroll; zoomed in, every direction pans it.
+        const touchAction = dragRef.current.targetZoom > 1.05 ? 'none' : 'pan-y';
+        if (canvas.style.touchAction !== touchAction) canvas.style.touchAction = touchAction;
         const W = canvas.offsetWidth;
         const H = canvas.offsetHeight;
         canvas.width = W * dpr;
@@ -562,7 +620,11 @@ export function DotMatrixGlobe({
         // The flat map is fitted inside the canvas rather than the canvas
         // being resized to it, so the box never moves underneath the drawing
         // and the 2D/3D morph has nothing to keep step with.
-        const mapW = Math.min(W, H * EQUAL_EARTH_ASPECT);
+        // A phone's slot is far taller than the flat map, and fitting the whole
+        // width there left a thin strip of sub-pixel dots in an empty box. A
+        // narrow slot fits the height instead and pans sideways.
+        const fitHeight = W < 600 && H * EQUAL_EARTH_ASPECT > W;
+        const mapW = fitHeight ? H * EQUAL_EARTH_ASPECT : Math.min(W, H * EQUAL_EARTH_ASPECT);
         const mapH = mapW / EQUAL_EARTH_ASPECT;
 
         // Opening the inspector beside the map narrows the canvas. Pan is in
@@ -722,8 +784,12 @@ export function DotMatrixGlobe({
 
         // Anti-clutter tuning on Mobile
         const isMobile = W < 600;
-        const radiusMultiplier = isMobile ? (progress === 0 ? 0.25 : 0.32) : 0.38;
+        const radiusMultiplier = isMobile ? 0.32 : 0.38;
         const baseRadius = Math.min(dotSpacingX, dotSpacingY) * radiusMultiplier * curZoom;
+        // On the globe a column is 2piR/cols wide, not W/cols. On a phone the
+        // canvas measure gave dots under a pixel across, so the globe washed
+        // out to grey; there they are sized to the globe's own spacing.
+        const sphereRadius = isMobile ? Math.max(baseRadius, ((2 * Math.PI * R) / cols) * 0.3) : baseRadius;
 
         // Equal Earth does not leave the grid even -- it squeezes towards the
         // poles -- so a dot sized for the equator is wrong everywhere else.
@@ -904,8 +970,8 @@ export function DotMatrixGlobe({
             const flatScaleY = Math.max(0.25, (dot.vScale * flatSpacingY) / flatUnit);
             // A globe has no such stretch: the dots go back to round.
             const sphereScale = Math.max(0.4, 0.6 + 0.4 * zNorm) * polarScale;
-            const activeRadiusX = baseRadius * (flatScaleX * (1 - progress) + sphereScale * progress);
-            const activeRadiusY = baseRadius * (flatScaleY * (1 - progress) + sphereScale * progress);
+            const activeRadiusX = baseRadius * flatScaleX * (1 - progress) + sphereRadius * sphereScale * progress;
+            const activeRadiusY = baseRadius * flatScaleY * (1 - progress) + sphereRadius * sphereScale * progress;
             const activeOpacity = 1 * (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
 
             const pDot: ProjectedDot = {
@@ -919,7 +985,7 @@ export function DotMatrixGlobe({
             };
 
             newProjected.push(pDot);
-            if (dot.dotKey === focusedDotKey) focusedProjected = pDot;
+            if (dot.dotKey === ringKey) focusedProjected = pDot;
             if (isBack && progress > 0.5) {
                 backDots.push(pDot);
             } else {
@@ -929,6 +995,7 @@ export function DotMatrixGlobe({
 
         projectedDotsRef.current = newProjected;
 
+        const palette = isDark ? DOT_PALETTE.dark : DOT_PALETTE.light;
         const drawDot = (p: ProjectedDot) => {
             const isCountryVisited = visitedSet.has(p.code);
             const isCityDot = visitedCityDots?.has(p.dotKey) ?? false;
@@ -938,45 +1005,22 @@ export function DotMatrixGlobe({
             let color: string;
             let emphasis = 1;
 
-            if (p.dotKey === focusedDotKey) {
-                // The chosen city: brighter and larger than any visited dot,
+            if (p.dotKey === ringKey) {
+                // The chosen place: brighter and larger than any visited dot,
                 // and ringed once every dot is down.
-                color = 'rgba(255, 200, 50, 1)';
+                color = palette.selected;
                 emphasis = 1.7;
-            } else if (isCityMode) {
-                // City view mode: highlight only dots with visited cities
-                if (isCityDot && isHovered) {
-                    color = 'rgba(255, 200, 50, 1)';
-                    emphasis = 1.4;
-                } else if (isCityDot) {
-                    color = 'rgba(218, 165, 32, 0.95)';
-                    emphasis = 1.2;
-                } else if (isCountryVisited && isHovered) {
-                    color = 'rgba(218, 165, 32, 0.45)';
-                    emphasis = 1.1;
-                } else if (isCountryVisited) {
-                    // Dim gold for visited country but no city here
-                    color = 'rgba(218, 165, 32, 0.08)';
-                } else if (isHovered) {
-                    color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
-                    emphasis = 1.2;
-                } else {
-                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.15 : 0.18})` : `rgba(50, 70, 130, ${isMobile ? 0.20 : 0.24})`;
-                }
+            } else if (isCityMode && isCityDot) {
+                color = isHovered ? palette.visitedHovered : palette.city;
+                emphasis = isHovered ? 1.55 : 1.4;
+            } else if (isCountryVisited) {
+                color = isCityMode ? (isHovered ? palette.visited : palette.visitedTint) : (isHovered ? palette.visitedHovered : palette.visited);
+                emphasis = isHovered ? 1.35 : isCityMode ? 1 : 1.2;
+            } else if (isHovered) {
+                color = palette.unvisitedHovered;
+                emphasis = 1.2;
             } else {
-                // Country view mode (existing behavior)
-                if (isCountryVisited && isHovered) {
-                    color = 'rgba(255, 200, 50, 1)';
-                    emphasis = 1.4;
-                } else if (isCountryVisited) {
-                    color = 'rgba(218, 165, 32, 0.95)';
-                    emphasis = 1.2;
-                } else if (isHovered) {
-                    color = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(60, 80, 140, 0.8)';
-                    emphasis = 1.2;
-                } else {
-                    color = isDark ? `rgba(255, 255, 255, ${isMobile ? 0.30 : 0.34})` : `rgba(50, 70, 130, ${isMobile ? 0.36 : 0.40})`;
-                }
+                color = palette.unvisited;
             }
 
             ctx.globalAlpha = p.opacity;
@@ -995,17 +1039,19 @@ export function DotMatrixGlobe({
         const ringed = focusedProjected;
         if (ringed) {
             if (!(ringed.isBack && progress > 0.5)) ring = { x: ringed.x, y: ringed.y, r: Math.max(ringed.rx, ringed.ry) * 3.2, opacity: ringed.opacity };
-        } else if (markerPoint) {
-            // The same flat-to-globe morph the dots go through, for one point.
-            const flat = projectEqualEarth(markerPoint.lon, markerPoint.lat);
+        } else if (markerCell && !markerCell.hasDot) {
+            // The cell has no dot of its own (open sea round a small island),
+            // so one is drawn there: the same flat-to-globe morph the dots go
+            // through, for one point.
+            const flat = projectEqualEarth(markerCell.lon, markerCell.lat);
             let x = flat.nx * W_zoom + W_offset;
             let y = flat.ny * H_zoom + H_offset;
             let zNorm = 1;
             if (progress > 0) {
                 const onGlobe = toGlobe({
-                    ux: Math.cos(markerPoint.lat) * Math.sin(markerPoint.lon),
-                    uy: -Math.sin(markerPoint.lat),
-                    uz: Math.cos(markerPoint.lat) * Math.cos(markerPoint.lon),
+                    ux: Math.cos(markerCell.lat) * Math.sin(markerCell.lon),
+                    uy: -Math.sin(markerCell.lat),
+                    uz: Math.cos(markerCell.lat) * Math.cos(markerCell.lon),
                 });
                 x += (onGlobe.x - x) * progress;
                 y += (onGlobe.y - y) * progress;
@@ -1013,14 +1059,22 @@ export function DotMatrixGlobe({
             }
             // Faded towards the globe's edge exactly as a dot there would be.
             const opacity = (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
-            if (!(zNorm < 0 && progress > 0.5)) ring = { x, y, r: baseRadius * 3.2, opacity };
+            if (!(zNorm < 0 && progress > 0.5)) {
+                const r = baseRadius * 1.7;
+                ctx.globalAlpha = opacity;
+                ctx.beginPath();
+                ctx.fillStyle = palette.selected;
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fill();
+                ring = { x, y, r: r * 1.9, opacity };
+            }
         }
         if (ring) {
             ctx.globalAlpha = ring.opacity;
             ctx.beginPath();
             ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(218, 165, 32, 0.9)';
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = palette.ring;
+            ctx.lineWidth = isMobile ? 1.25 : 1.5;
             ctx.stroke();
             ctx.globalAlpha = 1;
         }
@@ -1033,7 +1087,7 @@ export function DotMatrixGlobe({
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, focusedDotKey, markerPoint]);
+    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, ringKey, markerCell]);
 
     drawRef.current = draw;
 
@@ -1132,9 +1186,13 @@ export function DotMatrixGlobe({
 
         const handleTouchStart = (e: TouchEvent) => {
             if (!dotData) return;
-            e.preventDefault(); // Prevent iOS from hijacking touch
+            // Not cancelled for one finger: that would stop the page scrolling
+            // when the swipe turns out to be vertical. touch-action keeps the
+            // browser from doing anything else with it.
+            if (e.touches.length > 1) e.preventDefault();
             if (e.touches.length === 1) {
                 dragRef.current.isDragging = true;
+                dragRef.current.touchGesture = canvasRef.current?.style.touchAction === 'pan-y' ? 'undecided' : 'drag';
                 dragRef.current.lastX = e.touches[0].clientX;
                 dragRef.current.lastY = e.touches[0].clientY;
                 dragRef.current.startX = e.touches[0].clientX;
@@ -1145,6 +1203,7 @@ export function DotMatrixGlobe({
                 // must not drop it (see touchmove).
             } else if (e.touches.length === 2) {
                 // Two fingers are a pinch, which a held selection would fight.
+                dragRef.current.touchGesture = 'drag';
                 releaseTargets(dragRef.current);
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -1154,7 +1213,17 @@ export function DotMatrixGlobe({
 
         const handleTouchMove = (e: TouchEvent) => {
             if (!dotData) return;
-            e.preventDefault(); // Prevent iOS from hijacking touch
+            const drag = dragRef.current;
+            if (e.touches.length === 1 && drag.touchGesture === 'undecided') {
+                const dx = e.touches[0].clientX - drag.startX;
+                const dy = e.touches[0].clientY - drag.startY;
+                if (Math.hypot(dx, dy) < 6) return;
+                drag.touchGesture = Math.abs(dy) > Math.abs(dx) ? 'scroll' : 'drag';
+                if (drag.touchGesture === 'scroll') drag.isDragging = false;
+            }
+            // The page is scrolling: leave the globe where it is.
+            if (drag.touchGesture === 'scroll' || !e.cancelable) return;
+            e.preventDefault();
 
             if (e.touches.length === 1 && dragRef.current.isDragging) {
                 dragRef.current.lastInteractionTime = performance.now();
@@ -1205,16 +1274,19 @@ export function DotMatrixGlobe({
             dragRef.current.pinchDist = 0;
             dragRef.current.lastInteractionTime = performance.now();
 
-            // touchstart calls preventDefault to stop iOS scrolling the page
-            // while you spin the globe, which also cancels the synthetic click
-            // a tap would otherwise produce -- so selection has to be done
-            // here. A finger that travelled more than 5px was a drag, not a tap.
+            // Selection is done here rather than by the click a tap produces,
+            // which arrives late and after the touch has already been read.
+            // A finger that travelled more than 5px was a drag, not a tap.
             const touch = e.changedTouches[0];
+            if (e.touches.length === 0) dragRef.current.touchGesture = 'idle';
             if (!wasDragging || !touch) return;
             const dx = touch.clientX - dragRef.current.startX;
             const dy = touch.clientY - dragRef.current.startY;
             if (Math.sqrt(dx * dx + dy * dy) > 5) return;
 
+            // touchstart no longer cancels a one-finger touch, so the browser
+            // would follow this tap with a click that selects a second time.
+            if (e.cancelable) e.preventDefault();
             selectAtPoint(touch.clientX, touch.clientY);
         };
 
@@ -1339,7 +1411,7 @@ export function DotMatrixGlobe({
             <canvas
                 ref={canvasRef}
                 className="dot-matrix-map-canvas"
-                style={{ width: '100%', height: '100%', cursor: dragRef.current.isDragging ? 'grabbing' : (hoveredCountry ? 'crosshair' : 'grab'), touchAction: 'none' }}
+                style={{ width: '100%', height: '100%', cursor: dragRef.current.isDragging ? 'grabbing' : (hoveredCountry ? 'crosshair' : 'grab') }}
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onMouseMove={handleMouseMove}
@@ -1349,13 +1421,29 @@ export function DotMatrixGlobe({
             {/* One bar for both, so on a narrow map the toggle wraps onto a
                 line of its own instead of sliding over the label. */}
             {dotData && (
-                <div className="absolute inset-x-4 bottom-4 z-10 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
+                <div className="absolute inset-x-3 bottom-3 sm:inset-x-4 sm:bottom-4 z-10 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
+                    {/* What gold means, so visited and not visited never rest on
+                        telling two shades apart unaided. */}
+                    <div className="dot-matrix-legend pointer-events-auto">
+                        {viewMode === 'cities' ? (
+                            <>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch dot-matrix-legend-swatch--city" />City</span>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch dot-matrix-legend-swatch--tint" />Country</span>
+                            </>
+                        ) : (
+                            <>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch dot-matrix-legend-swatch--visited" />Visited</span>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" />Not yet</span>
+                            </>
+                        )}
+                    </div>
                     {/* Says what you are looking at, and nothing more -- there is one
                         projection now. Hidden over the globe, which is in no projection
                         at all, so the label never names something the map is not.
-                        Fades over the 500ms the dots take to roll up into the sphere. */}
+                        Fades over the 500ms the dots take to roll up into the sphere.
+                        Left out on a phone, where the map has no room to spare. */}
                     <div
-                        className={`px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
+                        className={`hidden sm:block px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm text-xs font-semibold tracking-wider text-muted-foreground whitespace-nowrap cursor-default transition-opacity duration-500 ${
                             mode === '3d' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
                         }`}
                         title={EQUAL_EARTH_NOTE}
@@ -1365,11 +1453,14 @@ export function DotMatrixGlobe({
                     </div>
                     <button
                         onClick={() => setMode(m => m === '2d' ? '3d' : '2d')}
-                        className="ml-auto flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
+                        className="ml-auto flex min-h-9 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm hover:bg-muted text-xs font-semibold tracking-wider text-muted-foreground transition-[background-color,color] duration-300 pointer-events-auto"
                         aria-label="Toggle 3D View"
+                        aria-pressed={mode === '3d'}
                     >
                         {mode === '2d' ? <Globe className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}
-                        {mode === '2d' ? '3D Globe' : '2D Map'}
+                        {/* Short on a phone, so the legend and the toggle share a line. */}
+                        <span className="sm:hidden">{mode === '2d' ? '3D' : '2D'}</span>
+                        <span className="hidden sm:inline">{mode === '2d' ? '3D Globe' : '2D Map'}</span>
                     </button>
                 </div>
             )}
