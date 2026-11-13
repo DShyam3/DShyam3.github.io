@@ -214,6 +214,23 @@ export const totalWatchedRuntime = (
 export const isSpecialsSeason = (seasonNumber: number): boolean =>
     seasonNumber === 0;
 
+/**
+ * The season a viewer is on: the first numbered season not fully watched, or
+ * the last one once every season is. Specials count only for a show that has
+ * nothing else. The detail opens on this season, and its trailer is this
+ * season's: a viewer through Season 1 of three is shown Season 2, not the
+ * latest.
+ */
+export const currentSeasonNumber = <S extends { season_number: number }>(
+    seasons: readonly S[],
+    isWatched: (season: S) => boolean,
+): number | undefined => {
+    const numbered = seasons.filter((season) => !isSpecialsSeason(season.season_number));
+    const candidates = numbered.length ? numbered : seasons;
+    const unwatched = candidates.find((season) => !isWatched(season));
+    return (unwatched ?? candidates[candidates.length - 1])?.season_number;
+};
+
 /** Episode 1 of any real season is the premiere; season 0 (specials) never counts. */
 export const isPremiereEpisode = (
     episodeNumber: number,

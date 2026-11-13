@@ -54,7 +54,7 @@ function DockedDetailBody({ detail, onClose }: DockedDetailBodyProps) {
           min-content of every flex item below, splitting short pills such as
           an episode's "Not released" mid-word. */}
       {/* Keyed by record: one dialog moving to another title must not carry
-          over state from the last one, such as the season it had picked. */}
+          over state from the last one held inside the node. */}
       <div key={detail.id} className="space-y-4 break-words">{detail.node}</div>
     </div>
   );

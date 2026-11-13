@@ -286,15 +286,11 @@ Marking an episode or season watched or unwatched refreshes Watch Next to match
 the saved progress. Watched marks change only after the save succeeds. If a save
 fails, an error toast appears and the existing watched marks stay unchanged.
 
-Details place episodes below the poster and information on tablets, with a
-third column on wider screens. On tablets, information stays fixed above the
-episode area; the season picker and season details scroll with the episodes.
-On wider screens, the episode list scrolls independently below the
-season controls, and the close control shares the episode heading row without
-an empty strip above the content. TV details show a short synopsis preview;
-Read synopsis opens the full text separately. Tablet and desktop details place
-Delete in the header and ask for confirmation. The close control stays reachable.
-The first unwatched regular season opens by default.
+Details open in the side inspector, or a sheet on narrower or shorter screens:
+the poster and information sit above the season picker and its episodes, and the
+panel scrolls as one. It opens on the first regular season not fully watched, or
+the last season once all are, and that season stays shown while its episodes are
+marked. Delete asks for confirmation.
 
 **Both views:**
 
@@ -303,13 +299,14 @@ The first unwatched regular season opens by default.
 - Status, episode, season and platform refreshed from TMDB on a daily
   server-side schedule, so the data is current whether or not anyone has the
   page open — and on demand from the page itself
-- Trailers: a title's details show Watch trailer when TMDB lists a YouTube
-  trailer for it, and the season picker shows a trailer button for a season
-  that has its own. The trailer plays in a dialog in YouTube's privacy-enhanced
-  player, which loads only once the button is pressed, with a link to open it
-  on YouTube. The sync picks each trailer, English or without a language,
-  trailers before teasers, official first, newest first; a title added by hand
-  has its trailer at once
+- Trailers: a title's details have one trailer button. For a show it plays the
+  selected season's trailer — at first the season you are on, then whichever
+  season you pick — or the show's when that season has none of its own, and
+  for specials. With neither, there is no button. The trailer plays in a
+  dialog in YouTube's privacy-enhanced player, which loads only once the
+  button is pressed, with a link to open it on YouTube. The sync picks each
+  trailer, English or without a language, trailers before teasers, official
+  first, newest first; a title added by hand has its trailer at once
 
 **Sync:**
 

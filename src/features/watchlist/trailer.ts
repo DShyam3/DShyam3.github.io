@@ -1,4 +1,5 @@
 import type { TMDBVideo } from './tmdb-types';
+import { isSpecialsSeason } from './watchlist-utils';
 
 /**
  * Trailer selection and the embed URL built from it.
@@ -79,4 +80,29 @@ export function trailerEmbedUrl(key: string): string | null {
 export function trailerWatchUrl(key: string): string | null {
   if (!isYouTubeKey(key)) return null;
   return `https://www.youtube.com/watch?v=${key}`;
+}
+
+export interface DetailTrailer {
+  /** A valid YouTube id, or null when there is no trailer to offer. */
+  key: string | null;
+  /** Names the trailer's dialog: "Tulsa King" or "Tulsa King, Season 4". */
+  title: string;
+  label: string;
+}
+
+/**
+ * The one trailer a title's detail offers. A show plays the selected season's
+ * own trailer where TMDB has one, and the show's otherwise; specials always
+ * take the show's. A film has only its own.
+ */
+export function detailTrailer(
+  title: { title: string; trailer_key?: string | null },
+  season?: { season_number: number; trailer_key?: string | null } | null,
+): DetailTrailer {
+  if (season && !isSpecialsSeason(season.season_number) && isYouTubeKey(season.trailer_key)) {
+    const name = `Season ${season.season_number}`;
+    return { key: season.trailer_key, title: `${title.title}, ${name}`, label: `Watch ${name} trailer` };
+  }
+  const key = isYouTubeKey(title.trailer_key) ? title.trailer_key : null;
+  return { key, title: title.title, label: 'Watch trailer' };
 }

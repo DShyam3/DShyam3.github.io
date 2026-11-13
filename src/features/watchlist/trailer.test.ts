@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isYouTubeKey, pickTrailerKey, trailerEmbedUrl, trailerWatchUrl } from './trailer';
+import { detailTrailer, isYouTubeKey, pickTrailerKey, trailerEmbedUrl, trailerWatchUrl } from './trailer';
 
 const yt = (key: string, extra: Record<string, unknown> = {}) => ({
   key,
@@ -69,5 +69,34 @@ describe('trailer URLs', () => {
       expect(trailerEmbedUrl(key)).toBeNull();
       expect(trailerWatchUrl(key)).toBeNull();
     }
+  });
+});
+
+describe('detailTrailer', () => {
+  const show = { title: 'Tulsa King', trailer_key: 'showKey0001' };
+
+  it("plays the selected season's own trailer", () => {
+    expect(detailTrailer(show, { season_number: 4, trailer_key: 'season40001' })).toEqual({
+      key: 'season40001',
+      title: 'Tulsa King, Season 4',
+      label: 'Watch Season 4 trailer',
+    });
+  });
+
+  it("falls back to the show's trailer when the season has none, or an invalid one", () => {
+    const fallback = { key: 'showKey0001', title: 'Tulsa King', label: 'Watch trailer' };
+    expect(detailTrailer(show, { season_number: 2 })).toEqual(fallback);
+    expect(detailTrailer(show, { season_number: 2, trailer_key: 'x/../evil' })).toEqual(fallback);
+    expect(detailTrailer(show, null)).toEqual(fallback);
+    expect(detailTrailer(show)).toEqual(fallback);
+  });
+
+  it("gives specials the show's trailer even when they have their own", () => {
+    expect(detailTrailer(show, { season_number: 0, trailer_key: 'specials001' }).key).toBe('showKey0001');
+  });
+
+  it('has no key when neither the season nor the title has one', () => {
+    expect(detailTrailer({ title: 'Film' }, { season_number: 1 }).key).toBeNull();
+    expect(detailTrailer({ title: 'Film', trailer_key: 'a"onload=1' }).key).toBeNull();
   });
 });

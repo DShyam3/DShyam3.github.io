@@ -3,6 +3,7 @@ import {
   buildUpdatesFeed,
   compactUpcomingStatus,
   computeFirstSeenAt,
+  currentSeasonNumber,
   daysUntil,
   displayTitle,
   releaseYear,
@@ -983,5 +984,36 @@ describe('filterRecentByWindow', () => {
     const rows = [row('2026-09-04')];
     expect(filterRecentByWindow(rows, 'week', today)).toHaveLength(0);
     expect(filterRecentByWindow(rows, 'month', today)).toHaveLength(1);
+  });
+});
+
+describe('currentSeasonNumber', () => {
+  const seasons = (...numbers: number[]) => numbers.map((season_number) => ({ season_number }));
+  const watched = (...numbers: number[]) => (season: { season_number: number }) =>
+    numbers.includes(season.season_number);
+
+  it('picks the first numbered season not fully watched', () => {
+    // Through Season 1 with Seasons 2 and 3 out: Season 2, not the latest.
+    expect(currentSeasonNumber(seasons(0, 1, 2, 3), watched(0, 1))).toBe(2);
+    // Seasons 1-3 done, Season 4 part-watched.
+    expect(currentSeasonNumber(seasons(0, 1, 2, 3, 4), watched(0, 1, 2, 3))).toBe(4);
+    // A gap counts: Season 2 skipped while 3 is watched.
+    expect(currentSeasonNumber(seasons(1, 2, 3), watched(1, 3))).toBe(2);
+  });
+
+  it('ignores specials while numbered seasons exist', () => {
+    expect(currentSeasonNumber(seasons(0, 1, 2), watched(1))).toBe(2);
+  });
+
+  it('falls back to the last numbered season once everything is watched', () => {
+    expect(currentSeasonNumber(seasons(0, 1, 2), watched(0, 1, 2))).toBe(2);
+  });
+
+  it('uses specials only for a show that has nothing else', () => {
+    expect(currentSeasonNumber(seasons(0), watched())).toBe(0);
+  });
+
+  it('is undefined with no seasons', () => {
+    expect(currentSeasonNumber([], watched())).toBeUndefined();
   });
 });

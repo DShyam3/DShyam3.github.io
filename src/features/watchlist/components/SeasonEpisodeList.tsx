@@ -1,13 +1,8 @@
-import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Season } from '@/features/watchlist/useWatchlist';
 import { daysUntil } from '@/features/watchlist/watchlist-utils';
-import { TrailerButton } from './TrailerButton';
-
-const seasonLabel = (seasonNumber: number) =>
-  seasonNumber === 0 ? 'Specials' : `Season ${seasonNumber}`;
 
 interface SeasonEpisodeListProps {
   seasons: Season[];
@@ -24,8 +19,17 @@ interface SeasonEpisodeListProps {
     episodeNumber: number,
   ) => boolean;
   isSeasonWatched: (showId: string, season: Season) => boolean;
-  /** Names the season's trailer dialog, e.g. "Severance, Season 2". */
-  showTitle?: string;
+  /**
+   * The season shown. Held by the detail, whose one trailer button plays the
+   * selected season's trailer.
+   */
+  selectedSeason: number | undefined;
+  /**
+   * Called with a season picked, and with the shown season whenever an
+   * episode or the season is marked: the detail defaults to the season the
+   * viewer is on, and finishing it must not move the list to the next one.
+   */
+  onSelectSeason: (seasonNumber: number) => void;
 }
 
 export function SeasonEpisodeList({
@@ -35,16 +39,9 @@ export function SeasonEpisodeList({
   toggleSeasonWatched,
   isEpisodeWatched,
   isSeasonWatched,
-  showTitle,
+  selectedSeason,
+  onSelectSeason,
 }: SeasonEpisodeListProps) {
-  const initialSeason = useMemo(() => {
-    const regularSeasons = seasons.filter((season) => season.season_number > 0);
-    const candidates = regularSeasons.length ? regularSeasons : seasons;
-    const firstUnwatched = candidates.find((season) => !isSeasonWatched(showId, season));
-    return firstUnwatched?.season_number ?? candidates[candidates.length - 1]?.season_number;
-  }, [seasons, showId, isSeasonWatched]);
-
-  const [selectedSeason, setSelectedSeason] = useState(initialSeason);
   const currentSeason = seasons.find((s) => s.season_number === selectedSeason);
 
   const formatDate = (dateString?: string) => {
@@ -100,7 +97,7 @@ export function SeasonEpisodeList({
                 }
                 size="sm"
                 aria-pressed={selectedSeason === season.season_number}
-                onClick={() => setSelectedSeason(season.season_number)}
+                onClick={() => onSelectSeason(season.season_number)}
                 className="min-h-9 px-2.5 text-xs relative"
               >
                 {season.season_number === 0 ? 'Specials' : `Season ${season.season_number}`}
@@ -125,21 +122,15 @@ export function SeasonEpisodeList({
               </span>
             </div>
 
-            <TrailerButton
-              trailerKey={currentSeason.trailer_key}
-              title={`${showTitle ? `${showTitle}, ` : ''}${seasonLabel(currentSeason.season_number)}`}
-              label={`${seasonLabel(currentSeason.season_number)} trailer`}
-              className="w-full"
-            />
-
             {/* Mark Season Complete button */}
             {toggleSeasonWatched && currentSeason.episodes.length > 0 && (
               <Button
                 variant={seasonFullyWatched ? 'outline' : 'default'}
                 size="sm"
-                onClick={() =>
-                  toggleSeasonWatched(showId, currentSeason.season_number)
-                }
+                onClick={() => {
+                  onSelectSeason(currentSeason.season_number);
+                  toggleSeasonWatched(showId, currentSeason.season_number);
+                }}
                 className={cn(
                   'w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-1.5',
                   seasonFullyWatched
@@ -195,15 +186,15 @@ export function SeasonEpisodeList({
             return (
               <div
                 key={episode.episode_number}
-                onClick={() =>
-                  released &&
-                  toggleEpisodeWatched &&
+                onClick={() => {
+                  if (!released || !toggleEpisodeWatched) return;
+                  onSelectSeason(currentSeason.season_number);
                   toggleEpisodeWatched(
                     showId,
                     currentSeason.season_number,
                     episode.episode_number,
-                  )
-                }
+                  );
+                }}
                 className={cn(
                   'px-3 py-2 rounded-lg transition-[background-color,opacity,border-color] duration-200 border-l-4',
                   toggleEpisodeWatched

@@ -1,4 +1,4 @@
-import { useState, useEffect, useId, useRef, useMemo } from 'react';
+import { useState, useEffect, useId, useRef, useMemo, useCallback } from 'react';
 import { ExternalLink, Trash2, CalendarDays, Calendar, Heart, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -6,7 +6,8 @@ import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchl
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { TrailerButton } from './TrailerButton';
 import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
-import { displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { currentSeasonNumber, displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
+import { detailTrailer } from '@/features/watchlist/trailer';
 import { PlatformBadge } from './PlatformLogo';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
@@ -60,6 +61,15 @@ export function WatchlistDetailDialog({
   const { claimDockedDetail, updateDockedDetail, releaseDockedDetail } = useWorkspaceInspector();
   const wasOpenRef = useRef(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  // The season the viewer picked, or null to follow the one they are on. Tied
+  // to the title: News and Your Week hand one open dialog the next title, and
+  // a pick on one show must not carry over to another.
+  const [seasonPick, setSeasonPick] = useState<{ itemId: string; season: number } | null>(null);
+  const pickedSeason = seasonPick?.itemId === item.id ? seasonPick.season : null;
+  const pickSeason = useCallback(
+    (season: number) => setSeasonPick({ itemId: item.id, season }),
+    [item.id],
+  );
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { loadShowEpisodes, loadItemDescription } = useWatchlist();
 
@@ -80,13 +90,28 @@ export function WatchlistDetailDialog({
     }
   }, [open, item, loadItemDescription]);
 
-  // Reset deleting state when dialog opens/closes
+  // Reset deleting state and the season pick when dialog opens/closes
   useEffect(() => {
-    if (!open) setIsDeleting(false);
+    if (!open) {
+      setIsDeleting(false);
+      setSeasonPick(null);
+    }
   }, [open]);
 
   const isTVShow = item.category === 'TV Shows';
   const hasSeasons = Boolean(isTVShow && item.seasons && item.seasons.length > 0);
+
+  // Read every render, not memoised: isSeasonWatched keeps one identity while
+  // the watched flags behind it change.
+  const seasons = hasSeasons ? item.seasons ?? [] : [];
+  const selectedSeason =
+    pickedSeason !== null && seasons.some((season) => season.season_number === pickedSeason)
+      ? pickedSeason
+      : currentSeasonNumber(seasons, (season) => isSeasonWatched(item.id, season));
+  const trailer = detailTrailer(
+    item,
+    seasons.find((season) => season.season_number === selectedSeason),
+  );
 
   const upcomingReleaseDate = useMemo(() => {
     const now = new Date();
@@ -227,7 +252,12 @@ export function WatchlistDetailDialog({
             <DetailDescription text={item.description} />
           ) : null}
 
-          <TrailerButton trailerKey={item.trailer_key} title={item.title} className="w-full" />
+          <TrailerButton
+            trailerKey={trailer.key}
+            title={trailer.title}
+            label={trailer.label}
+            className="w-full"
+          />
 
           {!isTVShow && item.runtime ? (
             <RuntimeRow
@@ -251,8 +281,9 @@ export function WatchlistDetailDialog({
             >
               <SeasonEpisodeList
                 showId={item.id}
-                showTitle={item.title}
                 seasons={item.seasons}
+                selectedSeason={selectedSeason}
+                onSelectSeason={pickSeason}
                 toggleEpisodeWatched={toggleEpisodeWatched}
                 toggleSeasonWatched={toggleSeasonWatched}
                 isEpisodeWatched={isEpisodeWatched}
@@ -356,6 +387,10 @@ export function WatchlistDetailDialog({
     isTVShow,
     hasSeasons,
     item,
+    selectedSeason,
+    trailer.key,
+    trailer.title,
+    trailer.label,
     status,
     upcomingReleaseDate,
     isScheduled,
@@ -373,6 +408,7 @@ export function WatchlistDetailDialog({
     toggleSeasonWatched,
     isEpisodeWatched,
     isSeasonWatched,
+    pickSeason,
     claimDockedDetail,
     updateDockedDetail,
     releaseDockedDetail,
