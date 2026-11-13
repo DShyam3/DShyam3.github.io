@@ -285,7 +285,7 @@
     font-family: var(--font-sans);
 }
 
-/* Legend: the same colours the draw loop uses (DOT_PALETTE), as swatches. */
+/* Legend. Swatch colours come from DOT_PALETTE inline, so they match the dots. */
 .dot-matrix-legend {
     display: flex;
     align-items: center;
@@ -300,7 +300,8 @@
     letter-spacing: 0.04em;
     color: hsl(var(--muted-foreground));
     white-space: nowrap;
-    cursor: default;
+    /* A label, not a control: taps go through to the map. */
+    pointer-events: none;
 }
 
 .dot-matrix-legend span {
@@ -313,36 +314,4 @@
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 50%;
-    background: rgba(40, 52, 90, 0.3);
-}
-
-.dark .dot-matrix-legend-swatch {
-    background: rgba(255, 255, 255, 0.3);
-}
-
-.dot-matrix-legend-swatch--visited,
-.dot-matrix-legend-swatch--city {
-    background: rgb(214, 132, 0);
-}
-
-.dark .dot-matrix-legend-swatch--visited {
-    background: rgb(255, 186, 38);
-}
-
-.dot-matrix-legend-swatch--city {
-    background: rgb(196, 84, 0);
-    box-shadow: 0 0 0 2px rgba(214, 132, 0, 0.34);
-}
-
-.dark .dot-matrix-legend-swatch--city {
-    background: rgb(255, 222, 120);
-    box-shadow: 0 0 0 2px rgba(255, 186, 38, 0.38);
-}
-
-.dot-matrix-legend-swatch--tint {
-    background: rgba(214, 132, 0, 0.34);
-}
-
-.dark .dot-matrix-legend-swatch--tint {
-    background: rgba(255, 186, 38, 0.38);
 }

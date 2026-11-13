@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Globe, Map as MapIcon } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { ASSETS_URL } from '@/lib/constants';
 import {
     EQUAL_EARTH_ASPECT,
@@ -178,6 +179,7 @@ export function DotMatrixGlobe({
     const countryPointLon = focusedCountryPoint?.lon;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [dotData, setDotData] = useState<DotData | null>(null);
+    const { resolvedTheme } = useTheme();
     const [mapError, setMapError] = useState(false);
     const [countryNames, setCountryNames] = useState<Record<string, string>>({});
     const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
@@ -395,8 +397,10 @@ export function DotMatrixGlobe({
 
     // A place with no dot of its own -- Gibraltar, a city in a country too
     // small for the grid -- is ringed on the grid cell it falls in, so the ring
-    // always sits round a dot: the cell's own, shown as selected, or one drawn
-    // there. Ringed at its true position it fell between dots, round nothing.
+    // always sits round a dot: the cell's own, or one drawn there. Ringed at its
+    // true position it fell between dots, round nothing. The cell's dot is
+    // usually a neighbour's (Gibraltar's is Spain's), so it keeps its own
+    // colour: only the ring marks the place, never a dot of the wrong country.
     const markerCell = useMemo(() => {
         if (!markerPoint || !dotData) return null;
         const { cols, rows } = dotData;
@@ -1005,8 +1009,8 @@ export function DotMatrixGlobe({
             let color: string;
             let emphasis = 1;
 
-            if (p.dotKey === ringKey) {
-                // The chosen place: brighter and larger than any visited dot,
+            if (p.dotKey === focusedDotKey) {
+                // The chosen city: brighter and larger than any visited dot,
                 // and ringed once every dot is down.
                 color = palette.selected;
                 emphasis = 1.7;
@@ -1060,7 +1064,11 @@ export function DotMatrixGlobe({
             // Faded towards the globe's edge exactly as a dot there would be.
             const opacity = (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
             if (!(zNorm < 0 && progress > 0.5)) {
-                const r = baseRadius * 1.7;
+                // Sized as the dot loop sizes a selected dot, flat and round,
+                // or on a phone the ring shrank to a pixel or so.
+                const { hScale, vScale } = equalEarthRowScale(markerCell.lat);
+                const flatScale = Math.max(0.25, (hScale * flatSpacingX) / flatUnit, (vScale * flatSpacingY) / flatUnit);
+                const r = (baseRadius * flatScale * (1 - progress) + sphereRadius * progress) * 1.7;
                 ctx.globalAlpha = opacity;
                 ctx.beginPath();
                 ctx.fillStyle = palette.selected;
@@ -1087,7 +1095,7 @@ export function DotMatrixGlobe({
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, ringKey, markerCell]);
+    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, focusedDotKey, ringKey, markerCell]);
 
     drawRef.current = draw;
 
@@ -1278,15 +1286,18 @@ export function DotMatrixGlobe({
             // which arrives late and after the touch has already been read.
             // A finger that travelled more than 5px was a drag, not a tap.
             const touch = e.changedTouches[0];
+            const gesture = dragRef.current.touchGesture;
             if (e.touches.length === 0) dragRef.current.touchGesture = 'idle';
+            // touchstart no longer cancels a one-finger touch, so the browser
+            // follows it with mouse events and a click. After a pan that click
+            // would select whatever is under the finger, and after a tap it
+            // would select a second time; the touch has been read here already.
+            if (gesture !== 'scroll' && e.cancelable) e.preventDefault();
             if (!wasDragging || !touch) return;
             const dx = touch.clientX - dragRef.current.startX;
             const dy = touch.clientY - dragRef.current.startY;
             if (Math.sqrt(dx * dx + dy * dy) > 5) return;
 
-            // touchstart no longer cancels a one-finger touch, so the browser
-            // would follow this tap with a click that selects a second time.
-            if (e.cancelable) e.preventDefault();
             selectAtPoint(touch.clientX, touch.clientY);
         };
 
@@ -1390,6 +1401,9 @@ export function DotMatrixGlobe({
     }, [selectAtPoint]);
 
 
+    // The legend's swatches are the draw loop's own colours, so the two cannot drift.
+    const legendPalette = resolvedTheme === 'dark' ? DOT_PALETTE.dark : DOT_PALETTE.light;
+
     if (mapError) return <div role="status" className="flex min-h-64 items-center justify-center rounded-xl border border-border p-6 text-center text-sm text-muted-foreground">The map is unavailable. You can still explore countries and city journals from the list.</div>;
 
     return (
@@ -1424,16 +1438,16 @@ export function DotMatrixGlobe({
                 <div className="absolute inset-x-3 bottom-3 sm:inset-x-4 sm:bottom-4 z-10 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
                     {/* What gold means, so visited and not visited never rest on
                         telling two shades apart unaided. */}
-                    <div className="dot-matrix-legend pointer-events-auto">
+                    <div className="dot-matrix-legend">
                         {viewMode === 'cities' ? (
                             <>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch dot-matrix-legend-swatch--city" />City</span>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch dot-matrix-legend-swatch--tint" />Country</span>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.city, boxShadow: `0 0 0 2px ${legendPalette.visitedTint}` }} />City</span>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.visitedTint }} />Country</span>
                             </>
                         ) : (
                             <>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch dot-matrix-legend-swatch--visited" />Visited</span>
-                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" />Not yet</span>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.visited }} />Visited</span>
+                                <span><i aria-hidden="true" className="dot-matrix-legend-swatch" style={{ background: legendPalette.unvisited }} />Not yet</span>
                             </>
                         )}
                     </div>

@@ -10,6 +10,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useSyncExternalStore
 import { CONTINENT_ORDER } from '@/features/travel/continents';
 import { useContinentMap } from '@/features/travel/useContinentMap';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { FlagStrip } from '@/components/shared/FlagStrip';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { Globe, MapPin, Search, X, Loader2, ChevronDown } from 'lucide-react';
 import { CountryCityPanel, type City } from '@/features/travel/CountryCityPanel';
@@ -34,7 +35,7 @@ interface RestCountry {
 
 type ViewMode = 'countries' | 'cities';
 
-/** The query AppShell and responsive.css use for the side-by-side layout. */
+/** The query responsive.css and Index.css use for the side-by-side travel layout. */
 const SIDE_BY_SIDE = '(min-width: 1024px) and (min-height: 600px)';
 const subscribeSideBySide = (onChange: () => void) => {
     const query = window.matchMedia(SIDE_BY_SIDE);
@@ -95,6 +96,18 @@ const TravelContent = () => {
 
     // View mode toggle
     const [viewMode, setViewMode] = useState<ViewMode>('countries');
+
+    // Stacked (a phone, or a short window) the list follows the map down the
+    // page, and every country at once was several screens of scrolling. There
+    // each continent folds to one row, its flags showing what is inside.
+    const stacked = useStackedLayout();
+    const [openSections, setOpenSections] = useState<Set<string>>(() => new Set());
+    const toggleSection = useCallback((key: string) => setOpenSections(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    }), []);
+
 
     // Drill-down state: which country is expanded to show cities
     const [selectedCountry, setSelectedCountry] = useState<{
@@ -366,12 +379,18 @@ const TravelContent = () => {
 
     const handleCityPanelBack = useCallback(() => {
         const code = selectedCountry?.code;
+        // Its row is about to take focus, so a folded section is opened first;
+        // otherwise focus fell to the page when the country was picked on the map.
+        if (code) {
+            const section = sovereignCodes.size === 0 || sovereignCodes.has(code) ? (continentByCode[code] ?? 'Other') : 'territories';
+            setOpenSections(prev => prev.has(section) ? prev : new Set(prev).add(section));
+        }
         setSelectedCity(null);
         setSelectedItemId(null);
         setDockedDetail(null);
         setSelectedCountry(null);
         requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-country="${code}"]`)?.focus());
-    }, [selectedCountry, setDockedDetail]);
+    }, [selectedCountry, setDockedDetail, sovereignCodes, continentByCode]);
 
     const journalCities = useMemo(() => [...new Map([
         ...visitedCities.map(cityIdentity), ...journal.data.visits, ...journal.data.memories,
@@ -407,17 +426,6 @@ const TravelContent = () => {
 
     // Total visited cities count
     const totalCitiesVisited = visitedCities.length;
-
-    // Stacked (a phone, or a short window) the list follows the map down the
-    // page, and every country at once was several screens of scrolling. There
-    // each continent folds to one row, its flags showing what is inside.
-    const stacked = useStackedLayout();
-    const [openSections, setOpenSections] = useState<Set<string>>(() => new Set());
-    const toggleSection = useCallback((key: string) => setOpenSections(prev => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key); else next.add(key);
-        return next;
-    }), []);
 
     const renderCountryRow = (country: (typeof visitedCountries)[number], showUn: boolean) => {
         const flag = country.flag_url || `https://flagcdn.com/w80/${country.country_code.toLowerCase()}.png`;
@@ -492,13 +500,7 @@ const TravelContent = () => {
             <div key={key} className={sectionClass}>
                 <button type="button" className="travel-continent-header travel-continent-toggle" aria-expanded={open} aria-controls={listId} onClick={() => toggleSection(key)}>
                     <span className={labelClass}>{label}</span>
-                    {!open && (
-                        <span className="travel-continent-flags" aria-hidden="true">
-                            {countries.slice(0, 5).map(country => (
-                                <img key={country.country_code} src={`https://flagcdn.com/w40/${country.country_code.toLowerCase()}.png`} alt="" loading="lazy" decoding="async" />
-                            ))}
-                        </span>
-                    )}
+                    {!open && <FlagStrip codes={countries.map(country => country.country_code)} className="travel-continent-flags" />}
                     <span className="travel-continent-stats">{stats}</span>
                     <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform${open ? ' rotate-180' : ''}`} aria-hidden="true" />
                 </button>

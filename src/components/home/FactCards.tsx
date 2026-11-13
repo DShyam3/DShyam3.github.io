@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSiteContent } from '@/hooks/useSiteContent';
 import { useExperience } from '@/hooks/useResume';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FlagStrip } from '@/components/shared/FlagStrip';
 import { collectionQuery } from '@/collections/useCollection';
 import { booksCollection, type BookRow } from '@/collections/books';
 import { projectsCollection, type ProjectRow } from '@/collections/projects';
@@ -44,6 +45,9 @@ const favouriteTitlesQuery = queryOptions({
 });
 
 const PICK_KEYS = Object.values(FAVOURITE_PICK_KEYS);
+
+/** A noun's two forms: "series" is its own plural, so an appended "s" will not do. */
+interface Noun { one: string; many: string }
 const ROTATE = 'rotate';
 const LOADING = 'Loading…';
 
@@ -51,7 +55,11 @@ interface Fact {
   id: string;
   kicker: string;
   icon: LucideIcon;
-  palette: string;
+  /**
+   * A gradient tint, for at most two cards: DESIGN_SYSTEM allows two gradient
+   * panels a view, and six read as a screensaver. The rest are plain panels.
+   */
+  palette?: string;
   value: ReactNode;
   label: ReactNode;
   more: string;
@@ -83,7 +91,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
 
   const { visitedCountries, loading: countriesLoading } = useVisitedCountries();
   const { visitedCities, loading: citiesLoading } = useVisitedCities();
-  const { byCode: continentByCode, sovereignCodes } = useContinentMap();
+  const { byCode: continentByCode, sovereignCodes, error: countryListFailed } = useContinentMap();
   const { experience, loading: experienceLoading } = useExperience();
   const { content: picks } = useSiteContent(PICK_KEYS);
   const favourites = useQuery(favouriteTitlesQuery);
@@ -97,7 +105,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
   );
   // The newest first: the strip reads as where the owner has been lately.
   const recentFlags = useMemo(
-    () => [...visitedCountries].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5),
+    () => [...visitedCountries].sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [visitedCountries],
   );
 
@@ -144,12 +152,12 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
     },
   });
 
-  const picker = (kind: 'movie' | 'tv', items: FavouriteTitle[], noun: string) => {
+  const picker = (kind: 'movie' | 'tv', items: FavouriteTitle[], noun: Noun) => {
     const key = FAVOURITE_PICK_KEYS[kind];
     const current = items.some((item) => String(item.tmdb_id) === picks[key]?.trim()) ? picks[key].trim() : ROTATE;
     return (
       <Select value={current} onValueChange={(tmdbId) => savePick.mutate({ key, tmdbId })} disabled={savePick.isPending}>
-        <SelectTrigger className="h-8 text-xs" aria-label={`Choose your favourite ${noun}`}>
+        <SelectTrigger className="h-9 text-xs" aria-label={`Choose your favourite ${noun.one}`}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -166,22 +174,24 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
     kind: 'movie' | 'tv',
     pick: ReturnType<typeof featuredFavourite>,
     items: FavouriteTitle[],
-    noun: string,
+    noun: Noun,
     icon: LucideIcon,
     palette: string,
   ): Fact | null => {
     if (!pick) {
       return favourites.isLoading
-        ? { id: kind, kicker: `Favourite ${noun}`, icon, palette, value: LOADING, label: '', more: 'See my favourites', onOpen: () => navigate('/watchlist/library?category=favourites') }
+        ? { id: kind, kicker: `Favourite ${noun.one}`, icon, palette, value: LOADING, label: '', more: 'See my favourites', onOpen: () => navigate('/watchlist/library?category=favourites') }
         : null;
     }
     return {
       id: kind,
-      kicker: pick.chosen ? `Favourite ${noun}` : `A favourite ${noun}`,
+      kicker: pick.chosen ? `Favourite ${noun.one}` : `A favourite ${noun.one}`,
       icon,
       palette,
       value: pick.item.title,
-      label: pick.chosen ? `Top of ${items.length} favourite ${noun}s` : `Today's pick from ${items.length} favourites`,
+      label: pick.chosen
+        ? `Top of ${items.length} favourite ${items.length === 1 ? noun.one : noun.many}`
+        : `Today's pick from ${items.length} ${items.length === 1 ? 'favourite' : 'favourites'}`,
       more: 'See my favourites',
       media: pick.item.poster ? <img className="fact-card-poster" src={pick.item.poster} alt="" loading="lazy" decoding="async" /> : undefined,
       onOpen: () => navigate('/watchlist/library?category=favourites'),
@@ -190,7 +200,9 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
   };
 
   const facts: (Fact | null)[] = [
-    {
+    // Without the country list there is no UN count to give, and "Loading…"
+    // would sit there for good.
+    countryListFailed ? null : {
       id: 'travel',
       kicker: 'Travelled to',
       icon: Compass,
@@ -206,30 +218,17 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
         ].join(' · ')
         : 'countries',
       more: 'Open the map',
-      media: recentFlags.length > 0 ? (
-        <span className="fact-card-flags" aria-hidden="true">
-          {recentFlags.map((country) => (
-            <img
-              key={country.country_code}
-              src={`https://flagcdn.com/w40/${country.country_code.toLowerCase()}.png`}
-              alt=""
-              loading="lazy"
-              decoding="async"
-            />
-          ))}
-        </span>
-      ) : undefined,
+      media: recentFlags.length > 0 ? <FlagStrip codes={recentFlags.map((country) => country.country_code)} /> : undefined,
       stacked: true,
       onOpen: () => navigate('/travel'),
     },
-    favouriteFact('movie', film, films, 'film', Clapperboard, 'peach'),
-    favouriteFact('tv', show, series, 'series', Tv, 'lavender'),
+    favouriteFact('movie', film, films, { one: 'film', many: 'films' }, Clapperboard, 'peach'),
+    favouriteFact('tv', show, series, { one: 'series', many: 'series' }, Tv, undefined),
     book
       ? {
         id: 'book',
         kicker: book.kicker,
         icon: BookOpen,
-        palette: 'sage',
         value: book.row.title,
         label: book.row.author ? `by ${book.row.author}` : '',
         more: 'See the bookshelf',
@@ -237,28 +236,26 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
         onOpen: () => navigate('/books', { state: { revealId: book.row.id } }),
       }
       : books.isLoading
-        ? { id: 'book', kicker: 'Reading now', icon: BookOpen, palette: 'sage', value: LOADING, label: '', more: 'See the bookshelf', onOpen: () => navigate('/books') }
+        ? { id: 'book', kicker: 'Reading now', icon: BookOpen, value: LOADING, label: '', more: 'See the bookshelf', onOpen: () => navigate('/books') }
         : null,
     role
       ? {
         id: 'work',
         kicker: 'Working as',
         icon: Briefcase,
-        palette: 'sky',
         value: role.title,
         label: [role.company && `at ${role.company}`, role.start_date && `since ${role.start_date}`].filter(Boolean).join(' · '),
         more: 'Experience & CV',
         onOpen: onOpenExperience,
       }
       : experienceLoading
-        ? { id: 'work', kicker: 'Working as', icon: Briefcase, palette: 'sky', value: LOADING, label: '', more: 'Experience & CV', onOpen: onOpenExperience }
+        ? { id: 'work', kicker: 'Working as', icon: Briefcase, value: LOADING, label: '', more: 'Experience & CV', onOpen: onOpenExperience }
         : null,
     project
       ? {
         id: 'project',
         kicker: project.kicker,
         icon: FolderGit2,
-        palette: 'peach',
         value: project.row.title,
         label: project.row.summary ?? '',
         more: 'See my projects',
@@ -271,7 +268,6 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
         id: 'gear',
         kicker: 'Carrying',
         icon: Cpu,
-        palette: 'lavender',
         value: `${inventory.data.length} ${inventory.data.length === 1 ? 'thing' : 'things'}`,
         label: 'Everyday carry, desk and camera gear',
         more: 'See the inventory',
@@ -285,10 +281,10 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
       {facts.filter((fact): fact is Fact => fact !== null).map((fact) => {
         const Icon = fact.icon;
         return (
-          <div key={fact.id} role="listitem" className="fact-card ambient-card hud-corners" data-palette={fact.palette}>
+          <div key={fact.id} role="listitem" className={`fact-card hud-corners ${fact.palette ? 'ambient-card' : 'surface-card'}`} data-palette={fact.palette}>
             <button type="button" className="fact-card-open" onClick={fact.onOpen}>
               <span className="fact-card-top">
-                <span className="fact-card-kicker">{fact.kicker}</span>
+                <span className="readout-label">{fact.kicker}</span>
                 <Icon className="h-4 w-4 shrink-0 text-primary/80" aria-hidden="true" />
               </span>
               <span className={`fact-card-body${fact.stacked ? ' fact-card-body--stacked' : ''}`}>

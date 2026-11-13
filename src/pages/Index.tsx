@@ -303,7 +303,7 @@ const Index = () => {
             </div>
 
             {/* Fact cards: one fact each, opening the section it comes from */}
-            <section aria-label="A few facts" className="home-glance-section">
+            <section aria-label="A few facts">
               <div className="home-section-header">
                 <span className="home-section-eyebrow">A FEW FACTS</span>
                 <span className="home-section-sub">Tap a card to see more</span>

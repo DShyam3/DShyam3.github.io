@@ -885,6 +885,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       });
       if (error) throw error;
       await fetchData();
+      // The About page's favourite cards read titles on their own key.
+      void queryClient.invalidateQueries({ queryKey: ['favourites'] });
       toast({ title: 'Success', description: 'Added to favourites' });
     } catch (error) {
       toast({
@@ -902,6 +904,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', parseInt(id));
       if (error) throw error;
       setFavourites((prev) => prev.filter((f) => f.id !== id));
+      void queryClient.invalidateQueries({ queryKey: ['favourites'] });
       toast({ title: 'Success', description: 'Removed from favourites' });
     } catch (error) {
       toast({
