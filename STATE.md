@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-13 · Branch `main` · Head `9ac08373` = origin/main, plus this docs commit. Last code deploy: Pages run `43394718494` succeeded 08:39Z at `9ac08373` (`e8a5c94` inspector resize, `9ac0837` Quickest season and poster), over `523e67f` About fact cards and phone travel.
+Updated 2026-11-13 · Branch `main` · Head `0f9294b2` = origin/main, plus this docs commit. Last code deploy: Pages run `43516229768` succeeded 22:06Z at `0f9294b2` (one trailer button), over `e8a5c94` inspector resize, `9ac0837` Quickest season and poster, `523e67f` About fact cards and phone travel.
 
 ## In progress
 
@@ -11,7 +11,8 @@ Updated 2026-11-13 · Branch `main` · Head `9ac08373` = origin/main, plus this 
 
 **Inspector, Watchlist trailers and time-to-finish sort** (`ab8f8d2`, `3f5d473`, `b6cc1e4`, deployed). Production, signed out: inspector switches cards in every order; Ahsoka's title trailer plays at 1440px (YouTube may show a pre-roll ad), Season 2 trailer in the 375px sheet; live CSP `frame-src https://www.youtube-nocookie.com`; Quickest season orders as on local. Hosted trailers: 847/891 movies, 303/312 shows, 304/716 seasons (8 equal the show's; the rest have no TMDB season video, and show-level video names rarely name a season).
 - **Follow-ups `e8a5c94`, `9ac0837`** (deployed): narrowing past 1280px/600px with a title open hid it and the card could not reopen it; `inspectorSheetOpen` is now derived from a live `useMediaQuery` (new `src/hooks/use-media-query.ts`, also behind `useIsMobile`), the column renders the detail only while the sheet is shut, and the sheet returns focus to the selection's opener. Quickest season leaves out a next season with an episode dated after today ("S4 still airing", ranked before nothing left); undated rows are ignored (hosted has none). The detail poster lost its bordered, tinted frame. Reviewer (Opus): one doc bug, five risks, three nits, all fixed. Verified 2026-11-13, local dev, hosted, signed out: resize both ways with one copy and focus kept; Travel at 375. Production, signed out, 1440 and 375: poster unframed; Ahsoka moves into the sheet on narrowing, one copy, Escape returns focus to its card; Quickest season shows the same 7 still airing with none finishable after them.
-- Unverified: sort hold while marking episodes watched (signed in); signed-in add of a new title gets its trailer; Safari; real phone rotation; Home at the breakpoint.
+- **One trailer button `0f9294b`** (deployed). The per-season button is gone; the top one plays the selected season's trailer (the show's for specials or a season without one). Selection now lives in the dialog, defaults to `currentSeasonNumber` (first numbered season not fully watched, else the last), is pinned on any watch toggle, and is tied to the title, since News and Your Week hand one open dialog the next title (reviewer (Opus) caught that carry-over; fixed, plus five nits). Verified local dev, hosted, signed out, 1440 and 375: specials and films get the title trailer, reopen resets, a pick on Rings of Power does not reach Tulsa King on News. Production, signed out, 1440: One-Punch Man (S1 watched) opens on S2 and switches to S3; Tulsa King opens on S4.
+- Unverified: sort hold and the season pin while marking episodes watched (signed in); signed-in add of a new title gets its trailer; Safari; real phone rotation; Home at the breakpoint.
 
 **About fact cards and travel on phones** (`c53bdc9`, `c7b8404`, `e2e3cb5`, `523e67f`, deployed). Fact cards replace About's "At a glance" and "Continue exploring"; Travel gains a legend, phone-sized flat map, Gibraltar ring, folded continents; `?category=favourites` opens Favourites. Favourite picks in `site_content` keys `favourite_film` / `favourite_series`. Verified headless on stand-in data (iPhone 13, 1440px, light and dark); 2,507 tests at `523e67f`.
 - Unverified: real touch on iOS and Android (pan vs drag at 6px, pinch), Safari, the signed-in favourite picker writing to hosted `site_content`, the Projects card (table empty), real flags and posters.
@@ -23,6 +24,7 @@ Updated 2026-11-13 · Branch `main` · Head `9ac08373` = origin/main, plus this 
 
 | Check | Date | Result |
 |---|---|---|
+| `0f9294b` | 2026-11-13 | Staged tree alone in a scratch copy: typecheck, lint 0/0, 2,522 tests (81 files), build. graphify updated |
 | `e8a5c94`, `9ac0837` | 2026-11-13 | Each staged tree alone on `76ddb494`, in a scratch copy: typecheck, lint 0/0, build pass; 2,507 then 2,513 tests (81 files). graphify updated on the working tree |
 | About and travel (`523e67f`) | 2026-11-13 | Lint 0/0; typecheck and build pass; 2,507 tests across 81 files |
 | Trailers (`3f5d473`) | 2026-11-12 | Staged tree alone: typecheck, lint, deno check, watchlist tests, build. Hosted: migration `20261111223000` applied, `watchlist-cron-sync` v16, sync runs succeed |
@@ -32,7 +34,7 @@ Updated 2026-11-13 · Branch `main` · Head `9ac08373` = origin/main, plus this 
 ## Next
 
 1. Owner on a real phone, production: Travel (swipe over the map, drag the 2D map, Gibraltar, fold continents, globe holds then spins after ~12s) and About (swipe fact cards; signed in, pick a favourite film and series, reload). Delete stale `claude/travel-section-mobile-ux-3qcp9c` on GitHub.
-2. Signed in on production: time-to-finish order holds while marking episodes watched; add a title and see its trailer at once; a trailer in Safari and on an iPhone; inspector sheet on a phone.
+2. Signed in on production: time-to-finish order and the shown season both hold while marking episodes watched; add a title and see its trailer at once; a trailer in Safari and on an iPhone; inspector sheet on a phone.
 3. Commit the batch (its owner session), with `REHAUL_PLAN.md`'s trailer-note removal; then BST transaction day, Finance charts light and dark, Goals chevrons on production.
 4. Finance signed in: Budget, Cash Flow, Dashboard charts; Tax, Published Rates, Goals forms; holiday and debt dialogs.
 5. Travel signed in: re-import the Flighty CSV, add and publish a trip, upload a photo, run an import and a backup; then `REHAUL_PLAN.md` 8.F.
