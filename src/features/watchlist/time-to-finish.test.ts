@@ -38,7 +38,7 @@ describe('timeToFinish', () => {
     expect(t.episodesLeft).toBe(4);
     expect(t.minutesLeft).toBe(50 + 120);
     expect(t.estimated).toBe(false);
-    expect(t.nextSeason).toEqual({ seasonNumber: 1, episodesLeft: 1, minutesLeft: 50, estimated: false });
+    expect(t.nextSeason).toEqual({ seasonNumber: 1, episodesLeft: 1, minutesLeft: 50, estimated: false, stillAiring: false });
   });
 
   it('skips finished seasons when picking the next one', () => {
@@ -47,7 +47,7 @@ describe('timeToFinish', () => {
       watched(['1x1', '1x2']),
       today,
     );
-    expect(t.nextSeason).toEqual({ seasonNumber: 2, episodesLeft: 1, minutesLeft: 30, estimated: false });
+    expect(t.nextSeason).toEqual({ seasonNumber: 2, episodesLeft: 1, minutesLeft: 30, estimated: false, stillAiring: false });
     expect(t.minutesLeft).toBe(30);
   });
 
@@ -115,6 +115,56 @@ describe('timeToFinish', () => {
     const done = timeToFinish([season(1, [ep(1, 30)])], watched(['1x1']), today);
     expect(done.episodesLeft).toBe(0);
     expect(done.nextSeason).toBeNull();
+  });
+});
+
+describe('a season still airing', () => {
+  // Episode 1 aired, episode 2 airs tomorrow.
+  const airing = timeToFinish(
+    [season(1, [ep(1, 40), ep(2, 40)]), season(2, [ep(1, 50), ep(2, 50, '2026-11-12')])],
+    watched(['1x1', '1x2']),
+    today,
+  );
+  const settled = timeToFinish([season(1, [ep(1, 60), ep(2, 60), ep(3, 60)])], none, today);
+  const done = timeToFinish([season(1, [ep(1, 30)])], watched(['1x1']), today);
+
+  it('is marked when a stored episode has not aired', () => {
+    expect(airing.nextSeason).toEqual({ seasonNumber: 2, episodesLeft: 1, minutesLeft: 50, estimated: false, stillAiring: true });
+    expect(settled.nextSeason?.stillAiring).toBe(false);
+  });
+
+  it('ignores an episode with no date rather than holding the season open', () => {
+    const t = timeToFinish([season(1, [ep(1, 30), ep(2, 30, null)])], none, today);
+    expect(t.nextSeason?.stillAiring).toBe(false);
+    expect(t.nextSeason?.episodesLeft).toBe(1);
+  });
+
+  it('ranks after known and unknown runtimes, but before nothing left', () => {
+    const unknown = timeToFinish([season(1, [ep(1, null)])], none, today);
+    const order = [done, airing, unknown, settled].sort((a, b) => compareTimeToFinish(a, b, 'season'));
+    // The airing season's one 50m episode is quicker than settled's 3h, yet
+    // it is not a season to finish, so it goes after both.
+    expect(order).toEqual([settled, unknown, airing, done]);
+  });
+
+  it('reads up to date once every aired episode of it is watched', () => {
+    const caughtUp = timeToFinish(
+      [season(1, [ep(1, 40), ep(2, 40, '2026-11-20')])],
+      watched(['1x1']),
+      today,
+    );
+    expect(caughtUp.nextSeason).toBeNull();
+    expect(timeToFinishLabel(caughtUp, 'season')).toBe('Up to date');
+    expect(compareTimeToFinish(caughtUp, airing, 'season')).toBeGreaterThan(0);
+  });
+
+  it('still counts toward the whole show', () => {
+    expect(compareTimeToFinish(airing, settled, 'show')).toBeLessThan(0);
+    expect(timeToFinishLabel(airing, 'show')).toBe('1 ep · 50m');
+  });
+
+  it('says which season is still airing', () => {
+    expect(timeToFinishLabel(airing, 'season')).toBe('S2 still airing');
   });
 });
 

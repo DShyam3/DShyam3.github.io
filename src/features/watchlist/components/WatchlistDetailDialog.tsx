@@ -151,11 +151,13 @@ export function WatchlistDetailDialog({
       node: (
         <div className="space-y-4">
           {item.image_url ? (
-            <div className="flex justify-center rounded-xl border border-border/50 bg-background/50 p-2">
+            // The poster stands on the panel itself. A bordered, tinted box
+            // around it read as a frame inside the panel's own frame.
+            <div className="flex justify-center">
               <img
                 src={item.image_url}
                 alt={item.title}
-                className="max-h-52 w-auto rounded-lg object-contain shadow-md"
+                className="max-h-52 w-auto rounded-lg object-contain"
               />
             </div>
           ) : null}

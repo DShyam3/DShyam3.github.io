@@ -36,7 +36,18 @@ export interface FinishRemaining {
 
 export interface TimeToFinish extends FinishRemaining {
   /** The earliest season with an aired, unwatched episode. Null when none. */
-  nextSeason: (FinishRemaining & { seasonNumber: number }) | null;
+  nextSeason: (FinishRemaining & {
+    seasonNumber: number;
+    /**
+     * The season has a stored episode dated after today. Quickest season
+     * leaves such a season out: finishing it today means only the episodes
+     * out so far, often one, which is not a season to sit down to. The sync
+     * stores only episodes TMDB has dated, so a season whose later episodes
+     * are still undated reads as complete; an undated row, which only a hand
+     * edit could leave, is ignored rather than holding a season open.
+     */
+    stillAiring: boolean;
+  }) | null;
   /**
    * Aired regular episodes, watched or not. Zero means nothing has aired (or
    * no episode rows are stored), which is not the same as being up to date.
@@ -82,9 +93,14 @@ export const timeToFinish = (
     let seasonEpisodes = 0;
     let seasonMinutes = 0;
     let seasonEstimated = false;
+    let seasonUnaired = false;
     for (const ep of season.episodes) {
       const age = daysUntil(ep.release_date, today);
-      if (age === null || age > 0) continue;
+      if (age === null) continue;
+      if (age > 0) {
+        seasonUnaired = true;
+        continue;
+      }
       airedEpisodes++;
       if (isWatched(season.season_number, ep.episode_number)) continue;
       seasonEpisodes++;
@@ -104,6 +120,7 @@ export const timeToFinish = (
       episodesLeft: seasonEpisodes,
       minutesLeft: fallback === null ? null : seasonMinutes,
       estimated: seasonEstimated,
+      stillAiring: seasonUnaired,
     };
   }
 
@@ -122,15 +139,16 @@ export type FinishScope = 'show' | 'season';
 const remainingFor = (
   time: TimeToFinish,
   scope: FinishScope,
-): FinishRemaining | null =>
-  scope === 'show'
-    ? time.episodesLeft > 0 ? time : null
-    : time.nextSeason;
+): FinishRemaining | null => {
+  if (scope === 'show') return time.episodesLeft > 0 ? time : null;
+  return time.nextSeason && !time.nextSeason.stillAiring ? time.nextSeason : null;
+};
 
 /**
  * Sort order, quickest first. Shows with a known time come first, by
  * minutes and then by episode count; then shows with episodes left but no
- * runtime to go on, by episode count; then shows with nothing left to watch.
+ * runtime to go on, by episode count; in season scope, then shows whose
+ * next season is still airing; then shows with nothing left to watch.
  * Returns 0 for a full tie so the caller can break it by title.
  */
 export const compareTimeToFinish = (
@@ -140,7 +158,7 @@ export const compareTimeToFinish = (
 ): number => {
   const rank = (time: TimeToFinish): [number, number, number] => {
     const left = remainingFor(time, scope);
-    if (!left) return [2, 0, 0];
+    if (!left) return scope === 'season' && time.nextSeason?.stillAiring ? [2, 0, 0] : [3, 0, 0];
     if (left.minutesLeft === null) return [1, left.episodesLeft, 0];
     return [0, left.minutesLeft, left.episodesLeft];
   };
@@ -163,6 +181,9 @@ export const timeToFinishLabel = (
   time: TimeToFinish,
   scope: FinishScope,
 ): string => {
+  if (scope === 'season' && time.nextSeason?.stillAiring) {
+    return `S${time.nextSeason.seasonNumber} still airing`;
+  }
   const left = remainingFor(time, scope);
   if (!left) return time.airedEpisodes > 0 ? 'Up to date' : 'Not aired yet';
   const parts = [episodeCount(left.episodesLeft)];

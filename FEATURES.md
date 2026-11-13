@@ -260,14 +260,18 @@ offers Latest releases, and for shows Quickest to finish and Quickest season;
 for films it offers Shortest first. Quickest to finish ranks shows by the
 runtime of every aired episode not yet watched, across all regular seasons;
 watched seasons and episodes count for nothing. Quickest season ranks shows by
-the earliest season that still has an aired, unwatched episode. Specials and
-episodes that have not aired yet are left out. An episode with no stored
-runtime counts as the show's median episode runtime, and a total that includes
-one is marked "~". While a time order is picked, each card's line under the
-title shows what it is ranked by, such as "8 eps · 6h 40m" or
-"S2 · 6 eps · ~5h 10m". A show with nothing aired left reads "Up to date", and
-one with nothing aired at all reads "Not aired yet". Those shows, and shows with
-no runtime to go on, sort after the rest. Films under Shortest first sort by
+the earliest season that still has an aired, unwatched episode, and only while
+none of that season's known episodes is still to air; episodes TMDB has not
+dated yet are not known. A show whose next season is still airing reads
+"S4 still airing". Specials and episodes that have not aired yet are left out.
+An episode with no stored runtime counts as the show's median episode runtime,
+and a total that includes one is marked "~". While a time order is picked, each
+card's line under the title shows what it is ranked by, such as
+"8 eps · 6h 40m" or "S2 · 6 eps · ~5h 10m". A show with nothing aired left reads
+"Up to date", and one with nothing aired at all reads "Not aired yet". Shows sort
+in this order: those with a known time, quickest first; then those with no
+runtime to go on, fewest episodes first; then, for Quickest season, those whose
+next season is still airing; then those with nothing left to watch. Films under Shortest first sort by
 runtime and show it on the card. On Currently Watching, Latest releases orders
 by each show's latest season date. While a title's detail is open the order
 holds still, and it catches up when the detail closes.
