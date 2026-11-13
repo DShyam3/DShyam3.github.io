@@ -1,54 +1,55 @@
 # State
 
-Updated 2026-11-13 · Branch `main` · Head `523e67f` (the docs commit after it, if any, is this rewrite), pushed. Last deploy: Pages run `43387307277` succeeded 2026-11-13 07:41Z at `523e67f`. Under it, from another session and not recorded here: `ab8f8d2` (inspector switches card), `3f5d473` (trailers, migration `20261111223000`), `b6cc1e4` (library sort by time left), deployed by run `43228832265`. `origin/claude/travel-section-mobile-ux-3qcp9c` still holds the pre-rebase copies of this session's commits (force-push not permitted); everything in it is on main.
+Updated 2026-11-13 · Branch `main` · Head `9ac08373` = origin/main, plus this docs commit. Last code deploy: Pages run `43394718494` succeeded 08:39Z at `9ac08373` (`e8a5c94` inspector resize, `9ac0837` Quickest season and poster), over `523e67f` About fact cards and phone travel.
 
 ## In progress
 
-- **About fact cards and travel on phones** (`c53bdc9`, `c7b8404`, `e2e3cb5`, `523e67f` on main after rebase; deployed by run `43387307277`). The About overview's "At a glance" tiles and "Continue exploring" list give way to fact cards, each opening its section. The constellation's chips and orbit labels name sections only (counts were a third copy); the intro card's Download CV shows only below 640px, where the mode bar hides its own, and its Experience button is gone (the tab sits above it). Travel: legend, phone-sized flat map, Gibraltar ring, folded continents. Watchlist: `?category=favourites` opens Favourites. Files: `src/components/home/FactCards.tsx`, `fact-cards.ts` (+ test), `src/components/shared/FlagStrip.tsx`, `src/pages/Index.tsx`, `src/pages/Index.css`, `src/components/dot-matrix/DotMatrixGlobe.tsx`/`.css`, `src/features/travel/TravelPage.tsx`, `src/features/watchlist/WatchlistPage.tsx`, `WatchlistContext.tsx`. Favourite picks sit in `site_content` keys `favourite_film` / `favourite_series` (section `about`, content = tmdb_id), written by an admin-only Select. No schema change.
-  - Reviewer (Opus) before commit: one bug (plural "seriess") and the main risks, fixed in `a581059`: pan-then-click selecting a country, a dotless ring too small on phones, a neighbour's dot recoloured, focus lost on back with a folded continent, continents counted over UN only, stuck Loading on a country-list failure, favourites cache refresh, design system (two gradient cards max, weights and sizes on the scale, legend swatches from the palette).
-  - Verified 2026-11-13: lint 0/0; typecheck and build pass; vitest 2,507 across 81 files on the rebased tree (main's new commits included). Headless Chromium on hosted-shaped stand-in data (Supabase and the live site are unreachable from the sandbox; dot map regenerated with `scripts/generate-dot-map.py`): iPhone 13 and 1440px, light and dark. Travel phone page 1,925px to ~890px tall; 2D map fills its box; Gibraltar ring centred on its cell's dot.
-  - Unverified (none checked on production yet): real touch on iOS and Android (the pan-y vs drag decision at 6px, pinch, no stray click after a pan); Safari; the signed-in favourite picker writing to hosted `site_content` (never run); the Projects card (projects table empty); real flags, posters and covers (stubbed).
-  - Open, left on purpose: the Travel chip's inspector counts all places ("24 countries") where the card counts UN states (23/195, "+1 territory"); `?category=` stays in the URL after switching Watchlist tabs; `.travel-country-row--active` keeps the old goldenrod rgba; map colours live in `DOT_PALETTE` (TS), not CSS tokens; `useStackedLayout` is another hand-rolled matchMedia hook.
-- **Travel globe focus** (`e9134b91`, deployed). Choosing a country turns and holds the globe; a city's journal rings its dot in gold; going back zooms out; idle spin returns after ~12s. Verified 2026-11-11 on the local stack and on production signed out. Unverified: real-time motion in a visible browser, reduced motion, light theme, a real phone, signed in.
-- **Watchlist Library toolbar and News columns** (`cde866e2`, `0a029b5e`, `a82e1ff0`, `b7803983`, deployed). Headless only. Unverified: a real signed-in admin toolbar on an iPhone; Safari; a real trackpad swipe; the signed-in schedule buttons on cards; a real run of Sync on a phone.
-- **Travel itinerary, import review and journal** (`11676b3a`, `261c193c`, deployed). Unverified: owner's signed-in view with real data (imports, trips, publish, photo upload, backup and restore); dark theme; real phone. Known: an unticked flight returns as new on re-import (REHAUL_PLAN 8.F).
-- **Finance layout fixes** (`f6658a78`, `7e1a0a8f`, `c4bbe6b2`, deployed). Admin-only pages, unverified in a browser. Open from review: chart grid strokes `rgba(255,255,255,…)` vanish in light theme; `GoalsSurface.tsx` select SVG embeds `%23a1a1aa`.
-- **Shipped, partly unverified**: Your Week and inspector width (`a2c5427c`, `e265562c`); episode scroll (`3f13901b`); phone detail drag (`4c3ed14a`); Redesign shell (`29630878`); Bank link (`e64741b2`, `13cc7cca`, `60de9ebf`; signed-in on a real phone and desktop unchecked); Money Hub and Tax Calculator (signed-in production unverified).
+**Batch of fixes, 2026-11-11, UNCOMMITTED** (27 modified files, plus new `src/collections/facets.ts` and `facets.test.ts`, both need `git add`)
+- Finance: hand-added transactions save the picked local day; chart grid, axes and reference lines on theme tokens. ⌘K on the splash opens the palette; a palette pick of an unlisted-category Inventory row reveals it.
+- Verified (local dev, anonymous, hosted): ⌘K on the splash; palette pick of "Airpods Pro 2". Unverified: the reveal in a browser (unit tests only); Finance fixes (admin-only); light and dark; real phone.
+- Still open: `%23a1a1aa` select chevrons in `GoalsSurface.tsx`, `BudgetSurface.tsx`, `BudgetPresetField.tsx`, `calendar.tsx`; debt inputs `h-10` beside a 44px button; `BudgetSurface.tsx` ~371/419 donut tooltip shows "£1.00", not from rows; FilterBar "All (0)" over a revealed wishlist row.
+
+**Inspector, Watchlist trailers and time-to-finish sort** (`ab8f8d2`, `3f5d473`, `b6cc1e4`, deployed). Production, signed out: inspector switches cards in every order; Ahsoka's title trailer plays at 1440px (YouTube may show a pre-roll ad), Season 2 trailer in the 375px sheet; live CSP `frame-src https://www.youtube-nocookie.com`; Quickest season orders as on local. Hosted trailers: 847/891 movies, 303/312 shows, 304/716 seasons (8 equal the show's; the rest have no TMDB season video, and show-level video names rarely name a season).
+- **Follow-ups `e8a5c94`, `9ac0837`** (deployed): narrowing past 1280px/600px with a title open hid it and the card could not reopen it; `inspectorSheetOpen` is now derived from a live `useMediaQuery` (new `src/hooks/use-media-query.ts`, also behind `useIsMobile`), the column renders the detail only while the sheet is shut, and the sheet returns focus to the selection's opener. Quickest season leaves out a next season with an episode dated after today ("S4 still airing", ranked before nothing left); undated rows are ignored (hosted has none). The detail poster lost its bordered, tinted frame. Reviewer (Opus): one doc bug, five risks, three nits, all fixed. Verified 2026-11-13, local dev, hosted, signed out: resize both ways with one copy and focus kept; Travel at 375. Production, signed out, 1440 and 375: poster unframed; Ahsoka moves into the sheet on narrowing, one copy, Escape returns focus to its card; Quickest season shows the same 7 still airing with none finishable after them.
+- Unverified: sort hold while marking episodes watched (signed in); signed-in add of a new title gets its trailer; Safari; real phone rotation; Home at the breakpoint.
+
+**About fact cards and travel on phones** (`c53bdc9`, `c7b8404`, `e2e3cb5`, `523e67f`, deployed). Fact cards replace About's "At a glance" and "Continue exploring"; Travel gains a legend, phone-sized flat map, Gibraltar ring, folded continents; `?category=favourites` opens Favourites. Favourite picks in `site_content` keys `favourite_film` / `favourite_series`. Verified headless on stand-in data (iPhone 13, 1440px, light and dark); 2,507 tests at `523e67f`.
+- Unverified: real touch on iOS and Android (pan vs drag at 6px, pinch), Safari, the signed-in favourite picker writing to hosted `site_content`, the Projects card (table empty), real flags and posters.
+- Open on purpose: Travel chip counts all places where the card counts UN states; `?category=` stays after switching Watchlist tabs; `.travel-country-row--active` keeps an old rgba; map colours in `DOT_PALETTE` (TS), not tokens; `useStackedLayout` is a hand-rolled matchMedia hook (could use `useMediaQuery`).
+
+**Shipped, partly unverified:** Travel globe focus (`e9134b91`); Library toolbar and News columns (`cde866e2`, `0a029b5e`, `a82e1ff0`, `b7803983`, headless only); Travel itinerary, import review and journal (`11676b3a`, `261c193c`); Finance layout fixes (`f6658a78`, `7e1a0a8f`, `c4bbe6b2`); Your Week, episode scroll, phone detail drag, Redesign shell, Bank link, Money Hub and Tax Calculator.
 
 ## Checks
 
-| Check | Date | Evidence / result |
+| Check | Date | Result |
 |---|---|---|
-| Lint, typecheck, build | 2026-11-13 | At `523e67f` (rebased on `b6cc1e4`): lint 0 errors, 0 warnings; typecheck and build pass. Not run: `ship-check`; `graphify update .` (CLI not installed here) |
-| Tests | 2026-11-13 | Full suite: 2,507 across 81 files pass at `523e67f` |
-| Functions typecheck | 2026-11-10 | Pass, including `travel-photo`. Not rerun: `3f5d473` changed `watchlist-cron-sync`, and Deno is not installed in this sandbox |
-| Ship-check | 2026-11-06 | 96/100, Beta, 0 blockers, 1 high: possible N+1 in `FinanceDataContext`. Not rerun since |
-| Travel, production | 2026-11-11 | Migrations `20261110190000`, `20261110190100` on hosted, RLS and grants read back; anonymous `/travel` renders; signed-in flows unverified |
+| `e8a5c94`, `9ac0837` | 2026-11-13 | Each staged tree alone on `76ddb494`, in a scratch copy: typecheck, lint 0/0, build pass; 2,507 then 2,513 tests (81 files). graphify updated on the working tree |
+| About and travel (`523e67f`) | 2026-11-13 | Lint 0/0; typecheck and build pass; 2,507 tests across 81 files |
+| Trailers (`3f5d473`) | 2026-11-12 | Staged tree alone: typecheck, lint, deno check, watchlist tests, build. Hosted: migration `20261111223000` applied, `watchlist-cron-sync` v16, sync runs succeed |
+| Batch tests | 2026-11-11 | 2,473 across 79 files once; 1–2 perf tests over 5,000ms under load. Not a clean run |
+| Ship-check | 2026-11-06 | 96/100, Beta, 0 blockers, 1 high (possible N+1, `FinanceDataContext`). Not rerun |
 
 ## Next
 
-1. Owner checks production on a real phone: Travel (swipe the page over the map; drag the 2D map sideways; pick Gibraltar; fold and unfold continents; globe turns to a country, holds, and spins again after ~12s) and About (swipe the fact cards; signed in, pick a favourite film and series and see it stick after reload). Then delete the stale `claude/travel-section-mobile-ux-3qcp9c` branch on GitHub.
-2. Check the finance layout changes signed in on production: Budget, Cash Flow, Dashboard charts; Tax, Published Rates, Goals forms; holiday and debt dialogs.
-3. Owner checks the signed-in Library toolbar on an iPhone, and News at 1280px with the inspector open on a laptop (a real trackpad swipe, Safari).
-4. Owner signs in on production and checks Travel: re-imports the Flighty CSV, adds and publishes a trip, uploads one photo (no EXIF/GPS), runs an import and a backup. Then clear the open items in REHAUL_PLAN 8.F.
-5. On a real iPhone: drag a collection card's detail sideways (should not move), then open a signed-in edit dialog. Open: `responsive.css` rules for `dialog-flush`, `collection-detail-dialog`, `watchlist-detail-with-seasons` match nothing in `src`; "Next up" pill wraps below 1560px.
-6. Owner opens `/beliefs` signed in on the live site; checks the shell on a real phone (Add to Home Screen) and in dark theme. Then the public hub: Projects content and visibility per collection.
-7. Bank link: on a phone, Connect Another Bank opens TrueLayer in a new tab; approve in the Barclaycard app; card appears and the original tab refreshes; then desktop.
-8. Tax Calculator and Money Hub: signed-in check on production. Money Hub: cross-currency, Berlin and Amsterdam, Hide Figures, phone width.
-9. Merchant logos: fix `popworld`; check `revolution-bars` and `vue` in `supabase/functions/merchant-logo-cache/index.ts`; deploy; run one manual sync.
-10. Signed-in checks: Student Loan, holiday booking, recurring undismiss, Home Brandfetch logos, Watchlist edits and watched toggles, Cash Flow.
-11. Owner: set hosted pension to salary sacrifice; record SLC's next balance; check `1063LX` in the HMRC app; check whether benefits from November 2026 are payrolled.
-12. Finish save/reload races and schema reproducibility (`schemas/` composite-key objects). Leave `claude/affectionate-lamarr-f2d2cb`, `codex/assistant-integration-2026-11-02` and `origin/claude/net-take-home-tax-f2n71j` alone.
+1. Owner on a real phone, production: Travel (swipe over the map, drag the 2D map, Gibraltar, fold continents, globe holds then spins after ~12s) and About (swipe fact cards; signed in, pick a favourite film and series, reload). Delete stale `claude/travel-section-mobile-ux-3qcp9c` on GitHub.
+2. Signed in on production: time-to-finish order holds while marking episodes watched; add a title and see its trailer at once; a trailer in Safari and on an iPhone; inspector sheet on a phone.
+3. Commit the batch (its owner session), with `REHAUL_PLAN.md`'s trailer-note removal; then BST transaction day, Finance charts light and dark, Goals chevrons on production.
+4. Finance signed in: Budget, Cash Flow, Dashboard charts; Tax, Published Rates, Goals forms; holiday and debt dialogs.
+5. Travel signed in: re-import the Flighty CSV, add and publish a trip, upload a photo, run an import and a backup; then `REHAUL_PLAN.md` 8.F.
+6. Real iPhone: collection card detail drag; signed-in edit dialog; "Next up" pill below 1560px. `/beliefs` signed in, phone, dark; public hub Projects and per-collection visibility.
+7. Bank link on a phone (Barclaycard app), then desktop and Safari. Tax Calculator and Money Hub signed in.
+8. Merchant logos: fix `popworld`; check `revolution-bars` and `vue` in `merchant-logo-cache/index.ts`; deploy; one manual sync.
+9. Signed in: Student Loan, holiday booking, recurring undismiss, Brandfetch logos, Watchlist edits, Cash Flow. Owner: hosted pension to salary sacrifice; SLC balance; `1063LX`; November 2026 benefits payrolled?
+10. Save/reload races and schema reproducibility (`schemas/` composite keys). Leave `claude/affectionate-lamarr-f2d2cb`, `codex/assistant-integration-2026-11-02`, `origin/claude/net-take-home-tax-f2n71j` alone.
 
 ## Blockers
 
-- Parallel sessions share one checkout: coordinate file ownership and one committer; keep `backup/pre-rebase-2026-11-03` until signed-in production is verified. Browser checks need a connected browser extension.
-- Left out of commits on purpose: `.claude/launch.json`; `SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md` (absent here).
+- Parallel sessions share one checkout and cloud sessions push to `main`: fetch first, one committer; keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
+- Uncommitted: the batch, its `vite.config.ts` `data-exclude-search` hunk, `SeasonEpisodeList.tsx` comment and data-attribute removals, other sessions' `FEATURES.md` and `REHAUL_PLAN.md` edits. Left out on purpose: `.claude/launch.json`, `SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`.
 
 ## Open risks
 
-- Hosted `site_content` rows `about_me_1` and `about_me_2` have `section` NULL, but ABOUT_READ filters `section = 'about'`, so About shows the `src/config/site.json` fallback; edits will not show until `section` is set.
-- Warm-up sends about 30 anonymous reads, including the full Watchlist library (~7,600 episodes); payload unmeasured; `Save-Data` is Chromium-only.
-- Watchlist background re-read can overwrite a concurrent edit; a failed first read caches an empty library. Recurring "Show as suggestion again" deletes without confirmation.
-- Carried, unverified: four reference tables delete-then-insert; stalled token refresh; schemas-only rebuild misses composite keys; hosted sync, JWT config, headers, cron/Edge/pg_net, HEIC uploads; advisor warnings (`is_admin` callable by anon and authenticated); leaked-password protection off.
-- Student Loan: pending income-linked interest accrues on the rebuilt balance, not SLC's; a phantom £12 lands October 2026. Local seed has the 2026/27 Plan 2 threshold at 28,470, hosted 29,385.
+- Hosted `site_content` `about_me_1`/`about_me_2` have `section` NULL, so About shows the `site.json` fallback until it is set.
+- Warm-up sends ~30 anonymous reads, including the full Watchlist library; payload unmeasured. Watchlist background re-read can overwrite a concurrent edit; a failed first read caches an empty library.
+- Carried, unverified: four reference tables delete-then-insert; stalled token refresh; schemas-only rebuild misses composite keys; hosted JWT, headers, cron/pg_net, HEIC uploads; advisor warnings; leaked-password protection off.
+- Student Loan: pending interest accrues on the rebuilt balance, not SLC's; a phantom £12 lands October 2026. Keep stash `finance-reconciliation-backup-2026-10-29`.
