@@ -59,8 +59,9 @@ installable icons at 192px and 512px, and a maskable 512px icon.
 
 The name is set in dot-matrix text: Doto as a variable font, where the dots are
 circles that fuse as weight increases, so the look is reached for with weight
-rather than font-size. Beside it sit a Download CV button and an Experience &
-Education button, which opens the timeline.
+rather than font-size. The bar above the Overview holds the Download CV button
+and the Experience & CV tab; on a phone, where that bar has no room for the
+button, Download CV sits under the introduction instead.
 
 Experience and education appear as one timeline, newest first, roles and degrees
 interleaved by start date. Entries fill two compact, content-sized columns from left to right when the
@@ -70,8 +71,9 @@ fixed address that a new upload replaces; a file that is not a PDF is refused.
 Admins also get Add experience, Add education and Upload CV buttons.
 
 The Overview shows a 3D constellation of the sections, which can be dragged to
-rotate and paused. Selecting a section shows its summary and counts in the
-inspector. Finance is in the constellation for an admin only.
+rotate and paused, with a button per section beneath it. Both name the sections
+only; the counts are on the fact cards. Selecting a section shows its summary and
+counts in the inspector. Finance is in the constellation for an admin only.
 
 Fact cards each give one specific fact and open the section it comes from. They
 show the countries visited out of 195 UN states, with cities, continents and any

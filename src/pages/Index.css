@@ -826,6 +826,12 @@
   padding-top: 0.25rem;
 }
 
+@media (min-width: 640px) {
+  .home-hero-footer {
+    display: none;
+  }
+}
+
 /* Semantic Constellation Card */
 .home-constellation-card {
   display: flex;
