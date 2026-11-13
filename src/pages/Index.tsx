@@ -4,10 +4,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
 import {
-  ArrowUpRight,
-  Compass,
-  Cpu,
-  BookOpen,
   Briefcase,
   GraduationCap,
   FolderGit2,
@@ -17,7 +13,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Eye,
 } from 'lucide-react';
 import './Index.css';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,10 +34,8 @@ import { useVisitedCities } from '@/features/travel/useVisitedCities';
 import { useCollection } from '@/collections/useCollection';
 import { inventoryCollection } from '@/collections/inventory';
 import { collections } from '@/collections/registry';
-import {
-  useWorkspaceInspector,
-  type WorkspaceInspectorTarget,
-} from '@/contexts/WorkspaceInspectorContext';
+import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
+import { FactCards } from '@/components/home/FactCards';
 import {
   SemanticConstellation,
   buildSemanticClusters,
@@ -183,54 +176,6 @@ const Index = () => {
     selectTarget(expCluster.inspector);
   };
 
-  const continueExploringRows: {
-    id: string;
-    code: string;
-    title: string;
-    subtitle: string;
-    meta: string;
-    to?: string;
-    mode?: HomeMode;
-    inspector: WorkspaceInspectorTarget;
-  }[] = [
-    {
-      id: 'row-travel',
-      code: 'TRV · 02',
-      title: 'Global Travel Atlas',
-      subtitle: `${countriesText} & ${citiesText} mapped on the dot-matrix projection`,
-      meta: countriesText,
-      to: '/travel',
-      inspector: clusters[1].inspector,
-    },
-    {
-      id: 'row-inventory',
-      code: 'INV · 03',
-      title: 'Hardware & Everyday Carry',
-      subtitle: `${inventoryText} catalogued across computing, desk instruments, optics & audio`,
-      meta: inventoryText,
-      to: '/inventory',
-      inspector: clusters[2].inspector,
-    },
-    {
-      id: 'row-library',
-      code: 'BKS · 04',
-      title: 'Books, Articles & Watchlist',
-      subtitle: `${collectionsText} of curated reading notes, essays, and release radar`,
-      meta: collectionsText,
-      to: '/books',
-      inspector: clusters[3].inspector,
-    },
-    {
-      id: 'row-experience',
-      code: 'EXP · 05',
-      title: 'Experience & Education Timeline',
-      subtitle: 'Software engineering roles, academic milestones, and downloadable CV archive',
-      meta: milestonesText,
-      mode: 'experience',
-      inspector: clusters[4].inspector,
-    },
-  ];
-
   return (
     <AppShell layout="workspace">
       <div
@@ -357,144 +302,20 @@ const Index = () => {
               </section>
             </div>
 
-            {/* 4-Tile "At a glance" Strip */}
-            <section aria-label="At a glance metrics" className="home-glance-section">
+            {/* Fact cards: one fact each, opening the section it comes from */}
+            <section aria-label="A few facts" className="home-glance-section">
               <div className="home-section-header">
-                <span className="home-section-eyebrow">AT A GLANCE</span>
-                <span className="home-section-sub">Click a tile to open or inspect</span>
+                <span className="home-section-eyebrow">A FEW FACTS</span>
+                <span className="home-section-sub">Tap a card to see more</span>
               </div>
-
-              <div className="home-glance-grid">
-                <button
-                  type="button"
-                  className="home-glance-tile ambient-card hud-corners text-left"
-                  data-palette="sky"
-                  onClick={() => {
-                    navigate('/travel');
-                  }}
-                >
-                  <div className="home-glance-top">
-                    <span className="home-glance-kicker">Travel</span>
-                    <Compass className="h-4 w-4 text-primary/80" />
-                  </div>
-                  <div className="home-glance-value">{countriesText}</div>
-                  <p className="home-glance-desc">{citiesText} logged across visited regions</p>
-                </button>
-
-                <button
-                  type="button"
-                  className="home-glance-tile ambient-card hud-corners text-left"
-                  data-palette="peach"
-                  onClick={() => {
-                    navigate('/inventory');
-                  }}
-                >
-                  <div className="home-glance-top">
-                    <span className="home-glance-kicker">Inventory</span>
-                    <Cpu className="h-4 w-4 text-primary/80" />
-                  </div>
-                  <div className="home-glance-value">{inventoryText}</div>
-                  <p className="home-glance-desc">Everyday carry, desk &amp; camera gear</p>
-                </button>
-
-                <button
-                  type="button"
-                  className="home-glance-tile ambient-card hud-corners text-left"
-                  data-palette="lavender"
-                  onClick={() => {
-                    navigate('/books');
-                  }}
-                >
-                  <div className="home-glance-top">
-                    <span className="home-glance-kicker">Reading &amp; Watchlist</span>
-                    <BookOpen className="h-4 w-4 text-primary/80" />
-                  </div>
-                  <div className="home-glance-value">{collectionsText}</div>
-                  <p className="home-glance-desc">Curated books, articles &amp; series</p>
-                </button>
-
-                <button
-                  type="button"
-                  className="home-glance-tile ambient-card hud-corners text-left"
-                  data-palette="sage"
-                  onClick={() => {
-                    inspectExperienceTarget();
-                    setActiveMode('experience');
-                  }}
-                >
-                  <div className="home-glance-top">
-                    <span className="home-glance-kicker">Experience</span>
-                    <Briefcase className="h-4 w-4 text-primary/80" />
-                  </div>
-                  <div className="home-glance-value">{milestonesText}</div>
-                  <p className="home-glance-desc">Engineering, education &amp; CV archive</p>
-                </button>
-              </div>
+              <FactCards
+                onOpenExperience={() => {
+                  inspectExperienceTarget();
+                  setActiveMode('experience');
+                }}
+              />
             </section>
 
-            {/* "Continue exploring" Record List */}
-            <section aria-label="Continue exploring sections" className="home-records-section">
-              <div className="home-section-header">
-                <span className="home-section-eyebrow">CONTINUE EXPLORING · SECTIONS</span>
-                <span className="home-section-sub">Inspect metadata or open section</span>
-              </div>
-
-              <div className="home-records-list">
-                {continueExploringRows.map((row) => {
-                  const isSelected = selectedClusterId === row.inspector.id;
-                  return (
-                    <div
-                      key={row.id}
-                      className={`home-record-row ${isSelected ? 'home-record-row--active' : ''}`}
-                    >
-                      <div className="home-record-main">
-                        <span className="home-record-code">{row.code}</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="home-record-title">{row.title}</p>
-                          <p className="home-record-sub">{row.subtitle}</p>
-                        </div>
-                      </div>
-
-                      <div className="home-record-actions">
-                        <span className="home-record-meta">{row.meta}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 rounded-full px-3 text-xs gap-1.5"
-                          onClick={() => {
-                            selectTarget(row.inspector);
-                          }}
-                          aria-label={`Inspect ${row.title}`}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          <span>Inspect</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 rounded-full px-3 text-xs gap-1"
-                          onClick={() => {
-                            // Leaving Home clears the inspector anyway, so only
-                            // a Home tab switch keeps the row selected.
-                            if (row.to) {
-                              navigate(row.to);
-                            } else if (row.mode) {
-                              selectTarget(row.inspector);
-                              setActiveMode(row.mode);
-                            }
-                          }}
-                        >
-                          <span>Open</span>
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
           </div>
         )}
 
