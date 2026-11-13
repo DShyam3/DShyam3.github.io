@@ -51,7 +51,9 @@ inspector sheet returns focus to whatever opened it.
 **Inspector.** A collection card's detail opens in the inspector rather than a
 dialog. An admin sees the card's Edit and Delete actions there. Opening another
 card, or another Watchlist title, replaces what the inspector shows. Escape, or
-the close button, clears the selection.
+the close button, clears the selection. Below 1280px wide or 600px tall the
+inspector is a sheet over the page; resizing the window across either limit with
+something selected moves it between the sheet and the side column.
 
 **Install.** The site has a home-screen icon on iOS. Its web manifest gives
 installable icons at 192px and 512px, and a maskable 512px icon.

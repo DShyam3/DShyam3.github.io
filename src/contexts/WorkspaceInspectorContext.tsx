@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useMediaQuery } from '@/hooks/use-media-query';
 
 export interface InspectorMetadataRow {
   label: string;
@@ -72,6 +73,12 @@ interface WorkspaceInspectorContextValue {
   updateDockedDetail: (owner: string, detail: DockedInspectorDetail) => void;
   releaseDockedDetail: (owner: string) => void;
   inspectorSheetOpen: boolean;
+  /**
+   * What had focus when the current selection was made: the card or row that
+   * opened it. The sheet returns focus here when it has no better opener,
+   * because a sheet that opens on a resize opens with focus wherever it was.
+   */
+  selectionOpener: () => HTMLElement | null;
   commandOpen: boolean;
   setCommandOpen: (open: boolean) => void;
 }
@@ -82,29 +89,47 @@ const WorkspaceInspectorContext = createContext<WorkspaceInspectorContextValue |
 // may not call useWorkspaceInspector (see there).
 const DockedDetailOpenContext = createContext(false);
 
-/** Whether the inspector has its own column, rather than opening as a sheet. */
-const isRightRailVisible = () =>
-  typeof window !== 'undefined' &&
-  Boolean(window.matchMedia?.('(min-width: 1280px) and (min-height: 600px)').matches);
+/**
+ * When the inspector has its own column, rather than opening as a sheet. The
+ * same query shows `.workspace-right-inspector` in src/theme/responsive.css.
+ */
+const RIGHT_RAIL_QUERY = '(min-width: 1280px) and (min-height: 600px)';
+
+/** The element that has focus, unless that is nothing in particular. */
+const focusedElement = (): HTMLElement | null => {
+  const active = typeof document === 'undefined' ? null : document.activeElement;
+  return active instanceof HTMLElement && active !== document.body ? active : null;
+};
 
 export function WorkspaceInspectorProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
 
   const [target, setTarget] = useState<WorkspaceInspectorTarget | null>(null);
   const [dockedDetail, setDockedDetailState] = useState<DockedInspectorDetail | null>(null);
-  const [inspectorSheetOpen, setInspectorSheetOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  // The sheet is how a selection shows when there is no column for it. It
+  // closes only by clearing the selection, so it is derived, never stored --
+  // and followed live: read once on opening, a window narrowed past the
+  // breakpoint hid the column with the sheet still shut, and the detail could
+  // not be reached again, since its card's dialog was still open.
+  const rightRailVisible = useMediaQuery(RIGHT_RAIL_QUERY);
+  const inspectorSheetOpen = !rightRailVisible && (target !== null || dockedDetail !== null);
 
-  // What the inspector holds now, readable from callbacks without making them
-  // change identity on every selection. The docked detail and its owner are
-  // written in the same call that changes them, not after the render: two
-  // dialogs claiming in one commit must each see the other's claim.
-  const targetRef = useRef(target);
+  // The docked detail and its owner, readable from callbacks without making
+  // them change identity on every dock. Written in the same call that changes
+  // them, not after the render: two dialogs claiming in one commit must each
+  // see the other's claim.
   const dockedRef = useRef<DockedInspectorDetail | null>(null);
   const ownerRef = useRef<string | null>(null);
-  useEffect(() => {
-    targetRef.current = target;
-  }, [target]);
+  const openerRef = useRef<HTMLElement | null>(null);
+  // Called where a selection is made, never where one is only updated.
+  const recordOpener = useCallback(() => {
+    openerRef.current = focusedElement();
+  }, []);
+  const selectionOpener = useCallback(
+    () => (openerRef.current?.isConnected ? openerRef.current : null),
+    [],
+  );
 
   const writeDocked = useCallback((detail: DockedInspectorDetail | null, owner: string | null) => {
     dockedRef.current = detail;
@@ -127,41 +152,32 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
     if (ownerRef.current !== null) replaceDocked();
     setTarget(null);
     writeDocked(null, null);
-    setInspectorSheetOpen(false);
   }, [pathname, replaceDocked, writeDocked]);
 
   const selectTarget = useCallback((next: WorkspaceInspectorTarget) => {
+    recordOpener();
     replaceDocked();
     writeDocked(null, null);
     setTarget(next);
-    if (!isRightRailVisible()) {
-      setInspectorSheetOpen(true);
-    }
-  }, [replaceDocked, writeDocked]);
+  }, [recordOpener, replaceDocked, writeDocked]);
 
   const resetTarget = useCallback(() => {
     if (ownerRef.current !== null) replaceDocked();
     setTarget(null);
     writeDocked(null, null);
-    setInspectorSheetOpen(false);
   }, [replaceDocked, writeDocked]);
 
   const showDocked = useCallback((detail: DockedInspectorDetail | null, owner: string | null) => {
     writeDocked(detail, owner);
-    if (!detail) {
-      // The sheet stays if it has moved on to showing a selected record.
-      if (!targetRef.current) setInspectorSheetOpen(false);
-    } else if (!isRightRailVisible()) {
-      setInspectorSheetOpen(true);
-    }
   }, [writeDocked]);
 
   // Travel's own details carry no owner and keep their old behaviour; only a
   // dialog's claimed detail needs telling.
   const setDockedDetail = useCallback((detail: DockedInspectorDetail | null) => {
+    if (detail && dockedRef.current?.id !== detail.id) recordOpener();
     if (ownerRef.current !== null) replaceDocked();
     showDocked(detail, null);
-  }, [replaceDocked, showDocked]);
+  }, [recordOpener, replaceDocked, showDocked]);
 
   const dismissDockedDetail = useCallback(() => {
     dockedRef.current?.onClose();
@@ -169,9 +185,10 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
   }, [showDocked]);
 
   const claimDockedDetail = useCallback((owner: string, detail: DockedInspectorDetail) => {
+    recordOpener();
     if (ownerRef.current !== owner) replaceDocked();
     showDocked(detail, owner);
-  }, [replaceDocked, showDocked]);
+  }, [recordOpener, replaceDocked, showDocked]);
 
   const updateDockedDetail = useCallback((owner: string, detail: DockedInspectorDetail) => {
     if (ownerRef.current === owner) showDocked(detail, owner);
@@ -193,6 +210,7 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
       updateDockedDetail,
       releaseDockedDetail,
       inspectorSheetOpen,
+      selectionOpener,
       commandOpen,
       setCommandOpen,
     }),
@@ -207,6 +225,7 @@ export function WorkspaceInspectorProvider({ children }: { children: ReactNode }
       updateDockedDetail,
       releaseDockedDetail,
       inspectorSheetOpen,
+      selectionOpener,
       commandOpen,
     ],
   );

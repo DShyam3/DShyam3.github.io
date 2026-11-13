@@ -12,10 +12,16 @@ export function useReturnFocus() {
   const openerRef = useRef<HTMLElement | null>(null);
 
   return {
-    /** Call from `onOpenAutoFocus`, before focus has moved into the dialog. */
-    remember: () => {
+    /**
+     * Call from `onOpenAutoFocus`, before focus has moved into the dialog.
+     * `fallback` is used when nothing in particular has focus -- as when a
+     * dialog opens because the element that had it was just hidden.
+     */
+    remember: (fallback?: () => HTMLElement | null) => {
       const active = document.activeElement;
-      openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+      openerRef.current = active instanceof HTMLElement && active !== document.body
+        ? active
+        : fallback?.() ?? null;
     },
     /**
      * Drop the opener, for a close that moves the visitor somewhere else:

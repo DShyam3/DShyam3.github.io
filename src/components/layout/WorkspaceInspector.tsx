@@ -164,6 +164,7 @@ export function WorkspaceInspector() {
     dockedDetail,
     dismissDockedDetail,
     inspectorSheetOpen,
+    selectionOpener,
     commandOpen,
   } = useWorkspaceInspector();
 
@@ -206,7 +207,10 @@ export function WorkspaceInspector() {
         aria-label="Contextual inspector"
         className="workspace-right-inspector flex-col justify-between rounded-2xl border border-border/60 bg-popover/75 p-4 app-scroll overflow-y-auto overflow-x-hidden hud-corners min-h-0"
       >
-        {dockedDetail ? (
+        {/* One copy of the selection at a time: while the sheet shows it, the
+            column (hidden then) renders nothing, so resizing across the
+            breakpoint never brings back a second copy with its own state. */}
+        {inspectorSheetOpen ? null : dockedDetail ? (
           <DockedDetailBody detail={dockedDetail} onClose={dismissDockedDetail} />
         ) : target ? (
           <InspectorBody target={target} onClose={resetTarget} />
@@ -227,7 +231,9 @@ export function WorkspaceInspector() {
           <DialogOverlay className="bg-background/75" />
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            onOpenAutoFocus={returnFocus.remember}
+            // Opened by a resize, focus may have been in the column that just
+            // hid and fallen to the body; the selection's opener stands in.
+            onOpenAutoFocus={() => returnFocus.remember(selectionOpener)}
             onCloseAutoFocus={returnFocus.restore}
             onPointerDownOutside={ignoreOverlayPointerDown()}
             className="!fixed inset-x-3 bottom-3 z-50 mx-auto flex max-h-[85dvh] max-w-md flex-col justify-between rounded-2xl border border-border/75 bg-popover/95 p-4 shadow-xl app-scroll overflow-y-auto overflow-x-hidden hud-corners focus:outline-none sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2"
