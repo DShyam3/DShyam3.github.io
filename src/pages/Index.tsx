@@ -4,7 +4,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
 import {
-  Briefcase,
   GraduationCap,
   FolderGit2,
   Download,
@@ -270,6 +269,9 @@ const Index = () => {
                   {siteContent.about_me_1 || SITE.about[0]}
                 </p>
 
+                {/* The mode bar above already has Download CV and the Experience
+                    tab; below 640px it hides its CV button, so this one stands
+                    in there and only there. */}
                 <div className="home-hero-footer">
                   <Button
                     variant="secondary"
@@ -279,15 +281,6 @@ const Index = () => {
                   >
                     <Download className="h-3.5 w-3.5" />
                     Download CV
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-full text-xs gap-1.5"
-                    onClick={() => setActiveMode('experience')}
-                  >
-                    <Briefcase className="h-3.5 w-3.5" />
-                    Experience &amp; Education ({milestonesText})
                   </Button>
                 </div>
               </section>

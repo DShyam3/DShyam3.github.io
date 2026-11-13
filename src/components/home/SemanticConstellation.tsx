@@ -7,8 +7,11 @@ export type ClusterColorVar = '--primary' | '--sky' | '--peach' | '--lavender';
 export interface SemanticClusterNode {
   id: string;
   code: string;
+  /**
+   * The section's name and nothing else. Its figures live once, on the fact
+   * cards below; repeating them here put every count on the page twice.
+   */
   label: string;
-  shortLabel: string;
   colorVar: ClusterColorVar;
   coords: [number, number, number];
   radius: number;
@@ -36,7 +39,6 @@ export function buildSemanticClusters(
       id: 'cluster-home',
       code: '01',
       label: 'Home',
-      shortLabel: 'Home',
       colorVar: '--primary',
       coords: [0, 0.08, 0.12],
       radius: 7.5,
@@ -53,8 +55,7 @@ export function buildSemanticClusters(
     {
       id: 'cluster-travel',
       code: '02',
-      label: `Travel · ${counts.countriesText}`,
-      shortLabel: `Travel (${counts.countriesText})`,
+      label: 'Travel',
       colorVar: '--sky',
       coords: [-0.62, 0.34, 0.38],
       radius: 6.5,
@@ -73,8 +74,7 @@ export function buildSemanticClusters(
     {
       id: 'cluster-inventory',
       code: '03',
-      label: `Inventory · ${counts.inventoryText}`,
-      shortLabel: `Inventory (${counts.inventoryText})`,
+      label: 'Inventory',
       colorVar: '--peach',
       coords: [0.66, 0.28, -0.25],
       radius: 6,
@@ -90,8 +90,7 @@ export function buildSemanticClusters(
     {
       id: 'cluster-library',
       code: '04',
-      label: `Library · ${counts.collectionsText}`,
-      shortLabel: 'Library',
+      label: 'Library',
       colorVar: '--lavender',
       coords: [-0.48, -0.46, -0.36],
       radius: 6,
@@ -108,8 +107,7 @@ export function buildSemanticClusters(
     {
       id: 'cluster-experience',
       code: '05',
-      label: `Experience · ${counts.milestonesText}`,
-      shortLabel: 'Experience',
+      label: 'Experience',
       colorVar: '--primary',
       coords: [0.46, -0.44, 0.42],
       radius: 6,
@@ -125,7 +123,6 @@ export function buildSemanticClusters(
       id: 'cluster-treasury',
       code: '06',
       label: 'Finance',
-      shortLabel: 'Finance',
       colorVar: '--peach',
       coords: [0.06, 0.64, -0.48],
       radius: 5.5,
@@ -413,7 +410,7 @@ export function SemanticConstellation({
 
       // Callout label (12px minimum per DESIGN_SYSTEM.md)
       ctx.font = `${isSelected ? '600' : '500'} 12px "Space Mono", monospace`;
-      const text = `${cluster.code} ${cluster.shortLabel}`;
+      const text = `${cluster.code} ${cluster.label}`;
       const labelX = x + nodeRadius + 7;
       const labelY = y + 4;
 
