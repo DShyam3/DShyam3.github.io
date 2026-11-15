@@ -38,16 +38,15 @@ describe('timeToFinish', () => {
     expect(t.episodesLeft).toBe(4);
     expect(t.minutesLeft).toBe(50 + 120);
     expect(t.estimated).toBe(false);
-    expect(t.nextSeason).toEqual({ seasonNumber: 1, episodesLeft: 1, minutesLeft: 50, estimated: false, stillAiring: false });
   });
 
-  it('skips finished seasons when picking the next one', () => {
+  it('counts nothing for finished seasons', () => {
     const t = timeToFinish(
       [season(2, [ep(1, 30)]), season(1, [ep(1, 60), ep(2, 60)])],
       watched(['1x1', '1x2']),
       today,
     );
-    expect(t.nextSeason).toEqual({ seasonNumber: 2, episodesLeft: 1, minutesLeft: 30, estimated: false, stillAiring: false });
+    expect(t.episodesLeft).toBe(1);
     expect(t.minutesLeft).toBe(30);
   });
 
@@ -74,7 +73,6 @@ describe('timeToFinish', () => {
     // Known runtimes 30, 40, 60 -> median 40. Episode 3 takes it.
     expect(t.minutesLeft).toBe(40 + 40);
     expect(t.estimated).toBe(true);
-    expect(t.nextSeason?.estimated).toBe(true);
   });
 
   it('leaves specials out of the median', () => {
@@ -101,21 +99,18 @@ describe('timeToFinish', () => {
     const t = timeToFinish([season(1, [ep(1, null), ep(2, null)])], none, today);
     expect(t.episodesLeft).toBe(2);
     expect(t.minutesLeft).toBeNull();
-    expect(t.nextSeason?.minutesLeft).toBeNull();
   });
 
   it('has nothing left for a watched or empty show', () => {
     expect(timeToFinish(undefined, none, today)).toEqual({
       episodesLeft: 0,
       minutesLeft: 0,
-      nextSeason: null,
       estimated: false,
       airingSeason: null,
       airedEpisodes: 0,
     });
     const done = timeToFinish([season(1, [ep(1, 30)])], watched(['1x1']), today);
     expect(done.episodesLeft).toBe(0);
-    expect(done.nextSeason).toBeNull();
   });
 });
 
@@ -129,42 +124,33 @@ describe('a season still airing', () => {
   const settled = timeToFinish([season(1, [ep(1, 60), ep(2, 60), ep(3, 60)])], none, today);
   const done = timeToFinish([season(1, [ep(1, 30)])], watched(['1x1']), today);
 
-  it('is marked when a stored episode has not aired', () => {
-    expect(airing.nextSeason).toEqual({ seasonNumber: 2, episodesLeft: 1, minutesLeft: 50, estimated: false, stillAiring: true });
-    expect(settled.nextSeason?.stillAiring).toBe(false);
+  it('is marked when a season has an episode out and another to come', () => {
+    expect(airing.airingSeason).toBe(2);
+    expect(settled.airingSeason).toBeNull();
   });
 
   it('ignores an episode with no date rather than holding the season open', () => {
     const t = timeToFinish([season(1, [ep(1, 30), ep(2, 30, null)])], none, today);
-    expect(t.nextSeason?.stillAiring).toBe(false);
-    expect(t.nextSeason?.episodesLeft).toBe(1);
+    expect(t.airingSeason).toBeNull();
+    expect(t.episodesLeft).toBe(1);
   });
 
   it('ranks after known and unknown runtimes, but before nothing left', () => {
     const unknown = timeToFinish([season(1, [ep(1, null)])], none, today);
-    const order = [done, airing, unknown, settled].sort((a, b) => compareTimeToFinish(a, b, 'season'));
-    // The airing season's one 50m episode is quicker than settled's 3h, yet
-    // it is not a season to finish, so it goes after both.
+    const order = [done, airing, unknown, settled].sort(compareTimeToFinish);
+    // The airing show's one 50m episode is quicker than settled's 3h, yet
+    // the show cannot be finished, so it goes after both.
     expect(order).toEqual([settled, unknown, airing, done]);
   });
 
-  it('reads up to date once every aired episode of it is watched', () => {
+  it('reads up to date once every aired episode is watched', () => {
     const caughtUp = timeToFinish(
       [season(1, [ep(1, 40), ep(2, 40, '2026-11-20')])],
       watched(['1x1']),
       today,
     );
-    expect(caughtUp.nextSeason).toBeNull();
-    expect(timeToFinishLabel(caughtUp, 'season')).toBe('Up to date');
-    expect(compareTimeToFinish(caughtUp, airing, 'season')).toBeGreaterThan(0);
-  });
-
-  it('keeps the whole show from being finished too', () => {
-    expect(airing.airingSeason).toBe(2);
-    expect(settled.airingSeason).toBeNull();
-    const unknown = timeToFinish([season(1, [ep(1, null)])], none, today);
-    const order = [done, airing, unknown, settled].sort((a, b) => compareTimeToFinish(a, b, 'show'));
-    expect(order).toEqual([settled, unknown, airing, done]);
+    expect(timeToFinishLabel(caughtUp)).toBe('Up to date');
+    expect(compareTimeToFinish(caughtUp, airing)).toBeGreaterThan(0);
   });
 
   it('holds the show open even when the backlog is in an earlier season', () => {
@@ -174,9 +160,7 @@ describe('a season still airing', () => {
       watched(['2x1']),
       today,
     );
-    expect(timeToFinishLabel(behind, 'show')).toBe('S2 still airing');
-    // Season 1 alone can still be finished.
-    expect(timeToFinishLabel(behind, 'season')).toBe('S1 · 1 ep · 40m');
+    expect(timeToFinishLabel(behind)).toBe('S2 still airing');
   });
 
   it('does not count a season that has not started as airing', () => {
@@ -186,12 +170,11 @@ describe('a season still airing', () => {
       today,
     );
     expect(premiere.airingSeason).toBeNull();
-    expect(timeToFinishLabel(premiere, 'show')).toBe('1 ep · 40m');
+    expect(timeToFinishLabel(premiere)).toBe('1 ep · 40m');
   });
 
   it('says which season is still airing', () => {
-    expect(timeToFinishLabel(airing, 'season')).toBe('S2 still airing');
-    expect(timeToFinishLabel(airing, 'show')).toBe('S2 still airing');
+    expect(timeToFinishLabel(airing)).toBe('S2 still airing');
   });
 });
 
@@ -201,52 +184,43 @@ describe('compareTimeToFinish', () => {
   const unknown = timeToFinish([season(1, [ep(1, null)])], none, today);
   const done = timeToFinish([season(1, [ep(1, 30)])], watched(['1x1']), today);
 
-  const order = (scope: 'show' | 'season', ...items: ReturnType<typeof timeToFinish>[]) =>
-    [...items].sort((a, b) => compareTimeToFinish(a, b, scope));
+  const order = (...items: ReturnType<typeof timeToFinish>[]) => [...items].sort(compareTimeToFinish);
 
   it('puts known times first, then unknown, then nothing left', () => {
-    expect(order('show', done, unknown, long, short)).toEqual([short, long, unknown, done]);
-  });
-
-  it('ranks by the next season alone in season scope', () => {
-    // long's first season is one 60m episode; short's is two 30m ones.
-    // Equal minutes, so fewer episodes wins.
-    expect(order('season', short, long)).toEqual([long, short]);
+    expect(order(done, unknown, long, short)).toEqual([short, long, unknown, done]);
   });
 
   it('returns 0 for a tie so the caller can sort by title', () => {
-    expect(compareTimeToFinish(short, { ...short }, 'show')).toBe(0);
-    expect(compareTimeToFinish(done, { ...done }, 'season')).toBe(0);
+    expect(compareTimeToFinish(short, { ...short })).toBe(0);
+    expect(compareTimeToFinish(done, { ...done })).toBe(0);
   });
 });
 
 describe('timeToFinishLabel', () => {
-  it('labels the show and the next season', () => {
+  it('labels episodes and time left', () => {
     const t = timeToFinish(
       [season(1, [ep(1, 50)]), season(2, [ep(1, 45), ep(2, 45)])],
       watched(['1x1']),
       today,
     );
-    expect(timeToFinishLabel(t, 'show')).toBe('2 eps · 1h 30m');
-    expect(timeToFinishLabel(t, 'season')).toBe('S2 · 2 eps · 1h 30m');
+    expect(timeToFinishLabel(t)).toBe('2 eps · 1h 30m');
   });
 
   it('marks an estimate and omits unknown minutes', () => {
     const estimated = timeToFinish([season(1, [ep(1, 40), ep(2, null)])], watched(['1x1']), today);
-    expect(timeToFinishLabel(estimated, 'show')).toBe('1 ep · ~40m');
+    expect(timeToFinishLabel(estimated)).toBe('1 ep · ~40m');
     const unknown = timeToFinish([season(1, [ep(1, null)])], none, today);
-    expect(timeToFinishLabel(unknown, 'show')).toBe('1 ep');
+    expect(timeToFinishLabel(unknown)).toBe('1 ep');
   });
 
   it('says up to date when nothing aired is left', () => {
     const done = timeToFinish([season(1, [ep(1, 30)])], watched(['1x1']), today);
-    expect(timeToFinishLabel(done, 'show')).toBe('Up to date');
-    expect(timeToFinishLabel(done, 'season')).toBe('Up to date');
+    expect(timeToFinishLabel(done)).toBe('Up to date');
   });
 
   it('says not aired yet when nothing has aired', () => {
     const future = timeToFinish([season(1, [ep(1, 30, '2027-01-01')])], none, today);
-    expect(timeToFinishLabel(future, 'show')).toBe('Not aired yet');
-    expect(timeToFinishLabel(timeToFinish([season(1, [])], none, today), 'season')).toBe('Not aired yet');
+    expect(timeToFinishLabel(future)).toBe('Not aired yet');
+    expect(timeToFinishLabel(timeToFinish([season(1, [])], none, today))).toBe('Not aired yet');
   });
 });

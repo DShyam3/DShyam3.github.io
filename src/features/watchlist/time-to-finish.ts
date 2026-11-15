@@ -24,7 +24,7 @@ export interface FinishSeason {
   episodes: FinishEpisode[];
 }
 
-export interface FinishRemaining {
+export interface TimeToFinish {
   episodesLeft: number;
   /** Null when no episode of the show has a stored runtime to go on. */
   minutesLeft: number | null;
@@ -34,28 +34,15 @@ export interface FinishRemaining {
    * thirteen, so leaving them out would rank a show as quicker than it is.
    */
   estimated: boolean;
-}
-
-export interface TimeToFinish extends FinishRemaining {
-  /** The earliest season with an aired, unwatched episode. Null when none. */
-  nextSeason: (FinishRemaining & {
-    seasonNumber: number;
-    /**
-     * The season has a stored episode dated after today. Quickest season
-     * leaves such a season out: finishing it today means only the episodes
-     * out so far, often one, which is not a season to sit down to. The sync
-     * stores only episodes TMDB has dated, so a season whose later episodes
-     * are still undated reads as complete; an undated row, which only a hand
-     * edit could leave, is ignored rather than holding a season open.
-     */
-    stillAiring: boolean;
-  }) | null;
   /**
    * The earliest regular season with an episode out and another dated after
    * today. Quickest to finish leaves such a show out: finishing it today
    * means catching up on a season mid-run, often one episode, not finishing
    * the show. A season with nothing out yet does not count -- what is out
-   * is then whole seasons. Null when no season is mid-run.
+   * is then whole seasons. The sync stores only episodes TMDB has dated, so
+   * a season whose later episodes are still undated reads as complete; an
+   * undated row, which only a hand edit could leave, is ignored rather than
+   * holding a season open. Null when no season is mid-run.
    */
   airingSeason: number | null;
   /**
@@ -97,14 +84,10 @@ export const timeToFinish = (
   let episodesLeft = 0;
   let minutes = 0;
   let estimated = false;
-  let nextSeason: TimeToFinish['nextSeason'] = null;
   let airingSeason: number | null = null;
 
   for (const season of regular) {
-    let seasonAired = 0;
-    let seasonEpisodes = 0;
-    let seasonMinutes = 0;
-    let seasonEstimated = false;
+    let seasonAired = false;
     let seasonUnaired = false;
     for (const ep of season.episodes) {
       const age = daysUntil(ep.release_date, today);
@@ -114,61 +97,35 @@ export const timeToFinish = (
         continue;
       }
       airedEpisodes++;
-      seasonAired++;
+      seasonAired = true;
       if (isWatched(season.season_number, ep.episode_number)) continue;
-      seasonEpisodes++;
+      episodesLeft++;
       if (hasRuntime(ep.runtime)) {
-        seasonMinutes += ep.runtime;
+        minutes += ep.runtime;
       } else if (fallback !== null) {
-        seasonMinutes += fallback;
-        seasonEstimated = true;
+        minutes += fallback;
+        estimated = true;
       }
     }
-    if (seasonUnaired && seasonAired > 0) airingSeason ??= season.season_number;
-    if (seasonEpisodes === 0) continue;
-    episodesLeft += seasonEpisodes;
-    minutes += seasonMinutes;
-    estimated ||= seasonEstimated;
-    nextSeason ??= {
-      seasonNumber: season.season_number,
-      episodesLeft: seasonEpisodes,
-      minutesLeft: fallback === null ? null : seasonMinutes,
-      estimated: seasonEstimated,
-      stillAiring: seasonUnaired,
-    };
+    if (seasonAired && seasonUnaired) airingSeason ??= season.season_number;
   }
 
   return {
     episodesLeft,
     minutesLeft: fallback === null && episodesLeft > 0 ? null : minutes,
-    nextSeason,
     estimated,
     airingSeason,
     airedEpisodes,
   };
 };
 
-/** Whole show, or only the season to watch next. */
-export type FinishScope = 'show' | 'season';
-
 /**
- * The season still airing that keeps the show (or its next season) from
- * being finished, or null. Only while something is left to watch: a viewer
- * caught up on a season mid-run is up to date.
+ * The season still airing that keeps the show from being finished, or null.
+ * Only while something is left to watch: a viewer caught up on a season
+ * mid-run is up to date.
  */
-const airingBlock = (time: TimeToFinish, scope: FinishScope): number | null => {
-  if (scope === 'show') return time.episodesLeft > 0 ? time.airingSeason : null;
-  return time.nextSeason?.stillAiring ? time.nextSeason.seasonNumber : null;
-};
-
-const remainingFor = (
-  time: TimeToFinish,
-  scope: FinishScope,
-): FinishRemaining | null => {
-  if (airingBlock(time, scope) !== null) return null;
-  if (scope === 'show') return time.episodesLeft > 0 ? time : null;
-  return time.nextSeason;
-};
+const airingBlock = (time: TimeToFinish): number | null =>
+  time.episodesLeft > 0 ? time.airingSeason : null;
 
 /**
  * Sort order, quickest first. Shows with a known time come first, by
@@ -177,16 +134,12 @@ const remainingFor = (
  * still airing; then shows with nothing left to watch.
  * Returns 0 for a full tie so the caller can break it by title.
  */
-export const compareTimeToFinish = (
-  a: TimeToFinish,
-  b: TimeToFinish,
-  scope: FinishScope,
-): number => {
+export const compareTimeToFinish = (a: TimeToFinish, b: TimeToFinish): number => {
   const rank = (time: TimeToFinish): [number, number, number] => {
-    const left = remainingFor(time, scope);
-    if (!left) return airingBlock(time, scope) !== null ? [2, 0, 0] : [3, 0, 0];
-    if (left.minutesLeft === null) return [1, left.episodesLeft, 0];
-    return [0, left.minutesLeft, left.episodesLeft];
+    if (airingBlock(time) !== null) return [2, 0, 0];
+    if (time.episodesLeft === 0) return [3, 0, 0];
+    if (time.minutesLeft === null) return [1, time.episodesLeft, 0];
+    return [0, time.minutesLeft, time.episodesLeft];
   };
   const ra = rank(a);
   const rb = rank(b);
@@ -200,23 +153,16 @@ const episodeCount = (count: number) => `${count} ${count === 1 ? 'ep' : 'eps'}`
 
 /**
  * The card line for a show sorted by time to finish, e.g. "8 eps · 6h 40m"
- * or "S2 · 6 eps · ~5h 10m". A tilde marks a total that includes an
- * estimated runtime.
+ * or "6 eps · ~5h 10m". A tilde marks a total that includes an estimated
+ * runtime.
  */
-export const timeToFinishLabel = (
-  time: TimeToFinish,
-  scope: FinishScope,
-): string => {
-  const airing = airingBlock(time, scope);
+export const timeToFinishLabel = (time: TimeToFinish): string => {
+  const airing = airingBlock(time);
   if (airing !== null) return `S${airing} still airing`;
-  const left = remainingFor(time, scope);
-  if (!left) return time.airedEpisodes > 0 ? 'Up to date' : 'Not aired yet';
-  const parts = [episodeCount(left.episodesLeft)];
-  if (scope === 'season' && time.nextSeason) {
-    parts.unshift(`S${time.nextSeason.seasonNumber}`);
-  }
-  if (left.minutesLeft) {
-    parts.push(`${left.estimated ? '~' : ''}${formatRuntime(left.minutesLeft)}`);
+  if (time.episodesLeft === 0) return time.airedEpisodes > 0 ? 'Up to date' : 'Not aired yet';
+  const parts = [episodeCount(time.episodesLeft)];
+  if (time.minutesLeft) {
+    parts.push(`${time.estimated ? '~' : ''}${formatRuntime(time.minutesLeft)}`);
   }
   return parts.join(' · ');
 };

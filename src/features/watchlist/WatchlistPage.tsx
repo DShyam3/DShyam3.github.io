@@ -82,7 +82,6 @@ import {
   compareTimeToFinish,
   timeToFinish,
   timeToFinishLabel,
-  type FinishScope,
   type TimeToFinish,
 } from '@/features/watchlist/time-to-finish';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
@@ -94,11 +93,10 @@ import {
 } from '@/features/watchlist/components/PlatformLogo';
 
 /**
- * Library sort orders. The two `finish-` orders rank by time left to watch:
- * the whole show, or only the season to watch next. A film has no seasons,
- * so for Movies both mean its runtime.
+ * Library sort orders. `finish` ranks by time left to watch: a show's aired,
+ * unwatched episodes, or a film's runtime.
  */
-type LibrarySort = 'alphabetical' | 'recent' | 'finish-show' | 'finish-season';
+type LibrarySort = 'alphabetical' | 'recent' | 'finish';
 
 const CATEGORIES = [
   'TV Shows',
@@ -208,18 +206,7 @@ const Watchlist = () => {
     selectedCategory === 'TV Shows' ||
     selectedCategory === 'Movies' ||
     selectedCategory === 'Currently Watching';
-  // Movies offer one time order; a season pick carried over from TV means it.
-  const effectiveSort: LibrarySort =
-    selectedCategory === 'Movies' && sortOrder === 'finish-season'
-      ? 'finish-show'
-      : sortOrder;
-  const finishScope: FinishScope | null = !sortable
-    ? null
-    : effectiveSort === 'finish-show'
-      ? 'show'
-      : effectiveSort === 'finish-season'
-        ? 'season'
-        : null;
+  const byTimeLeft = sortable && sortOrder === 'finish';
   const [title, setTitle] = useState('');
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
   // Covers the whole click-to-completion span, including the getMovieDetails
@@ -490,7 +477,7 @@ const Watchlist = () => {
   // array, and categoryItems with it.
   const finishTimes = useMemo(() => {
     const times = new Map<string, TimeToFinish>();
-    if (!finishScope) return times;
+    if (!byTimeLeft) return times;
     const today = new Date();
     for (const item of categoryItems) {
       if (item.category !== 'TV Shows') continue;
@@ -505,7 +492,7 @@ const Watchlist = () => {
       );
     }
     return times;
-  }, [categoryItems, finishScope, isEpisodeWatched]);
+  }, [categoryItems, byTimeLeft, isEpisodeWatched]);
 
   // The order is held while a title's detail is open. Marking episodes
   // watched there would otherwise re-rank the grid under it, and a card
@@ -513,7 +500,7 @@ const Watchlist = () => {
   // labels stay live; the order catches up when the detail closes, or at
   // once if the sort or category changes.
   const detailOpen = useDockedDetailOpen();
-  const rankKey = `${selectedCategory}|${finishScope ?? ''}`;
+  const rankKey = `${selectedCategory}|${byTimeLeft}`;
   const [ranking, setRanking] = useState({ key: rankKey, times: finishTimes });
   if (ranking.times !== finishTimes && (!detailOpen || ranking.key !== rankKey)) {
     setRanking({ key: rankKey, times: finishTimes });
@@ -553,12 +540,12 @@ const Watchlist = () => {
     }
     if (selectedCategory !== 'Upcoming') {
       result = [...result].sort((a, b) => {
-        if (effectiveSort === 'alphabetical') return a.title.localeCompare(b.title);
-        if (finishScope) {
+        if (sortOrder === 'alphabetical') return a.title.localeCompare(b.title);
+        if (byTimeLeft) {
           const ta = rankTimes.get(a.id) ?? finishTimes.get(a.id);
           const tb = rankTimes.get(b.id) ?? finishTimes.get(b.id);
           if (ta && tb) {
-            return compareTimeToFinish(ta, tb, finishScope) || a.title.localeCompare(b.title);
+            return compareTimeToFinish(ta, tb) || a.title.localeCompare(b.title);
           }
           // Films, by runtime; one with no runtime goes last.
           const ra = a.runtime || Infinity;
@@ -566,7 +553,7 @@ const Watchlist = () => {
           if (ra !== rb) return ra < rb ? -1 : 1;
           return a.title.localeCompare(b.title);
         }
-        if (effectiveSort === 'recent') {
+        if (sortOrder === 'recent') {
           if (selectedCategory !== 'Movies') {
             const getLatestSeasonDate = (item: WatchlistItem) => {
               if (!item.seasons || item.seasons.length === 0)
@@ -596,8 +583,8 @@ const Watchlist = () => {
     searchQuery,
     selectedCategory,
     hideCompleted,
-    effectiveSort,
-    finishScope,
+    sortOrder,
+    byTimeLeft,
     finishTimes,
     rankTimes,
     getAutoStatus,
@@ -699,9 +686,9 @@ const Watchlist = () => {
 
   // While a time order is picked, each card says what it is ranked by.
   const timeLeftLabel = (item: WatchlistItem): string | undefined => {
-    if (!finishScope) return undefined;
+    if (!byTimeLeft) return undefined;
     const finish = finishTimes.get(item.id);
-    if (finish) return timeToFinishLabel(finish, finishScope);
+    if (finish) return timeToFinishLabel(finish);
     return item.runtime ? formatRuntime(item.runtime) : undefined;
   };
 
@@ -1125,19 +1112,14 @@ const Watchlist = () => {
 
             </PopoverContent>
           </Popover>
-          {sortable && <Select value={effectiveSort} onValueChange={value => setSortOrder(value as LibrarySort)}>
+          {sortable && <Select value={sortOrder} onValueChange={value => setSortOrder(value as LibrarySort)}>
             <SelectTrigger aria-label="Sort library" className="h-11 w-[208px] shrink-0"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="alphabetical">Title: A–Z</SelectItem>
               <SelectItem value="recent">Latest releases</SelectItem>
-              {selectedCategory === 'Movies' ? (
-                <SelectItem value="finish-show">Shortest first</SelectItem>
-              ) : (
-                <>
-                  <SelectItem value="finish-show">Quickest to finish</SelectItem>
-                  <SelectItem value="finish-season">Quickest season</SelectItem>
-                </>
-              )}
+              <SelectItem value="finish">
+                {selectedCategory === 'Movies' ? 'Shortest first' : 'Quickest to finish'}
+              </SelectItem>
             </SelectContent>
           </Select>}
         </>}
