@@ -193,8 +193,22 @@ export const taxYearOf = (date: string): number => {
   return beforeApril6 ? year - 1 : year;
 };
 
+/**
+ * The calendar year a payslip falls in: January to December, the question a
+ * mortgage application or a year-on-year comparison asks rather than HMRC's.
+ *
+ * Read the same way as `taxYearOf`: a `YYYY-MM-DD` pay date by its own year,
+ * whatever the machine's timezone, and a timestamp by its local day. Text
+ * that is no date gives NaN.
+ */
+export const calendarYearOf = (date: string): number =>
+  localCalendarDay(date)?.year ?? Number.NaN;
+
 export const inTaxYear = (slips: readonly Payslip[], taxYear: number): Payslip[] =>
   slips.filter(p => taxYearOf(p.payDate) === taxYear);
+
+export const inCalendarYear = (slips: readonly Payslip[], year: number): Payslip[] =>
+  slips.filter(p => calendarYearOf(p.payDate) === year);
 
 /**
  * Student loan actually repaid in a tax year.

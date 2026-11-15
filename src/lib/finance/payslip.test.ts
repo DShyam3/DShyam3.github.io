@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  checkPayslip, compareToModel, deductionRate, effectiveTaxRate, formatPayslipLineLabel, inTaxYear,
+  calendarYearOf, checkPayslip, compareToModel, deductionRate, effectiveTaxRate, formatPayslipLineLabel, inCalendarYear, inTaxYear,
   studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear, sumPayslips, taxYearOf, totalDeductions, type Payslip,
 } from './payslip';
 
@@ -116,6 +116,46 @@ describe('taxYearOf', () => {
   it('is NaN for something that is not a date, rather than a plausible year', () => {
     expect(taxYearOf('')).toBeNaN();
     expect(taxYearOf('not a date')).toBeNaN();
+  });
+});
+
+describe('calendarYearOf', () => {
+  it('runs January to December, so either side of 6 April is the same year', () => {
+    expect(calendarYearOf('2026-04-05')).toBe(2026);
+    expect(calendarYearOf('2026-04-06')).toBe(2026);
+  });
+
+  it('turns over on 1 January, where the tax year does not', () => {
+    expect(calendarYearOf('2026-12-31')).toBe(2026);
+    expect(calendarYearOf('2027-01-01')).toBe(2027);
+    expect(taxYearOf('2027-01-01')).toBe(2026);
+  });
+
+  it('reads a pay date from the string itself, whatever the timezone', () => {
+    expect(calendarYearOf('2024-02-29')).toBe(2024);
+    expect(calendarYearOf('2027-01-01')).toBe(2027);
+  });
+
+  it('still reads a full timestamp, which the payslips page passes for "now"', () => {
+    // Mid-year, so no timezone moves it into another calendar year.
+    expect(calendarYearOf('2026-08-28T12:00:00.000Z')).toBe(2026);
+  });
+
+  it('is NaN for something that is not a date, rather than a plausible year', () => {
+    expect(calendarYearOf('')).toBeNaN();
+    expect(calendarYearOf('not a date')).toBeNaN();
+  });
+});
+
+describe('calendar-year selection', () => {
+  it('selects January to December, across the 6 April boundary', () => {
+    const slips = [
+      slip({ id: 'a', payDate: '2025-12-28' }),
+      slip({ id: 'b', payDate: '2026-01-28' }), // 2025/26 tax year
+      slip({ id: 'c', payDate: '2026-04-28' }), // 2026/27 tax year
+    ];
+    expect(inCalendarYear(slips, 2026).map(p => p.id)).toEqual(['b', 'c']);
+    expect(inCalendarYear(slips, 2025).map(p => p.id)).toEqual(['a']);
   });
 });
 

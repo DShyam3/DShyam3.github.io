@@ -20,7 +20,7 @@ import { formatGBP } from '@/features/finance/utils/calculations';
 import {
   checkPayslip, compareToModel, findPayslipTransactionCandidates, studentLoanExpectedInTaxYear, studentLoanPaidInTaxYear,
   unambiguousPayslipMatches,
-  sumPayslips, taxYearOf, type Payslip,
+  calendarYearOf, inCalendarYear, inTaxYear, sumPayslips, taxYearOf, type Payslip,
 } from '@/lib/finance';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format-date';
@@ -162,8 +162,18 @@ export function PayslipsSection() {
     [payslips],
   );
   const thisYear = useMemo(
-    () => payslips.filter(p => taxYearOf(p.payDate) === currentTaxYear),
+    () => inTaxYear(payslips, currentTaxYear),
     [payslips, currentTaxYear],
+  );
+  // The calendar year of the newest payslip, as the tax year above is: the
+  // year the headline figures cover when grouped by calendar year.
+  const currentCalendarYear = useMemo(
+    () => calendarYearOf(payslips.length > 0 ? payslips[0].payDate : new Date().toISOString()),
+    [payslips],
+  );
+  const thisCalendarYear = useMemo(
+    () => inCalendarYear(payslips, currentCalendarYear),
+    [payslips, currentCalendarYear],
   );
   const allTime = useMemo(() => sumPayslips(payslips), [payslips]);
 
@@ -171,7 +181,7 @@ export function PayslipsSection() {
   // Tax year first: it is the question every other figure on this surface is
   // bounded by, so grouping any other way by default invites comparing two
   // things measured over different periods.
-  const [groupBy, setGroupBy] = useState<'employer' | 'year'>('year');
+  const [groupBy, setGroupBy] = useState<'year' | 'calendar' | 'employer'>('year');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [detail, setDetail] = useState<Payslip | null>(null);
 
@@ -204,13 +214,17 @@ export function PayslipsSection() {
     }
   };
 
-  /* Two ways of asking the same question. By employer answers "what did that
-     job pay me"; by tax year answers "what did I earn that year", which is
-     the one HMRC asks. Both keep payslips newest first within a group. */
+  /* Three ways of asking the same question. By employer answers "what did
+     that job pay me"; by tax year answers "what did I earn that year", which
+     is the one HMRC asks; by calendar year answers it January to December,
+     which is what a lender or a year-on-year comparison asks. All keep
+     payslips newest first within a group. */
   const groups = useMemo(() => {
     const buckets = new Map<string, Payslip[]>();
     for (const p of payslips) {
-      const key = groupBy === 'employer' ? (p.employer || 'Unattributed') : String(taxYearOf(p.payDate));
+      const key = groupBy === 'employer'
+        ? (p.employer || 'Unattributed')
+        : String(groupBy === 'calendar' ? calendarYearOf(p.payDate) : taxYearOf(p.payDate));
       const bucket = buckets.get(key);
       if (bucket) bucket.push(p);
       else buckets.set(key, [p]);
@@ -223,10 +237,13 @@ export function PayslipsSection() {
         const oldest = slips[slips.length - 1].payDate;
         return {
           key,
+          // Tax year 2025 and calendar year 2025 share the key "2025" but not
+          // their payslips, so a group folded in one mode stays its own.
+          collapseKey: `${groupBy}:${key}`,
           slips,
           totals,
           logo: groupBy === 'employer' ? employerLogo(key, orgs) : null,
-          title: groupBy === 'employer' ? key : `${key}/${String(Number(key) + 1).slice(2)}`,
+          title: groupBy === 'year' ? `${key}/${String(Number(key) + 1).slice(2)}` : key,
           subtitle:
             oldest === newest
               ? `${slips.length} payslip · ${formatDate(newest)}`
@@ -239,17 +256,20 @@ export function PayslipsSection() {
   }, [payslips, groupBy, orgs]);
 
   /* The headline figures answer whichever question the grouping is asking.
-     Grouped by tax year, a lifetime total sits above per-year groups and
-     invites reading one as the other; grouped by employer, the span is every
-     job, so all time is the honest scope. The label says which, because two
-     figures differing by four years of pay must not look interchangeable. */
+     Grouped by either kind of year, a lifetime total sits above per-year
+     groups and invites reading one as the other, so the headline is the
+     newest year of that kind; grouped by employer, the span is every job, so
+     all time is the honest scope. The label says which, because two figures
+     differing by four years of pay must not look interchangeable. */
   const summary = useMemo(
-    () => (groupBy === 'year' ? sumPayslips(thisYear) : allTime),
-    [groupBy, thisYear, allTime],
+    () => (groupBy === 'year'
+      ? sumPayslips(thisYear)
+      : groupBy === 'calendar' ? sumPayslips(thisCalendarYear) : allTime),
+    [groupBy, thisYear, thisCalendarYear, allTime],
   );
   const summaryScope = groupBy === 'year'
     ? `${currentTaxYear}/${String(currentTaxYear + 1).slice(2)}`
-    : 'all time';
+    : groupBy === 'calendar' ? String(currentCalendarYear) : 'all time';
 
   // Each payslip against what its own pay owes, not today's salary times the
   // count: an earlier, lower-paid job and a month paid by two employers both
@@ -476,21 +496,21 @@ export function PayslipsSection() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <span className="text-muted-foreground">Group by</span>
-            {(['year', 'employer'] as const).map(mode => (
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <span className="whitespace-nowrap text-muted-foreground">Group by</span>
+            {(['year', 'calendar', 'employer'] as const).map(mode => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setGroupBy(mode)}
                 className={cn(
-                  'rounded-md border px-2 py-0.5 transition-colors',
+                  'whitespace-nowrap rounded-md border px-2 py-0.5 transition-colors',
                   groupBy === mode
                     ? 'border-primary/40 bg-primary/10 text-primary'
                     : 'border-border/40 text-muted-foreground hover:text-foreground hover:border-border/80',
                 )}
               >
-                {mode === 'employer' ? 'Employer' : 'Tax year'}
+                {mode === 'employer' ? 'Employer' : mode === 'calendar' ? 'Calendar year' : 'Tax year'}
               </button>
             ))}
           </div>
@@ -500,10 +520,10 @@ export function PayslipsSection() {
               <div key={group.key} className="space-y-1.5">
                 <button
                   type="button"
-                  onClick={() => setCollapsed(c => ({ ...c, [group.key]: !c[group.key] }))}
+                  onClick={() => setCollapsed(c => ({ ...c, [group.collapseKey]: !c[group.collapseKey] }))}
                   className="flex w-full min-w-0 flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2 hover:bg-card/60 transition-colors text-left"
                 >
-                  {collapsed[group.key]
+                  {collapsed[group.collapseKey]
                     ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
                   {group.logo && (
@@ -531,7 +551,7 @@ export function PayslipsSection() {
                   </div>
                 </button>
 
-                {!collapsed[group.key] && (
+                {!collapsed[group.collapseKey] && (
                   <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2 pl-2">
                     {group.slips.map(p => {
                       const check = checkPayslip(p);

@@ -4,6 +4,10 @@ Updated 2026-11-15 · Branch `main` · Head `2f853367` = origin/main, plus this 
 
 ## In progress
 
+**Payslips: Calendar year grouping** (committed to `main`, not pushed or deployed; `src/lib/finance/payslip.ts`, `payslip.test.ts`, `PayslipsSection.tsx`)
+- Lint 0/0, typecheck, build, payslip tests 34/34 (also under TZ Auckland and Los Angeles). Reviewer (Opus): nothing blocking; fixed the Group by row wrapping on phones, fold state shared between tax and calendar 2025, a timezone-fragile test, the FEATURES student-loan wording; added tested `inCalendarYear`. Verified local dev, seed admin: desktop, Calendar year shows 2026 and 2025 with headline "· 2026", Tax year unchanged; 375px, the pills wrap whole and folding tax year 2025/26 leaves calendar 2025 open.
+- Unverified: production with real payslips; light theme; a real phone.
+
 **Batch of fixes, 2026-11-11, UNCOMMITTED** (27 modified files, plus new `src/collections/facets.ts` and `facets.test.ts`, both need `git add`)
 - Finance: hand-added transactions save the picked local day; chart grid, axes and reference lines on theme tokens. ⌘K on the splash opens the palette; a palette pick of an unlisted-category Inventory row reveals it.
 - Verified (local dev, anonymous, hosted): ⌘K on the splash; palette pick of "Airpods Pro 2". Unverified: the reveal in a browser (unit tests only); Finance fixes (admin-only); light and dark; real phone.
@@ -24,6 +28,7 @@ Updated 2026-11-15 · Branch `main` · Head `2f853367` = origin/main, plus this 
 
 | Check | Date | Result |
 |---|---|---|
+| Payslip calendar year | 2026-11-15 | Lint 0/0; typecheck, build; payslip tests 34/34; full suite 2,532 tests, 82 files, on the whole working tree. Graphify updated. Local dev only |
 | Watchlist (`3f5d473` .. `dcd8a4f`) | 2026-11-12 to 15 | Each commit's staged tree alone in a scratch copy: typecheck, lint 0/0, build; 2,522 tests at `dcd8a4f`; deno check and hosted migration `20261111223000`, `watchlist-cron-sync` v16 for trailers |
 | About and travel (`523e67f`) | 2026-11-13 | Lint 0/0; typecheck and build pass; 2,507 tests across 81 files |
 | Batch tests | 2026-11-11 | 2,473 across 79 files once; 1–2 perf tests over 5,000ms under load. Not a clean run |
