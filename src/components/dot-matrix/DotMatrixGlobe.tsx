@@ -76,10 +76,10 @@ const DOT_PALETTE = {
         // a tinted patch rather than out of the same grey as everywhere else.
         visitedTint: 'rgba(255, 186, 38, 0.38)',
         city: 'rgba(255, 222, 120, 1)',
-        // The selection is the one dot in a different hue, the sky the Travel
-        // section wears elsewhere, so it never reads as one more gold dot.
-        selected: 'rgba(110, 210, 255, 1)',
-        selectedGlow: 'rgba(110, 210, 255, 0.85)',
+        // The selection is the one dot in a different hue, the site's own
+        // green, so it never reads as one more gold dot. Only it grows.
+        selected: 'rgba(30, 235, 115, 1)',
+        selectedGlow: 'rgba(30, 235, 115, 0.85)',
     },
     light: {
         unvisited: 'rgba(40, 52, 90, 0.18)',
@@ -88,8 +88,8 @@ const DOT_PALETTE = {
         visitedHovered: 'rgba(170, 92, 0, 1)',
         visitedTint: 'rgba(214, 132, 0, 0.34)',
         city: 'rgba(196, 84, 0, 1)',
-        selected: 'rgba(0, 118, 214, 1)',
-        selectedGlow: 'rgba(0, 118, 214, 0.55)',
+        selected: 'rgba(30, 143, 87, 1)',
+        selectedGlow: 'rgba(30, 143, 87, 0.55)',
     },
 } as const;
 
@@ -801,11 +801,10 @@ export function DotMatrixGlobe({
         const isMobile = W < 600;
         const radiusMultiplier = isMobile ? 0.32 : 0.38;
         const baseRadius = Math.min(dotSpacingX, dotSpacingY) * radiusMultiplier * curZoom;
-        // On the globe a column is 2piR/cols wide, not W/cols. Sized to the
-        // canvas, a globe's dots filled a third of their spacing: under a pixel
-        // on a phone, and on a laptop thin enough that the borders outweighed
-        // the gold. They are sized to the globe's own spacing instead.
-        const sphereRadius = Math.max(baseRadius, ((2 * Math.PI * R) / cols) * (isMobile ? 0.3 : 0.27));
+        // On the globe a column is 2piR/cols wide, not W/cols. On a phone the
+        // canvas measure gave dots under a pixel across, so the globe washed
+        // out to grey; there they are sized to the globe's own spacing.
+        const sphereRadius = isMobile ? Math.max(baseRadius, ((2 * Math.PI * R) / cols) * 0.3) : baseRadius;
 
         // Equal Earth does not leave the grid even -- it squeezes towards the
         // poles -- so a dot sized for the equator is wrong everywhere else.
@@ -970,10 +969,8 @@ export function DotMatrixGlobe({
             // factor keeps the gaps open. Doing it by size rather than by
             // removing dots matters: thinning left visible grey holes across
             // Russia and northern Canada, whereas this stays continuous and
-            // simply reads as finer detail towards the poles. Globe dots are
-            // sized to fill about half their spacing, so the shrink starts from
-            // about 25 degrees out, or rows met sideways in stripes by 60 degrees.
-            const polarScale = Math.max(0.32, Math.min(1, dot.cosLat / 0.9));
+            // simply reads as finer detail towards the poles.
+            const polarScale = Math.max(0.32, Math.min(1, dot.cosLat / 0.55));
             // Whichever of the two spacings is tighter is the one that decides
             // whether this dot touches its neighbour. The floor keeps the last
             // couple of degrees from fading out entirely -- they overlap a
