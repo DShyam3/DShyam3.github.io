@@ -50,6 +50,16 @@ const IDLE_SPIN_RAMP_MS = 4000;
 /** How close each kind of selection is brought in. */
 const FOCUS_ZOOM = { country: { '3d': 2.5, '2d': 4 }, city: { '3d': 3.5, '2d': 6 } } as const;
 
+/** How much larger the selected dot is drawn than an ordinary one. */
+const SELECTED_EMPHASIS = 2.2;
+
+/**
+ * Border strength at the whole-world view, and the most it reaches zoomed in.
+ * At 0.15 the borders all but vanished under the dots until you zoomed in.
+ */
+const BORDER_ALPHA = 0.3;
+const BORDER_ALPHA_ZOOMED = 0.6;
+
 /**
  * Dot colours, one set per theme. Visited has to read at a glance against not
  * visited, so the two differ in hue, strength and size, never by alpha alone:
@@ -66,8 +76,10 @@ const DOT_PALETTE = {
         // a tinted patch rather than out of the same grey as everywhere else.
         visitedTint: 'rgba(255, 186, 38, 0.38)',
         city: 'rgba(255, 222, 120, 1)',
-        selected: 'rgba(255, 236, 170, 1)',
-        ring: 'rgba(255, 210, 90, 0.95)',
+        // The selection is the one dot in a different hue, the sky the Travel
+        // section wears elsewhere, so it never reads as one more gold dot.
+        selected: 'rgba(110, 210, 255, 1)',
+        selectedGlow: 'rgba(110, 210, 255, 0.85)',
     },
     light: {
         unvisited: 'rgba(40, 52, 90, 0.18)',
@@ -76,8 +88,8 @@ const DOT_PALETTE = {
         visitedHovered: 'rgba(170, 92, 0, 1)',
         visitedTint: 'rgba(214, 132, 0, 0.34)',
         city: 'rgba(196, 84, 0, 1)',
-        selected: 'rgba(150, 60, 0, 1)',
-        ring: 'rgba(170, 82, 0, 0.95)',
+        selected: 'rgba(0, 118, 214, 1)',
+        selectedGlow: 'rgba(0, 118, 214, 0.55)',
     },
 } as const;
 
@@ -386,8 +398,8 @@ export function DotMatrixGlobe({
         return best;
     }, [focusCityDotKey, focusLat, focusLon, focusCityCountry, dotData, dotCodes]);
 
-    // With no dot to ring, the ring goes on the place itself, in radians: a
-    // city in a country with no dots, or such a country with no city chosen.
+    // With no dot of its own to light, the place itself, in radians: a city in
+    // a country with no dots, or such a country with no city chosen.
     const markerPoint = useMemo(() => {
         if (focusLat !== undefined && focusLon !== undefined) {
             return focusedDotKey ? null : { lon: (focusLon * Math.PI) / 180, lat: (focusLat * Math.PI) / 180 };
@@ -396,11 +408,10 @@ export function DotMatrixGlobe({
     }, [focusLat, focusLon, focusedDotKey, countryFocus]);
 
     // A place with no dot of its own -- Gibraltar, a city in a country too
-    // small for the grid -- is ringed on the grid cell it falls in, so the ring
-    // always sits round a dot: the cell's own, or one drawn there. Ringed at its
-    // true position it fell between dots, round nothing. The cell's dot is
-    // usually a neighbour's (Gibraltar's is Spain's), so it keeps its own
-    // colour: only the ring marks the place, never a dot of the wrong country.
+    // small for the grid -- lights the dot of the grid cell it falls in, or a
+    // dot drawn there in open sea. That cell's dot is usually a neighbour's
+    // (Gibraltar's is Spain's): at one dot per degree, that is where the place
+    // is. Marked at its true position it fell between dots.
     const markerCell = useMemo(() => {
         if (!markerPoint || !dotData) return null;
         const { cols, rows } = dotData;
@@ -411,7 +422,7 @@ export function DotMatrixGlobe({
             ? { key, lon: 0, lat: 0, hasDot: true }
             : { key, lon: ((col + 0.5) / cols) * 2 * Math.PI - Math.PI, lat: Math.PI / 2 - ((row + 0.5) / rows) * Math.PI, hasDot: false };
     }, [markerPoint, dotData, dotCodes]);
-    const ringKey = focusedDotKey ?? (markerCell?.hasDot ? markerCell.key : null);
+    const selectedKey = focusedDotKey ?? (markerCell?.hasDot ? markerCell.key : null);
 
     // Turn to the selected city, or else the selected country, and hold there.
     // Clearing the selection zooms back out; the idle spin then eases in later.
@@ -790,10 +801,11 @@ export function DotMatrixGlobe({
         const isMobile = W < 600;
         const radiusMultiplier = isMobile ? 0.32 : 0.38;
         const baseRadius = Math.min(dotSpacingX, dotSpacingY) * radiusMultiplier * curZoom;
-        // On the globe a column is 2piR/cols wide, not W/cols. On a phone the
-        // canvas measure gave dots under a pixel across, so the globe washed
-        // out to grey; there they are sized to the globe's own spacing.
-        const sphereRadius = isMobile ? Math.max(baseRadius, ((2 * Math.PI * R) / cols) * 0.3) : baseRadius;
+        // On the globe a column is 2piR/cols wide, not W/cols. Sized to the
+        // canvas, a globe's dots filled a third of their spacing: under a pixel
+        // on a phone, and on a laptop thin enough that the borders outweighed
+        // the gold. They are sized to the globe's own spacing instead.
+        const sphereRadius = Math.max(baseRadius, ((2 * Math.PI * R) / cols) * (isMobile ? 0.3 : 0.27));
 
         // Equal Earth does not leave the grid even -- it squeezes towards the
         // poles -- so a dot sized for the equator is wrong everywhere else.
@@ -821,7 +833,7 @@ export function DotMatrixGlobe({
 
         // --- Render Grid-Based Borders ---
         if (borderSegments.length > 0) {
-            let borderAlpha = 0.15;
+            let borderAlpha = BORDER_ALPHA;
             let drawHemisphere = false;
 
             if (progress === 1) {
@@ -830,9 +842,9 @@ export function DotMatrixGlobe({
                 const threshold = 0.15;
                 if (progress > 1 - threshold) {
                     drawHemisphere = true;
-                    borderAlpha = 0.15 * ((progress - (1 - threshold)) / threshold);
+                    borderAlpha = BORDER_ALPHA * ((progress - (1 - threshold)) / threshold);
                 } else if (progress < threshold) {
-                    borderAlpha = 0.15 * (1 - (progress / threshold));
+                    borderAlpha = BORDER_ALPHA * (1 - (progress / threshold));
                 } else {
                     borderAlpha = 0;
                 }
@@ -841,7 +853,7 @@ export function DotMatrixGlobe({
             // Dynamically increase alpha when zooming in 2D so borders remain highly visible
             let dynamicAlpha = borderAlpha;
             if (curZoom > 1.0 && progress === 0) {
-                dynamicAlpha = Math.min(0.45, borderAlpha + (curZoom - 1.0) * 0.08);
+                dynamicAlpha = Math.min(BORDER_ALPHA_ZOOMED, borderAlpha + (curZoom - 1.0) * 0.1);
             }
 
             if (dynamicAlpha > 0.02) {
@@ -885,14 +897,14 @@ export function DotMatrixGlobe({
                 
                 ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
                 // Scale line width up gently with zoom to ensure borders stay thick and prominent
-                const baseWidth = isMobile ? 0.4 : 0.9;
+                const baseWidth = isMobile ? 0.6 : 0.9;
                 const borderWidth = Math.min(3.0, baseWidth * Math.pow(curZoom, 0.5)) * dpr;
                 ctx.lineWidth = borderWidth;
                 ctx.stroke();
 
                 // Hemisphere outline (only in 3D)
                 if (drawHemisphere) {
-                    ctx.globalAlpha = (borderAlpha / 0.15) * 0.05;
+                    ctx.globalAlpha = (borderAlpha / BORDER_ALPHA) * 0.05;
                     ctx.beginPath();
                     ctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
                     ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
@@ -958,8 +970,10 @@ export function DotMatrixGlobe({
             // factor keeps the gaps open. Doing it by size rather than by
             // removing dots matters: thinning left visible grey holes across
             // Russia and northern Canada, whereas this stays continuous and
-            // simply reads as finer detail towards the poles.
-            const polarScale = Math.max(0.32, Math.min(1, dot.cosLat / 0.55));
+            // simply reads as finer detail towards the poles. Globe dots are
+            // sized to fill about half their spacing, so the shrink starts from
+            // about 25 degrees out, or rows met sideways in stripes by 60 degrees.
+            const polarScale = Math.max(0.32, Math.min(1, dot.cosLat / 0.9));
             // Whichever of the two spacings is tighter is the one that decides
             // whether this dot touches its neighbour. The floor keeps the last
             // couple of degrees from fading out entirely -- they overlap a
@@ -989,7 +1003,7 @@ export function DotMatrixGlobe({
             };
 
             newProjected.push(pDot);
-            if (dot.dotKey === ringKey) focusedProjected = pDot;
+            if (dot.dotKey === selectedKey) focusedProjected = pDot;
             if (isBack && progress > 0.5) {
                 backDots.push(pDot);
             } else {
@@ -1009,11 +1023,11 @@ export function DotMatrixGlobe({
             let color: string;
             let emphasis = 1;
 
-            if (p.dotKey === focusedDotKey) {
-                // The chosen city: brighter and larger than any visited dot,
-                // and ringed once every dot is down.
+            if (p.dotKey === selectedKey) {
+                // The chosen place: its own hue and the largest dot on the map.
+                // Drawn again on top, with its glow, once every dot is down.
                 color = palette.selected;
-                emphasis = 1.7;
+                emphasis = SELECTED_EMPHASIS;
             } else if (isCityMode && isCityDot) {
                 color = isHovered ? palette.visitedHovered : palette.city;
                 emphasis = isHovered ? 1.55 : 1.4;
@@ -1037,12 +1051,29 @@ export function DotMatrixGlobe({
         for (const p of backDots) drawDot(p);
         for (const p of frontDots) drawDot(p);
 
-        // Ring the chosen city's dot or, with no dot to ring, the place itself,
-        // unless the globe has turned it away.
-        let ring: { x: number; y: number; r: number; opacity: number } | null = null;
-        const ringed = focusedProjected;
-        if (ringed) {
-            if (!(ringed.isBack && progress > 0.5)) ring = { x: ringed.x, y: ringed.y, r: Math.max(ringed.rx, ringed.ry) * 3.2, opacity: ringed.opacity };
+        // The selected dot again, on top of its neighbours and with a glow, so
+        // it stands clear even at a dot or two across. Not when the globe has
+        // turned it away.
+        const drawSelected = (x: number, y: number, rx: number, ry: number, opacity: number) => {
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.shadowColor = palette.selectedGlow;
+            // shadowBlur ignores the canvas transform, so it is set in device pixels.
+            ctx.shadowBlur = Math.max(6, Math.max(rx, ry) * 3) * dpr;
+            ctx.fillStyle = palette.selected;
+            ctx.beginPath();
+            ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        };
+        const selectedDot = focusedProjected;
+        if (selectedDot) {
+            if (!(selectedDot.isBack && progress > 0.5)) {
+                // Round, of the same area: a flat map's dots are ellipses, and
+                // one stretched to this size ran into the dots above and below.
+                const r = Math.sqrt(selectedDot.rx * selectedDot.ry) * SELECTED_EMPHASIS;
+                drawSelected(selectedDot.x, selectedDot.y, r, r, selectedDot.opacity);
+            }
         } else if (markerCell && !markerCell.hasDot) {
             // The cell has no dot of its own (open sea round a small island),
             // so one is drawn there: the same flat-to-globe morph the dots go
@@ -1064,27 +1095,12 @@ export function DotMatrixGlobe({
             // Faded towards the globe's edge exactly as a dot there would be.
             const opacity = (1 - progress) + Math.max(0.1, 0.45 + 0.55 * zNorm) * progress;
             if (!(zNorm < 0 && progress > 0.5)) {
-                // Sized as the dot loop sizes a selected dot, flat and round,
-                // or on a phone the ring shrank to a pixel or so.
+                // Sized as the dot loop sizes a selected dot, flat and round.
                 const { hScale, vScale } = equalEarthRowScale(markerCell.lat);
                 const flatScale = Math.max(0.25, (hScale * flatSpacingX) / flatUnit, (vScale * flatSpacingY) / flatUnit);
-                const r = (baseRadius * flatScale * (1 - progress) + sphereRadius * progress) * 1.7;
-                ctx.globalAlpha = opacity;
-                ctx.beginPath();
-                ctx.fillStyle = palette.selected;
-                ctx.arc(x, y, r, 0, Math.PI * 2);
-                ctx.fill();
-                ring = { x, y, r: r * 1.9, opacity };
+                const r = (baseRadius * flatScale * (1 - progress) + sphereRadius * progress) * SELECTED_EMPHASIS;
+                drawSelected(x, y, r, r, opacity);
             }
-        }
-        if (ring) {
-            ctx.globalAlpha = ring.opacity;
-            ctx.beginPath();
-            ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
-            ctx.strokeStyle = palette.ring;
-            ctx.lineWidth = isMobile ? 1.25 : 1.5;
-            ctx.stroke();
-            ctx.globalAlpha = 1;
         }
 
         if (progress > 0 || animRef.current.progress !== target) {
@@ -1095,7 +1111,7 @@ export function DotMatrixGlobe({
             requestRef.current = requestAnimationFrame((t) => draw(t));
         }
 
-    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, focusedDotKey, ringKey, markerCell]);
+    }, [dotData, optimizedDots, borderSegments, visitedSet, visitedCityDots, viewMode, hoveredCountry, mode, stars, selectedKey, markerCell]);
 
     drawRef.current = draw;
 
