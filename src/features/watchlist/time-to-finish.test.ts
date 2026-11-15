@@ -110,6 +110,7 @@ describe('timeToFinish', () => {
       minutesLeft: 0,
       nextSeason: null,
       estimated: false,
+      airingSeason: null,
       airedEpisodes: 0,
     });
     const done = timeToFinish([season(1, [ep(1, 30)])], watched(['1x1']), today);
@@ -158,13 +159,39 @@ describe('a season still airing', () => {
     expect(compareTimeToFinish(caughtUp, airing, 'season')).toBeGreaterThan(0);
   });
 
-  it('still counts toward the whole show', () => {
-    expect(compareTimeToFinish(airing, settled, 'show')).toBeLessThan(0);
-    expect(timeToFinishLabel(airing, 'show')).toBe('1 ep · 50m');
+  it('keeps the whole show from being finished too', () => {
+    expect(airing.airingSeason).toBe(2);
+    expect(settled.airingSeason).toBeNull();
+    const unknown = timeToFinish([season(1, [ep(1, null)])], none, today);
+    const order = [done, airing, unknown, settled].sort((a, b) => compareTimeToFinish(a, b, 'show'));
+    expect(order).toEqual([settled, unknown, airing, done]);
+  });
+
+  it('holds the show open even when the backlog is in an earlier season', () => {
+    // Season 1 complete and unwatched; caught up on Season 2, still airing.
+    const behind = timeToFinish(
+      [season(1, [ep(1, 40)]), season(2, [ep(1, 50), ep(2, 50, '2026-11-12')])],
+      watched(['2x1']),
+      today,
+    );
+    expect(timeToFinishLabel(behind, 'show')).toBe('S2 still airing');
+    // Season 1 alone can still be finished.
+    expect(timeToFinishLabel(behind, 'season')).toBe('S1 · 1 ep · 40m');
+  });
+
+  it('does not count a season that has not started as airing', () => {
+    const premiere = timeToFinish(
+      [season(1, [ep(1, 40)]), season(2, [ep(1, 50, '2027-03-01')])],
+      none,
+      today,
+    );
+    expect(premiere.airingSeason).toBeNull();
+    expect(timeToFinishLabel(premiere, 'show')).toBe('1 ep · 40m');
   });
 
   it('says which season is still airing', () => {
     expect(timeToFinishLabel(airing, 'season')).toBe('S2 still airing');
+    expect(timeToFinishLabel(airing, 'show')).toBe('S2 still airing');
   });
 });
 
