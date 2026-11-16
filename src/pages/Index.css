@@ -1109,6 +1109,27 @@
   color: hsl(var(--muted-foreground));
 }
 
+/* A second, smaller figure under the headline one, with its unit beside it. */
+.fact-card-sub {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  color: hsl(var(--muted-foreground));
+}
+
+.fact-card-figure--small {
+  font-size: 1.125rem;
+  color: hsl(var(--foreground));
+}
+
+.fact-card-figure--small .fact-card-figure-total {
+  font-size: 0.75rem;
+}
+
 .fact-card-label {
   display: -webkit-box;
   -webkit-box-orient: vertical;

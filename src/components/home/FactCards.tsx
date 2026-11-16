@@ -61,6 +61,8 @@ interface Fact {
    */
   palette?: string;
   value: ReactNode;
+  /** A smaller second figure under the value, before the label. */
+  sub?: ReactNode;
   label: ReactNode;
   more: string;
   media?: ReactNode;
@@ -200,23 +202,33 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
   };
 
   const facts: (Fact | null)[] = [
-    // Without the country list there is no UN count to give, and "Loading…"
+    // Without the country list there is no count to give, and "Loading…"
     // would sit there for good.
     countryListFailed ? null : {
       id: 'travel',
       kicker: 'Travelled to',
       icon: Compass,
       palette: 'sky',
+      // The headline matches the Travel page's: every country and territory.
+      // The UN count, the one people usually mean by "countries", sits under it.
       value: travel && !countriesLoading
-        ? <span className="fact-card-figure">{travel.countries}<span className="fact-card-figure-total">/{travel.total}</span></span>
+        ? <span className="fact-card-figure">{travel.places}<span className="fact-card-figure-total">/{travel.placesTotal}</span></span>
         : LOADING,
+      sub: travel && !countriesLoading
+        ? (
+          <>
+            <span className="fact-card-figure fact-card-figure--small">{travel.countries}<span className="fact-card-figure-total">/{travel.total}</span></span>
+            {' '}<span>UN states</span>
+          </>
+        )
+        : undefined,
       label: travel && !countriesLoading && !citiesLoading
         ? [
-          `countries · ${visitedCities.length} ${visitedCities.length === 1 ? 'city' : 'cities'}`,
+          'countries & territories',
+          `${visitedCities.length} ${visitedCities.length === 1 ? 'city' : 'cities'}`,
           `${travel.continents} ${travel.continents === 1 ? 'continent' : 'continents'}`,
-          ...(travel.territories > 0 ? [`+${travel.territories} ${travel.territories === 1 ? 'territory' : 'territories'}`] : []),
         ].join(' · ')
-        : 'countries',
+        : 'countries & territories',
       more: 'Open the map',
       media: recentFlags.length > 0 ? <FlagStrip codes={recentFlags.map((country) => country.country_code)} /> : undefined,
       stacked: true,
@@ -291,6 +303,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
                 {fact.media && <span className="fact-card-media">{fact.media}</span>}
                 <span className="fact-card-text">
                   <span className="fact-card-value">{fact.value}</span>
+                  {fact.sub && <span className="fact-card-sub">{fact.sub}</span>}
                   {fact.label && <span className="fact-card-label">{fact.label}</span>}
                 </span>
               </span>

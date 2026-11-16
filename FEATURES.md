@@ -79,8 +79,10 @@ only; the counts are on the fact cards. Selecting a section shows its summary an
 counts in the inspector. Finance is in the constellation for an admin only.
 
 Fact cards each give one specific fact and open the section it comes from. They
-show the countries visited out of 195 UN states, with cities, continents and any
-territories (opens the Travel map); a favourite film and a favourite series; the
+show every country and territory visited, out of the 250 with an ISO code,
+with the UN states visited out of 195 beneath it, then cities and the
+continents with a UN state visited (opens the Travel map); a favourite film and
+a favourite series; the
 book being read now, or the last one finished; the current role (opens Experience
 & CV); the latest project, when there are projects; and the inventory count. When
 signed in as admin, the admin picks the film and the series from their favourites,

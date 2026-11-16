@@ -51,33 +51,38 @@ export function featuredFavourite(
 }
 
 export interface TravelFacts {
+  /** Every country and territory visited, Gibraltar included -- the Travel page's headline count. */
+  places: number;
+  /** Every country and territory in the dataset, the Travel page's headline denominator. */
+  placesTotal: number;
   /** UN member and observer states visited -- the same count as the Travel page's UN row. */
   countries: number;
   /** The UN denominator: 193 members plus the Holy See and Palestine. */
   total: number;
-  /** Visited places that are not UN states, such as Gibraltar. */
-  territories: number;
   /** Continents with a visited UN state in them, as the Travel page's continent sections count. */
   continents: number;
 }
 
 /**
- * Counts against the UN list the Travel page's membership breakdown uses, so
- * the card and the page never disagree. Null until the country dataset is in:
- * without it every visit would read as a territory.
+ * Counts against the same lists the Travel page uses: every place in the
+ * dataset for the headline, as its "Where I've been" header does
+ * (`totalPlaces` in TravelPage.tsx, which repeats this formula), and the UN
+ * list of its membership breakdown for the second figure. Null until the
+ * country dataset is in: without it there is no denominator for either.
  */
 export function travelFacts(
   visitedCodes: string[],
   sovereignCodes: Set<string>,
   continentByCode: Record<string, string>,
 ): TravelFacts | null {
-  if (sovereignCodes.size === 0) return null;
+  const placesTotal = Object.keys(continentByCode).length;
+  if (sovereignCodes.size === 0 || placesTotal === 0) return null;
   const un = buildMemberships(sovereignCodes).find((body) => body.key === 'un');
   if (!un) return null;
   const unique = [...new Set(visitedCodes)];
   const countries = countMembers(un, unique);
   const continents = new Set(unique.filter((code) => un.members.has(code)).map((code) => continentByCode[code]).filter(Boolean)).size;
-  return { countries, total: un.total, territories: unique.length - countries, continents };
+  return { places: unique.length, placesTotal, countries, total: un.total, continents };
 }
 
 export interface RoleLike {

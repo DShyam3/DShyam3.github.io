@@ -49,30 +49,34 @@ describe('travelFacts', () => {
   const sovereign = new Set(['FR', 'GB', 'JP', 'VA', 'US']);
   const continents = { FR: 'Europe', GB: 'Europe', JP: 'Asia', VA: 'Europe', US: 'North America', GI: 'Europe' };
 
-  it('counts UN states, territories and continents', () => {
+  it('counts every place against the dataset, and UN states and continents apart', () => {
     expect(travelFacts(['FR', 'GB', 'JP', 'VA', 'GI'], sovereign, continents)).toEqual({
-      countries: 4, total: 195, territories: 1, continents: 2,
+      places: 5, placesTotal: 6, countries: 4, total: 195, continents: 2,
     });
   });
 
   it('counts a repeated code once', () => {
-    expect(travelFacts(['FR', 'FR'], sovereign, continents)?.countries).toBe(1);
+    expect(travelFacts(['FR', 'FR'], sovereign, continents)).toMatchObject({ places: 1, countries: 1 });
   });
 
   it('leaves a code with no continent out of the continent count', () => {
-    expect(travelFacts(['FR', 'XX'], sovereign, continents)).toMatchObject({ countries: 1, territories: 1, continents: 1 });
+    expect(travelFacts(['FR', 'XX'], sovereign, continents)).toMatchObject({ places: 2, countries: 1, continents: 1 });
   });
 
   it('waits for the country dataset rather than calling every visit a territory', () => {
     expect(travelFacts(['FR'], new Set(), continents)).toBeNull();
   });
 
+  it('waits for the place list, which gives the headline its denominator', () => {
+    expect(travelFacts(['FR'], sovereign, {})).toBeNull();
+  });
+
   it('counts a continent only for its UN states, not for a territory there', () => {
-    expect(travelFacts(['FR', 'PR'], sovereign, { ...continents, PR: 'North America' })).toMatchObject({ territories: 1, continents: 1 });
+    expect(travelFacts(['FR', 'PR'], sovereign, { ...continents, PR: 'North America' })).toMatchObject({ places: 2, countries: 1, continents: 1 });
   });
 
   it('reads zero with no visits', () => {
-    expect(travelFacts([], sovereign, continents)).toEqual({ countries: 0, total: 195, territories: 0, continents: 0 });
+    expect(travelFacts([], sovereign, continents)).toEqual({ places: 0, placesTotal: 6, countries: 0, total: 195, continents: 0 });
   });
 });
 
