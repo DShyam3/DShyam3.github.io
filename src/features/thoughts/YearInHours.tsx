@@ -314,17 +314,17 @@ export function YearInHours() {
         {/* Right Column: Visualization & Table */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           <Card className="bg-card/50 border border-border/40 rounded-lg p-4 sm:p-6 space-y-6 hover:border-border/80 transition-colors shadow-none">
-            <div className="flex flex-col md:flex-row items-center justify-around gap-6">
+            <div className="flex flex-col md:flex-row lg:flex-col xl:flex-row items-center justify-around gap-6">
               {/* Donut Chart */}
-              <div className="w-44 h-44 flex items-center justify-center relative shrink-0">
+              <div className="w-52 h-52 flex items-center justify-center relative shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={timeData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={68}
+                      innerRadius={70}
+                      outerRadius={88}
                       paddingAngle={3}
                       dataKey="value"
                       stroke="hsl(var(--card))"
