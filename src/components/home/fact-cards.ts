@@ -1,4 +1,4 @@
-import { buildMemberships, countMembers } from '@/features/travel/memberships';
+import { buildMemberships, countMembers, countPlaces } from '@/features/travel/memberships';
 
 /**
  * The arithmetic behind the About page's fact cards, kept out of the component
@@ -64,25 +64,24 @@ export interface TravelFacts {
 }
 
 /**
- * Counts against the same lists the Travel page uses: every place in the
- * dataset for the headline, as its "Where I've been" header does
- * (`totalPlaces` in TravelPage.tsx, which repeats this formula), and the UN
- * list of its membership breakdown for the second figure. Null until the
- * country dataset is in: without it there is no denominator for either.
+ * The Travel page's own figures, from the same helpers it calls: its
+ * "Where I've been" headline (`countPlaces`) and the UN row of its membership
+ * breakdown (`countMembers`). Null until the country dataset is in: without
+ * it every visit would read as a territory.
  */
 export function travelFacts(
   visitedCodes: string[],
   sovereignCodes: Set<string>,
   continentByCode: Record<string, string>,
 ): TravelFacts | null {
-  const placesTotal = Object.keys(continentByCode).length;
-  if (sovereignCodes.size === 0 || placesTotal === 0) return null;
+  if (sovereignCodes.size === 0) return null;
   const un = buildMemberships(sovereignCodes).find((body) => body.key === 'un');
   if (!un) return null;
   const unique = [...new Set(visitedCodes)];
+  const places = countPlaces(unique, continentByCode);
   const countries = countMembers(un, unique);
   const continents = new Set(unique.filter((code) => un.members.has(code)).map((code) => continentByCode[code]).filter(Boolean)).size;
-  return { places: unique.length, placesTotal, countries, total: un.total, continents };
+  return { places: places.visited, placesTotal: places.total, countries, total: un.total, continents };
 }
 
 export interface RoleLike {

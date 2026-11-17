@@ -1,5 +1,5 @@
 import { AppShell } from '@/components/layout/AppShell';
-import { buildMemberships, countMembers, assertTotals } from '@/features/travel/memberships';
+import { buildMemberships, countMembers, assertTotals, countPlaces } from '@/features/travel/memberships';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { DotMatrixGlobe } from '@/components/dot-matrix/DotMatrixGlobe';
 import { useAuth } from '@/contexts/AuthContext';
@@ -245,11 +245,11 @@ const TravelContent = () => {
     const sovereignVisited = visitedCountries.filter(c => sovereignCodes.size === 0 || sovereignCodes.has(c.country_code));
     const territoryVisited = visitedCountries.filter(c => sovereignCodes.size > 0 && !sovereignCodes.has(c.country_code));
 
-    // Sovereign count drives all the stats
-    const totalCountries = Object.values(continentTotals).reduce((a, b) => a + b, 0) || 195;
     // The headline counts everything visitable -- every country and territory
-    // in the dataset -- with UN membership shown per row instead.
-    const totalPlaces = Object.keys(continentByCode).length || 250;
+    // in the dataset -- with UN membership shown per row instead. The About
+    // page's Travelled to card shows the same figure from the same helper.
+    const places = countPlaces(visitedCodes, continentByCode);
+    const placesPercent = Math.round((places.visited / places.total) * 100);
 
     // Counts against the bodies that publish a membership list. See
     // memberships.ts -- FIFA and the IOC do not count countries the way ISO
@@ -271,7 +271,6 @@ const TravelContent = () => {
         const problems = assertTotals(memberships);
         if (problems.length) console.error('[Travel] membership totals:', problems);
     }, [memberships, sovereignCodes.size]);
-    const sovereignCount = sovereignVisited.length;
 
     const [hovered, setHovered] = useState<{ code: string; name: string; flagUrl: string; dotKey?: string | null } | null>(null);
 
@@ -531,7 +530,7 @@ const TravelContent = () => {
 
                             {/* LEFT — title above, country list in card below */}
                             <div className="travel-sidebar-col">
-                                {/* Title + counter + percentage — sovereign states only */}
+                                {/* Title + counter + percentage — every country and territory */}
                                 <div className="travel-sidebar-labels">
                                     <DotMatrixText
                                         text="WHERE I'VE BEEN  "
@@ -540,7 +539,7 @@ const TravelContent = () => {
                                         className="text-muted-foreground whitespace-nowrap"
                                     />
                                     <DotMatrixText
-                                        text={`${visitedCountries.length}/${totalPlaces}  ${Math.round((visitedCountries.length / totalPlaces) * 100)}%`}
+                                        text={`${places.visited}/${places.total}  ${placesPercent}%`}
                                         size={isMobile ? "xs" : "sm"}
                                         wrap={false}
                                         className="text-muted-foreground whitespace-nowrap"
@@ -564,14 +563,14 @@ const TravelContent = () => {
                                         <div className="flex items-baseline justify-between gap-3 pb-1.5 border-b border-border/50">
                                             <span
                                                 className="text-xs text-muted-foreground"
-                                                title="Every country and territory with an ISO 3166-1 alpha-2 code, including dependencies like Gibraltar and Hong Kong."
+                                                title="Every country and territory with an ISO 3166-1 alpha-2 code, including dependencies like Gibraltar and Hong Kong, plus Kosovo."
                                             >
                                                 ISO 3166-1
                                             </span>
                                             <span className="text-xs tabular-nums">
-                                                {visitedCountries.length}/{totalPlaces}
+                                                {places.visited}/{places.total}
                                                 <span className="text-muted-foreground/60 ml-1.5">
-                                                    {Math.round((visitedCountries.length / totalPlaces) * 100)}%
+                                                    {placesPercent}%
                                                 </span>
                                             </span>
                                         </div>

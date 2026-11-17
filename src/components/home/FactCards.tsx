@@ -212,7 +212,14 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
       // The headline matches the Travel page's: every country and territory.
       // The UN count, the one people usually mean by "countries", sits under it.
       value: travel && !countriesLoading
-        ? <span className="fact-card-figure">{travel.places}<span className="fact-card-figure-total">/{travel.placesTotal}</span></span>
+        ? (
+          <span className="fact-card-figure">
+            {travel.places}<span className="fact-card-figure-total">/{travel.placesTotal}</span>
+            {/* The visible unit sits in the label, after the UN line; a screen
+                reader hears it here, next to the figure it belongs to. */}
+            <span className="sr-only"> countries and territories,</span>
+          </span>
+        )
         : LOADING,
       sub: travel && !countriesLoading
         ? (
@@ -223,12 +230,19 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
         )
         : undefined,
       label: travel && !countriesLoading && !citiesLoading
-        ? [
-          'countries & territories',
-          `${visitedCities.length} ${visitedCities.length === 1 ? 'city' : 'cities'}`,
-          `${travel.continents} ${travel.continents === 1 ? 'continent' : 'continents'}`,
-        ].join(' · ')
-        : 'countries & territories',
+        ? (
+          <>
+            <span aria-hidden="true">countries & territories · </span>
+            {`${visitedCities.length} ${visitedCities.length === 1 ? 'city' : 'cities'}`}
+            {' · '}
+            {`${travel.continents} ${travel.continents === 1 ? 'continent' : 'continents'}`}
+          </>
+        )
+        // Once the headline carries the sr-only unit, the visible one is hidden
+        // from a screen reader here too, so it is not heard twice.
+        : travel && !countriesLoading
+          ? <span aria-hidden="true">countries & territories</span>
+          : 'countries & territories',
       more: 'Open the map',
       media: recentFlags.length > 0 ? <FlagStrip codes={recentFlags.map((country) => country.country_code)} /> : undefined,
       stacked: true,

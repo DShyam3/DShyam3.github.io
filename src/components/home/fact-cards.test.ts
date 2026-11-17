@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PLACES_FALLBACK_TOTAL } from '@/features/travel/memberships';
 import { currentRole, dayNumber, featuredFavourite, travelFacts, type FavouriteTitle } from './fact-cards';
 
 const fav = (id: number, title: string, tmdb_id: number | null): FavouriteTitle => ({
@@ -67,8 +68,8 @@ describe('travelFacts', () => {
     expect(travelFacts(['FR'], new Set(), continents)).toBeNull();
   });
 
-  it('waits for the place list, which gives the headline its denominator', () => {
-    expect(travelFacts(['FR'], sovereign, {})).toBeNull();
+  it('falls back to the Travel page\'s 250 places, as its header does', () => {
+    expect(travelFacts(['FR'], sovereign, {})).toMatchObject({ places: 1, placesTotal: PLACES_FALLBACK_TOTAL, continents: 0 });
   });
 
   it('counts a continent only for its UN states, not for a territory there', () => {

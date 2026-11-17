@@ -178,6 +178,28 @@ export function countMembers(
 }
 
 /**
+ * Every place in the country dataset (`public/countries.json`), used until it
+ * is in: the 249 officially assigned ISO 3166-1 codes plus Kosovo (XK, which
+ * ISO leaves user-assigned). Not a membership body, so no assertTotals check.
+ */
+export const PLACES_FALLBACK_TOTAL = 250;
+
+/**
+ * The Travel page's headline: every country and territory visited, out of
+ * every place in the country dataset. The About page's Travelled to card
+ * shows the same figure, so both call this rather than each other's copy.
+ */
+export function countPlaces(
+  visitedCodes: string[],
+  continentByCode: Record<string, string>,
+): { visited: number; total: number } {
+  return {
+    visited: new Set(visitedCodes).size,
+    total: Object.keys(continentByCode).length || PLACES_FALLBACK_TOTAL,
+  };
+}
+
+/**
  * Guard against a bad edit. Each list is built to match the body's published
  * total, so a mismatch means the data is wrong and the resulting percentage
  * would be a confident lie.

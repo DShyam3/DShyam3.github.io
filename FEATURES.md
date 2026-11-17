@@ -79,7 +79,7 @@ only; the counts are on the fact cards. Selecting a section shows its summary an
 counts in the inspector. Finance is in the constellation for an admin only.
 
 Fact cards each give one specific fact and open the section it comes from. They
-show every country and territory visited, out of the 250 with an ISO code,
+show every country and territory visited, out of 250 (the ISO list plus Kosovo),
 with the UN states visited out of 195 beneath it, then cities and the
 continents with a UN state visited (opens the Travel map); a favourite film and
 a favourite series; the
