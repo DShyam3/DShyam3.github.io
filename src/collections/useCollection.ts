@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { supabaseTableQuery, useSupabaseTable, type TableReadOptions } from '@/hooks/useSupabaseTable';
-import type { CollectionConfig, CollectionRow, FacetDef } from './types';
+import type { CollectionConfig, CollectionRow } from './types';
+import { ALL, countFilters, defaultFor, nextFilters, revealFilters } from './facets';
 
-export const ALL = 'all';
 
 /** The read a collection's page makes. One function, so the warm-up asks for the same key. */
 function collectionRead<T extends CollectionRow, R>(config: CollectionConfig<T, R>): TableReadOptions {
@@ -22,14 +22,6 @@ function collectionRead<T extends CollectionRow, R>(config: CollectionConfig<T, 
 /** A collection's rows as query options, for fetching them before its page mounts. */
 export const collectionQuery = <T extends CollectionRow, R>(config: CollectionConfig<T, R>) =>
   supabaseTableQuery<T>(config.table, collectionRead(config));
-
-/**
- * The option a facet starts on, and returns to when a resetsOthers facet
- * changes. One function so first render and reset cannot disagree.
- */
-function defaultFor<T extends CollectionRow>(facet: FacetDef<T>): string {
-  return facet.defaultValue ?? (facet.includeAll === false ? facet.options[0]?.key : ALL);
-}
 
 /**
  * Data + filtering for one collection, driven entirely by its config.
@@ -53,44 +45,16 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState(() => config.sortOptions?.[0]?.key ?? '');
 
-  const nextFiltersFor = useCallback(
-    (current: Record<string, string>, key: string, value: string) => {
-      const changed = config.facets.find((facet) => facet.key === key);
-      const next = { ...current, [key]: value };
-      if (changed?.resetsOthers) {
-        for (const facet of config.facets) {
-          if (facet.key !== key) next[facet.key] = defaultFor(facet);
-        }
-      }
-      return next;
-    },
+  const setFilter = useCallback(
+    (key: string, value: string) => setFilters((current) => nextFilters(config.facets, current, key, value)),
     [config.facets],
   );
 
-  const setFilter = useCallback(
-    (key: string, value: string) => setFilters((current) => nextFiltersFor(current, key, value)),
-    [nextFiltersFor],
-  );
-
-  /**
-   * Narrows the page to one row: searches for its title and sets each facet so
-   * the row is not filtered out. A facet with an All option goes to All; one
-   * without goes to the option the row belongs to.
-   */
+  /** Narrows the page to one row: searches for its title and sets each facet to keep it (see revealFilters). */
   const reveal = useCallback(
     (row: T, title: string) => {
       setSearch(title);
-      setFilters(
-        Object.fromEntries(
-          config.facets.map((facet) => {
-            if (facet.includeAll !== false) return [facet.key, ALL];
-            const option = facet.options.find((o) =>
-              facet.match ? facet.match(row, o.key) : String(row[facet.field]) === o.key,
-            );
-            return [facet.key, option?.key ?? defaultFor(facet)];
-          }),
-        ),
-      );
+      setFilters(revealFilters(config.facets, row));
     },
     [config.facets],
   );
@@ -167,7 +131,7 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
     (facetKey: string, optionKey: string) => {
       const facet = config.facets.find((f) => f.key === facetKey);
       if (!facet) return 0;
-      const candidateFilters = nextFiltersFor(filters, facetKey, optionKey);
+      const candidateFilters = countFilters(config.facets, filters, facetKey, optionKey);
       const pool = applyFacets(searched, facetKey, candidateFilters);
       if (optionKey === ALL) return pool.length;
       if (facet.match) {
@@ -175,7 +139,7 @@ export function useCollection<T extends CollectionRow, R>(config: CollectionConf
       }
       return pool.filter((item) => String(item[facet.field]) === optionKey).length;
     },
-    [config.facets, searched, applyFacets, filters, nextFiltersFor],
+    [config.facets, searched, applyFacets, filters],
   );
 
   return {

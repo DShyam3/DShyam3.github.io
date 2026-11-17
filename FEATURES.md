@@ -40,7 +40,11 @@ sections. From two characters it also lists records, matched on the fields that
 each collection's own search box uses, and only in collections the visitor can
 open. Photos and Beliefs have no search box, so they are not searched. Picking a
 record opens its collection with the search and filters set so the record is on
-screen. Search reads stored rows only and answers no questions.
+screen. A filter that offers no option for the record's category goes to All, so
+the record still shows. Search reads stored rows only and answers no questions.
+
+On the opening splash, ⌘K (Ctrl+K elsewhere) closes the splash at once and opens
+the palette. Holding the keys does not toggle the palette on each key repeat.
 
 In the palette, Tab stays within it and typing stays in the search field. Up
 and Down move a highlight
@@ -470,6 +474,8 @@ or restored from the dismissed list. The bank's own "transfer" label appears as 
 on bank-synced rows. Possible transfers also lists one-sided transfers — a row the bank or its name calls a transfer with no matching movement in another tracked account. Mark it "My own account" (not counted) or "Real spending"/"Real income"; either can be undone. Possible transfers shows five of each list first, with "Show all". Each shows a red line when confirmed transfer links or one-sided transfers fail to load.
 
 Bank-synced transfers are labelled "Transfers" rather than a spending category, and a category you change on a synced transaction stays changed after the next sync.
+
+A transaction added by hand is dated the day chosen in its date picker, read in the browser's local time, and "today" is the current local day.
 
 The page loads the complete transaction ledger, however large, and displays 100 at a time with "Show 100 more"; search, filters and bulk selection cover every matching transaction, and a transaction opened from Home is always shown. Transfer links, transfer dismissals, one-sided transfers, transfers between profiles, payslips and their bank matches, net-worth history, goal contributions, investment activity and debt balance records also load in full, however many there are.
 
@@ -907,6 +913,8 @@ rise from the right and set to the left over 700ms. Supported browsers crossfade
 the page between palettes over 350ms; other browsers switch the palette immediately.
 The moon rises smoothly into place without overshooting. Reduced-motion
 preferences skip the animation.
+
+Finance charts draw their grid lines, axes and reference lines in the current theme's colours.
 
 From 700px the header's "+" button opens the social links to its right; between 700 and 1023px the page title fades out to make room. Below 700px there is no social button, and the links sit at the foot of the menu panel. On phones the header stays one row: the page title wraps between words beside the avatar and the controls.
 

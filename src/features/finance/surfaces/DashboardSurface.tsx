@@ -163,7 +163,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
     return 'bg-destructive';
   };
 
-  const todayIso = `${todayDateObj.getFullYear()}-${String(todayDateObj.getMonth() + 1).padStart(2, '0')}-${String(todayDateObj.getDate()).padStart(2, '0')}`;
+  const todayIso = toISODate(todayDateObj);
   const changeSummary = useMemo(
     () => deriveFinanceChangeSummary(ledger, todayIso),
     [ledger, todayIso],
@@ -449,7 +449,7 @@ export default function DashboardSurface({ toggleRecurringPaid }: { toggleRecurr
                 <stop offset="95%" stopColor={progressGradientColor} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis
               dataKey={dashboardSpendXAxisKey}
               tickLine={false}

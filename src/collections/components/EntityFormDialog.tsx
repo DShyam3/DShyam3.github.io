@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { safeHref } from '@/lib/safe-url';
-import { ALL } from '../useCollection';
+import { ALL } from '../facets';
 import type {
   CollectionConfig,
   CollectionRow,

@@ -1,3 +1,4 @@
+import { toISODate } from '@/lib/finance/dates';
 import { MetricProgress } from '@/components/ui/metric-progress';
 /**
  * Goals — one of the two sections on the Plan surface (REHAUL_PLAN.md 7.C).
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
@@ -69,7 +71,7 @@ export default function GoalsSurface() {
     note: string;
     date: string;
     bankAccountId: string;
-  }>({ amount: '', note: '', date: new Date().toISOString().split('T')[0], bankAccountId: '' });
+  }>({ amount: '', note: '', date: toISODate(new Date()), bankAccountId: '' });
 
   const [collapsedGoalGroups, setCollapsedGoalGroups] = useState<{
     active: boolean;
@@ -87,7 +89,7 @@ export default function GoalsSurface() {
       toast({ title: 'Invalid Goal', description: 'Please enter a valid name and target amount.', variant: 'destructive' });
       return;
     }
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toISODate(new Date());
     const created: Goal = {
       id: 'g_' + Date.now(),
       name: newGoal.name,
@@ -221,7 +223,7 @@ export default function GoalsSurface() {
         const contrib = {
           id: 'c_' + Date.now(),
           amount: contribAmount,
-          date: newContribution.date || new Date().toISOString().split('T')[0],
+          date: newContribution.date || toISODate(new Date()),
           note: newContribution.note || undefined,
           bankAccountId: newContribution.bankAccountId || undefined
         };
@@ -235,7 +237,7 @@ export default function GoalsSurface() {
     });
     setGoals(updated);
     saveDataToSupabase('goals', updated);
-    setNewContribution({ amount: '', note: '', date: new Date().toISOString().split('T')[0], bankAccountId: '' });
+    setNewContribution({ amount: '', note: '', date: toISODate(new Date()), bankAccountId: '' });
     toast({ title: 'Contribution Logged', description: `Added ${formatGBP(contribAmount)} and updated linked account.` });
   };
 
@@ -413,7 +415,7 @@ export default function GoalsSurface() {
         const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
 
         const sortedContributions = [...(goal.contributions || [])].sort((a, b) => a.date.localeCompare(b.date));
-        const startD = goal.startDate || (sortedContributions[0] ? sortedContributions[0].date : new Date().toISOString().split('T')[0]);
+        const startD = goal.startDate || (sortedContributions[0] ? sortedContributions[0].date : toISODate(new Date()));
 
         let currentTotal = 0;
         const chartData = [{
@@ -431,7 +433,7 @@ export default function GoalsSurface() {
           });
         });
 
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = toISODate(new Date());
         if (chartData[chartData.length - 1].date < todayStr) {
           chartData.push({
             date: todayStr,
@@ -509,7 +511,7 @@ export default function GoalsSurface() {
                       <stop offset="95%" stopColor="hsl(var(--positive))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis
                     dataKey="formattedDate"
                     tickLine={false}
@@ -527,8 +529,8 @@ export default function GoalsSurface() {
                     formatter={(value: number) => [formatGBP(value), 'Saved']}
                     labelFormatter={(label) => `Date: ${label}`}
                     contentStyle={{
-                      backgroundColor: 'rgba(30, 30, 46, 0.9)',
-                      borderColor: 'rgba(255, 255, 255, 0.1)',
+                      backgroundColor: 'hsl(var(--popover))',
+                      borderColor: 'hsl(var(--border))',
                       borderRadius: '16px',
                       fontSize: '12px',
                       color: 'hsl(var(--foreground))'
@@ -578,7 +580,7 @@ export default function GoalsSurface() {
                   placeholder="Amount (£)"
                   value={newContribution.amount}
                   onChange={(e) => setNewContribution({ ...newContribution, amount: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                  className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
+                  className="rounded-lg h-11 border-border/40 bg-background/50 text-xs font-mono"
                   required
                 />
                 <Input
@@ -586,12 +588,12 @@ export default function GoalsSurface() {
                   placeholder="Note / Source"
                   value={newContribution.note}
                   onChange={(e) => setNewContribution({ ...newContribution, note: e.target.value })}
-                  className="rounded-lg h-9 border-border/40 bg-background/50 text-xs font-mono"
+                  className="rounded-lg h-11 border-border/40 bg-background/50 text-xs font-mono"
                 />
-                <select
+                <NativeSelect
                   value={newContribution.bankAccountId || ''}
                   onChange={(e) => setNewContribution({ ...newContribution, bankAccountId: e.target.value })}
-                  className="flex w-full rounded-lg border border-border/40 bg-background/50 h-9 px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors font-mono"
+                  className="rounded-lg border border-border/40 bg-background/50 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary hover:bg-background/80 transition-colors font-mono"
                 >
                   <option value="">No linked account (Manual)</option>
                   {bankAccounts.map(acc => (
@@ -599,8 +601,8 @@ export default function GoalsSurface() {
                       {acc.name} ({acc.type} - {formatGBP(acc.balance)})
                     </option>
                   ))}
-                </select>
-                <Button type="submit" className="rounded-lg h-9 bg-primary text-primary-foreground font-mono text-xs">
+                </NativeSelect>
+                <Button type="submit" className="rounded-lg bg-primary text-primary-foreground font-mono text-xs">
                   Add Contribution
                 </Button>
               </div>

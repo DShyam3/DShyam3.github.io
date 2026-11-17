@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BudgetCategory, BudgetItem, MockTransaction, RecurringBill } from '@/features/finance/finance-types';
@@ -368,7 +369,7 @@ const categoryData = budgetCategories
   })
   .filter(d => d.value > 0);
 
-const donutData = categoryData.length > 0 ? categoryData : [{ name: 'Budget', value: 1, color: 'rgba(255,255,255,0.1)' }];
+const donutData = categoryData.length > 0 ? categoryData : [{ name: 'Budget', value: 1, color: 'hsl(var(--muted))' }];
 
 return (
   <div className="space-y-6">
@@ -416,7 +417,9 @@ return (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <RechartsTooltip formatter={(v: number) => formatGBP(v)} />
+            {/* With nothing spent yet the pie is a placeholder slice of 1, not a
+                figure, so it gets no tooltip. */}
+            {categoryData.length > 0 && <RechartsTooltip formatter={(v: number) => formatGBP(v)} />}
           </PieChart>
         </ResponsiveContainer>
       </div>
@@ -786,7 +789,7 @@ return (
                     return null;
                   }}
                 />
-                <ReferenceLine y={targetCategoryBudget} stroke="rgba(255, 255, 255, 0.3)" strokeDasharray="3 3" />
+                <ReferenceLine y={targetCategoryBudget} stroke="hsl(var(--muted-foreground) / 0.5)" strokeDasharray="3 3" />
                 <Bar dataKey="spent" radius={[3, 3, 0, 0]}>
                   {multiMonthChartData.map((entry, index) => (
                     <Cell
@@ -1051,7 +1054,7 @@ return (
     <form onSubmit={handleAddCategory} className="space-y-4 py-2">
       <div className="space-y-1">
         <Label htmlFor="cat-template" className="text-xs">Select Template (Auto-fills details)</Label>
-        <select
+        <NativeSelect
           id="cat-template"
           onChange={(e) => {
             const idx = parseInt(e.target.value, 10);
@@ -1067,7 +1070,7 @@ return (
               setNewCategoryBudget('');
             }
           }}
-          className="flex w-full rounded-lg border border-primary/20 bg-background/50 h-10 px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat cursor-pointer hover:bg-background/80 transition-colors"
+          className="rounded-lg border border-primary/20 bg-background/50 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary hover:bg-background/80 transition-colors"
           defaultValue=""
         >
           <option value="">Start a new one from scratch</option>
@@ -1076,7 +1079,7 @@ return (
               {preset.emoji} {preset.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       <div className="space-y-1">
         <Label htmlFor="cat-new-name">Category Name</Label>

@@ -126,6 +126,14 @@ export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
 
     useEffect(() => {
         const handleKeyPress = (e: KeyboardEvent) => {
+            // ⌘K / Ctrl+K opens the command palette (CommandDock listens for it
+            // too). The palette sits under this screen, so get out of its way at
+            // once, without the exit animation, rather than open it unseen.
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                document.body.style.overflow = '';
+                onComplete();
+                return;
+            }
             if ((e.key === ' ' || e.key === 'Enter') && showPressStart && !isAnimating) {
                 e.preventDefault();
                 handleStart();
@@ -134,7 +142,7 @@ export const OpeningSequence = ({ onComplete }: OpeningSequenceProps) => {
 
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [showPressStart, isAnimating, handleStart]);
+    }, [showPressStart, isAnimating, handleStart, onComplete]);
 
     // Use the final full text once typing is done to avoid re-renders
     const displayText = typingDone ? CONFIG.fullText : text;

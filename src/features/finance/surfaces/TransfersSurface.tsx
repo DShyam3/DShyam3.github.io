@@ -7,6 +7,7 @@
  * figures skip whichever ledger entries are linked to it.
  */
 
+import { toISODate } from '@/lib/finance/dates';
 import { useMemo, useState } from 'react';
 import { ArrowRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ export default function TransfersSurface() {
   const { askDelete, deleteDialog } = useDeleteConfirm();
 
   const others = profiles.filter(p => p.id !== profileId);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toISODate(new Date());
 
   const [toProfile, setToProfile] = useState('');
   const [amount, setAmount] = useState('');

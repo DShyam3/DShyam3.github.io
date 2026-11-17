@@ -6,6 +6,7 @@
  * reads them.
  */
 
+import { calendarParts, toISODate } from '@/lib/finance/dates';
 import { useMemo, useState } from 'react';
 import { useFinanceData } from '../FinanceDataContext';
 import { useSpendingLedger } from '../useSpendingLedger';
@@ -72,7 +73,7 @@ export default function CashFlowSurface({ breakdownRates, todayDateObj }: CashFl
   });
   const [cfCustomEnd, setCfCustomEnd] = useState<string>(() => {
     const today = new Date();
-    return today.toISOString().split('T')[0];
+    return toISODate(today);
   });
 
 // ── Cash Flow Period Definitions ──
@@ -105,13 +106,13 @@ const getPeriodRange = () => {
       return { start: s, end: today };
     }
     case 'custom': {
-      const s = new Date(cfCustomStart);
-      const e = new Date(cfCustomEnd);
-      s.setHours(0, 0, 0, 0);
-      e.setHours(23, 59, 59, 999);
+      // `new Date('YYYY-MM-DD')` is UTC midnight, the previous local day west
+      // of Greenwich; build each end from the stored day's own parts.
+      const s = calendarParts(cfCustomStart);
+      const e = calendarParts(cfCustomEnd);
       return {
-        start: isNaN(s.getTime()) ? new Date(cfYear, 0, 1) : s,
-        end: isNaN(e.getTime()) ? today : e
+        start: s ? new Date(s.year, s.month - 1, s.day) : new Date(cfYear, 0, 1),
+        end: e ? new Date(e.year, e.month - 1, e.day, 23, 59, 59, 999) : today
       };
     }
     default:
@@ -445,7 +446,7 @@ return (
       <div className="h-[220px] sm:h-[280px] w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={cfMonthlyData} margin={{ top: 10, right: 4, left: 0, bottom: 30 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis
               dataKey="name"
               tickLine={false}
@@ -467,7 +468,7 @@ return (
               labelStyle={{ fontWeight: 'bold' }}
               formatter={(value: number) => [formatGBP(value), 'Net Income']}
             />
-            <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
+            <ReferenceLine y={0} stroke="hsl(var(--muted-foreground) / 0.5)" strokeDasharray="4 4" />
             <Bar
               dataKey="net"
               shape={(props: Record<string, unknown>) => {
@@ -509,7 +510,7 @@ return (
         <div className="h-[180px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: 0, bottom: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="name"
                 tickLine={false}
@@ -550,7 +551,7 @@ return (
         <div className="h-[180px] w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={cfMonthlyData} margin={{ top: 5, right: 4, left: 0, bottom: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="name"
                 tickLine={false}

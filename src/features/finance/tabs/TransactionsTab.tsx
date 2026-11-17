@@ -1,3 +1,4 @@
+import { toISODate } from '@/lib/finance/dates';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { MockTransaction, BankAccount, Goal, BudgetCategory } from '@/features/finance/finance-types';
@@ -270,10 +271,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   // Grouped transactions by date (only dates that are present after filtering)
   const groupedTransactions = useMemo(() => {
     const groups: { [key: string]: MockTransaction[] } = {};
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toISODate(new Date());
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = toISODate(yesterday);
 
     visibleTransactions.forEach(tx => {
       let groupKey = tx.date;
@@ -556,7 +557,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       name: newTxName.trim(),
       amount: parseFloat(newTxAmount),
       category: newTxCategory || 'Other',
-      date: newTxDate.toISOString().split('T')[0],
+      date: toISODate(newTxDate),
       isReviewed: false,
       bankAccountId: newTxAccount || undefined,
       goalId: newTxGoal || undefined,
@@ -600,7 +601,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `transactions_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `transactions_export_${toISODate(new Date())}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

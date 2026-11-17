@@ -115,6 +115,7 @@ const sitePlugin = (): Plugin => {
                 defer: true,
                 src: analytics.umamiScriptUrl,
                 "data-website-id": analytics.umamiWebsiteId,
+                "data-exclude-search": "true",
               },
               injectTo: "head",
             },

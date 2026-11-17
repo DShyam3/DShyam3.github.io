@@ -287,6 +287,7 @@ uppercase-label question that `REHAUL_PLAN.md` carried until 11 September
 | Filters | Compact toolbar: primary facet select, search with a clear button, Filters popover whose trigger counts facets moved off their default, sort select | `FilterBar`, `CollectionPage` (sort) |
 | Finance summary | Large actual figure, explanation, optional secondary figure | `SurfaceHero`, `finance-hero` |
 | Dialog | Frosted container over a dimmed, blurred backdrop | `DialogContent`, `glass-dialog` |
+| Native select | A plain `<select>` at 44px, its browser arrow hidden and a `ChevronDown` drawn in the muted foreground colour; no fixed-colour arrow images | `NativeSelect` |
 | Travel | Map framed as the main visual, separate readable list | `travel-map-col`, `travel-sidebar` |
 | Gradient metric tile *(planned)* | Large radius, soft mesh gradient, oversized light figure, smaller suffix, dot-grid fade, optional circular action | Not built — extend `ambient-card` with a figure slot |
 | Instrument panel *(planned)* | Dark card, hairline rule, corner brackets, tabular readout rail | Not built — extend `ambient-card`, do not fork `Card` |
@@ -354,32 +355,14 @@ brands, in portrait and landscape.
 - Card actions appear on touch/coarse pointers; fine-pointer hover and keyboard
   focus reveal them. Shared touch controls use a `2.75rem` minimum target.
 - Dialogs retain outer gutters and a bounded scrolling body, with the close
-  control outside that body (except `dialog-flush` on phones; see below). The
+  control outside that body. The
   body's scrollbar is the thin `app-scroll` bar;
   on the default p-6 frame it sits in the dialog's right padding, never over
-  content. Series with seasons use an `85dvh` dialog from 640px:
-  poster/information above an independently scrolling episode rail through
-  1279px, then three columns from 1280px. The outer body stays still; long
-  information has its own overflow area. Below 640px the outer body scrolls and
-  the episode rail is capped at `40dvh`. Episode names are always displayed,
-  with “Title unavailable” as fallback. The collection card detail
-  (`sm:max-w-4xl`, up to 896px) keeps its artwork outside the text scroller from
-  640px: a cover (a book, a recipe) is a fixed column, 35% up to 18rem, and a
-  content image (Photos) shares the row. From 640px only
-  `.collection-detail-info` scrolls; the artwork column stays put, and the close
-  button stays fixed over the text column, kept clear of the text by `3.5rem` of
-  right padding. Below 640px the whole dialog is one stacked scroller, and the
-  close button scrolls away with the artwork.
+  content.
 - No control sits on top of text. The dialog close button is `2.75rem`, `0.5rem`
   in from the corner, and `.glass-dialog` reserves a `3.75rem` top inset for it
   outside the body's scroller, so headers need no right padding for it and
-  scrolled fields never pass under it. The collection card detail carries
-  `dialog-flush`, which drops the inset at every width. Below 640px the dialog
-  itself scrolls rather than its body, so the close button moves with the
-  content instead of floating over it; at rest it sits over the artwork, or,
-  with no artwork, beside a header padded `pr-10` to clear it. From 640px its
-  text column keeps `3.5rem` of right padding clear of the close button
-  instead.
+  scrolled fields never pass under it.
   `SheetHeader` keeps `pr-10`, since a sheet has no inset. The dialog body's
   single column is `minmax(0, 1fr)`, so no child can widen it. Row actions sit
   in the row's flow (a menu, a trailing button, a clear button with matching
@@ -487,7 +470,7 @@ supplementary review reference, with no new runtime dependency or installation.
 | Transactions | Quiet date groups, wrapping merchant names, explicit review labels, aligned amounts, named checkboxes and directly focusable rows complement the existing review shortcuts. |
 | Budget and goals | `MetricProgress` supplies a labelled value and semantic state. Over budget, no target, not started, in progress and completed states are distinct. Budget values and meters remain visible on phones. Debt meters describe outstanding/repaid balances instead of borrowing goal terminology. |
 | Travel | The country list is keyboard reachable, selected places use the existing shared map/list state, the location heading receives focus and Back restores it to the country. The globe has stronger base-dot contrast in both themes. |
-| Books, Watchlist, Inventory | Covers retain their proportions; unavailable artwork has a titled fallback. Watchlist detail cards support Enter/Space and restore focus after closing. Card actions remain visible when keyboard focus enters the group. |
+| Books, Watchlist, Inventory | Covers retain their proportions; unavailable artwork has a titled fallback. Watchlist detail cards support Enter/Space and restore focus after closing; episode names always show, with “Title unavailable” as fallback. Card actions remain visible when keyboard focus enters the group. |
 | Photos and Inspiration | Larger gallery columns and contained images give media more room. Image controls keep an opaque backing; photo details preserve the complete image on mobile. |
 | Articles, Thoughts, Beliefs | Quiet reading surfaces and comfortable detail line spacing. Beliefs show complete passages without truncation or an overlapping decorative quote. |
 | Forms and dialogs | Persistent labels, linked validation errors, required-field focus, an accessible file picker, disabled pending forms and a retained-input save-error state. Dialog bodies scroll within the viewport. Dismissal does not wait for exit animations before restoring focus. |

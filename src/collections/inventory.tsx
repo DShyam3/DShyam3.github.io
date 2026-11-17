@@ -29,7 +29,9 @@ export interface InventoryRow extends CollectionRow {
 
 /**
  * Inventory always shows exactly one category -- there is no "everything"
- * view -- so the facet opts out of the All option and starts on EDC.
+ * view -- so the facet opts out of the All option and starts on EDC. The one
+ * exception: a palette pick of a row in a category not listed here sets the
+ * facet to All, or the row could not be shown (collections/facets.ts).
  */
 const CATEGORIES = [
   { key: 'edc', label: 'EDC' },

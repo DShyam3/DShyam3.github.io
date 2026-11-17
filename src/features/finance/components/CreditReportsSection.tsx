@@ -1,3 +1,4 @@
+import { toISODate } from '@/lib/finance/dates';
 import React, { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
@@ -55,7 +56,7 @@ export default function CreditReportsSection() {
     originalScore: number | null;
   }
 
-  const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [logDate, setLogDate] = useState(() => toISODate(new Date()));
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [isSavingScores, setIsSavingScores] = useState(false);
   const [bureauDrafts, setBureauDrafts] = useState<Record<'experian' | 'transunion' | 'equifax', BureauScoreDraft>>({
@@ -83,7 +84,7 @@ export default function CreditReportsSection() {
     });
 
     setBureauDrafts(drafts);
-    setLogDate(new Date().toISOString().split('T')[0]);
+    setLogDate(toISODate(new Date()));
     setReportFile(null);
     setIsAddCreditScoreOpen(true);
   }, [creditBureaus, creditScores]);

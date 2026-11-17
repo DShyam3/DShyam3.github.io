@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ALL } from '../useCollection';
+import { ALL } from '../facets';
 import type { CollectionConfig, CollectionRow, FacetDef } from '../types';
 
 interface FilterBarProps<T extends CollectionRow, R> {
@@ -37,8 +37,10 @@ export function FilterBar<T extends CollectionRow, R>({
 
   const facetSelect = (facet: FacetDef<T>, primary = false) => {
     const all = { key: ALL, label: 'All' };
+    // A facet without All still lists it while a palette reveal has set it
+    // (useCollection's reveal), or the trigger would show a blank value.
     const options = facet.includeAll === false
-      ? facet.options
+      ? filters[facet.key] === ALL ? [...facet.options, all] : facet.options
       : facet.allLast ? [...facet.options, all] : [all, ...facet.options];
     const label = facet.label ?? facet.key.replace(/[_-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 

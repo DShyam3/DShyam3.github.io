@@ -53,6 +53,8 @@ export function CommandDock() {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
+        // Holding the keys would otherwise toggle the palette on every repeat.
+        if (event.repeat) return;
         setCommandOpen(!commandOpen);
       }
     };

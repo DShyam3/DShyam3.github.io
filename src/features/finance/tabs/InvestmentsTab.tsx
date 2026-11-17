@@ -760,16 +760,16 @@ export const InvestmentsTab: React.FC<InvestmentsTabProps> = ({
                       <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis
                     dataKey="year"
-                    stroke="rgba(255,255,255,0.4)"
+                    stroke="hsl(var(--muted-foreground))"
                     fontSize={12}
                     fontFamily="monospace"
                     dy={10}
                   />
                   <YAxis
-                    stroke="rgba(255,255,255,0.4)"
+                    stroke="hsl(var(--muted-foreground))"
                     fontSize={12}
                     fontFamily="monospace"
                     tickFormatter={(val) => `£${(val / 1000).toFixed(0)}k`}

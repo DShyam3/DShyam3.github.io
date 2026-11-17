@@ -19,10 +19,6 @@ import { Activity, ArrowUpRight, Clock, CreditCard, Edit2, Landmark, Loader2, Pl
 
 type ProviderLogoSize = 'account' | 'connection';
 
-function providerKey(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
 /**
  * TrueLayer's `provider_name` is either already a display name (has a space
  * or an uppercase letter) or a bare provider id like `uk-ob-barclays`, which
@@ -94,12 +90,6 @@ export default function BankAccountsSection() {
     disconnectTrueLayer,
     syncTrueLayer,
   } = useTrueLayer(fetchSupabaseData);
-
-  const providerLogoUris = new Map(
-    (trueLayerStatus?.connections ?? [])
-      .filter(connection => Boolean(connection.provider_logo_uri))
-      .map(connection => [providerKey(connection.provider_name), connection.provider_logo_uri]),
-  );
 
   /* Blank means the limit is unknown, which is not the same as £0: an unknown
      limit leaves the card out of utilisation instead of counting it as maxed. */

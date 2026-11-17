@@ -273,14 +273,6 @@ checked, and how, is in `SECURITY.md`.
   or `msf1`) is refused when its HEVC brand is fifth or later in the compatible
   list, or when its `ftyp` box size is 0. It fails safe; widen the read only if a
   real file trips it (`553b08e3`).
-- The Umami tag the build injects (`vite.config.ts`, from `site.json`) lacks
-  `data-exclude-search`. Umami also loads on `/finance`, where the OAuth
-  callback query is probably sent before `replaceState` clears it
-  (unconfirmed).
-
-**Doc drift:**
-
-- README does not list the `SITE_ORIGIN` secret.
 
 **Unverified.** Not checked, and not to be read as passed: a real authenticated
 run of `truelayer-sync` v48 and `watchlist-cron-sync` v14 (the 2026-10-25 probes
@@ -309,7 +301,6 @@ The code no longer names the owner outside `src/config/site.json`
 - README clone URL and admin email, SECURITY.md project ref. Applied
   migrations `20260904130000` and `20260911090000` carry the owner email; a
   fork needs its own `admin_users` seed step documented instead.
-- `BankAccountsSection.tsx` `providerLogoUris` is dead code.
 
 ### Money hub — remaining scope
 
@@ -624,9 +615,9 @@ accounts rather than per account.
    have two callers.
 3. **Recipe JSON-LD import**, after the quantity shape is settled.
 
-The pin-setting UI and trailers depend on building the primitives in 8.D.
+The pin-setting UI depends on building the primitives in 8.D.
 Stalled-show detection depends on `watched_at` backfill (8.B) and seeing real
-data. Trailers need the TMDB `videos` field.
+data.
 
 ### 8.J Non-builds
 

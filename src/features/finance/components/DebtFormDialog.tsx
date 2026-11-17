@@ -354,14 +354,14 @@ export function DebtFormDialog({
                   value={draw.label}
                   onChange={e => setDraw({ ...draw, label: e.target.value })}
                   onKeyDown={onDrawKeyDown}
-                  className="h-10 flex-1"
+                  className="h-11 flex-1"
                 />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={addDraw}
                   aria-label="Add borrowing"
-                  className="h-10 shrink-0 gap-1.5 px-3.5"
+                  className="shrink-0 gap-1.5 px-3.5"
                 >
                   <Plus className="h-4 w-4" />
                   Add

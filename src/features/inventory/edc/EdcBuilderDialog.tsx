@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
 import { edcCategoryLabel, isInEdc } from './categories';
 import type { InventoryRow } from '@/collections/inventory';
@@ -67,13 +68,10 @@ export function EdcBuilderDialog({ open, onOpenChange, onCloseAutoFocus, allItem
           </label>
           <label className="min-w-0 space-y-2 text-sm">
             <span>Category</span>
-            <div className="relative">
-              <select value={category} onChange={(event) => setCategory(event.target.value)} className="block h-11 w-full min-w-0 appearance-none rounded-md border border-input bg-background pl-3 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="all">All inventory</option>
-                {categories.map((label) => <option key={label} value={label}>{label}</option>)}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            </div>
+            <NativeSelect value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <option value="all">All inventory</option>
+              {categories.map((label) => <option key={label} value={label}>{label}</option>)}
+            </NativeSelect>
           </label>
         </div>
         {filteredItems.length === 0 ? (

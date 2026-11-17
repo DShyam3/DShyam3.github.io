@@ -1,3 +1,4 @@
+import { toISODate } from '@/lib/finance/dates';
 import { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
@@ -777,7 +778,7 @@ function FinanceView() {
             <>
               Assets {formatGBP(totalAssets)} · Debt {formatGBP(totalDebt)}
               <div className="mt-3 max-w-sm">
-                <NetWorthTrend points={netWorthHistory} today={todayDateObj.toISOString().slice(0, 10)} />
+                <NetWorthTrend points={netWorthHistory} today={toISODate(todayDateObj)} />
               </div>
             </>
           }
