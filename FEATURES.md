@@ -149,15 +149,31 @@ when the project has a link.
 Thoughts holds written pieces, filtered by category, and one piece that is
 something to use rather than read. **A year in hours** has its own page, opened
 from a card marked Interactive that sits first on Thoughts while nothing is
-being searched or filtered. Sliders set sleep, getting ready, commuting, the
-gym, learning and time with friends, and the working year: weekend days, bank
-holidays, leave and hours a day. From those it shows where the year's 8,760
-hours go: a ring of the shares; free time, sleep, work and everything else as four figures; an average day as a
-24-hour strip, and a table by day, week and year. Free time is whatever is left.
-Entering more than a year holds brings a warning with the excess. Reset returns
-every slider to its starting value. The page uses only what the visitor enters:
-it starts from a five-day week with eight bank holidays and twenty days' leave,
-reads nothing stored, and keeps nothing.
+being searched or filtered. Sliders set sleep / time in bed, personal care, commuting,
+exercise (days a week, then time each day in 15-minute steps), learning and
+socialising, and the working year: working days a week, bank holidays, leave
+and hours a day. The model uses a fixed 365-day year of 52 whole weeks, so
+weekend days follow from the working week: 104 for five days, 156 for four.
+The card gives the working days a year and the hours in a working week. From those it shows
+where the year's 8,760 hours go: a ring of the shares; free time, sleep, work
+and everything else as four figures; an average day as a 24-hour strip, and a
+table by average day, average week and year. A line under the table explains
+that the averages spread the whole year, so work reads below the working week:
+34.8 hours against 40 when 34 days go to bank holidays and leave. A Show in switch gives the ring, the four figures
+and the table in seconds, minutes, hours, days or weeks, so the year reads as
+31,536,000 seconds or 52.1 weeks. Free time is whatever is left. Entering more
+than a year holds brings a warning with the excess. The page opens on Dhyan's
+own year: a 40-hour week, eight bank holidays and 26 days' leave. A Start from
+switch sets every slider to Dhyan's year or a UK starting point and marks whichever
+the sliders match. The UK starting point uses a 37.5-hour working week, eight bank
+holidays, 25 days' leave, 7.5 hours in bed, one hour of personal care, five
+commuting days with a one-hour return journey, and four hours of socialising
+a week. Exercise and learning start at zero. Example controls offer on-site,
+hybrid and remote commuting patterns and three one-hour exercise sessions.
+Commuting excludes leave and bank holidays, pro-rated over the working week,
+and can be no more days than are worked; the on-site example is every working day. A disclaimer and expandable Sources and assumptions distinguish published
+statistics from rounded planning assumptions, with source links and dates. The page uses only what the visitor enters, reads nothing stored, and
+keeps nothing.
 
 ## Books
 

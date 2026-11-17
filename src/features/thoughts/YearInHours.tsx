@@ -1,28 +1,32 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
+import { cn } from '@/lib/utils';
 import {
-  DEFAULT_YEAR_HOURS_INPUT,
+  AVERAGE_YEAR_HOURS_INPUT,
+  DHYAN_YEAR_HOURS_INPUT,
   HOURS_IN_YEAR,
+  hoursIn,
+  matchesYearHoursInput,
   yearHours,
   type YearActivityKey,
   type YearHoursInput,
+  type YearTimeUnit,
 } from '@/lib/year-hours';
 
 /** Whole hours with a thousands separator: 8,760. */
 const wholeHours = (hours: number) => Math.round(hours).toLocaleString('en-GB');
 
 const ACTIVITY: Record<YearActivityKey, { label: string; color: string; emoji: string }> = {
-  sleep: { label: 'Sleep', color: 'hsl(var(--chart-3))', emoji: '😴' },
+  sleep: { label: 'Sleep / time in bed', color: 'hsl(var(--chart-3))', emoji: '😴' },
   work: { label: 'Work', color: 'hsl(var(--chart-2))', emoji: '💼' },
   free: { label: 'Free time', color: 'hsl(var(--chart-1))', emoji: '🌴' },
   friends: { label: 'Socialising', color: 'hsl(var(--chart-5))', emoji: '🥳' },
-  gettingReady: { label: 'Getting ready', color: 'hsl(var(--muted-foreground))', emoji: '🧼' },
-  gym: { label: 'Gym', color: 'hsl(var(--positive))', emoji: '🏋️' },
+  gettingReady: { label: 'Personal care', color: 'hsl(var(--muted-foreground))', emoji: '🧼' },
+  exercise: { label: 'Exercise', color: 'hsl(var(--positive))', emoji: '🏃' },
   commute: { label: 'Commute', color: 'hsl(var(--secondary-foreground))', emoji: '🚗' },
   learning: { label: 'Learning', color: 'hsl(var(--chart-4))', emoji: '📚' },
 };
@@ -32,12 +36,88 @@ const TABLE_ORDER: YearActivityKey[] = [
   'work',
   'commute',
   'gettingReady',
-  'gym',
+  'exercise',
   'learning',
   'friends',
   'free',
 ];
-const OPTIONAL_ROWS: YearActivityKey[] = ['commute', 'gym', 'learning', 'friends'];
+const OPTIONAL_ROWS: YearActivityKey[] = ['commute', 'exercise', 'learning', 'friends'];
+
+const PRESETS: { label: string; input: YearHoursInput }[] = [
+  { label: "Dhyan's", input: DHYAN_YEAR_HOURS_INPUT },
+  { label: 'UK starting point', input: AVERAGE_YEAR_HOURS_INPUT },
+];
+
+const UNITS: { unit: YearTimeUnit; label: string }[] = [
+  { unit: 'seconds', label: 'Seconds' },
+  { unit: 'minutes', label: 'Minutes' },
+  { unit: 'hours', label: 'Hours' },
+  { unit: 'days', label: 'Days' },
+  { unit: 'weeks', label: 'Weeks' },
+];
+
+/** At most one decimal place, none when whole: 40, 37.5. */
+const upToOnePlace = (value: number) => Number(value.toFixed(1)).toLocaleString('en-GB');
+
+/** Minutes as hours and minutes: "45 mins", "1 hr", "1 hr 30 mins". */
+const minutesAndHours = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const parts = [hours > 0 ? `${hours} hr${hours === 1 ? '' : 's'}` : '', rest > 0 ? `${rest} mins` : ''];
+  return parts.filter(Boolean).join(' ') || '0 mins';
+};
+
+/**
+ * A figure at a precision that suits its size: 2,920 and 31,536,000 whole,
+ * 56.0 to one place, and below one to two significant figures, so that 0.0038
+ * weeks is not shown as 0.00.
+ */
+const amount = (value: number) => {
+  if (value > 0 && value < 1) return value.toLocaleString('en-GB', { maximumSignificantDigits: 2 });
+  const digits = value === 0 || value >= 100 ? 0 : 1;
+  return value.toLocaleString('en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+};
+
+interface PillGroupProps<T extends string> {
+  label: string;
+  options: { value: T; label: string }[];
+  isSelected: (value: T) => boolean;
+  onSelect: (value: T) => void;
+  className?: string;
+}
+
+function PillGroup<T extends string>({ label, options, isSelected, onSelect, className }: PillGroupProps<T>) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className={cn(
+        'flex flex-wrap items-center gap-1 p-0.5 bg-background/80 rounded-lg border border-border/40 w-fit max-w-full',
+        className,
+      )}
+    >
+      {options.map((option) => {
+        const selected = isSelected(option.value);
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onSelect(option.value)}
+            className={cn(
+              'px-2.5 py-1 rounded text-xs font-mono font-medium whitespace-nowrap transition-colors border',
+              selected
+                ? 'bg-primary/20 text-primary border-primary/40 font-semibold shadow-xs'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 interface SliderRowProps {
   label: string;
@@ -48,13 +128,14 @@ interface SliderRowProps {
   max: number;
   step: number;
   nested?: boolean;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }
 
-function SliderRow({ label, emoji, display, value, min, max, step, nested, onChange }: SliderRowProps) {
+function SliderRow({ label, emoji, display, value, min, max, step, nested, disabled, onChange }: SliderRowProps) {
   return (
     <div className={nested ? 'space-y-2 pl-3 border-l-2 border-border/40' : 'space-y-2'}>
-      <div className="flex justify-between items-center text-xs font-mono">
+      <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs font-mono">
         <span className="text-muted-foreground flex items-center gap-1.5">
           {emoji && <span>{emoji}</span>} <span className="text-foreground font-medium">{label}</span>
         </span>
@@ -62,6 +143,7 @@ function SliderRow({ label, emoji, display, value, min, max, step, nested, onCha
       </div>
       <Slider
         aria-label={label}
+        disabled={disabled}
         value={[value]}
         onValueChange={(val) => onChange(val[0])}
         min={min}
@@ -73,20 +155,28 @@ function SliderRow({ label, emoji, display, value, min, max, step, nested, onCha
 }
 
 export function YearInHours() {
-  const [input, setInput] = useState<YearHoursInput>(DEFAULT_YEAR_HOURS_INPUT);
+  const [input, setInput] = useState<YearHoursInput>(DHYAN_YEAR_HOURS_INPUT);
+  const [unit, setUnit] = useState<YearTimeUnit>('hours');
   const result = useMemo(() => yearHours(input), [input]);
+  /** Hours as a figure in the chosen unit, unit named in full: "2,920 hours". */
+  const inUnit = (hours: number) => `${amount(hoursIn(hours, unit))} ${unit}`;
 
   const set = (key: keyof YearHoursInput) => (value: number) =>
     setInput((prev) => {
       const next = { ...prev, [key]: value };
-      // The hours sliders appear only once there are days to spend them on,
-      // and start at half an hour. Give them a value to match, or the thumb
-      // would sit at 0.5 while the sums used 0.
+      next.commuteDaysPerWeek = Math.min(next.commuteDaysPerWeek, next.workingDaysPerWeek);
+      // The time sliders appear only once there are days to spend them on,
+      // and start above zero. Give them a value to match, or the thumb would
+      // sit at its minimum while the sums used 0.
       if (key === 'commuteDaysPerWeek' && value > 0 && prev.commuteHoursPerDay === 0) {
         next.commuteHoursPerDay = 1;
       }
-      if (key === 'gymDaysPerWeek' && value > 0 && prev.gymHoursPerSession === 0) {
-        next.gymHoursPerSession = 1;
+      if (key === 'exerciseDaysPerWeek' && value > 0 && prev.exerciseMinutesPerDay === 0) {
+        next.exerciseMinutesPerDay = 60;
+      }
+      // Commuting happens on working days, so a shorter week shortens it too.
+      if (key === 'workingDaysPerWeek' && prev.commuteDaysPerWeek > value) {
+        next.commuteDaysPerWeek = value;
       }
       return next;
     });
@@ -121,6 +211,9 @@ export function YearInHours() {
   );
   const totalYearly = tableRows.reduce((sum, a) => sum + a.hoursPerYear, 0);
   const totalShare = tableRows.reduce((sum, a) => sum + a.share, 0);
+  const centreFigure = amount(
+    hoursIn(result.overAllocatedHours > 0 ? result.allocatedHours : HOURS_IN_YEAR, unit),
+  );
 
   return (
     <div className="space-y-6">
@@ -131,16 +224,77 @@ export function YearInHours() {
             <Clock className="h-4 w-4 text-primary shrink-0" /> A year in hours
           </h3>
           <p className="text-xs text-muted-foreground font-mono mt-0.5">
-            A year has {wholeHours(HOURS_IN_YEAR)} hours. Move the sliders to see where yours go.
+            A year has {wholeHours(HOURS_IN_YEAR)} hours. It opens on mine; move the sliders to see where yours go.
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setInput(DEFAULT_YEAR_HOURS_INPUT)}
-          className="rounded-lg h-8 px-3 gap-1.5 shrink-0 self-start sm:self-auto text-xs font-mono border-border/40"
-        >
-          Reset
-        </Button>
+        <PillGroup
+          label="Start from"
+          className="shrink-0 self-start sm:self-auto"
+          options={PRESETS.map((preset) => ({ value: preset.label, label: preset.label }))}
+          isSelected={(label) => {
+            const preset = PRESETS.find((p) => p.label === label);
+            return preset !== undefined && matchesYearHoursInput(input, preset.input);
+          }}
+          onSelect={(label) => {
+            const preset = PRESETS.find((p) => p.label === label);
+            if (preset) setInput(preset.input);
+          }}
+        />
+      </div>
+
+      <div className="space-y-2 text-xs font-mono text-muted-foreground">
+        <p>
+          <span className="font-semibold text-foreground">About the UK starting point: </span>
+          Defaults combine published UK or Great Britain statistics with rounded planning assumptions.
+          Sources cover different years and groups; these are starting estimates, not personal targets.
+          Adjust them to match your routine.
+        </p>
+        <details className="rounded-lg border border-border/40 bg-card/50 p-3">
+          <summary className="cursor-pointer font-medium text-foreground hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+            Sources and assumptions
+          </summary>
+          <ul className="mt-3 space-y-3 list-disc pl-4 leading-relaxed [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 [&_a]:break-words">
+            <li>
+              <span className="font-semibold text-foreground">Sleep / time in bed:</span>{' '}
+              <a href="https://www.dreams.co.uk/sleep-matters-club/the-2026-uk-sleep-survey" target="_blank" rel="noopener noreferrer">Dreams, January 2026</a>{' '}
+              surveyed 2,000 UK adults: 6h 24m asleep and 7h 12m in bed. This is a commercial,
+              self-reported survey. The preset uses 7.5 hours in bed as a rounded planning assumption,
+              not a sleep target.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Personal care and socialising:</span>{' '}
+              <a href="https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/timeuseintheuk/23septemberto1october2023" target="_blank" rel="noopener noreferrer">ONS, September 2023</a>{' '}
+              measured 53 minutes a day washing, dressing, using the bathroom and grooming,
+              rounded here to 1 hour. Socialising was 32 minutes a day, rounded to 4 hours a week;
+              this includes people generally, not just friends.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Commuting:</span>{' '}
+              <a href="https://www.gov.uk/government/statistics/transport-statistics-great-britain-2025/transport-statistics-great-britain-2024-domestic-travel" target="_blank" rel="noopener noreferrer">DfT, Great Britain 2024</a>{' '}
+              reports 28 minutes each way, rounded here to a 1-hour return journey. On-site (every
+              working day), hybrid (3) and remote (0) are example assumptions, not national averages.
+              Commute time excludes leave and bank holidays, pro-rated by the commute days in the working week.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Exercise and learning:</span>{' '}
+              zero means no time allocated in the starting point, not a national average.
+              The optional 3-day exercise example is an assumption. Its 1-hour duration is rounded from{' '}
+              <a href="https://www.puregym.com/blog/uk-fitness-report-gym-statistics/" target="_blank" rel="noopener noreferrer">PureGym’s 2025/26 report</a>{' '}
+              of 68 minutes per visit among its own members; it does not represent all exercise or all UK adults.
+              Add exercise travel separately to the time you allocate.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Working year:</span>{' '}
+              37.5 scheduled hours over five days is a planning assumption. The{' '}
+              <a href="https://www.tuc.org.uk/guidance/how-do-i-work-out-my-holiday-entitlement" target="_blank" rel="noopener noreferrer">TUC</a>{' '}
+              reports 25 days’ annual leave plus eight bank holidays for the average full-time worker
+              in Great Britain. The preset’s eight bank holidays match{' '}
+              <a href="https://www.gov.uk/bank-holidays" target="_blank" rel="noopener noreferrer">England and Wales in 2026</a>.
+              Leave excludes bank holidays. This is a fixed 365-day model of 52 whole weeks, so a
+              five-day week has 104 weekend days; it is not a calendar calculation for a selected year. Dhyan’s preset keeps his own routine.
+            </li>
+          </ul>
+        </details>
       </div>
 
       {result.overAllocatedHours > 0 && (
@@ -165,7 +319,7 @@ export function YearInHours() {
             </CardHeader>
             <CardContent className="space-y-5">
               <SliderRow
-                label="Sleep"
+                label="Sleep / time in bed"
                 emoji="😴"
                 display={`${input.sleepHoursPerDay} hrs / day`}
                 value={input.sleepHoursPerDay}
@@ -175,7 +329,7 @@ export function YearInHours() {
                 onChange={set('sleepHoursPerDay')}
               />
               <SliderRow
-                label="Getting ready"
+                label="Personal care"
                 emoji="🧼"
                 display={`${input.gettingReadyHoursPerDay} hrs / day`}
                 value={input.gettingReadyHoursPerDay}
@@ -190,13 +344,30 @@ export function YearInHours() {
               <SliderRow
                 label="Commute days"
                 emoji="🚗"
-                display={`${input.commuteDaysPerWeek} days / week`}
+                display={`${input.commuteDaysPerWeek} days / working week`}
                 value={input.commuteDaysPerWeek}
                 min={0}
-                max={7}
+                max={Math.max(1, input.workingDaysPerWeek)}
+                disabled={input.workingDaysPerWeek === 0}
                 step={1}
                 onChange={set('commuteDaysPerWeek')}
               />
+              <div className="space-y-2">
+                <p className="text-xs font-mono text-muted-foreground">Example commute patterns (assumptions)</p>
+                <PillGroup
+                  label="Example commute patterns"
+                  options={[
+                    {
+                      value: String(input.workingDaysPerWeek),
+                      label: `On-site · ${input.workingDaysPerWeek} day${input.workingDaysPerWeek === 1 ? '' : 's'}`,
+                    },
+                    ...(input.workingDaysPerWeek > 3 ? [{ value: '3', label: 'Hybrid · 3 days' }] : []),
+                    { value: '0', label: 'Remote · 0 days' },
+                  ].filter((option, index, all) => all.findIndex((o) => o.value === option.value) === index)}
+                  isSelected={(value) => input.commuteDaysPerWeek === Number(value)}
+                  onSelect={(value) => set('commuteDaysPerWeek')(Number(value))}
+                />
+              </div>
               {input.commuteDaysPerWeek > 0 && (
                 <SliderRow
                   nested
@@ -213,25 +384,34 @@ export function YearInHours() {
               <div className="h-px bg-border/40" />
 
               <SliderRow
-                label="Gym days"
-                emoji="🏋️"
-                display={`${input.gymDaysPerWeek} days / week`}
-                value={input.gymDaysPerWeek}
+                label="Exercise days"
+                emoji="🏃"
+                display={`${input.exerciseDaysPerWeek} days / week`}
+                value={input.exerciseDaysPerWeek}
                 min={0}
                 max={7}
                 step={1}
-                onChange={set('gymDaysPerWeek')}
+                onChange={set('exerciseDaysPerWeek')}
               />
-              {input.gymDaysPerWeek > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-mono text-muted-foreground">Optional example, not a national average</p>
+                <PillGroup
+                  label="Example exercise routine"
+                  options={[{ value: '3', label: '3 days × 1 hour' }]}
+                  isSelected={() => input.exerciseDaysPerWeek === 3 && input.exerciseMinutesPerDay === 60}
+                  onSelect={() => setInput((prev) => ({ ...prev, exerciseDaysPerWeek: 3, exerciseMinutesPerDay: 60 }))}
+                />
+              </div>
+              {input.exerciseDaysPerWeek > 0 && (
                 <SliderRow
                   nested
-                  label="Session length"
-                  display={`${input.gymHoursPerSession} hrs / session`}
-                  value={input.gymHoursPerSession}
-                  min={0.5}
-                  max={6}
-                  step={0.5}
-                  onChange={set('gymHoursPerSession')}
+                  label="Time each day"
+                  display={`${minutesAndHours(input.exerciseMinutesPerDay)} / day`}
+                  value={input.exerciseMinutesPerDay}
+                  min={15}
+                  max={240}
+                  step={15}
+                  onChange={set('exerciseMinutesPerDay')}
                 />
               )}
 
@@ -248,7 +428,7 @@ export function YearInHours() {
                 onChange={set('learningHoursPerWeek')}
               />
               <SliderRow
-                label="Friends"
+                label="Socialising"
                 emoji="🥳"
                 display={`${input.friendsHoursPerWeek} hrs / week`}
                 value={input.friendsHoursPerWeek}
@@ -264,19 +444,24 @@ export function YearInHours() {
             <CardHeader className="pb-4">
               <CardTitle className="text-xs font-mono uppercase tracking-wider font-semibold">Working year</CardTitle>
               <CardDescription className="text-xs font-mono text-muted-foreground">
-                Set the days you do not work and how long a working day lasts.
+                A 365-day year of 52 whole weeks. Set the days you work each week, your holidays and how
+                long a working day lasts.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <SliderRow
-                label="Weekend days a year"
-                display={`${input.weekendDays} days`}
-                value={input.weekendDays}
+                label="Working days a week"
+                display={`${input.workingDaysPerWeek} days / week`}
+                value={input.workingDaysPerWeek}
                 min={0}
-                max={156}
+                max={7}
                 step={1}
-                onChange={set('weekendDays')}
+                onChange={set('workingDaysPerWeek')}
               />
+              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs font-mono">
+                <span className="text-foreground font-medium">Weekend days a year</span>
+                <span className="text-foreground font-semibold tabular-nums">{result.weekendDays} days</span>
+              </div>
               <SliderRow
                 label="Bank holidays"
                 display={`${input.bankHolidays} days`}
@@ -305,7 +490,7 @@ export function YearInHours() {
                 onChange={set('workingHoursPerDay')}
               />
               <p className="text-xs font-mono text-muted-foreground tabular-nums">
-                {result.workDays} working days a year
+                {result.workDays} working days a year · {upToOnePlace(result.workingWeekHours)} hours a working week
               </p>
             </CardContent>
           </Card>
@@ -313,6 +498,15 @@ export function YearInHours() {
 
         {/* Right Column: Visualization & Table */}
         <div className="lg:col-span-7 flex flex-col gap-6">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-xs font-mono text-muted-foreground">Show in</span>
+            <PillGroup<YearTimeUnit>
+              label="Show figures in"
+              options={UNITS.map((u) => ({ value: u.unit, label: u.label }))}
+              isSelected={(value) => value === unit}
+              onSelect={setUnit}
+            />
+          </div>
           <Card className="bg-card/50 border border-border/40 rounded-lg p-4 sm:p-6 space-y-6 hover:border-border/80 transition-colors shadow-none">
             <div className="flex flex-col md:flex-row lg:flex-col xl:flex-row items-center justify-around gap-6">
               {/* Donut Chart */}
@@ -345,7 +539,7 @@ export function YearInHours() {
                                 <span>{data.name}</span>
                               </div>
                               <div className="text-muted-foreground">
-                                <span className="text-foreground font-semibold tabular-nums">{Number(data.value).toFixed(0)} hrs</span> ({Number(data.pct).toFixed(1)}%)
+                                <span className="text-foreground font-semibold tabular-nums">{inUnit(Number(data.value))}</span> ({Number(data.pct).toFixed(1)}%)
                               </div>
                             </div>
                           );
@@ -356,10 +550,18 @@ export function YearInHours() {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                  <span className="font-mono text-2xl font-bold tracking-tight text-foreground tabular-nums">
-                    {wholeHours(result.overAllocatedHours > 0 ? result.allocatedHours : HOURS_IN_YEAR)}
+                  <span
+                    className={cn(
+                      'font-mono font-bold tracking-tight text-foreground tabular-nums',
+                      // 31,536,000 seconds would not fit the ring at full size.
+                      centreFigure.length > 7 ? 'text-lg' : 'text-2xl',
+                    )}
+                  >
+                    {centreFigure}
                   </span>
-                  <span className="text-xs text-muted-foreground font-mono font-semibold">{result.overAllocatedHours > 0 ? 'hours entered' : 'hours in a year'}</span>
+                  <span className="text-xs text-muted-foreground font-mono font-semibold">
+                    {unit} {result.overAllocatedHours > 0 ? 'entered' : 'in a year'}
+                  </span>
                 </div>
               </div>
 
@@ -371,7 +573,8 @@ export function YearInHours() {
                       <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-1))]" /> Free time
                     </span>
                     <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
-                      {free.hoursPerYear.toFixed(0)} hrs
+                      {amount(hoursIn(free.hoursPerYear, unit))}{' '}
+                      <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
                     </span>
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">{(free.share * 100).toFixed(1)}% of year</span>
                   </div>
@@ -380,7 +583,8 @@ export function YearInHours() {
                       <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-3))]" /> Sleep
                     </span>
                     <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
-                      {sleep.hoursPerYear.toFixed(0)} hrs
+                      {amount(hoursIn(sleep.hoursPerYear, unit))}{' '}
+                      <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
                     </span>
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">{(sleep.share * 100).toFixed(1)}% of year</span>
                   </div>
@@ -389,7 +593,8 @@ export function YearInHours() {
                       <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--chart-2))]" /> Work
                     </span>
                     <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
-                      {work.hoursPerYear.toFixed(0)} hrs
+                      {amount(hoursIn(work.hoursPerYear, unit))}{' '}
+                      <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
                     </span>
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">{(work.share * 100).toFixed(1)}% of year</span>
                   </div>
@@ -398,7 +603,8 @@ export function YearInHours() {
                       <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" /> Everything else
                     </span>
                     <span className="font-mono text-xl font-bold tracking-tight text-foreground block tabular-nums">
-                      {otherHours.toFixed(0)} hrs
+                      {amount(hoursIn(otherHours, unit))}{' '}
+                      <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
                     </span>
                     <span className="text-xs font-mono text-muted-foreground tabular-nums">
                       {(otherShare * 100).toFixed(1)}% of year
@@ -469,8 +675,8 @@ export function YearInHours() {
                 <thead>
                   <tr className="border-b border-border/40 text-muted-foreground font-semibold text-xs">
                     <th className="py-2.5 px-3">Activity</th>
-                    <th className="py-2.5 px-3 text-right">A day</th>
-                    <th className="py-2.5 px-3 text-right">A week</th>
+                    <th className="py-2.5 px-3 text-right">Average day</th>
+                    <th className="py-2.5 px-3 text-right">Average week</th>
                     <th className="py-2.5 px-3 text-right">A year</th>
                     <th className="py-2.5 px-3 text-right">% of Year</th>
                   </tr>
@@ -484,23 +690,36 @@ export function YearInHours() {
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
                           <span>{meta.emoji} {meta.label}</span>
                         </td>
-                        <td className="py-2.5 px-3 text-right tabular-nums">{row.hoursPerDay.toFixed(1)} hrs</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums">{(row.hoursPerDay * 7).toFixed(1)} hrs</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums">{row.hoursPerYear.toFixed(0)} hrs</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">{inUnit(row.hoursPerDay)}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">{inUnit(row.hoursPerDay * 7)}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums whitespace-nowrap">{inUnit(row.hoursPerYear)}</td>
                         <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{(row.share * 100).toFixed(1)}%</td>
                       </tr>
                     );
                   })}
                   <tr className="font-bold border-t border-border/60 bg-muted/15 font-mono">
                     <td className="py-3 px-3">Total</td>
-                    <td className="py-3 px-3 text-right tabular-nums">{totalDailyHours.toFixed(1)} hrs/d</td>
-                    <td className="py-3 px-3 text-right tabular-nums">{(totalDailyHours * 7).toFixed(1)} hrs/w</td>
-                    <td className="py-3 px-3 text-right tabular-nums">{totalYearly.toFixed(0)} hrs</td>
+                    <td className="py-3 px-3 text-right tabular-nums whitespace-nowrap">{inUnit(totalDailyHours)}</td>
+                    <td className="py-3 px-3 text-right tabular-nums whitespace-nowrap">{inUnit(totalDailyHours * 7)}</td>
+                    <td className="py-3 px-3 text-right tabular-nums whitespace-nowrap">{inUnit(totalYearly)}</td>
                     <td className="py-3 px-3 text-right tabular-nums">{(totalShare * 100).toFixed(1)}%</td>
                   </tr>
                 </tbody>
               </table>
             </div>
+            <p className="mt-4 text-xs font-mono text-muted-foreground leading-relaxed">
+              {result.overAllocatedHours > 0
+                ? 'The entered activities exceed the available time, so the average day and week exceed 24 and 168 hours.'
+                : 'The average day and week spread the whole year evenly, weekends and holidays included, so they add up to 24 and 168 hours.'}
+              {work.hoursPerYear > 0 && input.bankHolidays + input.leaveDays > 0 && (
+                <>
+                  {' '}
+                  Work averages {amount(work.hoursPerDay * 7)} hours a week against a{' '}
+                  {upToOnePlace(result.workingWeekHours)}-hour working week because of the{' '}
+                  {input.bankHolidays + input.leaveDays} days of bank holidays and leave.
+                </>
+              )}
+            </p>
           </Card>
         </div>
       </div>
