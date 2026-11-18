@@ -379,9 +379,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const cached = queryClient.getQueryData(watchlistLibraryQuery.queryKey);
     return cached ? watchedEpisodeKeys(cached.watchlist) : new Set();
   });
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [lastAutoSyncTime, setLastAutoSyncTime] = useState<string | null>(null);
-  const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
   const [nextAutoSyncTime, setNextAutoSyncTime] = useState<string>(
     getNextAutoSync().toISOString(),
   );
@@ -590,41 +587,42 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     );
   }, []);
 
-  // Fetch sync log from Supabase. Admin-only, and not just as a matter of
-  // taste: `sync_log`'s RLS restricts reads to is_admin(), and migration
-  // 20260905160000 revoked anon's table grant on it outright, so calling this
-  // as a public visitor is a guaranteed 42501 -- a wasted round trip and a
-  // console error on every load of the page.
-  const fetchSyncLog = useCallback(async () => {
-    if (!isAdmin) return;
-    try {
+  // Fetch sync log from Supabase via React Query (in-memory only, never
+  // persisted to IndexedDB). Admin-only: `sync_log`'s RLS restricts reads to
+  // is_admin(), and migration 20260905160000 revoked anon's table grant on it.
+  // Caching it in React Query stops WatchlistProvider remounts from hitting
+  // `sync_log` on every route switch back to /watchlist.
+  const syncLogQuery = useQuery<SyncLogEntry[]>({
+    queryKey: ['watchlist', 'sync-log'] as const,
+    enabled: isAdmin,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
       const { data, error } = await supabase.from('sync_log')
-        .select('*')
+        .select('id, synced_at, sync_type, status, items_synced, error_message, duration_ms, shard, shard_count')
         .order('synced_at', { ascending: false })
         .limit(20);
-      if (error) throw error;
-      if (data) {
-        // `sync_type` and `status` are plain text columns; the union below is
-        // this file's contract for what the sync writers put in them.
-        const entries = data as SyncLogEntry[];
-        setSyncLog(entries);
-        // Find most recent successful sync of any type
-        const lastSuccessful = entries.find((e) => e.status === 'success');
-        if (lastSuccessful) {
-          setLastSyncTime(lastSuccessful.synced_at);
-        }
-        // Find most recent successful auto sync
-        const lastAutoSuccess = entries.find(
-          (e) => e.sync_type === 'auto' && e.status === 'success',
-        );
-        if (lastAutoSuccess) {
-          setLastAutoSyncTime(lastAutoSuccess.synced_at);
-        }
+      if (error) {
+        console.error('Error fetching sync log:', error);
+        return [];
       }
-    } catch (error) {
-      console.error('Error fetching sync log:', error);
-    }
-  }, [isAdmin]);
+      return (data ?? []) as SyncLogEntry[];
+    },
+  });
+
+  const syncLog = useMemo(() => (isAdmin ? syncLogQuery.data ?? [] : []), [isAdmin, syncLogQuery.data]);
+  const lastSyncTime = useMemo(
+    () => syncLog.find((e) => e.status === 'success')?.synced_at ?? null,
+    [syncLog],
+  );
+  const lastAutoSyncTime = useMemo(
+    () => syncLog.find((e) => e.sync_type === 'auto' && e.status === 'success')?.synced_at ?? null,
+    [syncLog],
+  );
+
+  const fetchSyncLog = useCallback(async () => {
+    if (!isAdmin) return;
+    await queryClient.invalidateQueries({ queryKey: ['watchlist', 'sync-log'] });
+  }, [isAdmin, queryClient]);
 
   useEffect(() => {
     const stored = localStorage.getItem('watched_episodes');
@@ -636,8 +634,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     void loadLibrary(false);
-    fetchSyncLog();
-  }, [loadLibrary, fetchSyncLog]);
+  }, [loadLibrary]);
 
   const getAutoStatus = useCallback(
     (item: WatchlistItem) => {

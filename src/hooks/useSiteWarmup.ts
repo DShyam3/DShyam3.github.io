@@ -3,9 +3,14 @@ import { useQueryClient, type FetchQueryOptions } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { collections } from '@/collections/registry';
 import { collectionQuery } from '@/collections/useCollection';
+import { favouriteTitlesQuery } from '@/components/home/FactCards';
 import { warmFinanceSections } from '@/features/finance/section-chunks';
+import { merchantLogosQuery } from '@/features/finance/useMerchantLogos';
+import { trueLayerConnectionQuery } from '@/features/finance/useTrueLayer';
+import { travelJournalQuery } from '@/features/travel/useTravelJournal';
 import { visitedCitiesQuery } from '@/features/travel/useVisitedCities';
 import { visitedCountriesQuery } from '@/features/travel/useVisitedCountries';
+import { diaryQueryOptions } from '@/features/watchlist/diary-query';
 import { watchlistLibraryQuery } from '@/features/watchlist/library-query';
 import { watchlistRatingsQuery } from '@/features/watchlist/ratings-query';
 import { scheduleQuery } from '@/features/watchlist/useSchedule';
@@ -18,72 +23,140 @@ import {
   upcomingMoviesQuery,
   watchlistEventsQuery,
 } from '@/features/watchlist/useWatchlistNews';
+import { viewingOrdersQueryOptions } from '@/features/watchlist/viewing-orders-query';
 import { prefersSavedData, whenIdle, warmChunk } from '@/lib/idle';
 import { EDUCATION_READ, EXPERIENCE_READ } from './useResume';
 import { ABOUT_READ } from './useSiteContent';
 import { supabaseTableQuery } from './useSupabaseTable';
 
 /**
- * Fetches what every other page needs while the user reads the current one,
- * so moving between sections is a render rather than a round trip.
+ * Progressively warms code chunks and Supabase reads in staged idle tiers so
+ * moving between sections (Watchlist ↔ Finance, internal tabs, Travel, Books,
+ * EDC) is a render rather than a round trip — without firing 50+ requests in
+ * one burst on startup.
  *
- * Two halves, both deferred to idle so the visible page paints first:
+ * - **Stage 1 (immediate idle):** Sibling tabs of the section the user is on.
+ * - **Stage 2 (+1.5 s idle):** The other major sections (Watchlist, Travel,
+ *   Finance chunks/status) and route chunks.
+ * - **Stage 3 (+4.5 s idle):** Remaining collections (Books, EDC/Inventory,
+ *   Projects, Links, Recipes, etc.).
  *
- * - **Code.** The three split route chunks, and for the admin every finance
- *   section. The browser keeps a fetched chunk for the life of the tab.
- * - **Rows.** Each page's table read, prefetched into the query cache under
- *   the key the page itself uses, so opening it renders from cache at once and
- *   revalidates behind the scenes once the data is older than `staleTime`.
- *   `prefetchQuery` skips anything still fresh, so this never re-reads what a
- *   page has just loaded.
- *
- * Finance rows are not here: FinanceSession warms them by mounting the
- * finance provider on idle. Nor are Watchlist's premiere episodes, whose read
- * depends on the announcements the page has already loaded.
- *
- * Waits for auth to settle: admin-only reads (Beliefs) and the finance code
- * are warmed only for the account that can open them, and a read sent before
- * the session is known would go out as anon and cache the wrong answer.
+ * `prefetchQuery` skips anything still fresh (including entries hydrated from
+ * IndexedDB), so stages never duplicate work. Waits for auth to settle so
+ * admin-only reads are warmed only for the admin account.
  */
 export function useSiteWarmup() {
   const queryClient = useQueryClient();
-  const { isAdmin, isAuthLoading } = useAuth();
+  const { session, isAdmin, isAuthLoading } = useAuth();
+  const userId = session?.user.id;
 
   useEffect(() => {
     if (isAuthLoading || prefersSavedData()) return;
 
-    return whenIdle(() => {
+    let cancelled = false;
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    const idleCancels: Array<() => void> = [];
+
+    const prefetchAll = (reads: FetchQueryOptions[]) => {
+      for (const read of reads) void queryClient.prefetchQuery(read);
+    };
+
+    const scheduleStage = (delayMs: number, run: () => void) => {
+      const enqueueIdle = () => {
+        if (cancelled) return;
+        idleCancels.push(whenIdle(() => {
+          if (!cancelled) run();
+        }));
+      };
+      if (delayMs === 0) {
+        enqueueIdle();
+      } else {
+        timers.push(setTimeout(enqueueIdle, delayMs));
+      }
+    };
+
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+
+    const homeReads: FetchQueryOptions[] = [
+      supabaseTableQuery('site_content', EXPERIENCE_READ),
+      supabaseTableQuery('site_content', EDUCATION_READ),
+      supabaseTableQuery('site_content', ABOUT_READ),
+      favouriteTitlesQuery,
+    ];
+
+    const watchlistReads: FetchQueryOptions[] = [
+      watchlistLibraryQuery,
+      watchlistRatingsQuery,
+      scheduleQuery,
+      diaryQueryOptions,
+      viewingOrdersQueryOptions,
+      pinnedTitleQuery,
+      recentEpisodesQuery(30),
+      recentMoviesQuery(30),
+      upcomingEpisodesQuery,
+      upcomingMoviesQuery,
+      watchlistEventsQuery(30),
+      recentAnnouncementsQuery(30),
+    ];
+
+    const travelReads: FetchQueryOptions[] = [
+      visitedCountriesQuery,
+      visitedCitiesQuery,
+      travelJournalQuery(userId, isAdmin),
+    ];
+
+    const financeReads: FetchQueryOptions[] = isAdmin
+      ? [trueLayerConnectionQuery, merchantLogosQuery]
+      : [];
+
+    const collectionReads: FetchQueryOptions[] = collections
+      .filter((c) => isAdmin || !c.adminOnly)
+      .map(collectionQuery);
+
+    const warmFinanceCode = () => {
+      if (!isAdmin) return;
+      warmChunk(() => import('@/features/finance/FinancePage'));
+      warmFinanceSections();
+    };
+
+    // Stage 1: warm the sibling tabs of whichever section the user opened.
+    scheduleStage(0, () => {
+      if (pathname.startsWith('/watchlist')) {
+        warmChunk(() => import('@/features/watchlist/WatchlistPage'));
+        prefetchAll(watchlistReads);
+      } else if (pathname.startsWith('/finance')) {
+        warmFinanceCode();
+        prefetchAll(financeReads);
+      } else if (pathname.startsWith('/travel')) {
+        warmChunk(() => import('@/features/travel/TravelPage'));
+        prefetchAll(travelReads);
+      } else {
+        prefetchAll(homeReads);
+      }
+    });
+
+    // Stage 2: warm the other major sections and split route chunks.
+    scheduleStage(1_500, () => {
       warmChunk(() => import('@/features/travel/TravelPage'));
       warmChunk(() => import('@/features/watchlist/WatchlistPage'));
-      if (isAdmin) {
-        warmChunk(() => import('@/features/finance/FinancePage'));
-        warmFinanceSections();
-      }
-
-      // Typed loosely on purpose: each read carries its own row type, and the
-      // array only needs to hand them to prefetchQuery one at a time.
-      const reads: FetchQueryOptions[] = [
-        supabaseTableQuery('site_content', EXPERIENCE_READ),
-        supabaseTableQuery('site_content', EDUCATION_READ),
-        supabaseTableQuery('site_content', ABOUT_READ),
-        ...collections.filter(c => isAdmin || !c.adminOnly).map(collectionQuery),
-        visitedCountriesQuery,
-        visitedCitiesQuery,
-        watchlistLibraryQuery,
-        watchlistRatingsQuery,
-        scheduleQuery,
-        pinnedTitleQuery,
-        // The windows WatchlistNews asks for; a different one is a different key.
-        recentEpisodesQuery(30),
-        recentMoviesQuery(30),
-        upcomingEpisodesQuery,
-        upcomingMoviesQuery,
-        watchlistEventsQuery(30),
-        recentAnnouncementsQuery(30),
-      ];
-      // prefetchQuery never throws: a failed warm-up leaves the page to fetch
-      // and report the error itself when it is opened.
-      for (const read of reads) void queryClient.prefetchQuery(read);
+      warmFinanceCode();
+      prefetchAll([
+        ...homeReads,
+        ...watchlistReads,
+        ...travelReads,
+        ...financeReads,
+      ]);
     });
-  }, [queryClient, isAdmin, isAuthLoading]);
+
+    // Stage 3: warm all remaining collections (Books, EDC/Inventory, Projects, etc.).
+    scheduleStage(4_500, () => {
+      prefetchAll(collectionReads);
+    });
+
+    return () => {
+      cancelled = true;
+      for (const timer of timers) clearTimeout(timer);
+      for (const cancel of idleCancels) cancel();
+    };
+  }, [queryClient, userId, isAdmin, isAuthLoading]);
 }

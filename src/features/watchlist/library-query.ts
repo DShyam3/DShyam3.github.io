@@ -238,7 +238,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
 export const watchlistLibraryQuery = queryOptions({
   queryKey: ['watchlist', 'library'],
   queryFn: readWatchlistLibrary,
-  staleTime: 5 * 60 * 1000,
+  staleTime: 10 * 60 * 1000,
   // The provider owns these objects' identity and writes them back on every
   // edit; structural sharing would deep-compare ~7,600 episode rows each time
   // to preserve references nothing relies on.

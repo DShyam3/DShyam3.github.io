@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,13 +19,9 @@ const columns = {
 // Anonymous readers have no grant on source_key / source_name, so the public list omits them.
 const publicItineraryColumns = `${commonColumns},trip_id,kind,title,start_date,end_date,start_time,end_time,time_zone,arrival_time_zone,origin,destination,notes,status`;
 
-export function useTravelJournal() {
-  const { session, isAdmin, isAuthLoading } = useAuth();
-  const userId = session?.user.id;
-  const client = useQueryClient();
-  const query = useQuery({
-    queryKey: ['travel-journal', userId ?? 'public', isAdmin],
-    enabled: !isAuthLoading,
+export const travelJournalQuery = (userId: string | undefined, isAdmin: boolean) =>
+  queryOptions<TravelJournal>({
+    queryKey: ['travel-journal', userId ?? 'public', isAdmin] as const,
     queryFn: async ({ signal }) => {
       async function read<K extends JournalTable>(table: K): Promise<JournalRows[K][]> {
         const result = await selectAllPages<JournalRows[K]>(
@@ -45,6 +41,15 @@ export function useTravelJournal() {
       ]);
       return { trips, visits, memories, itinerary };
     },
+  });
+
+export function useTravelJournal() {
+  const { session, isAdmin, isAuthLoading } = useAuth();
+  const userId = session?.user.id;
+  const client = useQueryClient();
+  const query = useQuery({
+    ...travelJournalQuery(userId, isAdmin),
+    enabled: !isAuthLoading,
   });
   const refresh = useCallback(() => client.invalidateQueries({ queryKey: ['travel-journal'] }), [client]);
   const mutation = useMutation({

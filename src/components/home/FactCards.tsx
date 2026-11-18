@@ -6,7 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useSiteContent } from '@/hooks/useSiteContent';
+import { ABOUT_READ, useSiteContent } from '@/hooks/useSiteContent';
+import { supabaseTableQuery } from '@/hooks/useSupabaseTable';
 import { useExperience } from '@/hooks/useResume';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FlagStrip } from '@/components/shared/FlagStrip';
@@ -30,7 +31,7 @@ import {
  * Titles only, for the two favourite cards. The Watchlist library read carries
  * every episode of every show; the cards need a title and a poster.
  */
-const favouriteTitlesQuery = queryOptions({
+export const favouriteTitlesQuery = queryOptions({
   queryKey: ['favourites', 'titles'],
   queryFn: async () => {
     const { data, error } = await selectAllPages((from, to) => supabase
@@ -147,7 +148,7 @@ export function FactCards({ onOpenExperience }: FactCardsProps) {
         );
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['site_content'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: supabaseTableQuery('site_content', ABOUT_READ).queryKey }),
     onError: (error) => {
       console.error('[FactCards] could not save the favourite:', error);
       toast({ title: 'Could not save your favourite', description: 'Nothing was changed. Please try again.', variant: 'destructive' });

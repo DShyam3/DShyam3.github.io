@@ -44,7 +44,6 @@ export function EdcBuilderDialog({ open, onOpenChange, onCloseAutoFocus, allItem
       queryClient.setQueriesData<InventoryRow[]>({ queryKey: ['inventory_items'] }, (current) =>
         current?.map((row) => row.id === item.id ? { ...row, is_edc: !item.is_edc } : row),
       );
-      await queryClient.invalidateQueries({ queryKey: ['inventory_items'] }, { cancelRefetch: false });
       toast.success(`${item.is_edc ? 'Removed' : 'Added'} ${item.name} ${item.is_edc ? 'from' : 'to'} EDC`);
     } catch {
       toast.error(`Could not update ${item.name}. Please try again.`);
