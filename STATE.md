@@ -1,14 +1,14 @@
 # State
 
-Updated 2026-11-18 · Branch `claude/eloquent-johnson-xdjc53` · Head: the commit after `645601e` (no watch dates on unreleased titles), merged with `origin/main` `49a186e`, pushed. NOT merged into `main`; no PR. Nothing here is deployed.
+Updated 2026-11-18 · `main` = branch `claude/eloquent-johnson-xdjc53` (fast-forwarded, pushed). Migration applied to hosted; `tmdb-proxy` v15 and `watchlist-cron-sync` v18 deployed. Pages deploy of this push NOT yet verified.
 
 ## In progress
 
-**Watchlist Diary, Franchises, history import, OMDb scores and public ratings.** In the tree on the branch; not merged, not deployed, migration not applied. Full list in `REHAUL_PLAN.md`, "Watchlist Diary, Franchises, import and public ratings".
+**Watchlist Diary, Franchises, history import, OMDb scores and public ratings.** Live on hosted (database and functions) and pushed to `main`. Full list in `REHAUL_PLAN.md`, "Watchlist Diary, Franchises, import and public ratings".
 
 - Built: IMDb, Rotten Tomatoes and Metacritic scores (from OMDb, by the nightly sync) beside the owner's rating; Mark as watched and Mark Season as Complete ask when; Paused series state; Diary and Year in review (`/watchlist/diary`); Franchises (`/watchlist/franchises`); Letterboxd and Trakt file import (admin); nav News · Library · Diary · Franchises.
-- Fixed in code, not live: a season is no longer unmarked when one of its episodes is (migration `20261118190243`, `pg_trigger_depth` guard).
-- Ratings are now public, read-only to visitors; writes stay admin-only (the owner's decision, 2026-11-18). Committed: client in `bf1f2db` (visitors read `watchlist_ratings`, "My score · IMDb · RT · Metacritic" line), policy in migration `20261118190243` (`Public Read Access`, anon SELECT; checked on a scratch Postgres: anon reads, cannot write). Not applied, not deployed: applying it publishes every existing rating.
+- Hosted migration `20261118190243_watchlist_tracking` applied and checked by SQL: score and collection columns, `paused` on `tv_shows`, public read with admin-only writes on `watchlist_ratings` (ratings are now public, the owner's decision) and the viewing-order tables, anon cannot execute the new RPCs, the season-cascade guard is in. 0 ratings existed when it was applied.
+- `OMDB_API_KEY` is NOT set yet: storing it through the Supabase MCP is paused, so the owner is adding it in the dashboard (Edge Functions → Secrets). Until then the sync skips scores. The owner shared the key in chat (screenshot); a fresh key would retire that copy.
 
 ## Checks (2026-11-18, final tree of this branch)
 
@@ -27,10 +27,9 @@ Not run: `supabase db diff` against a from-schema build; graphify (not installed
 
 ## Next
 
-1. Apply migration `20261118190243_watchlist_tracking` to hosted (after main's three, which are applied); check `select library_state, imdb_rating from tv_shows limit 1` and that anon can read `watchlist_ratings`. Then deploy `watchlist-cron-sync` and `tmdb-proxy`. Then merge to `main`. This order matters: the client and the sync read and write the new columns.
-2. Browser-verify every new screen, signed out and signed in as admin. Nothing has been checked yet.
-3. Add the OMDb key as the Edge Function secret `OMDB_API_KEY` (free key, 1,000 requests a day). Without it the sync skips scores. Then let scores and collections fill in over the nightly sync parts (up to 300 OMDb lookups per part).
-4. Check the Trakt export format against a real export, and that `last_watched_at` (latest play) is used as such.
+1. Verify the Pages deploy of `main` finished, then browser-verify every new screen, signed out and signed in as admin. Nothing has been checked in a browser.
+2. Owner: activate the OMDb key and add `OMDB_API_KEY` in Edge Functions → Secrets. Then scores and collections fill in over the nightly sync parts (up to 300 OMDb lookups a part; 1,295 titles, weekly refresh after the first pass).
+3. Check the Trakt export format against a real export, and that `last_watched_at` (latest play) is used as such.
 
 ## Landed on main (checked against git, 2026-11-18)
 
