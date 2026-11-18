@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-18 · `main` at `44f22ca` (this branch, fast-forwarded and pushed). Pages run `44378328865` at `44f22ca` succeeded. Hosted migration `20261118190243_watchlist_tracking` applied; `tmdb-proxy` v15 and `watchlist-cron-sync` v18 deployed; `OMDB_API_KEY` set by the owner 19:11 UTC. Not browser-verified: this sandbox cannot reach the live site.
+Updated 2026-11-18 19:50 UTC · `main` at `44f22ca` (this branch, fast-forwarded and pushed). Pages run `44378328865` at `44f22ca` succeeded. Hosted migration `20261118190243_watchlist_tracking` applied; `tmdb-proxy` v15 and `watchlist-cron-sync` v18 deployed; `OMDB_API_KEY` set by the owner 19:11 UTC. Not browser-verified: this sandbox cannot reach the live site.
 
 ## Deployed — Discovery fixes (`0ba78391`)
 
@@ -8,7 +8,7 @@ Updated 2026-11-18 · `main` at `44f22ca` (this branch, fast-forwarded and pushe
 
 - Built: IMDb, Rotten Tomatoes and Metacritic scores (from OMDb, by the nightly sync) beside the owner's rating; Mark as watched and Mark Season as Complete ask when; Paused series state; Diary and Year in review (`/watchlist/diary`); Franchises (`/watchlist/franchises`); Letterboxd and Trakt file import (admin); nav News · Library · Diary · Franchises.
 - Hosted migration `20261118190243_watchlist_tracking` applied and checked by SQL: score and collection columns, `paused` on `tv_shows`, public read with admin-only writes on `watchlist_ratings` (ratings are now public, the owner's decision) and the viewing-order tables, anon cannot execute the new RPCs, the season-cascade guard is in. 0 ratings existed when it was applied.
-- `OMDB_API_KEY` set by the owner in the dashboard (the MCP route was paused). Scores start with the next nightly parts. The key was shown in a chat screenshot; a fresh key would retire that copy. Anon can read all 20 columns the site reads (checked by SQL); Supabase security advisor shows nothing new.
+- `OMDB_API_KEY` set by the owner in the dashboard (the MCP route was paused). First pass run by hand 19:36–19:45 UTC (the three nightly parts, same request as the cron jobs): each part 200 OK, ~100 s, 299/300/300 OMDb lookups, 0 not found, not stopped by the limit. Films: 899 of 1,004 checked, 851 with IMDb, 724 RT, 731 Metacritic. Shows: 0 of 343 yet (films came first and filled each part); IMDb ids now on 998 films and 341 shows. The rest (~450) is due in the 06:00 parts, if OMDb's daily count has reset by then. The key was shown in a chat screenshot; a fresh key would retire that copy. Anon can read all 20 columns the site reads (checked by SQL); Supabase security advisor shows nothing new.
 
 ## Checks (2026-11-18, final tree of this branch)
 
@@ -28,8 +28,9 @@ Not run: `supabase db diff` against a from-schema build; graphify (not installed
 ## Next
 
 1. Browser-verify every new screen on the live site, signed out and signed in as admin. Nothing has been checked in a browser.
-2. Owner: make sure the OMDb key is activated (link in OMDb's email). Then check after a night that scores appear (`select count(*) from movies where scores_checked_at is not null`); 1,295 titles, up to 300 OMDb lookups a part, weekly refresh after the first pass.
+2. After the 2026-11-19 06:00 parts: check shows have scores (`select count(scores_checked_at) from tv_shows`). A 300-lookup part takes ~100 s against the cron's 120 s `pg_net` timeout; the first weekly refresh (~11-25) is another 300-a-part burst. Not checked: whether the function finishes if `pg_net` stops waiting.
 3. Check the Trakt export format against a real export, and that `last_watched_at` (latest play) is used as such.
+4. Discover's "Seen it" stamps today as the watch date (insert trigger), so back-filled films show in the Diary and 2026 Year in review as watched today. On 2026-11-18 the owner added ~54 that way. Undecided: ask when, as Library does, and whether to clear those dates.
 
 ## Landed on main (checked against git, 2026-11-18)
 
@@ -41,7 +42,7 @@ Not run: `supabase db diff` against a from-schema build; graphify (not installed
 
 ## Still unverified (carried forward, not checked)
 
-- Signed-in admin on production: rating, Seen it, favourite toggle, Not interested sync, reads from `watchlist_ratings`.
+- Signed-in admin on production: rating, favourite toggle, Not interested sync, reads from `watchlist_ratings`. ("Seen it" from Discover works: ~54 films added 2026-11-18, seen in the database.)
 - Light mode; a real phone; a show's "Created by" and cast in the production dialog.
 - Hosted `site_content` `about_me_1` / `about_me_2` have `section` NULL, so About shows the `site.json` fallback.
 - Warm-up sends about 30 anonymous reads, including the full Watchlist library.
