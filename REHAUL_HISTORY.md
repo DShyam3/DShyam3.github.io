@@ -3025,3 +3025,63 @@ privacy the default for anything rating-shaped. The library read stays public
 and never carries scores; the owner's session lays them on from their own
 query, so they never enter the shared library cache either.
 
+
+## Ratings are public, read-only to visitors — 2026-11-18
+
+Reverses the owner-only decision in "Personal ratings in their own owner-only
+table", the same day. The owner wants the comparison visible: a title's
+rating sits beside TMDB's average, and the year in review's top-rated films
+and seasons show to everyone. The scores are opinions about public titles,
+not personal data, so there is no reason to hold them back from visitors.
+Writes stay admin-only: `watchlist_ratings` gets an open SELECT, and its
+INSERT, UPDATE and DELETE keep `(SELECT public.is_admin())`. The scale is
+unchanged, main's 0.5–10 in 0.5 steps.
+
+## TMDB's average is the comparison — 2026-11-18
+
+Rotten Tomatoes and Metacritic have no public API, so the watchlist shows
+TMDB's user average beside the owner's rating. It is an average of TMDB's
+users, not critics, so it is labelled that way and shown with its vote count.
+Under 50 votes reads "few votes". Nothing shows until the nightly sync has
+stored votes, rather than a placeholder.
+
+## "When watched" goes through set_watched — 2026-11-18
+
+The `movies` and `tv_show_episodes` triggers stamp `now()` whenever watched
+flips, so a plain UPDATE cannot store a chosen date. The `set_watched` RPC
+takes a `when`, and any value other than now goes through it. Date-only values
+are stored at local noon, so a day does not shift across midnight in another
+timezone. A future date is refused. An unaired episode gets null, because no
+air date means no honest date. "Date unknown" stores watched with a null
+`watched_at`, as 8.B requires: watched, date unknown, excluded from anything
+time-bucketed.
+
+## Paused is a fourth library state, series only — 2026-11-18
+
+Paused is added to main's `library_state` values (active, paused, hidden,
+stopped) rather than a separate tracking column, because the states already
+answer the one question the column would have asked. Only series can be paused;
+films have nothing to resume. A paused series leaves Your Week and keeps its
+shelf. It stays in News, unlike Stopped watching and Hidden, which leave it.
+
+## Import keeps the earlier date and never overwrites a rating — 2026-11-18
+
+The same film is often logged on several services, and the earliest watch is
+the first time it was seen, so an existing earlier date is kept. An existing
+rating is the owner's own, so a re-import never overwrites it. New titles
+default to unticked: a file should not add a library's worth of titles without
+review. The import is a one-time file read. A live Trakt or Simkl integration
+stays unbuilt (8.J stands); the file is reviewed before anything is saved.
+
+## Diary public, with a season cascade guard — 2026-11-18
+
+Diary and year in review are public because watch dates were already public
+data on the library rows, and the scores are public under the reversal above.
+The owner alone edits dates and runs the import.
+
+The season trigger `update_episodes_watched_status` cascades a season's watched
+flag to its episodes. When the UPDATE came from an episode trigger
+(`pg_trigger_depth() > 1`), it returns without cascading. Before the guard,
+unmarking one episode of a fully watched season, or a newly synced episode
+joining one, unmarked the whole season and wiped its watch dates. The fix is
+migration `20261118120000_watchlist_tracking`; it is not applied yet.

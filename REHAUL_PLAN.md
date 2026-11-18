@@ -350,6 +350,36 @@ Open after the News and Library redesign, 2026-11-17. Its three migrations are a
    `selectUpNextRail` in `watchlist-utils.ts`. Delete them, keep
    `persistWatchedProgress`, and decide whether the view itself goes too.
 
+### Watchlist Diary, Franchises, import and public ratings — what is left
+
+Built in the tree on `claude/eloquent-johnson-xdjc53` (4b1380f); not merged to
+main, not deployed, migration not applied. Decisions are in `REHAUL_HISTORY.md`
+under 2026-11-18.
+
+1. **Deploy order, fixed.** Apply migration `20261118120000_watchlist_tracking`
+   to hosted (after the three migrations already applied on 2026-11-17 and
+   2026-11-18), then deploy `watchlist-cron-sync` and `tmdb-proxy`, then merge to
+   main. The client and the sync read and write the new columns: deploying either
+   first breaks the library read or every nightly sync.
+2. **Public ratings.** `watchlist_ratings` becomes publicly readable, writes stay
+   admin-only (`(SELECT public.is_admin())`). This is an RLS change. The schema
+   and migration carry it as uncommitted edits at the time of writing; the
+   client change is not confirmed. It needs the migration's RLS and grant check
+   before step 1.
+3. **Browser verification of every new screen.** None has been run: Diary (both
+   tabs), Franchises, the import review, the Paused label, the Mark as watched
+   date menu, the TMDB score, and the public rating read, plus the signed-in admin
+   checks.
+4. **TMDB votes and collections backfill** runs over three nightly sync parts.
+   Franchises and the TMDB score stay incomplete until it has run.
+5. **Trakt export format**: check the importer's parsing against a real Trakt
+   export. It was written against the documented shape.
+6. **Trakt watched-movies date.** `last_watched_at` is the latest play, not the
+   first. Confirm the importer uses it that way before trusting dates on films
+   watched more than once.
+7. **Favourites as a flag** and the other open items under "Watchlist News and
+   Library" above still stand.
+
 ### Deferred by choice
 
 7.2e (measured, not worth building), 7.12 delivery, 7.13 contacts and
@@ -462,10 +492,11 @@ announcements today; when dead links, subscription price rises or new books in a
 tracked series need signalling, `watchlist_events`'s shape scales — `{ surface,
 entity_id, kind, occurred_at, payload }` — and one renderer serves them all.
 
-**Year in review.** One statistics engine over rows, six surfaces feeding it:
-episodes and hours, countries and distance, books and pages, spend, cost per
-wear. It is arithmetic over rows, so 7.P applies in full — computed in
-`lib/`, tested, never generated. Unblocked; this is pure function territory.
+**Year in review, other surfaces.** The watchlist surface is built
+(`src/features/watchlist/year-review.ts`). Five remain feeding the same engine:
+countries and distance, books and pages, spend, cost per wear. It is arithmetic
+over rows, so 7.P applies in full — computed in `lib/`, tested, never generated.
+Unblocked; this is pure function territory.
 
 ### 8.E Collections
 
