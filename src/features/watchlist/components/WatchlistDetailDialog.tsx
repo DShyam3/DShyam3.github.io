@@ -268,7 +268,8 @@ export function WatchlistDetailDialog({
             className="w-full"
           />
 
-          <TmdbScore average={item.tmdb_vote_average} votes={item.tmdb_vote_count} />
+          {/* The admin rates in LibraryActions; visitors see the score here. */}
+          <TmdbScore average={item.tmdb_vote_average} votes={item.tmdb_vote_count} mine={isAdmin ? undefined : item.personal_rating} />
 
           {!isTVShow && item.runtime ? (
             <RuntimeRow

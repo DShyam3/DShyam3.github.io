@@ -4,9 +4,9 @@ import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { WatchlistItem } from './WatchlistContext';
 
 /**
- * The owner's personal scores. They live in `watchlist_ratings`, which only
- * the signed-in owner can read, so they never reach a visitor -- not in the
- * page and not through the public API. One row names exactly one target.
+ * The owner's scores, in `watchlist_ratings`: publicly readable (the owner's
+ * choice, 2026-11-18) and written only by the admin. One row names exactly
+ * one target.
  */
 export interface RatingRow {
   movie_id: number | null;

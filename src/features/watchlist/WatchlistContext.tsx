@@ -1457,18 +1457,17 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableIsSeasonWatched = useStableCallback(isSeasonWatched);
   const stableSetWatchedDates = useStableCallback(setWatchedDates);
 
-  // The owner's scores, laid onto the library for the owner only. A
-  // signed-out session never reads them, and a cached copy from before
-  // signing out is ignored.
-  const ratings = useQuery({ ...watchlistRatingsQuery, enabled: isAdmin });
+  // The owner's scores, public since 2026-11-18 (the owner's choice): every
+  // visitor reads them and sees them beside TMDB's; only the admin writes.
+  const ratings = useQuery(watchlistRatingsQuery);
   const ratedWatchlist = useMemo(
-    () => (isAdmin && ratings.data ? applyRatings(watchlist, ratings.data) : watchlist),
-    [isAdmin, ratings.data, watchlist],
+    () => (ratings.data ? applyRatings(watchlist, ratings.data) : watchlist),
+    [ratings.data, watchlist],
   );
   const ratingsStatus: WatchlistContextType['ratingsStatus'] = isAuthLoading
     ? 'loading'
     // Scores already in stay usable when a background refetch fails.
-    : !isAdmin || ratings.data !== undefined ? 'ready' : ratings.isError ? 'failed' : 'loading';
+    : ratings.data !== undefined ? 'ready' : ratings.isError ? 'failed' : 'loading';
 
   const value = useMemo(
     () => ({
