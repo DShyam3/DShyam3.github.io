@@ -17,9 +17,9 @@ const HOW_TO: Record<ImportSource, string> = {
 function ProgressBar({ label, done, total }: { label: string; done: number; total: number }) {
   const percent = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
-    <div className="space-y-1" aria-live="polite">
+    <div className="space-y-1">
       <p className="text-sm [overflow-wrap:anywhere]">{label}</p>
-      <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div role="progressbar" aria-label="Import progress" aria-valuetext={`${done} of ${total}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-2 w-full overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary transition-[width]" style={{ width: `${percent}%` }} />
       </div>
       <p className="text-xs text-muted-foreground">{done} of {total}</p>
@@ -90,11 +90,11 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
               <div role="alert" className="space-y-1 rounded-xl border border-destructive p-3 text-sm">
                 <p className="font-medium text-destructive">Failed at: {failure.step}</p>
                 <p className="[overflow-wrap:anywhere]">{failure.message}</p>
-                <p>Already saved: {failure.saved}. Added titles are not rolled back; running the import again is safe.</p>
+                <p>Saved before it stopped: {failure.saved}. Nothing is rolled back; importing again skips titles already added.</p>
               </div>
             )}
             <p className="text-sm" aria-live="polite">
-              {summary.films} film{summary.films === 1 ? '' : 's'} to mark watched ({summary.dated} dated), {summary.episodes} episode{summary.episodes === 1 ? '' : 's'} to mark watched, {summary.ratings} rating{summary.ratings === 1 ? '' : 's'} to set, {summary.adds} title{summary.adds === 1 ? '' : 's'} to add.
+              {summary.films} film{summary.films === 1 ? '' : 's'} to mark watched ({summary.dated} dated{summary.ratedOnly > 0 ? `, ${summary.ratedOnly} rated on Trakt with no watch logged` : ''}), {summary.episodes} episode{summary.episodes === 1 ? '' : 's'} to mark watched, {summary.ratings} rating{summary.ratings === 1 ? '' : 's'} to set, {summary.adds} title{summary.adds === 1 ? '' : 's'} to add.
             </p>
             {stage === 'applying' && progress && <ProgressBar {...progress} />}
             <ImportReview plan={plan} onChange={run.setPlan} disabled={busy} />
@@ -105,8 +105,10 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           <div className="space-y-2 text-sm" aria-live="polite">
             <p className="font-medium">Import finished.</p>
             <ul className="list-disc space-y-1 pl-5">
-              <li>{outcome.marked.movies_marked} films marked watched ({outcome.marked.dated} dated)</li>
+              <li>{outcome.marked.movies_marked} films marked watched</li>
+              <li>{outcome.marked.movies_dated} films dated</li>
               <li>{outcome.marked.episodes_marked} episodes marked watched</li>
+              <li>{outcome.marked.episodes_dated} episodes dated</li>
               <li>{outcome.marked.ratings_set} ratings set</li>
               <li>{outcome.added} titles added to your library</li>
               {outcome.failedAdds.length > 0 && <li>Could not add: {outcome.failedAdds.join(', ')}</li>}
@@ -140,7 +142,7 @@ export function WatchHistoryImport() {
   if (!isAdmin) return null;
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Import history</Button>
+      <Button variant="outline" onClick={() => setOpen(true)}>Import history</Button>
       {open && <ImportDialog open={open} onOpenChange={setOpen} />}
     </>
   );

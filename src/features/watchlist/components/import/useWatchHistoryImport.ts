@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useWatchlistContext } from '../../WatchlistContext';
 import { watchlistLibraryQuery } from '../../library-query';
+import { newItemFromDetails } from '../../new-item';
 import { invalidateWatchDerived } from '../../up-next-query';
 import { useTMDB } from '../../useTMDB';
 import { releaseYear } from '../../watchlist-utils';
@@ -10,15 +11,17 @@ import { LETTERBOXD_MAX_BYTES, parseLetterboxdFiles } from '../../letterboxd-imp
 import { TRAKT_MAX_BYTES, parseTraktFiles } from '../../trakt-import';
 import {
   buildImportPayload, buildLibraryIndex, chunk, classifyCandidates, filmsFromLetterboxd, importFromTrakt,
-  matchFilm, matchShow, titlesToAdd,
-  type Candidate, type ImportEpisode, type ImportFilm, type ImportPlan, type ImportRating, type ImportShowRef, type Resolution,
+  matchFilm, matchShow, resolveVerdict, titlesToAdd,
+  type Candidate, type ImportEpisode, type ImportFilm, type ImportPlan, type ImportRating, type ImportShowRef, type LibraryIndex, type Resolution,
 } from '../../import-match';
 
 export type ImportSource = 'letterboxd' | 'trakt';
 export type ImportStage = 'pick' | 'matching' | 'review' | 'applying' | 'done';
 
-/** The proxy allows 60 requests a minute per address. */
-const SEARCH_GAP_MS = 1100;
+/** The proxy allows 60 requests a minute per address: one TMDB request per gap. */
+const REQUEST_GAP_MS = 1100;
+/** The proxy's rate window is a fixed 60 s, so a retry waits it out. */
+const RETRY_WAIT_MS = 60_000;
 
 export interface ParsedImport {
   films: ImportFilm[];
@@ -30,13 +33,14 @@ export interface ParsedImport {
 export interface ImportOutcome {
   added: number;
   failedAdds: string[];
-  marked: { episodes_marked: number; movies_marked: number; dated: number; ratings_set: number };
+  marked: { episodes_marked: number; movies_marked: number; movies_dated: number; episodes_dated: number; ratings_set: number };
   notFound: { episodes: number; films: number; ratings: number };
 }
 export interface ImportFailure { step: string; message: string; saved: string }
 export interface ImportProgress { label: string; done: number; total: number }
 
-const RETRY_WAIT_MS = 30_000;
+/** Thrown inside a run that was cancelled, closed or unmounted; unwinds it silently. */
+class RunCancelled extends Error {}
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 const asCount = (value: unknown) => typeof value === 'number' ? value : 0;
 
@@ -51,11 +55,24 @@ export function useWatchHistoryImport() {
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
   const [failure, setFailure] = useState<ImportFailure | null>(null);
-  const cancelled = useRef(false);
-  const lastCall = useRef(0);
+  const runId = useRef(0);
+  /** When the next TMDB request may go out. */
+  const nextFree = useRef(0);
+
+  // A closed dialog must not keep searching or adding.
+  useEffect(() => () => { runId.current++; }, []);
+
+  const assertLive = (myRun: number) => { if (runId.current !== myRun) throw new RunCancelled(); };
+  const wait = async (ms: number, myRun: number) => { await sleep(ms); assertLive(myRun); };
+  /** Waits for a free slot, then books `calls` requests' worth of the rate window. */
+  const pace = async (myRun: number, calls = 1) => {
+    const ahead = nextFree.current - Date.now();
+    if (ahead > 0) await wait(ahead, myRun);
+    nextFree.current = Math.max(Date.now(), nextFree.current) + calls * REQUEST_GAP_MS;
+  };
 
   const reset = () => {
-    cancelled.current = true;
+    runId.current++;
     setStage('pick'); setParsed(null); setParseError(null); setPlan(null); setProgress(null); setOutcome(null); setFailure(null);
   };
 
@@ -88,28 +105,29 @@ export function useWatchHistoryImport() {
   };
 
   /**
-   * One TMDB search, paced against the last one. A failed call (often the
-   * proxy's 60-a-minute limit) waits 30 s and is tried once more; a second
-   * failure gives no candidates, so the title lands in "Not found".
+   * One paced TMDB search. A failed call (often the proxy's rate limit) waits
+   * out its 60 s window and is tried once more; a second failure is null, which
+   * the caller reports as a failed lookup rather than a title TMDB lacks.
    */
-  const searchCandidates = async (title: string, category: 'Movies' | 'TV Shows'): Promise<Candidate[]> => {
+  const searchCandidates = async (myRun: number, title: string, category: 'Movies' | 'TV Shows', year?: number): Promise<Candidate[] | null> => {
     const attempt = async () => {
-      const wait = SEARCH_GAP_MS - (Date.now() - lastCall.current);
-      if (wait > 0) await sleep(wait);
-      lastCall.current = Date.now();
-      return searchTitles(title, category);
+      await pace(myRun);
+      const found = await searchTitles(title, category, year);
+      assertLive(myRun);
+      return found;
     };
     let results;
     try {
       results = await attempt();
-    } catch {
-      if (cancelled.current) return [];
-      await sleep(RETRY_WAIT_MS);
+    } catch (error) {
+      if (error instanceof RunCancelled) throw error;
+      await wait(RETRY_WAIT_MS, myRun);
       try {
         results = await attempt();
-      } catch (error) {
-        console.error(`TMDB search failed twice for "${title}":`, error);
-        return [];
+      } catch (retryError) {
+        if (retryError instanceof RunCancelled) throw retryError;
+        console.error(`TMDB search failed twice for "${title}":`, retryError);
+        return null;
       }
     }
     return results.map(item => ({
@@ -120,20 +138,17 @@ export function useWatchHistoryImport() {
     }));
   };
 
-  const resolveBySearch = async (title: string, year: number | null, category: 'Movies' | 'TV Shows'): Promise<Resolution> => {
-    const candidates = await searchCandidates(title, category);
-    const verdict = classifyCandidates({ title, year }, candidates);
-    if (verdict.status === 'confident') {
-      const { match } = verdict;
-      return { status: 'new', tmdbId: match.id, title: match.title, year: match.year, poster: match.poster, include: false };
-    }
-    if (verdict.status === 'unsure') return { status: 'unsure', candidates: verdict.candidates, chosen: null };
-    return { status: 'missing' };
+  /** Year first when there is one; with no year, or nothing found with it, search without. */
+  const resolveBySearch = async (myRun: number, title: string, year: number | null, category: 'Movies' | 'TV Shows', index: LibraryIndex): Promise<Resolution> => {
+    let candidates = await searchCandidates(myRun, title, category, year ?? undefined);
+    if (candidates?.length === 0 && year !== null) candidates = await searchCandidates(myRun, title, category);
+    if (candidates === null) return { status: 'failed' };
+    return resolveVerdict(classifyCandidates({ title, year }, candidates), index, category);
   };
 
   const startMatching = async () => {
     if (!parsed) return;
-    cancelled.current = false;
+    const myRun = ++runId.current;
     setStage('matching'); setFailure(null);
     const index = buildLibraryIndex(watchlist);
     const films = parsed.films.map(film => ({ film, resolution: matchFilm(film, index) }));
@@ -141,21 +156,33 @@ export function useWatchHistoryImport() {
     const total = films.filter(f => !f.resolution).length + shows.filter(s => !s.resolution).length;
     let done = 0;
     setProgress({ label: 'Looking titles up', done, total });
-    for (const entry of films) {
-      if (entry.resolution) continue;
-      if (cancelled.current) return;
-      entry.resolution = await resolveBySearch(entry.film.name, entry.film.year, 'Movies');
-      setProgress({ label: `Looking up ${entry.film.name}`, done: ++done, total });
+    try {
+      for (const entry of films) {
+        if (entry.resolution) continue;
+        assertLive(myRun);
+        setProgress({ label: `Looking up ${entry.film.name}`, done, total });
+        entry.resolution = await resolveBySearch(myRun, entry.film.name, entry.film.year, 'Movies', index);
+        done += 1;
+      }
+      for (const entry of shows) {
+        if (entry.resolution) continue;
+        assertLive(myRun);
+        setProgress({ label: `Looking up ${entry.ref.title}`, done, total });
+        entry.resolution = await resolveBySearch(myRun, entry.ref.title, entry.ref.year, 'TV Shows', index);
+        done += 1;
+      }
+    } catch (error) {
+      if (error instanceof RunCancelled) return;
+      throw error;
     }
-    for (const entry of shows) {
-      if (entry.resolution) continue;
-      if (cancelled.current) return;
-      entry.resolution = await resolveBySearch(entry.ref.title, entry.ref.year, 'TV Shows');
-      setProgress({ label: `Looking up ${entry.ref.title}`, done: ++done, total });
-    }
-    if (cancelled.current) return;
+    if (runId.current !== myRun) return;
     setPlan({
-      films: films.map(f => ({ film: f.film, resolution: f.resolution ?? { status: 'missing' } })),
+      films: films.map(f => {
+        const resolution: Resolution = f.resolution ?? { status: 'missing' };
+        // Rated but never logged as watched: offered, not assumed.
+        const unticked = f.film.ratedOnly && (resolution.status === 'library' || resolution.status === 'new') ? { ...resolution, include: false } : resolution;
+        return { film: f.film, resolution: unticked };
+      }),
       shows: shows.map(s => ({ ref: s.ref, resolution: s.resolution ?? { status: 'missing' } })),
       episodes: parsed.episodes,
       ratings: parsed.ratings,
@@ -164,58 +191,51 @@ export function useWatchHistoryImport() {
     setStage('review');
   };
 
-  const cancelMatching = () => { cancelled.current = true; setProgress(null); setStage('pick'); };
+  const cancelMatching = () => { runId.current++; setProgress(null); setStage('pick'); };
 
   const apply = async () => {
     if (!plan) return;
-    cancelled.current = false;
+    const myRun = ++runId.current;
     setStage('applying'); setFailure(null);
-    const adds = titlesToAdd(plan);
+    // Titles the library already holds are not added again, so "added" counts real adds.
+    const index = buildLibraryIndex(watchlist);
+    const adds = titlesToAdd(plan).filter(entry => !(entry.category === 'Movies' ? index.filmByTmdb : index.showByTmdb).has(entry.tmdbId));
     const failedAdds: string[] = [];
     let added = 0;
     let step = 'Adding new titles';
-    let marked = { episodes_marked: 0, movies_marked: 0, dated: 0, ratings_set: 0 };
+    let marked = { episodes_marked: 0, movies_marked: 0, movies_dated: 0, episodes_dated: 0, ratings_set: 0 };
     const savedText = () => [
-      added > 0 ? `${added} new title${added === 1 ? '' : 's'} added to your library (not rolled back)` : 'No new titles were added',
-      marked.movies_marked + marked.episodes_marked > 0
-        ? `${marked.movies_marked} films and ${marked.episodes_marked} episodes marked watched` : 'nothing marked watched yet',
+      `${added} title${added === 1 ? '' : 's'} added to your library`,
+      `${marked.movies_marked} film${marked.movies_marked === 1 ? '' : 's'} and ${marked.episodes_marked} episode${marked.episodes_marked === 1 ? '' : 's'} marked watched`,
+      `${marked.movies_dated + marked.episodes_dated} watch date${marked.movies_dated + marked.episodes_dated === 1 ? '' : 's'} set`,
+      `${marked.ratings_set} rating${marked.ratings_set === 1 ? '' : 's'} set`,
     ].join('; ');
     try {
       for (const [i, entry] of adds.entries()) {
-        const wait = SEARCH_GAP_MS - (Date.now() - lastCall.current);
-        if (wait > 0) await sleep(wait);
-        lastCall.current = Date.now();
-        setProgress({ label: `Adding title ${i + 1} of ${adds.length}`, done: i, total: adds.length });
-        const details = await getMovieDetails(entry.tmdbId, entry.category === 'Movies' ? 'movie' : 'tv');
-        const ok = details && await addWatchlistItem({
-          title: details.release_year ? `${details.title} (${details.release_year})` : details.title,
-          category: entry.category,
-          description: details.overview,
-          year: details.release_year || undefined,
-          image_url: details.poster || undefined,
-          backdrop_url: details.backdrop || undefined,
-          runtime: details.runtime || undefined,
-          genres: details.genres,
-          tmdb_id: details.tmdb_id,
-          release_date: details.release_date,
-          streaming_platform: details.platform,
-          trailer_key: details.trailer_key ?? undefined,
-          tmdb_vote_average: details.tmdb_vote_average ?? undefined,
-          tmdb_vote_count: details.tmdb_vote_count ?? undefined,
-          collection_id: details.collection_id ?? undefined,
-          collection_name: details.collection_name ?? undefined,
-          directors: details.directors ?? undefined,
-          creators: details.creators ?? undefined,
-          top_cast: details.top_cast ?? undefined,
-        }, { quiet: true, skipRefresh: true });
-        if (ok) added += 1; else failedAdds.push(details?.title ?? `TMDB ${entry.tmdbId}`);
+        setProgress({ label: `Adding ${entry.title}`, done: i, total: adds.length });
+        const type = entry.category === 'Movies' ? 'movie' : 'tv';
+        await pace(myRun);
+        let details = await getMovieDetails(entry.tmdbId, type);
+        assertLive(myRun);
+        if (!details) {
+          await wait(RETRY_WAIT_MS, myRun);
+          await pace(myRun);
+          details = await getMovieDetails(entry.tmdbId, type);
+          assertLive(myRun);
+        }
+        if (!details) { failedAdds.push(entry.title); continue; }
+        // The add itself costs a details call plus one per season for a show.
+        if (entry.category === 'TV Shows') nextFree.current += (1 + details.season_count) * REQUEST_GAP_MS;
+        const ok = await addWatchlistItem(newItemFromDetails(details, entry.category), { quiet: true, skipRefresh: true });
+        assertLive(myRun);
+        if (ok) added += 1; else failedAdds.push(entry.title);
       }
 
       step = 'Reading the updated library';
       setProgress({ label: 'Reading your library', done: 0, total: 1 });
-      await fetchData();
-      const fresh = queryClient.getQueryData(watchlistLibraryQuery.queryKey)?.watchlist;
-      if (!fresh) throw new Error('The library could not be read back.');
+      // fetchData swallows its own errors; a failed re-read must stop the import.
+      const fresh = (await queryClient.fetchQuery({ ...watchlistLibraryQuery, staleTime: 0 })).watchlist;
+      assertLive(myRun);
 
       step = 'Marking titles watched';
       const payload = buildImportPayload(plan, fresh);
@@ -231,11 +251,13 @@ export function useWatchHistoryImport() {
           p_shows: parts.shows[i] ?? [], p_seasons: parts.seasons[i] ?? [],
         });
         if (error) throw error;
+        assertLive(myRun);
         const counts = (data ?? {}) as Record<string, unknown>;
         marked = {
           episodes_marked: marked.episodes_marked + asCount(counts.episodes_marked),
           movies_marked: marked.movies_marked + asCount(counts.movies_marked),
-          dated: marked.dated + asCount(counts.dated),
+          movies_dated: marked.movies_dated + asCount(counts.movies_dated),
+          episodes_dated: marked.episodes_dated + asCount(counts.episodes_dated),
           ratings_set: marked.ratings_set + asCount(counts.ratings_set),
         };
       }
@@ -243,14 +265,20 @@ export function useWatchHistoryImport() {
       step = 'Refreshing the page';
       await fetchData();
       await invalidateWatchDerived(queryClient);
+      assertLive(myRun);
       setOutcome({ added, failedAdds, marked, notFound: payload.notFound });
       setProgress(null);
       setStage('done');
     } catch (error) {
+      if (error instanceof RunCancelled) return;
+      // Refresh before handing back to review, so a second Import sees the
+      // titles already added and cannot add them again.
+      await fetchData();
+      await invalidateWatchDerived(queryClient);
+      if (runId.current !== myRun) return;
       setProgress(null);
       setFailure({ step, message: error instanceof Error ? error.message : 'Something went wrong.', saved: savedText() });
       setStage('review');
-      void fetchData();
     }
   };
 

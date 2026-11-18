@@ -83,7 +83,7 @@ export function OrderCard({
               <Button type="button" variant="outline" className="gap-1.5" disabled={busy} onClick={() => { setDraft(order.name); setRenameError(null); setRenaming(true); }}>
                 <Pencil className="h-4 w-4" aria-hidden="true" />Rename
               </Button>
-              <AddEntryDialog existingKeys={new Set(order.entries.map((e) => e.key))} onAdd={actions.onAdd} />
+              <AddEntryDialog existingKeys={new Set(order.entries.map((e) => e.key))} onAdd={actions.onAdd} disabled={busy} />
               <Button type="button" variant="outline" className="gap-1.5 text-destructive" disabled={busy} onClick={actions.onDelete}>
                 <Trash2 className="h-4 w-4" aria-hidden="true" />Delete
               </Button>

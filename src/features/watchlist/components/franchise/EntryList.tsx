@@ -166,7 +166,6 @@ export function EntryList({
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
                       disabled={adding}
                       onClick={() => onAddToLibrary(entry)}
                       className="gap-1.5"

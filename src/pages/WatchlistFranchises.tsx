@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
@@ -11,7 +12,7 @@ import { useAddToLibrary } from '@/features/watchlist/components/franchise/useAd
 import {
   buildOrderView,
   collectionsFromLibrary,
-  type LibraryLookup,
+  libraryLookup,
   type OrderEntryView,
 } from '@/features/watchlist/franchise';
 import { useTMDB } from '@/features/watchlist/useTMDB';
@@ -20,6 +21,7 @@ import {
   addEntry,
   createOrder,
   deleteOrder,
+  libraryCollectionsQueryOptions,
   moveEntry,
   removeEntry,
   renameOrder,
@@ -30,8 +32,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useToast } from '@/hooks/use-toast';
 
-const localDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** Postgres unique_violation: the film or show is already in this order. */
+const UNIQUE_VIOLATION = '23505';
 
 /** Franchises: viewing orders for film series and cinematic universes. */
 export default function WatchlistFranchises() {
@@ -45,71 +47,77 @@ export default function WatchlistFranchises() {
   const orders = useQuery(viewingOrdersQueryOptions);
   const [selected, setSelected] = useState<{ id: string; category: 'Movies' | 'TV Shows' } | null>(null);
 
-  const lookup = useMemo<LibraryLookup>(() => {
-    const today = localDate(new Date());
-    const movies: LibraryLookup['movies'] = new Map();
-    const shows: LibraryLookup['shows'] = new Map();
-    for (const item of watchlist) {
-      if (item.tmdb_id == null) continue;
-      if (item.category === 'Movies') {
-        movies.set(item.tmdb_id, { id: item.id, watched: !!item.watched });
-      } else if (item.category === 'TV Shows') {
-        let airedEpisodes = 0;
-        let watchedEpisodes = 0;
-        for (const season of item.seasons ?? []) {
-          if (season.season_number <= 0) continue;
-          for (const ep of season.episodes) {
-            if (!ep.release_date || ep.release_date.slice(0, 10) > today) continue;
-            airedEpisodes++;
-            if (ep.watched) watchedEpisodes++;
-          }
-        }
-        shows.set(item.tmdb_id, { id: item.id, airedEpisodes, watchedEpisodes });
-      }
-    }
-    return { movies, shows };
-  }, [watchlist]);
+  const lookup = useMemo(() => libraryLookup(watchlist, new Date()), [watchlist]);
 
   const savedOrders = orders.data ?? [];
   const savedCollectionIds = new Set(savedOrders.flatMap((o) => (o.tmdbCollectionId == null ? [] : [o.tmdbCollectionId])));
-  const collections = useMemo(
-    () =>
-      collectionsFromLibrary(
-        watchlist
-          .filter((item) => item.category === 'Movies')
-          .map((item) => ({
-            id: item.id,
-            tmdbId: item.tmdb_id ?? null,
-            title: item.title,
-            watched: !!item.watched,
-            releaseDate: item.release_date ?? null,
-            poster: item.image_url ?? null,
-            collectionId: item.collection_id ?? null,
-            collectionName: item.collection_name ?? null,
-          })),
-      ),
-    [watchlist],
-  );
+  const collectionRows = useQuery(libraryCollectionsQueryOptions);
+  const collections = useMemo(() => {
+    const films = new Map(watchlist.filter((item) => item.category === 'Movies').map((item) => [item.id, item]));
+    return collectionsFromLibrary(
+      (collectionRows.data ?? []).flatMap((row) => {
+        const item = films.get(row.id);
+        return item
+          ? [{
+              id: item.id,
+              tmdbId: row.tmdbId,
+              title: item.title,
+              watched: !!item.watched,
+              releaseDate: item.release_date ?? null,
+              poster: item.image_url ?? null,
+              collectionId: row.collectionId,
+              collectionName: row.collectionName,
+            }]
+          : [];
+      }),
+    );
+  }, [watchlist, collectionRows.data]);
   const openCollections = collections.filter((c) => !savedCollectionIds.has(c.collectionId));
 
-  const run = async (action: () => Promise<unknown>, failure: string) => {
+  /** Runs a change, then refreshes the orders. Resolves to an error message, or null on success. */
+  const run = async (action: () => Promise<unknown>, failure: string): Promise<string | null> => {
     try {
       await action();
       await queryClient.invalidateQueries({ queryKey: viewingOrdersQueryOptions.queryKey });
+      return null;
     } catch (error) {
       console.error(failure, error);
-      toast({ title: failure, variant: 'destructive' });
+      return (error as { code?: string } | null)?.code === UNIQUE_VIOLATION ? 'Already in this order' : failure;
+    }
+  };
+
+  const runWithToast = async (action: () => Promise<unknown>, failure: string) => {
+    const message = await run(action, failure);
+    if (message) toast({ title: message, variant: 'destructive' });
+  };
+
+  /** Orders with a change, or the read that follows it, in flight. */
+  const [busyOrders, setBusyOrders] = useState<ReadonlySet<number>>(new Set());
+  const inOrder = async <T,>(orderId: number, work: () => Promise<T>): Promise<T> => {
+    setBusyOrders((current) => new Set(current).add(orderId));
+    try {
+      return await work();
+    } finally {
+      setBusyOrders((current) => {
+        const next = new Set(current);
+        next.delete(orderId);
+        return next;
+      });
     }
   };
 
   const actionsFor = (order: { id: number; name: string }): OrderActions => ({
-    onRename: (name) => void run(() => renameOrder(order.id, name), 'Could not rename the order'),
+    onRename: (name) => inOrder(order.id, () => run(() => renameOrder(order.id, name), 'Could not rename the order')),
     onDelete: () =>
-      askDelete({ name: order.name, onConfirm: () => run(() => deleteOrder(order.id), 'Could not delete the order') }),
-    onAdd: (entry) => void run(() => addEntry(order.id, entry), 'Could not add to the order'),
-    onRemove: (entryId) => void run(() => removeEntry(entryId), 'Could not remove the entry'),
-    onNote: (entryId, note) => void run(() => updateEntryNote(entryId, note), 'Could not save the note'),
-    onMove: (entryIds, from, to) => void run(() => moveEntry(order.id, entryIds, from, to), 'Could not move the entry'),
+      askDelete({
+        name: order.name,
+        onConfirm: () => inOrder(order.id, () => runWithToast(() => deleteOrder(order.id), 'Could not delete the order')),
+      }),
+    onAdd: (entry) => inOrder(order.id, () => run(() => addEntry(order.id, entry), 'Could not add to the order')),
+    onRemove: (entryId) => void inOrder(order.id, () => runWithToast(() => removeEntry(entryId), 'Could not remove the entry')),
+    onNote: (entryId, note) => inOrder(order.id, () => run(() => updateEntryNote(entryId, note), 'Could not save the note')),
+    onMove: (entryIds, from, to) =>
+      void inOrder(order.id, () => runWithToast(() => moveEntry(order.id, entryIds, from, to), 'Could not move the entry')),
   });
 
   const openEntry = (entry: OrderEntryView) => {
@@ -120,17 +128,15 @@ export default function WatchlistFranchises() {
   const loading = libraryLoading || orders.isPending;
 
   return (
+    <AppShell title="Watchlist" subtitle="Franchises" toolbar={<WatchlistNav current="franchises" />}>
     <div className="space-y-6">
-      <WatchlistNav current="franchises" />
 
       <section aria-labelledby="orders-heading" className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="orders-heading"><DotMatrixText text="YOUR VIEWING ORDERS" size="xs" /></h2>
           {isAdmin && (
             <NewOrderForm
-              onCreate={async (name) => {
-                await run(() => createOrder({ name }), 'Could not create the order');
-              }}
+              onCreate={(name) => run(() => createOrder({ name }), 'Could not create the order')}
             />
           )}
         </div>
@@ -147,6 +153,7 @@ export default function WatchlistFranchises() {
                 order={order}
                 view={buildOrderView(order.entries, lookup)}
                 actions={isAdmin ? actionsFor(order) : undefined}
+                busy={busyOrders.has(order.id)}
                 onOpen={openEntry}
                 onAddToLibrary={isAdmin ? (entry) => void addToLibrary(entry) : undefined}
                 isAdding={isAdding}
@@ -178,7 +185,7 @@ export default function WatchlistFranchises() {
                 onSave={
                   isAdmin
                     ? async (c, view) => {
-                        await run(
+                        await runWithToast(
                           () => createOrder({ name: c.name.slice(0, 120), tmdbCollectionId: c.collectionId, entries: view.entries }),
                           'Could not save the viewing order',
                         );
@@ -206,5 +213,6 @@ export default function WatchlistFranchises() {
         />
       )}
     </div>
+    </AppShell>
   );
 }

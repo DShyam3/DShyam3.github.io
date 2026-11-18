@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WatchlistItem } from './WatchlistContext';
 import {
   buildImportPayload, buildLibraryIndex, chunk, classifyCandidates, filmsFromLetterboxd, importFromTrakt,
-  matchFilm, matchShow, summarisePlan, type Candidate, type ImportFilm, type ImportPlan, type ImportShowRef,
+  matchFilm, matchShow, resolveVerdict, settle, summarisePlan, type Candidate, type ImportFilm, type ImportPlan, type ImportShowRef,
 } from './import-match';
 import { parseTraktFiles } from './trakt-import';
 
@@ -35,11 +35,17 @@ describe('library matching', () => {
   it('treats an unmatched Trakt film with an id as new, without a search', () => {
     expect(matchFilm(imported('Unknown', 2020, { tmdbId: 5 }), index)).toMatchObject({ status: 'new', tmdbId: 5, include: false });
   });
+  it('does not let a title hit override a different TMDB id, but accepts one without an id', () => {
+    const idx = buildLibraryIndex([film('1', 'Heat', 1995, 949), film('2', 'Plain', 2000)]);
+    expect(matchFilm(imported('Heat', 1995, { tmdbId: 111 }), idx)).toMatchObject({ status: 'new', tmdbId: 111 });
+    expect(matchFilm(imported('Heat', 1995), idx)).toMatchObject({ status: 'library', libraryId: '1', libraryTitle: 'Heat (1995)' });
+    expect(matchFilm(imported('Plain', 2000, { tmdbId: 5 }), idx)).toMatchObject({ status: 'library', libraryId: '2' });
+  });
   it('matches shows by id or title and year', () => {
     const ref = (tmdbId: number | null): ImportShowRef => ({ tmdbId, title: 'Dark', year: 2017 });
     expect(matchShow(ref(null), index)).toMatchObject({ libraryId: '9' });
     expect(matchShow(ref(70523), index)).toMatchObject({ libraryId: '9' });
-    expect(matchShow(ref(1), index)).toMatchObject({ status: 'library', libraryId: '9' });
+    expect(matchShow(ref(1), index)).toMatchObject({ status: 'new', tmdbId: 1 });
     expect(matchShow({ tmdbId: 1, title: 'Other', year: 2000 }, index)).toMatchObject({ status: 'new' });
   });
 });
@@ -59,6 +65,24 @@ describe('classifyCandidates', () => {
   });
   it('is missing without candidates', () => {
     expect(classifyCandidates({ title: 'x', year: null }, [])).toEqual({ status: 'missing' });
+  });
+});
+
+describe('resolveVerdict', () => {
+  const idx = buildLibraryIndex([film('1', 'Birdman', 2014, 194)]);
+  it('resolves a confident hit already in the library to the library row', () => {
+    const verdict = classifyCandidates({ title: 'Birdman or (The Unexpected Virtue of Ignorance)', year: 2014 }, [cand(194, 'Birdman or (The Unexpected Virtue of Ignorance)', 2014)]);
+    expect(resolveVerdict(verdict, idx, 'Movies')).toMatchObject({ status: 'library', libraryId: '1', libraryTitle: 'Birdman (2014)' });
+  });
+  it('keeps a confident hit not in the library as new', () => {
+    expect(resolveVerdict({ status: 'confident', match: cand(5, 'X', 2000) }, idx, 'Movies')).toMatchObject({ status: 'new', tmdbId: 5 });
+  });
+  it('marks unsure candidates in the library, and choosing one settles to that row', () => {
+    const res = resolveVerdict({ status: 'unsure', candidates: [cand(194, 'Birdman', 2014), cand(7, 'Other', 2014)] }, idx, 'Movies');
+    if (res.status !== 'unsure') throw new Error('expected unsure');
+    expect(res.candidates.map(c => c.libraryId)).toEqual(['1', undefined]);
+    expect(settle({ ...res, chosen: 194 })).toEqual({ kind: 'library', libraryId: '1' });
+    expect(settle({ ...res, chosen: 7 })).toMatchObject({ kind: 'new', tmdbId: 7 });
   });
 });
 
@@ -106,7 +130,7 @@ describe('buildImportPayload', () => {
   });
 
   it('summarises what will be saved', () => {
-    expect(summarisePlan(plan)).toEqual({ films: 3, dated: 1, episodes: 3, ratings: 4, adds: 2 });
+    expect(summarisePlan(plan)).toEqual({ films: 3, dated: 1, ratedOnly: 0, episodes: 3, ratings: 4, adds: 2 });
   });
 });
 
@@ -129,7 +153,15 @@ describe('sources', () => {
     const out = importFromTrakt(result);
     expect(out.films).toHaveLength(1);
     expect(out.films[0]).toMatchObject({ tmdbId: 949, rating: 8, watchedAt: '2021-01-01T00:00:00.000Z' });
+    expect(out.films[0].ratedOnly).toBeUndefined();
     expect(out.shows).toHaveLength(1);
     expect(out.episodes).toHaveLength(1);
+  });
+
+  it('flags a Trakt film rated without any history', () => {
+    const out = importFromTrakt(parseTraktFiles([{ name: 'r.json', text: JSON.stringify([
+      { type: 'movie', rating: 8, rated_at: '2022-01-01T00:00:00Z', movie: { title: 'Heat', year: 1995, ids: { tmdb: 949 } } },
+    ]) }]));
+    expect(out.films[0]).toMatchObject({ ratedOnly: true, watchedAt: null, rating: 8 });
   });
 });

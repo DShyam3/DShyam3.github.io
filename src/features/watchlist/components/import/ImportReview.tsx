@@ -7,6 +7,7 @@ interface Entry {
   label: string;
   year: number | null;
   resolution: Resolution;
+  ratedOnly?: boolean;
 }
 
 interface ImportReviewProps {
@@ -25,13 +26,15 @@ const yearText = (year: number | null) => year ? ` (${year})` : '';
 
 export function ImportReview({ plan, onChange, disabled }: ImportReviewProps) {
   const entries: Entry[] = [
-    ...plan.films.map((p, index): Entry => ({ kind: 'film', index, label: p.film.name, year: p.film.year, resolution: p.resolution })),
+    ...plan.films.map((p, index): Entry => ({ kind: 'film', index, label: p.film.name, year: p.film.year, resolution: p.resolution, ratedOnly: p.film.ratedOnly })),
     ...plan.shows.map((p, index): Entry => ({ kind: 'show', index, label: p.ref.title, year: p.ref.year, resolution: p.resolution })),
   ];
-  const library = entries.filter(e => e.resolution.status === 'library');
-  const fresh = entries.filter(e => e.resolution.status === 'new');
+  const keepable = (e: Entry) => e.resolution.status === 'library' || e.resolution.status === 'new';
+  const rated = entries.filter(e => keepable(e) && e.ratedOnly);
+  const library = entries.filter(e => e.resolution.status === 'library' && !e.ratedOnly);
+  const fresh = entries.filter(e => e.resolution.status === 'new' && !e.ratedOnly);
   const unsure = entries.filter(e => e.resolution.status === 'unsure');
-  const missing = entries.filter(e => e.resolution.status === 'missing');
+  const missing = entries.filter(e => e.resolution.status === 'missing' || e.resolution.status === 'failed');
 
   const update = (entry: Entry, resolution: Resolution) => {
     if (entry.kind === 'film') onChange({ ...plan, films: plan.films.map((p, i) => i === entry.index ? { ...p, resolution } : p) });
@@ -62,7 +65,10 @@ export function ImportReview({ plan, onChange, disabled }: ImportReviewProps) {
         <label className="flex min-h-11 items-center gap-3 py-1">
           <input type="checkbox" className="h-4 w-4 shrink-0" checked={include} disabled={disabled} onChange={event => setInclude(entry, event.target.checked)} />
           <Poster url={poster} />
-          <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{title}{yearText(year)}{entry.kind === 'show' ? ' · TV' : ''}</span>
+          <span className="min-w-0 text-sm [overflow-wrap:anywhere]">
+            {title}{yearText(year)}{entry.kind === 'show' ? ' · TV' : ''}
+            {res.status === 'library' && res.libraryTitle && <span className="block text-xs text-muted-foreground">Matched to library: {res.libraryTitle}</span>}
+          </span>
         </label>
       </li>
     );
@@ -70,13 +76,26 @@ export function ImportReview({ plan, onChange, disabled }: ImportReviewProps) {
 
   return (
     <div className="space-y-5">
+      {rated.length > 0 && (
+        <section aria-labelledby="import-rated" className="space-y-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="import-rated" className="text-sm font-semibold">Rated on Trakt, no watch logged — {rated.length}</h3>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => setAll(rated, true)}>Select all</Button>
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => setAll(rated, false)}>Select none</Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Not ticked by default. Ticked films are marked watched with no date, and keep their rating.</p>
+          <ul>{rated.map(entry => checkRow(entry, entry.resolution.status === 'new' ? entry.resolution.poster : null))}</ul>
+        </section>
+      )}
       {library.length > 0 && (
         <section aria-labelledby="import-library" className="space-y-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 id="import-library" className="text-sm font-semibold">Already in your library — {library.length}</h3>
             <div className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setAll(library, true)}>Select all</Button>
-              <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setAll(library, false)}>Select none</Button>
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => setAll(library, true)}>Select all</Button>
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => setAll(library, false)}>Select none</Button>
             </div>
           </div>
           <ul>{library.map(entry => checkRow(entry, null))}</ul>
@@ -87,8 +106,8 @@ export function ImportReview({ plan, onChange, disabled }: ImportReviewProps) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 id="import-new" className="text-sm font-semibold">New to your library — {fresh.length}</h3>
             <div className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setAll(fresh, true)}>Select all</Button>
-              <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setAll(fresh, false)}>Select none</Button>
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => setAll(fresh, true)}>Select all</Button>
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => setAll(fresh, false)}>Select none</Button>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">Ticked titles are added to your library, then marked watched.</p>
@@ -109,7 +128,7 @@ export function ImportReview({ plan, onChange, disabled }: ImportReviewProps) {
                   <label key={candidate.id} className="flex min-h-11 items-center gap-3">
                     <input type="radio" name={name} className="h-4 w-4 shrink-0" checked={res.chosen === candidate.id} onChange={() => update(entry, { ...res, chosen: candidate.id })} />
                     <Poster url={candidate.poster} />
-                    <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{candidate.title}{yearText(candidate.year)}</span>
+                    <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{candidate.title}{yearText(candidate.year)}{candidate.libraryId && <span className="text-xs text-muted-foreground"> · in your library</span>}</span>
                   </label>
                 ))}
                 <label className="flex min-h-11 items-center gap-3">
@@ -125,7 +144,7 @@ export function ImportReview({ plan, onChange, disabled }: ImportReviewProps) {
         <section aria-labelledby="import-missing" className="space-y-1">
           <h3 id="import-missing" className="text-sm font-semibold">Not found — {missing.length}</h3>
           <ul className="space-y-1 text-sm text-muted-foreground">
-            {missing.map(entry => <li key={`${entry.kind}-${entry.index}`} className="[overflow-wrap:anywhere]">{entry.label}{yearText(entry.year)}</li>)}
+            {missing.map(entry => <li key={`${entry.kind}-${entry.index}`} className="[overflow-wrap:anywhere]">{entry.label}{yearText(entry.year)}{entry.resolution.status === 'failed' ? ' — lookup failed, try again later' : ''}</li>)}
           </ul>
         </section>
       )}

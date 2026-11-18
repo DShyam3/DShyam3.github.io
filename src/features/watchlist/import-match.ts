@@ -14,18 +14,23 @@ export interface ImportFilm {
   /** ISO timestamp, or null for "watched, date unknown". */
   watchedAt: string | null;
   rating: number | null;
+  /** Trakt rated it but logged no watch: kept, though not ticked by default. */
+  ratedOnly?: boolean;
 }
 export interface ImportShowRef { tmdbId: number | null; title: string; year: number | null }
 export interface ImportEpisode { show: ImportShowRef; season: number; episode: number; watchedAt: string | null }
 export interface ImportRating { kind: 'show' | 'season'; show: ImportShowRef; season?: number; rating: number }
 
-export interface Candidate { id: number; title: string; year: number | null; poster: string | null }
+/** `libraryId` is set when this TMDB title is already in the library. */
+export interface Candidate { id: number; title: string; year: number | null; poster: string | null; libraryId?: string }
 
 export type Resolution =
-  | { status: 'library'; libraryId: string; include: boolean }
+  | { status: 'library'; libraryId: string; libraryTitle?: string; include: boolean }
   | { status: 'new'; tmdbId: number; title: string; year: number | null; poster: string | null; include: boolean }
   | { status: 'unsure'; candidates: Candidate[]; chosen: number | null }
-  | { status: 'missing' };
+  | { status: 'missing' }
+  /** The lookup itself failed twice (not the same as TMDB having nothing). */
+  | { status: 'failed' };
 
 export interface PlannedFilm { film: ImportFilm; resolution: Resolution }
 export interface PlannedShow { ref: ImportShowRef; resolution: Resolution }
@@ -59,6 +64,8 @@ export const titleYearKey = (title: string, year: number | null) => `${normalise
 export interface LibraryIndex {
   filmByTmdb: Map<number, string>;
   filmByTitle: Map<string, string>;
+  /** Library row by id: its stored title and TMDB id. */
+  rowById: Map<string, { title: string; tmdbId: number | null }>;
   showByTmdb: Map<number, string>;
   showByTitle: Map<string, string>;
   episodeId: (showLibraryId: string, season: number, episode: number) => number | undefined;
@@ -70,6 +77,7 @@ export function buildLibraryIndex(watchlist: WatchlistItem[]): LibraryIndex {
   const filmByTitle = new Map<string, string>();
   const showByTmdb = new Map<number, string>();
   const showByTitle = new Map<string, string>();
+  const rowById = new Map<string, { title: string; tmdbId: number | null }>();
   const episodes = new Map<string, number>();
   const seasons = new Map<string, number>();
   const setFirst = <K,>(map: Map<K, string>, key: K, id: string) => { if (!map.has(key)) map.set(key, id); };
@@ -77,6 +85,7 @@ export function buildLibraryIndex(watchlist: WatchlistItem[]): LibraryIndex {
   for (const item of watchlist) {
     const { base, year } = splitTitleYear(item.title, item.year);
     const key = titleYearKey(base, year);
+    rowById.set(item.id, { title: item.title, tmdbId: item.tmdb_id ?? null });
     if (item.category === 'Movies') {
       if (item.tmdb_id) setFirst(filmByTmdb, item.tmdb_id, item.id);
       setFirst(filmByTitle, key, item.id);
@@ -92,7 +101,7 @@ export function buildLibraryIndex(watchlist: WatchlistItem[]): LibraryIndex {
     }
   }
   return {
-    filmByTmdb, filmByTitle, showByTmdb, showByTitle,
+    filmByTmdb, filmByTitle, rowById, showByTmdb, showByTitle,
     episodeId: (showId, season, episode) => episodes.get(`${showId}|${season}|${episode}`),
     seasonId: (showId, season) => seasons.get(`${showId}|${season}`),
   };
@@ -137,7 +146,7 @@ export function importFromTrakt(result: TraktParseResult): {
       const key = filmKey(entry.title);
       const existing = films.get(key);
       if (existing) existing.rating = entry.rating;
-      else films.set(key, { key, name: entry.title.title, year: entry.title.year, tmdbId: entry.title.tmdbId, watchedAt: null, rating: entry.rating });
+      else films.set(key, { key, name: entry.title.title, year: entry.title.year, tmdbId: entry.title.tmdbId, watchedAt: null, rating: entry.rating, ratedOnly: true });
     } else {
       const show = addShow(entry.title);
       ratings.push({ kind: entry.kind, show, season: entry.season, rating: entry.rating });
@@ -149,19 +158,33 @@ export function importFromTrakt(result: TraktParseResult): {
 
 // ---- Matching ----------------------------------------------------------------
 
+/**
+ * A title hit never overrides a different TMDB id: a library row that has an
+ * id of its own only matches by title when the import has no id or the same one.
+ */
+function libraryHit(
+  byTmdb: Map<number, string>, byTitle: Map<string, string>, index: LibraryIndex,
+  tmdbId: number | null, title: string, year: number | null,
+): { libraryId: string; libraryTitle?: string } | null {
+  const byId = tmdbId !== null ? byTmdb.get(tmdbId) : undefined;
+  const byName = byTitle.get(titleYearKey(title, year));
+  const row = byName ? index.rowById.get(byName) : undefined;
+  const nameUsable = byName !== undefined && !(tmdbId !== null && row?.tmdbId != null && row.tmdbId !== tmdbId);
+  const libraryId = byId ?? (nameUsable ? byName : undefined);
+  return libraryId ? { libraryId, libraryTitle: index.rowById.get(libraryId)?.title } : null;
+}
+
 /** A library match, a straight 'new' (Trakt gave a TMDB id), or null: needs a TMDB search. */
 export function matchFilm(film: ImportFilm, index: LibraryIndex): Resolution | null {
-  const libraryId = (film.tmdbId !== null ? index.filmByTmdb.get(film.tmdbId) : undefined)
-    ?? index.filmByTitle.get(titleYearKey(film.name, film.year));
-  if (libraryId) return { status: 'library', libraryId, include: true };
+  const hit = libraryHit(index.filmByTmdb, index.filmByTitle, index, film.tmdbId, film.name, film.year);
+  if (hit) return { status: 'library', ...hit, include: true };
   if (film.tmdbId !== null) return { status: 'new', tmdbId: film.tmdbId, title: film.name, year: film.year, poster: null, include: false };
   return null;
 }
 
 export function matchShow(ref: ImportShowRef, index: LibraryIndex): Resolution | null {
-  const libraryId = (ref.tmdbId !== null ? index.showByTmdb.get(ref.tmdbId) : undefined)
-    ?? index.showByTitle.get(titleYearKey(ref.title, ref.year));
-  if (libraryId) return { status: 'library', libraryId, include: true };
+  const hit = libraryHit(index.showByTmdb, index.showByTitle, index, ref.tmdbId, ref.title, ref.year);
+  if (hit) return { status: 'library', ...hit, include: true };
   if (ref.tmdbId !== null) return { status: 'new', tmdbId: ref.tmdbId, title: ref.title, year: ref.year, poster: null, include: false };
   return null;
 }
@@ -182,6 +205,26 @@ export function classifyCandidates(query: { title: string; year: number | null }
   return { status: 'unsure', candidates: ordered.slice(0, 3).map(entry => entry.c) };
 }
 
+/**
+ * What a search verdict means for the plan. A confident hit already in the
+ * library (by TMDB id) is the library row, not a new title; unsure candidates
+ * already in the library are marked so choosing one resolves to that row.
+ */
+export function resolveVerdict(verdict: Classification, index: LibraryIndex, category: 'Movies' | 'TV Shows'): Resolution {
+  const byTmdb = category === 'Movies' ? index.filmByTmdb : index.showByTmdb;
+  if (verdict.status === 'confident') {
+    const { match } = verdict;
+    const libraryId = byTmdb.get(match.id);
+    if (libraryId) return { status: 'library', libraryId, libraryTitle: index.rowById.get(libraryId)?.title, include: true };
+    return { status: 'new', tmdbId: match.id, title: match.title, year: match.year, poster: match.poster, include: false };
+  }
+  if (verdict.status === 'unsure') {
+    const candidates = verdict.candidates.map(c => { const libraryId = byTmdb.get(c.id); return libraryId ? { ...c, libraryId } : c; });
+    return { status: 'unsure', candidates, chosen: null };
+  }
+  return { status: 'missing' };
+}
+
 // ---- Plan -> payload -------------------------------------------------------------
 
 export type Settled = { kind: 'library'; libraryId: string } | { kind: 'new'; tmdbId: number; title: string; year: number | null; poster: string | null };
@@ -192,20 +235,21 @@ export function settle(resolution: Resolution): Settled | null {
   if (resolution.status === 'new') return resolution.include ? { kind: 'new', tmdbId: resolution.tmdbId, title: resolution.title, year: resolution.year, poster: resolution.poster } : null;
   if (resolution.status === 'unsure' && resolution.chosen !== null) {
     const pick = resolution.candidates.find(c => c.id === resolution.chosen);
+    if (pick?.libraryId) return { kind: 'library', libraryId: pick.libraryId };
     return pick ? { kind: 'new', tmdbId: pick.id, title: pick.title, year: pick.year, poster: pick.poster } : null;
   }
   return null;
 }
 
 /** The titles the import must add before it can mark anything, once each. */
-export function titlesToAdd(plan: ImportPlan): { category: 'Movies' | 'TV Shows'; tmdbId: number }[] {
+export function titlesToAdd(plan: ImportPlan): { category: 'Movies' | 'TV Shows'; tmdbId: number; title: string }[] {
   const seen = new Set<string>();
-  const out: { category: 'Movies' | 'TV Shows'; tmdbId: number }[] = [];
+  const out: { category: 'Movies' | 'TV Shows'; tmdbId: number; title: string }[] = [];
   const collect = (category: 'Movies' | 'TV Shows', resolution: Resolution) => {
     const settled = settle(resolution);
     if (settled?.kind !== 'new' || seen.has(`${category}:${settled.tmdbId}`)) return;
     seen.add(`${category}:${settled.tmdbId}`);
-    out.push({ category, tmdbId: settled.tmdbId });
+    out.push({ category, tmdbId: settled.tmdbId, title: settled.title });
   };
   plan.films.forEach(p => collect('Movies', p.resolution));
   plan.shows.forEach(p => collect('TV Shows', p.resolution));
@@ -218,6 +262,7 @@ export function summarisePlan(plan: ImportPlan) {
   return {
     films: films.length,
     dated: films.filter(p => p.film.watchedAt).length,
+    ratedOnly: films.filter(p => p.film.ratedOnly).length,
     episodes: plan.episodes.filter(ep => keptShows.has(showKey(ep.show))).length,
     ratings: films.filter(p => p.film.rating !== null).length + plan.ratings.filter(r => keptShows.has(showKey(r.show))).length,
     adds: titlesToAdd(plan).length,
