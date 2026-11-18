@@ -2235,6 +2235,8 @@ export type Database = {
       movies: {
         Row: {
           backdrop: string | null
+          collection_id: number | null
+          collection_name: string | null
           directors: string[] | null
           genre: string | null
           id: number
@@ -2242,16 +2244,23 @@ export type Database = {
           pinned: boolean
           platform: string | null
           poster: string | null
+          rating: number | null
           release_date: string | null
           release_year: number | null
           runtime: number | null
           title: string
           tmdb_id: number | null
+          tmdb_vote_average: number | null
+          tmdb_vote_count: number | null
           top_cast: string[] | null
           trailer_key: string | null
+          watched: boolean
+          watched_at: string | null
         }
         Insert: {
           backdrop?: string | null
+          collection_id?: number | null
+          collection_name?: string | null
           directors?: string[] | null
           genre?: string | null
           id?: number
@@ -2259,16 +2268,23 @@ export type Database = {
           pinned?: boolean
           platform?: string | null
           poster?: string | null
+          rating?: number | null
           release_date?: string | null
           release_year?: number | null
           runtime?: number | null
           title: string
           tmdb_id?: number | null
+          tmdb_vote_average?: number | null
+          tmdb_vote_count?: number | null
           top_cast?: string[] | null
           trailer_key?: string | null
+          watched?: boolean
+          watched_at?: string | null
         }
         Update: {
           backdrop?: string | null
+          collection_id?: number | null
+          collection_name?: string | null
           directors?: string[] | null
           genre?: string | null
           id?: number
@@ -2276,13 +2292,18 @@ export type Database = {
           pinned?: boolean
           platform?: string | null
           poster?: string | null
+          rating?: number | null
           release_date?: string | null
           release_year?: number | null
           runtime?: number | null
           title?: string
           tmdb_id?: number | null
+          tmdb_vote_average?: number | null
+          tmdb_vote_count?: number | null
           top_cast?: string[] | null
           trailer_key?: string | null
+          watched?: boolean
+          watched_at?: string | null
         }
         Relationships: []
       }
@@ -2547,9 +2568,11 @@ export type Database = {
         Row: {
           created_at: string | null
           id: number
+          rating: number | null
           release_date: string | null
           release_year: number | null
           season_number: number
+          tmdb_vote_average: number | null
           trailer_checked_at: string | null
           trailer_key: string | null
           tv_show_id: number | null
@@ -2558,9 +2581,11 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: number
+          rating?: number | null
           release_date?: string | null
           release_year?: number | null
           season_number: number
+          tmdb_vote_average?: number | null
           trailer_checked_at?: string | null
           trailer_key?: string | null
           tv_show_id?: number | null
@@ -2569,9 +2594,11 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: number
+          rating?: number | null
           release_date?: string | null
           release_year?: number | null
           season_number?: number
+          tmdb_vote_average?: number | null
           trailer_checked_at?: string | null
           trailer_key?: string | null
           tv_show_id?: number | null
@@ -2597,11 +2624,15 @@ export type Database = {
           pinned: boolean
           platform: string
           poster: string | null
+          rating: number | null
           release_date: string | null
           status: string | null
           title: string
           tmdb_id: number | null
+          tmdb_vote_average: number | null
+          tmdb_vote_count: number | null
           top_cast: string[] | null
+          tracking: string
           trailer_key: string | null
         }
         Insert: {
@@ -2613,11 +2644,15 @@ export type Database = {
           pinned?: boolean
           platform: string
           poster?: string | null
+          rating?: number | null
           release_date?: string | null
           status?: string | null
           title: string
           tmdb_id?: number | null
+          tmdb_vote_average?: number | null
+          tmdb_vote_count?: number | null
           top_cast?: string[] | null
+          tracking?: string
           trailer_key?: string | null
         }
         Update: {
@@ -2629,11 +2664,15 @@ export type Database = {
           pinned?: boolean
           platform?: string
           poster?: string | null
+          rating?: number | null
           release_date?: string | null
           status?: string | null
           title?: string
           tmdb_id?: number | null
+          tmdb_vote_average?: number | null
+          tmdb_vote_count?: number | null
           top_cast?: string[] | null
+          tracking?: string
           trailer_key?: string | null
         }
         Relationships: []
@@ -2692,6 +2731,77 @@ export type Database = {
           created_at?: string
           flag_url?: string | null
           id?: number
+        }
+        Relationships: []
+      }
+      viewing_order_entries: {
+        Row: {
+          id: number
+          media_type: string
+          note: string | null
+          order_id: number
+          position: number
+          poster: string | null
+          release_date: string | null
+          title: string
+          tmdb_id: number
+        }
+        Insert: {
+          id?: never
+          media_type: string
+          note?: string | null
+          order_id: number
+          position: number
+          poster?: string | null
+          release_date?: string | null
+          title: string
+          tmdb_id: number
+        }
+        Update: {
+          id?: never
+          media_type?: string
+          note?: string | null
+          order_id?: number
+          position?: number
+          poster?: string | null
+          release_date?: string | null
+          title?: string
+          tmdb_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viewing_order_entries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "viewing_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      viewing_orders: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: number
+          name: string
+          tmdb_collection_id: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: never
+          name: string
+          tmdb_collection_id?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: never
+          name?: string
+          tmdb_collection_id?: number | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2798,7 +2908,30 @@ export type Database = {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: boolean
       }
+      import_watch_history: {
+        Args: {
+          p_episodes?: Json
+          p_movies?: Json
+          p_seasons?: Json
+          p_shows?: Json
+        }
+        Returns: Json
+      }
       is_admin: { Args: never; Returns: boolean }
+      reorder_viewing_order: {
+        Args: { p_entry_ids: number[]; p_order_id: number }
+        Returns: undefined
+      }
+      set_watched: {
+        Args: {
+          p_at?: string | null
+          p_ids: number[]
+          p_kind: string
+          p_watched: boolean
+          p_when?: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       content_type:

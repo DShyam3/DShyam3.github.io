@@ -14,6 +14,9 @@ const ALLOWED_ENDPOINT_PATTERNS = [
     /^movie\/\d+$/,
     /^tv\/\d+$/,
     /^tv\/\d+\/season\/\d+$/,
+    // A film collection's parts, for Franchises: which films a collection
+    // holds is the one thing the library's own rows cannot answer.
+    /^collection\/\d+$/,
 ]
 
 function buildCorsHeaders(req: Request) {

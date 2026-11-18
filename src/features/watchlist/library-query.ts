@@ -3,7 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { resolveFavouriteCategory, type TmdbFacts } from './favourite-category';
 import { releaseYear } from './watchlist-utils';
-import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
+import type { FavouriteItem, ShowTracking, WatchlistItem } from './WatchlistContext';
+
+/** The column is CHECK-constrained; anything else reads as active. */
+export function parseTracking(value: string | null | undefined): ShowTracking {
+  return value === 'paused' || value === 'dropped' ? value : 'active';
+}
 
 /** Everything the library grid and the favourites shelf render. */
 export interface WatchlistLibrary {
@@ -22,7 +27,8 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
     selectAllPages((from, to) => supabase
       .from('movies')
       .select(
-        'id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime',
+        `id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime,
+          watched, watched_at, rating, tmdb_vote_average, tmdb_vote_count, collection_id, collection_name`,
         { count: 'exact' },
       )
       .order('title', { ascending: true })
@@ -39,8 +45,9 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .select(
         `
                 id, title, platform, genre, status, poster, release_date, tmdb_id,
+                rating, tmdb_vote_average, tmdb_vote_count, tracking,
                 tv_show_seasons (
-                  id, season_number, release_date, watched,
+                  id, season_number, release_date, watched, rating, tmdb_vote_average,
                   tv_show_episodes (id, episode_number, watched, runtime, release_date)
                 )
             `,
@@ -83,6 +90,13 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
         ? new Date(movie.release_date).toISOString()
         : new Date().toISOString(),
       streaming_platform: movie.platform,
+      watched: movie.watched,
+      watched_at: movie.watched_at,
+      rating: movie.rating ?? undefined,
+      tmdb_vote_average: movie.tmdb_vote_average ?? undefined,
+      tmdb_vote_count: movie.tmdb_vote_count ?? undefined,
+      collection_id: movie.collection_id ?? undefined,
+      collection_name: movie.collection_name ?? undefined,
     }),
   );
 
@@ -109,6 +123,10 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
         : new Date().toISOString(),
       streaming_platform: show.platform,
       series_status: show.status as WatchlistItem['series_status'],
+      rating: show.rating ?? undefined,
+      tmdb_vote_average: show.tmdb_vote_average ?? undefined,
+      tmdb_vote_count: show.tmdb_vote_count ?? undefined,
+      tracking: parseTracking(show.tracking),
       episodesLoaded: false,
       seasons: (show.tv_show_seasons || [])
         .sort((a, b) => a.season_number - b.season_number)
@@ -117,6 +135,8 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
           season_number: season.season_number,
           release_date: season.release_date || undefined,
           watched: season.watched,
+          rating: season.rating ?? undefined,
+          tmdb_vote_average: season.tmdb_vote_average ?? undefined,
           episodes: (season.tv_show_episodes || [])
             .sort(
               (a, b) =>

@@ -124,7 +124,8 @@ $$;
 
 ALTER FUNCTION "public"."update_season_watched_status"() OWNER TO "postgres";
 
--- Stamps tv_show_episodes.watched_at from the `watched` boolean, so the four
+-- Stamps watched_at from the `watched` boolean on tv_show_episodes and movies
+-- (the function is generic over NEW.watched / NEW.watched_at), so the four
 -- write paths that can flip it (WatchlistContext.tsx's single-episode toggle,
 -- its bulk season toggle, its browser sync upsert, and watchlist-cron-sync's
 -- Deno upsert -- see README.md:101 for why the last two duplicate the same

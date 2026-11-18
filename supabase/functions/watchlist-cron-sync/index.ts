@@ -77,6 +77,7 @@ interface TMDBSeasonSummary {
   season_number: number
   episode_count?: number
   air_date?: string | null
+  vote_average?: number | null
 }
 interface TMDBEpisode {
   episode_number: number
@@ -129,6 +130,9 @@ interface TMDBDetails {
   credits?: TMDBCredits
   aggregate_credits?: TMDBCredits
   created_by?: { name?: string }[]
+  vote_average?: number | null
+  vote_count?: number | null
+  belongs_to_collection?: { id?: number; name?: string } | null
 }
 
 /**
@@ -334,6 +338,39 @@ function pickTrailerKey(videos: TMDBVideo[] | undefined | null): string | null {
     }
   }
   return best?.key ?? null
+}
+
+// Mirror of src/features/watchlist/tmdb-score.ts. Deno cannot import from
+// src/, so this is a hand-maintained copy -- change both together.
+//
+// TMDB's vote_average is its own users' mean score, 0-10. It reports 0 for a
+// title nobody has rated, which must not read as "everyone hated it", so a
+// zero average or a zero count stores no average. A field missing from the
+// response returns undefined, so the caller writes nothing and never wipes
+// what is stored.
+function roundVote(value: number): number {
+  return Math.round(Math.min(10, Math.max(0, value)) * 10) / 10
+}
+function pickTitleVotes(
+  data: { vote_average?: number | null; vote_count?: number | null },
+): { tmdb_vote_average: number | null; tmdb_vote_count: number } | undefined {
+  if (typeof data.vote_count !== 'number' || !Number.isFinite(data.vote_count)) return undefined
+  const count = Math.max(0, Math.round(data.vote_count))
+  const average = typeof data.vote_average === 'number' && Number.isFinite(data.vote_average) ? data.vote_average : 0
+  return { tmdb_vote_average: count > 0 && average > 0 ? roundVote(average) : null, tmdb_vote_count: count }
+}
+function pickSeasonVote(value: number | null | undefined): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || !Number.isFinite(value) || value <= 0) return null
+  return roundVote(value)
+}
+function pickCollection(
+  data: { belongs_to_collection?: { id?: number; name?: string } | null },
+): { collection_id: number | null; collection_name: string | null } | undefined {
+  if (!('belongs_to_collection' in data)) return undefined
+  const c = data.belongs_to_collection
+  if (!c || typeof c.id !== 'number' || c.id <= 0) return { collection_id: null, collection_name: null }
+  return { collection_id: c.id, collection_name: c.name?.trim() || null }
 }
 
 // Mirror of src/features/watchlist/credits.ts. Deno cannot import from src/,
@@ -606,6 +643,8 @@ serve(async (req) => {
             // Rewritten every run, like platform: the append costs no extra
             // call, and a trailer TMDB has since removed should go too.
             commonUpdates.trailer_key = pickTrailerKey(data.videos?.results)
+            const votes = pickTitleVotes(data)
+            if (votes) Object.assign(commonUpdates, votes)
 
             if (item.category === 'Movies') {
               const movieUpdates = { ...commonUpdates }
@@ -614,6 +653,8 @@ serve(async (req) => {
                 movieUpdates.release_year = new Date(airDate).getFullYear()
               }
               if (data.runtime) movieUpdates.runtime = data.runtime
+              const collection = pickCollection(data)
+              if (collection) Object.assign(movieUpdates, collection)
               // Written only when the block came back, so a response without
               // it never wipes what is stored.
               if (data.credits) {
@@ -666,7 +707,14 @@ serve(async (req) => {
                       const { data: dbS, error: sErr } = await supabaseAdmin
                         .from('tv_show_seasons')
                         .upsert(
-                          { tv_show_id: parseInt(item.id), season_number: s.season_number, release_date: s.air_date || null },
+                          {
+                            tv_show_id: parseInt(item.id),
+                            season_number: s.season_number,
+                            release_date: s.air_date || null,
+                            ...(pickSeasonVote(s.vote_average) !== undefined
+                              ? { tmdb_vote_average: pickSeasonVote(s.vote_average) }
+                              : {}),
+                          },
                           { onConflict: 'tv_show_id,season_number' },
                         )
                         .select()

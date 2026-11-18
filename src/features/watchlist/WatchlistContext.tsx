@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
-import { persistWatchedProgress } from './up-next-query';
+import { invalidateWatchDerived, persistWatchedProgress } from './up-next-query';
 import { watchedEpisodeKeys, watchlistLibraryQuery, type WatchlistLibrary } from './library-query';
 import { useToast } from '@/hooks/use-toast';
 import { useCooldown } from '@/hooks/useCooldown';
@@ -19,6 +19,8 @@ import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
 import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
+import { pickSeasonVote } from './tmdb-score';
+import { setWatchedArgs, type WatchedWhen } from './watched-when';
 import {
   resolveFavouriteCategory,
   type FavouriteCategory,
@@ -119,7 +121,15 @@ export interface Season {
   watched?: boolean;
   /** YouTube key of this season's trailer. Loaded with the episodes. */
   trailer_key?: string;
+  /** The owner's own score for this season, 1-10. */
+  rating?: number;
+  /** TMDB users' mean score for this season; TMDB gives no count. */
+  tmdb_vote_average?: number;
 }
+
+/** Whether a show is in Watch Next and Your Week. Paused leaves both; dropped
+ *  also leaves News. */
+export type ShowTracking = 'active' | 'paused' | 'dropped';
 
 export interface WatchlistItem {
   id: string;
@@ -163,6 +173,20 @@ export interface WatchlistItem {
   // pre-existing stored rows using the British spelling.
   series_status?:
     'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
+  /** The owner's own score, 1-10: a film's, or a show's overall. */
+  rating?: number;
+  /** TMDB users' mean score (0-10) and how many voted; absent when none. */
+  tmdb_vote_average?: number;
+  tmdb_vote_count?: number;
+  /** Films only. A show's watched state lives in its episodes. */
+  watched?: boolean;
+  /** Films only. Null while watched means "watched, date unknown". */
+  watched_at?: string | null;
+  /** Films only: the TMDB collection (film series) it belongs to. */
+  collection_id?: number;
+  collection_name?: string;
+  /** Shows only. */
+  tracking?: ShowTracking;
 }
 
 export type { FavouriteCategory } from './favourite-category';
@@ -226,6 +250,17 @@ interface SyncLogEntry {
   shard_count?: number | null;
 }
 
+/** What a rating is for. */
+export type RatingTarget =
+  | { kind: 'movie'; id: string }
+  | { kind: 'show'; id: string }
+  | { kind: 'season'; showId: string; seasonNumber: number };
+
+export interface AddWatchlistOptions {
+  quiet?: boolean;
+  skipRefresh?: boolean;
+}
+
 interface WatchlistContextType {
   watchlist: WatchlistItem[];
   favourites: FavouriteItem[];
@@ -246,9 +281,13 @@ interface WatchlistContextType {
   syncWatchlist: () => Promise<void>;
   syncSingleItem: (ref: TitleRef) => Promise<void>;
   cancelSync: () => void;
+  /** Resolves true once the title is in the library. `quiet` drops the
+   *  success toast and `skipRefresh` the library re-read, for a batch (the
+   *  import) that refreshes once at the end. */
   addWatchlistItem: (
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
-  ) => Promise<void>;
+    options?: AddWatchlistOptions,
+  ) => Promise<boolean>;
   isAddPending: (item: {
     tmdb_id?: number;
     title: string;
@@ -264,7 +303,19 @@ interface WatchlistContextType {
     seasonNumber: number,
     episodeNumber: number,
   ) => Promise<void>;
-  toggleSeasonWatched: (showId: string, seasonNumber: number) => Promise<void>;
+  /** `when` applies only when marking watched; unmarking clears the date. */
+  toggleSeasonWatched: (
+    showId: string,
+    seasonNumber: number,
+    when?: WatchedWhen,
+  ) => Promise<void>;
+  /** Films. `when` as for seasons. */
+  setMovieWatched: (movieId: string, watched: boolean, when?: WatchedWhen) => Promise<void>;
+  /** The owner's 1-10 score; null clears it. */
+  setRating: (target: RatingTarget, rating: number | null) => Promise<void>;
+  setShowTracking: (showId: string, tracking: ShowTracking) => Promise<void>;
+  /** Corrects when something already watched was watched; null = unknown. */
+  setWatchedDate: (kind: 'episode' | 'movie', id: number, watchedAt: string | null) => Promise<void>;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -671,7 +722,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
   const addWatchlistItem = async (
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
-  ) => {
+    options: AddWatchlistOptions = {},
+  ): Promise<boolean> => {
     const exists = watchlist.find(
       (i) =>
         (item.tmdb_id && i.tmdb_id === item.tmdb_id && i.category === item.category) ||
@@ -679,15 +731,17 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           i.category === item.category),
     );
     if (exists) {
-      toast({
-        title: 'Already in Watchlist',
-        description: `"${item.title}" is already in your ${item.category} list.`,
-      });
-      return;
+      if (!options.quiet) {
+        toast({
+          title: 'Already in Watchlist',
+          description: `"${item.title}" is already in your ${item.category} list.`,
+        });
+      }
+      return true;
     }
 
     const key = addItemKey(item);
-    if (pendingAddKeys.has(key)) return; // already in flight -- ignore double-click
+    if (pendingAddKeys.has(key)) return false; // already in flight -- ignore double-click
     setPendingAddKeys((prev) => new Set(prev).add(key));
 
     try {
@@ -707,16 +761,22 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             trailer_key: item.trailer_key || null,
             directors: item.directors ?? null,
             top_cast: item.top_cast ?? null,
+            tmdb_vote_average: item.tmdb_vote_average ?? null,
+            tmdb_vote_count: item.tmdb_vote_count ?? null,
+            collection_id: item.collection_id ?? null,
+            collection_name: item.collection_name ?? null,
           });
           if (error) throw error;
-          await fetchData();
-          toast({ title: 'Success', description: 'Movie added to watchlist' });
+          if (!options.skipRefresh) await fetchData();
+          if (!options.quiet) toast({ title: 'Success', description: 'Movie added to watchlist' });
+          return true;
         } catch (error) {
           toast({
             title: 'Error',
-            description: 'Failed to add movie',
+            description: `Failed to add ${item.title}`,
             variant: 'destructive',
           });
+          return false;
         }
       } else if (item.category === 'TV Shows') {
         try {
@@ -734,6 +794,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               trailer_key: item.trailer_key || null,
               creators: item.creators ?? null,
               top_cast: item.top_cast ?? null,
+              tmdb_vote_average: item.tmdb_vote_average ?? null,
+              tmdb_vote_count: item.tmdb_vote_count ?? null,
             })
             .select()
             .single();
@@ -774,6 +836,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       tv_show_id: show.id,
                       season_number: s.season_number,
                       release_date: s.air_date || null,
+                      tmdb_vote_average: pickSeasonVote(s.vote_average) ?? null,
                       trailer_key: pickTrailerKey(sDetails.videos?.results),
                       // Checked, so the sync's trailer backfill skips it.
                       trailer_checked_at: new Date().toISOString(),
@@ -814,7 +877,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             failedSeasonCount = results.filter((ok) => !ok).length;
           }
 
-          await fetchData();
+          if (!options.skipRefresh) await fetchData();
+          if (options.quiet && !detailsFailed && failedSeasonCount === 0) return true;
           toast({
             title: 'Success',
             description:
@@ -824,14 +888,17 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                   ? `TV Show added (${failedSeasonCount} season${failedSeasonCount > 1 ? 's' : ''} failed to load -- resync it to retry)`
                   : 'TV Show added',
           });
+          return true;
         } catch (error) {
           toast({
             title: 'Error',
-            description: 'Failed to add TV Show',
+            description: `Failed to add ${item.title}`,
             variant: 'destructive',
           });
+          return false;
         }
       }
+      return false;
     } finally {
       setPendingAddKeys((prev) => {
         const next = new Set(prev);
@@ -1028,7 +1095,11 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const toggleSeasonWatched = async (showId: string, seasonNumber: number) => {
+  const toggleSeasonWatched = async (
+    showId: string,
+    seasonNumber: number,
+    when?: WatchedWhen,
+  ) => {
     if (!isAdmin) return;
     const show = watchlist.find((s) => isShowWithId(s, showId));
     const season = show?.seasons?.find((s) => s.season_number === seasonNumber);
@@ -1039,7 +1110,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const nextWatched = !allWatched;
 
     try {
-      await persistWatchedProgress(queryClient, episodes.map((ep) => ep.id), nextWatched);
+      await persistWatchedProgress(queryClient, episodes.map((ep) => ep.id), nextWatched, when);
       markEpisodesWatched(
         showId, seasonNumber, new Set(episodes.map((ep) => ep.episode_number)), nextWatched,
       );
@@ -1056,6 +1127,111 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Error toggling season watched:', error);
       toast({ title: 'Error', description: 'Failed to update watched progress', variant: 'destructive' });
+    }
+  };
+
+  const isMovieWithId = (item: WatchlistItem, id: string) =>
+    item.category === 'Movies' && item.id === id;
+
+  const setMovieWatched = async (movieId: string, watched: boolean, when?: WatchedWhen) => {
+    if (!isAdmin) return;
+    const id = parseInt(movieId);
+    try {
+      const args = setWatchedArgs('movie', [id], watched, when ?? { mode: 'now' });
+      const { error } = await supabase.rpc('set_watched', args);
+      if (error) throw error;
+      // The stored time is the database's (now(), noon on a date, or none),
+      // so read it back rather than guessing it here.
+      const { data, error: readError } = await supabase.from('movies')
+        .select('watched, watched_at')
+        .eq('id', id)
+        .single();
+      if (readError) throw readError;
+      setWatchlist((prev) => prev.map((item) => !isMovieWithId(item, movieId) ? item : {
+        ...item,
+        watched: data.watched,
+        watched_at: data.watched_at,
+      }));
+      await invalidateWatchDerived(queryClient);
+    } catch (error) {
+      console.error('Error marking film watched:', error);
+      toast({ title: 'Error', description: 'Failed to update watched state', variant: 'destructive' });
+    }
+  };
+
+  const setRating = async (target: RatingTarget, rating: number | null) => {
+    if (!isAdmin) return;
+    if (rating !== null && !(Number.isInteger(rating) && rating >= 1 && rating <= 10)) return;
+    try {
+      if (target.kind === 'season') {
+        const show = watchlist.find((s) => isShowWithId(s, target.showId));
+        const season = show?.seasons?.find((s) => s.season_number === target.seasonNumber);
+        if (!season?.id) throw new Error('Missing season id');
+        const { error } = await supabase.from('tv_show_seasons')
+          .update({ rating }).eq('id', season.id);
+        if (error) throw error;
+        setWatchlist((prev) => prev.map((item) => !isShowWithId(item, target.showId) ? item : {
+          ...item,
+          seasons: item.seasons?.map((s) => s.season_number !== target.seasonNumber ? s : {
+            ...s, rating: rating ?? undefined,
+          }),
+        }));
+      } else {
+        const { error } = target.kind === 'movie'
+          ? await supabase.from('movies').update({ rating }).eq('id', parseInt(target.id))
+          : await supabase.from('tv_shows').update({ rating }).eq('id', parseInt(target.id));
+        if (error) throw error;
+        const category = target.kind === 'movie' ? 'Movies' : 'TV Shows';
+        setWatchlist((prev) => prev.map((item) =>
+          item.category === category && item.id === target.id
+            ? { ...item, rating: rating ?? undefined }
+            : item));
+      }
+      void queryClient.invalidateQueries({ queryKey: ['watchlist', 'diary'] });
+    } catch (error) {
+      console.error('Error saving rating:', error);
+      toast({ title: 'Error', description: 'Failed to save rating', variant: 'destructive' });
+    }
+  };
+
+  const setShowTracking = async (showId: string, tracking: ShowTracking) => {
+    if (!isAdmin) return;
+    try {
+      const { error } = await supabase.from('tv_shows')
+        .update({ tracking }).eq('id', parseInt(showId));
+      if (error) throw error;
+      setWatchlist((prev) => prev.map((item) => !isShowWithId(item, showId) ? item : { ...item, tracking }));
+      await Promise.all([
+        invalidateWatchDerived(queryClient),
+        queryClient.invalidateQueries({ queryKey: ['watchlist', 'schedule'] }, { throwOnError: false }),
+      ]);
+    } catch (error) {
+      console.error('Error saving show tracking:', error);
+      toast({ title: 'Error', description: 'Failed to update the show', variant: 'destructive' });
+    }
+  };
+
+  const setWatchedDate = async (kind: 'episode' | 'movie', id: number, watchedAt: string | null) => {
+    if (!isAdmin) return;
+    try {
+      // Only watched_at is in the SET list, so the trigger that stamps
+      // now() on a watched flip does not fire; `.eq('watched', true)` keeps
+      // a date off a row that is not watched.
+      const { data, error } = kind === 'movie'
+        ? await supabase.from('movies').update({ watched_at: watchedAt })
+          .eq('id', id).eq('watched', true).select('id')
+        : await supabase.from('tv_show_episodes').update({ watched_at: watchedAt })
+          .eq('id', id).eq('watched', true).select('id');
+      if (error) throw error;
+      if (!data?.length) throw new Error('Not watched');
+      if (kind === 'movie') {
+        setWatchlist((prev) => prev.map((item) =>
+          isMovieWithId(item, String(id)) ? { ...item, watched_at: watchedAt } : item));
+      }
+      await queryClient.invalidateQueries({ queryKey: ['watchlist', 'diary'] }, { throwOnError: false });
+    } catch (error) {
+      console.error('Error saving watched date:', error);
+      toast({ title: 'Error', description: 'Failed to save the date', variant: 'destructive' });
     }
   };
 
@@ -1285,6 +1461,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableToggleSeasonWatched = useStableCallback(toggleSeasonWatched);
   const stableIsEpisodeWatched = useStableCallback(isEpisodeWatched);
   const stableIsSeasonWatched = useStableCallback(isSeasonWatched);
+  const stableSetMovieWatched = useStableCallback(setMovieWatched);
+  const stableSetRating = useStableCallback(setRating);
+  const stableSetShowTracking = useStableCallback(setShowTracking);
+  const stableSetWatchedDate = useStableCallback(setWatchedDate);
 
   const value = useMemo(
     () => ({
@@ -1312,6 +1492,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       toggleSeasonWatched: stableToggleSeasonWatched,
       isEpisodeWatched: stableIsEpisodeWatched,
       isSeasonWatched: stableIsSeasonWatched,
+      setMovieWatched: stableSetMovieWatched,
+      setRating: stableSetRating,
+      setShowTracking: stableSetShowTracking,
+      setWatchedDate: stableSetWatchedDate,
       getAutoStatus,
       loadShowEpisodes,
       loadItemDescription,
@@ -1342,6 +1526,10 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableToggleSeasonWatched,
       stableIsEpisodeWatched,
       stableIsSeasonWatched,
+      stableSetMovieWatched,
+      stableSetRating,
+      stableSetShowTracking,
+      stableSetWatchedDate,
       getAutoStatus,
       loadShowEpisodes,
       loadItemDescription,

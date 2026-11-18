@@ -39,6 +39,8 @@ export interface TMDBSeasonSummary {
   episode_count?: number;
   air_date?: string | null;
   name?: string;
+  /** TMDB users' mean score for the season; 0 when nobody has voted. */
+  vote_average?: number | null;
 }
 
 export interface TMDBEpisode {
@@ -119,6 +121,33 @@ export interface TMDBDetails {
   credits?: TMDBCredits;
   aggregate_credits?: TMDBCredits;
   created_by?: TMDBCreator[];
+  /** TMDB users' mean score, 0-10, and how many voted. 0 when nobody has. */
+  vote_average?: number | null;
+  vote_count?: number | null;
+  /** Films only: the series it belongs to, e.g. "X-Men Collection". */
+  belongs_to_collection?: TMDBCollectionRef | null;
+}
+
+export interface TMDBCollectionRef {
+  id?: number;
+  name?: string;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+}
+
+/** `collection/{id}`: a film series and its parts. */
+export interface TMDBCollection {
+  id?: number;
+  name?: string;
+  overview?: string;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+  parts?: {
+    id?: number;
+    title?: string;
+    release_date?: string | null;
+    poster_path?: string | null;
+  }[];
 }
 
 /** One row of `search/movie` or `search/tv`. */
@@ -137,6 +166,8 @@ export interface TMDBSearchItem {
   // Ids rather than names -- the search endpoints never expand them. 16 is
   // Animation, 18 is Drama.
   genre_ids?: number[];
+  vote_average?: number;
+  vote_count?: number;
 }
 
 export interface TMDBSearchResponse {
