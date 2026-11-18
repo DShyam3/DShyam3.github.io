@@ -2249,6 +2249,8 @@ export type Database = {
           imdb_id: string | null
           imdb_rating: number | null
           imdb_votes: number | null
+          tmdb_rating: number | null
+          tmdb_votes: number | null
           metascore: number | null
           overview: string | null
           pinned: boolean
@@ -2280,6 +2282,8 @@ export type Database = {
           imdb_id?: string | null
           imdb_rating?: number | null
           imdb_votes?: number | null
+          tmdb_rating?: number | null
+          tmdb_votes?: number | null
           metascore?: number | null
           overview?: string | null
           pinned?: boolean
@@ -2311,6 +2315,8 @@ export type Database = {
           imdb_id?: string | null
           imdb_rating?: number | null
           imdb_votes?: number | null
+          tmdb_rating?: number | null
+          tmdb_votes?: number | null
           metascore?: number | null
           overview?: string | null
           pinned?: boolean
@@ -2642,6 +2648,8 @@ export type Database = {
           imdb_id: string | null
           imdb_rating: number | null
           imdb_votes: number | null
+          tmdb_rating: number | null
+          tmdb_votes: number | null
           metascore: number | null
           overview: string | null
           pinned: boolean
@@ -2668,6 +2676,8 @@ export type Database = {
           imdb_id?: string | null
           imdb_rating?: number | null
           imdb_votes?: number | null
+          tmdb_rating?: number | null
+          tmdb_votes?: number | null
           metascore?: number | null
           overview?: string | null
           pinned?: boolean
@@ -2694,6 +2704,8 @@ export type Database = {
           imdb_id?: string | null
           imdb_rating?: number | null
           imdb_votes?: number | null
+          tmdb_rating?: number | null
+          tmdb_votes?: number | null
           metascore?: number | null
           overview?: string | null
           pinned?: boolean

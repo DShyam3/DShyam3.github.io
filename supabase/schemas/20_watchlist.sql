@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "imdb_votes" integer,
     "rt_score" smallint,
     "metascore" smallint,
+    "tmdb_rating" numeric(3,1),
+    "tmdb_votes" integer,
     "scores_checked_at" timestamp with time zone,
     "collection_id" integer,
     "collection_name" "text",
@@ -60,7 +62,9 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     CONSTRAINT "movies_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
     CONSTRAINT "movies_imdb_votes_check" CHECK ("imdb_votes" >= 0),
     CONSTRAINT "movies_rt_score_check" CHECK ("rt_score" BETWEEN 0 AND 100),
-    CONSTRAINT "movies_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100)
+    CONSTRAINT "movies_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100),
+    CONSTRAINT "movies_tmdb_rating_check" CHECK ("tmdb_rating" BETWEEN 0 AND 10),
+    CONSTRAINT "movies_tmdb_votes_check" CHECK ("tmdb_votes" >= 0)
 );
 
 ALTER TABLE "public"."movies" OWNER TO "postgres";
@@ -189,12 +193,16 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "imdb_votes" integer,
     "rt_score" smallint,
     "metascore" smallint,
+    "tmdb_rating" numeric(3,1),
+    "tmdb_votes" integer,
     "scores_checked_at" timestamp with time zone,
     CONSTRAINT "tv_shows_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
     CONSTRAINT "tv_shows_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
     CONSTRAINT "tv_shows_imdb_votes_check" CHECK ("imdb_votes" >= 0),
     CONSTRAINT "tv_shows_rt_score_check" CHECK ("rt_score" BETWEEN 0 AND 100),
-    CONSTRAINT "tv_shows_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100)
+    CONSTRAINT "tv_shows_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100),
+    CONSTRAINT "tv_shows_tmdb_rating_check" CHECK ("tmdb_rating" BETWEEN 0 AND 10),
+    CONSTRAINT "tv_shows_tmdb_votes_check" CHECK ("tmdb_votes" >= 0)
 );
 
 ALTER TABLE "public"."tv_shows" OWNER TO "postgres";

@@ -332,8 +332,10 @@ episodes, and the panel scrolls as one. It opens on the first regular season not
   the nightly sync, which refreshes a few hundred titles a night, oldest first;
   a part OMDb does not have is left out, and nothing shows until the sync has
   reached the title. Rotten Tomatoes and Metacritic are often missing for
-  series and for older or foreign films. The TMDB score comes from the title's
-  TMDB record. Seasons have no outside score.
+  series and for older or foreign films. The TMDB score is stored on the title
+  when added and refreshed from TMDB by the nightly sync alongside IMDb, Rotten
+  Tomatoes and Metacritic (falling back to the live TMDB record when not yet
+  stored). Seasons have no outside score.
 
 **Sync:**
 

@@ -28,7 +28,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .select(
         `id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime,
           watched, watched_at, library_state, collection_id, collection_name,
-          imdb_id, imdb_rating, imdb_votes, rt_score, metascore`,
+          imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes`,
         { count: 'exact' },
       )
       .order('title', { ascending: true })
@@ -37,7 +37,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       if (!withFacts.error || !missingCategoryColumns(withFacts.error.message)) return withFacts;
       return selectAllPages((from, to) => supabase.from('movies')
         .select(`id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime,
-          watched, watched_at, library_state, collection_id, collection_name, imdb_id, imdb_rating, imdb_votes, rt_score, metascore`, { count: 'exact' })
+          watched, watched_at, library_state, collection_id, collection_name, imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes`, { count: 'exact' })
         .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (movie) => String(movie.id));
     })(),
     (async () => {
@@ -52,7 +52,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .select(
         `
                 id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state,
-                imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
+                imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
                 tv_show_seasons (
                   id, season_number, release_date, watched,
                   tv_show_episodes (id, episode_number, watched, runtime, release_date)
@@ -66,7 +66,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       if (!withFacts.error || !missingCategoryColumns(withFacts.error.message)) return withFacts;
       return selectAllPages((from, to) => supabase.from('tv_shows')
         .select(`id, title, platform, genre, status, poster, release_date, tmdb_id, library_state,
-          imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
+          imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
           tv_show_seasons (id, season_number, release_date, watched,
             tv_show_episodes (id, episode_number, watched, runtime, release_date))`, { count: 'exact' })
         .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (show) => String(show.id));
@@ -128,6 +128,8 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       imdb_id: movie.imdb_id ?? undefined,
       imdb_rating: movie.imdb_rating ?? undefined,
       imdb_votes: movie.imdb_votes ?? undefined,
+      tmdb_rating: movie.tmdb_rating ?? undefined,
+      tmdb_votes: movie.tmdb_votes ?? undefined,
       rt_score: movie.rt_score ?? undefined,
       metascore: movie.metascore ?? undefined,
       collection_id: movie.collection_id ?? undefined,
@@ -166,6 +168,8 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       imdb_id: show.imdb_id ?? undefined,
       imdb_rating: show.imdb_rating ?? undefined,
       imdb_votes: show.imdb_votes ?? undefined,
+      tmdb_rating: show.tmdb_rating ?? undefined,
+      tmdb_votes: show.tmdb_votes ?? undefined,
       rt_score: show.rt_score ?? undefined,
       metascore: show.metascore ?? undefined,
       episodesLoaded: false,

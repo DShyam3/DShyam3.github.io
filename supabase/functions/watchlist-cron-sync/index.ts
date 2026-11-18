@@ -135,6 +135,8 @@ interface TMDBDetails {
   imdb_id?: string | null
   external_ids?: { imdb_id?: string | null }
   belongs_to_collection?: { id?: number; name?: string } | null
+  vote_average?: number
+  vote_count?: number
 }
 
 /**
@@ -208,6 +210,8 @@ interface MovieRow {
   library_state: string | null
   top_cast: string[] | null
   imdb_id: string | null
+  tmdb_rating: number | null
+  tmdb_votes: number | null
   scores_checked_at: string | null
 }
 interface EpisodeRow {
@@ -244,6 +248,8 @@ interface ShowRow {
   library_state: string | null
   top_cast: string[] | null
   imdb_id: string | null
+  tmdb_rating: number | null
+  tmdb_votes: number | null
   scores_checked_at: string | null
   tv_show_seasons: SeasonRow[] | null
 }
@@ -292,6 +298,8 @@ interface SyncItem {
   has_credits: boolean
   /** Stored IMDb id; the OMDb pass only asks for titles that have one. */
   imdb_id?: string
+  tmdb_rating?: number | null
+  tmdb_votes?: number | null
   /** When OMDb was last asked; unset means never. */
   scores_checked_at?: string
   seasons?: SyncSeason[]
@@ -630,8 +638,8 @@ serve(async (req) => {
     // library would go unsynced under a green log row. Paging is on the
     // top-level rows; seasons and episodes stay embedded. A single-title
     // resync reads only that title's row and skips the other table outright.
-    const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, release_year, release_date, platform, trailer_key, runtime, collection_id, collection_name, library_state, top_cast, imdb_id, scores_checked_at'
-    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, status, release_date, platform, trailer_key, library_state, top_cast, imdb_id, scores_checked_at, tv_show_seasons (id, season_number, release_date, trailer_key, trailer_checked_at, tv_show_episodes (id, episode_number, title, runtime, release_date, watched))'
+    const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, release_year, release_date, platform, trailer_key, runtime, collection_id, collection_name, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at'
+    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, genre_ids, original_language, origin_country, status, release_date, platform, trailer_key, library_state, top_cast, imdb_id, tmdb_rating, tmdb_votes, scores_checked_at, tv_show_seasons (id, season_number, release_date, trailer_key, trailer_checked_at, tv_show_episodes (id, episode_number, title, runtime, release_date, watched))'
     const none = { data: [], error: null }
     const [moviesResult, showsResult] = await Promise.all([
       !target
@@ -677,6 +685,8 @@ serve(async (req) => {
       collection_name: m.collection_name ?? null,
       has_credits: m.top_cast !== null,
       imdb_id: isImdbId(m.imdb_id) ? m.imdb_id : undefined,
+      tmdb_rating: m.tmdb_rating ?? null,
+      tmdb_votes: m.tmdb_votes ?? null,
       scores_checked_at: m.scores_checked_at || undefined,
     }))
 
@@ -699,6 +709,8 @@ serve(async (req) => {
       series_status: s.status,
       has_credits: s.top_cast !== null,
       imdb_id: isImdbId(s.imdb_id) ? s.imdb_id : undefined,
+      tmdb_rating: s.tmdb_rating ?? null,
+      tmdb_votes: s.tmdb_votes ?? null,
       scores_checked_at: s.scores_checked_at || undefined,
       seasons: (s.tv_show_seasons || []).map((season) => ({
         id: season.id,
@@ -813,6 +825,12 @@ serve(async (req) => {
             if (isImdbId(imdbId)) {
               commonUpdates.imdb_id = imdbId
               item.imdb_id = imdbId
+            }
+            if (typeof data.vote_average === 'number' && data.vote_average > 0) {
+              commonUpdates.tmdb_rating = Math.round(data.vote_average * 10) / 10
+            }
+            if (typeof data.vote_count === 'number' && data.vote_count >= 0) {
+              commonUpdates.tmdb_votes = Math.round(data.vote_count)
             }
 
             const arrayEq = (a: unknown, b: unknown) =>

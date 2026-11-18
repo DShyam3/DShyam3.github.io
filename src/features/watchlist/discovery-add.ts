@@ -42,6 +42,8 @@ export function discoveryAddPayload(item: DiscoveryItem, data: Detail, watched: 
     directors: data.directors ?? undefined,
     creators: data.creators ?? undefined,
     top_cast: data.top_cast ?? undefined,
+    tmdb_rating: data.tmdb_rating ?? undefined,
+    tmdb_votes: data.tmdb_votes ?? undefined,
     // So the nightly sync can score it (OMDb is asked by IMDb id) and a film
     // shows in its series on Franchises without waiting for a resync.
     imdb_id: data.imdb_id ?? undefined,

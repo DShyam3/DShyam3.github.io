@@ -284,8 +284,8 @@ export function WatchlistDetailDialog({
             imdbVotes={item.imdb_votes}
             rtScore={item.rt_score}
             metascore={item.metascore}
-            tmdbRating={tmdbDetail?.tmdb_rating ?? undefined}
-            tmdbVotes={tmdbDetail?.tmdb_votes ?? undefined}
+            tmdbRating={item.tmdb_rating ?? tmdbDetail?.tmdb_rating ?? undefined}
+            tmdbVotes={item.tmdb_votes ?? tmdbDetail?.tmdb_votes ?? undefined}
           />
 
           {!isTVShow && item.runtime ? (

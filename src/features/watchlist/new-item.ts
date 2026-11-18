@@ -31,6 +31,8 @@ export function newItemFromDetails(
     streaming_platform: details.platform,
     trailer_key: details.trailer_key ?? undefined,
     imdb_id: details.imdb_id ?? undefined,
+    tmdb_rating: details.tmdb_rating ?? undefined,
+    tmdb_votes: details.tmdb_votes ?? undefined,
     collection_id: details.collection_id ?? undefined,
     collection_name: details.collection_name ?? undefined,
     directors: details.directors ?? undefined,

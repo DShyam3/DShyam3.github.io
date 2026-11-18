@@ -180,6 +180,8 @@ export interface WatchlistItem {
   imdb_id?: string;
   imdb_rating?: number;
   imdb_votes?: number;
+  tmdb_rating?: number;
+  tmdb_votes?: number;
   rt_score?: number;
   metascore?: number;
   /** Films only: the TMDB collection (film series) it belongs to. */
@@ -721,6 +723,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             directors: item.directors ?? null,
             top_cast: item.top_cast ?? null,
             imdb_id: item.imdb_id ?? null,
+            tmdb_rating: item.tmdb_rating ?? null,
+            tmdb_votes: item.tmdb_votes ?? null,
             collection_id: item.collection_id ?? null,
             collection_name: item.collection_name ?? null,
             // "Seen it" from discovery: straight to Finished.
@@ -777,6 +781,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               directors: item.directors ?? undefined,
               top_cast: item.top_cast ?? undefined,
               imdb_id: item.imdb_id ?? undefined,
+              tmdb_rating: item.tmdb_rating ?? undefined,
+              tmdb_votes: item.tmdb_votes ?? undefined,
               collection_id: item.collection_id ?? undefined,
               collection_name: item.collection_name ?? undefined,
             };
@@ -816,6 +822,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               creators: item.creators ?? null,
               top_cast: item.top_cast ?? null,
               imdb_id: item.imdb_id ?? null,
+              tmdb_rating: item.tmdb_rating ?? null,
+              tmdb_votes: item.tmdb_votes ?? null,
           };
           const firstInsert = await supabase.from('tv_shows').insert({
             ...payload,
@@ -987,6 +995,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               creators: item.creators ?? undefined,
               top_cast: item.top_cast ?? undefined,
               imdb_id: item.imdb_id ?? undefined,
+              tmdb_rating: item.tmdb_rating ?? undefined,
+              tmdb_votes: item.tmdb_votes ?? undefined,
               episodesLoaded: true,
               seasons: finalSeasons,
             };
@@ -1457,7 +1467,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           if (target.category === 'Movies') {
             const { data: movie } = await supabase
               .from('movies')
-              .select('id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime, watched, watched_at, library_state, collection_id, collection_name, overview, trailer_key, directors, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore')
+              .select('id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime, watched, watched_at, library_state, collection_id, collection_name, overview, trailer_key, directors, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes')
               .eq('id', targetId)
               .maybeSingle();
             if (!movie) return;
@@ -1490,6 +1500,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       imdb_id: movie.imdb_id ?? undefined,
                       imdb_rating: movie.imdb_rating ?? undefined,
                       imdb_votes: movie.imdb_votes ?? undefined,
+                      tmdb_rating: movie.tmdb_rating ?? undefined,
+                      tmdb_votes: movie.tmdb_votes ?? undefined,
                       rt_score: movie.rt_score ?? undefined,
                       metascore: movie.metascore ?? undefined,
                     }
@@ -1501,7 +1513,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               supabase
                 .from('tv_shows')
                 .select(`id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state,
-                  overview, trailer_key, creators, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
+                  overview, trailer_key, creators, top_cast, imdb_id, imdb_rating, imdb_votes, rt_score, metascore, tmdb_rating, tmdb_votes,
                   tv_show_seasons (id, season_number, release_date, watched, trailer_key,
                     tv_show_episodes (id, episode_number, title, watched, runtime, release_date))`)
                 .eq('id', targetId)
@@ -1560,6 +1572,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       imdb_id: show.imdb_id ?? undefined,
                       imdb_rating: show.imdb_rating ?? undefined,
                       imdb_votes: show.imdb_votes ?? undefined,
+                      tmdb_rating: show.tmdb_rating ?? undefined,
+                      tmdb_votes: show.tmdb_votes ?? undefined,
                       rt_score: show.rt_score ?? undefined,
                       metascore: show.metascore ?? undefined,
                       episodesLoaded: true,
