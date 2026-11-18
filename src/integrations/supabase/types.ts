@@ -2235,6 +2235,7 @@ export type Database = {
       movies: {
         Row: {
           backdrop: string | null
+          directors: string[] | null
           genre: string | null
           id: number
           overview: string | null
@@ -2246,10 +2247,12 @@ export type Database = {
           runtime: number | null
           title: string
           tmdb_id: number | null
+          top_cast: string[] | null
           trailer_key: string | null
         }
         Insert: {
           backdrop?: string | null
+          directors?: string[] | null
           genre?: string | null
           id?: number
           overview?: string | null
@@ -2261,10 +2264,12 @@ export type Database = {
           runtime?: number | null
           title: string
           tmdb_id?: number | null
+          top_cast?: string[] | null
           trailer_key?: string | null
         }
         Update: {
           backdrop?: string | null
+          directors?: string[] | null
           genre?: string | null
           id?: number
           overview?: string | null
@@ -2276,6 +2281,7 @@ export type Database = {
           runtime?: number | null
           title?: string
           tmdb_id?: number | null
+          top_cast?: string[] | null
           trailer_key?: string | null
         }
         Relationships: []
@@ -2584,6 +2590,7 @@ export type Database = {
       tv_shows: {
         Row: {
           backdrop: string | null
+          creators: string[] | null
           genre: string | null
           id: number
           overview: string | null
@@ -2594,10 +2601,12 @@ export type Database = {
           status: string | null
           title: string
           tmdb_id: number | null
+          top_cast: string[] | null
           trailer_key: string | null
         }
         Insert: {
           backdrop?: string | null
+          creators?: string[] | null
           genre?: string | null
           id?: number
           overview?: string | null
@@ -2608,10 +2617,12 @@ export type Database = {
           status?: string | null
           title: string
           tmdb_id?: number | null
+          top_cast?: string[] | null
           trailer_key?: string | null
         }
         Update: {
           backdrop?: string | null
+          creators?: string[] | null
           genre?: string | null
           id?: number
           overview?: string | null
@@ -2622,6 +2633,7 @@ export type Database = {
           status?: string | null
           title?: string
           tmdb_id?: number | null
+          top_cast?: string[] | null
           trailer_key?: string | null
         }
         Relationships: []

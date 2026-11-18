@@ -151,6 +151,14 @@ export interface WatchlistItem {
    * sync. Loaded with the description, since only the detail view shows it.
    */
   trailer_key?: string;
+  /**
+   * Directors (films), creators (shows) and the top three billed actors,
+   * from TMDB credits. Loaded with the description, since only the detail
+   * view shows them.
+   */
+  directors?: string[];
+  creators?: string[];
+  top_cast?: string[];
   // TMDB returns the US spelling ('Canceled'); 'Cancelled' is kept for any
   // pre-existing stored rows using the British spelling.
   series_status?:
@@ -399,17 +407,23 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const loadItemDescription = useCallback(async (item: WatchlistItem) => {
     // movies and tv_shows number their rows independently, so a film and a
     // show can share an id. Keyed and matched on id alone, opening one wrote
-    // its overview and trailer onto the other, and the other never
+    // its overview, trailer and credits onto the other, and the other never
     // loaded its own.
     const key = titleKey(item);
     if (item.descriptionLoaded || loadedDescriptionsRef.current.has(key)) return;
     loadedDescriptionsRef.current.add(key);
 
-    const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
-    const { data, error } = await supabase.from(table)
-      .select('overview, trailer_key')
-      .eq('id', parseInt(item.id))
-      .maybeSingle();
+    const id = parseInt(item.id);
+    const isMovie = item.category === 'Movies';
+    const { data, error } = isMovie
+      ? await supabase.from('movies')
+        .select('overview, trailer_key, directors, top_cast')
+        .eq('id', id)
+        .maybeSingle()
+      : await supabase.from('tv_shows')
+        .select('overview, trailer_key, creators, top_cast')
+        .eq('id', id)
+        .maybeSingle();
 
     if (error) {
       // Allow a retry on the next open rather than leaving the panel blank.
@@ -425,6 +439,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             ...i,
             description: data?.overview || '',
             trailer_key: data?.trailer_key || undefined,
+            directors: (data && 'directors' in data ? data.directors : null) ?? undefined,
+            creators: (data && 'creators' in data ? data.creators : null) ?? undefined,
+            top_cast: data?.top_cast ?? undefined,
             descriptionLoaded: true,
           }
           : i,
@@ -688,6 +705,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             runtime: item.runtime || null,
             release_year: item.year || null,
             trailer_key: item.trailer_key || null,
+            directors: item.directors ?? null,
+            top_cast: item.top_cast ?? null,
           });
           if (error) throw error;
           await fetchData();
@@ -713,6 +732,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               release_date: item.release_date || null,
               status: item.series_status || 'Returning Series',
               trailer_key: item.trailer_key || null,
+              creators: item.creators ?? null,
+              top_cast: item.top_cast ?? null,
             })
             .select()
             .single();

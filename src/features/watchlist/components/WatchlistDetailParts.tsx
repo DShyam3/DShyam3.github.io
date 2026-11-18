@@ -1,6 +1,7 @@
 import { Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
+import { joinNames } from '@/features/watchlist/credits';
 import type { WatchlistItem } from '@/features/watchlist/useWatchlist';
 
 /**
@@ -74,5 +75,38 @@ export function DetailDescription({
 }) {
   return (
     <p className={cn('text-sm text-muted-foreground mt-4', className)}>{text}</p>
+  );
+}
+
+/** "Directed by" / "Created by" and "Starring" rows. Renders nothing when both lists are empty. */
+export function CreditsList({
+  kind,
+  leads,
+  cast,
+  className,
+}: {
+  kind: 'movie' | 'tv';
+  leads?: string[];
+  cast?: string[];
+  className?: string;
+}) {
+  const hasLeads = !!leads?.length;
+  const hasCast = !!cast?.length;
+  if (!hasLeads && !hasCast) return null;
+  return (
+    <dl className={cn('grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm', className)}>
+      {hasLeads ? (
+        <>
+          <dt className="text-muted-foreground">{kind === 'tv' ? 'Created by' : 'Directed by'}</dt>
+          <dd className="text-foreground">{joinNames(leads)}</dd>
+        </>
+      ) : null}
+      {hasCast ? (
+        <>
+          <dt className="text-muted-foreground">Starring</dt>
+          <dd className="text-foreground">{joinNames(cast)}</dd>
+        </>
+      ) : null}
+    </dl>
   );
 }

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { TrailerButton } from './TrailerButton';
-import { DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
+import { CreditsList, DetailDescription, RuntimeRow, SeriesStatusPill } from './WatchlistDetailParts';
 import { currentSeasonNumber, displayTitle, getStatusColor, isUpcomingStatus } from '@/features/watchlist/watchlist-utils';
 import { detailTrailer } from '@/features/watchlist/trailer';
 import { PlatformBadge } from './PlatformLogo';
@@ -251,6 +251,12 @@ export function WatchlistDetailDialog({
           {item.description ? (
             <DetailDescription text={item.description} />
           ) : null}
+
+          <CreditsList
+            kind={isTVShow ? 'tv' : 'movie'}
+            leads={isTVShow ? item.creators : item.directors}
+            cast={item.top_cast}
+          />
 
           <TrailerButton
             trailerKey={trailer.key}

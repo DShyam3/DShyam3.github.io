@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "tmdb_id" integer,
     "runtime" integer,
     "pinned" boolean DEFAULT false NOT NULL,
-    "trailer_key" "text"
+    "trailer_key" "text",
+    "directors" "text"[],
+    "top_cast" "text"[]
 );
 
 ALTER TABLE "public"."movies" OWNER TO "postgres";
@@ -156,7 +158,9 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "release_date" "date",
     "tmdb_id" integer,
     "pinned" boolean DEFAULT false NOT NULL,
-    "trailer_key" "text"
+    "trailer_key" "text",
+    "creators" "text"[],
+    "top_cast" "text"[]
 );
 
 ALTER TABLE "public"."tv_shows" OWNER TO "postgres";
@@ -680,6 +684,18 @@ COMMENT ON COLUMN "public"."tv_shows"."backdrop" IS
 
 COMMENT ON COLUMN "public"."movies"."backdrop" IS
     'Full TMDB backdrop image URL at w1280 (e.g. https://image.tmdb.org/t/p/w1280/abc.jpg), the landscape counterpart of poster. Written by watchlist-cron-sync (only while still null) and the client add flow. Null until one of them fills it; never backfilled in SQL, because the value only exists in TMDB.';
+
+COMMENT ON COLUMN "public"."movies"."directors" IS
+    'Names of the film''s directors (TMDB credits crew where job = Director), in TMDB order. Written by watchlist-cron-sync and the client add flow from the same TMDB detail call (credits is appended, no extra request). An empty array means TMDB lists no director; null means not fetched yet. Public facts, shown in the detail view.';
+
+COMMENT ON COLUMN "public"."movies"."top_cast" IS
+    'Up to three lead actors, in TMDB billing order. Written by watchlist-cron-sync and the client add flow from the same TMDB detail call (credits is appended, no extra request). Null means not fetched yet: the nightly shard runs fill a capped number per run, and a single-title Resync refreshes one. An empty array means TMDB lists no cast. Public facts, shown in the detail view.';
+
+COMMENT ON COLUMN "public"."tv_shows"."creators" IS
+    'Names from TMDB''s created_by (a series has no single director). Written by watchlist-cron-sync and the client add flow from the same TMDB detail call (no extra request). An empty array means TMDB lists no creator; null means not fetched yet. Public facts, shown in the detail view.';
+
+COMMENT ON COLUMN "public"."tv_shows"."top_cast" IS
+    'Up to three actors with the most episodes across all seasons (TMDB aggregate_credits). Written by watchlist-cron-sync and the client add flow from the same TMDB detail call (aggregate_credits is appended, no extra request). Null means not fetched yet: the nightly shard runs fill a capped number per run, and a single-title Resync refreshes one. An empty array means TMDB lists no cast. Public facts, shown in the detail view.';
 
 COMMENT ON COLUMN "public"."favourites"."original_language" IS
     'TMDB''s original_language (ISO 639-1, e.g. "ko", "ja", "hi", "en"), for deriving the favourites grid''s category bucket from TMDB data instead of the frozen category string. Left null on every pre-migration row and never backfilled in SQL -- the value only exists in TMDB and is fetched by an admin-triggered client action; a fabricated value here reads exactly like a real one. Falls back to category when null.';

@@ -99,6 +99,19 @@ interface TMDBSeasonDetails {
   episodes?: TMDBEpisode[]
   videos?: TMDBVideos
 }
+interface TMDBCastMember {
+  name?: string
+  order?: number
+  total_episode_count?: number
+}
+interface TMDBCrewMember {
+  name?: string
+  job?: string
+}
+interface TMDBCredits {
+  cast?: TMDBCastMember[]
+  crew?: TMDBCrewMember[]
+}
 interface TMDBDetails {
   id?: number
   overview?: string
@@ -113,6 +126,9 @@ interface TMDBDetails {
   seasons?: TMDBSeasonSummary[]
   'watch/providers'?: { results?: Record<string, TMDBRegionProviders | undefined> }
   videos?: TMDBVideos
+  credits?: TMDBCredits
+  aggregate_credits?: TMDBCredits
+  created_by?: { name?: string }[]
 }
 
 /**
@@ -136,6 +152,18 @@ const VIDEO_PARAMS = { include_video_language: 'en,null' }
 const MAX_TRAILER_BACKFILL_PER_RUN = 300
 const TRAILER_BACKFILL_CONCURRENCY = 8
 
+/**
+ * Credits (director or creators, and the top cast) are appended to the detail
+ * call a title already makes, but the block is large -- a film's whole crew, a
+ * long-running show's aggregate_credits -- and parsing it is CPU the function
+ * is short of. So it is asked for once per title (`top_cast` still null), at
+ * most this many per run, on shard runs only, and again whenever the admin
+ * resyncs that one title. Three nightly shards fill the library in about three
+ * nights. An empty cast is stored as [] rather than null, so titles with no
+ * cast are not asked again every run and do not use up this allowance.
+ */
+const MAX_CREDITS_BACKFILL_PER_RUN = 150
+
 /** A TMDB episode that survived the "has an air date" filter. */
 type AiredEpisode = TMDBEpisode & { air_date: string }
 const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date)
@@ -151,6 +179,7 @@ interface MovieRow {
   overview: string | null
   genre: string | null
   release_year: number | null
+  top_cast: string[] | null
 }
 interface EpisodeRow {
   id?: number
@@ -173,6 +202,7 @@ interface ShowRow {
   overview: string | null
   genre: string | null
   status: string | null
+  top_cast: string[] | null
   tv_show_seasons: SeasonRow[] | null
 }
 
@@ -198,6 +228,8 @@ interface SyncItem {
   genres: string[]
   year?: number
   series_status?: string | null
+  /** True once `top_cast` is stored; false asks TMDB for credits. */
+  has_credits: boolean
   seasons?: SyncSeason[]
 }
 
@@ -304,6 +336,36 @@ function pickTrailerKey(videos: TMDBVideo[] | undefined | null): string | null {
   return best?.key ?? null
 }
 
+// Mirror of src/features/watchlist/credits.ts. Deno cannot import from src/,
+// so this is a hand-maintained copy -- change both together.
+const TOP_CAST_SIZE = 3
+function uniqueNames(names: Array<string | undefined>): string[] {
+  const seen = new Set<string>()
+  for (const raw of names) {
+    const name = raw?.trim()
+    if (name) seen.add(name)
+  }
+  return [...seen]
+}
+function pickDirectors(crew: TMDBCrewMember[] | undefined | null): string[] {
+  return uniqueNames((crew ?? []).filter((c) => c.job === 'Director').map((c) => c.name))
+}
+function pickCreators(createdBy: { name?: string }[] | undefined | null): string[] {
+  return uniqueNames((createdBy ?? []).map((c) => c.name))
+}
+function pickTopCast(cast: TMDBCastMember[] | undefined | null): string[] {
+  const ranked = (cast ?? [])
+    .map((member, index) => ({ member, index }))
+    .filter(({ member }) => member.name?.trim())
+    .sort((a, b) => {
+      const episodes = (b.member.total_episode_count ?? 0) - (a.member.total_episode_count ?? 0)
+      if (episodes) return episodes
+      const order = (a.member.order ?? Infinity) - (b.member.order ?? Infinity)
+      return order || a.index - b.index
+    })
+  return uniqueNames(ranked.map(({ member }) => member.name)).slice(0, TOP_CAST_SIZE)
+}
+
 serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
 
@@ -408,8 +470,8 @@ serve(async (req) => {
     // library would go unsynced under a green log row. Paging is on the
     // top-level rows; seasons and episodes stay embedded. A single-title
     // resync reads only that title's row and skips the other table outright.
-    const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, release_year'
-    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, status, tv_show_seasons (id, season_number, release_date, trailer_checked_at, tv_show_episodes (episode_number, watched))'
+    const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, release_year, top_cast'
+    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, status, top_cast, tv_show_seasons (id, season_number, release_date, trailer_checked_at, tv_show_episodes (episode_number, watched))'
     const none = { data: [], error: null }
     const [moviesResult, showsResult] = await Promise.all([
       !target
@@ -443,6 +505,7 @@ serve(async (req) => {
       description: m.overview || undefined,
       genres: m.genre ? m.genre.split(',').map((g: string) => g.trim()) : [],
       year: m.release_year || undefined,
+      has_credits: m.top_cast !== null,
     }))
 
     const shows: SyncItem[] = ((showsResult.data || []) as ShowRow[]).map((s) => ({
@@ -455,6 +518,7 @@ serve(async (req) => {
       description: s.overview || undefined,
       genres: s.genre ? s.genre.split(',').map((g: string) => g.trim()) : [],
       series_status: s.status,
+      has_credits: s.top_cast !== null,
       seasons: (s.tv_show_seasons || []).map((season) => ({
         id: season.id,
         season_number: season.season_number,
@@ -490,6 +554,7 @@ serve(async (req) => {
     const MAX_EXECUTION_TIME_MS = 100_000
     let hitCeiling = false
     const backfillTrailers = Boolean(shard || target)
+    let creditsBackfillLeft = shard ? MAX_CREDITS_BACKFILL_PER_RUN : 0
     const trailerBackfill: { seasonId: number; tmdbId: number; seasonNumber: number; title: string }[] = []
     loopStarted = true
 
@@ -506,7 +571,29 @@ serve(async (req) => {
         chunk.map(async (item) => {
           try {
             const tmdbType = item.category === 'TV Shows' ? 'tv' : 'movie'
-            const data = await fetchTMDB<TMDBDetails>(`${tmdbType}/${item.tmdb_id}`, { append_to_response: 'watch/providers,videos', ...VIDEO_PARAMS })
+            // See MAX_CREDITS_BACKFILL_PER_RUN. The allowance is taken before
+            // the first await, so the chunk's parallel callbacks cannot
+            // overspend it.
+            const wantCredits = Boolean(target) || (!item.has_credits && creditsBackfillLeft > 0)
+            if (wantCredits && !target) creditsBackfillLeft--
+            const detailPath = `${tmdbType}/${item.tmdb_id}`
+            const detailParams = (append: string) => ({ append_to_response: append, ...VIDEO_PARAMS })
+            let data: TMDBDetails | null
+            if (wantCredits) {
+              try {
+                data = await fetchTMDB<TMDBDetails>(
+                  detailPath,
+                  detailParams(`watch/providers,videos,${tmdbType === 'tv' ? 'aggregate_credits' : 'credits'}`),
+                )
+              } catch (creditsError) {
+                // Credits must never fail a title: the call without them is the
+                // one every run made before credits were stored.
+                console.warn(`Credits fetch failed for ${item.title}; retrying without`, creditsError)
+                data = await fetchTMDB<TMDBDetails>(detailPath, detailParams('watch/providers,videos'))
+              }
+            } else {
+              data = await fetchTMDB<TMDBDetails>(detailPath, detailParams('watch/providers,videos'))
+            }
             if (!data?.id) return
 
             const commonUpdates: Record<string, unknown> = {}
@@ -527,12 +614,22 @@ serve(async (req) => {
                 movieUpdates.release_year = new Date(airDate).getFullYear()
               }
               if (data.runtime) movieUpdates.runtime = data.runtime
+              // Written only when the block came back, so a response without
+              // it never wipes what is stored.
+              if (data.credits) {
+                movieUpdates.directors = pickDirectors(data.credits.crew)
+                movieUpdates.top_cast = pickTopCast(data.credits.cast)
+              }
               check(await supabaseAdmin.from('movies').update(movieUpdates).eq('id', parseInt(item.id)))
             } else {
               if (data.status && item.series_status && data.status !== item.series_status) {
                 changes.push(`${item.title}: status → ${data.status}`)
               }
-              const tvUpdates = { ...commonUpdates, status: data.status }
+              const tvUpdates: Record<string, unknown> = { ...commonUpdates, status: data.status }
+              if (data.aggregate_credits) {
+                tvUpdates.creators = pickCreators(data.created_by)
+                tvUpdates.top_cast = pickTopCast(data.aggregate_credits.cast)
+              }
               check(await supabaseAdmin.from('tv_shows').update(tvUpdates).eq('id', parseInt(item.id)))
 
               // Season 0 cleanup (specials that TMDB removed or that duplicate a real season)

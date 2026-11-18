@@ -300,6 +300,9 @@ const Watchlist = () => {
           release_date: details.release_date,
           streaming_platform: details.platform,
           trailer_key: details.trailer_key ?? undefined,
+          directors: details.directors ?? undefined,
+          creators: details.creators ?? undefined,
+          top_cast: details.top_cast ?? undefined,
         });
         setAddedItems((prev) => new Set(prev).add(result.id));
       } finally {

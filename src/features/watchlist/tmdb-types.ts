@@ -64,6 +64,30 @@ export interface TMDBVideos {
   results?: TMDBVideo[];
 }
 
+/** One entry of a credits block's `cast`. `total_episode_count` is aggregate_credits only. */
+export interface TMDBCastMember {
+  name?: string;
+  order?: number;
+  total_episode_count?: number;
+}
+
+/** One entry of a credits block's `crew`. */
+export interface TMDBCrewMember {
+  name?: string;
+  job?: string;
+}
+
+/** `append_to_response: 'credits'` (films) or `'aggregate_credits'` (shows). */
+export interface TMDBCredits {
+  cast?: TMDBCastMember[];
+  crew?: TMDBCrewMember[];
+}
+
+/** One entry of a show's `created_by`. */
+export interface TMDBCreator {
+  name?: string;
+}
+
 /** `tv/{id}/season/{n}` -- the only place episodes come from. */
 export interface TMDBSeasonDetails {
   episodes?: TMDBEpisode[];
@@ -92,6 +116,9 @@ export interface TMDBDetails {
   seasons?: TMDBSeasonSummary[];
   'watch/providers'?: TMDBWatchProviders;
   videos?: TMDBVideos;
+  credits?: TMDBCredits;
+  aggregate_credits?: TMDBCredits;
+  created_by?: TMDBCreator[];
 }
 
 /** One row of `search/movie` or `search/tv`. */

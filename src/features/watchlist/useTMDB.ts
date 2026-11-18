@@ -7,6 +7,7 @@ import type {
 } from './tmdb-types';
 import { getPlatform } from './sync-logic';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
+import { CREDITS_APPEND, pickCreators, pickDirectors, pickTopCast } from './credits';
 import { releaseYear } from './watchlist-utils';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
@@ -86,7 +87,7 @@ export function useTMDB() {
         setLoading(true);
         try {
             const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, {
-                append_to_response: 'watch/providers,videos',
+                append_to_response: `watch/providers,videos,${CREDITS_APPEND[type]}`,
                 ...TRAILER_VIDEO_PARAMS,
             });
 
@@ -94,6 +95,10 @@ export function useTMDB() {
             // same precedence as the sync path, so an item added by hand and
             // the same item refreshed by the nightly sync agree.
             const platform = getPlatform(data['watch/providers']?.results?.GB);
+            // Missing only if TMDB left the block out; null then, so the
+            // sync's backfill asks again. An empty cast is [], as the sync
+            // stores it.
+            const credits = type === 'movie' ? data.credits : data.aggregate_credits;
 
             return {
                 title: data.title || data.name,
@@ -109,6 +114,9 @@ export function useTMDB() {
                 // Same pick as the sync, so the title has its trailer from
                 // the moment it is added rather than from the next sync.
                 trailer_key: pickTrailerKey(data.videos?.results),
+                directors: type === 'movie' && credits ? pickDirectors(credits.crew) : null,
+                creators: type === 'tv' ? pickCreators(data.created_by) : null,
+                top_cast: credits ? pickTopCast(credits.cast) : null,
             };
         } catch (error) {
             console.error('TMDB Detail Error:', error);

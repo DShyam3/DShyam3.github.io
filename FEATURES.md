@@ -341,6 +341,13 @@ marked. Delete asks for confirmation.
   button is pressed, with a link to open it on YouTube. The sync picks each
   trailer, English or without a language, trailers before teasers, official
   first, newest first; a title added by hand has its trailer at once
+- Credits: a title's details show who made it ("Directed by" for a film,
+  "Created by" for a series) and "Starring" with three lead actors — a film's
+  top-billed cast, a series' actors in the most episodes across all seasons.
+  Over three directors or creators read "and N more". A title added by hand
+  has its credits at once; the rest of the library fills from TMDB over the
+  nightly sync, a few hundred titles a night, and a title's Resync refreshes
+  its credits. A title TMDB lists no one for shows neither line
 
 **Sync:**
 
