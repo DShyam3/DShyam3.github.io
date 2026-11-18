@@ -352,7 +352,7 @@ Open after the News and Library redesign, 2026-11-17. Its three migrations are a
 
 ### Watchlist Diary, Franchises, import and public ratings — what is left
 
-Built in the tree on `claude/eloquent-johnson-xdjc53` (4b1380f); not merged to
+Built in the tree on `claude/eloquent-johnson-xdjc53`; not merged to
 main, not deployed, migration not applied. Decisions are in `REHAUL_HISTORY.md`
 under 2026-11-18.
 
@@ -362,10 +362,9 @@ under 2026-11-18.
    main. The client and the sync read and write the new columns: deploying either
    first breaks the library read or every nightly sync.
 2. **Public ratings.** `watchlist_ratings` becomes publicly readable, writes stay
-   admin-only (`(SELECT public.is_admin())`). This is an RLS change. The schema
-   and migration carry it as uncommitted edits at the time of writing; the
-   client change is not confirmed. It needs the migration's RLS and grant check
-   before step 1.
+   admin-only (`(SELECT public.is_admin())`). Committed: the policy in
+   migration `20261118120000`, the client in `bf1f2db`; checked on a scratch
+   Postgres only. Applying the migration publishes every existing rating.
 3. **Browser verification of every new screen.** None has been run: Diary (both
    tabs), Franchises, the import review, the Paused label, the Mark as watched
    date menu, the TMDB score, and the public rating read, plus the signed-in admin

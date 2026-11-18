@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-18 · Branch `claude/eloquent-johnson-xdjc53` · Head `4b1380f`, merged with `origin/main` `49a186e`, pushed. NOT merged into `main`; no PR. Nothing here is deployed.
+Updated 2026-11-18 · Branch `claude/eloquent-johnson-xdjc53` · Head: the commit after `645601e` (no watch dates on unreleased titles), merged with `origin/main` `49a186e`, pushed. NOT merged into `main`; no PR. Nothing here is deployed.
 
 ## In progress
 
@@ -10,7 +10,7 @@ Updated 2026-11-18 · Branch `claude/eloquent-johnson-xdjc53` · Head `4b1380f`,
 - Fixed in code, not live: a season is no longer unmarked when one of its episodes is (migration `20261118120000`, `pg_trigger_depth` guard).
 - Ratings are now public, read-only to visitors; writes stay admin-only (the owner's decision, 2026-11-18). Committed: client in `bf1f2db` (visitors read `watchlist_ratings`, "My score · TMDB" line), policy in migration `20261118120000` (`Public Read Access`, anon SELECT; checked on a scratch Postgres: anon reads, cannot write). Not applied, not deployed: applying it publishes every existing rating.
 
-## Checks (2026-11-18, `4b1380f`)
+## Checks (2026-11-18, final tree of this branch)
 
 | Check | Result |
 |---|---|

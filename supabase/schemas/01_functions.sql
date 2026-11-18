@@ -157,19 +157,27 @@ ALTER FUNCTION "public"."update_season_watched_status"() OWNER TO "postgres";
 -- an unrelated column update (release_date, runtime, title) or a same-value
 -- rewrite of `watched` touched watched_at, the nightly cron would reset the
 -- entire watch history to now() on its first run.
+--
+-- A row whose release_date is in the future is never stamped (watched_at stays
+-- NULL, "watched, date unknown"): it cannot have been watched today.
 CREATE OR REPLACE FUNCTION "public"."set_watched_at"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF NEW.watched IS TRUE AND NEW.watched_at IS NULL THEN
+    IF NEW.watched IS TRUE AND NEW.watched_at IS NULL
+       AND (NEW.release_date IS NULL OR NEW.release_date <= CURRENT_DATE) THEN
       NEW.watched_at := now();
     END IF;
   ELSIF TG_OP = 'UPDATE' THEN
     IF OLD.watched IS DISTINCT FROM NEW.watched THEN
       IF NEW.watched IS TRUE THEN
-        NEW.watched_at := now();
+        IF NEW.release_date IS NULL OR NEW.release_date <= CURRENT_DATE THEN
+          NEW.watched_at := now();
+        ELSE
+          NEW.watched_at := NULL;
+        END IF;
       ELSE
         NEW.watched_at := NULL;
       END IF;

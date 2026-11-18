@@ -2,10 +2,11 @@
 -- score, a paused state for series, a film's TMDB collection, hand-built
 -- viewing orders, and three admin RPCs. Mirrors supabase/schemas/20_watchlist.sql.
 --
--- Applies AFTER origin/main's three migrations, which are already on the
+-- Applies AFTER origin/main's four migrations, which are already on the
 -- hosted database:
 --   20261117193741_watchlist_history_ratings.sql  movies.watched / watched_at,
 --     library_state on movies and tv_shows, tr_set_movie_watched_at
+--   20261118001210_watchlist_credits.sql  directors, creators and top_cast
 --   20261118074402_watchlist_dismissed_suggestions.sql
 --   20261118074422_watchlist_private_ratings.sql  owner-only watchlist_ratings
 --     and the watchlist_show_last_watched view
@@ -49,6 +50,14 @@
 -- policies. The two new tables get RLS, public read, is_admin() writes and the
 -- same grants as tv_shows, with anon's default ALL revoked before its SELECT.
 -- The three functions are SECURITY INVOKER.
+--
+-- ## Watch dates on unreleased titles
+--
+-- set_watched_at() (shared by tv_show_episodes and movies) no longer stamps
+-- now() on a row whose release_date is in the future; set_watched() step 2 and
+-- import_watch_history store null for such rows. Same signature, owner,
+-- search_path and grants as main's function. Otherwise "Mark Season N
+-- complete" put unaired episodes in the Diary as watched today.
 --
 -- ## Cascade fix
 --
@@ -177,7 +186,7 @@ ALTER TABLE "public"."viewing_order_entries" ENABLE ROW LEVEL SECURITY;
 
 -- Public read, deliberately: the watchlist is a public page and these are
 -- franchise watch orders of public titles, nothing private. Writes are admin only.
-CREATE POLICY "Public Read Access" ON "public"."viewing_orders" FOR SELECT USING (true);
+CREATE POLICY "Public Read Access" ON "public"."viewing_orders" FOR SELECT TO "anon", "authenticated" USING (true);
 
 CREATE POLICY "Admin insert" ON "public"."viewing_orders" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
@@ -185,7 +194,7 @@ CREATE POLICY "Admin update" ON "public"."viewing_orders" FOR UPDATE TO "authent
 
 CREATE POLICY "Admin delete" ON "public"."viewing_orders" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
-CREATE POLICY "Public Read Access" ON "public"."viewing_order_entries" FOR SELECT USING (true);
+CREATE POLICY "Public Read Access" ON "public"."viewing_order_entries" FOR SELECT TO "anon", "authenticated" USING (true);
 
 CREATE POLICY "Admin insert" ON "public"."viewing_order_entries" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
@@ -228,6 +237,37 @@ REVOKE ALL ON SEQUENCE "public"."viewing_orders_id_seq" FROM "anon", "authentica
 REVOKE ALL ON SEQUENCE "public"."viewing_order_entries_id_seq" FROM "anon", "authenticated";
 
 -- ## Functions
+
+-- Same signature, owner, search_path and grants as before. Now also declines
+-- to stamp a row whose release_date is still in the future (see 01_functions.sql).
+CREATE OR REPLACE FUNCTION "public"."set_watched_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.watched IS TRUE AND NEW.watched_at IS NULL
+       AND (NEW.release_date IS NULL OR NEW.release_date <= CURRENT_DATE) THEN
+      NEW.watched_at := now();
+    END IF;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.watched IS DISTINCT FROM NEW.watched THEN
+      IF NEW.watched IS TRUE THEN
+        IF NEW.release_date IS NULL OR NEW.release_date <= CURRENT_DATE THEN
+          NEW.watched_at := now();
+        ELSE
+          NEW.watched_at := NULL;
+        END IF;
+      ELSE
+        NEW.watched_at := NULL;
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION "public"."set_watched_at"() OWNER TO "postgres";
 
 -- Cascade a season's watched flag onto its episodes only when the season row
 -- was updated directly. When the update came from update_season_watched_status()
@@ -277,6 +317,10 @@ ALTER FUNCTION "public"."update_episodes_watched_status"() OWNER TO "postgres";
 -- rewrites only watched_at. Step 2 lists watched_at alone, so the BEFORE UPDATE
 -- OF watched trigger does not fire for it. Step 2 touches only the rows step 1
 -- flipped: rows that were already watched keep the date they had.
+--
+-- A row whose release_date is still in the future is never given a watch date,
+-- whatever p_when says: step 2 stores null for it ("watched, date unknown"), and
+-- for 'now' the trigger itself declines to stamp it (see set_watched_at).
 --
 -- p_when: 'now' keeps the trigger's stamp; 'unknown' stores null ("watched,
 -- date unknown"); 'at' stores p_at; 'release' stores the row's release_date at
@@ -333,11 +377,12 @@ BEGIN
 
     IF p_watched AND p_when <> 'now' AND v_flipped IS NOT NULL THEN
       UPDATE public.tv_show_episodes
-      SET watched_at = CASE p_when
-        WHEN 'unknown' THEN NULL
-        WHEN 'at' THEN p_at
-        WHEN 'release' THEN (
-          CASE WHEN release_date IS NULL OR release_date > CURRENT_DATE THEN NULL
+      SET watched_at = CASE
+        WHEN release_date > CURRENT_DATE THEN NULL
+        WHEN p_when = 'unknown' THEN NULL
+        WHEN p_when = 'at' THEN p_at
+        WHEN p_when = 'release' THEN (
+          CASE WHEN release_date IS NULL THEN NULL
                ELSE (release_date + time '12:00') AT TIME ZONE 'UTC' END
         )
       END
@@ -354,11 +399,12 @@ BEGIN
 
     IF p_watched AND p_when <> 'now' AND v_flipped IS NOT NULL THEN
       UPDATE public.movies
-      SET watched_at = CASE p_when
-        WHEN 'unknown' THEN NULL
-        WHEN 'at' THEN p_at
-        WHEN 'release' THEN (
-          CASE WHEN release_date IS NULL OR release_date > CURRENT_DATE THEN NULL
+      SET watched_at = CASE
+        WHEN release_date > CURRENT_DATE THEN NULL
+        WHEN p_when = 'unknown' THEN NULL
+        WHEN p_when = 'at' THEN p_at
+        WHEN p_when = 'release' THEN (
+          CASE WHEN release_date IS NULL THEN NULL
                ELSE (release_date + time '12:00') AT TIME ZONE 'UTC' END
         )
       END
@@ -381,6 +427,9 @@ GRANT EXECUTE ON FUNCTION "public"."set_watched"(text, integer[], boolean, text,
 -- episodes_marked and movies_marked (rows flipped to watched), episodes_dated
 -- and movies_dated (rows whose watched_at was set or moved earlier), dated
 -- (their sum, kept for compatibility) and ratings_set.
+--
+-- A row whose release_date is still in the future gets null whatever the file
+-- says: an import cannot know an unreleased title was watched.
 --
 -- An imported watched_at more than a day ahead of now() is treated as null
 -- ("date unknown"): a future watch date is never real, and the day of slack
@@ -458,15 +507,16 @@ BEGIN
     GROUP BY x.id
   ), n AS (
     SELECT e.id,
-           i.watched_at AS imported,
+           d.w AS imported,
            CASE
-             WHEN e.id = ANY (COALESCE(v_flipped_eps, '{}'::integer[])) THEN i.watched_at
-             WHEN i.watched_at IS NULL THEN e.watched_at
-             WHEN e.watched_at IS NULL THEN i.watched_at
-             ELSE LEAST(e.watched_at, i.watched_at)
+             WHEN e.id = ANY (COALESCE(v_flipped_eps, '{}'::integer[])) THEN d.w
+             WHEN d.w IS NULL THEN e.watched_at
+             WHEN e.watched_at IS NULL THEN d.w
+             ELSE LEAST(e.watched_at, d.w)
            END AS new_at
     FROM public.tv_show_episodes e
     JOIN i ON i.id = e.id
+    CROSS JOIN LATERAL (SELECT CASE WHEN e.release_date > CURRENT_DATE THEN NULL ELSE i.watched_at END AS w) d
     WHERE e.watched
   ), u AS (
     UPDATE public.tv_show_episodes e
@@ -499,15 +549,16 @@ BEGIN
     GROUP BY x.id
   ), n AS (
     SELECT m.id,
-           i.watched_at AS imported,
+           d.w AS imported,
            CASE
-             WHEN m.id = ANY (COALESCE(v_flipped_movies, '{}'::integer[])) THEN i.watched_at
-             WHEN i.watched_at IS NULL THEN m.watched_at
-             WHEN m.watched_at IS NULL THEN i.watched_at
-             ELSE LEAST(m.watched_at, i.watched_at)
+             WHEN m.id = ANY (COALESCE(v_flipped_movies, '{}'::integer[])) THEN d.w
+             WHEN d.w IS NULL THEN m.watched_at
+             WHEN m.watched_at IS NULL THEN d.w
+             ELSE LEAST(m.watched_at, d.w)
            END AS new_at
     FROM public.movies m
     JOIN i ON i.id = m.id
+    CROSS JOIN LATERAL (SELECT CASE WHEN m.release_date > CURRENT_DATE THEN NULL ELSE i.watched_at END AS w) d
     WHERE m.watched
   ), u AS (
     UPDATE public.movies m
