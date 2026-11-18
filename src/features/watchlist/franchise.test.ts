@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { WatchlistItem } from './WatchlistContext';
 import {
   buildOrderView,
   collectionPartsToEntries,
   collectionsFromLibrary,
   entryState,
+  libraryLookup,
   sortByRelease,
   type LibraryLookup,
   type OrderEntryInput,
@@ -125,5 +127,39 @@ describe('collectionPartsToEntries', () => {
     expect(out[0]).toMatchObject({ mediaType: 'movie', tmdbId: 1, title: 'Early', poster: null });
     expect(out[1].poster).toBe('https://img//l.jpg');
     expect(out[2]).toMatchObject({ releaseDate: null, poster: 'https://img//u.jpg' });
+  });
+});
+
+describe('libraryLookup', () => {
+  const today = new Date(2026, 5, 15, 18, 30);
+  const ep = (n: number, release_date: string | undefined, watched = false) => ({
+    episode_number: n, title: '', release_date, watched,
+  });
+  const show = {
+    id: 's1', category: 'TV Shows', tmdb_id: 50, title: 'Show',
+    seasons: [
+      { season_number: 0, episodes: [ep(1, '2020-01-01', true)] },
+      {
+        season_number: 1,
+        episodes: [
+          ep(1, '2026-06-01', true),
+          ep(2, '2026-06-15', false),
+          ep(3, '2026-06-16', true),
+          ep(4, undefined, true),
+        ],
+      },
+    ],
+  } as unknown as WatchlistItem;
+  const movie = { id: 'm1', category: 'Movies', tmdb_id: 7, watched: true, title: 'Film' } as unknown as WatchlistItem;
+  const noId = { id: 'x', category: 'Movies', tmdb_id: null, title: 'No id' } as unknown as WatchlistItem;
+
+  it('maps films by TMDB id and skips items without one', () => {
+    const lookup = libraryLookup([movie, noId], today);
+    expect(lookup.movies.get(7)).toEqual({ id: 'm1', watched: true });
+    expect(lookup.movies.size).toBe(1);
+  });
+
+  it('counts aired episodes up to and including today, skipping specials and undated ones', () => {
+    expect(libraryLookup([show], today).shows.get(50)).toEqual({ id: 's1', airedEpisodes: 2, watchedEpisodes: 1 });
   });
 });

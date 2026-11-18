@@ -84,9 +84,8 @@ describe('formatScore', () => {
 });
 
 describe('scoreLine', () => {
-  it('computes the difference to one decimal', () => {
-    expect(scoreLine(8, 7.4, 500)).toEqual({ mine: 8, tmdb: 7.4, votes: 500, fewVotes: false, difference: 0.6 });
-    expect(scoreLine(6.5, 7.4, 500).difference).toBe(-0.9);
+  it('carries mine, tmdb and votes through', () => {
+    expect(scoreLine(8, 7.4, 500)).toEqual({ mine: 8, tmdb: 7.4, votes: 500, fewVotes: false });
   });
   it('flags few votes below 50', () => {
     expect(scoreLine(8, 7, 49).fewVotes).toBe(true);
@@ -94,10 +93,7 @@ describe('scoreLine', () => {
     expect(scoreLine(8, 7, null).fewVotes).toBe(false);
   });
   it('treats a null or zero average as no TMDB score', () => {
-    expect(scoreLine(8, 0, 10)).toMatchObject({ tmdb: null, difference: null });
-    expect(scoreLine(8, null, null)).toMatchObject({ tmdb: null, votes: null, difference: null });
-  });
-  it('has no difference without my score', () => {
-    expect(scoreLine(undefined, 7, 100)).toMatchObject({ mine: null, difference: null });
+    expect(scoreLine(8, 0, 10)).toMatchObject({ tmdb: null });
+    expect(scoreLine(8, null, null)).toMatchObject({ tmdb: null, votes: null });
   });
 });

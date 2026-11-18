@@ -6,9 +6,9 @@ const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
 
 function Figure({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card/60 p-3">
-      <dd className="font-serif text-xl font-semibold tabular-nums">{value}</dd>
+    <div className="flex flex-col-reverse rounded-xl border border-border/70 bg-card/60 p-3">
       <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-serif text-xl font-semibold tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -31,7 +31,7 @@ function MonthChart({ months }: { months: YearReview['months'] }) {
       </div>
       <div className="flex gap-1 sm:gap-2" aria-hidden="true">
         {months.map((m) => (
-          <span key={m.month} className="min-w-0 flex-1 text-center text-[10px] text-muted-foreground sm:text-xs">{MONTH_NAMES[m.month - 1].slice(0, 1)}<span className="hidden sm:inline">{MONTH_NAMES[m.month - 1].slice(1)}</span></span>
+          <span key={m.month} className="min-w-0 flex-1 text-center text-xs text-muted-foreground">{MONTH_NAMES[m.month - 1].slice(0, 1)}<span className="hidden sm:inline">{MONTH_NAMES[m.month - 1].slice(1)}</span></span>
         ))}
       </div>
       <table className="sr-only">
@@ -111,7 +111,8 @@ export function YearReviewView({ review }: { review: YearReview }) {
 
         {review.platforms.length > 0 && (
           <section className="space-y-2">
-            <Heading>Platforms</Heading>
+            <Heading>Where they stream now</Heading>
+            <p className="text-xs text-muted-foreground">Platforms are where each title streams today, not where you watched it.</p>
             <ul className="divide-y divide-border/50">
               {review.platforms.map((p) => (
                 <li key={p.platform} className="flex items-baseline justify-between gap-3 py-1.5 text-sm">

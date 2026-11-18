@@ -60,6 +60,12 @@ describe('parseTraktFiles', () => {
     expect(out.skipped).toBe(2);
   });
 
+  it('treats exactly the Unix epoch as an unknown date', () => {
+    const out = parse([ep('1970-01-01T00:00:00.000Z'), { movie: { title: 'Heat', year: 1995, ids: { tmdb: 949 } }, watched_at: '1970-01-01T00:00:00Z' }]);
+    expect(out.episodes[0].watchedAt).toBeNull();
+    expect(out.movies[0].watchedAt).toBeNull();
+  });
+
   it('throws on malformed JSON naming the file, and on an empty list', () => {
     expect(() => parseTraktFiles([{ name: 'bad.json', text: '{oops' }])).toThrow(/bad\.json/);
     expect(() => parseTraktFiles([])).toThrow();

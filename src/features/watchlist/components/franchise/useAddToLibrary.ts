@@ -1,3 +1,4 @@
+import { newItemFromDetails } from '@/features/watchlist/new-item';
 import { useCallback, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
@@ -21,27 +22,7 @@ export function useAddToLibrary() {
           toast({ title: `Could not look up ${entry.title}`, variant: 'destructive' });
           return;
         }
-        await addWatchlistItem({
-          title: details.release_year ? `${details.title} (${details.release_year})` : details.title,
-          category: entry.mediaType === 'movie' ? 'Movies' : 'TV Shows',
-          description: details.overview,
-          year: details.release_year || undefined,
-          image_url: details.poster || undefined,
-          backdrop_url: details.backdrop || undefined,
-          runtime: details.runtime || undefined,
-          genres: details.genres,
-          tmdb_id: details.tmdb_id,
-          release_date: details.release_date,
-          streaming_platform: details.platform,
-          trailer_key: details.trailer_key ?? undefined,
-          tmdb_vote_average: details.tmdb_vote_average ?? undefined,
-          tmdb_vote_count: details.tmdb_vote_count ?? undefined,
-          collection_id: details.collection_id ?? undefined,
-          collection_name: details.collection_name ?? undefined,
-          directors: details.directors ?? undefined,
-          creators: details.creators ?? undefined,
-          top_cast: details.top_cast ?? undefined,
-        });
+        await addWatchlistItem(newItemFromDetails(details, entry.mediaType === 'movie' ? 'Movies' : 'TV Shows'));
       } finally {
         setPending((prev) => {
           const next = new Set(prev);

@@ -32,7 +32,6 @@ import {
   getStatusColor,
   groupAnnouncementsByShow,
   groupRecentEpisodesByShow,
-  isDropped,
   isPremiereEpisode,
   isSeasonFinished,
   movieReleaseSentence,
@@ -441,12 +440,8 @@ const WatchlistNews = () => {
   const pinnedDays = pinned ? daysUntil(pinned.release_date, today) : null;
   const showCountdown = !!pinned && pinnedDays !== null && pinnedDays >= 0;
 
-  // Dropped shows and watched films stay out of Out Now, Upcoming and Updates,
-  // as shows you are caught up on already do. Matched by id against the library.
-  const droppedShowIds = new Set(watchlist.filter(isDropped).map((item) => item.id));
-  const watchedMovieIds = new Set(watchlist.filter((item) => item.category === 'Movies' && item.watched).map((item) => item.id));
-  const liveShow = (tvShowId: number) => !droppedShowIds.has(String(tvShowId));
-  const unwatchedMovie = (movieId: number) => !watchedMovieIds.has(String(movieId));
+  // Dropped shows and watched films are filtered in the useWatchlistNews
+  // queries themselves, so they never flash in before the library loads.
 
   const { upNext, failed: upNextFailed } = useUpNext();
   const watchNextIds = new Set(upNext.map((item) => item.tv_show_id));
@@ -458,7 +453,7 @@ const WatchlistNews = () => {
   const { episodes: recentEpisodes, loading: recentLoading, failed: recentFailed } = useRecentEpisodes(30);
   const { movies: outNowMovies, loading: outNowMovieLoading, failed: outNowMovieFailed } = useRecentMovies(30);
 
-  const outNowPremiereCandidates = premieresOf(recentEpisodes).filter((ep) => liveShow(ep.tv_show_id));
+  const outNowPremiereCandidates = premieresOf(recentEpisodes);
   const { episodesBySeason: premiereSeasonEpisodes, loading: premiereSeasonLoading, failed: premiereSeasonFailed } =
     usePremiereSeasonEpisodes(
       outNowPremiereCandidates.map((ep) => ({
@@ -490,7 +485,7 @@ const WatchlistNews = () => {
         seasonNumber: ep.season_number,
         entityId: ep.tv_show_id,
       })),
-      ...outNowMovies.filter((movie) => unwatchedMovie(movie.id)).map((movie): OutNowRow => ({
+      ...outNowMovies.map((movie): OutNowRow => ({
         key: `movie-${movie.id}`,
         kind: 'movie',
         title: movie.title,
@@ -514,7 +509,7 @@ const WatchlistNews = () => {
   const upcomingLoading = upcomingTvLoading || upcomingMovieLoading;
   const upcomingFailed = upcomingTvFailed || upcomingMovieFailed;
   const upcomingItems: UpcomingRow[] = [
-    ...premieresOf(upcomingEpisodes).filter((ep) => liveShow(ep.tv_show_id)).map((ep): UpcomingRow => {
+    ...premieresOf(upcomingEpisodes).map((ep): UpcomingRow => {
       const days = daysUntil(ep.release_date, today) ?? 0;
       return {
         key: `tv-${ep.tv_show_id}-${ep.season_number}`,
@@ -557,20 +552,17 @@ const WatchlistNews = () => {
   // Platform and status rows are not deduplicated -- they are different news.
   const excludedFromUpdates = new Set([...watchNextIds, ...outNowTvIds]);
   const recentGroups = groupRecentEpisodesByShow(recentEpisodes).filter(
-    (group) => !excludedFromUpdates.has(group.tv_show_id) && liveShow(group.tv_show_id),
+    (group) => !excludedFromUpdates.has(group.tv_show_id),
   );
 
   const { announcements, firstSeenByShow, loading: announcementsLoading, failed: announcementsFailed } =
     useRecentAnnouncements(30);
-  const announcementGroups = groupAnnouncementsByShow(announcements, firstSeenByShow, today)
-    .filter((group) => liveShow(group.tv_show_id));
-  const updateEvents = events.filter((event) =>
-    event.entity_type === 'tv_show' ? liveShow(event.entity_id) : unwatchedMovie(event.entity_id));
+  const announcementGroups = groupAnnouncementsByShow(announcements, firstSeenByShow, today);
 
   const updatesLoading = eventsLoading || recentLoading || announcementsLoading;
   const updatesFailed = eventsFailed || recentFailed || announcementsFailed;
   const updatesFeed = filterUpdatesByWindow(
-    buildUpdatesFeed(recentGroups, updateEvents, announcementGroups, today),
+    buildUpdatesFeed(recentGroups, events, announcementGroups, today),
     newsWindow,
     today,
   );

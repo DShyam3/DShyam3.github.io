@@ -74,11 +74,23 @@ CREATE POLICY "Admin read" ON "public"."admin_users"
 -- This table must therefore never be given FORCE ROW LEVEL SECURITY, which
 -- would remove that exemption and turn the check into infinite recursion.
 
+-- Cascades a season's watched flag onto its episodes, but only when the season
+-- row was updated directly. update_season_watched_status() (below) recomputes
+-- season.watched from its episodes, and that UPDATE would fire this trigger
+-- again at trigger depth 2: copying the recomputed flag back down turned
+-- "unmark one episode of a finished season" into "unmark every episode", and
+-- set_watched_at() then cleared all their watched_at. Hence the depth guard:
+-- depth 1 is a direct UPDATE of tv_show_seasons (a hand-run SQL edit still
+-- cascades), anything deeper came from an episode trigger and must not.
 CREATE OR REPLACE FUNCTION "public"."update_episodes_watched_status"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
 BEGIN
+  IF pg_trigger_depth() > 1 THEN
+    RETURN NEW;
+  END IF;
+
   -- Only run if the 'watched' status actually changed
   IF (OLD.watched IS DISTINCT FROM NEW.watched) THEN
     UPDATE tv_show_episodes

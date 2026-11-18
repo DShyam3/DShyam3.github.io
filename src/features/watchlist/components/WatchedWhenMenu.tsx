@@ -43,7 +43,9 @@ export function WatchedWhenMenu({
     onPick(when);
   };
 
-  const releaseLabel = releaseDate
+  const notOutYet = !!releaseDate && !isOnOrBefore(releaseDate.slice(0, 10), today);
+
+  const releaseLabel =releaseDate
     ? new Date(releaseDate).toLocaleDateString('en-GB', {
         day: 'numeric',
         month: 'short',
@@ -115,10 +117,10 @@ export function WatchedWhenMenu({
             </DropdownMenuItem>
             <DropdownMenuItem
               className="min-h-10"
-              disabled={!releaseDate}
+              disabled={!releaseDate || notOutYet}
               onSelect={() => pick({ mode: 'release' })}
             >
-              On release date{releaseLabel ? ` (${releaseLabel})` : ''}
+              On release date{releaseLabel ? ` (${releaseLabel}${notOutYet ? ', not out yet' : ''})` : ''}
             </DropdownMenuItem>
             <DropdownMenuItem className="min-h-10" onSelect={() => pick({ mode: 'unknown' })}>
               Date unknown

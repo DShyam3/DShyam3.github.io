@@ -1,4 +1,5 @@
 import { parseDelimitedRows } from '@/lib/finance/statement-import';
+import { isCalendarDate } from './watched-when';
 
 export const LETTERBOXD_MAX_BYTES = 10 * 1024 * 1024; // per file
 export const LETTERBOXD_MAX_ROWS = 20000; // per file
@@ -31,7 +32,18 @@ export function normaliseTitle(title: string): string {
     .trim();
 }
 
+/**
+ * watchlist.csv and likes/*.csv share watched.csv's header but are films the
+ * user has NOT necessarily seen, so they must never be read as watched.
+ */
+function isUnwatchedList(fileName: string): boolean {
+  const parts = fileName.toLowerCase().split(/[\\/]/).map(part => part.replace(/\.[^.]*$/, '').trim());
+  const base = parts.pop() ?? '';
+  return base === 'watchlist' || base === 'likes' || parts.includes('likes') || parts.includes('watchlist');
+}
+
 export function detectLetterboxdFile(fileName: string, headers: string[]): LetterboxdFileKind {
+  if (isUnwatchedList(fileName)) return 'unknown';
   const base = (fileName.split(/[\\/]/).pop() ?? '').toLowerCase().replace(/\.[^.]*$/, '').trim();
   if (base === 'diary' || base === 'reviews' || base === 'watched' || base === 'ratings') return base;
   const names = new Set(headers.map(normaliseHeader));
@@ -44,11 +56,6 @@ export function detectLetterboxdFile(fileName: string, headers: string[]): Lette
 const localToday = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
-const validDate = (value: string) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 const parseRating = (value: string): number | null => {
   const text = value.trim();
@@ -81,7 +88,7 @@ export function parseLetterboxdFiles(files: { name: string; text: string }[], op
     const kind = detectLetterboxdFile(file.name, rawHeaders);
     if (kind === 'unknown') {
       result.files.push({ name: file.name, kind, rows: 0 });
-      result.skipped.push({ file: file.name, row: 0, reason: 'not a Letterboxd export file' });
+      result.skipped.push({ file: file.name, row: 0, reason: isUnwatchedList(file.name) ? 'a watchlist or likes list, not films you have watched' : 'not a Letterboxd export file' });
       continue;
     }
     result.files.push({ name: file.name, kind, rows: records.length });
@@ -108,7 +115,7 @@ export function parseLetterboxdFiles(files: { name: string; text: string }[], op
       const watched = watchedAt >= 0 ? (record[watchedAt] ?? '').trim() : '';
       let watchedDate = '';
       if (watched) {
-        if (validDate(watched) && watched <= today) { draft.dates.add(watched); watchedDate = watched; }
+        if (isCalendarDate(watched) && watched <= today) { draft.dates.add(watched); watchedDate = watched; }
         else skip('invalid watched date');
       }
       if (rating !== null && (!draft.diaryRating || watchedDate >= draft.diaryRating.date)) draft.diaryRating = { date: watchedDate, rating };

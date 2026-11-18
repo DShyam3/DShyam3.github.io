@@ -3,18 +3,19 @@ import { QueryClient } from '@tanstack/react-query';
 import {
   addEntry,
   createOrder,
+  libraryCollectionsQueryOptions,
   moveEntry,
   reorderedIds,
   updateEntryNote,
   viewingOrdersQueryOptions,
 } from './viewing-orders-query';
 
-type Result = { data: unknown; error: Error | null };
+type Result = { data: unknown; error: Error | null; count?: number };
 type Call = { table: string; op: string; args: unknown[] };
 
 const db = vi.hoisted(() => ({
   calls: [] as { table: string; op: string; args: unknown[] }[],
-  results: {} as Record<string, { data: unknown; error: Error | null }>,
+  results: {} as Record<string, { data: unknown; error: Error | null; count?: number }>,
   rpcs: [] as { name: string; args: unknown }[],
 }));
 
@@ -23,7 +24,7 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: (table: string) => {
       const ops: string[] = [];
       const chain: Record<string, unknown> = {};
-      for (const op of ['select', 'insert', 'update', 'delete', 'eq', 'order', 'limit', 'single']) {
+      for (const op of ['select', 'insert', 'update', 'delete', 'eq', 'order', 'limit', 'single', 'not', 'range']) {
         chain[op] = (...args: unknown[]) => {
           ops.push(op);
           db.calls.push({ table, op, args });
@@ -97,6 +98,35 @@ describe('viewing orders', () => {
     db.results['viewing_order_entries.insert'] = { data: null, error: new Error('entries failed') };
     await expect(createOrder({ name: 'Saga', entries: [entry(10)] })).rejects.toThrow('entries failed');
     expect(callsTo('viewing_orders', 'delete')).toHaveLength(1);
+  });
+
+  it('reports the rollback failure too when the empty order cannot be removed', async () => {
+    db.results['viewing_orders.insert'] = { data: { id: 7 }, error: null };
+    db.results['viewing_order_entries.insert'] = { data: null, error: new Error('entries failed') };
+    db.results['viewing_orders.delete'] = { data: null, error: new Error('delete failed') };
+    await expect(createOrder({ name: 'Saga', entries: [entry(10)] })).rejects.toThrow(/entries failed.*delete failed/);
+  });
+
+  it('reads library films that belong to a collection', async () => {
+    db.results['movies.select'] = {
+      error: null,
+      count: 2,
+      data: [
+        { id: 'a', tmdb_id: 1, collection_id: 10, collection_name: 'Saga' },
+        { id: 'b', tmdb_id: null, collection_id: 10, collection_name: null },
+      ],
+    };
+    const rows = await new QueryClient().fetchQuery(libraryCollectionsQueryOptions);
+    expect(rows).toEqual([
+      { id: 'a', tmdbId: 1, collectionId: 10, collectionName: 'Saga' },
+      { id: 'b', tmdbId: null, collectionId: 10, collectionName: null },
+    ]);
+    expect(callsTo('movies', 'not')[0].args).toEqual(['collection_id', 'is', null]);
+  });
+
+  it('throws when the collections read fails', async () => {
+    db.results['movies.select'] = { data: null, error: new Error('nope'), count: 0 };
+    await expect(new QueryClient().fetchQuery(libraryCollectionsQueryOptions)).rejects.toThrow('nope');
   });
 
   it('adds an entry after the current last position', async () => {

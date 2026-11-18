@@ -2785,7 +2785,6 @@ export type Database = {
           id: number
           name: string
           tmdb_collection_id: number | null
-          updated_at: string
         }
         Insert: {
           created_at?: string
@@ -2793,7 +2792,6 @@ export type Database = {
           id?: never
           name: string
           tmdb_collection_id?: number | null
-          updated_at?: string
         }
         Update: {
           created_at?: string
@@ -2801,7 +2799,6 @@ export type Database = {
           id?: never
           name?: string
           tmdb_collection_id?: number | null
-          updated_at?: string
         }
         Relationships: []
       }

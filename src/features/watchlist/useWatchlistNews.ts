@@ -28,6 +28,11 @@ function unwrapEmbed(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** A dropped show leaves every News section, and a watched film leaves Out
+ *  Now and Updates. Applied to the rows each query returns, so it does not wait
+ *  on the library held in the watchlist context. Paused shows stay. */
+const isDroppedShow = (show: { tracking?: string | null } | undefined) => show?.tracking === 'dropped';
+
 export type WatchlistNewsMediaType = 'tv' | 'movie';
 
 export interface PinnedTitle {
@@ -126,11 +131,14 @@ export interface WatchlistNewsEpisode {
   watched: boolean;
 }
 
-/** Flattens the `tv_show_episodes -> tv_show_seasons -> tv_shows` embed. */
-function mapEpisodeRow(row): WatchlistNewsEpisode {
-  const season = unwrapEmbed(row.tv_show_seasons) || {};
-  const show = unwrapEmbed(season.tv_shows) || {};
-  return {
+/** Flattens the `tv_show_episodes -> tv_show_seasons -> tv_shows` embed,
+ *  skipping episodes of a dropped show. */
+function mapEpisodeRows(rows): WatchlistNewsEpisode[] {
+  return rows.flatMap((row): WatchlistNewsEpisode[] => {
+    const season = unwrapEmbed(row.tv_show_seasons) || {};
+    const show = unwrapEmbed(season.tv_shows) || {};
+    if (isDroppedShow(show)) return [];
+    return [{
     tv_show_id: season.tv_show_id,
     title: show.title ?? '',
     poster: show.poster ?? null,
@@ -140,7 +148,8 @@ function mapEpisodeRow(row): WatchlistNewsEpisode {
     episode_title: row.title,
     release_date: row.release_date,
     watched: !!row.watched,
-  };
+    }];
+  });
 }
 
 // A read whose rows grow with the library rather than with a date window
@@ -148,7 +157,7 @@ function mapEpisodeRow(row): WatchlistNewsEpisode {
 // saying so, and a truncated list reads exactly like a complete one. Each
 // paged read orders by `id` last, which is also what `id` is selected for.
 const EPISODE_EMBED =
-  'id, episode_number, title, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform))';
+  'id, episode_number, title, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, tracking))';
 
 const NO_EPISODES: WatchlistNewsEpisode[] = [];
 
@@ -169,7 +178,7 @@ export const recentEpisodesQuery = (windowDays = 30) =>
           .order('release_date', { ascending: false });
 
         if (error) throw error;
-        return (data || []).map(mapEpisodeRow);
+        return mapEpisodeRows(data || []);
       } catch (error) {
         console.error('Error fetching recently released episodes:', error);
         throw error;
@@ -199,7 +208,7 @@ export const upcomingEpisodesQuery = queryOptions({
         .range(from, to), (row) => String(row.id));
 
       if (error) throw error;
-      return (data || []).map(mapEpisodeRow);
+      return mapEpisodeRows(data || []);
     } catch (error) {
       console.error('Error fetching upcoming episodes:', error);
       throw error;
@@ -232,7 +241,7 @@ function mapMovieRow(row): WatchlistNewsMovie {
   };
 }
 
-const MOVIE_SELECT = 'id, title, poster, platform, release_date';
+const MOVIE_SELECT = 'id, title, poster, platform, release_date, watched';
 
 const NO_MOVIES: WatchlistNewsMovie[] = [];
 
@@ -253,7 +262,8 @@ export const recentMoviesQuery = (windowDays = 30) =>
           .order('release_date', { ascending: false });
 
         if (error) throw error;
-        return (data || []).map(mapMovieRow);
+        // Out Now: a film already watched is not news.
+        return (data || []).filter((row) => !row.watched).map(mapMovieRow);
       } catch (error) {
         console.error('Error fetching recently released movies:', error);
         throw error;
@@ -350,10 +360,10 @@ export const watchlistEventsQuery = (windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) 
 
         const [showsResult, moviesResult] = await Promise.all([
           tvIds.length
-            ? supabase.from('tv_shows').select('id, title, poster, platform').in('id', tvIds)
+            ? supabase.from('tv_shows').select('id, title, poster, platform, tracking').in('id', tvIds)
             : Promise.resolve({ data: [], error: null }),
           movieIds.length
-            ? supabase.from('movies').select('id, title, poster, platform').in('id', movieIds)
+            ? supabase.from('movies').select('id, title, poster, platform, watched').in('id', movieIds)
             : Promise.resolve({ data: [], error: null }),
         ]);
 
@@ -369,6 +379,7 @@ export const watchlistEventsQuery = (windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) 
               ? showsById.get(row.entity_id)
               : moviesById.get(row.entity_id);
           if (!source) return [];
+          if ('tracking' in source ? isDroppedShow(source) : source.watched) return [];
           return [{
             id: row.id,
             // CHECK constraints hold both columns to these values; the
@@ -438,14 +449,14 @@ export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) 
         const [seasonsResult, episodesResult] = await Promise.all([
           supabase
             .from('tv_show_seasons')
-            .select('id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform)')
+            .select('id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform, tracking)')
             .gt('created_at', cutoff)
             .order('created_at', { ascending: false })
             .limit(ANNOUNCEMENT_ROW_CAP),
           supabase
             .from('tv_show_episodes')
             .select(
-              'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform))',
+              'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, tracking))',
             )
             .gt('created_at', cutoff)
             .order('created_at', { ascending: false })
@@ -455,10 +466,11 @@ export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) 
         if (seasonsResult.error) throw seasonsResult.error;
         if (episodesResult.error) throw episodesResult.error;
 
-        const seasonItems: AnnouncementCandidate[] = (seasonsResult.data || []).map(
-          (row): AnnouncementCandidate => {
+        const seasonItems: AnnouncementCandidate[] = (seasonsResult.data || []).flatMap(
+          (row): AnnouncementCandidate[] => {
             const show = unwrapEmbed(row.tv_shows) || {};
-            return {
+            if (isDroppedShow(show)) return [];
+            return [{
               kind: 'season',
               tv_show_id: row.tv_show_id,
               title: show.title ?? '',
@@ -466,15 +478,16 @@ export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) 
               platform: show.platform ?? null,
               season_number: row.season_number,
               created_at: row.created_at,
-            };
+            }];
           },
         );
 
-        const episodeItems: AnnouncementCandidate[] = (episodesResult.data || []).map(
-          (row): AnnouncementCandidate => {
+        const episodeItems: AnnouncementCandidate[] = (episodesResult.data || []).flatMap(
+          (row): AnnouncementCandidate[] => {
             const season = unwrapEmbed(row.tv_show_seasons) || {};
             const show = unwrapEmbed(season.tv_shows) || {};
-            return {
+            if (isDroppedShow(show)) return [];
+            return [{
               kind: 'episode',
               tv_show_id: season.tv_show_id,
               title: show.title ?? '',
@@ -485,7 +498,7 @@ export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) 
               episode_title: row.title,
               release_date: row.release_date,
               created_at: row.created_at,
-            };
+            }];
           },
         );
 

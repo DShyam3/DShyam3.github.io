@@ -3,6 +3,9 @@
  * watched. Pure; the caller supplies the library lookup.
  */
 
+import type { WatchlistItem } from './WatchlistContext';
+import { daysUntil, isSpecialsSeason } from './watchlist-utils';
+
 export interface OrderEntryInput {
   key: string;
   mediaType: 'movie' | 'tv';
@@ -16,8 +19,39 @@ export interface OrderEntryInput {
 export interface LibraryLookup {
   /** Keyed by TMDB id. */
   movies: Map<number, { id: string; watched: boolean }>;
-  /** Keyed by TMDB id; specials excluded by the caller. */
+  /** Keyed by TMDB id; specials excluded by `libraryLookup`. */
   shows: Map<number, { id: string; airedEpisodes: number; watchedEpisodes: number }>;
+}
+
+/**
+ * The lookup the order views read, from the library. A show's aired count
+ * skips specials (`isSpecialsSeason`) and counts an episode as aired when it
+ * has a release date that is not after `today` -- `daysUntil(...) <= 0`,
+ * mirroring `timeToFinish` in time-to-finish.ts (which does not export it).
+ */
+export function libraryLookup(watchlist: WatchlistItem[], today: Date): LibraryLookup {
+  const movies: LibraryLookup['movies'] = new Map();
+  const shows: LibraryLookup['shows'] = new Map();
+  for (const item of watchlist) {
+    if (item.tmdb_id == null) continue;
+    if (item.category === 'Movies') {
+      movies.set(item.tmdb_id, { id: item.id, watched: !!item.watched });
+    } else if (item.category === 'TV Shows') {
+      let airedEpisodes = 0;
+      let watchedEpisodes = 0;
+      for (const season of item.seasons ?? []) {
+        if (isSpecialsSeason(season.season_number)) continue;
+        for (const ep of season.episodes) {
+          const age = daysUntil(ep.release_date, today);
+          if (age === null || age > 0) continue;
+          airedEpisodes++;
+          if (ep.watched) watchedEpisodes++;
+        }
+      }
+      shows.set(item.tmdb_id, { id: item.id, airedEpisodes, watchedEpisodes });
+    }
+  }
+  return { movies, shows };
 }
 
 export type EntryState = 'watched' | 'in-progress' | 'unwatched' | 'not-in-library';

@@ -20,6 +20,11 @@ describe('detectLetterboxdFile', () => {
     expect(detectLetterboxdFile('a\\watched.csv', [])).toBe('watched');
     expect(detectLetterboxdFile('ratings.csv', [])).toBe('ratings');
   });
+  it('never reads the watchlist or likes lists as watched', () => {
+    expect(detectLetterboxdFile('watchlist.csv', ['Name', 'Year'])).toBe('unknown');
+    expect(detectLetterboxdFile('export/Likes.csv', ['Name', 'Year'])).toBe('unknown');
+    expect(detectLetterboxdFile('likes/films.csv', ['Name', 'Year'])).toBe('unknown');
+  });
   it('falls back to headers', () => {
     expect(detectLetterboxdFile('x.csv', [' Name', 'Watched  Date'])).toBe('diary');
     expect(detectLetterboxdFile('x.csv', ['Name', 'Year', 'Rating'])).toBe('ratings');
@@ -83,6 +88,12 @@ describe('parseLetterboxdFiles', () => {
     const out = parse([{ name: 'other.csv', text: 'Foo,Bar\n1,2' }]);
     expect(out.files).toEqual([{ name: 'other.csv', kind: 'unknown', rows: 0 }]);
     expect(out.skipped).toHaveLength(1);
+  });
+
+  it('skips watchlist.csv with a reason so to-watch films are not marked watched', () => {
+    const out = parse([{ name: 'watched.csv', text: 'Date,Name,Year,Letterboxd URI\n2026-01-01,Seen,2000,u' }, { name: 'watchlist.csv', text: 'Date,Name,Year,Letterboxd URI\n2026-01-01,Unseen,2001,u' }]);
+    expect(out.films.map(f => f.name)).toEqual(['Seen']);
+    expect(out.skipped).toEqual([{ file: 'watchlist.csv', row: 0, reason: expect.stringContaining('watchlist') }]);
   });
 
   it('throws on an empty list and on too many rows', () => {

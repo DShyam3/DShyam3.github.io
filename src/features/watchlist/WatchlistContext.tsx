@@ -314,8 +314,10 @@ interface WatchlistContextType {
   /** The owner's 1-10 score; null clears it. */
   setRating: (target: RatingTarget, rating: number | null) => Promise<void>;
   setShowTracking: (showId: string, tracking: ShowTracking) => Promise<void>;
-  /** Corrects when something already watched was watched; null = unknown. */
-  setWatchedDate: (kind: 'episode' | 'movie', id: number, watchedAt: string | null) => Promise<void>;
+  /** Corrects when already-watched rows were watched; null = unknown. One
+   *  update for all the ids; rejects (no toast) if any row was not changed,
+   *  so the caller can keep its form open and say so. */
+  setWatchedDates: (kind: 'episode' | 'movie', ids: number[], watchedAt: string | null) => Promise<void>;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -1187,7 +1189,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             ? { ...item, rating: rating ?? undefined }
             : item));
       }
-      void queryClient.invalidateQueries({ queryKey: ['watchlist', 'diary'] });
     } catch (error) {
       console.error('Error saving rating:', error);
       toast({ title: 'Error', description: 'Failed to save rating', variant: 'destructive' });
@@ -1211,27 +1212,28 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const setWatchedDate = async (kind: 'episode' | 'movie', id: number, watchedAt: string | null) => {
-    if (!isAdmin) return;
-    try {
-      // Only watched_at is in the SET list, so the trigger that stamps
-      // now() on a watched flip does not fire; `.eq('watched', true)` keeps
-      // a date off a row that is not watched.
-      const { data, error } = kind === 'movie'
-        ? await supabase.from('movies').update({ watched_at: watchedAt })
-          .eq('id', id).eq('watched', true).select('id')
-        : await supabase.from('tv_show_episodes').update({ watched_at: watchedAt })
-          .eq('id', id).eq('watched', true).select('id');
-      if (error) throw error;
-      if (!data?.length) throw new Error('Not watched');
-      if (kind === 'movie') {
-        setWatchlist((prev) => prev.map((item) =>
-          isMovieWithId(item, String(id)) ? { ...item, watched_at: watchedAt } : item));
-      }
-      await queryClient.invalidateQueries({ queryKey: ['watchlist', 'diary'] }, { throwOnError: false });
-    } catch (error) {
-      console.error('Error saving watched date:', error);
-      toast({ title: 'Error', description: 'Failed to save the date', variant: 'destructive' });
+  const setWatchedDates = async (kind: 'episode' | 'movie', ids: number[], watchedAt: string | null) => {
+    if (!isAdmin) throw new Error('Not signed in as admin');
+    if (ids.length === 0) return;
+    if (watchedAt !== null && Date.parse(watchedAt) > Date.now() + 24 * 60 * 60 * 1000) {
+      throw new Error('A watch date cannot be in the future');
+    }
+    // Only watched_at is in the SET list, so the trigger that stamps now()
+    // on a watched flip does not fire; `.eq('watched', true)` keeps a date
+    // off a row that is not watched.
+    const { data, error } = kind === 'movie'
+      ? await supabase.from('movies').update({ watched_at: watchedAt })
+        .in('id', ids).eq('watched', true).select('id')
+      : await supabase.from('tv_show_episodes').update({ watched_at: watchedAt })
+        .in('id', ids).eq('watched', true).select('id');
+    if (error) throw error;
+    if ((data?.length ?? 0) !== new Set(ids).size) {
+      throw new Error('Some of these are no longer marked watched');
+    }
+    if (kind === 'movie') {
+      const changed = new Set(ids.map(String));
+      setWatchlist((prev) => prev.map((item) =>
+        item.category === 'Movies' && changed.has(item.id) ? { ...item, watched_at: watchedAt } : item));
     }
   };
 
@@ -1464,7 +1466,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   const stableSetMovieWatched = useStableCallback(setMovieWatched);
   const stableSetRating = useStableCallback(setRating);
   const stableSetShowTracking = useStableCallback(setShowTracking);
-  const stableSetWatchedDate = useStableCallback(setWatchedDate);
+  const stableSetWatchedDates = useStableCallback(setWatchedDates);
 
   const value = useMemo(
     () => ({
@@ -1495,7 +1497,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       setMovieWatched: stableSetMovieWatched,
       setRating: stableSetRating,
       setShowTracking: stableSetShowTracking,
-      setWatchedDate: stableSetWatchedDate,
+      setWatchedDates: stableSetWatchedDates,
       getAutoStatus,
       loadShowEpisodes,
       loadItemDescription,
@@ -1529,7 +1531,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
       stableSetMovieWatched,
       stableSetRating,
       stableSetShowTracking,
-      stableSetWatchedDate,
+      stableSetWatchedDates,
       getAutoStatus,
       loadShowEpisodes,
       loadItemDescription,

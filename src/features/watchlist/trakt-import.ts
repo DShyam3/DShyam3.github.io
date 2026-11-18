@@ -36,7 +36,8 @@ export function parseTraktFiles(files: { name: string; text: string }[], options
   const timestamp = (value: unknown): string | null => {
     if (typeof value !== 'string') return null;
     const ms = Date.parse(value);
-    return Number.isFinite(ms) && ms > MIN_TIME && ms <= nowMs + 86_400_000 ? new Date(ms).toISOString() : null;
+    // Exactly the Unix epoch is how Trakt exports an unknown date.
+    return Number.isFinite(ms) && ms !== 0 && ms > MIN_TIME && ms <= nowMs + 86_400_000 ? new Date(ms).toISOString() : null;
   };
   const earliest = (a: string | null, b: string | null) => (a && b ? (a <= b ? a : b) : a ?? b);
 

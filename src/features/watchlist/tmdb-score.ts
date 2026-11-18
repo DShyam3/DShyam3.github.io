@@ -56,7 +56,6 @@ export interface ScoreLine {
   tmdb: number | null;
   votes: number | null;
   fewVotes: boolean;
-  difference: number | null;
 }
 
 const FEW_VOTES = 50;
@@ -74,6 +73,5 @@ export function scoreLine(
     tmdb,
     votes,
     fewVotes: votes != null && votes < FEW_VOTES,
-    difference: m != null && tmdb != null ? Math.round((m - tmdb) * 10) / 10 : null,
   };
 }

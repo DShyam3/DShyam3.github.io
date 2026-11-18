@@ -28,23 +28,29 @@ interface EpisodeRow {
 
 const one = <T,>(value: T | T[]): T => (Array.isArray(value) ? value[0] : value);
 
-async function readDiary(): Promise<{ records: WatchRecord[] }> {
-  const [episodesResult, moviesResult] = await Promise.all([
+async function readDiary(): Promise<{ records: WatchRecord[]; undated: number }> {
+  const [episodesResult, moviesResult, undatedEpisodes, undatedFilms] = await Promise.all([
     selectAllPages((from, to) => supabase
       .from('tv_show_episodes')
       .select(DIARY_EPISODE_SELECT, { count: 'exact' })
       .eq('watched', true)
+      .not('watched_at', 'is', null)
       .order('id', { ascending: true })
       .range(from, to), (row) => String(row.id)),
     selectAllPages((from, to) => supabase
       .from('movies')
       .select(DIARY_MOVIE_SELECT, { count: 'exact' })
       .eq('watched', true)
+      .not('watched_at', 'is', null)
       .order('id', { ascending: true })
       .range(from, to), (row) => String(row.id)),
+    supabase.from('tv_show_episodes').select('id', { count: 'exact', head: true }).eq('watched', true).is('watched_at', null),
+    supabase.from('movies').select('id', { count: 'exact', head: true }).eq('watched', true).is('watched_at', null),
   ]);
   if (episodesResult.error) throw episodesResult.error;
   if (moviesResult.error) throw moviesResult.error;
+  if (undatedEpisodes.error) throw undatedEpisodes.error;
+  if (undatedFilms.error) throw undatedFilms.error;
 
   const episodes = (episodesResult.data as unknown as EpisodeRow[]).map((row): WatchRecord => {
     const season = one(row.tv_show_seasons);
@@ -75,10 +81,10 @@ async function readDiary(): Promise<{ records: WatchRecord[] }> {
     genres: genresOf(row.genre),
     platform: row.platform,
   }));
-  return { records: [...episodes, ...films] };
+  return { records: [...episodes, ...films], undated: (undatedEpisodes.count ?? 0) + (undatedFilms.count ?? 0) };
 }
 
-/** Every watched episode and film as a WatchRecord. Mutations invalidate this key. */
+/** Every dated watched episode and film as a WatchRecord, plus the count of watched rows with no date. Mutations invalidate this key. */
 export const diaryQueryOptions = queryOptions({
   queryKey: ['watchlist', 'diary'],
   queryFn: readDiary,

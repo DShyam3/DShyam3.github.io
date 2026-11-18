@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, Film, Loader2, Pencil, Plus, Trash2, Tv } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,12 @@ export const POSTER_BASE: string = import.meta.env.VITE_TMDB_IMAGE_BASE_URL ?? '
 
 /** Admin edits on a saved order, addressed by position in the list. */
 export interface EntryEdits {
+  /** Disables every control while a change to the order is in flight. */
+  busy?: boolean;
   onMove: (from: number, to: number) => void;
   onRemove: (index: number) => void;
-  onNote: (index: number, note: string) => void;
+  /** Resolves to an error message, or null once saved. */
+  onNote: (index: number, note: string) => Promise<string | null>;
 }
 
 export function stateLabel(entry: OrderEntryView): string {
@@ -51,19 +54,29 @@ export function Poster({ src, mediaType, className }: { src: string | null; medi
   );
 }
 
-function NoteEditor({ initial, onSave, onCancel }: { initial: string; onSave: (note: string) => void; onCancel: () => void }) {
+function NoteEditor({ initial, onSave, onCancel }: { initial: string; onSave: (note: string) => Promise<string | null>; onCancel: () => void }) {
+  const id = useId();
   const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <form
       className="flex flex-wrap items-center gap-2"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
-        onSave(draft);
+        setSaving(true);
+        setError(null);
+        try {
+          const failure = await onSave(draft);
+          if (failure) setError(failure);
+        } finally {
+          setSaving(false);
+        }
       }}
     >
-      <label className="sr-only" htmlFor="entry-note">Note</label>
+      <label className="sr-only" htmlFor={id}>Note</label>
       <Input
-        id="entry-note"
+        id={id}
         value={draft}
         maxLength={200}
         onChange={(event) => setDraft(event.target.value)}
@@ -71,8 +84,9 @@ function NoteEditor({ initial, onSave, onCancel }: { initial: string; onSave: (n
         className="min-w-0 flex-1 basis-48"
         autoFocus
       />
-      <Button type="submit" size="sm">Save</Button>
-      <Button type="button" size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
+      <Button type="submit" disabled={saving}>Save</Button>
+      <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+      {error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
     </form>
   );
 }
@@ -137,9 +151,10 @@ export function EntryList({
                 <NoteEditor
                   initial={entry.note ?? ''}
                   onCancel={() => setEditing(null)}
-                  onSave={(note) => {
-                    edits.onNote(i, note);
-                    setEditing(null);
+                  onSave={async (note) => {
+                    const failure = await edits.onNote(i, note);
+                    if (!failure) setEditing(null);
+                    return failure;
                   }}
                 />
               ) : (
@@ -162,16 +177,16 @@ export function EntryList({
                   )}
                   {edits && (
                     <>
-                      <Button type="button" variant="ghost" size="icon" disabled={i === 0} onClick={() => edits.onMove(i, i - 1)} aria-label={`Move ${entry.title} up`}>
+                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy || i === 0} onClick={() => edits.onMove(i, i - 1)} aria-label={`Move ${entry.title} up`}>
                         <ArrowUp className="h-4 w-4" />
                       </Button>
-                      <Button type="button" variant="ghost" size="icon" disabled={i === view.entries.length - 1} onClick={() => edits.onMove(i, i + 1)} aria-label={`Move ${entry.title} down`}>
+                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy || i === view.entries.length - 1} onClick={() => edits.onMove(i, i + 1)} aria-label={`Move ${entry.title} down`}>
                         <ArrowDown className="h-4 w-4" />
                       </Button>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => setEditing(i)} aria-label={`Edit note for ${entry.title}`}>
+                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy} onClick={() => setEditing(i)} aria-label={`Edit note for ${entry.title}`}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => edits.onRemove(i)} aria-label={`Remove ${entry.title} from this order`}>
+                      <Button type="button" variant="ghost" size="icon" disabled={edits.busy} onClick={() => edits.onRemove(i)} aria-label={`Remove ${entry.title} from this order`}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </>

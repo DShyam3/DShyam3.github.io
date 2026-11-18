@@ -159,11 +159,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             ) : (
               <PlatformBadge platform={item.streaming_platform} size={18} />
             )}
-            {holdLabel && (
-              <span className="text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap bg-secondary text-muted-foreground">
-                {holdLabel}
-              </span>
-            )}
+            <span className="flex min-w-0 max-w-full items-center gap-1 overflow-hidden">
             {status && (
               isUpcomingStatus(status) && upcomingReleaseDate ? (
                 <span
@@ -195,6 +191,12 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                 </span>
               )
             )}
+            {holdLabel && (
+              <span className="min-w-0 truncate text-xs px-2 py-0.5 rounded font-medium bg-secondary text-muted-foreground">
+                {holdLabel}
+              </span>
+            )}
+            </span>
         </>}
         scheduled={isInSchedule(item)}
         onSchedule={addToSchedule || removeFromSchedule ? () => {

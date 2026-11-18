@@ -1,3 +1,4 @@
+import { useRef, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatScore, formatVoteCount, scoreLine } from '@/features/watchlist/tmdb-score';
@@ -27,42 +28,89 @@ export function RatingRow({
 }: RatingRowProps) {
   const line = scoreLine(mine, tmdbAverage, tmdbVotes);
 
-  let tmdbText: string;
-  if (line.tmdb === null) {
+  // Unsynced titles have null votes until the nightly sync backfills them, so
+  // only an explicit zero count means "no votes yet".
+  let tmdbText: string | null = null;
+  if (line.tmdb !== null) {
+    tmdbText =
+      line.votes !== null
+        ? `TMDB ${formatScore(line.tmdb)} (${formatVoteCount(line.votes)} votes)`
+        : `TMDB ${formatScore(line.tmdb)}`;
+  } else if (tmdbVotes === 0) {
     tmdbText = 'TMDB: no votes yet';
-  } else if (line.votes !== null) {
-    tmdbText = `TMDB ${formatScore(line.tmdb)} (${formatVoteCount(line.votes)} votes)`;
-  } else {
-    tmdbText = `TMDB ${formatScore(line.tmdb)}`;
   }
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const move = (index: number) => {
+    const next = (index + SCORES.length) % SCORES.length;
+    refs.current[next]?.focus();
+    onChange?.(SCORES[next]);
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        move(index + 1);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        move(index - 1);
+        break;
+      case 'Home':
+        move(0);
+        break;
+      case 'End':
+        move(SCORES.length - 1);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  };
   const mineText = line.mine !== null ? `You ${line.mine}` : editable ? 'Not rated' : null;
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <p className="text-xs text-muted-foreground">
-        {mineText ? <span className="text-foreground">{mineText} · </span> : null}
-        {tmdbText}
-        {line.fewVotes ? <span> · few votes</span> : null}
-      </p>
+      {mineText || tmdbText ? (
+        <p className="text-xs text-muted-foreground">
+          {mineText ? (
+            <span className="text-foreground">
+              {mineText}
+              {tmdbText ? ' · ' : ''}
+            </span>
+          ) : null}
+          {tmdbText}
+          {tmdbText && line.fewVotes ? <span> · few votes</span> : null}
+        </p>
+      ) : null}
 
       {editable ? (
         <div className="flex flex-wrap items-center gap-1">
           <div
             role="radiogroup"
             aria-label={`${label}: your score out of 10`}
-            className="flex flex-wrap gap-0.5"
+            className="grid grid-cols-[repeat(5,2.75rem)] gap-1"
           >
-            {SCORES.map((score) => {
+            {SCORES.map((score, index) => {
               const selected = line.mine === score;
+              const tabbable = line.mine !== null ? selected : index === 0;
               return (
                 <button
                   key={score}
+                  ref={(el) => {
+                    refs.current[index] = el;
+                  }}
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  onClick={() => onChange?.(selected ? null : score)}
+                  tabIndex={tabbable ? 0 : -1}
+                  onClick={() => {
+                    if (!selected) onChange?.(score);
+                  }}
+                  onKeyDown={(event) => onKeyDown(event, index)}
                   className={cn(
-                    'min-h-10 w-7 rounded-md border border-border text-xs font-medium transition-colors',
+                    'min-h-11 rounded-md border border-border text-xs font-medium transition-colors',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                     selected
                       ? 'border-primary bg-primary text-primary-foreground'

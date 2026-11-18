@@ -28,7 +28,15 @@
 --
 -- The new columns inherit the table-level grants and the existing admin-write
 -- policies. The two new tables get RLS, public read, is_admin() writes and the
--- same grants as tv_shows. The three functions are SECURITY INVOKER.
+-- same grants as tv_shows, with anon's default ALL revoked before its SELECT.
+-- The three functions are SECURITY INVOKER.
+--
+-- ## Cascade fix
+--
+-- update_episodes_watched_status() is redefined (same signature, owner and
+-- search_path) with a trigger-depth guard. Before it, unmarking one episode of
+-- a fully watched season flipped season.watched to false, which cascaded
+-- watched = false onto every sibling and cleared all their watched_at.
 
 BEGIN;
 
@@ -161,7 +169,6 @@ CREATE TABLE IF NOT EXISTS "public"."viewing_orders" (
     "description" "text",
     "tmdb_collection_id" integer,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "viewing_orders_name_check" CHECK (char_length(btrim("name")) BETWEEN 1 AND 120),
     CONSTRAINT "viewing_orders_description_check" CHECK ("description" IS NULL OR char_length("description") <= 500)
 );
@@ -225,8 +232,11 @@ CREATE POLICY "Admin update" ON "public"."viewing_order_entries" FOR UPDATE TO "
 CREATE POLICY "Admin delete" ON "public"."viewing_order_entries" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
 -- Grants, as on tv_shows: anon reads, authenticated gets the four data verbs,
--- service_role everything. The REVOKE ALL FROM authenticated comes first
--- because a fresh build starts from the image's default of ALL.
+-- service_role everything. Each REVOKE ALL comes first because a fresh build
+-- starts from the image's default of ALL (and schemas/ applies 20_ before
+-- 90_privileges, so anon would otherwise keep TRUNCATE and the rest).
+REVOKE ALL ON TABLE "public"."viewing_orders" FROM "anon";
+
 GRANT SELECT ON TABLE "public"."viewing_orders" TO "anon";
 
 REVOKE ALL ON TABLE "public"."viewing_orders" FROM "authenticated";
@@ -234,6 +244,8 @@ REVOKE ALL ON TABLE "public"."viewing_orders" FROM "authenticated";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."viewing_orders" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."viewing_orders" TO "service_role";
+
+REVOKE ALL ON TABLE "public"."viewing_order_entries" FROM "anon";
 
 GRANT SELECT ON TABLE "public"."viewing_order_entries" TO "anon";
 
@@ -254,6 +266,35 @@ REVOKE ALL ON SEQUENCE "public"."viewing_orders_id_seq" FROM "anon", "authentica
 REVOKE ALL ON SEQUENCE "public"."viewing_order_entries_id_seq" FROM "anon", "authenticated";
 
 -- ## Functions
+
+-- Cascade a season's watched flag onto its episodes only when the season row
+-- was updated directly. When the update came from update_season_watched_status()
+-- (an episode changed, so the season is merely recomputed) the trigger depth is
+-- 2 or more and copying the flag back down would unwatch the sibling episodes
+-- and wipe their watched_at. CREATE OR REPLACE keeps the existing grants.
+CREATE OR REPLACE FUNCTION "public"."update_episodes_watched_status"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+BEGIN
+  -- Depth 1 is this trigger fired by a direct UPDATE of tv_show_seasons.
+  -- Deeper means the UPDATE came from an episode trigger: do not cascade back.
+  IF pg_trigger_depth() > 1 THEN
+    RETURN NEW;
+  END IF;
+
+  -- Only run if the 'watched' status actually changed
+  IF (OLD.watched IS DISTINCT FROM NEW.watched) THEN
+    UPDATE tv_show_episodes
+    SET watched = NEW.watched
+    WHERE season_id = NEW.id
+    AND watched IS DISTINCT FROM NEW.watched; -- Only update rows that actually need to change
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION "public"."update_episodes_watched_status"() OWNER TO "postgres";
 
 -- Admin RPCs for the watchlist. All three are SECURITY INVOKER with an empty
 -- search_path (every name schema-qualified), so the caller's RLS and grants
@@ -276,11 +317,15 @@ REVOKE ALL ON SEQUENCE "public"."viewing_order_entries_id_seq" FROM "anon", "aut
 --
 -- p_when: 'now' keeps the trigger's stamp; 'unknown' stores null ("watched,
 -- date unknown"); 'at' stores p_at; 'release' stores the row's release_date at
--- 12:00 UTC (null when it has none). Noon UTC, because release_date is a date
+-- 12:00 UTC (null when it has none, and null when it is still in the future:
+-- marking an airing season "on release date" must not stamp future dates on
+-- episodes that have not aired). Noon UTC, because release_date is a date
 -- with no time: midnight UTC would land on the previous calendar day in any
 -- zone west of UTC, while noon UTC stays on the same day anywhere in UK and
--- European time. p_at must be given exactly when p_when = 'at'. p_when is
--- ignored when p_watched is false (unwatching always clears).
+-- European time. p_at must be given exactly when p_when = 'at', and may not be
+-- more than a day ahead of now() (the day of slack absorbs clock and timezone
+-- skew; anything beyond raises 22023). p_when is ignored when p_watched is
+-- false (unwatching always clears), but its arguments are still validated.
 CREATE OR REPLACE FUNCTION "public"."set_watched"(
     p_kind text,
     p_ids integer[],
@@ -310,6 +355,9 @@ BEGIN
   IF (p_when = 'at') <> (p_at IS NOT NULL) THEN
     RAISE EXCEPTION 'p_at must be given exactly when p_when is at' USING ERRCODE = '22023';
   END IF;
+  IF p_when = 'at' AND p_at > now() + interval '1 day' THEN
+    RAISE EXCEPTION 'p_at must not be in the future' USING ERRCODE = '22023';
+  END IF;
 
   IF p_kind = 'episode' THEN
     WITH u AS (
@@ -326,7 +374,7 @@ BEGIN
         WHEN 'unknown' THEN NULL
         WHEN 'at' THEN p_at
         WHEN 'release' THEN (
-          CASE WHEN release_date IS NULL THEN NULL
+          CASE WHEN release_date IS NULL OR release_date > CURRENT_DATE THEN NULL
                ELSE (release_date + time '12:00') AT TIME ZONE 'UTC' END
         )
       END
@@ -347,7 +395,7 @@ BEGIN
         WHEN 'unknown' THEN NULL
         WHEN 'at' THEN p_at
         WHEN 'release' THEN (
-          CASE WHEN release_date IS NULL THEN NULL
+          CASE WHEN release_date IS NULL OR release_date > CURRENT_DATE THEN NULL
                ELSE (release_date + time '12:00') AT TIME ZONE 'UTC' END
         )
       END
@@ -367,8 +415,13 @@ GRANT EXECUTE ON FUNCTION "public"."set_watched"(text, integer[], boolean, text,
 
 -- Bulk import of watch history and ratings (a Trakt/Letterboxd-style export
 -- already matched to library ids by the client). Returns jsonb counts:
--- episodes_marked and movies_marked (rows flipped to watched), dated (rows
--- whose watched_at was set or moved earlier) and ratings_set.
+-- episodes_marked and movies_marked (rows flipped to watched), episodes_dated
+-- and movies_dated (rows whose watched_at was set or moved earlier), dated
+-- (their sum, kept for compatibility) and ratings_set.
+--
+-- An imported watched_at more than a day ahead of now() is treated as null
+-- ("date unknown"): a future watch date is never real, and the day of slack
+-- absorbs clock and timezone skew.
 --
 -- Every listed episode and movie ends up watched. Rows that flip are stamped
 -- now() by tr_set_watched_at, so the second statement then writes the imported
@@ -419,7 +472,7 @@ BEGIN
 
   -- Episodes: flip, then date.
   WITH i AS (
-    SELECT x.id, min(x.watched_at) AS watched_at
+    SELECT x.id, min(CASE WHEN x.watched_at > now() + interval '1 day' THEN NULL ELSE x.watched_at END) AS watched_at
     FROM jsonb_to_recordset(p_episodes) AS x(id integer, watched_at timestamptz)
     WHERE x.id IS NOT NULL
     GROUP BY x.id
@@ -433,7 +486,7 @@ BEGIN
   SELECT array_agg(id) INTO v_flipped_eps FROM u;
 
   WITH i AS (
-    SELECT x.id, min(x.watched_at) AS watched_at
+    SELECT x.id, min(CASE WHEN x.watched_at > now() + interval '1 day' THEN NULL ELSE x.watched_at END) AS watched_at
     FROM jsonb_to_recordset(p_episodes) AS x(id integer, watched_at timestamptz)
     WHERE x.id IS NOT NULL
     GROUP BY x.id
@@ -460,7 +513,7 @@ BEGIN
 
   -- Movies: flip, then date.
   WITH i AS (
-    SELECT x.id, min(x.watched_at) AS watched_at
+    SELECT x.id, min(CASE WHEN x.watched_at > now() + interval '1 day' THEN NULL ELSE x.watched_at END) AS watched_at
     FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating integer)
     WHERE x.id IS NOT NULL
     GROUP BY x.id
@@ -474,7 +527,7 @@ BEGIN
   SELECT array_agg(id) INTO v_flipped_movies FROM u;
 
   WITH i AS (
-    SELECT x.id, min(x.watched_at) AS watched_at
+    SELECT x.id, min(CASE WHEN x.watched_at > now() + interval '1 day' THEN NULL ELSE x.watched_at END) AS watched_at
     FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating integer)
     WHERE x.id IS NOT NULL
     GROUP BY x.id
@@ -542,6 +595,8 @@ BEGIN
   RETURN jsonb_build_object(
     'episodes_marked', COALESCE(cardinality(v_flipped_eps), 0),
     'movies_marked', COALESCE(cardinality(v_flipped_movies), 0),
+    'episodes_dated', v_dated_eps,
+    'movies_dated', v_dated_movies,
     'dated', v_dated_eps + v_dated_movies,
     'ratings_set', v_ratings
   );
@@ -594,8 +649,6 @@ BEGIN
   UPDATE public.viewing_order_entries
   SET position = array_position(p_entry_ids, id)
   WHERE order_id = p_order_id;
-
-  UPDATE public.viewing_orders SET updated_at = now() WHERE id = p_order_id;
 END;
 $$;
 

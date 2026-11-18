@@ -28,7 +28,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .from('movies')
       .select(
         `id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime,
-          watched, watched_at, rating, tmdb_vote_average, tmdb_vote_count, collection_id, collection_name`,
+          watched, watched_at, rating, tmdb_vote_average, tmdb_vote_count`,
         { count: 'exact' },
       )
       .order('title', { ascending: true })
@@ -95,8 +95,6 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       rating: movie.rating ?? undefined,
       tmdb_vote_average: movie.tmdb_vote_average ?? undefined,
       tmdb_vote_count: movie.tmdb_vote_count ?? undefined,
-      collection_id: movie.collection_id ?? undefined,
-      collection_name: movie.collection_name ?? undefined,
     }),
   );
 

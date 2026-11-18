@@ -40,41 +40,6 @@ export function useTMDB() {
         return data as T;
     }, []);
 
-    const search = useCallback(async (query: string, type: 'TV Shows' | 'Movies', year?: number) => {
-        const trimmedQuery = query.trim();
-        if (!trimmedQuery) {
-            setResults([]);
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const endpoint = type === 'Movies' ? 'search/movie' : 'search/tv';
-            const params: Record<string, string> = { query: trimmedQuery };
-
-            if (year) {
-                if (type === 'Movies') params.primary_release_year = year.toString();
-                else params.first_air_date_year = year.toString();
-            }
-
-            const data = await fetchTMDB<TMDBSearchResponse>(endpoint, params);
-
-            const mediaType: TMDBResult['media_type'] =
-                type === 'Movies' ? 'movie' : 'tv';
-            const mappedResults = (data.results || []).slice(0, 10).map((item) => ({
-                ...item,
-                media_type: mediaType,
-            }));
-
-            setResults(mappedResults);
-        } catch (error) {
-            console.error('TMDB Search Error:', error);
-            setResults([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [fetchTMDB]);
-
     const getPosterUrl = useCallback((path: string | null) => {
         if (!path) return null;
         return `${TMDB_IMAGE_BASE_URL}${path}`;
@@ -113,6 +78,8 @@ export function useTMDB() {
                 genres: data.genres?.map((g) => g.name) || [],
                 tmdb_id: data.id,
                 platform: platform,
+                /** TV only; the import paces its proxy calls by it. */
+                season_count: type === 'tv' ? data.seasons?.length ?? 0 : 0,
                 // Same pick as the sync, so the title has its trailer from
                 // the moment it is added rather than from the next sync.
                 trailer_key: pickTrailerKey(data.videos?.results),
@@ -185,18 +152,38 @@ export function useTMDB() {
     }, [fetchTMDB]);
 
     /**
-     * The same search as `search`, returned rather than put in state, and
-     * throwing when the request fails, so a batch (the history import) can
-     * tell "TMDB found nothing" from "the call failed" and retry the latter.
+     * A title search returned rather than put in state, and throwing when the
+     * request fails, so a batch (the history import) can tell "TMDB found
+     * nothing" from "the call failed" and retry the latter. `year` narrows by
+     * release year (films) or first-air year (shows).
      */
-    const searchTitles = useCallback(async (query: string, type: 'TV Shows' | 'Movies'): Promise<TMDBResult[]> => {
+    const searchTitles = useCallback(async (query: string, type: 'TV Shows' | 'Movies', year?: number): Promise<TMDBResult[]> => {
         const trimmedQuery = query.trim();
         if (!trimmedQuery) return [];
         const endpoint = type === 'Movies' ? 'search/movie' : 'search/tv';
-        const data = await fetchTMDB<TMDBSearchResponse>(endpoint, { query: trimmedQuery });
+        const params: Record<string, string> = { query: trimmedQuery };
+        if (year) params[type === 'Movies' ? 'primary_release_year' : 'first_air_date_year'] = year.toString();
+        const data = await fetchTMDB<TMDBSearchResponse>(endpoint, params);
         const mediaType: TMDBResult['media_type'] = type === 'Movies' ? 'movie' : 'tv';
         return (data.results || []).slice(0, 10).map((item) => ({ ...item, media_type: mediaType }));
     }, [fetchTMDB]);
+
+    const search = useCallback(async (query: string, type: 'TV Shows' | 'Movies', year?: number) => {
+        if (!query.trim()) {
+            setResults([]);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            setResults(await searchTitles(query, type, year));
+        } catch (error) {
+            console.error('TMDB Search Error:', error);
+            setResults([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [searchTitles]);
 
     return {
         results,

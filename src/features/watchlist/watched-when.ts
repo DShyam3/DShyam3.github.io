@@ -1,3 +1,4 @@
+import { calendarDateKey } from './calendar';
 /**
  * When something was watched: just now, on the release date, unknown, or a
  * picked day. A date-only value is stored as local noon so it stays on the same
@@ -34,8 +35,7 @@ export function isOnOrBefore(date: string, today: string): boolean {
 
 /** YYYY-MM-DD in the runtime's zone. */
 export function todayLocal(now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return calendarDateKey(now);
 }
 
 export interface SetWatchedArgs {

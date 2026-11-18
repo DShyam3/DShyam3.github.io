@@ -68,7 +68,6 @@ export function CollectionCard({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               className="gap-1.5"
               disabled={saving || view.total === 0}
               onClick={async () => {

@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { OrderEntryInput } from './franchise';
 
 /** An entry as stored: the pure `OrderEntryInput` plus its row id. */
@@ -48,6 +49,43 @@ export const viewingOrdersQueryOptions = queryOptions({
   retry: false,
 });
 
+/** A library film that belongs to a TMDB collection. */
+export interface LibraryCollectionRow {
+  id: string;
+  tmdbId: number | null;
+  collectionId: number;
+  collectionName: string | null;
+}
+
+/** Read here, not with the library, so the site-wide warm-up stays small. */
+export const libraryCollectionsQueryOptions = queryOptions({
+  queryKey: ['watchlist', 'library-collections'],
+  queryFn: async (): Promise<LibraryCollectionRow[]> => {
+    const { data, error } = await selectAllPages(
+      (from, to) =>
+        supabase
+          .from('movies')
+          .select('id, tmdb_id, collection_id, collection_name', { count: 'exact' })
+          .not('collection_id', 'is', null)
+          .order('id', { ascending: true })
+          .range(from, to),
+      (row) => String(row.id),
+    );
+    if (error) throw error;
+    return data.flatMap((row) =>
+      row.collection_id == null
+        ? []
+        : [{
+            id: String(row.id),
+            tmdbId: row.tmdb_id,
+            collectionId: row.collection_id,
+            collectionName: row.collection_name,
+          }],
+    );
+  },
+  retry: false,
+});
+
 const entryRow = (orderId: number, entry: OrderEntryInput, position: number) => ({
   order_id: orderId,
   position,
@@ -82,7 +120,10 @@ export async function createOrder(input: {
       .insert(entries.map((entry, i) => entryRow(data.id, entry, i + 1)));
     if (entriesError) {
       // Do not leave an empty order behind a half-saved series.
-      await supabase.from('viewing_orders').delete().eq('id', data.id);
+      const { error: rollbackError } = await supabase.from('viewing_orders').delete().eq('id', data.id);
+      if (rollbackError) {
+        throw new Error(`${entriesError.message}; the empty order could not be removed: ${rollbackError.message}`);
+      }
       throw entriesError;
     }
   }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Tv } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { localNoonIso, todayLocal } from '@/features/watchlist/watched-when';
+import { isCalendarDate, isOnOrBefore, localNoonIso, todayLocal } from '@/features/watchlist/watched-when';
 import type { Diary, DiaryRow } from '@/features/watchlist/diary';
 import { formatDayHeading, formatMinutes, formatTotal } from './format';
 
@@ -16,11 +16,13 @@ function EditDate({ row, onSave }: { row: DiaryRow; onSave: SetDate }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const save = async (watchedAt: string | null) => {
+  const valid = isCalendarDate(date) && isOnOrBefore(date, todayLocal());
+
+  const save = async (watchedAt?: string | null) => {
     setBusy(true);
     setFailed(false);
     try {
-      await onSave(row, watchedAt);
+      await onSave(row, watchedAt === undefined ? localNoonIso(date) : watchedAt);
       setOpen(false);
     } catch {
       setFailed(true);
@@ -46,7 +48,7 @@ function EditDate({ row, onSave }: { row: DiaryRow; onSave: SetDate }) {
           />
         </label>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" className="min-h-11" disabled={busy || !date} onClick={() => void save(localNoonIso(date))}>Save</Button>
+          <Button size="sm" className="min-h-11" disabled={busy || !valid} onClick={() => void save()}>Save</Button>
           <Button size="sm" variant="outline" className="min-h-11" disabled={busy} onClick={() => void save(null)}>Date unknown</Button>
         </div>
         {failed && <p role="alert" className="text-xs text-muted-foreground">Could not save the date</p>}
