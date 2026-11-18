@@ -37,8 +37,8 @@ interface WatchlistCardProps {
     showId: string,
     seasonNumber: number,
     episodeNumber: number,
-  ) => void;
-  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void;
+  ) => void | Promise<void>;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void | Promise<void>;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,

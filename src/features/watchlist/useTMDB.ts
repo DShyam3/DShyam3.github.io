@@ -76,6 +76,7 @@ export function useTMDB() {
             return {
                 title: data.title || data.name,
                 series_status: seriesStatus(type, data.status),
+                season_count: seasonCount,
                 overview: data.overview,
                 poster: data.poster_path ? getPosterUrl(data.poster_path) : null,
                 backdrop: data.backdrop_path ? getBackdropUrl(data.backdrop_path) : null,
@@ -88,8 +89,6 @@ export function useTMDB() {
                 origin_country: data.origin_country?.length ? data.origin_country : data.production_countries?.map((country) => country.iso_3166_1) ?? [],
                 tmdb_id: data.id,
                 platform: platform,
-                /** TV only; regular seasons count (with fallback for the import pacing). */
-                season_count: seasonCount,
                 // Same pick as the sync, so the title has its trailer from
                 // the moment it is added rather than from the next sync.
                 trailer_key: pickTrailerKey(data.videos?.results),

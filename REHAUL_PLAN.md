@@ -697,6 +697,85 @@ screens. Verify portrait and landscape sizes, short viewports, keyboard access
 to the end of results, and no document or main-frame overflow. This remains
 unimplemented.
 
+## Part 4 — Personal tracking expansion
+
+Proposed additions from the owner's personal-tracking discussion, 2026-11-17.
+These are backlog candidates, not implemented features or a commitment to build
+every tracker. The site already covers money, travel, entertainment, reading,
+possessions, projects and personal writing. The opportunity is to connect those
+records to everyday actions and progress.
+
+**Selection test:** what will seeing this information help the owner do
+differently? A tracker earns its place through that answer and a sustainable
+amount of data entry. Extend existing surfaces where possible rather than
+creating a separate section for every idea. Personal tracking is private by
+default; any public summary needs an explicit publishing choice.
+
+### Suggested order
+
+1. **Health & Fitness** — the strongest next standalone addition.
+2. **Goals & Habits** — personal goals beyond the existing financial goals.
+3. **Today / This week** — one private overview connecting existing and new
+   sections, once there are useful records to bring together.
+
+Life Admin can move ahead of these if forgotten dates are the more pressing
+problem. Other candidates below remain optional; implementation order and
+detailed designs are still open. This does not replace the remaining Phase 8
+work or its order in 8.I.
+
+### Health & Fitness — first useful scope
+
+- Quick phone-friendly workout logging: date, exercise, sets, reps and weight;
+  duration and distance where appropriate for activities such as running.
+- Reusable routines, showing the previous session's values during entry.
+- Progress and personal bests for the exercises or activities the owner chooses.
+- Weekly completed sessions against the owner's own target.
+- Optional body measurements, sleep and energy entries, only if useful enough
+  to maintain; these must not be required to log a workout.
+
+Start with this small core. Nutrition, meal planning and shopping lists could
+later extend Recipes. Detailed food logging is a separate decision because it
+adds substantial daily input. Device integrations and automatic imports are
+not prerequisites for the first version. All progress figures are deterministic
+calculations over stored entries, following the existing model boundary.
+
+### Goals & Habits
+
+Track non-financial goals, milestones, recurring habits and weekly targets
+across fitness, learning and personal projects. Link a goal to its relevant
+records where possible so one workout or study session does not need entering
+twice. Decide the smallest useful goal and recurrence model before building;
+avoid duplicating Finance's savings-goal ledger.
+
+### Today / This week — private overview
+
+The existing Watchlist Your Week is entertainment-specific. A broader personal
+view could bring together:
+
+- The next workout and current personal goal.
+- Upcoming appointments, renewals and planned trips.
+- The book or course currently being worked through.
+- Quick entry for a workout, habit or journal note.
+- A short weekly review of progress and items needing attention.
+
+Read from each section's existing records rather than maintain a second copy.
+The review's counts and summaries must work without a model. Placement,
+cross-section date handling and which items deserve attention remain design
+decisions; this is not yet a notification or calendar-integration commitment.
+
+### Other candidates
+
+| Candidate | Potential scope | Relationship to the existing site |
+|---|---|---|
+| Life Admin | Passport expiry, insurance renewals, MOT/service dates, warranties and appointments | Extend Inventory for item-related dates; decide whether other deadlines need a shared view |
+| Journal & Weekly Review | Short daily notes, optional mood/energy, highlights, what worked and next week's priorities | Private personal context alongside Thoughts and the proposed weekly overview |
+| Learning & Skills | Courses, skills being practised, study sessions and completed qualifications | Connect Books, Projects and experience to evidence of learning and application |
+| Experiences & Bucket List | Gigs, theatre, restaurants, hikes, activities and things to try | Extend Travel beyond trips, including experiences close to home |
+| People & Occasions | Birthdays, gift ideas, planned catch-ups and shared memories | Private reminders, not social-network features; third-party names remain outside model projections |
+
+No feature moves into FEATURES.md until it exists in the tree. These proposals
+remain here until selected, refined or explicitly declined.
+
 ## Appendix — Verification commands
 
 ```bash

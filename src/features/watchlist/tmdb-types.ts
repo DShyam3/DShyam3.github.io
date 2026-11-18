@@ -112,6 +112,7 @@ export interface TMDBDetails {
   episode_run_time?: number[];
   genres?: TMDBGenre[];
   status?: string;
+  number_of_seasons?: number;
   seasons?: TMDBSeasonSummary[];
   'watch/providers'?: TMDBWatchProviders;
   videos?: TMDBVideos;
@@ -123,7 +124,6 @@ export interface TMDBDetails {
   external_ids?: { imdb_id?: string | null };
   /** Films only: the series it belongs to, e.g. "X-Men Collection". */
   belongs_to_collection?: TMDBCollectionRef | null;
-  number_of_seasons?: number;
 }
 
 export interface TMDBCollectionRef {

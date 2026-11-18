@@ -320,6 +320,10 @@ function getPlatform(providers: TMDBRegionProviders | undefined): string {
     { tmdbNames: ['Apple TV Plus', 'Apple TV+', 'Apple TV'], displayName: 'Apple TV+' },
     { tmdbNames: ['BBC iPlayer'], displayName: 'BBC iPlayer' },
     { tmdbNames: ['ITVX'], displayName: 'ITVX' },
+    { tmdbNames: ['NOW', 'Now TV', 'Sky Go'], displayName: 'NOW' },
+    { tmdbNames: ['Paramount Plus', 'Paramount+', 'Paramount Plus Apple TV Channel', 'Paramount+ Amazon Channel'], displayName: 'Paramount+' },
+    { tmdbNames: ['Channel 4', 'All 4'], displayName: 'Channel 4' },
+    { tmdbNames: ['Crunchyroll', 'Crunchyroll Amazon Channel'], displayName: 'Crunchyroll' },
   ]
   for (const a of allowed) {
     if (available.some((p) => a.tmdbNames.some((name) => p.provider_name?.toLowerCase() === name.toLowerCase()))) {

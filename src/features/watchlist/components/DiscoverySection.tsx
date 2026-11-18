@@ -334,11 +334,26 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {!discovery.loading && discovery.recommendations.length === 0 && !discovery.failed && (
           <p className="text-sm text-muted-foreground">Nothing new on this page. Show more to keep looking.</p>
         )}
-        {discovery.hasMore && !discovery.loading && (
-          <div className="flex justify-center pt-2">
-            <Button variant="outline" onClick={discovery.loadMore} disabled={discovery.loadingMore}>
-              {discovery.loadingMore ? 'Loading…' : 'Show more suggestions'}
-            </Button>
+        {!discovery.loading && (discovery.recommendations.length > 0 || discovery.hasMore) && (
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            {discovery.recommendations.length > 0 && (
+              <Button
+                variant="ghost"
+                disabled={discovery.loadingMore}
+                onClick={() => {
+                  discovery.dismissMany(discovery.recommendations);
+                  if (discovery.hasMore && !discovery.loadingMore) discovery.loadMore();
+                }}
+              >
+                <X className="h-4 w-4" />
+                None of these
+              </Button>
+            )}
+            {discovery.hasMore && (
+              <Button variant="outline" onClick={discovery.loadMore} disabled={discovery.loadingMore}>
+                {discovery.loadingMore ? 'Loading…' : 'Show more suggestions'}
+              </Button>
+            )}
           </div>
         )}
       </section>

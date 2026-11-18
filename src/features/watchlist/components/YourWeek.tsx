@@ -255,3 +255,65 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
     </section>
   );
 }
+
+/** Suggestions the viewer declined in the full calendar, read from the same
+ *  store so the strip and the calendar never disagree. */
+function readDeclined(): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(DECLINED_RELEASES_KEY) ?? '[]');
+    return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : [];
+  } catch { return []; }
+}
+
+/**
+ * This week at a glance, for the closed "Your week" bar: one cell per day,
+ * up to two posters and a "+N" for the rest. Read-only -- the full calendar
+ * behind the bar is where anything changes.
+ */
+export function WeekStrip({ schedule, watchlist, isEpisodeWatched }: {
+  schedule: ScheduleEntry[];
+  watchlist: WatchlistItem[];
+  isEpisodeWatched: (showId: string, season: number, episode: number) => boolean;
+}) {
+  const today = new Date();
+  const todayKey = calendarDateKey(today);
+  const declined = readDeclined();
+  const events = buildCalendarEvents(schedule, watchlist, isEpisodeWatched, today)
+    .filter((event) => event.kind === 'plan' || !declined.includes(event.id));
+  const start = calendarWeekStart(today);
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(date.getDate() + index);
+    return date;
+  });
+  const total = days.reduce((sum, date) => sum + events.filter((event) => event.date === calendarDateKey(date)).length, 0);
+  return (
+    <ol className="week-strip grid flex-1 grid-cols-7 gap-1.5" aria-label={`This week: ${total} planned or suggested`}>
+      {days.map((date) => {
+        const key = calendarDateKey(date);
+        const dayEvents = events.filter((event) => event.date === key);
+        const isToday = key === todayKey;
+        return (
+          <li
+            key={key}
+            aria-label={`${date.toLocaleDateString('en-GB', { weekday: 'long' })}: ${dayEvents.length ? dayEvents.map((event) => event.item.title).join(', ') : 'nothing'}`}
+            className={cn('flex min-w-0 flex-col items-center gap-1 rounded-lg border px-1 py-1.5', isToday ? 'border-primary/50 bg-primary/5' : 'border-border/50')}
+          >
+            <span aria-hidden="true" className={cn('text-[10px] uppercase tracking-wide', isToday ? 'text-primary' : 'text-muted-foreground')}>
+              {date.toLocaleDateString('en-GB', { weekday: 'narrow' })}
+            </span>
+            <span aria-hidden="true" className="flex h-8 items-center gap-0.5">
+              {dayEvents.length === 0 && <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />}
+              {dayEvents.slice(0, 2).map((event) => (
+                <span key={event.id} className={cn('h-8 w-[22px] overflow-hidden rounded-sm bg-muted', event.kind === 'suggestion' && 'opacity-60')}>
+                  {event.item.image_url && <img src={event.item.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                </span>
+              ))}
+              {dayEvents.length > 2 && <span className="text-[10px] text-muted-foreground">+{dayEvents.length - 2}</span>}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

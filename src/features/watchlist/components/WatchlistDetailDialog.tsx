@@ -1,8 +1,9 @@
 import { useState, useEffect, useId, useRef, useMemo, useCallback } from 'react';
-import { ExternalLink, Trash2, CalendarDays, Calendar, RefreshCcw } from 'lucide-react';
+import { ExternalLink, Trash2, CalendarDays, Calendar, RefreshCcw, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useWatchlist, type WatchlistItem, type Season } from '@/features/watchlist/useWatchlist';
+import { libraryShelf } from '@/features/watchlist/library-state';
 import { SeasonEpisodeList } from './SeasonEpisodeList';
 import { TrailerButton } from './TrailerButton';
 import { LibraryActions } from './LibraryActions';
@@ -32,8 +33,8 @@ interface WatchlistDetailDialogProps {
     showId: string,
     seasonNumber: number,
     episodeNumber: number,
-  ) => void;
-  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void;
+  ) => void | Promise<void>;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void | Promise<void>;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -75,8 +76,14 @@ export function WatchlistDetailDialog({
     [item.id],
   );
   const { askDelete, deleteDialog } = useDeleteConfirm();
-  const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus } = useWatchlist();
+  const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus, favourites } = useWatchlist();
   const { isAdmin } = useAuth();
+  const shelf = libraryShelf(item);
+  const isFavourite = favourites.some(
+    (candidate) =>
+      candidate.media_type === (item.category === 'TV Shows' ? 'tv' : 'movie') &&
+      (item.tmdb_id ? candidate.tmdb_id === item.tmdb_id : candidate.title === item.title),
+  );
 
   // The grid only loads episode numbers and watched flags; episode titles,
   // air dates and runtimes are fetched here, for this show only, the first
@@ -105,6 +112,7 @@ export function WatchlistDetailDialog({
 
   const isTVShow = item.category === 'TV Shows';
   const hasSeasons = Boolean(isTVShow && item.seasons && item.seasons.length > 0);
+  const regularSeasonCount = isTVShow ? (item.seasons?.filter((season) => season.season_number > 0).length ?? 0) : 0;
 
   // Read every render, not memoised: isSeasonWatched keeps one identity while
   // the watched flags behind it change.
@@ -182,6 +190,9 @@ export function WatchlistDetailDialog({
                 {isTVShow ? 'TV Show' : 'Movie'}
               </span>
               {item.year ? <span>• {item.year}</span> : null}
+              {regularSeasonCount > 0 ? (
+                <span>• {regularSeasonCount} season{regularSeasonCount === 1 ? '' : 's'}</span>
+              ) : null}
               {item.genres && item.genres.length > 0 ? (
                 <span>• {item.genres.join(', ')}</span>
               ) : null}
@@ -219,6 +230,20 @@ export function WatchlistDetailDialog({
                   </span>
                 )
               ) : null}
+              {isTVShow && item.series_status && status !== item.series_status ? (
+                <SeriesStatusPill status={item.series_status} className="px-2.5 py-1" />
+              ) : null}
+              {shelf && shelf.toLowerCase() !== status?.toLowerCase() ? (
+                <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  Shelf: {shelf}
+                </span>
+              ) : null}
+              {isFavourite ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
+                  <Heart className="h-3 w-3 fill-current" aria-hidden="true" />
+                  Favourite
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -254,12 +279,6 @@ export function WatchlistDetailDialog({
               className="text-muted-foreground"
               iconClassName="text-muted-foreground"
             />
-          ) : null}
-
-          {isTVShow && item.series_status ? (
-            <div>
-              <SeriesStatusPill status={item.series_status} className="px-2.5 py-1" />
-            </div>
           ) : null}
 
           <LibraryActions key={`${item.category}:${item.id}`} item={item} />
@@ -369,12 +388,15 @@ export function WatchlistDetailDialog({
     instanceId,
     isTVShow,
     hasSeasons,
+    regularSeasonCount,
     item,
     selectedSeason,
     trailer.key,
     trailer.title,
     trailer.label,
     status,
+    shelf,
+    isFavourite,
     upcomingReleaseDate,
     isScheduled,
     syncing,

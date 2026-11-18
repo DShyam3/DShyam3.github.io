@@ -175,6 +175,10 @@ const ALL_PLATFORMS = [
   'Apple TV+',
   'BBC iPlayer',
   'ITVX',
+  'NOW',
+  'Paramount+',
+  'Channel 4',
+  'Crunchyroll',
   'Online',
 ];
 
@@ -272,8 +276,10 @@ const Watchlist = () => {
     }
   };
   const [searchQuery, setSearchQuery] = useState('');
-  // A search looks across every shelf, so a finished title is still found
-  // from Watching.
+  const [searchAllShelves, setSearchAllShelves] = useState(true);
+  // A search looks across every shelf by default, so a finished title is
+  // still found from Watching; picking a shelf narrows the search without
+  // clearing what was typed.
   const searching = searchQuery.trim() !== '';
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
@@ -476,8 +482,8 @@ const Watchlist = () => {
     const typed = watchlist.filter((item) => matchesLibraryType(item, libraryType));
     // Hidden and Stopped watching are the owner's own shelves.
     const isPrivate = (item: WatchlistItem) => (MORE_SHELVES as readonly string[]).includes(shelfByItem.get(titleKey(item)) ?? '');
+    if (searching && searchAllShelves) return isAdmin ? typed : typed.filter((item) => !isPrivate(item));
     if (!isAdmin && (MORE_SHELVES as readonly string[]).includes(selectedCategory)) return [];
-    if (searching) return isAdmin ? typed : typed.filter((item) => !isPrivate(item));
     const onShelf = typed.filter((item) => gridShelfOf(item) === selectedCategory);
     if (selectedCategory !== 'Upcoming') return onShelf;
     // Soonest first; a title with no known date goes last.
@@ -486,7 +492,7 @@ const Watchlist = () => {
       .map((item) => ({ item, date: nextAirDate(item, today) }))
       .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.item.title.localeCompare(b.item.title))
       .map(({ item }) => item);
-  }, [watchlist, libraryType, searching, shelfByItem, gridShelfOf, selectedCategory, isAdmin]);
+  }, [watchlist, libraryType, searching, searchAllShelves, shelfByItem, gridShelfOf, selectedCategory, isAdmin]);
 
   const platformCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -711,13 +717,31 @@ const Watchlist = () => {
 
   const categoryCounts = useMemo(() => {
     const counts = Object.fromEntries(SHELVES.map((shelf) => [shelf, 0])) as Record<Shelf, number>;
-    counts.Favourites = favourites.filter((favourite) => libraryType === 'all' || favourite.media_type === libraryType).length;
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    counts.Favourites = favourites.filter((favourite) =>
+      (libraryType === 'all' || favourite.media_type === libraryType) &&
+      (!normalizedQuery || favourite.title.toLowerCase().includes(normalizedQuery)),
+    ).length;
     watchlist.forEach((item) => {
       const shelf = shelfByItem.get(titleKey(item));
-      if (shelf && matchesLibraryType(item, libraryType)) counts[shelf]++;
+      if (
+        shelf &&
+        matchesLibraryType(item, libraryType) &&
+        (!normalizedQuery || item.title.toLowerCase().includes(normalizedQuery))
+      ) {
+        counts[shelf]++;
+      }
     });
     return counts;
-  }, [watchlist, favourites, shelfByItem, libraryType]);
+  }, [watchlist, favourites, shelfByItem, libraryType, searchQuery]);
+
+  const totalSearchMatches = useMemo(() => {
+    if (!searching) return 0;
+    const visibleShelves = isAdmin
+      ? SHELVES.filter((s) => s !== 'Favourites')
+      : MAIN_SHELVES.filter((s) => s !== 'Favourites');
+    return visibleShelves.reduce((sum, shelf) => sum + categoryCounts[shelf], 0);
+  }, [searching, isAdmin, categoryCounts]);
 
   // Reset visible count when filters change
   useEffect(() => {
@@ -1054,22 +1078,45 @@ const Watchlist = () => {
         </div>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Select value={selectedCategory} onValueChange={(value) => {
-          const shelf = value as Shelf;
-          setSelectedCategory(shelf);
-          setSortOrder(SHELF_SORTS[shelf][0] ?? 'alphabetical');
-          setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); setSearchQuery('');
-        }}>
-          {/* A search covers every shelf, so the picker says so; picking a
-              shelf clears the search and opens that shelf. */}
+        <Select
+          value={searching && searchAllShelves ? '__all__' : selectedCategory}
+          onValueChange={(value) => {
+            if (value === '__all__') {
+              setSearchAllShelves(true);
+              return;
+            }
+            const shelf = value as Shelf;
+            setSelectedCategory(shelf);
+            setSortOrder(SHELF_SORTS[shelf][0] ?? 'alphabetical');
+            setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null);
+            if (searching && shelf !== 'Favourites') {
+              setSearchAllShelves(false);
+            } else {
+              setSearchQuery('');
+              setSearchAllShelves(true);
+            }
+          }}
+        >
+          {/* A search covers every shelf by default; picking a shelf narrows
+              an active search to that shelf instead of clearing it. */}
           <SelectTrigger aria-label="Library shelf" className="h-11 w-[210px] shrink-0 text-sm">
             {/* Always given children: Radix portals the picked item's text in
                 otherwise, and switching between the two crashes the tree. */}
             <SelectValue>
-              {searching ? 'All shelves' : <span className="flex items-center gap-2">{getCategoryIcon(selectedCategory)}{selectedCategory} ({categoryCounts[selectedCategory]})</span>}
+              {searching && searchAllShelves
+                ? `All shelves (${totalSearchMatches})`
+                : <span className="flex items-center gap-2">{getCategoryIcon(selectedCategory)}{selectedCategory} ({categoryCounts[selectedCategory]})</span>}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
+            {searching && (
+              <>
+                <SelectItem value="__all__">
+                  <span className="flex items-center gap-2 font-medium">All shelves ({totalSearchMatches})</span>
+                </SelectItem>
+                <SelectSeparator />
+              </>
+            )}
             {MAIN_SHELVES.map((shelf) => (
               <SelectItem key={shelf} value={shelf}>
                 <span className="flex items-center gap-2">{getCategoryIcon(shelf)}{shelf} ({categoryCounts[shelf]})</span>
@@ -1097,8 +1144,18 @@ const Watchlist = () => {
           {/* 12rem holds the whole placeholder; narrower, the box drops below the category picker. */}
           <div className="relative min-w-[12rem] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input aria-label="Search your whole library" placeholder="Search library…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')} />
-            {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => setSearchQuery('')}><X className="h-4 w-4" /></Button>}
+            <Input
+              aria-label="Search your whole library"
+              placeholder="Search library…"
+              value={searchQuery}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (!searchQuery && next) setSearchAllShelves(true);
+                setSearchQuery(next);
+              }}
+              className={cn('h-11 w-full pl-9', searchQuery && 'pr-10')}
+            />
+            {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label="Clear search" onClick={() => { setSearchQuery(''); setSearchAllShelves(true); }}><X className="h-4 w-4" /></Button>}
           </div>
           <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
             <PopoverTrigger asChild><Button variant="outline" className="h-11 gap-2"><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}</Button></PopoverTrigger>
@@ -1424,7 +1481,7 @@ const Watchlist = () => {
               <p className="text-center py-16 text-muted-foreground">
                 {searching ? `Nothing in your library matches “${searchQuery.trim()}”` : `Nothing on ${selectedCategory} yet`}
               </p>
-            ) : searching ? (
+            ) : searching && searchAllShelves ? (
               <div className="space-y-8">
                 {SHELVES.filter((shelf) => shelf !== 'Favourites').map((shelf) => {
                   // The held shelf, as on a single shelf: a title marked watched

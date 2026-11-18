@@ -21,6 +21,10 @@ describe('getPlatform', () => {
     expect(getPlatform({ flatrate: [{ provider_name: 'Amazon Prime Video' }] })).toBe(
       'Prime Video',
     );
+    expect(getPlatform({ flatrate: [{ provider_name: 'Now TV' }] })).toBe('NOW');
+    expect(getPlatform({ flatrate: [{ provider_name: 'Paramount Plus' }] })).toBe('Paramount+');
+    expect(getPlatform({ free: [{ provider_name: 'All 4' }] })).toBe('Channel 4');
+    expect(getPlatform({ flatrate: [{ provider_name: 'Crunchyroll' }] })).toBe('Crunchyroll');
   });
 
   it('matches case-insensitively', () => {

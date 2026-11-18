@@ -835,3 +835,37 @@ export const filterRecentByWindow = <T extends UpcomingWindowCandidate>(
         return age !== null && age <= 0 && age >= -windowDays;
     });
 };
+
+/** How a season is going out, counted from its episode rows. */
+export interface SeasonRun {
+    total: number;
+    aired: number;
+    /** 'all-at-once' when every dated episode shares one date. */
+    pattern: 'all-at-once' | 'weekly';
+    /** The last episode's date, when every episode has one. */
+    finale: string | null;
+}
+
+/**
+ * Counts a season's episodes, how many are out by `today`, and whether they
+ * drop together or one by one. A season with no episodes, or none dated,
+ * says nothing (null) rather than guessing a pattern.
+ */
+export const seasonRun = (
+    episodes: { release_date?: string | null }[],
+    today: Date,
+): SeasonRun | null => {
+    const dates = episodes.map((ep) => ep.release_date?.slice(0, 10) ?? null);
+    const dated = dates.filter((date): date is string => !!date).sort();
+    if (episodes.length === 0 || dated.length === 0) return null;
+    const aired = dated.filter((date) => {
+        const days = daysUntil(date, today);
+        return days !== null && days <= 0;
+    }).length;
+    return {
+        total: episodes.length,
+        aired,
+        pattern: new Set(dated).size === 1 ? 'all-at-once' : 'weekly',
+        finale: dated.length === dates.length ? dated[dated.length - 1] : null,
+    };
+};

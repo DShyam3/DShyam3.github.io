@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Season } from '@/features/watchlist/useWatchlist';
-import { daysUntil } from '@/features/watchlist/watchlist-utils';
+import { currentSeasonNumber, daysUntil } from '@/features/watchlist/watchlist-utils';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { useAuth } from '@/contexts/AuthContext';
 import { TitleScores } from './TitleScores';
@@ -19,8 +19,8 @@ interface SeasonEpisodeListProps {
     showId: string,
     seasonNumber: number,
     episodeNumber: number,
-  ) => void;
-  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void;
+  ) => void | Promise<void>;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void | Promise<void>;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -92,6 +92,23 @@ export function SeasonEpisodeList({
     ? summarizeRatings(currentSeason.episodes.map((ep) => ep.personal_rating))
     : null;
 
+  /**
+   * Advances to the next unwatched regular season after `completedSeasonNumber`
+   * (or the first unwatched regular season if none follow it).
+   */
+  const advanceAfterSeason = (completedSeasonNumber: number) => {
+    const isWatchedAfter = (season: Season) =>
+      season.season_number === completedSeasonNumber || isSeasonWatched(showId, season);
+    const nextAfter = seasons.find(
+      (season) => season.season_number > completedSeasonNumber && !isWatchedAfter(season),
+    );
+    const nextSeason =
+      nextAfter?.season_number ?? currentSeasonNumber(seasons, isWatchedAfter);
+    if (nextSeason !== undefined) {
+      onSelectSeason(nextSeason);
+    }
+  };
+
   return (
     // The episode list is never its own scroller: it renders in the
     // workspace inspector, which scrolls the whole panel, and a nested
@@ -146,9 +163,24 @@ export function SeasonEpisodeList({
                 key={currentSeason.season_number}
                 label={`Season ${currentSeason.season_number} overall rating`}
                 value={currentSeason.personal_rating}
-                onChange={currentWatchedCount > 0 ? (rating) => onRate(rating, currentSeason.season_number) : undefined}
+                onChange={
+                  currentWatchedCount > 0
+                    ? async (rating) => {
+                        const wasPrompting = promptSeason && rating !== null;
+                        await onRate(rating, currentSeason.season_number);
+                        if (wasPrompting) advanceAfterSeason(currentSeason.season_number);
+                      }
+                    : undefined
+                }
                 prompt={promptSeason ? `Finished season ${currentSeason.season_number} — rate it?` : undefined}
-                onSkip={promptSeason ? () => setSkippedSeasons((prev) => new Set(prev).add(currentSeason.season_number)) : undefined}
+                onSkip={
+                  promptSeason
+                    ? () => {
+                        setSkippedSeasons((prev) => new Set(prev).add(currentSeason.season_number));
+                        advanceAfterSeason(currentSeason.season_number);
+                      }
+                    : undefined
+                }
               />
             )}
             {onRate && episodeRatingSummary && episodeRatingSummary.average !== null && (
@@ -184,8 +216,19 @@ export function SeasonEpisodeList({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  onSelectSeason(currentSeason.season_number);
-                  toggleSeasonWatched(showId, currentSeason.season_number);
+                  const completedNumber = currentSeason.season_number;
+                  const willComplete = !seasonFullyWatched;
+                  const willPromptRating =
+                    willComplete &&
+                    Boolean(onRate) &&
+                    currentSeason.personal_rating == null &&
+                    !skippedSeasons.has(completedNumber);
+                  onSelectSeason(completedNumber);
+                  void Promise.resolve(toggleSeasonWatched(showId, completedNumber)).then(() => {
+                    if (willComplete && !willPromptRating) {
+                      advanceAfterSeason(completedNumber);
+                    }
+                  });
                 }}
                 className="w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-1.5 text-muted-foreground hover:bg-secondary"
               >
@@ -220,12 +263,26 @@ export function SeasonEpisodeList({
                 key={episode.episode_number}
                 onClick={() => {
                   if (!released || !toggleEpisodeWatched) return;
-                  onSelectSeason(currentSeason.season_number);
-                  toggleEpisodeWatched(
-                    showId,
-                    currentSeason.season_number,
-                    episode.episode_number,
-                  );
+                  const completedNumber = currentSeason.season_number;
+                  const willCompleteSeason =
+                    !watched && currentWatchedCount + 1 === currentSeason.episodes.length;
+                  const willPromptRating =
+                    willCompleteSeason &&
+                    Boolean(onRate) &&
+                    currentSeason.personal_rating == null &&
+                    !skippedSeasons.has(completedNumber);
+                  onSelectSeason(completedNumber);
+                  void Promise.resolve(
+                    toggleEpisodeWatched(
+                      showId,
+                      completedNumber,
+                      episode.episode_number,
+                    ),
+                  ).then(() => {
+                    if (willCompleteSeason && !willPromptRating) {
+                      advanceAfterSeason(completedNumber);
+                    }
+                  });
                 }}
                 className={cn(
                   'px-3 py-2 rounded-lg transition-[background-color,opacity,border-color] duration-200 border-l-4',

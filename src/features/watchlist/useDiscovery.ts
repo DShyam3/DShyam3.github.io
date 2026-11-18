@@ -10,6 +10,7 @@ import {
   discoveryKey,
   discoverySeeds,
   interleaveBySeed,
+  interleaveUpcoming,
   weekIndex,
   type DiscoveryItem,
   type DiscoveryMedia,
@@ -81,14 +82,12 @@ async function load(sources: Source[]): Promise<Loaded> {
   };
 }
 
-const mediaFor = (type: LibraryType): DiscoveryMedia[] => (type === 'all' ? ['movie', 'tv'] : [type]);
-
 /**
- * One page of suggestions. Pages walk the seed list four at a time; once it
- * runs out, they continue with TMDB's most-voted titles, page by page, so
- * the list does not end.
+ * One page of suggestions for one media type (`movie` or `tv`). Pages walk
+ * that media type's seed list four at a time; once it runs out, they continue
+ * with TMDB's most-voted titles of that media type, page by page.
  */
-function sourcesForPage(seeds: DiscoverySeed[], page: number, type: LibraryType): Source[] {
+function sourcesForMediaPage(seeds: DiscoverySeed[], page: number, media: DiscoveryMedia): Source[] {
   const slice = seeds.slice(page * SEEDS_PER_PAGE, (page + 1) * SEEDS_PER_PAGE);
   if (slice.length > 0) {
     return slice.map((seed) => ({
@@ -102,7 +101,7 @@ function sourcesForPage(seeds: DiscoverySeed[], page: number, type: LibraryType)
     }));
   }
   const fillerPage = page - Math.ceil(seeds.length / SEEDS_PER_PAGE) + 1;
-  return mediaFor(type).map((media) => ({
+  return [{
     endpoint: `discover/${media}`,
     params: { sort_by: 'vote_count.desc', include_adult: 'false', page: String(fillerPage) },
     media,
@@ -110,7 +109,7 @@ function sourcesForPage(seeds: DiscoverySeed[], page: number, type: LibraryType)
     shortReason: 'Widely loved',
     kind: 'recommendation' as const,
     seedKey: `filler:${media}`,
-  }));
+  }];
 }
 
 export interface DiscoveryFranchiseGroup {
@@ -192,29 +191,54 @@ export function useDiscovery(type: LibraryType) {
   // Seeds are read at fetch time rather than keyed on: adding a suggestion
   // changes the library, and must not throw the pages already loaded away.
   // Ranking walks the whole library, so only when its inputs change.
+  // Built separately for films and series so All, Films and Series read from
+  // the exact same movie and TV caches: every film shown in All is in Films,
+  // and every series shown in All is in Series.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
-  const seeds = useMemo(() => discoverySeeds(watchlist, favourites, today, type), [watchlist, favourites, type, week]);
-  const seedsRef = useRef(seeds);
+  const movieSeeds = useMemo(() => discoverySeeds(watchlist, favourites, today, 'movie'), [watchlist, favourites, week]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+  const tvSeeds = useMemo(() => discoverySeeds(watchlist, favourites, today, 'tv'), [watchlist, favourites, week]);
+  const movieSeedsRef = useRef(movieSeeds);
+  const tvSeedsRef = useRef(tvSeeds);
   // Declared before the query, so the first fetch already sees these seeds.
-  useEffect(() => { seedsRef.current = seeds; });
+  useEffect(() => {
+    movieSeedsRef.current = movieSeeds;
+    tvSeedsRef.current = tvSeeds;
+  });
 
   // The seed list is fixed when the first page loads and travels with the
   // pages, so it survives the cache: adding or "Seen it"-ing a title
   // reorders the seeds, and paging must not repeat or skip one -- also after
   // leaving Discover and coming back, or switching type and back.
-  const recommendations = useInfiniteQuery({
-    // isAdmin in the key: a visitor's pages (public scores, but no owner-only
-    // shelves) must not be what the owner gets after signing in.
-    queryKey: ['watchlist', 'discovery', 'recommendations', type, week, isAdmin],
+  const movieRecommendations = useInfiniteQuery({
+    // isAdmin in the key: pages seeded as a visitor (no scores) must not be
+    // what the owner gets after signing in.
+    queryKey: ['watchlist', 'discovery', 'recommendations', 'movie', week, isAdmin],
     // Ratings decide the first seeds (8 and up lead, under 6 never seed), so
     // the first page waits for them rather than freezing without them.
-    enabled: !loading && ratingsStatus !== 'loading',
+    enabled: !loading && ratingsStatus !== 'loading' && type !== 'tv',
     staleTime: 60 * 60 * 1000,
     retry: false,
     initialPageParam: { page: 0, seeds: null } as PageParam,
     queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
-      const pageSeeds = pageParam.seeds ?? seedsRef.current;
-      const loaded = await load(sourcesForPage(pageSeeds, pageParam.page, type));
+      const pageSeeds = pageParam.seeds ?? movieSeedsRef.current;
+      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'movie'));
+      return { ...loaded, seeds: pageSeeds };
+    },
+    getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
+      lastParam.page + 1 < MAX_PAGES ? { page: lastParam.page + 1, seeds: lastPage.seeds } : undefined
+    ),
+  });
+
+  const tvRecommendations = useInfiniteQuery({
+    queryKey: ['watchlist', 'discovery', 'recommendations', 'tv', week, isAdmin],
+    enabled: !loading && ratingsStatus !== 'loading' && type !== 'movie',
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+    initialPageParam: { page: 0, seeds: null } as PageParam,
+    queryFn: async ({ pageParam }): Promise<SuggestionPage> => {
+      const pageSeeds = pageParam.seeds ?? tvSeedsRef.current;
+      const loaded = await load(sourcesForMediaPage(pageSeeds, pageParam.page, 'tv'));
       return { ...loaded, seeds: pageSeeds };
     },
     getNextPageParam: (lastPage, _pages, lastParam): PageParam | undefined => (
@@ -226,19 +250,27 @@ export function useDiscovery(type: LibraryType) {
   const endDate = new Date(today); endDate.setDate(endDate.getDate() + 180);
   const end = endDate.toLocaleDateString('en-CA');
   const upcoming = useQuery({
-    queryKey: ['watchlist', 'discovery', 'upcoming', type, start],
+    queryKey: ['watchlist', 'discovery', 'upcoming', start],
     enabled: !loading,
     staleTime: 60 * 60 * 1000,
     retry: false,
     queryFn: () => load([
-      ...(type !== 'tv' ? [{ endpoint: 'discover/movie', params: { region: 'GB', 'release_date.gte': start, 'release_date.lte': end, with_release_type: '3', sort_by: 'popularity.desc', include_adult: 'false' }, media: 'movie' as const, reason: 'In UK cinemas soon', kind: 'upcoming' as const }] : []),
-      ...(type !== 'movie' ? [{ endpoint: 'discover/tv', params: { 'first_air_date.gte': start, 'first_air_date.lte': end, sort_by: 'popularity.desc', include_adult: 'false' }, media: 'tv' as const, reason: 'New series', kind: 'upcoming' as const }] : []),
+      { endpoint: 'discover/movie', params: { region: 'GB', 'release_date.gte': start, 'release_date.lte': end, with_release_type: '3', sort_by: 'popularity.desc', include_adult: 'false' }, media: 'movie' as const, reason: 'In UK cinemas soon', kind: 'upcoming' as const },
+      { endpoint: 'discover/tv', params: { 'first_air_date.gte': start, 'first_air_date.lte': end, sort_by: 'popularity.desc', include_adult: 'false' }, media: 'tv' as const, reason: 'New series', kind: 'upcoming' as const },
     ]),
   });
 
-  const recommendationItems = useMemo(
-    () => (recommendations.data?.pages ?? []).flatMap((page) => interleaveBySeed(page.items)),
-    [recommendations.data],
+  const recommendationItems = useMemo(() => {
+    const movieList = (movieRecommendations.data?.pages ?? []).flatMap((page) => interleaveBySeed(page.items));
+    const tvList = (tvRecommendations.data?.pages ?? []).flatMap((page) => interleaveBySeed(page.items));
+    if (type === 'movie') return movieList;
+    if (type === 'tv') return tvList;
+    return interleaveUpcoming([...movieList, ...tvList]);
+  }, [type, movieRecommendations.data, tvRecommendations.data]);
+
+  const upcomingItems = useMemo(
+    () => (upcoming.data?.items ?? []).filter((item) => type === 'all' || item.media === type),
+    [upcoming.data?.items, type],
   );
 
   // --- "Have you already watched?" grouped franchises & spin-offs ----------
@@ -369,10 +401,16 @@ export function useDiscovery(type: LibraryType) {
 
   // Kept in the browser first, so it holds even if the table write fails;
   // the effect above moves it into the table for the owner.
-  const dismiss = (media: DiscoveryMedia, id: number) => {
-    const key = discoveryKey(media, id);
-    setLocalDismissed((prev) => { const next = new Set(prev).add(key); writeDismissed(next); return next; });
+  const dismissMany = (items: ReadonlyArray<{ media: DiscoveryMedia; id: number }>) => {
+    if (items.length === 0) return;
+    setLocalDismissed((prev) => {
+      const next = new Set(prev);
+      for (const item of items) next.add(discoveryKey(item.media, item.id));
+      writeDismissed(next);
+      return next;
+    });
   };
+  const dismiss = (media: DiscoveryMedia, id: number) => dismissMany([{ media, id }]);
   // Visitors can only reset their own browser's dismissals; the owner's
   // table is theirs alone to clear.
   const resetDismissed = async () => {
@@ -385,9 +423,23 @@ export function useDiscovery(type: LibraryType) {
   };
   const resettable = localDismissed.size + (ownerSynced ? remote.data?.length ?? 0 : 0);
 
+  const activeQueries = type === 'movie'
+    ? [movieRecommendations]
+    : type === 'tv'
+      ? [tvRecommendations]
+      : [movieRecommendations, tvRecommendations];
+  const isPending = activeQueries.every((q) => q.isPending);
+  const isError = activeQueries.every((q) => q.isError);
+  const partlyFailed = !isError && (
+    activeQueries.some((q) => q.isError) ||
+    activeQueries.some((q) => q.data?.pages.some((page) => page.failed) ?? false)
+  );
+  const hasMore = activeQueries.some((q) => q.hasNextPage);
+  const loadingMore = activeQueries.some((q) => q.isFetchingNextPage);
+
   return {
     recommendations: curateDiscovery(recommendationItems, watchlist, favourites, dismissed, franchiseEntryKeys),
-    upcoming: curateDiscovery(upcoming.data?.items ?? [], watchlist, favourites, dismissed),
+    upcoming: curateDiscovery(upcomingItems, watchlist, favourites, dismissed),
     franchises: franchiseGroups,
     franchisesLoading:
       loading ||
@@ -395,18 +447,27 @@ export function useDiscovery(type: LibraryType) {
       (type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending),
     hasMoreFranchises: type !== 'tv' && collectionLimit < libraryCollections.length,
     loadMoreFranchises: () => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH),
-    loading: loading || ratingsStatus === 'loading' || recommendations.isPending,
+    loading: loading || ratingsStatus === 'loading' || isPending,
     upcomingLoading: loading || upcoming.isPending,
-    failed: recommendations.isError,
-    partlyFailed: !recommendations.isError && (recommendations.data?.pages.some((page) => page.failed) ?? false),
+    failed: isError,
+    partlyFailed,
     upcomingFailed: upcoming.isError || Boolean(upcoming.data?.failed),
-    hasMore: recommendations.hasNextPage,
-    loadingMore: recommendations.isFetchingNextPage,
-    loadMore: () => { void recommendations.fetchNextPage(); },
+    hasMore,
+    loadingMore,
+    loadMore: () => {
+      for (const q of activeQueries) {
+        if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
+      }
+    },
     // Only after a total failure, which is one page: refetching every loaded
     // page at once would run into tmdb-proxy's per-minute limit.
-    retry: () => { void recommendations.refetch(); },
+    retry: () => {
+      for (const q of activeQueries) {
+        if (q.isError) void q.refetch();
+      }
+    },
     dismiss,
+    dismissMany,
     resetDismissed,
     dismissedCount: resettable,
     synced: ownerSynced,

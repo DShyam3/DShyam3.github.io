@@ -85,7 +85,7 @@ interface PlatformBadgeProps {
   className?: string;
 }
 
-const OTHER_SERVICES_HINT = 'Not on Netflix, Prime Video, Disney+, Apple TV+, BBC iPlayer or ITVX';
+const OTHER_SERVICES_HINT = 'Not on Netflix, Prime Video, Disney+, Apple TV+, BBC iPlayer, ITVX, NOW, Paramount+, Channel 4 or Crunchyroll';
 
 /**
  * The sync stores "Online" for a title on none of the tracked services --

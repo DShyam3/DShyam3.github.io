@@ -18,6 +18,7 @@ import {
   useUpcomingMovies,
   useWatchlistEvents,
   useRecentAnnouncements,
+  useFeaturedExtras,
   type WatchlistNewsEpisode,
 } from '@/features/watchlist/useWatchlistNews';
 import {
@@ -34,6 +35,8 @@ import {
   movieReleaseSentence,
   relativeDay,
   seasonPremiereSentence,
+  seasonRun,
+  type SeasonRun,
   type UpdatesFeedRow,
   type UpdatesWindow,
 } from '@/features/watchlist/watchlist-utils';
@@ -46,7 +49,7 @@ import './WatchlistNews.css';
 import { DiscoverySection } from '@/features/watchlist/components/DiscoverySection';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { LIBRARY_TYPE_OPTIONS, type LibraryType, isFollowedState } from '@/features/watchlist/library-state';
-import { YourWeek } from '@/features/watchlist/components/YourWeek';
+import { WeekStrip, YourWeek } from '@/features/watchlist/components/YourWeek';
 
 /** Which entity a click on a card or row resolves to -- looked up in
  *  `useWatchlist()`'s list by both fields, since a TV show and a movie id
@@ -224,32 +227,55 @@ interface FeaturedRow extends EntityRef {
   platform: string | null;
   date: string;
   line: string;
+  /** Set for a season premiere, so the card can describe that season's run. */
+  seasonNumber?: number;
+}
+
+/** "Weekly · 3 of 8 out · finale Wed 31 Dec", from the season's own rows. */
+function seasonRunLine(run: SeasonRun): string {
+  const parts = [run.pattern === 'all-at-once' ? 'All at once' : 'Weekly'];
+  parts.push(run.aired >= run.total ? `${run.total} episode${run.total === 1 ? '' : 's'}` : `${run.aired} of ${run.total} out`);
+  if (run.finale && run.pattern === 'weekly') parts.push(`finale ${shortDay(run.finale)}`);
+  return parts.join(' · ');
 }
 
 /**
  * One title worth your attention: the poster opens it, a quiet button does
- * too. The time, date and platform share one line so nothing crowds the
- * action.
+ * too. Its backdrop fills the card behind a gradient, with the plot and the
+ * season's run beside the poster.
  */
-function FeaturedCard({ featured, onOpen }: { featured: FeaturedRow; onOpen: () => void }) {
+function FeaturedCard({ featured, run, onOpen }: { featured: FeaturedRow; run: SeasonRun | null; onOpen: () => void }) {
   const [broken, setBroken] = useState(false);
+  const [backdropBroken, setBackdropBroken] = useState(false);
+  const { backdrop, overview } = useFeaturedExtras(featured.entityType, featured.entityId);
+  const showBackdrop = !!backdrop && !backdropBroken;
   return (
-    <section aria-labelledby="news-featured-title" className="rounded-3xl border border-border/60 bg-card p-5 sm:p-6">
-      <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Worth your attention</p>
-      <div className="mt-4 flex items-start gap-4 sm:gap-6">
-        <button type="button" onClick={onOpen} aria-label={`${featured.title} — open details`} className="aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-2xl bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-32">
-          {featured.poster && !broken
-            ? <img src={featured.poster} alt="" onError={() => setBroken(true)} className="h-full w-full object-cover" />
-            : <span className="flex h-full items-center justify-center"><Tv className="h-6 w-6 text-muted-foreground" /></span>}
-        </button>
-        <div className="min-w-0 flex-1 space-y-3">
-          <h2 id="news-featured-title" className="text-xl font-semibold leading-tight sm:text-2xl" style={{ textWrap: 'balance' }}>{featured.title}</h2>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <span>{featured.line} · {shortDay(featured.date)}</span>
-            {featured.platform && <PlatformBadge platform={featured.platform} />}
-          </p>
-          <div className="pt-1">
-            <Button variant="outline" onClick={onOpen}>View details</Button>
+    <section aria-labelledby="news-featured-title" className="news-featured relative overflow-hidden rounded-3xl border border-border/60 bg-card p-5 sm:p-6">
+      {showBackdrop && (
+        <>
+          <img src={backdrop} alt="" aria-hidden="true" onError={() => setBackdropBroken(true)} className="news-featured-backdrop pointer-events-none absolute inset-y-0 right-0 h-full w-full object-cover sm:w-3/4" />
+          <div aria-hidden="true" className="news-featured-scrim pointer-events-none absolute inset-0" />
+        </>
+      )}
+      <div className="relative">
+        <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Worth your attention</p>
+        <div className="mt-4 flex items-start gap-4 sm:gap-6">
+          <button type="button" onClick={onOpen} aria-label={`${featured.title} — open details`} className="aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-2xl bg-muted shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-32">
+            {featured.poster && !broken
+              ? <img src={featured.poster} alt="" onError={() => setBroken(true)} className="h-full w-full object-cover" />
+              : <span className="flex h-full items-center justify-center"><Tv className="h-6 w-6 text-muted-foreground" /></span>}
+          </button>
+          <div className="min-w-0 max-w-xl flex-1 space-y-3">
+            <h2 id="news-featured-title" className="text-xl font-semibold leading-tight sm:text-2xl" style={{ textWrap: 'balance' }}>{featured.title}</h2>
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span>{featured.line} · {shortDay(featured.date)}</span>
+              {featured.platform && <PlatformBadge platform={featured.platform} />}
+            </p>
+            {run && <p className="text-xs text-muted-foreground">{seasonRunLine(run)}</p>}
+            {overview && <p className="hidden text-sm leading-relaxed text-foreground/80 sm:line-clamp-3">{overview}</p>}
+            <div className="pt-1">
+              <Button variant="outline" onClick={onOpen}>View details</Button>
+            </div>
           </div>
         </div>
       </div>
@@ -301,7 +327,7 @@ function UpdatesList({
         </p>
         )
       ) : (
-        <div className="watchlist-updates-scroll divide-y divide-border/50">
+        <div className="watchlist-updates-scroll news-updates-grid">
           {rows.map((row) => (
             <UpdateRow
               key={row.key}
@@ -640,10 +666,17 @@ const WatchlistNews = () => {
         platform: typedOutNow[0].platform || null,
         date: typedOutNow[0].date,
         line: typedOutNow[0].kind === 'premiere' ? `Season ${typedOutNow[0].seasonNumber} is out` : 'Out now',
+        seasonNumber: typedOutNow[0].kind === 'premiere' ? typedOutNow[0].seasonNumber : undefined,
       }
     : nextUp
       ? { entityType: nextUp.entityType, entityId: nextUp.entityId, title: nextUp.title, poster: nextUp.poster, platform: nextUp.platform || null, date: nextUp.date, line: nextUp.sentence }
       : undefined;
+  const featuredSeason = featured?.seasonNumber !== undefined
+    ? watchlist
+      .find((item) => item.category === 'TV Shows' && item.id === String(featured.entityId))
+      ?.seasons?.find((season) => season.season_number === featured.seasonNumber)
+    : undefined;
+  const featuredRun = featuredSeason ? seasonRun(featuredSeason.episodes, today) : null;
   const used = new Set<string>(featured ? [`${featured.entityType}:${featured.entityId}`] : []);
   const takeUnique = <T,>(items: T[], refOf: (item: T) => EntityRef, limit: number): T[] => {
     const result: T[] = [];
@@ -686,10 +719,17 @@ const WatchlistNews = () => {
           {newsPanel === 'following' && <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />}
         </div>
         {newsPanel === 'following' ? <>
-          {featured && <FeaturedCard featured={featured} onOpen={() => openDetail(featured)} />}
+          {featured && <FeaturedCard key={`${featured.entityType}:${featured.entityId}`} featured={featured} run={featuredRun} onOpen={() => openDetail(featured)} />}
           {!pinnedLoading && pinnedFailed && <SectionFailure>Could not load the countdown.</SectionFailure>}
           <details className="rounded-2xl border border-border/60 bg-card p-4">
-            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold">Your week · view your schedule</summary>
+            <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-6 gap-y-3 text-sm font-semibold">
+              <span className="shrink-0">Your week · view your schedule</span>
+              {!scheduleLoading && !watchlistLoading && (
+                <span className="hidden min-w-[18rem] flex-1 sm:flex">
+                  <WeekStrip schedule={schedule} watchlist={watchlist} isEpisodeWatched={isEpisodeWatched} />
+                </span>
+              )}
+            </summary>
             <div className="pt-4">
               <YourWeek
                 schedule={schedule}
@@ -714,7 +754,7 @@ const WatchlistNews = () => {
               <p className="px-2 py-3 text-xs text-muted-foreground">{newsWindow === 'week' ? 'Nothing new this week' : 'Nothing new this month'}</p>
             )}
             {visibleOutNow.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="news-card-grid">
                 {visibleOutNow.map((item) => (
                   <NewsPosterCard
                     key={item.key}

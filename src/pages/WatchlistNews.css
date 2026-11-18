@@ -14,3 +14,26 @@
 .news-update-row > span:nth-child(2), .news-update-row > span:nth-child(3) { white-space: normal; overflow-wrap: anywhere; }
 .news-update-row > span:nth-child(4) { display: none; }
 .news-update-row > span:last-child { grid-column: 2; grid-row: 3; justify-self: start; text-align: left; }
+
+/* Updates: one column, two once there is room, so a row's short content
+   does not leave the right half of the pane empty. */
+.curated-news .news-updates-grid { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 1.5rem; }
+.curated-news .news-updates-grid > * { border-bottom: 1px solid hsl(var(--border) / .5); }
+@media (min-width: 1024px) {
+  .curated-news .news-updates-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Featured: the backdrop sits to the right, fading into the card on the left
+   and bottom so the text always reads against the card colour. */
+.news-featured-backdrop { opacity: .55; }
+.news-featured-scrim {
+  background:
+    linear-gradient(90deg, hsl(var(--card)) 0%, hsl(var(--card)) 30%, hsl(var(--card) / .75) 55%, hsl(var(--card) / .15) 100%),
+    linear-gradient(0deg, hsl(var(--card)) 0%, transparent 45%);
+}
+@media (max-width: 639px) {
+  .news-featured-backdrop { opacity: .25; }
+}
+
+/* The week strip lives inside <summary>; keep its marker on the text line. */
+.curated-news details > summary::-webkit-details-marker { display: none; }
