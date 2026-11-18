@@ -121,7 +121,7 @@ COMMENT ON COLUMN "public"."movies"."imdb_id" IS
     'IMDb title id (tt plus 7 to 10 digits), taken from TMDB (movie imdb_id, or tv external_ids.imdb_id). It is the key OMDb is queried by. Null when TMDB has none or the sync has not fetched it.';
 
 COMMENT ON COLUMN "public"."movies"."imdb_rating" IS
-    'IMDb's weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
+    'IMDb''s weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
 
 COMMENT ON COLUMN "public"."movies"."imdb_votes" IS
     'How many IMDb users voted behind imdb_rating; a low count means a noisy rating. From OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known.';
@@ -139,7 +139,7 @@ COMMENT ON COLUMN "public"."tv_shows"."imdb_id" IS
     'IMDb title id (tt plus 7 to 10 digits), taken from TMDB (movie imdb_id, or tv external_ids.imdb_id). It is the key OMDb is queried by. Null when TMDB has none or the sync has not fetched it.';
 
 COMMENT ON COLUMN "public"."tv_shows"."imdb_rating" IS
-    'IMDb's weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
+    'IMDb''s weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
 
 COMMENT ON COLUMN "public"."tv_shows"."imdb_votes" IS
     'How many IMDb users voted behind imdb_rating; a low count means a noisy rating. From OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known.';

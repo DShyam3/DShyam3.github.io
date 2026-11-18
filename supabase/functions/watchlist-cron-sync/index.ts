@@ -952,8 +952,15 @@ serve(async (req) => {
     // logged as a fixed string because its message can carry the URL.
     const omdbStats = { asked: 0, updated: 0, notFound: 0, stoppedByLimit: false }
     const omdbKey = Deno.env.get('OMDB_API_KEY')
+    // Nightly parts and one-title resyncs only, like the trailer and credits
+    // backfills: an unsharded manual run already uses nearly all of the CPU
+    // budget (see 20261006090000), and it would spend a third of OMDb's daily
+    // 1,000 requests on every press.
+    const runOmdb = Boolean(shard || target)
     if (!omdbKey) {
       console.warn(`[Sync ${runLabel}] OMDB_API_KEY is not set; skipping the OMDb score pass.`)
+    } else if (!runOmdb) {
+      console.log(`[Sync ${runLabel}] Full manual run; the OMDb score pass runs in the nightly parts.`)
     } else {
       const staleBefore = Date.now() - OMDB_STALE_AFTER_MS
       const queue = [...movies, ...shows]
@@ -1049,7 +1056,7 @@ serve(async (req) => {
         shard: shard ?? undefined,
         failedTitles,
         changes,
-        omdb: omdbKey ? omdbStats : undefined,
+        omdb: omdbKey && runOmdb ? omdbStats : undefined,
         durationMs,
         // Stopped at the time ceiling: titles past the stopping point were
         // not reached, and are in neither count.

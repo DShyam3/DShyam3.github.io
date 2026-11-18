@@ -10,6 +10,7 @@ import { getPlatform } from './sync-logic';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import { CREDITS_APPEND, pickCreators, pickDirectors, pickTopCast } from './credits';
 import { pickCollection } from './tmdb-score';
+import { isImdbId } from './omdb-scores';
 import { releaseYear } from './watchlist-utils';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
@@ -88,7 +89,7 @@ export function useTMDB() {
                 creators: type === 'tv' ? pickCreators(data.created_by) : null,
                 top_cast: credits ? pickTopCast(credits.cast) : null,
                 // The nightly sync looks the OMDb scores up by this id.
-                imdb_id: /^tt\d{7,10}$/.test(imdbId ?? '') ? imdbId : null,
+                imdb_id: isImdbId(imdbId) ? imdbId : null,
                 // Same pick as the sync, so a film has its series at once.
                 ...(type === 'movie'
                     ? (pickCollection(data) ?? { collection_id: null, collection_name: null })

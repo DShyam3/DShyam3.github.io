@@ -247,9 +247,22 @@ npx supabase secrets set SITE_ORIGIN=https://dshyam3.github.io
 Left unset, `corsAllowOrigin` fails closed: every production browser's request
 is refused, and only the local dev origins still work.
 
-`merchant-logo-cache` is the only function that fetches from hosts outside our
-own infrastructure, and it talks to exactly two — `api.brandfetch.io` and
-`cdn.brandfetch.io`. See the SSRF note in `SECURITY.md`. It needs one secret:
+Three functions fetch from fixed hosts outside our own infrastructure, never
+from a URL a caller supplies: `tmdb-proxy` and `watchlist-cron-sync` call
+`api.themoviedb.org`, `watchlist-cron-sync` also calls `www.omdbapi.com` for
+IMDb, Rotten Tomatoes and Metacritic scores, and `merchant-logo-cache` talks to
+exactly two, `api.brandfetch.io` and `cdn.brandfetch.io`. See the SSRF note in
+`SECURITY.md`.
+
+`watchlist-cron-sync` reads an OMDb key (free at omdbapi.com, 1,000 requests a
+day; the sync asks for at most 300 titles per nightly part). Left unset, the
+sync skips the score pass and everything else runs:
+
+```bash
+npx supabase secrets set OMDB_API_KEY=<key>
+```
+
+`merchant-logo-cache` needs one secret:
 
 ```bash
 npx supabase secrets set BRANDFETCH_CLIENT_ID=<client id>
