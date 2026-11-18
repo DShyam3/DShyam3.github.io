@@ -1,57 +1,52 @@
 # State
 
-Updated 2026-11-18 · Branch `main` · `49a186ec` pushed and deployed (= `origin/main`), plus this STATE.md update, committed locally and not pushed.
+Updated 2026-11-18 · Branch `main` · Head `0ba78391`, pushed to `origin/main` with the owner’s approval (including prior docs commit `6d848708`). Discovery fixes are deployed: Pages run `44376019120` at `0ba78391` succeeded.
 
-## Landed (Watchlist redesign, pushed and deployed)
+## Deployed — Discovery fixes (`0ba78391`)
 
-**Watchlist News and Library redesign: `63fa21b6`**, with `49a186ec` docs(state). Pushed `3d17b507..49a186ec` with the owner's go-ahead; Pages run 44306812884 succeeded.
+- `useTMDB.ts`, `discovery-add.ts`, `DiscoverySection.tsx`: Discover preserves validated series status and fetched director, creator and cast details. Seen it puts a fully watched ended/cancelled series in Finished rather than Up to date.
+- `discovery.ts`, `DiscoverySection.tsx`: Coming soon alternates eligible films and series before its 12-tile limit, preserves each source's order, and fills remaining slots from whichever list remains. Regression tests cover these behaviours and missing versus empty credits.
+- FEATURES.md describes the tree. No schema or Edge Function changes. No historical data was changed.
+- Still open: signed-in browser writes and production behaviour verification. Commit/push and deployment are confirmed.
 
-- News: Following and Discover tabs; All / Films / Series switch. Discover mixes five seed groups; Show more continues with the next seeds after leaving and returning. Recommendations wait for the owner's ratings.
-- Library: status shelves with a hint line; search groups results by shelf ("All shelves"); shelves hold while a detail is open; Finished sorts by Recently watched, series by their latest watched episode.
-- Ratings: tap picker and prompts; stored in the owner-only `watchlist_ratings` table and read by a separate owner query, never in the public library read. Rating controls show only once ratings have loaded.
-- Removed dead code: `UpNextRail.tsx`, `CountdownCard.tsx`, `useUpNext.ts`, about 120 lines of column-workspace CSS, the Up Next warm-up read.
-- Hosted migrations applied (project `yvtiybyuifkiwyrnjebe`, owner-approved; the commit is unchanged from them): `20261117193741_watchlist_history_ratings`, `20261118074402_watchlist_dismissed_suggestions`, `20261118074422_watchlist_private_ratings`. The public `personal_rating` columns are gone. The live site never read them, so it is not broken meanwhile.
-- Hosted `tmdb-proxy` v14 already allows the discover and recommendations routes, so no function deploy is needed.
-- Backup `git stash` entry `stash@{0}` "watchlist-redesign-before-ff" (pre-merge copy) stays until the owner says to drop it.
-
-## Checks (2026-11-18, committed tree `63fa21b6`)
+## Checks — Discovery fixes, 2026-11-18
 
 | Check | Result |
 |---|---|
 | `npm run lint` | 0 errors, 0 warnings |
 | `npm run typecheck` / `typecheck:functions` | pass / pass |
-| `npx vitest run` | 2,609 / 2,609 (89 files) |
+| Watchlist and Supabase tests | 312/312, 18 files |
 | `npm run build` | pass |
+| Pages CI `44376019120` at `0ba78391` | lint, both typechecks, full Test, Build and Deploy passed; full test count not inspected |
 | `graphify update .` | run |
-| Hosted advisors (security, performance) | nothing for the new objects |
+| Reviewer (high reasoning tier) | no actionable findings in the scoped fixes |
+| `npm run ship-check` | 91/100; Do not launch. Existing airport-code AWS-key false positive, dependency advisories, N+1 and other repository findings remain unresolved |
 
-Browser-verified signed out, desktop, local dev server against hosted, no console errors: Finished sort puts "Don't Trust the B---- in Apartment 23" second, after 22 Jump Street; Discover leave-and-return then Show more loads the next four seeds; grouped search "the" shows To watch 41, Upcoming 1, Up to date 2, Finished 4.
+Local results above come from this session. CI subsequently passed the full test suite; its count was not inspected. Signed-in browser writes remain unverified.
 
-Production, signed out, desktop, after deploy: Finished (78) sorted Recently watched with "Don't Trust the B---- in Apartment 23" second; the view read returns 200 and no ratings read is made; Discover shows 12 Coming soon and 72 suggestion tiles, all tmdb-proxy calls 200. The only console errors are the two 404 document responses GitHub Pages gives deep links (SPA fallback).
+## Deployed baseline
 
-NOT verified: anything signed in as admin (rating a film, season and episode; Seen it from Discover; favourite toggle; "Not interested" sync; ratings read back from `watchlist_ratings`); light mode; a real phone.
+- Watchlist redesign `63fa21b6`, with docs `49a186ec`, deployed by Pages run 44306812884: Following/Discover, status shelves, grouped search, stable shelf while details are open, Recently watched ordering, owner-only ratings, and cached recommendation seeds.
+- Hosted migrations applied, owner-approved: `20261117193741_watchlist_history_ratings`, `20261118074402_watchlist_dismissed_suggestions`, `20261118074422_watchlist_private_ratings`. Public rating columns are gone. `tmdb-proxy` v14 supports discovery.
+- Baseline checks 2026-11-18: lint 0/0, both typechecks, build, graphify; full suite 2,609/2,609 (89 files); hosted advisors found nothing for the new objects.
+- Baseline signed-out production desktop: Finished (78) sorted Recently watched; public view returns 200 with no ratings read; Discover has 12 Coming soon and 72 suggestions, proxy calls 200. Only console errors were GitHub Pages' deep-link document 404s before SPA fallback.
+- NOT verified: signed-in rating film/season/episode and reload, Seen it, favourite toggle, dismissal sync; light mode; real phone. Prior local signed-out desktop checks covered grouped search and Discover leave/return paging.
+- Credits and typed title identity: `12bb88d9` and `3d17b507` deployed, Pages run 44206083694; hosted credits migration `20261118001210`, cron sync v17. Backfill: 952/952 films, 341/342 shows; remaining gaps are TMDB's, including Cyberpunk: Edgerunners 2 (404). Show creator/cast rendering, light theme and real phone remain unverified.
 
 ## Next
 
-1. Signed-in owner check on production (the NOT-verified list above).
-2. The plan's "Watchlist News and Library — what is left" items: see `REHAUL_PLAN.md`, not copied here.
+1. Verify the deployed Discovery fixes in production: mixed Coming soon results and preserved status/credits on add.
+2. Signed-in owner browser check: Seen it for an ended show, saved credits, ratings and reload, favourites, and cross-device dismissal sync.
+3. Continue `REHAUL_PLAN.md` → “Watchlist News and Library — what is left”.
 
-## Landed (credits session, pushed and deployed)
+## Blockers and retained work
 
-- `12bb88d9` fix(watchlist): a film and a show that share a row id are told apart (`TitleRef`, `src/features/watchlist/title-ref.ts`).
-- `3d17b507` feat(watchlist): directors, creators and top cast in a title's details; FEATURES.md "Credits" bullet. Pushed `e3708d80..3d17b507`; Pages run 44206083694 succeeded. Hosted migration `watchlist_credits` applied as `20261118001210`; `watchlist-cron-sync` v17 deployed.
-- Backfill complete 2026-11-18: 952/952 films and 341/342 shows have credits. Gaps are TMDB's: 2 films with empty cast, 4 with no director, 59 shows with no "Created by", 1 empty show, and Cyberpunk: Edgerunners 2 (TMDB 404s tv/326788, pre-existing).
-- NOT verified: a show's "Created by" and cast rendered in the production dialog (data is in the rows; UI checked for a film only); light theme; a real phone.
-- The credits worktree `.claude/worktrees/watchlist-credits` and branch `feat/watchlist-credits` are deleted; that session owns nothing in the tree.
-
-## Blockers
-
-- Parallel sessions share one checkout, and cloud sessions push to `main`: fetch first, one committer. Keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
-- Left uncommitted on purpose, not this work's: `.claude/launch.json` (another session's preview entries), the REHAUL_PLAN.md section "Part 4 — Personal tracking expansion" (owner unknown), untracked drafts `SITE_PLAN.md`, `google_implementation_redesign.md` and `gpt_implementation redesign.md`.
-- Worktree `.claude/worktrees/affectionate-lamarr-f2d2cb` (detached at d46bdecf), owner unknown.
+- Parallel sessions share the checkout: fetch first, one committer. Keep `backup/pre-rebase-2026-11-03` until signed-in production is verified and stash `watchlist-redesign-before-ff` until the owner says to drop it.
+- Preserve unrelated `.claude/launch.json`, REHAUL_PLAN.md Part 4 Personal tracking expansion, and untracked `SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`.
+- `.claude/worktrees/affectionate-lamarr-f2d2cb` is detached at d46bdecf, owner unknown. Credits worktree/branch were deleted and own nothing in this tree.
 
 ## Open risks
 
-- Hosted `site_content` `about_me_1` / `about_me_2` have `section` NULL, so About shows the `site.json` fallback.
+- Hosted About text rows have `section` NULL, so About uses the `site.json` fallback.
 - Warm-up sends about 30 anonymous reads, including the full Watchlist library.
-- Most watched episodes have no watch date: 2,447 of 2,532 on hosted (earliest dated 2026-09-13), so older finished series sort after dated titles under Recently watched.
+- 2,447 of 2,532 watched episodes have no watch date (earliest dated 2026-09-13); older finished series sort after dated titles under Recently watched.
