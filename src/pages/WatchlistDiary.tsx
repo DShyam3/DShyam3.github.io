@@ -4,6 +4,7 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { NativeSelect } from '@/components/ui/native-select';
 import { useAuth } from '@/contexts/AuthContext';
 import { DiaryList } from '@/features/watchlist/components/diary/DiaryList';
+import { WatchHistoryImport } from '@/features/watchlist/components/import/WatchHistoryImport';
 import { YearReviewView } from '@/features/watchlist/components/diary/YearReviewView';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
@@ -82,7 +83,9 @@ export default function WatchlistDiary() {
             );
           })}
         </nav>
-        <div data-slot="diary-actions" />
+        <div data-slot="diary-actions" className="ml-auto">
+          <WatchHistoryImport />
+        </div>
       </header>
 
       {isPending && (

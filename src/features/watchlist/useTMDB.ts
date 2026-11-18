@@ -184,10 +184,25 @@ export function useTMDB() {
         }
     }, [fetchTMDB]);
 
+    /**
+     * The same search as `search`, returned rather than put in state, and
+     * throwing when the request fails, so a batch (the history import) can
+     * tell "TMDB found nothing" from "the call failed" and retry the latter.
+     */
+    const searchTitles = useCallback(async (query: string, type: 'TV Shows' | 'Movies'): Promise<TMDBResult[]> => {
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery) return [];
+        const endpoint = type === 'Movies' ? 'search/movie' : 'search/tv';
+        const data = await fetchTMDB<TMDBSearchResponse>(endpoint, { query: trimmedQuery });
+        const mediaType: TMDBResult['media_type'] = type === 'Movies' ? 'movie' : 'tv';
+        return (data.results || []).slice(0, 10).map((item) => ({ ...item, media_type: mediaType }));
+    }, [fetchTMDB]);
+
     return {
         results,
         loading,
         search,
+        searchTitles,
         searchMulti,
         getPosterUrl,
         getMovieDetails,
