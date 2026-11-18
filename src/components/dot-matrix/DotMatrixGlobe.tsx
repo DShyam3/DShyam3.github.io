@@ -71,28 +71,28 @@ const BORDER_ALPHA_ZOOMED = 0.6;
  */
 const DOT_PALETTE = {
     dark: {
-        unvisited: 'rgba(255, 255, 255, 0.2)',
-        unvisitedHovered: 'rgba(255, 255, 255, 0.6)',
-        visited: 'rgba(255, 186, 38, 1)',
-        visitedHovered: 'rgba(255, 222, 120, 1)',
+        unvisited: 'rgba(237, 227, 207, 0.2)',
+        unvisitedHovered: 'rgba(237, 227, 207, 0.58)',
+        visited: 'rgba(196, 155, 80, 1)',
+        visitedHovered: 'rgba(222, 184, 108, 1)',
         // Cities view: the country is still marked, so its cities stand out of
         // a tinted patch rather than out of the same grey as everywhere else.
-        visitedTint: 'rgba(255, 186, 38, 0.38)',
-        city: 'rgba(255, 222, 120, 1)',
-        // The selection is the one dot in a different hue, the site's own
-        // green, so it never reads as one more gold dot. Its size is unchanged.
-        selected: 'rgba(30, 235, 115, 1)',
-        selectedGlow: 'rgba(30, 235, 115, 0.6)',
+        visitedTint: 'rgba(196, 155, 80, 0.36)',
+        city: 'rgba(216, 134, 48, 1)',
+        // The selection is the one dot in a different hue, matte Indicolite,
+        // so it never reads as one more antique brass dot.
+        selected: 'rgba(46, 166, 178, 1)',
+        selectedGlow: 'rgba(46, 166, 178, 0.5)',
     },
     light: {
-        unvisited: 'rgba(40, 52, 90, 0.18)',
-        unvisitedHovered: 'rgba(40, 60, 130, 0.65)',
-        visited: 'rgba(214, 132, 0, 1)',
-        visitedHovered: 'rgba(170, 92, 0, 1)',
-        visitedTint: 'rgba(214, 132, 0, 0.34)',
-        city: 'rgba(196, 84, 0, 1)',
-        selected: 'rgba(30, 143, 87, 1)',
-        selectedGlow: 'rgba(30, 143, 87, 0.4)',
+        unvisited: 'rgba(31, 25, 36, 0.18)',
+        unvisitedHovered: 'rgba(31, 25, 36, 0.58)',
+        visited: 'rgba(150, 112, 45, 1)',
+        visitedHovered: 'rgba(122, 88, 28, 1)',
+        visitedTint: 'rgba(150, 112, 45, 0.34)',
+        city: 'rgba(179, 98, 18, 1)',
+        selected: 'rgba(15, 100, 109, 1)',
+        selectedGlow: 'rgba(15, 100, 109, 0.38)',
     },
 } as const;
 

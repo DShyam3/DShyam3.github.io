@@ -223,20 +223,23 @@ Proposed tokens, not yet implemented, if this direction is built:
 
 ## Palette
 
-The HSL variables in [src/index.css](src/index.css) are authoritative. Hex values
-below are rounded equivalents for design tools. Decorative colours are blended
-into surfaces; they are not intended as text colours by themselves.
+**Sovereign Folio** — matte architectural surfaces, antique brass framing, warm
+parchment/obsidian-plum grounds, and solid matte enamel route pigments (no
+radial neon colour-fog washes). The HSL variables in [src/index.css](src/index.css)
+are authoritative. Hex values below are rounded equivalents for design tools.
 
 | Role / token | Light | Dark | Use |
 |---|---|---|---|
-| `background` | `#F5F4EF` | `#101413` | Warm ivory / charcoal canvas |
-| `foreground` | `#212C28` | `#F0F0EA` | Primary text |
-| `primary` | `#325D4B` | `#CFE68E` | Primary controls and selection |
-| `sage` | `#A3C884` | `#82A94C` | About, Finance, Recipes |
-| `sky` | `#87C8E8` | `#3F87AB` | Travel, Inventory, Links |
-| `lavender` | `#C1A7EC` | `#8660C3` | Books, Articles, Watchlist, Auth |
-| `peach` | `#F5B389` | `#D57539` | Inspiration, Thoughts |
-| `rose` | `#EBA2B8` | `#B95573` | Photos, Beliefs |
+| `background` | `#EBE4D5` | `#151218` | Warm rag parchment / obsidian-plum canvas |
+| `foreground` | `#1F1924` | `#EDE3CF` | Deep plum-charcoal / warm parchment ink |
+| `primary` | `#6B1D2B` | `#C49B50` | Tudor claret (light) / burnished antique brass (dark) |
+| `brass` | `#96702D` | `#C49B50` | Double-frame focal trim, focus rings, corner ticks |
+| `ribbon` | `#1F1924` | `#EDE0C4` | Active navigation/tab ribbon |
+| `sage` *(Indicolite)* | `#0F646D` | `#278591` | About, Finance, Recipes |
+| `sky` *(Gulf Blue)* | `#1E4B80` | `#5286B8` | Travel, Inventory, Links |
+| `lavender` *(Tyrian Purple)* | `#5E276B` | `#8D569F` | Books, Articles, Watchlist, Auth |
+| `peach` *(Saffron Orange)* | `#B36212` | `#C67825` | Inspiration, Thoughts, Projects |
+| `rose` *(Tudor Crimson)* | `#871F30` | `#AA3649` | Photos, Beliefs |
 
 Keep `positive`, `destructive`, and `chart-1` through `chart-5` separate from
 decorative accents. A rose photo card is not an error; a sage account card is

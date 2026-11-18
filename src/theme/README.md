@@ -69,33 +69,35 @@ with no overflow and 82px of clearance between the two.
 composes them into the ambient page backgrounds, cards, navigation and dialogs.
 The original Doto and Space Mono font families are retained.
 
-The palette uses warm ivory or charcoal foundations, sage/lime primary controls,
-and peach, lavender, sky blue and rose accents. `AppShell` publishes
-`data-section` from the route, giving related pages a consistent accent:
+The palette uses **Sovereign Folio**: warm rag parchment or obsidian-plum
+foundations, antique brass trim (`--brass`), Tudor claret / burnished brass
+primary controls, parchment active ribbons (`--ribbon`), and five matte enamel
+route pigments (Indicolite, Gulf Blue, Tyrian Purple, Saffron Orange, and Tudor
+Crimson, retaining the internal CSS token names `sage`, `sky`, `lavender`,
+`peach`, and `rose` for compatibility). `AppShell` publishes `data-section`
+from the route, giving related pages a consistent enamel accent:
 
-| Accent | Pages |
+| Slot / Pigment | Pages |
 |---|---|
-| Sage | About, Finance, Recipes |
-| Sky | Travel, Links, Inventory |
-| Lavender | Books, Articles, Watchlist, Auth |
-| Peach | Inspiration, Thoughts |
-| Rose | Photos, Beliefs |
+| `sage` (Indicolite) | About, Finance, Recipes |
+| `sky` (Gulf Blue) | Travel, Links, Inventory |
+| `lavender` (Tyrian Purple) | Books, Articles, Watchlist, Auth |
+| `peach` (Saffron Orange) | Inspiration, Thoughts, Projects |
+| `rose` (Tudor Crimson) | Photos, Beliefs |
 
-Shared `Card` and collection `item-card` surfaces inherit the page accent.
-Use `data-palette="sage|sky|lavender|peach|rose"` on a `Card`, or with
-`ambient-card` on a custom panel, for a stronger gradient. The home bento and
-finance summary cards deliberately mix accents. Ordinary rows stay quieter.
+Shared `Card` and collection `item-card` surfaces use matte opaque fills and a
+solid enamel accent stripe rather than translucent radial colour washes. Focal
+panels (`ambient-card` / `data-palette`) receive a double-framed antique brass
+border. Ordinary rows stay quieter.
 
 Decorative palette tokens are separate from `positive`, `destructive` and
 `chart-1..5`; colours never replace a status label or calculation. Text, inputs
-and popovers have their own contrast tokens in both themes. Glass is reserved
-for floating navigation and dialogs; card grids use translucent fills without
-hundreds of blur filters. Reduced transparency uses opaque surfaces, and reduced
-motion disables decorative card movement.
+and popovers have their own contrast tokens in both themes. Reduced motion
+disables decorative card movement.
 
 ## Radii
 
-`--radius` is 0.875rem (14px), with Tailwind `lg`, `md` and `sm` derived from it.
-Shared panels use 24px corners (20px on mobile), collection cards use 16px,
-and navigation/actions use pills. The card grid sizing and scroll ownership
-remain in `src/index.css` and `CardGrid`.
+`--radius` is 0.375rem (6px), with Tailwind `lg`, `md` and `sm` derived from it.
+Shared panels and collection cards use crisp 6px corners (4px on mobile) and
+ruled controls. The card grid sizing and scroll ownership remain in
+`src/index.css` and `CardGrid`.

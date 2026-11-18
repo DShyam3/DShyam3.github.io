@@ -4,8 +4,8 @@
   "description": "Personal index, spatial atlas, reading library, and deterministic ledger.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#080b0a",
-  "theme_color": "#080b0a",
+  "background_color": "#151218",
+  "theme_color": "#151218",
   "icons": [
     {
       "src": "/favicon.ico",
