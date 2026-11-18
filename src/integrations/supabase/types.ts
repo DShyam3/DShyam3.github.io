@@ -2635,6 +2635,27 @@ export type Database = {
           },
         ]
       }
+      uk_bank_holidays: {
+        Row: {
+          date: string
+          region: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          date: string
+          region: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          date?: string
+          region?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tv_shows: {
         Row: {
           genre_ids: number[] | null

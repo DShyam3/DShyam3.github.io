@@ -377,20 +377,19 @@ function useProvideFinanceData() {
       let fetchedHolsInYear: string[] = [];
       const fetchedHolsMap: Record<string, string> = {};
       try {
-        const res = await fetch('https://www.gov.uk/bank-holidays.json');
-        if (!res.ok) throw new Error('Failed to fetch holidays');
-        const data = await res.json();
-
-        const events = (data[region]?.events ?? []) as { date: string; title: string }[];
         const yearStr = settings.taxYear.toString();
-        fetchedHolsInYear = events
-          .filter((e) => e.date.startsWith(yearStr))
-          .map((e) => e.date);
+        const { data, error } = await supabase
+          .from('uk_bank_holidays')
+          .select('date, title')
+          .eq('region', region)
+          .gte('date', `${yearStr}-01-01`)
+          .lte('date', `${yearStr}-12-31`);
+        if (error) throw error;
 
+        const events = data ?? [];
+        fetchedHolsInYear = events.map((e) => e.date);
         events.forEach((e) => {
-          if (e.date.startsWith(yearStr)) {
-            fetchedHolsMap[e.date] = e.title;
-          }
+          fetchedHolsMap[e.date] = e.title;
         });
       } catch (err) {
         console.error('Error fetching bank holidays:', err);
