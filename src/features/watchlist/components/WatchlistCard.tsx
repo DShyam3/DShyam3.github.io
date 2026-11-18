@@ -47,7 +47,9 @@ interface WatchlistCardProps {
   addToSchedule?: (item: Omit<ScheduleEntry, 'id'>) => void;
   removeFromSchedule?: (ref: TitleRef) => void;
   isInSchedule: (ref: TitleRef) => boolean;
-  onMoveToFavourites?: (item: WatchlistItem) => void;
+  /** Whether the title is a favourite; the menu offers the opposite. */
+  isFavourite?: boolean;
+  onToggleFavourite?: (item: WatchlistItem) => void;
   onResync?: (ref: TitleRef) => void;
   syncing?: boolean;
 }
@@ -64,7 +66,8 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   addToSchedule,
   removeFromSchedule,
   isInSchedule,
-  onMoveToFavourites,
+  isFavourite = false,
+  onToggleFavourite,
   onResync,
   syncing,
 }: WatchlistCardProps) {
@@ -89,9 +92,9 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   };
 
   const status = getAutoStatus(item);
-  const holdLabel = item.category === 'Movies'
-    ? (item.watched ? 'Watched' : null)
-    : item.tracking === 'paused' ? 'Paused' : item.tracking === 'dropped' ? 'Dropped' : null;
+  // The status pill already says Watched, Stopped watching or Hidden; a
+  // paused series keeps its shelf status, so it is the one that needs a label.
+  const holdLabel = item.library_state === 'paused' ? 'Paused' : null;
   // A search page on the provider's own site, not a deep link -- see
   // provider-links.ts.
   const watchUrl = providerSearchUrl(item.streaming_platform, item.title);
@@ -204,12 +207,12 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             askDelete({ name: item.title, title: 'Remove from schedule', confirmLabel: 'Remove', description: 'The title stays in your library.', onConfirm: () => removeFromSchedule(item) });
           } else if (addToSchedule) setScheduleDialogOpen(true);
         } : undefined}
-        actions={onMoveToFavourites || onRemove ? (
+        actions={onToggleFavourite || onRemove ? (
           <div className="absolute right-2 top-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="secondary" size="icon" className="h-11 w-11 bg-background/90" aria-label={`Actions for ${item.title}`}><MoreHorizontal className="h-5 w-5" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {onMoveToFavourites && <DropdownMenuItem onSelect={() => onMoveToFavourites(item)}><Heart className="mr-2 h-4 w-4" />Move to favourites</DropdownMenuItem>}
+                {onToggleFavourite && <DropdownMenuItem onSelect={() => onToggleFavourite(item)}><Heart className={cn('mr-2 h-4 w-4', isFavourite && 'fill-current')} />{isFavourite ? 'Remove from favourites' : 'Add to favourites'}</DropdownMenuItem>}
                 {onRemove && <DropdownMenuItem className="text-destructive" onSelect={() => setDeleteConfirmOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Remove from library</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -306,14 +309,6 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         toggleSeasonWatched={toggleSeasonWatched}
         isEpisodeWatched={isEpisodeWatched}
         isSeasonWatched={isSeasonWatched}
-        onMoveToFavourites={
-          onMoveToFavourites
-            ? () => {
-                onMoveToFavourites(item);
-                setDetailOpen(false);
-              }
-            : undefined
-        }
         onResync={onResync ? () => onResync(item) : undefined}
         syncing={syncing}
       />

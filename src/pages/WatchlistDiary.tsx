@@ -38,12 +38,12 @@ export default function WatchlistDiary() {
   const ratings = useMemo(() => {
     const things: RatedThing[] = [];
     for (const item of watchlist) {
-      if (item.category === 'Movies' && item.rating) {
-        things.push({ kind: 'movie', titleId: item.id, title: item.title, poster: item.image_url ?? null, rating: item.rating });
+      if (item.category === 'Movies' && item.personal_rating != null) {
+        things.push({ kind: 'movie', titleId: item.id, title: item.title, poster: item.image_url ?? null, rating: item.personal_rating });
       }
       for (const season of item.seasons ?? []) {
-        if (season.rating) {
-          things.push({ kind: 'season', titleId: item.id, title: item.title, poster: item.image_url ?? null, seasonNumber: season.season_number, rating: season.rating });
+        if (season.personal_rating != null) {
+          things.push({ kind: 'season', titleId: item.id, title: item.title, poster: item.image_url ?? null, seasonNumber: season.season_number, rating: season.personal_rating });
         }
       }
     }

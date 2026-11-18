@@ -11,6 +11,8 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 // quota), only known endpoint shapes actually used by the app are allowed.
 const ALLOWED_ENDPOINT_PATTERNS = [
     /^search\/(movie|tv)$/,
+    /^discover\/(movie|tv)$/,
+    /^(movie|tv)\/\d+\/recommendations$/,
     /^movie\/\d+$/,
     /^tv\/\d+$/,
     /^tv\/\d+\/season\/\d+$/,

@@ -1,17 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Calendar, Tv } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
 import { CARD_GRID } from '@/theme/layout';
-import { CountdownCard } from '@/components/shared/CountdownCard';
-import { UpNextRail } from '@/features/watchlist/components/UpNextRail';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { PlatformBadge } from '@/features/watchlist/components/PlatformLogo';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
-import { useUpNext } from '@/features/watchlist/useUpNext';
 import {
   usePinnedTitle,
   usePremiereSeasonEpisodes,
@@ -45,6 +42,10 @@ import { cn } from '@/lib/utils';
 import { useSchedule, type ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 import { useAuth } from '@/contexts/AuthContext';
 import { SmartScheduleDialog, scheduleReleaseDate } from '@/features/watchlist/components/SmartScheduleDialog';
+import './WatchlistNews.css';
+import { DiscoverySection } from '@/features/watchlist/components/DiscoverySection';
+import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
+import { LIBRARY_TYPE_OPTIONS, type LibraryType } from '@/features/watchlist/library-state';
 import { YourWeek } from '@/features/watchlist/components/YourWeek';
 
 /** Which entity a click on a card or row resolves to -- looked up in
@@ -186,9 +187,75 @@ function UpdateRow({
  *  8.C-bis) that scopes Out Now and Updates (backward) and Upcoming
  *  (forward); see `WatchlistNews`'s toolbar, the only place it is rendered. */
 const NEWS_WINDOW_OPTIONS: { key: UpdatesWindow; label: string }[] = [
-  { key: 'week', label: 'THIS WEEK' },
-  { key: 'month', label: 'THIS MONTH' },
+  { key: 'week', label: 'This week' },
+  { key: 'month', label: 'This month' },
 ];
+
+type NewsPanel = 'following' | 'discover';
+const NEWS_PANEL_OPTIONS: { key: NewsPanel; label: string }[] = [
+  { key: 'following', label: 'Following' },
+  { key: 'discover', label: 'Discover' },
+];
+
+/** Remembered choices; unavailable storage falls back to the default. */
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    return allowed.find((value) => value === stored) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeStored(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The choice resets next visit.
+  }
+}
+
+/** "Wed 18 Nov": the day matters more than the year for something this close. */
+const shortDay = (date: string) =>
+  new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+interface FeaturedRow extends EntityRef {
+  title: string;
+  poster: string | null;
+  platform: string | null;
+  date: string;
+  line: string;
+}
+
+/**
+ * One title worth your attention: the poster opens it, a quiet button does
+ * too. The time, date and platform share one line so nothing crowds the
+ * action.
+ */
+function FeaturedCard({ featured, onOpen }: { featured: FeaturedRow; onOpen: () => void }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <section aria-labelledby="news-featured-title" className="rounded-3xl border border-border/60 bg-card p-5 sm:p-6">
+      <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Worth your attention</p>
+      <div className="mt-4 flex items-start gap-4 sm:gap-6">
+        <button type="button" onClick={onOpen} aria-label={`${featured.title} — open details`} className="aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-2xl bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-32">
+          {featured.poster && !broken
+            ? <img src={featured.poster} alt="" onError={() => setBroken(true)} className="h-full w-full object-cover" />
+            : <span className="flex h-full items-center justify-center"><Tv className="h-6 w-6 text-muted-foreground" /></span>}
+        </button>
+        <div className="min-w-0 flex-1 space-y-3">
+          <h2 id="news-featured-title" className="text-xl font-semibold leading-tight sm:text-2xl" style={{ textWrap: 'balance' }}>{featured.title}</h2>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span>{featured.line} · {shortDay(featured.date)}</span>
+            {featured.platform && <PlatformBadge platform={featured.platform} />}
+          </p>
+          <div className="pt-1">
+            <Button variant="outline" onClick={onOpen}>View details</Button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 const NEWS_WINDOW_STORAGE_KEY = 'watchlist-news-updates-window';
 
@@ -220,8 +287,8 @@ function UpdatesList({
   failed: boolean;
 }) {
   return (
-    <section className="news-pane news-pane-updates min-w-0 space-y-1" tabIndex={0} role="region" aria-label="Updates">
-      <div className="news-pane-heading"><DotMatrixText text="UPDATES" size="xs" /></div>
+    <section className="news-pane news-pane-updates min-w-0 space-y-1" aria-label="Updates">
+      <h2 className="news-pane-heading"><DotMatrixText text="UPDATES" size="sm" /></h2>
       {failed && (
         <SectionFailure>
           {rows.length === 0 ? 'Could not load updates' : 'Some updates could not load'}
@@ -305,7 +372,7 @@ function UpcomingGrid({
 }) {
   return (
     <section className="news-pane news-pane-upcoming min-w-0 space-y-3">
-      <div className="news-pane-heading"><DotMatrixText text="UPCOMING" size="xs" /></div>
+      <h2 className="news-pane-heading"><DotMatrixText text="UPCOMING" size="sm" /></h2>
       {failed && (
         <SectionFailure>
           {items.length === 0 ? 'Could not load upcoming releases' : 'Some upcoming releases could not load'}
@@ -361,7 +428,12 @@ const WatchlistNews = () => {
   // Page level (REHAUL_PLAN.md 8.C-bis): drives both Upcoming (forward) and
   // Updates (backward), and Out Now (backward) too.
   const [newsWindow, setNewsWindow] = useState<UpdatesWindow>(readStoredNewsWindow);
-  const [newsPanel, setNewsPanel] = useState('next');
+  const [newsPanel, setNewsPanel] = useState<NewsPanel>(() => readStored('watchlist-news-panel', ['following', 'discover'], 'following'));
+  const [newsType, setNewsType] = useState<LibraryType>(() => readStored('watchlist-news-type', ['all', 'movie', 'tv'], 'all'));
+  useEffect(() => writeStored('watchlist-news-panel', newsPanel), [newsPanel]);
+  useEffect(() => writeStored('watchlist-news-type', newsType), [newsType]);
+  const typeMatches = (entityType: EntityRef['entityType']) =>
+    newsType === 'all' || (newsType === 'movie' ? entityType === 'movie' : entityType === 'tv_show');
 
   useEffect(() => {
     try {
@@ -382,37 +454,6 @@ const WatchlistNews = () => {
 
   const openDetail = useCallback((ref: EntityRef) => setSelectedRef(ref), []);
 
-  // Opening the inspector narrows the News row, and past the column floor it
-  // scrolls sideways (responsive.css), which can leave the column just
-  // clicked out of view. Track the last column clicked, and when the row
-  // resizes, scroll it back in.
-  const workspaceRef = useRef<HTMLDivElement>(null);
-  const lastColumnRef = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    const workspace = workspaceRef.current;
-    if (!workspace || typeof ResizeObserver === 'undefined') return;
-    let width = workspace.clientWidth;
-    const observer = new ResizeObserver(() => {
-      // Only a change of width can push a column out; a height change (rows
-      // loading, the window growing taller) leaves the user's scroll alone.
-      if (workspace.clientWidth === width) return;
-      width = workspace.clientWidth;
-      const column = lastColumnRef.current;
-      if (!column || workspace.scrollWidth <= workspace.clientWidth) return;
-      const row = workspace.getBoundingClientRect();
-      const box = column.getBoundingClientRect();
-      if (box.left < row.left) workspace.scrollLeft -= row.left - box.left;
-      else if (box.right > row.right) workspace.scrollLeft += box.right - row.right;
-    });
-    observer.observe(workspace);
-    return () => observer.disconnect();
-  }, []);
-  // Clicks in a portaled dialog reach this handler too, from outside any
-  // column; they keep the last column rather than clearing it.
-  const rememberColumn = (event: React.MouseEvent) => {
-    const column = event.target instanceof Element ? event.target.closest<HTMLElement>('.news-column') : null;
-    if (column) lastColumnRef.current = column;
-  };
   const scheduleFor = useCallback((entityType: EntityRef['entityType'], entityId: number, title: string, date: string): React.ComponentProps<typeof NewsPosterCard>['schedule'] => {
     if (!isAdmin) return undefined;
     const watchlistItemId = String(entityId);
@@ -436,15 +477,16 @@ const WatchlistNews = () => {
     };
   }, [addToSchedule, isAdmin, isInSchedule, removeFromScheduleByWatchlistId]);
 
+  const activeKeys = new Set(watchlist.filter((item) => !item.library_state || item.library_state === 'active').map((item) => `${item.category === 'Movies' ? 'movie' : 'tv_show'}:${item.id}`));
+  const isFollowing = (entityType: EntityRef['entityType'], id: number) => activeKeys.has(`${entityType}:${id}`);
+
   const { pinned, loading: pinnedLoading, failed: pinnedFailed } = usePinnedTitle();
   const pinnedDays = pinned ? daysUntil(pinned.release_date, today) : null;
-  const showCountdown = !!pinned && pinnedDays !== null && pinnedDays >= 0;
-
-  // Dropped shows and watched films are filtered in the useWatchlistNews
-  // queries themselves, so they never flash in before the library loads.
-
-  const { upNext, failed: upNextFailed } = useUpNext();
-  const watchNextIds = new Set(upNext.map((item) => item.tv_show_id));
+  const showCountdown =
+    !!pinned &&
+    pinnedDays !== null &&
+    pinnedDays >= 0 &&
+    isFollowing(pinned.media_type === 'tv' ? 'tv_show' : 'movie', pinned.id);
 
   // Out Now and Updates both fetch their widest window (30 days) once; the
   // page-level window filters client-side (filterRecentByWindow here,
@@ -461,14 +503,15 @@ const WatchlistNews = () => {
         season_number: ep.season_number,
       })),
     );
-  const outNowLoading = recentLoading || outNowMovieLoading || premiereSeasonLoading;
+  // Every list filters on the library, so it is loading until that is.
+  const outNowLoading = watchlistLoading || recentLoading || outNowMovieLoading || premiereSeasonLoading;
   const outNowFailed = recentFailed || outNowMovieFailed || premiereSeasonFailed;
 
   // A premiere drops out of Out Now when its season is already finished (the
   // user is caught up -- see isSeasonFinished) or when the same show already
   // has a Watch Next card (priority Watch Next > Out Now).
   const outNowPremieres = outNowPremiereCandidates.filter((ep) => {
-    if (watchNextIds.has(ep.tv_show_id)) return false;
+    if (!isFollowing('tv_show', ep.tv_show_id)) return false;
     const seasonEpisodes = premiereSeasonEpisodes.get(`${ep.tv_show_id}:${ep.season_number}`);
     if (seasonEpisodes && isSeasonFinished(seasonEpisodes, today)) return false;
     return true;
@@ -485,7 +528,7 @@ const WatchlistNews = () => {
         seasonNumber: ep.season_number,
         entityId: ep.tv_show_id,
       })),
-      ...outNowMovies.map((movie): OutNowRow => ({
+      ...outNowMovies.filter((movie) => isFollowing('movie', movie.id) && !watchlist.find((item) => item.category === 'Movies' && item.id === String(movie.id))?.watched).map((movie): OutNowRow => ({
         key: `movie-${movie.id}`,
         kind: 'movie',
         title: movie.title,
@@ -506,10 +549,10 @@ const WatchlistNews = () => {
 
   const { episodes: upcomingEpisodes, loading: upcomingTvLoading, failed: upcomingTvFailed } = useUpcomingEpisodes();
   const { movies: upcomingMovies, loading: upcomingMovieLoading, failed: upcomingMovieFailed } = useUpcomingMovies();
-  const upcomingLoading = upcomingTvLoading || upcomingMovieLoading;
+  const upcomingLoading = watchlistLoading || upcomingTvLoading || upcomingMovieLoading;
   const upcomingFailed = upcomingTvFailed || upcomingMovieFailed;
   const upcomingItems: UpcomingRow[] = [
-    ...premieresOf(upcomingEpisodes).map((ep): UpcomingRow => {
+    ...premieresOf(upcomingEpisodes).filter((ep) => isFollowing('tv_show', ep.tv_show_id)).map((ep): UpcomingRow => {
       const days = daysUntil(ep.release_date, today) ?? 0;
       return {
         key: `tv-${ep.tv_show_id}-${ep.season_number}`,
@@ -523,7 +566,7 @@ const WatchlistNews = () => {
         entityId: ep.tv_show_id,
       };
     }),
-    ...upcomingMovies.map((movie): UpcomingRow => {
+    ...upcomingMovies.filter((movie) => isFollowing('movie', movie.id)).map((movie): UpcomingRow => {
       const days = daysUntil(movie.release_date, today) ?? 0;
       return {
         key: `movie-${movie.id}`,
@@ -550,7 +593,7 @@ const WatchlistNews = () => {
   // A show already shown in Watch Next or Out Now does not also get a
   // released-episode row here (priority Watch Next > Out Now > Updates).
   // Platform and status rows are not deduplicated -- they are different news.
-  const excludedFromUpdates = new Set([...watchNextIds, ...outNowTvIds]);
+  const excludedFromUpdates = new Set([...outNowTvIds]);
   const recentGroups = groupRecentEpisodesByShow(recentEpisodes).filter(
     (group) => !excludedFromUpdates.has(group.tv_show_id),
   );
@@ -559,7 +602,7 @@ const WatchlistNews = () => {
     useRecentAnnouncements(30);
   const announcementGroups = groupAnnouncementsByShow(announcements, firstSeenByShow, today);
 
-  const updatesLoading = eventsLoading || recentLoading || announcementsLoading;
+  const updatesLoading = watchlistLoading || eventsLoading || recentLoading || announcementsLoading;
   const updatesFailed = eventsFailed || recentFailed || announcementsFailed;
   const updatesFeed = filterUpdatesByWindow(
     buildUpdatesFeed(recentGroups, events, announcementGroups, today),
@@ -567,151 +610,128 @@ const WatchlistNews = () => {
     today,
   );
 
-  const toolbar = (
-    <div className="flex flex-wrap items-center justify-between gap-4">
-      <WatchlistNav current="news" />
-      {/* A segmented control rather than nav-link text: `nav-link-active` only
-          changes weight and tints to --primary, which in light mode is nearly
-          the same dark tone as unselected text, so the selected window was
-          not visible. The selected option is a filled --primary pill. */}
-      <nav
-        aria-label="News time range"
-        className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-card/60 p-0.5"
-      >
-        {NEWS_WINDOW_OPTIONS.map((option) => {
-          const selected = newsWindow === option.key;
-          return (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => setNewsWindow(option.key)}
-              aria-pressed={selected}
-              className={cn(
-                'rounded-full px-3 py-1 transition-colors duration-200',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                selected
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-foreground/75 hover:bg-muted hover:text-foreground',
-              )}
-            >
-              <DotMatrixText text={option.label} size="xs" wrap={false} />
-            </button>
-          );
-        })}
-      </nav>
+  // One title per feed. The featured slot goes to something watchable now,
+  // then the pinned countdown, then the next release; the lists below skip
+  // whatever it took.
+  const rowLimit = 24;
+  const typedOutNow = outNowItems.filter((row) => typeMatches(row.kind === 'movie' ? 'movie' : 'tv_show'));
+  const typedUpcoming = upcomingWindowItems.filter((row) => typeMatches(row.entityType));
+  const pinnedType: EntityRef['entityType'] | null = pinned ? (pinned.media_type === 'tv' ? 'tv_show' : 'movie') : null;
+  const pinnedRow: UpcomingRow | null = pinned && pinnedType && showCountdown && typeMatches(pinnedType) && pinned.release_date
+    ? {
+        key: `pinned-${pinnedType}-${pinned.id}`,
+        title: pinned.title,
+        poster: pinned.poster,
+        platform: watchlist.find((item) => item.category === (pinnedType === 'tv_show' ? 'TV Shows' : 'Movies') && item.id === String(pinned.id))?.streaming_platform ?? '',
+        date: pinned.release_date,
+        days: pinnedDays ?? 0,
+        sentence: pinnedDays === 0 ? 'Out today' : `${pinnedDays} day${pinnedDays === 1 ? '' : 's'} to go`,
+        entityType: pinnedType,
+        entityId: pinned.id,
+      }
+    : null;
+  const nextUp = pinnedRow ?? typedUpcoming[0];
+  const featured: FeaturedRow | undefined = typedOutNow[0]
+    ? {
+        entityType: typedOutNow[0].kind === 'movie' ? 'movie' : 'tv_show',
+        entityId: typedOutNow[0].entityId,
+        title: typedOutNow[0].title,
+        poster: typedOutNow[0].poster,
+        platform: typedOutNow[0].platform || null,
+        date: typedOutNow[0].date,
+        line: typedOutNow[0].kind === 'premiere' ? `Season ${typedOutNow[0].seasonNumber} is out` : 'Out now',
+      }
+    : nextUp
+      ? { entityType: nextUp.entityType, entityId: nextUp.entityId, title: nextUp.title, poster: nextUp.poster, platform: nextUp.platform || null, date: nextUp.date, line: nextUp.sentence }
+      : undefined;
+  const used = new Set<string>(featured ? [`${featured.entityType}:${featured.entityId}`] : []);
+  const takeUnique = <T,>(items: T[], refOf: (item: T) => EntityRef, limit: number): T[] => {
+    const result: T[] = [];
+    for (const item of items) {
+      if (result.length >= limit) break;
+      const ref = refOf(item);
+      const key = `${ref.entityType}:${ref.entityId}`;
+      if (used.has(key) || !isFollowing(ref.entityType, ref.entityId)) continue;
+      used.add(key);
+      result.push(item);
+    }
+    return result;
+  };
+  const visibleOutNow = takeUnique(
+    typedOutNow,
+    (row) => ({ entityType: row.kind === 'movie' ? 'movie' : 'tv_show', entityId: row.entityId }),
+    rowLimit,
+  );
+  // A pinned title beyond the window still shows, first, when it is not featured.
+  const upcomingWithPinned = pinnedRow && !typedUpcoming.some((row) => row.entityType === pinnedRow.entityType && row.entityId === pinnedRow.entityId)
+    ? [pinnedRow, ...typedUpcoming]
+    : typedUpcoming;
+  const visibleUpcoming = takeUnique(upcomingWithPinned, (row) => row, rowLimit);
+  const visibleUpdates = updatesFeed
+    .filter((row) => typeMatches(row.entityType) && isFollowing(row.entityType, row.entityId) && (row.kind !== 'released' || !used.has(`${row.entityType}:${row.entityId}`)))
+    .slice(0, rowLimit);
 
+  const toolbar = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <WatchlistNav current="news" />
+      <SegmentedControl label="News view" options={NEWS_PANEL_OPTIONS} value={newsPanel} onChange={setNewsPanel} />
     </div>
   );
 
   return (
-    <AppShell title="Watchlist" subtitle="What to watch now" toolbar={toolbar} layout="workspace">
-      <div className="news-panel-switcher">
-        <label htmlFor="news-panel" className="text-sm">Section</label>
-        <select id="news-panel" value={newsPanel} onChange={(event) => setNewsPanel(event.target.value)} className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2 text-sm">
-          <option value="next">Watch Next</option>
-          <option value="week">Your Week</option>
-          <option value="now">Out Now</option>
-          <option value="upcoming">Upcoming</option>
-          <option value="updates">Updates</option>
-        </select>
-      </div>
-      <div ref={workspaceRef} className="watchlist-news-workspace" data-active-panel={newsPanel} onClickCapture={rememberColumn}>
-        <div className="news-column" data-panel="next">
-        <UpNextRail
-          items={upNext}
-          onSelect={(tvShowId) => openDetail({ entityType: 'tv_show', entityId: tvShowId })}
-          failed={upNextFailed}
-          plannedDays={Object.fromEntries(schedule.filter((entry) => entry.category === 'TV Shows').map((entry) => [entry.watchlistItemId, entry.mode === 'date' && entry.scheduledDate ? new Date(`${entry.scheduledDate}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : entry.day]))}
-        />
+    <AppShell title="Watchlist" subtitle="A little inspiration for your next watch" toolbar={toolbar}>
+      <div className="curated-news space-y-8 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={newsType} onChange={setNewsType} />
+          {newsPanel === 'following' && <SegmentedControl label="News time range" options={NEWS_WINDOW_OPTIONS} value={newsWindow} onChange={setNewsWindow} />}
         </div>
-        <div className="news-column" data-panel="week">
-        <YourWeek
-          schedule={schedule}
-          loading={scheduleLoading || watchlistLoading}
-          watchlist={watchlist}
-          removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
-          updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
-          addToSchedule={isAdmin ? addToSchedule : undefined}
-          toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
-          isEpisodeWatched={isEpisodeWatched}
-          isSeasonWatched={isSeasonWatched}
-          getAutoStatus={getAutoStatus}
-          isInSchedule={isInSchedule}
-        />
-        </div>
-        <div className="news-column" data-panel="now">
-          <section className="news-pane news-pane-out-now min-w-0 space-y-3" tabIndex={0} role="region" aria-label="Out now">
-            <div className="news-pane-heading"><DotMatrixText text="OUT NOW" size="xs" /></div>
-            {outNowLoading && <p role="status" className="text-sm text-muted-foreground">Loading new releases…</p>}
-            {!outNowLoading && !outNowFailed && outNowItems.length === 0 && <p className="text-sm text-muted-foreground">No new releases in this window.</p>}
-            {outNowFailed && (
-              <SectionFailure>
-                {outNowItems.length === 0 ? 'Could not load new releases' : 'Some new releases could not load'}
-              </SectionFailure>
-            )}
-            {outNowItems.length > 0 && (
-            <div className={cn(CARD_GRID, 'news-card-grid', 'watchlist-news-full-width')}>
-              {outNowItems.map((item) => (
-                <NewsPosterCard
-                  key={item.key}
-                  title={item.title}
-                  poster={item.poster}
-                  platform={item.platform}
-                  sub={
-                    item.kind === 'premiere' && item.seasonNumber > 1
-                      ? `Season ${item.seasonNumber} · ${formatDate(item.date)}`
-                      : formatDate(item.date)
-                  }
-                  onClick={() =>
-                    openDetail({
-                      entityType: item.kind === 'premiere' ? 'tv_show' : 'movie',
-                      entityId: item.entityId,
-                    })
-                  }
-                  schedule={scheduleFor(item.kind === 'premiere' ? 'tv_show' : 'movie', item.entityId, item.title, item.date)}
-                />
-              ))}
+        {newsPanel === 'following' ? <>
+          {featured && <FeaturedCard featured={featured} onOpen={() => openDetail(featured)} />}
+          {!pinnedLoading && pinnedFailed && <SectionFailure>Could not load the countdown.</SectionFailure>}
+          <details className="rounded-2xl border border-border/60 bg-card p-4">
+            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold">Your week · view your schedule</summary>
+            <div className="pt-4">
+              <YourWeek
+                schedule={schedule}
+                loading={scheduleLoading || watchlistLoading}
+                watchlist={watchlist}
+                removeFromSchedule={isAdmin ? removeFromSchedule : undefined}
+                updateScheduleDay={isAdmin ? updateScheduleDay : undefined}
+                addToSchedule={isAdmin ? addToSchedule : undefined}
+                toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
+                isEpisodeWatched={isEpisodeWatched}
+                isSeasonWatched={isSeasonWatched}
+                getAutoStatus={getAutoStatus}
+                isInSchedule={isInSchedule}
+              />
             </div>
+          </details>
+          <section className="space-y-3" aria-labelledby="news-out-now">
+            <h2 id="news-out-now" className="news-pane-heading"><DotMatrixText text="OUT NOW" size="sm" /></h2>
+            {outNowLoading && <p role="status" className="text-sm text-muted-foreground">Loading new releases…</p>}
+            {outNowFailed && <SectionFailure>Some new releases could not load.</SectionFailure>}
+            {!outNowLoading && !outNowFailed && visibleOutNow.length === 0 && (
+              <p className="px-2 py-3 text-xs text-muted-foreground">{newsWindow === 'week' ? 'Nothing new this week' : 'Nothing new this month'}</p>
+            )}
+            {visibleOutNow.length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {visibleOutNow.map((item) => (
+                  <NewsPosterCard
+                    key={item.key}
+                    title={item.title}
+                    poster={item.poster}
+                    platform={item.platform}
+                    sub={`${item.kind === 'premiere' ? `Season ${item.seasonNumber} · ` : ''}Out ${shortDay(item.date)}`}
+                    onClick={() => openDetail({ entityType: item.kind === 'movie' ? 'movie' : 'tv_show', entityId: item.entityId })}
+                    schedule={scheduleFor(item.kind === 'movie' ? 'movie' : 'tv_show', item.entityId, item.title, item.date)}
+                  />
+                ))}
+              </div>
             )}
           </section>
-        </div>
-        <div className="news-column news-column-upcoming" data-panel="upcoming" tabIndex={0} role="region" aria-label="Upcoming releases and countdown">
-        {upcomingLoading && <p role="status">Loading upcoming releases…</p>}
-        {!upcomingLoading && (
-          <UpcomingGrid
-          items={upcomingWindowItems}
-          activeWindow={newsWindow}
-          onSelect={openDetail}
-          scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)}
-          failed={upcomingFailed}
-          />
-        )}
-
-        {!pinnedLoading && pinnedFailed && (
-          <section className="col-span-full min-w-0 space-y-3">
-            <DotMatrixText text="COUNTDOWN" size="xs" />
-            <SectionFailure>Could not load the countdown</SectionFailure>
-          </section>
-        )}
-
-        {!pinnedLoading && showCountdown && pinned && (
-          <section className="col-span-full min-w-0 space-y-3">
-            <DotMatrixText text="COUNTDOWN" size="xs" />
-            <CountdownCard
-              label={pinned.title}
-              date={pinned.release_date!}
-              days={pinnedDays!}
-              srLabel={`${pinnedDays} day${pinnedDays === 1 ? '' : 's'} until ${pinned.title}`}
-              image={pinned.backdrop ?? pinned.poster}
-              imageAlt={pinned.title}
-              className="w-full sm:max-w-md"
-            />
-          </section>
-        )}
-        </div>
-        <div className="news-column" data-panel="updates">
-          {updatesLoading ? <p role="status">Loading updates…</p> : <UpdatesList rows={updatesFeed} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />}
-        </div>
+          {updatesLoading ? <p role="status" className="text-sm text-muted-foreground">Loading updates…</p> : <UpdatesList rows={visibleUpdates} activeWindow={newsWindow} today={today} onSelect={openDetail} failed={updatesFailed} />}
+          {upcomingLoading ? <p role="status" className="text-sm text-muted-foreground">Loading upcoming releases…</p> : <UpcomingGrid items={visibleUpcoming} activeWindow={newsWindow} onSelect={openDetail} scheduleFor={(item) => scheduleFor(item.entityType, item.entityId, item.title, item.date)} failed={upcomingFailed} />}
+        </> : <DiscoverySection type={newsType} />}
       </div>
 
       {selectedItem && (

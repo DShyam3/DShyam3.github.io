@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { PersonalRating } from './PersonalRating';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -5,11 +7,13 @@ import type { Season } from '@/features/watchlist/useWatchlist';
 import { daysUntil } from '@/features/watchlist/watchlist-utils';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { useAuth } from '@/contexts/AuthContext';
-import { RatingRow } from './RatingRow';
+import { TmdbScore } from './TmdbScore';
 import { WatchedWhenMenu } from './WatchedWhenMenu';
+import { summarizeRatings } from '../rating-summary';
 
 interface SeasonEpisodeListProps {
   seasons: Season[];
+  onRate?: (rating: number | null, seasonNumber: number, episodeNumber?: number) => Promise<void>;
   showId: string;
   toggleEpisodeWatched?: (
     showId: string,
@@ -34,16 +38,11 @@ interface SeasonEpisodeListProps {
    * viewer is on, and finishing it must not move the list to the next one.
    */
   onSelectSeason: (seasonNumber: number) => void;
-  /**
-   * Saves the owner's score for a season. A prop, not useWatchlist(): this
-   * list renders inside the docked inspector, which sits above the
-   * WatchlistProvider, so the context is out of reach there.
-   */
-  onRateSeason?: (seasonNumber: number, rating: number | null) => void;
 }
 
 export function SeasonEpisodeList({
   seasons,
+  onRate,
   showId,
   toggleEpisodeWatched,
   toggleSeasonWatched,
@@ -51,8 +50,8 @@ export function SeasonEpisodeList({
   isSeasonWatched,
   selectedSeason,
   onSelectSeason,
-  onRateSeason,
 }: SeasonEpisodeListProps) {
+  const [skippedSeasons, setSkippedSeasons] = useState<Set<number>>(new Set());
   const currentSeason = seasons.find((s) => s.season_number === selectedSeason);
   const { isAdmin } = useAuth();
 
@@ -84,6 +83,14 @@ export function SeasonEpisodeList({
 
   const seasonFullyWatched = currentSeason ? isSeasonWatched(showId, currentSeason) : false;
   const currentWatchedCount = currentSeason ? getWatchedCount(currentSeason) : 0;
+  const promptSeason =
+    !!currentSeason &&
+    seasonFullyWatched &&
+    currentSeason.personal_rating == null &&
+    !skippedSeasons.has(currentSeason.season_number);
+  const episodeRatingSummary = currentSeason
+    ? summarizeRatings(currentSeason.episodes.map((ep) => ep.personal_rating))
+    : null;
 
   return (
     // The episode list is never its own scroller: it renders in the
@@ -125,14 +132,7 @@ export function SeasonEpisodeList({
 
         {currentSeason && (
           <>
-            <RatingRow
-              label={currentSeason.season_number === 0 ? 'Specials' : `Season ${currentSeason.season_number}`}
-              mine={currentSeason.rating}
-              tmdbAverage={currentSeason.tmdb_vote_average}
-              tmdbVotes={null}
-              editable={isAdmin && Boolean(onRateSeason)}
-              onChange={(rating) => onRateSeason?.(currentSeason.season_number, rating)}
-            />
+            <TmdbScore average={currentSeason.tmdb_vote_average} votes={null} />
             <div className="flex items-center gap-2 text-xs text-muted-foreground pb-1.5 border-b">
               <Calendar className="h-3.5 w-3.5" />
               <span>Released: {formatDate(currentSeason.release_date)}</span>
@@ -140,6 +140,22 @@ export function SeasonEpisodeList({
                 {currentSeason.episodes.length} episodes
               </span>
             </div>
+
+            {onRate && (
+              <PersonalRating
+                key={currentSeason.season_number}
+                label={`Season ${currentSeason.season_number} overall rating`}
+                value={currentSeason.personal_rating}
+                onChange={currentWatchedCount > 0 ? (rating) => onRate(rating, currentSeason.season_number) : undefined}
+                prompt={promptSeason ? `Finished season ${currentSeason.season_number} — rate it?` : undefined}
+                onSkip={promptSeason ? () => setSkippedSeasons((prev) => new Set(prev).add(currentSeason.season_number)) : undefined}
+              />
+            )}
+            {onRate && episodeRatingSummary && episodeRatingSummary.average !== null && (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                Episode average: {episodeRatingSummary.average}/10 · {episodeRatingSummary.rated} of {episodeRatingSummary.total} rated
+              </p>
+            )}
 
             {/* Mark Season Complete button */}
             {toggleSeasonWatched && currentSeason.episodes.length > 0 && !seasonFullyWatched && (
@@ -190,7 +206,8 @@ export function SeasonEpisodeList({
               episode.episode_number,
             );
             // Air day counts as released, matching the Up Next rail and News.
-            const released = (daysUntil(episode.release_date, new Date()) ?? 0) <= 0;
+            const daysToEpisode = daysUntil(episode.release_date, new Date());
+            const released = daysToEpisode !== null && daysToEpisode <= 0;
             const previousEpisodes = currentSeason.episodes.filter(
               (candidate) => candidate.episode_number < episode.episode_number,
             );
@@ -253,6 +270,13 @@ export function SeasonEpisodeList({
                     </div>
                   )}
                 </div>
+                {onRate && (
+                  <PersonalRating
+                    label={`Episode ${episode.episode_number} rating`}
+                    value={episode.personal_rating}
+                    onChange={watched ? (rating) => onRate(rating, currentSeason.season_number, episode.episode_number) : undefined}
+                  />
+                )}
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
                   {formatDate(episode.release_date)}

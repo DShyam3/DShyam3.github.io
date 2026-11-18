@@ -327,6 +327,29 @@ GitHub will run Actions on Node 24 and move `ubuntu-latest` to 26. That was not
 checked against GitHub's announcement on 2026-10-24. Confirm it, then move the
 Actions and the Node version before the change is enforced.
 
+### Watchlist News and Library — what is left
+
+Open after the News and Library redesign, 2026-11-17. Its three migrations are applied to hosted; the code is not deployed yet (see STATE.md).
+
+1. **Decide whether favourites become a flag on `movies` and `tv_shows`** instead
+   of a separate table of copied titles.
+2. **Phone News still stacks three switch rows** (tab, type and, on Following,
+   This week / This month). Make them fit one row or collapse them.
+3. **Signed-in admin check in a browser:** Add, Seen it, the rating picker, the
+   rating prompts, the favourite toggle, ratings written to and read back from
+   `watchlist_ratings`, and "Not interested" synced to
+   `watchlist_dismissed_suggestions`. Only signed-out views are verified.
+4. **Most watched episodes have no watch date.** On hosted, 2,447 of 2,532 watched
+   episodes have no `watched_at`; the earliest dated one is 2026-09-13, and only 57
+   dated watches fall before 17 November. A series finished before dating began
+   therefore sorts after dated titles under Recently watched. Backfilling is not
+   possible from what is stored.
+5. **Nothing reads `watchlist_up_next` any more.** `upNextQueryOptions` in
+   `src/features/watchlist/up-next-query.ts` survives only so a watched write
+   can invalidate a query no screen observes, with its test and
+   `selectUpNextRail` in `watchlist-utils.ts`. Delete them, keep
+   `persistWatchedProgress`, and decide whether the view itself goes too.
+
 ### Deferred by choice
 
 7.2e (measured, not worth building), 7.12 delivery, 7.13 contacts and
@@ -426,14 +449,13 @@ fabrication arrives anyway.
 
 ### 8.D Three primitives, still to build
 
-The watchlist news redesign ships with a countdown component built for that
-surface only. The three items below are needed only when a second surface (Travel,
+The watchlist's own countdown card was removed when News moved its pinned
+countdown into the featured slot; nothing is left to generalise. The three items below are needed only when a second surface (Travel,
 Finance or Inventory) needs the same mechanics.
 
 **The countdown.** A `{ label, date, href, image }` component, serving show
-releases, trip departures, warranty expiries and goal dates. The watchlist has
-one; do not duplicate it elsewhere until a second surface needs one. Then write
-it once, outside all surfaces, and import it three ways.
+releases, trip departures, warranty expiries and goal dates. Write it once,
+outside all surfaces, when a second surface needs one.
 
 **The change feed.** Snapshot or insert-timestamp, then diff. Powers watchlist
 announcements today; when dead links, subscription price rises or new books in a
@@ -632,10 +654,6 @@ reporting history to a service whose own consent notice names 210 advertising
 partners. Neither clears the bar in Part 1 for what this site sends outward.
 What was worth taking from Trakt is its `last_activities` delta shape, and the
 `created_at` column in 8.B is that idea at a tenth of the cost.
-
-**Films get no watched state.** Owner decision, 2026-09-29. `movies` has no
-`watched` column. The News page keeps listing films after they have been
-watched, the same way it did before.
 
 ---
 ## Library card-contained scrolling

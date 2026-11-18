@@ -31,7 +31,9 @@ function unwrapEmbed(value) {
 /** A dropped show leaves every News section, and a watched film leaves Out
  *  Now and Updates. Applied to the rows each query returns, so it does not wait
  *  on the library held in the watchlist context. Paused shows stay. */
-const isDroppedShow = (show: { tracking?: string | null } | undefined) => show?.tracking === 'dropped';
+/** Stopped watching and Hidden titles leave News; Paused ones stay. */
+const isDroppedShow = (show: { library_state?: string | null } | undefined) =>
+  show?.library_state === 'stopped' || show?.library_state === 'hidden';
 
 export type WatchlistNewsMediaType = 'tv' | 'movie';
 
@@ -65,12 +67,15 @@ export const pinnedTitleQuery = queryOptions({
           .from('tv_shows')
           .select('id, title, poster, backdrop, release_date')
           .eq('pinned', true)
+          .eq('library_state', 'active')
           .limit(1)
           .maybeSingle(),
         supabase
           .from('movies')
           .select('id, title, poster, backdrop, release_date')
           .eq('pinned', true)
+          .eq('library_state', 'active')
+          .eq('watched', false)
           .limit(1)
           .maybeSingle(),
       ]);
@@ -157,7 +162,7 @@ function mapEpisodeRows(rows): WatchlistNewsEpisode[] {
 // saying so, and a truncated list reads exactly like a complete one. Each
 // paged read orders by `id` last, which is also what `id` is selected for.
 const EPISODE_EMBED =
-  'id, episode_number, title, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, tracking))';
+  'id, episode_number, title, release_date, watched, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, library_state))';
 
 const NO_EPISODES: WatchlistNewsEpisode[] = [];
 
@@ -360,7 +365,7 @@ export const watchlistEventsQuery = (windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) 
 
         const [showsResult, moviesResult] = await Promise.all([
           tvIds.length
-            ? supabase.from('tv_shows').select('id, title, poster, platform, tracking').in('id', tvIds)
+            ? supabase.from('tv_shows').select('id, title, poster, platform, library_state').in('id', tvIds)
             : Promise.resolve({ data: [], error: null }),
           movieIds.length
             ? supabase.from('movies').select('id, title, poster, platform, watched').in('id', movieIds)
@@ -379,7 +384,10 @@ export const watchlistEventsQuery = (windowDays = WATCHLIST_EVENTS_WINDOW_DAYS) 
               ? showsById.get(row.entity_id)
               : moviesById.get(row.entity_id);
           if (!source) return [];
-          if ('tracking' in source ? isDroppedShow(source) : source.watched) return [];
+          const leavesNews = row.entity_type === 'tv_show'
+            ? isDroppedShow(source as { library_state?: string | null })
+            : (source as { watched?: boolean }).watched === true;
+          if (leavesNews) return [];
           return [{
             id: row.id,
             // CHECK constraints hold both columns to these values; the
@@ -449,14 +457,14 @@ export const recentAnnouncementsQuery = (windowDays = ANNOUNCEMENT_WINDOW_DAYS) 
         const [seasonsResult, episodesResult] = await Promise.all([
           supabase
             .from('tv_show_seasons')
-            .select('id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform, tracking)')
+            .select('id, tv_show_id, season_number, created_at, tv_shows!inner(title, poster, platform, library_state)')
             .gt('created_at', cutoff)
             .order('created_at', { ascending: false })
             .limit(ANNOUNCEMENT_ROW_CAP),
           supabase
             .from('tv_show_episodes')
             .select(
-              'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, tracking))',
+              'id, episode_number, title, release_date, created_at, tv_show_seasons!inner(season_number, tv_show_id, tv_shows!inner(title, poster, platform, library_state))',
             )
             .gt('created_at', cutoff)
             .order('created_at', { ascending: false })

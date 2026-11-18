@@ -44,12 +44,11 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "top_cast" "text"[],
     "watched" boolean DEFAULT false NOT NULL,
     "watched_at" timestamp with time zone,
-    "rating" smallint,
+    "library_state" "text" DEFAULT 'active'::"text" NOT NULL,
     "tmdb_vote_average" numeric(3,1),
     "tmdb_vote_count" integer,
     "collection_id" integer,
     "collection_name" "text",
-    CONSTRAINT "movies_rating_check" CHECK ("rating" BETWEEN 1 AND 10),
     CONSTRAINT "movies_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10),
     CONSTRAINT "movies_tmdb_vote_count_check" CHECK ("tmdb_vote_count" >= 0)
 );
@@ -140,9 +139,7 @@ CREATE TABLE IF NOT EXISTS "public"."tv_show_seasons" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     "trailer_key" "text",
     "trailer_checked_at" timestamp with time zone,
-    "rating" smallint,
     "tmdb_vote_average" numeric(3,1),
-    CONSTRAINT "tv_show_seasons_rating_check" CHECK ("rating" BETWEEN 1 AND 10),
     CONSTRAINT "tv_show_seasons_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10)
 );
 
@@ -175,14 +172,11 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "trailer_key" "text",
     "creators" "text"[],
     "top_cast" "text"[],
-    "rating" smallint,
+    "library_state" "text" DEFAULT 'active'::"text" NOT NULL,
     "tmdb_vote_average" numeric(3,1),
     "tmdb_vote_count" integer,
-    "tracking" "text" DEFAULT 'active' NOT NULL,
-    CONSTRAINT "tv_shows_rating_check" CHECK ("rating" BETWEEN 1 AND 10),
     CONSTRAINT "tv_shows_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10),
-    CONSTRAINT "tv_shows_tmdb_vote_count_check" CHECK ("tmdb_vote_count" >= 0),
-    CONSTRAINT "tv_shows_tracking_check" CHECK ("tracking" IN ('active', 'paused', 'dropped'))
+    CONSTRAINT "tv_shows_tmdb_vote_count_check" CHECK ("tmdb_vote_count" >= 0)
 );
 
 ALTER TABLE "public"."tv_shows" OWNER TO "postgres";
@@ -299,6 +293,14 @@ ALTER TABLE ONLY "public"."weekly_schedule"
 
 -- Partial: only films in a TMDB collection are ever looked up by it.
 CREATE INDEX IF NOT EXISTS "movies_collection_id_idx" ON "public"."movies" USING "btree" ("collection_id") WHERE ("collection_id" IS NOT NULL);
+
+ALTER TABLE ONLY "public"."movies"
+    ADD CONSTRAINT "movies_library_state_check"
+    CHECK ("library_state" IN ('active', 'hidden', 'stopped'));
+
+ALTER TABLE ONLY "public"."tv_shows"
+    ADD CONSTRAINT "tv_shows_library_state_check"
+    CHECK ("library_state" IN ('active', 'paused', 'hidden', 'stopped'));
 
 CREATE INDEX "idx_tv_shows_tmdb_id" ON "public"."tv_shows" USING "btree" ("tmdb_id");
 
@@ -431,11 +433,8 @@ DROP TRIGGER IF EXISTS "tr_set_watched_at" ON "public"."tv_show_episodes";
 
 CREATE TRIGGER "tr_set_watched_at" BEFORE INSERT OR UPDATE OF "watched" ON "public"."tv_show_episodes" FOR EACH ROW EXECUTE FUNCTION "public"."set_watched_at"();
 
--- Films get the same stamping: set_watched_at() is generic over
--- NEW.watched / NEW.watched_at.
-DROP TRIGGER IF EXISTS "tr_set_watched_at" ON "public"."movies";
-
-CREATE TRIGGER "tr_set_watched_at" BEFORE INSERT OR UPDATE OF "watched" ON "public"."movies" FOR EACH ROW EXECUTE FUNCTION "public"."set_watched_at"();
+-- Film watch dates use the same transition-aware stamping as episodes.
+CREATE TRIGGER "tr_set_movie_watched_at" BEFORE INSERT OR UPDATE OF "watched" ON "public"."movies" FOR EACH ROW EXECUTE FUNCTION "public"."set_watched_at"();
 
 -- Records platform/status history into watchlist_events for the News page.
 -- One function (log_watchlist_event(), 01_functions.sql) on triggers over
@@ -460,9 +459,6 @@ CREATE OR REPLACE TRIGGER "tr_log_movie_watchlist_event" AFTER UPDATE ON "public
 -- DISTINCT ON ordering, so without `season_number > 0` a show with an unwatched
 -- special led Watch Next with it. A show whose only unwatched episodes are
 -- specials is therefore absent from the view; that is intended.
---
--- Only shows with tracking = 'active' appear: a paused or dropped show leaves
--- Watch Next but stays in the library.
 CREATE OR REPLACE VIEW "public"."watchlist_up_next" WITH (security_invoker = true) AS
 SELECT DISTINCT ON (s.tv_show_id)
        s.tv_show_id,
@@ -506,7 +502,6 @@ JOIN   "public"."tv_show_seasons"  s  ON s.id = e.season_id
 JOIN   "public"."tv_shows"         sh ON sh.id = s.tv_show_id
 WHERE  e.watched = false
   AND  s.season_number > 0
-  AND  sh.tracking = 'active'
 ORDER  BY s.tv_show_id, s.season_number, e.episode_number;
 
 -- Grants
@@ -762,7 +757,8 @@ REVOKE ALL ON SEQUENCE "public"."viewing_order_entries_id_seq" FROM "anon", "aut
 -- Marks episodes or movies watched or unwatched in bulk and returns how many
 -- rows actually changed.
 --
--- Why two statements: tr_set_watched_at stamps now() whenever `watched` flips,
+-- Why two statements: tr_set_watched_at (episodes) and tr_set_movie_watched_at
+-- (films) stamp now() whenever `watched` flips,
 -- and an UPDATE that sets watched cannot also pick a different date, because
 -- the trigger runs after the SET list and overwrites it. So step 1 flips
 -- `watched` (the trigger stamps now(), or clears on unwatch) and step 2
@@ -879,17 +875,20 @@ GRANT EXECUTE ON FUNCTION "public"."set_watched"(text, integer[], boolean, text,
 -- absorbs clock and timezone skew.
 --
 -- Every listed episode and movie ends up watched. Rows that flip are stamped
--- now() by tr_set_watched_at, so the second statement then writes the imported
+-- now() by those triggers, so the second statement then writes the imported
 -- value over it -- including null, which means "watched, date unknown" and
 -- must not be left as the import-time now(). Rows that were already watched
 -- keep the earlier of their existing and imported dates; a null on either side
 -- never erases a known date. The second statement lists watched_at alone, so
 -- the trigger does not fire again.
 --
--- Ratings are set only where the row has none yet and the imported value is
--- 1 to 10: an import never overwrites the owner's own score. Ids that match no
--- row are ignored. A repeated id within one array is collapsed first (earliest
--- date, highest rating) so the outcome does not depend on row order.
+-- Ratings are written to public.watchlist_ratings (owner-only, one row per
+-- target) only where the target has none yet and the imported value is 0.5 to
+-- 10 in half-point steps: an import never overwrites the owner's own score.
+-- ratings_set counts the rows actually inserted. Ids that match no row are
+-- ignored. A repeated id within one array is collapsed first (earliest date,
+-- highest rating) so the outcome does not depend on row order. The function is
+-- SECURITY INVOKER, so watchlist_ratings' admin-only RLS applies to the insert.
 CREATE OR REPLACE FUNCTION "public"."import_watch_history"(
     p_episodes jsonb DEFAULT '[]',
     p_movies jsonb DEFAULT '[]',
@@ -969,7 +968,7 @@ BEGIN
   -- Movies: flip, then date.
   WITH i AS (
     SELECT x.id, min(CASE WHEN x.watched_at > now() + interval '1 day' THEN NULL ELSE x.watched_at END) AS watched_at
-    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating integer)
+    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating numeric)
     WHERE x.id IS NOT NULL
     GROUP BY x.id
   ), u AS (
@@ -983,7 +982,7 @@ BEGIN
 
   WITH i AS (
     SELECT x.id, min(CASE WHEN x.watched_at > now() + interval '1 day' THEN NULL ELSE x.watched_at END) AS watched_at
-    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating integer)
+    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating numeric)
     WHERE x.id IS NOT NULL
     GROUP BY x.id
   ), n AS (
@@ -1007,42 +1006,49 @@ BEGIN
   )
   SELECT count(*) FILTER (WHERE imported IS NOT NULL) INTO v_dated_movies FROM u;
 
-  -- Ratings: only where none is set yet, only 1 to 10.
+  -- Ratings go to the owner-only watchlist_ratings table, only where the
+  -- target has none yet, only 0.5 to 10 in half-point steps.
   WITH i AS (
     SELECT x.id, max(x.rating) AS rating
-    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating integer)
-    WHERE x.id IS NOT NULL AND x.rating BETWEEN 1 AND 10
+    FROM jsonb_to_recordset(p_movies) AS x(id integer, watched_at timestamptz, rating numeric)
+    WHERE x.id IS NOT NULL AND x.rating BETWEEN 0.5 AND 10 AND mod(x.rating, 0.5) = 0
     GROUP BY x.id
   ), u AS (
-    UPDATE public.movies m SET rating = i.rating
-    FROM i WHERE m.id = i.id AND m.rating IS NULL
-    RETURNING m.id
+    INSERT INTO public.watchlist_ratings (movie_id, rating, updated_at)
+    SELECT t.id, i.rating, now()
+    FROM i JOIN public.movies t ON t.id = i.id
+    ON CONFLICT (movie_id) DO NOTHING
+    RETURNING 1
   )
   SELECT count(*) INTO v_n FROM u;
   v_ratings := v_ratings + v_n;
 
   WITH i AS (
     SELECT x.id, max(x.rating) AS rating
-    FROM jsonb_to_recordset(p_shows) AS x(id integer, rating integer)
-    WHERE x.id IS NOT NULL AND x.rating BETWEEN 1 AND 10
+    FROM jsonb_to_recordset(p_shows) AS x(id integer, rating numeric)
+    WHERE x.id IS NOT NULL AND x.rating BETWEEN 0.5 AND 10 AND mod(x.rating, 0.5) = 0
     GROUP BY x.id
   ), u AS (
-    UPDATE public.tv_shows s SET rating = i.rating
-    FROM i WHERE s.id = i.id AND s.rating IS NULL
-    RETURNING s.id
+    INSERT INTO public.watchlist_ratings (tv_show_id, rating, updated_at)
+    SELECT t.id, i.rating, now()
+    FROM i JOIN public.tv_shows t ON t.id = i.id
+    ON CONFLICT (tv_show_id) DO NOTHING
+    RETURNING 1
   )
   SELECT count(*) INTO v_n FROM u;
   v_ratings := v_ratings + v_n;
 
   WITH i AS (
     SELECT x.id, max(x.rating) AS rating
-    FROM jsonb_to_recordset(p_seasons) AS x(id integer, rating integer)
-    WHERE x.id IS NOT NULL AND x.rating BETWEEN 1 AND 10
+    FROM jsonb_to_recordset(p_seasons) AS x(id integer, rating numeric)
+    WHERE x.id IS NOT NULL AND x.rating BETWEEN 0.5 AND 10 AND mod(x.rating, 0.5) = 0
     GROUP BY x.id
   ), u AS (
-    UPDATE public.tv_show_seasons s SET rating = i.rating
-    FROM i WHERE s.id = i.id AND s.rating IS NULL
-    RETURNING s.id
+    INSERT INTO public.watchlist_ratings (season_id, rating, updated_at)
+    SELECT t.id, i.rating, now()
+    FROM i JOIN public.tv_show_seasons t ON t.id = i.id
+    ON CONFLICT (season_id) DO NOTHING
+    RETURNING 1
   )
   SELECT count(*) INTO v_n FROM u;
   v_ratings := v_ratings + v_n;
@@ -1216,26 +1222,14 @@ COMMENT ON COLUMN "public"."favourites"."origin_country" IS
 COMMENT ON COLUMN "public"."favourites"."genre_ids" IS
     'TMDB genre ids (e.g. 16 = Animation, 18 = Drama), for deriving the favourites grid''s category bucket from TMDB data instead of the frozen category string. Left null on every pre-migration row and never backfilled in SQL -- the value only exists in TMDB and is fetched by an admin-triggered client action; a fabricated value here reads exactly like a real one. Falls back to category when null.';
 
-COMMENT ON COLUMN "public"."movies"."watched_at" IS
-    'When the film was actually watched. Left null on every pre-migration row and never backfilled to now() -- a fabricated watch timestamp reads exactly like a real one. Null with watched = true means "watched, date unknown"; every consumer must exclude null from anything time-bucketed (watch history, year in review).';
-
-COMMENT ON COLUMN "public"."movies"."rating" IS
-    'The owner''s own score, 1 to 10. Null means not rated. Not TMDB''s score -- see tmdb_vote_average.';
-
-COMMENT ON COLUMN "public"."tv_shows"."rating" IS
-    'The owner''s own score, 1 to 10. Null means not rated. Not TMDB''s score -- see tmdb_vote_average.';
-
-COMMENT ON COLUMN "public"."tv_show_seasons"."rating" IS
-    'The owner''s own score, 1 to 10. Null means not rated. Not TMDB''s score -- see tmdb_vote_average.';
-
 COMMENT ON COLUMN "public"."movies"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s rating. Null until the sync has fetched it.';
+    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s own score in watchlist_ratings. Null until the sync has fetched it.';
 
 COMMENT ON COLUMN "public"."tv_shows"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s rating. Null until the sync has fetched it.';
+    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s own score in watchlist_ratings. Null until the sync has fetched it.';
 
 COMMENT ON COLUMN "public"."tv_show_seasons"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average for the season, 0 to 10 (not critics). TMDB gives seasons an average but no vote count. Null until the sync has fetched it.';
+    'TMDB''s community user-vote average for the season, 0 to 10 (not critics), stored beside the owner''s own score in watchlist_ratings. TMDB gives seasons an average but no vote count. Null until the sync has fetched it.';
 
 COMMENT ON COLUMN "public"."movies"."tmdb_vote_count" IS
     'How many TMDB users voted behind tmdb_vote_average; a low count means a noisy average. Null until the sync has fetched it.';
@@ -1243,8 +1237,112 @@ COMMENT ON COLUMN "public"."movies"."tmdb_vote_count" IS
 COMMENT ON COLUMN "public"."tv_shows"."tmdb_vote_count" IS
     'How many TMDB users voted behind tmdb_vote_average; a low count means a noisy average. Null until the sync has fetched it.';
 
-COMMENT ON COLUMN "public"."tv_shows"."tracking" IS
-    'active, paused or dropped. Only active shows appear in Watch Next (watchlist_up_next); paused and dropped ones stay in the library. active is the truth for every pre-existing row.';
+COMMENT ON COLUMN "public"."tv_shows"."library_state" IS
+    'active, paused, hidden or stopped. paused: a break -- the series leaves Your Week but keeps its shelf. stopped: the owner stopped watching it. hidden: hidden from visitors, owner-only. active is the truth for every pre-existing row. Films have no paused state (movies_library_state_check allows active, hidden, stopped).';
 
 COMMENT ON COLUMN "public"."movies"."collection_id" IS
     'TMDB belongs_to_collection.id, e.g. a franchise. Null when the film is in no collection or the sync has not fetched it yet.';
+
+-- TMDB titles the owner marked "Not interested" on Watchlist News discovery,
+-- kept in the database so the dismissal follows the owner across devices.
+-- Insert and delete only: a dismissal is made or undone, never edited.
+CREATE TABLE IF NOT EXISTS "public"."watchlist_dismissed_suggestions" (
+    "id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "media" "text" NOT NULL,
+    "tmdb_id" integer NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "watchlist_dismissed_suggestions_media_check" CHECK (("media" = ANY (ARRAY['movie'::"text", 'tv'::"text"]))),
+    CONSTRAINT "watchlist_dismissed_suggestions_tmdb_id_check" CHECK (("tmdb_id" > 0)),
+    CONSTRAINT "watchlist_dismissed_suggestions_media_tmdb_id_key" UNIQUE ("media", "tmdb_id")
+);
+
+ALTER TABLE "public"."watchlist_dismissed_suggestions" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."watchlist_dismissed_suggestions" IS
+    'TMDB titles the owner marked "Not interested" on Watchlist News discovery. Identity is media + tmdb_id because TMDB film and show ids can collide. Public read so the public page hides the same suggestions; writes are admin only.';
+
+ALTER TABLE "public"."watchlist_dismissed_suggestions" ENABLE ROW LEVEL SECURITY;
+
+-- Public read, like the rest of the watchlist: a TMDB id and a media type,
+-- nothing private. No UPDATE policy -- rows are inserted or deleted.
+CREATE POLICY "Public Read Access" ON "public"."watchlist_dismissed_suggestions" FOR SELECT TO "anon", "authenticated" USING (true);
+
+CREATE POLICY "Admin insert" ON "public"."watchlist_dismissed_suggestions" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin delete" ON "public"."watchlist_dismissed_suggestions" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
+
+-- A fresh table starts from the image's default of ALL for anon and
+-- authenticated, so the REVOKE is load-bearing: TRUNCATE is not filtered by
+-- RLS and the grant is the only barrier. The identity column needs no
+-- sequence grant.
+REVOKE ALL ON TABLE "public"."watchlist_dismissed_suggestions" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT ON TABLE "public"."watchlist_dismissed_suggestions" TO "anon";
+
+GRANT SELECT, INSERT, DELETE ON TABLE "public"."watchlist_dismissed_suggestions" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."watchlist_dismissed_suggestions" TO "service_role";
+
+-- The owner's personal scores, kept out of the public-read watchlist tables so
+-- a visitor can never read them through the API. One row per rated target;
+-- exactly one of the four target columns is set. The UNIQUE constraints back
+-- client upserts (onConflict on each column) and index the foreign keys.
+-- No updated_at trigger exists in 01_functions.sql, so the client sets it.
+CREATE TABLE IF NOT EXISTS "public"."watchlist_ratings" (
+    "id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "movie_id" integer REFERENCES "public"."movies"("id") ON DELETE CASCADE,
+    "tv_show_id" integer REFERENCES "public"."tv_shows"("id") ON DELETE CASCADE,
+    "season_id" integer REFERENCES "public"."tv_show_seasons"("id") ON DELETE CASCADE,
+    "episode_id" integer REFERENCES "public"."tv_show_episodes"("id") ON DELETE CASCADE,
+    "rating" numeric NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "watchlist_ratings_rating_check" CHECK (("rating" BETWEEN 0.5 AND 10 AND mod("rating", 0.5) = 0)),
+    CONSTRAINT "watchlist_ratings_one_target_check" CHECK (num_nonnulls("movie_id", "tv_show_id", "season_id", "episode_id") = 1),
+    CONSTRAINT "watchlist_ratings_movie_id_key" UNIQUE ("movie_id"),
+    CONSTRAINT "watchlist_ratings_tv_show_id_key" UNIQUE ("tv_show_id"),
+    CONSTRAINT "watchlist_ratings_season_id_key" UNIQUE ("season_id"),
+    CONSTRAINT "watchlist_ratings_episode_id_key" UNIQUE ("episode_id")
+);
+
+ALTER TABLE "public"."watchlist_ratings" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."watchlist_ratings" IS
+    'The owner''s personal scores for films, shows, seasons and episodes; kept apart from the public watchlist tables so they are never readable by visitors; exactly one target per row.';
+
+ALTER TABLE "public"."watchlist_ratings" ENABLE ROW LEVEL SECURITY;
+
+-- Admin only, reads included. No anon policy at all.
+CREATE POLICY "Admin read" ON "public"."watchlist_ratings" FOR SELECT TO "authenticated" USING ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin insert" ON "public"."watchlist_ratings" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin update" ON "public"."watchlist_ratings" FOR UPDATE TO "authenticated" USING ((SELECT "public"."is_admin"())) WITH CHECK ((SELECT "public"."is_admin"()));
+
+CREATE POLICY "Admin delete" ON "public"."watchlist_ratings" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
+
+-- anon holds nothing: TRUNCATE is not filtered by RLS, so the grant is the
+-- only barrier. The identity column needs no sequence grant.
+REVOKE ALL ON TABLE "public"."watchlist_ratings" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."watchlist_ratings" TO "authenticated";
+
+GRANT ALL ON TABLE "public"."watchlist_ratings" TO "service_role";
+
+-- Latest episode watch date per series, so the Library can sort finished
+-- series by when they were watched. security_invoker keeps the underlying
+-- RLS in force; tv_show_episodes.watched_at is already public-read, so this
+-- exposes nothing new.
+CREATE OR REPLACE VIEW "public"."watchlist_show_last_watched" WITH (security_invoker = true) AS
+SELECT s.tv_show_id,
+       max(e.watched_at) AS last_watched_at
+FROM   "public"."tv_show_episodes" e
+JOIN   "public"."tv_show_seasons"  s ON s.id = e.season_id
+WHERE  e.watched_at IS NOT NULL
+GROUP  BY s.tv_show_id;
+
+COMMENT ON VIEW "public"."watchlist_show_last_watched" IS
+    'The most recent episode watched_at per series, for sorting finished series by when they were watched. Series with no dated watch are absent. security_invoker; public read, like the episode table beneath it.';
+
+REVOKE ALL ON TABLE "public"."watchlist_show_last_watched" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT ON TABLE "public"."watchlist_show_last_watched" TO "anon", "authenticated";

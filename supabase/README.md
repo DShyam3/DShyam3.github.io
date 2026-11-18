@@ -30,7 +30,7 @@ exactly.
 | `00_extensions.sql` | extensions, `content_type` enum |
 | `01_functions.sql` | `is_admin()`, the two watchlist trigger functions |
 | `10_books` … `18_site_content` | one file per content collection |
-| `20_watchlist.sql` | movies, shows, seasons, episodes, schedule, favourites, sync_log, viewing orders (`viewing_orders`, `viewing_order_entries`), triggers, and the three RPCs `set_watched`, `import_watch_history`, `reorder_viewing_order` |
+| `20_watchlist.sql` | movies, shows, seasons, episodes, schedule, favourites, sync_log, dismissed suggestions, owner-only ratings (`watchlist_ratings`), viewing orders (`viewing_orders`, `viewing_order_entries`), triggers, and the three RPCs `set_watched`, `import_watch_history` (ratings go to `watchlist_ratings`), `reorder_viewing_order` |
 | `30_travel.sql` | visited countries + cities |
 | `40_finance.sql` | the 37 `finance_*` tables |
 | `90_privileges.sql` | schema-level grants and default privileges only |

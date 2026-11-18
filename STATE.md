@@ -1,61 +1,56 @@
 # State
 
-Updated 2026-11-17 · Branch `main` · Calculator `0e548706`, fact card `bffd0ada` and donut `c5e68cdb` pushed to origin/main; deployment NOT verified: Year in hours donut label fits the hole (ring 70/88 in `w-52`; donut stacks over the tiles at `lg`, side by side from `xl`; checked in local dev at 375, 1100, 1280, 1600, dark only; unverified light theme, real phone). Last verified code deploy: Pages run `43759097843` at `cf57fc0` (Travel selected dot, colour only), over `78dc5a1a` payslips by calendar year, `2f853367` Quickest season removed, `19832e6` Travel green selected dot, `47b2ed6` Quickest to finish skips shows still airing, `0f9294b` one trailer button.
+Updated 2026-11-18 · Branch `main` · Head `63fa21b6` · 1 ahead of `origin/main` (`3d17b507`). `63fa21b6` is committed but NOT pushed, so NOT deployed: the live site still runs `3d17b507`.
 
 ## In progress
 
-**"A year in hours": committed `9241f92d` on top of `e7b8b1a3`, NOT PUSHED** (`src/lib/year-hours.ts`, `year-hours.test.ts`, `YearInHours.tsx`, FEATURES.md calculator paragraph). Splits the year into needs (sleep, personal care, eating, housework and errands, caring, work, commute) and free time (exercise, learning, socialising, still free). "Days off" replaces weekend days (counted, not named; 365 at zero working days); time at work counts lunch and breaks, so the UK starting point is 8 h, with eating 1 h and housework 2.5 h. Dhyan's preset is the owner's own figures (sleep 7.5 h, care 1 h, eating 1 h, housework 1.5 h, on site 5 days with a 2 h round trip; 2,475 free hours). Slices, totals, weekly figures and free-time shares come from the model; the free-time subtotal is what its rows add up to. Sources: ONS 2023 (eating 1h07m; unpaid household 144 min a day; childcare 24.4 min all adults, 133.1 min participants) and NHS 150 min a week VERIFIED; Dreams, DfT, TUC and PureGym figures UNVERIFIED.
-- Checks 2026-11-17: staged tree alone in a scratch copy: typecheck, eslint 0/0, `year-hours` 27/27, build; graphify updated. Reviewer (Opus): FEATURES sleep figure (blocking) and a free-time subtotal that disagreed with its rows once over-filled, both fixed and tested; also plurals, units, emoji `aria-hidden`, row headers, commute pills hidden at zero days, lunch double-count noted in Sources. Preview localhost:8086, light: opening year 2,475 free hours; over-filled subtotals 6,285 + 8,343 = 14,628; zero days gives 365 days off. NOT run: full suite, `typecheck:functions`, ship-check, dark theme of the new layout, real phone, production. Left open from review: strip tooltips not keyboard-reachable (predates this), ad-hoc uppercase titles (the file's existing pattern), palette limits (dark lightness band; light orange/green CVD 7.7).
+**Watchlist News and Library redesign: committed as `63fa21b6`, not pushed.** Open: push to origin/main (deploys via GitHub Pages), awaiting the owner's go-ahead in the redesign session.
 
-**Fact card: "Travelled to" counts every place, committed `bffd0ada` on top of `c5e68cdb`, pushed; deployment NOT verified** (`src/components/home/fact-cards.ts`, `fact-cards.test.ts`, `FactCards.tsx`, `src/pages/Index.css`, its FEATURES.md sentence). Headline is every country and territory over the dataset's places (24/250), as the Travel header; beneath it UN states out of 195 (23/195) in a smaller figure; label "countries & territories · N cities · N continents"; "+N territory" gone. Owner's ask in chat.
-- Checks 2026-11-16: lint 0/0, typecheck, build pass; `fact-cards.test.ts` 17/17 (full suite not run); staged tree alone in a scratch copy: tsc, eslint, 17 tests, build. Reviewer (Opus): nothing blocking; fixed comment, "UN states" spacing, type-ladder size, test name, FEATURES wording. Verified local dev, hosted data, signed out, 800x600, 1440x900, 375x812: 24/250, 23/195 UN states, label; no console errors. Unverified: production; light theme; a real phone. Open: screen reader hears "23/195 UN states countries & territories" (headline unit comes after the second figure); TravelPage `totalPlaces` repeats the card's formula rather than calling `travelFacts`.
+- News: Following and Discover tabs; All / Films / Series switch. Discover mixes five seed groups; Show more continues with the next seeds after leaving and returning. Recommendations wait for the owner's ratings.
+- Library: status shelves with a hint line; search groups results by shelf ("All shelves"); shelves hold while a detail is open; Finished sorts by Recently watched, series by their latest watched episode.
+- Ratings: tap picker and prompts; stored in the owner-only `watchlist_ratings` table and read by a separate owner query, never in the public library read. Rating controls show only once ratings have loaded.
+- Removed dead code: `UpNextRail.tsx`, `CountdownCard.tsx`, `useUpNext.ts`, about 120 lines of column-workspace CSS, the Up Next warm-up read.
+- Hosted migrations applied (project `yvtiybyuifkiwyrnjebe`, owner-approved; the commit is unchanged from them): `20261117193741_watchlist_history_ratings`, `20261118074402_watchlist_dismissed_suggestions`, `20261118074422_watchlist_private_ratings`. The public `personal_rating` columns are gone. The live site never read them, so it is not broken meanwhile.
+- Hosted `tmdb-proxy` v14 already allows the discover and recommendations routes, so no function deploy is needed.
+- Backup `git stash` entry `stash@{0}` "watchlist-redesign-before-ff" (pre-merge copy) stays until the owner says to drop it.
 
-**Payslips: Calendar year grouping** (`78dc5a1`, deployed; `src/lib/finance/payslip.ts`, `payslip.test.ts`, `PayslipsSection.tsx`). Lint 0/0, typecheck, build, payslip tests 34/34 (also under TZ Auckland and Los Angeles). Reviewer (Opus): nothing blocking; fixed the Group by row wrapping on phones, fold state shared between tax and calendar 2025, a timezone-fragile test, the FEATURES student-loan wording; added tested `inCalendarYear`. Verified local dev, seed admin: desktop, Calendar year shows 2026 and 2025 with headline "· 2026", Tax year unchanged; 375px, the pills wrap whole and folding tax year 2025/26 leaves calendar 2025 open. Production, signed out: the live `TaxIncomeSurface` chunk carries "Calendar year". Unverified: production signed in with real payslips; light theme; a real phone.
+## Checks (2026-11-18, committed tree `63fa21b6`)
 
-**Batch of fixes, 2026-11-11, UNCOMMITTED** (27 modified files, plus new `src/collections/facets.ts` and `facets.test.ts`, both need `git add`)
-- Finance: hand-added transactions save the picked local day; chart grid, axes and reference lines on theme tokens. ⌘K on the splash opens the palette; a palette pick of an unlisted-category Inventory row reveals it. Verified (local dev, anonymous, hosted): ⌘K on the splash; palette pick of "Airpods Pro 2". Unverified: the reveal in a browser (unit tests only); Finance fixes (admin-only); light and dark; real phone.
-- Still open: `%23a1a1aa` select chevrons in `GoalsSurface.tsx`, `BudgetSurface.tsx`, `BudgetPresetField.tsx`, `calendar.tsx`; debt inputs `h-10` beside a 44px button; `BudgetSurface.tsx` ~371/419 donut tooltip shows "£1.00", not from rows; FilterBar "All (0)" over a revealed wishlist row.
+| Check | Result |
+|---|---|
+| `npm run lint` | 0 errors, 0 warnings |
+| `npm run typecheck` / `typecheck:functions` | pass / pass |
+| `npx vitest run` | 2,609 / 2,609 (89 files) |
+| `npm run build` | pass |
+| `graphify update .` | run |
+| Hosted advisors (security, performance) | nothing for the new objects |
 
-**Watchlist: inspector, trailers, time-to-finish sort** (`ab8f8d2`, `3f5d473`, `b6cc1e4`, `e8a5c94`, `9ac0837`, `0f9294b`, `47b2ed6`, `dcd8a4f`, deployed). The inspector follows the window across 1280px/600px (live `useMediaQuery`), one copy, focus back to the opener. A detail has one trailer button, playing the selected season's trailer (the show's for specials or a season without one); the selection lives in the dialog, defaults to `currentSeasonNumber`, is pinned on any watch toggle, and is tied to the title (News and Your Week reuse one dialog). One time sort, the owner's ask: "Quickest to finish" for shows, "Shortest first" for films; Quickest season, never asked for, is gone. A show with a season mid-run (`airingSeason`) sorts after every timed show, as "S4 still airing". Hosted trailers: 847/891 movies, 303/312 shows, 304/716 seasons (the rest have no TMDB season video). Production, signed out, 1440 and 375: inspector resize and sheet; One-Punch Man (S1 watched) opens on S2, switches to S3; sort offers Title, Latest releases, Quickest to finish; under it Tulsa King reads "S4 still airing": 265 timed, then 13 airing, then 9 up to date. Unverified: sort hold and the season pin while marking episodes watched (signed in); signed-in add of a new title gets its trailer; Safari; real phone rotation; Home at the breakpoint.
+Browser-verified signed out, desktop, local dev server against hosted, no console errors: Finished sort puts "Don't Trust the B---- in Apartment 23" second, after 22 Jump Street; Discover leave-and-return then Show more loads the next four seeds; grouped search "the" shows To watch 41, Upcoming 1, Up to date 2, Finished 4.
 
-**About fact cards and travel on phones** (`c53bdc9`, `c7b8404`, `e2e3cb5`, `523e67f`, deployed). Fact cards replace About's "At a glance" and "Continue exploring"; Travel gains a legend, phone-sized flat map, folded continents; `?category=favourites` opens Favourites. Favourite picks in `site_content` keys `favourite_film` / `favourite_series`. Verified headless on stand-in data (iPhone 13, 1440px, light and dark); 2,507 tests at `523e67f`. Follow-up 2026-11-15 (`DotMatrixGlobe.tsx` only; `4debf50`, `19832e6`, `cf57fc0`, last deployed by Pages run `43759097843`): the ring is gone; a selected city, or a dotless place's grid-square dot (Gibraltar), is drawn in the site's green with a faint glow, at the size it would have anyway (a selected city at least city-sized); no dot changes size (a larger selected dot and a desktop globe-dot enlargement were both reverted at the owner's request). Borders 0.3 alpha at world zoom (was 0.15), up to 0.6 zoomed; phone border width 0.6. Lint 0/0, typecheck, build, 2,522 tests across 81 files; headless light and dark at 1440px and iPhone 13. Unverified: a real phone and Safari. Known: on a laptop in the light theme the whole-world globe's gold is faint (small dots, as before).
-- Unverified: real touch on iOS and Android (pan vs drag at 6px, pinch), Safari, the signed-in favourite picker writing to hosted `site_content`, the Projects card (table empty), real flags and posters. Open on purpose: `?category=` stays after switching Watchlist tabs; `.travel-country-row--active` keeps an old rgba; map colours in `DOT_PALETTE` (TS), not tokens; `useStackedLayout` is a hand-rolled matchMedia hook (could use `useMediaQuery`).
-
-**Shipped, partly unverified:** Travel globe focus (`e9134b91`); Library toolbar and News columns (`cde866e2`, `0a029b5e`, `a82e1ff0`, `b7803983`, headless only); Travel itinerary, import review and journal (`11676b3a`, `261c193c`); Finance layout fixes (`f6658a78`, `7e1a0a8f`, `c4bbe6b2`); Your Week, episode scroll, phone detail drag, Redesign shell, Bank link, Money Hub and Tax Calculator.
-
-## Checks
-
-| Check | Date | Result |
-|---|---|---|
-| `c5e68cdb` donut | 2026-11-16 | Staged tree alone in a scratch copy: typecheck, eslint on the file; lint 0/0 and build on the whole working tree. Tests not run (layout only) |
-| `9241f92d` year in hours | 2026-11-17 | Staged tree alone in a scratch copy: typecheck, eslint 0/0, `year-hours` 27/27, build; graphify updated. Full suite and functions check not run |
-| `bffd0ada` fact card | 2026-11-16 | Lint 0/0; typecheck and build pass; `fact-cards.test.ts` 17/17; full suite not run. Graphify updated |
-| Watchlist (`3f5d473` .. `dcd8a4f`) | 2026-11-12 to 15 | Each commit's staged tree alone in a scratch copy: typecheck, lint 0/0, build; 2,522 tests at `dcd8a4f`; deno check and hosted migration `20261111223000`, `watchlist-cron-sync` v16 for trailers |
-| Batch tests | 2026-11-11 | 2,473 across 79 files once; 1–2 perf tests over 5,000ms under load. Not a clean run |
-| Ship-check | 2026-11-16 | 93/100; raw verdict Do not launch. Critical AWS-key match in `airport-countries.data.ts:226` verified as concatenated IATA codes (false positive). N+1, dependency vulnerabilities, cycles and other findings unresolved; not a green scan |
+NOT verified: anything signed in as admin (rating a film, season and episode; Seen it from Discover; favourite toggle; "Not interested" sync; ratings read back from `watchlist_ratings`); light mode; a real phone; production after deploy.
 
 ## Next
 
-1. Owner to approve pushing `9241f92d` (the only local commit; `e7b8b1a3` is on origin); then the calculator on production, in the dark theme and on a phone.
-2. Owner on a real phone, production: Travel (swipe over the map, drag the 2D map, pick Gibraltar and a city: one green dot each, no ring; borders readable at world zoom; fold continents, globe holds then spins after ~12s) and About (swipe fact cards; the Travelled to card reads 24/250 with 23/195 UN states beneath; signed in, pick a favourite film and series, reload).
-3. Signed in on production: time-to-finish order and the shown season both hold while marking episodes watched; add a title and see its trailer at once; a trailer in Safari and on an iPhone; inspector sheet on a phone.
-4. Verify Pages deployment and production behavior for pushed `0e548706`, `c5e68cdb` and `bffd0ada`. Commit the unrelated batch (its owner session), with `REHAUL_PLAN.md`'s trailer-note removal; then BST transaction day, Finance charts light and dark, Goals chevrons on production.
-5. Finance signed in: Budget, Cash Flow, Dashboard charts; Tax, Published Rates, Goals forms; holiday and debt dialogs.
-6. Travel signed in: re-import the Flighty CSV, add and publish a trip, upload a photo, run an import and a backup; then `REHAUL_PLAN.md` 8.F.
-7. Real iPhone: collection card detail drag; signed-in edit dialog; "Next up" pill below 1560px. `/beliefs` signed in, phone, dark; public hub Projects and per-collection visibility.
-8. Bank link on a phone (Barclaycard app), then desktop and Safari. Tax Calculator and Money Hub signed in.
-9. Merchant logos: fix `popworld`; check `revolution-bars` and `vue` in `merchant-logo-cache/index.ts`; deploy; one manual sync.
-10. Signed in: Student Loan, holiday booking, recurring undismiss, Brandfetch logos, Watchlist edits, Cash Flow. Owner: hosted pension to salary sacrifice; SLC balance; `1063LX`; November 2026 benefits payrolled?
-11. Save/reload races and schema reproducibility (`schemas/` composite keys). Leave `claude/affectionate-lamarr-f2d2cb` and `codex/assistant-integration-2026-11-02` (the 7.6 assistant, unmerged, waits on a key) and `codex/redesign-phase-0` (one unmerged commit: redesign plan and wireframes) alone.
+1. Owner go-ahead, then push `63fa21b6` and confirm the Pages run succeeds.
+2. Signed-in owner check on production (the NOT-verified list above).
+3. The plan's "Watchlist News and Library — what is left" items: see `REHAUL_PLAN.md`, not copied here.
+
+## Landed (credits session, pushed and deployed)
+
+- `12bb88d9` fix(watchlist): a film and a show that share a row id are told apart (`TitleRef`, `src/features/watchlist/title-ref.ts`).
+- `3d17b507` feat(watchlist): directors, creators and top cast in a title's details; FEATURES.md "Credits" bullet. Pushed `e3708d80..3d17b507`; Pages run 44206083694 succeeded. Hosted migration `watchlist_credits` applied as `20261118001210`; `watchlist-cron-sync` v17 deployed.
+- Backfill complete 2026-11-18: 952/952 films and 341/342 shows have credits. Gaps are TMDB's: 2 films with empty cast, 4 with no director, 59 shows with no "Created by", 1 empty show, and Cyberpunk: Edgerunners 2 (TMDB 404s tv/326788, pre-existing).
+- NOT verified: a show's "Created by" and cast rendered in the production dialog (data is in the rows; UI checked for a film only); light theme; a real phone.
+- The credits worktree `.claude/worktrees/watchlist-credits` and branch `feat/watchlist-credits` are deleted; that session owns nothing in the tree.
 
 ## Blockers
 
-- Parallel sessions share one checkout and cloud sessions push to `main`: fetch first, one committer; keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
-- Uncommitted: the batch, the `vite.config.ts` `data-exclude-search` hunk, `SeasonEpisodeList.tsx` comment and data-attribute removals, other sessions' `FEATURES.md` and `REHAUL_PLAN.md` edits. Left out on purpose: `.claude/launch.json`, `SITE_PLAN.md`, `google_implementation_redesign.md`, `gpt_implementation redesign.md`.
+- Parallel sessions share one checkout, and cloud sessions push to `main`: fetch first, one committer. Keep `backup/pre-rebase-2026-11-03` until signed-in production is verified.
+- Left uncommitted on purpose, not this work's: `.claude/launch.json` (another session's preview entries), the REHAUL_PLAN.md section "Part 4 — Personal tracking expansion" (owner unknown), untracked drafts `SITE_PLAN.md`, `google_implementation_redesign.md` and `gpt_implementation redesign.md`.
+- Worktree `.claude/worktrees/affectionate-lamarr-f2d2cb` (detached at d46bdecf), owner unknown.
 
 ## Open risks
 
-- Hosted `site_content` `about_me_1`/`about_me_2` have `section` NULL, so About shows the `site.json` fallback until it is set.
-- Warm-up sends ~30 anonymous reads, including the full Watchlist library; payload unmeasured. Watchlist background re-read can overwrite a concurrent edit; a failed first read caches an empty library.
-- Carried, unverified: four reference tables delete-then-insert; stalled token refresh; schemas-only rebuild misses composite keys; hosted JWT, headers, cron/pg_net, HEIC uploads; advisor warnings; leaked-password protection off.
-- Student Loan: pending interest accrues on the rebuilt balance, not SLC's; a phantom £12 lands October 2026. Keep stash `finance-reconciliation-backup-2026-10-29`.
+- Hosted `site_content` `about_me_1` / `about_me_2` have `section` NULL, so About shows the `site.json` fallback.
+- Warm-up sends about 30 anonymous reads, including the full Watchlist library.
+- Most watched episodes have no watch date: 2,447 of 2,532 on hosted (earliest dated 2026-09-13), so older finished series sort after dated titles under Recently watched.

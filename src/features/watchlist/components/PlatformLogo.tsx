@@ -85,6 +85,14 @@ interface PlatformBadgeProps {
   className?: string;
 }
 
+const OTHER_SERVICES_HINT = 'Not on Netflix, Prime Video, Disney+, Apple TV+, BBC iPlayer or ITVX';
+
+/**
+ * The sync stores "Online" for a title on none of the tracked services --
+ * rent, buy, another service or not streaming yet. Shown as what it means.
+ */
+export const platformLabel = (platform: string) => (platform === 'Online' ? 'Other services' : platform);
+
 /**
  * Platform indicator for cards and the detail dialog: the wordmark where the
  * platform has one, otherwise its name as a plain pill. "Online" is not a
@@ -101,12 +109,13 @@ export function PlatformBadge({
   if (!hasPlatformLogo(platform)) {
     return (
       <span
+        title={platform === 'Online' ? OTHER_SERVICES_HINT : undefined}
         className={cn(
           'rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground whitespace-nowrap',
           className,
         )}
       >
-        {platform}
+        {platformLabel(platform)}
       </span>
     );
   }

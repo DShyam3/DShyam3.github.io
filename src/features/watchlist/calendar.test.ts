@@ -58,17 +58,17 @@ describe('calendar episode plans', () => {
   });
 });
 
-describe('calendar tracking states', () => {
+describe('calendar library states', () => {
   it('gives a paused show no plans, keeps the saved row, and plans again once resumed', () => {
-    const paused: WatchlistItem = { ...show, tracking: 'paused' };
+    const paused: WatchlistItem = { ...show, library_state: 'paused' };
     expect(buildCalendarEvents([weekly], [paused], watchedThrough(3), today)).toEqual([]);
-    expect(buildCalendarEvents([weekly], [{ ...paused, tracking: 'active' }], watchedThrough(3), today)).toHaveLength(5);
+    expect(buildCalendarEvents([weekly], [{ ...paused, library_state: 'active' }], watchedThrough(3), today)).toHaveLength(5);
   });
   it('does not suggest the premiere of a paused or dropped show', () => {
     const upcoming: WatchlistItem = { ...show, seasons: [{ season_number: 2, release_date: '2027-01-07', episodes: [] }] };
-    expect(buildCalendarEvents([], [{ ...upcoming, tracking: 'dropped' }], watchedThrough(0), today)).toEqual([]);
-    expect(buildCalendarEvents([], [{ ...upcoming, tracking: 'paused' }], watchedThrough(0), today)).toEqual([]);
-    expect(buildCalendarEvents([], [{ ...upcoming, tracking: 'active' }], watchedThrough(0), today)).toHaveLength(1);
+    expect(buildCalendarEvents([], [{ ...upcoming, library_state: 'stopped' }], watchedThrough(0), today)).toEqual([]);
+    expect(buildCalendarEvents([], [{ ...upcoming, library_state: 'paused' }], watchedThrough(0), today)).toEqual([]);
+    expect(buildCalendarEvents([], [{ ...upcoming, library_state: 'active' }], watchedThrough(0), today)).toHaveLength(1);
   });
 });
 

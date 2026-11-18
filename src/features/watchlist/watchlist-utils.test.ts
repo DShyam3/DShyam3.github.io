@@ -15,8 +15,6 @@ import {
   groupAnnouncementsByShow,
   groupRecentEpisodesByShow,
   isAnnouncement,
-  isDropped,
-  isOnHold,
   isPremiereEpisode,
   isSeasonFinished,
   isSpecialsSeason,
@@ -50,20 +48,6 @@ const season = (episodes: Episode[]): Season => ({
   episodes,
 });
 
-describe('isOnHold / isDropped', () => {
-  it('treats only paused and dropped shows as on hold', () => {
-    expect(isOnHold({ category: 'TV Shows', tracking: 'paused' })).toBe(true);
-    expect(isOnHold({ category: 'TV Shows', tracking: 'dropped' })).toBe(true);
-    expect(isOnHold({ category: 'TV Shows', tracking: 'active' })).toBe(false);
-    expect(isOnHold({ category: 'TV Shows' })).toBe(false);
-    expect(isOnHold({ category: 'Movies', tracking: 'paused' })).toBe(false);
-  });
-  it('treats only dropped shows as dropped', () => {
-    expect(isDropped({ category: 'TV Shows', tracking: 'dropped' })).toBe(true);
-    expect(isDropped({ category: 'TV Shows', tracking: 'paused' })).toBe(false);
-    expect(isDropped({ category: 'Movies', tracking: 'dropped' })).toBe(false);
-  });
-});
 
 describe('formatRuntime', () => {
   it('drops the hours segment under an hour', () => {
@@ -434,6 +418,8 @@ describe('platformChangeSentence', () => {
 
   it('returns null when neither side is known', () => {
     expect(platformChangeSentence(null, null)).toBeNull();
+    expect(platformChangeSentence('Online', 'BBC iPlayer')).toBe('Now on BBC iPlayer');
+    expect(platformChangeSentence('Netflix', 'Online')).toBe('Left Netflix');
   });
 });
 
