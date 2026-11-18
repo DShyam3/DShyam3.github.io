@@ -124,6 +124,8 @@ export interface TMDBDetails {
   external_ids?: { imdb_id?: string | null };
   /** Films only: the series it belongs to, e.g. "X-Men Collection". */
   belongs_to_collection?: TMDBCollectionRef | null;
+  vote_average?: number;
+  vote_count?: number;
 }
 
 export interface TMDBCollectionRef {

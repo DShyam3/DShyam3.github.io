@@ -1,4 +1,5 @@
 import { useState, useEffect, useId, useRef, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, Trash2, CalendarDays, Calendar, RefreshCcw, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { TitleScores } from './TitleScores';
 import { libraryCategories } from '../library-categories';
+import { useTMDB } from '../useTMDB';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -77,6 +79,7 @@ export function WatchlistDetailDialog({
   );
   const { askDelete, deleteDialog } = useDeleteConfirm();
   const { loadShowEpisodes, loadItemDescription, setPersonalRating, ratingsStatus, favourites } = useWatchlist();
+  const { getMovieDetails } = useTMDB();
   const { isAdmin } = useAuth();
   const shelf = libraryShelf(item);
   const isFavourite = favourites.some(
@@ -111,6 +114,16 @@ export function WatchlistDetailDialog({
   }, [open]);
 
   const isTVShow = item.category === 'TV Shows';
+  const { data: tmdbDetail } = useQuery({
+    queryKey: ['watchlist', 'tmdb-details', isTVShow ? 'tv' : 'movie', item.tmdb_id],
+    enabled: open && !!item.tmdb_id,
+    staleTime: 30 * 60 * 1000,
+    queryFn: async () => {
+      const details = await getMovieDetails(item.tmdb_id!, isTVShow ? 'tv' : 'movie');
+      if (!details) throw new Error('TMDB details unavailable');
+      return details;
+    },
+  });
   const hasSeasons = Boolean(isTVShow && item.seasons && item.seasons.length > 0);
   const regularSeasonCount = isTVShow ? (item.seasons?.filter((season) => season.season_number > 0).length ?? 0) : 0;
 
@@ -271,6 +284,8 @@ export function WatchlistDetailDialog({
             imdbVotes={item.imdb_votes}
             rtScore={item.rt_score}
             metascore={item.metascore}
+            tmdbRating={tmdbDetail?.tmdb_rating ?? undefined}
+            tmdbVotes={tmdbDetail?.tmdb_votes ?? undefined}
           />
 
           {!isTVShow && item.runtime ? (
@@ -392,6 +407,8 @@ export function WatchlistDetailDialog({
     item,
     selectedSeason,
     trailer.key,
+    tmdbDetail?.tmdb_rating,
+    tmdbDetail?.tmdb_votes,
     trailer.title,
     trailer.label,
     status,

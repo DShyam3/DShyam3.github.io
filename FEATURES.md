@@ -233,7 +233,7 @@ News, Library, Diary and Franchises sit in one nav bar on every Watchlist page.
 - **Library** — a searchable grid of every title, sorted onto shelves by status: `Watching`, `To watch`, `Upcoming`, `Up to date`, `Finished`, then, separately, `Stopped watching` and `Hidden`. Each title sits on one shelf. `Upcoming` holds titles not out yet, and a series you are up to date on whose next episode or season has a date, soonest first: nothing to watch until then. `Up to date` holds a running series with every aired episode watched and no next date known; once that date is known it moves to `Upcoming`, and when the episode airs it moves to `Watching`. `Finished` holds watched films and ended series watched to the end. `Favourites` lists the titles you have favourited. An `All` / `Films` / `Series` switch, remembered in the browser, applies to every shelf, its count and `Favourites`. Search covers the whole library from any shelf. Favouriting from a card's menu is a single tap that adds or removes the favourite.
 A series can be paused from its details (Paused, out of Your Week): it keeps its shelf, and its card carries a Paused label. Films cannot be paused.
 Mark as watched for a film, and Mark Season N as Complete for a season, ask when: just now, on the release date (offered only once released), date unknown, or a picked day that is not in the future. A single episode tick is recorded as now, and an episode not yet aired gets no date.
-- **Personal Ratings** — tap-to-rate picker from `0.5` to `10` in `0.5` steps, with `Clear rating`, on movies, TV shows, seasons, and watched episodes. A season can be rated once at least one of its episodes is watched, and an episode only once it is watched. After watching, the app may ask `Watched — rate it?`, `Finished — rate the show?` or `Finished season N — rate it?`, each with `Skip` for that visit. Season pages show an independent episode average, `Episode average: X/10 · Y of Z rated`. Visitors see the owner's rating read-only, beside the IMDb, Rotten Tomatoes and Metacritic scores where they are known; only the signed-in owner can set a rating.
+- **Personal Ratings** — tap-to-rate picker from `0.5` to `10` in `0.5` steps, with `Clear rating`, on movies, TV shows, seasons, and watched episodes. A season can be rated once at least one of its episodes is watched, and an episode only once it is watched. After watching, the app may ask `Watched — rate it?`, `Finished — rate the show?` or `Finished season N — rate it?`, each with `Skip` for that visit. Season pages show an independent episode average, `Episode average: X/10 · Y of Z rated`. Visitors see the owner's rating read-only, beside the IMDb, Rotten Tomatoes, Metacritic and TMDB scores where they are known; only the signed-in owner can set a rating.
 - **Your Week** — part of News, showing today's plans and days with plans or
   suggested releases. Expand calendar offers week and month views with previous,
   next and current-period controls. Weekly TV plans place one unwatched episode
@@ -324,15 +324,16 @@ episodes, and the panel scrolls as one. It opens on the first regular season not
   has its credits at once; the rest of the library fills from TMDB over the
   nightly sync, a few hundred titles a night, and a title's Resync refreshes
   its credits. A title TMDB lists no one for shows neither line
-- Scores: a film's or series' details show its IMDb rating and vote count,
-  its Rotten Tomatoes Tomatometer (the share of critics' reviews that are
-  positive) and its Metacritic score, beside the owner's own rating, e.g.
-  "My score 8.5 · IMDb 7.8 (1.2M) · RT 91% · Metacritic 84". They come from
-  OMDb through the nightly sync, which refreshes a few hundred titles a night,
-  oldest first; a part OMDb does not have is left out, and nothing shows until
-  the sync has reached the title. Rotten Tomatoes and Metacritic are often
-  missing for series and for older or foreign films. Seasons have no outside
-  score.
+- Scores: a film's or series' details (and TMDB previews for titles outside
+  the library) show score chips with colour-coded badges or icons for the
+  owner's rating (`My score`), IMDb rating and vote count, Rotten Tomatoes
+  Tomatometer (fresh or splat tomato icon), Metacritic score, and TMDB rating
+  and vote count. IMDb, Rotten Tomatoes and Metacritic come from OMDb through
+  the nightly sync, which refreshes a few hundred titles a night, oldest first;
+  a part OMDb does not have is left out, and nothing shows until the sync has
+  reached the title. Rotten Tomatoes and Metacritic are often missing for
+  series and for older or foreign films. The TMDB score comes from the title's
+  TMDB record. Seasons have no outside score.
 
 **Sync:**
 

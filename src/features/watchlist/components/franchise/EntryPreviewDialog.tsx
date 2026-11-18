@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Check, Loader2, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +12,7 @@ import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { OrderEntryView } from '@/features/watchlist/franchise';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { PlatformBadge } from '@/features/watchlist/components/PlatformLogo';
+import { TitleScores } from '@/features/watchlist/components/TitleScores';
 import { TrailerButton } from '@/features/watchlist/components/TrailerButton';
 import { WatchedWhenMenu } from '@/features/watchlist/components/WatchedWhenMenu';
 import { CreditsList, RuntimeRow, SeriesStatusPill } from '@/features/watchlist/components/WatchlistDetailParts';
@@ -35,31 +36,15 @@ export function EntryPreviewDialog({
   adding?: boolean;
 }) {
   const { getMovieDetails } = useTMDB();
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setDetail(null);
-    setLoading(true);
-    setError(false);
-    void getMovieDetails(entry.tmdbId, entry.mediaType)
-      .then((data) => {
-        if (cancelled) return;
-        if (data) setDetail(data);
-        else setError(true);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [entry.tmdbId, entry.mediaType, getMovieDetails]);
+  const { data: detail = null, isPending: loading, isError: error } = useQuery<Detail>({
+    queryKey: ['watchlist', 'tmdb-details', entry.mediaType, entry.tmdbId],
+    staleTime: 30 * 60 * 1000,
+    queryFn: async () => {
+      const details = await getMovieDetails(entry.tmdbId, entry.mediaType);
+      if (!details) throw new Error('TMDB details unavailable');
+      return details;
+    },
+  });
 
   const poster = detail?.poster || entry.poster;
   const year = detail?.release_year?.toString() || entry.releaseDate?.slice(0, 4);
@@ -108,6 +93,10 @@ export function EntryPreviewDialog({
           {entry.mediaType === 'movie' && detail?.runtime ? (
             <RuntimeRow runtime={detail.runtime} className="text-muted-foreground" iconClassName="text-muted-foreground" />
           ) : null}
+          <TitleScores
+            tmdbRating={detail?.tmdb_rating ?? undefined}
+            tmdbVotes={detail?.tmdb_votes ?? undefined}
+          />
           <TrailerButton trailerKey={detail?.trailer_key} title={entry.title} />
           {detail && !detail.trailer_key && <p className="text-xs text-muted-foreground">No trailer available yet.</p>}
           {(onAddToLibrary || onSeenIt || onDismiss) && (

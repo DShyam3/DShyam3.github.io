@@ -103,6 +103,8 @@ export function useTMDB() {
                         top_cast: credits ? pickTopCast(credits.cast) : null,
                         // The nightly sync looks the OMDb scores up by this id.
                         imdb_id: isImdbId(imdbId) ? imdbId : null,
+                        tmdb_rating: data.vote_average && data.vote_average > 0 ? data.vote_average : null,
+                        tmdb_votes: data.vote_count && data.vote_count > 0 ? data.vote_count : null,
                         // Same pick as the sync, so a film has its series at once.
                         ...(type === 'movie'
                             ? (pickCollection(data) ?? { collection_id: null, collection_name: null })
