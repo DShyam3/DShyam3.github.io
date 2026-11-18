@@ -356,14 +356,14 @@ Built in the tree on `claude/eloquent-johnson-xdjc53`; not merged to
 main, not deployed, migration not applied. Decisions are in `REHAUL_HISTORY.md`
 under 2026-11-18.
 
-1. **Deploy order, fixed.** Apply migration `20261118120000_watchlist_tracking`
+1. **Deploy order, fixed.** Apply migration `20261118190243_watchlist_tracking`
    to hosted (after the three migrations already applied on 2026-11-17 and
    2026-11-18), then deploy `watchlist-cron-sync` and `tmdb-proxy`, then merge to
    main. The client and the sync read and write the new columns: deploying either
    first breaks the library read or every nightly sync.
 2. **Public ratings.** `watchlist_ratings` becomes publicly readable, writes stay
    admin-only (`(SELECT public.is_admin())`). Committed: the policy in
-   migration `20261118120000`, the client in `bf1f2db`; checked on a scratch
+   migration `20261118190243`, the client in `bf1f2db`; checked on a scratch
    Postgres only. Applying the migration publishes every existing rating.
 3. **Browser verification of every new screen.** None has been run: Diary (both
    tabs), Franchises, the import review, the Paused label, the Mark as watched

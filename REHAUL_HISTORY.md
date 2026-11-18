@@ -3084,7 +3084,7 @@ flag to its episodes. When the UPDATE came from an episode trigger
 (`pg_trigger_depth() > 1`), it returns without cascading. Before the guard,
 unmarking one episode of a fully watched season, or a newly synced episode
 joining one, unmarked the whole season and wiped its watch dates. The fix is
-migration `20261118120000_watchlist_tracking`; it is not applied yet.
+migration `20261118190243_watchlist_tracking`; it is not applied yet.
 
 ## OMDb replaces TMDB's average — 2026-11-18
 
