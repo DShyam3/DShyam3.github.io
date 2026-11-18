@@ -418,7 +418,7 @@ const WatchlistNews = () => {
     const watchlistItemId = String(entityId);
     const category = entityType === 'tv_show' ? 'TV Shows' : 'Movies';
     return {
-      scheduled: isInSchedule(watchlistItemId),
+      scheduled: isInSchedule({ id: watchlistItemId, category }),
       releaseDate: date,
       defaultMode: entityType === 'tv_show' ? ('weekly' as const) : ('date' as const),
       onAdd: (day: ScheduleEntry['day'], scheduledDate: string, mode: 'weekly' | 'date') => addToSchedule({
@@ -432,7 +432,7 @@ const WatchlistNews = () => {
         scheduledDate: mode === 'date' ? scheduledDate : undefined,
         mode,
       }),
-      onRemove: () => { void removeFromScheduleByWatchlistId(watchlistItemId); },
+      onRemove: () => { void removeFromScheduleByWatchlistId({ id: watchlistItemId, category }); },
     };
   }, [addToSchedule, isAdmin, isInSchedule, removeFromScheduleByWatchlistId]);
 
@@ -723,8 +723,8 @@ const WatchlistNews = () => {
           item={selectedItem}
           status={getAutoStatus(selectedItem)}
           onSchedule={isAdmin ? () => setDetailScheduleOpen(true) : undefined}
-          onRemoveFromSchedule={isAdmin ? () => { void removeFromScheduleByWatchlistId(selectedItem.id); } : undefined}
-          isScheduled={isInSchedule(selectedItem.id)}
+          onRemoveFromSchedule={isAdmin ? () => { void removeFromScheduleByWatchlistId(selectedItem); } : undefined}
+          isScheduled={isInSchedule(selectedItem)}
           toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
           isEpisodeWatched={isEpisodeWatched}
           isSeasonWatched={isSeasonWatched}

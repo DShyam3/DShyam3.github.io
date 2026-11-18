@@ -11,6 +11,7 @@ import { Trash2, Calendar, Heart, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
+import type { TitleRef } from '@/features/watchlist/title-ref';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
 import {
   compactUpcomingStatus,
@@ -29,7 +30,7 @@ interface WatchlistCardProps {
   item: WatchlistItem;
   /** Time left to watch, shown in place of year and genre while the library is sorted by it. */
   timeLeft?: string;
-  onRemove?: (id: string) => void;
+  onRemove?: (ref: TitleRef) => void;
   toggleEpisodeWatched?: (
     showId: string,
     seasonNumber: number,
@@ -44,10 +45,10 @@ interface WatchlistCardProps {
   isSeasonWatched: (showId: string, season: Season) => boolean;
   getAutoStatus: (item: WatchlistItem) => string | undefined;
   addToSchedule?: (item: Omit<ScheduleEntry, 'id'>) => void;
-  removeFromSchedule?: (watchlistItemId: string) => void;
-  isInSchedule: (watchlistItemId: string) => boolean;
+  removeFromSchedule?: (ref: TitleRef) => void;
+  isInSchedule: (ref: TitleRef) => boolean;
   onMoveToFavourites?: (item: WatchlistItem) => void;
-  onResync?: (id: string) => void;
+  onResync?: (ref: TitleRef) => void;
   syncing?: boolean;
 }
 
@@ -187,10 +188,10 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               )
             )}
         </>}
-        scheduled={isInSchedule(item.id)}
+        scheduled={isInSchedule(item)}
         onSchedule={addToSchedule || removeFromSchedule ? () => {
-          if (isInSchedule(item.id) && removeFromSchedule) {
-            askDelete({ name: item.title, title: 'Remove from schedule', confirmLabel: 'Remove', description: 'The title stays in your library.', onConfirm: () => removeFromSchedule(item.id) });
+          if (isInSchedule(item) && removeFromSchedule) {
+            askDelete({ name: item.title, title: 'Remove from schedule', confirmLabel: 'Remove', description: 'The title stays in your library.', onConfirm: () => removeFromSchedule(item) });
           } else if (addToSchedule) setScheduleDialogOpen(true);
         } : undefined}
         actions={onMoveToFavourites || onRemove ? (
@@ -231,7 +232,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
             <Button
               variant="destructive"
               onClick={() => {
-                if (onRemove) onRemove(item.id);
+                if (onRemove) onRemove(item);
                 setDeleteConfirmOpen(false);
               }}
               className="flex-1 gap-1.5"
@@ -261,7 +262,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         onDelete={
           onRemove
             ? () => {
-                onRemove(item.id);
+                onRemove(item);
                 setDetailOpen(false);
               }
             : undefined
@@ -269,7 +270,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
         onSchedule={
           addToSchedule
             ? () => {
-                if (!isInSchedule(item.id)) {
+                if (!isInSchedule(item)) {
                   setScheduleDialogOpen(true);
                 }
               }
@@ -284,13 +285,13 @@ export const WatchlistCard = React.memo(function WatchlistCard({
                   confirmLabel: 'Remove',
                   description: `Remove "${item.title}" from your weekly schedule? The title stays on your watchlist.`,
                   onConfirm: () => {
-                    removeFromSchedule(item.id);
+                    removeFromSchedule(item);
                     setDetailOpen(false);
                   },
                 })
             : undefined
         }
-        isScheduled={isInSchedule(item.id)}
+        isScheduled={isInSchedule(item)}
         toggleEpisodeWatched={toggleEpisodeWatched}
         toggleSeasonWatched={toggleSeasonWatched}
         isEpisodeWatched={isEpisodeWatched}
@@ -303,7 +304,7 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               }
             : undefined
         }
-        onResync={onResync ? () => onResync(item.id) : undefined}
+        onResync={onResync ? () => onResync(item) : undefined}
         syncing={syncing}
       />
 

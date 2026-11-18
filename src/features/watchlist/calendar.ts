@@ -1,5 +1,6 @@
 import type { WatchlistItem } from './useWatchlist';
 import type { ScheduleItem } from './useSchedule';
+import { isScheduleFor } from './title-ref';
 
 export interface CalendarEvent {
   id: string;
@@ -40,7 +41,7 @@ export function buildCalendarEvents(
   const todayKey = calendarDateKey(today);
   const weekStart = calendarWeekStart(today);
   for (const entry of schedule) {
-    const item = watchlist.find((title) => title.id === entry.watchlistItemId && title.category === entry.category);
+    const item = watchlist.find((title) => isScheduleFor(entry, title));
     if (!item) continue;
     const push = (date: string, label: string, releaseDate?: string) => events.push({
       id: `${entry.id}:${date}`, date, item, schedule: entry, label, releaseDate,
@@ -90,7 +91,7 @@ export function buildCalendarEvents(
   }
 
   for (const item of watchlist) {
-    if (schedule.some((entry) => entry.watchlistItemId === item.id && entry.category === item.category)) continue;
+    if (schedule.some((entry) => isScheduleFor(entry, item))) continue;
     const suggest = (date: string | undefined, label: string, suffix: string) => {
       if (!validDate(date) || date < todayKey) return;
       events.push({ id: `suggestion:${item.category}:${item.id}:${suffix}`, date, item, label, releaseDate: date, kind: 'suggestion', unreleased: date > todayKey });

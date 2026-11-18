@@ -17,6 +17,7 @@ import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
+import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import {
   resolveFavouriteCategory,
@@ -235,7 +236,7 @@ interface WatchlistContextType {
   syncLog: SyncLogEntry[];
   autoSyncEnabled: boolean;
   syncWatchlist: () => Promise<void>;
-  syncSingleItem: (id: string) => Promise<void>;
+  syncSingleItem: (ref: TitleRef) => Promise<void>;
   cancelSync: () => void;
   addWatchlistItem: (
     item: Omit<WatchlistItem, 'id' | 'created_at'>,
@@ -245,7 +246,7 @@ interface WatchlistContextType {
     title: string;
     category: string;
   }) => boolean;
-  removeWatchlistItem: (id: string) => Promise<void>;
+  removeWatchlistItem: (ref: TitleRef) => Promise<void>;
   addFavourite: (item: NewFavourite) => Promise<void>;
   /** Fills in missing TMDB facts on existing favourites. Admin-only. */
   syncFavouriteFacts: () => Promise<void>;
@@ -396,8 +397,13 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
    * Called when a detail dialog opens -- the only place it is displayed.
    */
   const loadItemDescription = useCallback(async (item: WatchlistItem) => {
-    if (item.descriptionLoaded || loadedDescriptionsRef.current.has(item.id)) return;
-    loadedDescriptionsRef.current.add(item.id);
+    // movies and tv_shows number their rows independently, so a film and a
+    // show can share an id. Keyed and matched on id alone, opening one wrote
+    // its overview and trailer onto the other, and the other never
+    // loaded its own.
+    const key = titleKey(item);
+    if (item.descriptionLoaded || loadedDescriptionsRef.current.has(key)) return;
+    loadedDescriptionsRef.current.add(key);
 
     const table = item.category === 'Movies' ? 'movies' : 'tv_shows';
     const { data, error } = await supabase.from(table)
@@ -407,14 +413,14 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
     if (error) {
       // Allow a retry on the next open rather than leaving the panel blank.
-      loadedDescriptionsRef.current.delete(item.id);
+      loadedDescriptionsRef.current.delete(key);
       console.error('Error loading description:', error);
       return;
     }
 
     setWatchlist((prev) =>
       prev.map((i) =>
-        i.id === item.id
+        isSameTitle(i, item)
           ? {
             ...i,
             description: data?.overview || '',
@@ -475,7 +481,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
     setWatchlist((prev) =>
       prev.map((item) => {
-        if (item.id !== showId) return item;
+        if (!isShowWithId(item, showId)) return item;
         return {
           ...item,
           episodesLoaded: true,
@@ -651,7 +657,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     const exists = watchlist.find(
       (i) =>
-        (item.tmdb_id && i.tmdb_id === item.tmdb_id) ||
+        (item.tmdb_id && i.tmdb_id === item.tmdb_id && i.category === item.category) ||
         (i.title.toLowerCase() === item.title.toLowerCase() &&
           i.category === item.category),
     );
@@ -820,8 +826,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     category: string;
   }) => pendingAddKeys.has(addItemKey(item));
 
-  const removeWatchlistItem = async (id: string) => {
-    const itemToRemove = watchlist.find((item) => item.id === id);
+  const removeWatchlistItem = async (ref: TitleRef) => {
+    const itemToRemove = watchlist.find((item) => isSameTitle(item, ref));
     if (!itemToRemove) return;
     try {
       if (itemToRemove.category === 'TV Shows') {
@@ -829,7 +835,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         // First, get all seasons for this show
         const { data: seasons } = await supabase.from('tv_show_seasons')
           .select('id')
-          .eq('tv_show_id', parseInt(id));
+          .eq('tv_show_id', parseInt(ref.id));
 
         if (seasons && seasons.length > 0) {
           const seasonIds = seasons.map((s) => s.id);
@@ -842,24 +848,24 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
           // Delete all seasons
           await supabase.from('tv_show_seasons')
             .delete()
-            .eq('tv_show_id', parseInt(id));
+            .eq('tv_show_id', parseInt(ref.id));
         }
 
         // Finally, delete the TV show itself
         const { error } = await supabase.from('tv_shows')
           .delete()
-          .eq('id', parseInt(id));
+          .eq('id', parseInt(ref.id));
         if (error) throw error;
       } else {
         // For movies, simple delete
         const { error } = await supabase
           .from('movies')
           .delete()
-          .eq('id', parseInt(id));
+          .eq('id', parseInt(ref.id));
         if (error) throw error;
       }
 
-      setWatchlist((prev) => prev.filter((item) => item.id !== id));
+      setWatchlist((prev) => prev.filter((item) => !isSameTitle(item, ref)));
       toast({ title: 'Success', description: 'Item removed' });
     } catch (error) {
       console.error('Error removing item:', error);
@@ -944,7 +950,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     episodeNumbers: ReadonlySet<number>,
     watched: boolean,
   ) => {
-    setWatchlist((prev) => prev.map((show) => show.id !== showId ? show : {
+    setWatchlist((prev) => prev.map((show) => !isShowWithId(show, showId) ? show : {
       ...show,
       seasons: show.seasons?.map((season) => season.season_number !== seasonNumber ? season : {
         ...season,
@@ -965,7 +971,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     const nextWatched = !isCurrentlyWatched;
 
     try {
-      const show = watchlist.find((s) => s.id === showId);
+      const show = watchlist.find((s) => isShowWithId(s, showId));
       const season = show?.seasons?.find(
         (s) => s.season_number === seasonNumber,
       );
@@ -1003,7 +1009,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
   const toggleSeasonWatched = async (showId: string, seasonNumber: number) => {
     if (!isAdmin) return;
-    const show = watchlist.find((s) => s.id === showId);
+    const show = watchlist.find((s) => isShowWithId(s, showId));
     const season = show?.seasons?.find((s) => s.season_number === seasonNumber);
     const episodes = season?.episodes ?? [];
     const allWatched = episodes.every((ep) =>
@@ -1105,8 +1111,8 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
   const syncWatchlist = () => runServerSync();
 
-  const syncSingleItem = async (id: string) => {
-    const item = watchlist.find((i) => i.id === id);
+  const syncSingleItem = async (ref: TitleRef) => {
+    const item = watchlist.find((i) => isSameTitle(i, ref));
     if (!item || !item.tmdb_id) return;
     await runServerSync(item);
   };

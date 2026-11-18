@@ -24,6 +24,7 @@ import {
   type TmdbFacts,
 } from '@/features/watchlist/favourite-category';
 import { useAuth } from '@/contexts/AuthContext';
+import { titleKey, type TitleRef } from './title-ref';
 import {
   buildDisplaySyncLog,
   formatSyncPart,
@@ -180,9 +181,9 @@ const Watchlist = () => {
   const { askDelete, deleteDialog } = useDeleteConfirm();
 
   const removeWatchlistItemAndSchedule = useCallback(
-    async (id: string) => {
-      await removeWatchlistItem(id);
-      await removeFromScheduleByWatchlistId(id);
+    async (ref: TitleRef) => {
+      await removeWatchlistItem(ref);
+      await removeFromScheduleByWatchlistId(ref);
     },
     [removeWatchlistItem, removeFromScheduleByWatchlistId],
   );
@@ -1311,7 +1312,7 @@ const Watchlist = () => {
               ) : (
                 visibleWatchlist.map((item) => (
                   <WatchlistCard
-                    key={item.id}
+                    key={titleKey(item)}
                     item={item}
                     timeLeft={timeLeftLabel(item)}
                     onRemove={
@@ -1412,9 +1413,9 @@ const Watchlist = () => {
                           category: selectedFavCategory,
                         });
 
-                        await removeWatchlistItem(moveItem.id);
-                        if (isInSchedule(moveItem.id)) {
-                          removeFromScheduleByWatchlistId(moveItem.id);
+                        await removeWatchlistItem(moveItem);
+                        if (isInSchedule(moveItem)) {
+                          removeFromScheduleByWatchlistId(moveItem);
                         }
                         setMoveDialogOpen(false);
                       } catch (error) {

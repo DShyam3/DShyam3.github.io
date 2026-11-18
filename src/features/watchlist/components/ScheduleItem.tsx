@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Tv, Film, Clock, Calendar, ArrowRightLeft, MoreHorizontal, Trash2 } from 'lucide-react';
 import { WatchlistItem, Season } from '@/features/watchlist/useWatchlist';
+import type { TitleRef } from '@/features/watchlist/title-ref';
 import { formatRuntime } from '@/features/watchlist/watchlist-utils';
 import { WatchlistDetailDialog } from './WatchlistDetailDialog';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
@@ -39,7 +40,6 @@ interface ScheduleItemProps {
       | 'Saturday'
       | 'Sunday',
   ) => void;
-  onRemoveWatchlist?: (id: string) => void;
   toggleEpisodeWatched?: (
     showId: string,
     seasonNumber: number,
@@ -53,7 +53,7 @@ interface ScheduleItemProps {
   isSeasonWatched: (showId: string, season: Season) => boolean;
   getAutoStatus: (item: WatchlistItem) => string | undefined;
   addToSchedule?: (item: Omit<ScheduleEntry, 'id'>) => void;
-  isInSchedule: (watchlistItemId: string) => boolean;
+  isInSchedule: (ref: TitleRef) => boolean;
   onMoveToFavourites?: (item: WatchlistItem) => void;
 }
 
@@ -62,7 +62,6 @@ export function ScheduleItem({
   item,
   removeFromSchedule,
   updateScheduleDay,
-  onRemoveWatchlist,
   toggleEpisodeWatched,
   isEpisodeWatched,
   isSeasonWatched,
@@ -267,18 +266,10 @@ export function ScheduleItem({
         onOpenChange={setDetailOpen}
         item={item}
         status={getAutoStatus(item)}
-        onDelete={
-          onRemoveWatchlist
-            ? () => {
-                onRemoveWatchlist(item.id);
-                setDetailOpen(false);
-              }
-            : undefined
-        }
         onSchedule={
           addToSchedule
             ? () => {
-                if (!isInSchedule(item.id)) {
+                if (!isInSchedule(item)) {
                   setScheduleDialogOpen(true);
                 }
               }
@@ -299,7 +290,7 @@ export function ScheduleItem({
                 })
             : undefined
         }
-        isScheduled={isInSchedule(item.id)}
+        isScheduled={isInSchedule(item)}
         toggleEpisodeWatched={toggleEpisodeWatched}
         isEpisodeWatched={isEpisodeWatched}
         isSeasonWatched={isSeasonWatched}

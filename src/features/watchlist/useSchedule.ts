@@ -1,6 +1,7 @@
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { isScheduleFor, type TitleRef } from './title-ref';
 
 export interface ScheduleItem {
   id: string;
@@ -15,7 +16,8 @@ export interface ScheduleItem {
     | 'Sunday';
   time?: string;
   title?: string;
-  category?: 'TV Shows' | 'Movies' | 'Upcoming';
+  /** Required: the id alone matches a film and a show that share it. */
+  category: TitleRef['category'];
   image_url?: string;
   scheduledDate?: string;
   mode?: 'weekly' | 'date';
@@ -186,12 +188,12 @@ export function useSchedule() {
     );
   };
 
-  const isInSchedule = (watchlistItemId: string) => {
-    return schedule.some((item) => item.watchlistItemId === watchlistItemId);
+  const isInSchedule = (ref: TitleRef) => {
+    return schedule.some((item) => isScheduleFor(item, ref));
   };
 
-  const removeFromScheduleByWatchlistId = async (watchlistItemId: string) => {
-    const item = schedule.find((i) => i.watchlistItemId === watchlistItemId);
+  const removeFromScheduleByWatchlistId = async (ref: TitleRef) => {
+    const item = schedule.find((i) => isScheduleFor(i, ref));
     if (item) {
       await removeFromSchedule(item.id);
     }

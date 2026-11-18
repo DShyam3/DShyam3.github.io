@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import type { ScheduleItem as ScheduleEntry } from '@/features/watchlist/useSchedule';
 import type { WatchlistItem } from '@/features/watchlist/useWatchlist';
+import { isSameTitle } from '@/features/watchlist/title-ref';
 import { buildCalendarEvents, calendarDateKey, calendarWeekStart, type CalendarEvent } from '@/features/watchlist/calendar';
 import { ScheduleItem } from './ScheduleItem';
 import { SmartScheduleDialog } from './SmartScheduleDialog';
@@ -51,7 +52,7 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
   const todayKey = calendarDateKey(today);
   const events = buildCalendarEvents(schedule, watchlist, actions.isEpisodeWatched, today)
     .filter((event) => event.kind === 'plan' || !declined.includes(event.id));
-  const selectedItem = selectedEvent && (watchlist.find((item) => item.id === selectedEvent.item.id && item.category === selectedEvent.item.category) ?? selectedEvent.item);
+  const selectedItem = selectedEvent && (watchlist.find((item) => isSameTitle(item, selectedEvent.item)) ?? selectedEvent.item);
 
   const datesFrom = (start: Date, count: number) => Array.from({ length: count }, (_, index) => {
     const date = new Date(start);
@@ -225,7 +226,7 @@ export function YourWeek({ schedule, watchlist, loading, ...actions }: YourWeekP
         onOpenChange={(open) => { if (!open) setSelectedEvent(null); }}
         item={selectedItem}
         status={actions.getAutoStatus(selectedItem)}
-        isScheduled={actions.isInSchedule(selectedItem.id)}
+        isScheduled={actions.isInSchedule(selectedItem)}
         onSchedule={actions.addToSchedule ? () => setScheduleEvent(selectedEvent) : undefined}
         onRemoveFromSchedule={selectedEvent.schedule && actions.removeFromSchedule ? () => askDelete({
           name: selectedItem.title,
