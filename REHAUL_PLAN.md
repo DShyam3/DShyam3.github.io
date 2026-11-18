@@ -367,10 +367,13 @@ under 2026-11-18.
    Postgres only. Applying the migration publishes every existing rating.
 3. **Browser verification of every new screen.** None has been run: Diary (both
    tabs), Franchises, the import review, the Paused label, the Mark as watched
-   date menu, the TMDB score, and the public rating read, plus the signed-in admin
+   date menu, the IMDb / RT / Metacritic scores, and the public rating read, plus the signed-in admin
    checks.
-4. **TMDB votes and collections backfill** runs over three nightly sync parts.
-   Franchises and the TMDB score stay incomplete until it has run.
+4. **OMDb key and backfill.** Add `OMDB_API_KEY` as an Edge Function secret
+   (free tier: 1,000 requests a day); without it the sync skips scores. Scores
+   (at most 300 OMDb lookups per nightly part) and film collections then fill
+   in over the nightly sync parts; Franchises and the scores stay incomplete
+   until they have.
 5. **Trakt export format**: check the importer's parsing against a real Trakt
    export. It was written against the documented shape.
 6. **Trakt watched-movies date.** `last_watched_at` is the latest play, not the

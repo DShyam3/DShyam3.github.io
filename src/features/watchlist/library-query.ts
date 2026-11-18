@@ -25,7 +25,8 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .from('movies')
       .select(
         `id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime,
-          watched, watched_at, library_state, tmdb_vote_average, tmdb_vote_count`,
+          watched, watched_at, library_state,
+          imdb_id, imdb_rating, imdb_votes, rt_score, metascore`,
         { count: 'exact' },
       )
       .order('title', { ascending: true })
@@ -42,9 +43,9 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .select(
         `
                 id, title, platform, genre, status, poster, release_date, tmdb_id, library_state,
-                tmdb_vote_average, tmdb_vote_count,
+                imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
                 tv_show_seasons (
-                  id, season_number, release_date, watched, tmdb_vote_average,
+                  id, season_number, release_date, watched,
                   tv_show_episodes (id, episode_number, watched, runtime, release_date)
                 )
             `,
@@ -104,8 +105,11 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
         ? new Date(movie.release_date).toISOString()
         : new Date().toISOString(),
       streaming_platform: movie.platform,
-      tmdb_vote_average: movie.tmdb_vote_average ?? undefined,
-      tmdb_vote_count: movie.tmdb_vote_count ?? undefined,
+      imdb_id: movie.imdb_id ?? undefined,
+      imdb_rating: movie.imdb_rating ?? undefined,
+      imdb_votes: movie.imdb_votes ?? undefined,
+      rt_score: movie.rt_score ?? undefined,
+      metascore: movie.metascore ?? undefined,
     }),
   );
 
@@ -134,8 +138,11 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
         : new Date().toISOString(),
       streaming_platform: show.platform,
       series_status: show.status as WatchlistItem['series_status'],
-      tmdb_vote_average: show.tmdb_vote_average ?? undefined,
-      tmdb_vote_count: show.tmdb_vote_count ?? undefined,
+      imdb_id: show.imdb_id ?? undefined,
+      imdb_rating: show.imdb_rating ?? undefined,
+      imdb_votes: show.imdb_votes ?? undefined,
+      rt_score: show.rt_score ?? undefined,
+      metascore: show.metascore ?? undefined,
       episodesLoaded: false,
       seasons: (show.tv_show_seasons || [])
         .sort((a, b) => a.season_number - b.season_number)
@@ -144,7 +151,6 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
           season_number: season.season_number,
           release_date: season.release_date || undefined,
           watched: season.watched,
-          tmdb_vote_average: season.tmdb_vote_average ?? undefined,
           episodes: (season.tv_show_episodes || [])
             .sort(
               (a, b) =>

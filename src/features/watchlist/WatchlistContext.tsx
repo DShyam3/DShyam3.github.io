@@ -20,7 +20,6 @@ import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
 import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
 import { applyRatings, ratingColumn, watchlistRatingsQuery, withRating, type RatingTarget } from './ratings-query';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
-import { pickSeasonVote } from './tmdb-score';
 import { setWatchedArgs, type WatchedWhen } from './watched-when';
 import {
   resolveFavouriteCategory,
@@ -125,8 +124,6 @@ export interface Season {
   watched?: boolean;
   /** YouTube key of this season's trailer. Loaded with the episodes. */
   trailer_key?: string;
-  /** TMDB users' mean score for this season; TMDB gives no count. */
-  tmdb_vote_average?: number;
 }
 
 export interface WatchlistItem {
@@ -175,9 +172,12 @@ export interface WatchlistItem {
   // pre-existing stored rows using the British spelling.
   series_status?:
     'Returning Series' | 'In Production' | 'Ended' | 'Canceled' | 'Cancelled';
-  /** TMDB users' mean score (0-10) and how many voted; absent when none. */
-  tmdb_vote_average?: number;
-  tmdb_vote_count?: number;
+  /** OMDb scores, filled by the nightly sync; each absent when unknown. */
+  imdb_id?: string;
+  imdb_rating?: number;
+  imdb_votes?: number;
+  rt_score?: number;
+  metascore?: number;
   /** Films only: the TMDB collection (film series) it belongs to. */
   collection_id?: number;
   collection_name?: string;
@@ -717,8 +717,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             trailer_key: item.trailer_key || null,
             directors: item.directors ?? null,
             top_cast: item.top_cast ?? null,
-            tmdb_vote_average: item.tmdb_vote_average ?? null,
-            tmdb_vote_count: item.tmdb_vote_count ?? null,
+            imdb_id: item.imdb_id ?? null,
             collection_id: item.collection_id ?? null,
             collection_name: item.collection_name ?? null,
             // "Seen it" from discovery: straight to Finished. The row's
@@ -755,8 +754,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               trailer_key: item.trailer_key || null,
               creators: item.creators ?? null,
               top_cast: item.top_cast ?? null,
-              tmdb_vote_average: item.tmdb_vote_average ?? null,
-              tmdb_vote_count: item.tmdb_vote_count ?? null,
+              imdb_id: item.imdb_id ?? null,
             })
             .select()
             .single();
@@ -799,7 +797,6 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       tv_show_id: show.id,
                       season_number: s.season_number,
                       release_date: s.air_date || null,
-                      tmdb_vote_average: pickSeasonVote(s.vote_average) ?? null,
                       trailer_key: pickTrailerKey(sDetails.videos?.results),
                       // Checked, so the sync's trailer backfill skips it.
                       trailer_checked_at: new Date().toISOString(),

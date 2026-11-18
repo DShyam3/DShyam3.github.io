@@ -1,5 +1,5 @@
--- Watchlist tracking: TMDB's community vote average beside the owner's own
--- score, a paused state for series, a film's TMDB collection, hand-built
+-- Watchlist tracking: OMDb scores (IMDb rating and votes, Rotten Tomatoes,
+-- Metacritic) beside the owner's own score, a paused state for series, a film's TMDB collection, hand-built
 -- viewing orders, and three admin RPCs. Mirrors supabase/schemas/20_watchlist.sql.
 --
 -- Applies AFTER origin/main's four migrations, which are already on the
@@ -32,10 +32,12 @@
 --
 -- ## Columns
 --
--- movies: tmdb_vote_average, tmdb_vote_count, collection_id, collection_name.
--- tv_shows: tmdb_vote_average, tmdb_vote_count. tv_show_seasons:
--- tmdb_vote_average (TMDB gives seasons no count). All CHECKs are on nullable
--- columns, so existing rows satisfy them.
+-- movies: imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
+-- scores_checked_at, collection_id, collection_name.
+-- tv_shows: imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
+-- scores_checked_at. tv_show_seasons gets no score column. The scores come
+-- from OMDb (an unofficial aggregator), queried by imdb_id. All CHECKs are on
+-- nullable columns, so existing rows satisfy them.
 --
 -- ## Library state
 --
@@ -76,10 +78,17 @@ BEGIN;
 -- ## Columns
 
 ALTER TABLE "public"."movies"
-    ADD COLUMN IF NOT EXISTS "tmdb_vote_average" numeric(3,1)
-        CONSTRAINT "movies_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10),
-    ADD COLUMN IF NOT EXISTS "tmdb_vote_count" integer
-        CONSTRAINT "movies_tmdb_vote_count_check" CHECK ("tmdb_vote_count" >= 0),
+    ADD COLUMN IF NOT EXISTS "imdb_id" text
+        CONSTRAINT "movies_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
+    ADD COLUMN IF NOT EXISTS "imdb_rating" numeric(3,1)
+        CONSTRAINT "movies_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
+    ADD COLUMN IF NOT EXISTS "imdb_votes" integer
+        CONSTRAINT "movies_imdb_votes_check" CHECK ("imdb_votes" >= 0),
+    ADD COLUMN IF NOT EXISTS "rt_score" smallint
+        CONSTRAINT "movies_rt_score_check" CHECK ("rt_score" BETWEEN 0 AND 100),
+    ADD COLUMN IF NOT EXISTS "metascore" smallint
+        CONSTRAINT "movies_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100),
+    ADD COLUMN IF NOT EXISTS "scores_checked_at" timestamptz,
     ADD COLUMN IF NOT EXISTS "collection_id" integer,
     ADD COLUMN IF NOT EXISTS "collection_name" text;
 
@@ -87,14 +96,17 @@ ALTER TABLE "public"."movies"
 CREATE INDEX IF NOT EXISTS "movies_collection_id_idx" ON "public"."movies" USING "btree" ("collection_id") WHERE ("collection_id" IS NOT NULL);
 
 ALTER TABLE "public"."tv_shows"
-    ADD COLUMN IF NOT EXISTS "tmdb_vote_average" numeric(3,1)
-        CONSTRAINT "tv_shows_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10),
-    ADD COLUMN IF NOT EXISTS "tmdb_vote_count" integer
-        CONSTRAINT "tv_shows_tmdb_vote_count_check" CHECK ("tmdb_vote_count" >= 0);
-
-ALTER TABLE "public"."tv_show_seasons"
-    ADD COLUMN IF NOT EXISTS "tmdb_vote_average" numeric(3,1)
-        CONSTRAINT "tv_show_seasons_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10);
+    ADD COLUMN IF NOT EXISTS "imdb_id" text
+        CONSTRAINT "tv_shows_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
+    ADD COLUMN IF NOT EXISTS "imdb_rating" numeric(3,1)
+        CONSTRAINT "tv_shows_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
+    ADD COLUMN IF NOT EXISTS "imdb_votes" integer
+        CONSTRAINT "tv_shows_imdb_votes_check" CHECK ("imdb_votes" >= 0),
+    ADD COLUMN IF NOT EXISTS "rt_score" smallint
+        CONSTRAINT "tv_shows_rt_score_check" CHECK ("rt_score" BETWEEN 0 AND 100),
+    ADD COLUMN IF NOT EXISTS "metascore" smallint
+        CONSTRAINT "tv_shows_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100),
+    ADD COLUMN IF NOT EXISTS "scores_checked_at" timestamptz;
 
 -- Series only: a break from watching. Films keep main's three states.
 ALTER TABLE "public"."tv_shows" DROP CONSTRAINT IF EXISTS "tv_shows_library_state_check";
@@ -105,20 +117,41 @@ ALTER TABLE ONLY "public"."tv_shows"
 
 -- ## Comments
 
-COMMENT ON COLUMN "public"."movies"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s own score in watchlist_ratings. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."imdb_id" IS
+    'IMDb title id (tt plus 7 to 10 digits), taken from TMDB (movie imdb_id, or tv external_ids.imdb_id). It is the key OMDb is queried by. Null when TMDB has none or the sync has not fetched it.';
 
-COMMENT ON COLUMN "public"."tv_shows"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s own score in watchlist_ratings. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."imdb_rating" IS
+    'IMDb's weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
 
-COMMENT ON COLUMN "public"."tv_show_seasons"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average for the season, 0 to 10 (not critics), stored beside the owner''s own score in watchlist_ratings. TMDB gives seasons an average but no vote count. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."imdb_votes" IS
+    'How many IMDb users voted behind imdb_rating; a low count means a noisy rating. From OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known.';
 
-COMMENT ON COLUMN "public"."movies"."tmdb_vote_count" IS
-    'How many TMDB users voted behind tmdb_vote_average; a low count means a noisy average. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."rt_score" IS
+    'Rotten Tomatoes Tomatometer, 0 to 100: the percentage of critics'' reviews that are positive (not an average grade). from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
 
-COMMENT ON COLUMN "public"."tv_shows"."tmdb_vote_count" IS
-    'How many TMDB users voted behind tmdb_vote_average; a low count means a noisy average. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."metascore" IS
+    'Metacritic''s weighted critic score, 0 to 100, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
+
+COMMENT ON COLUMN "public"."movies"."scores_checked_at" IS
+    'When OMDb was last asked for this title; null = never. The nightly sync refreshes the oldest first within a daily request budget; a title OMDb has no scores for still gets a time so it is not asked every night. OMDb is an unofficial aggregator.';
+
+COMMENT ON COLUMN "public"."tv_shows"."imdb_id" IS
+    'IMDb title id (tt plus 7 to 10 digits), taken from TMDB (movie imdb_id, or tv external_ids.imdb_id). It is the key OMDb is queried by. Null when TMDB has none or the sync has not fetched it.';
+
+COMMENT ON COLUMN "public"."tv_shows"."imdb_rating" IS
+    'IMDb's weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
+
+COMMENT ON COLUMN "public"."tv_shows"."imdb_votes" IS
+    'How many IMDb users voted behind imdb_rating; a low count means a noisy rating. From OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known.';
+
+COMMENT ON COLUMN "public"."tv_shows"."rt_score" IS
+    'Rotten Tomatoes Tomatometer, 0 to 100: the percentage of critics'' reviews that are positive (not an average grade). from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
+
+COMMENT ON COLUMN "public"."tv_shows"."metascore" IS
+    'Metacritic''s weighted critic score, 0 to 100, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
+
+COMMENT ON COLUMN "public"."tv_shows"."scores_checked_at" IS
+    'When OMDb was last asked for this title; null = never. The nightly sync refreshes the oldest first within a daily request budget; a title OMDb has no scores for still gets a time so it is not asked every night. OMDb is an unofficial aggregator.';
 
 COMMENT ON COLUMN "public"."tv_shows"."library_state" IS
     'active, paused, hidden or stopped. paused: a break -- the series leaves Your Week but keeps its shelf. stopped: the owner stopped watching it. hidden: hidden from visitors, owner-only. active is the truth for every pre-existing row. Films have no paused state (movies_library_state_check allows active, hidden, stopped).';

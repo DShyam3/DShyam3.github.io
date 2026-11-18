@@ -14,7 +14,7 @@ import { PlatformBadge } from './PlatformLogo';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
-import { TmdbScore } from './TmdbScore';
+import { TitleScores } from './TitleScores';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -269,7 +269,13 @@ export function WatchlistDetailDialog({
           />
 
           {/* The admin rates in LibraryActions; visitors see the score here. */}
-          <TmdbScore average={item.tmdb_vote_average} votes={item.tmdb_vote_count} mine={isAdmin ? undefined : item.personal_rating} />
+          <TitleScores
+            mine={isAdmin ? undefined : item.personal_rating}
+            imdbRating={item.imdb_rating}
+            imdbVotes={item.imdb_votes}
+            rtScore={item.rt_score}
+            metascore={item.metascore}
+          />
 
           {!isTVShow && item.runtime ? (
             <RuntimeRow

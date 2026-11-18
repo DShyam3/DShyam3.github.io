@@ -2243,17 +2243,21 @@ export type Database = {
           directors: string[] | null
           genre: string | null
           id: number
+          imdb_id: string | null
+          imdb_rating: number | null
+          imdb_votes: number | null
+          metascore: number | null
           overview: string | null
           pinned: boolean
           platform: string | null
           poster: string | null
           release_date: string | null
           release_year: number | null
+          rt_score: number | null
           runtime: number | null
+          scores_checked_at: string | null
           title: string
           tmdb_id: number | null
-          tmdb_vote_average: number | null
-          tmdb_vote_count: number | null
           top_cast: string[] | null
           trailer_key: string | null
         }
@@ -2267,17 +2271,21 @@ export type Database = {
           directors?: string[] | null
           genre?: string | null
           id?: number
+          imdb_id?: string | null
+          imdb_rating?: number | null
+          imdb_votes?: number | null
+          metascore?: number | null
           overview?: string | null
           pinned?: boolean
           platform?: string | null
           poster?: string | null
           release_date?: string | null
           release_year?: number | null
+          rt_score?: number | null
           runtime?: number | null
+          scores_checked_at?: string | null
           title: string
           tmdb_id?: number | null
-          tmdb_vote_average?: number | null
-          tmdb_vote_count?: number | null
           top_cast?: string[] | null
           trailer_key?: string | null
         }
@@ -2291,17 +2299,21 @@ export type Database = {
           directors?: string[] | null
           genre?: string | null
           id?: number
+          imdb_id?: string | null
+          imdb_rating?: number | null
+          imdb_votes?: number | null
+          metascore?: number | null
           overview?: string | null
           pinned?: boolean
           platform?: string | null
           poster?: string | null
           release_date?: string | null
           release_year?: number | null
+          rt_score?: number | null
           runtime?: number | null
+          scores_checked_at?: string | null
           title?: string
           tmdb_id?: number | null
-          tmdb_vote_average?: number | null
-          tmdb_vote_count?: number | null
           top_cast?: string[] | null
           trailer_key?: string | null
         }
@@ -2571,7 +2583,6 @@ export type Database = {
           release_date: string | null
           release_year: number | null
           season_number: number
-          tmdb_vote_average: number | null
           trailer_checked_at: string | null
           trailer_key: string | null
           tv_show_id: number | null
@@ -2583,7 +2594,6 @@ export type Database = {
           release_date?: string | null
           release_year?: number | null
           season_number: number
-          tmdb_vote_average?: number | null
           trailer_checked_at?: string | null
           trailer_key?: string | null
           tv_show_id?: number | null
@@ -2595,7 +2605,6 @@ export type Database = {
           release_date?: string | null
           release_year?: number | null
           season_number?: number
-          tmdb_vote_average?: number | null
           trailer_checked_at?: string | null
           trailer_key?: string | null
           tv_show_id?: number | null
@@ -2618,16 +2627,20 @@ export type Database = {
           creators: string[] | null
           genre: string | null
           id: number
+          imdb_id: string | null
+          imdb_rating: number | null
+          imdb_votes: number | null
+          metascore: number | null
           overview: string | null
           pinned: boolean
           platform: string
           poster: string | null
           release_date: string | null
+          rt_score: number | null
+          scores_checked_at: string | null
           status: string | null
           title: string
           tmdb_id: number | null
-          tmdb_vote_average: number | null
-          tmdb_vote_count: number | null
           top_cast: string[] | null
           trailer_key: string | null
         }
@@ -2637,16 +2650,20 @@ export type Database = {
           creators?: string[] | null
           genre?: string | null
           id?: number
+          imdb_id?: string | null
+          imdb_rating?: number | null
+          imdb_votes?: number | null
+          metascore?: number | null
           overview?: string | null
           pinned?: boolean
           platform: string
           poster?: string | null
           release_date?: string | null
+          rt_score?: number | null
+          scores_checked_at?: string | null
           status?: string | null
           title: string
           tmdb_id?: number | null
-          tmdb_vote_average?: number | null
-          tmdb_vote_count?: number | null
           top_cast?: string[] | null
           trailer_key?: string | null
         }
@@ -2656,16 +2673,20 @@ export type Database = {
           creators?: string[] | null
           genre?: string | null
           id?: number
+          imdb_id?: string | null
+          imdb_rating?: number | null
+          imdb_votes?: number | null
+          metascore?: number | null
           overview?: string | null
           pinned?: boolean
           platform?: string
           poster?: string | null
           release_date?: string | null
+          rt_score?: number | null
+          scores_checked_at?: string | null
           status?: string | null
           title?: string
           tmdb_id?: number | null
-          tmdb_vote_average?: number | null
-          tmdb_vote_count?: number | null
           top_cast?: string[] | null
           trailer_key?: string | null
         }

@@ -4,11 +4,11 @@ Updated 2026-11-18 · Branch `claude/eloquent-johnson-xdjc53` · Head: the commi
 
 ## In progress
 
-**Watchlist Diary, Franchises, history import, TMDB scores and public ratings.** In the tree on the branch; not merged, not deployed, migration not applied. Full list in `REHAUL_PLAN.md`, "Watchlist Diary, Franchises, import and public ratings".
+**Watchlist Diary, Franchises, history import, OMDb scores and public ratings.** In the tree on the branch; not merged, not deployed, migration not applied. Full list in `REHAUL_PLAN.md`, "Watchlist Diary, Franchises, import and public ratings".
 
-- Built: TMDB score beside the owner's rating; Mark as watched and Mark Season as Complete ask when; Paused series state; Diary and Year in review (`/watchlist/diary`); Franchises (`/watchlist/franchises`); Letterboxd and Trakt file import (admin); nav News · Library · Diary · Franchises.
+- Built: IMDb, Rotten Tomatoes and Metacritic scores (from OMDb, by the nightly sync) beside the owner's rating; Mark as watched and Mark Season as Complete ask when; Paused series state; Diary and Year in review (`/watchlist/diary`); Franchises (`/watchlist/franchises`); Letterboxd and Trakt file import (admin); nav News · Library · Diary · Franchises.
 - Fixed in code, not live: a season is no longer unmarked when one of its episodes is (migration `20261118120000`, `pg_trigger_depth` guard).
-- Ratings are now public, read-only to visitors; writes stay admin-only (the owner's decision, 2026-11-18). Committed: client in `bf1f2db` (visitors read `watchlist_ratings`, "My score · TMDB" line), policy in migration `20261118120000` (`Public Read Access`, anon SELECT; checked on a scratch Postgres: anon reads, cannot write). Not applied, not deployed: applying it publishes every existing rating.
+- Ratings are now public, read-only to visitors; writes stay admin-only (the owner's decision, 2026-11-18). Committed: client in `bf1f2db` (visitors read `watchlist_ratings`, "My score · IMDb · RT · Metacritic" line), policy in migration `20261118120000` (`Public Read Access`, anon SELECT; checked on a scratch Postgres: anon reads, cannot write). Not applied, not deployed: applying it publishes every existing rating.
 
 ## Checks (2026-11-18, final tree of this branch)
 
@@ -27,9 +27,9 @@ Not run: `supabase db diff` against a from-schema build; graphify (not installed
 
 ## Next
 
-1. Apply migration `20261118120000_watchlist_tracking` to hosted (after main's three, which are applied); check `select library_state, tmdb_vote_count from tv_shows limit 1` and that anon can read `watchlist_ratings`. Then deploy `watchlist-cron-sync` and `tmdb-proxy`. Then merge to `main`. This order matters: the client and the sync read and write the new columns.
+1. Apply migration `20261118120000_watchlist_tracking` to hosted (after main's three, which are applied); check `select library_state, imdb_rating from tv_shows limit 1` and that anon can read `watchlist_ratings`. Then deploy `watchlist-cron-sync` and `tmdb-proxy`. Then merge to `main`. This order matters: the client and the sync read and write the new columns.
 2. Browser-verify every new screen, signed out and signed in as admin. Nothing has been checked yet.
-3. Let the TMDB votes and collections backfill run over three nightly sync parts.
+3. Add the OMDb key as the Edge Function secret `OMDB_API_KEY` (free key, 1,000 requests a day). Without it the sync skips scores. Then let scores and collections fill in over the nightly sync parts (up to 300 OMDb lookups per part).
 4. Check the Trakt export format against a real export, and that `last_watched_at` (latest play) is used as such.
 
 ## Landed on main (checked against git, 2026-11-18)

@@ -3085,3 +3085,19 @@ flag to its episodes. When the UPDATE came from an episode trigger
 unmarking one episode of a fully watched season, or a newly synced episode
 joining one, unmarked the whole season and wiped its watch dates. The fix is
 migration `20261118120000_watchlist_tracking`; it is not applied yet.
+
+## OMDb replaces TMDB's average — 2026-11-18
+
+Reverses "TMDB's average is the comparison" above, the same day and before
+anything shipped. The owner judged TMDB's user average not useful: few people
+vote there, so the figure is thin for anything outside the most popular
+titles. The scores now come from OMDb, one lookup per title by IMDb id: IMDb's
+weighted user rating and vote count, Rotten Tomatoes' Tomatometer and
+Metacritic's critic score. OMDb is an unofficial aggregator, chosen because
+Rotten Tomatoes and Metacritic publish no API; IMDb's own daily data files were
+the alternative, official but IMDb-only and a large daily download. The key
+(`OMDB_API_KEY`) is an Edge Function secret, never in the client, and the free
+tier's 1,000 requests a day sets the budget: at most 300 lookups per nightly
+part, oldest `scores_checked_at` first, refreshed weekly. The TMDB vote columns
+were removed from the unapplied migration rather than added and dropped.
+Seasons have no outside score.

@@ -77,7 +77,6 @@ interface TMDBSeasonSummary {
   season_number: number
   episode_count?: number
   air_date?: string | null
-  vote_average?: number | null
 }
 interface TMDBEpisode {
   episode_number: number
@@ -130,8 +129,8 @@ interface TMDBDetails {
   credits?: TMDBCredits
   aggregate_credits?: TMDBCredits
   created_by?: { name?: string }[]
-  vote_average?: number | null
-  vote_count?: number | null
+  imdb_id?: string | null
+  external_ids?: { imdb_id?: string | null }
   belongs_to_collection?: { id?: number; name?: string } | null
 }
 
@@ -168,6 +167,17 @@ const TRAILER_BACKFILL_CONCURRENCY = 8
  */
 const MAX_CREDITS_BACKFILL_PER_RUN = 150
 
+/**
+ * IMDb, Rotten Tomatoes and Metacritic scores come from OMDb after the TMDB
+ * pass, for titles whose scores were never read or are over a week old. OMDb's
+ * free tier allows 1,000 requests a day; three nightly shards of at most this
+ * many stay under it. A one-title resync always asks for its target.
+ */
+const OMDB_MAX_PER_RUN = 300
+const OMDB_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
+const OMDB_REQUEST_GAP_MS = 100
+const OMDB_MAX_CONSECUTIVE_ERRORS = 5
+
 /** A TMDB episode that survived the "has an air date" filter. */
 type AiredEpisode = TMDBEpisode & { air_date: string }
 const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date)
@@ -184,6 +194,8 @@ interface MovieRow {
   genre: string | null
   release_year: number | null
   top_cast: string[] | null
+  imdb_id: string | null
+  scores_checked_at: string | null
 }
 interface EpisodeRow {
   id?: number
@@ -207,6 +219,8 @@ interface ShowRow {
   genre: string | null
   status: string | null
   top_cast: string[] | null
+  imdb_id: string | null
+  scores_checked_at: string | null
   tv_show_seasons: SeasonRow[] | null
 }
 
@@ -234,6 +248,10 @@ interface SyncItem {
   series_status?: string | null
   /** True once `top_cast` is stored; false asks TMDB for credits. */
   has_credits: boolean
+  /** Stored IMDb id; the OMDb pass only asks for titles that have one. */
+  imdb_id?: string
+  /** When OMDb was last asked; unset means never. */
+  scores_checked_at?: string
   seasons?: SyncSeason[]
 }
 
@@ -343,27 +361,6 @@ function pickTrailerKey(videos: TMDBVideo[] | undefined | null): string | null {
 // Mirror of src/features/watchlist/tmdb-score.ts. Deno cannot import from
 // src/, so this is a hand-maintained copy -- change both together.
 //
-// TMDB's vote_average is its own users' mean score, 0-10. It reports 0 for a
-// title nobody has rated, which must not read as "everyone hated it", so a
-// zero average or a zero count stores no average. A field missing from the
-// response returns undefined, so the caller writes nothing and never wipes
-// what is stored.
-function roundVote(value: number): number {
-  return Math.round(Math.min(10, Math.max(0, value)) * 10) / 10
-}
-function pickTitleVotes(
-  data: { vote_average?: number | null; vote_count?: number | null },
-): { tmdb_vote_average: number | null; tmdb_vote_count: number } | undefined {
-  if (typeof data.vote_count !== 'number' || !Number.isFinite(data.vote_count)) return undefined
-  const count = Math.max(0, Math.round(data.vote_count))
-  const average = typeof data.vote_average === 'number' && Number.isFinite(data.vote_average) ? data.vote_average : 0
-  return { tmdb_vote_average: count > 0 && average > 0 ? roundVote(average) : null, tmdb_vote_count: count }
-}
-function pickSeasonVote(value: number | null | undefined): number | null | undefined {
-  if (value === undefined) return undefined
-  if (value === null || !Number.isFinite(value) || value <= 0) return null
-  return roundVote(value)
-}
 function pickCollection(
   data: { belongs_to_collection?: { id?: number; name?: string } | null },
 ): { collection_id: number | null; collection_name: string | null } | undefined {
@@ -371,6 +368,86 @@ function pickCollection(
   const c = data.belongs_to_collection
   if (!c || typeof c.id !== 'number' || c.id <= 0) return { collection_id: null, collection_name: null }
   return { collection_id: c.id, collection_name: c.name?.trim() || null }
+}
+
+// Mirror of src/features/watchlist/omdb-scores.ts -- change both together.
+// Deno cannot import from src/, so this is a hand-maintained copy.
+interface OmdbScores {
+  imdb_rating: number | null
+  imdb_votes: number | null
+  rt_score: number | null
+  metascore: number | null
+}
+type OmdbOutcome =
+  | { kind: 'scores'; scores: OmdbScores }
+  | { kind: 'not-found' }
+  | { kind: 'limit' }
+  | { kind: 'error'; message: string }
+
+const IMDB_ID = /^tt\d{7,10}$/
+const OMDB_DECIMAL = /^\d+(\.\d+)?$/
+const OMDB_INTEGER = /^\d+$/
+function isImdbId(value: unknown): value is string {
+  return typeof value === 'string' && IMDB_ID.test(value)
+}
+function omdbText(value: unknown): string | null {
+  return typeof value === 'string' ? value.trim() : null
+}
+function omdbDecimal(text: string | null): number | null {
+  if (text === null || !OMDB_DECIMAL.test(text)) return null
+  const n = Number(text)
+  return Number.isFinite(n) ? n : null
+}
+function omdbPercent(text: string | null): number | null {
+  const n = omdbDecimal(text)
+  if (n === null || n > 100) return null
+  return Math.round(n)
+}
+function omdbRatingValue(ratings: unknown, source: string): string | null {
+  if (!Array.isArray(ratings)) return null
+  for (const entry of ratings) {
+    if (entry && typeof entry === 'object' && (entry as { Source?: unknown }).Source === source) {
+      return omdbText((entry as { Value?: unknown }).Value)
+    }
+  }
+  return null
+}
+function omdbImdbRating(text: string | null): number | null {
+  const n = omdbDecimal(text)
+  if (n === null) return null
+  return Math.round(Math.min(10, Math.max(0, n)) * 10) / 10
+}
+function omdbVotes(text: string | null): number | null {
+  if (text === null) return null
+  const digits = text.replace(/,/g, '')
+  if (!OMDB_INTEGER.test(digits)) return null
+  const n = Number(digits)
+  return Number.isSafeInteger(n) ? n : null
+}
+function parseOmdbResponse(json: unknown): OmdbOutcome {
+  if (!json || typeof json !== 'object') return { kind: 'error', message: 'OMDb returned no JSON object' }
+  const data = json as Record<string, unknown>
+  if (data.Response === 'False') {
+    const message = omdbText(data.Error) || 'OMDb returned an error'
+    const lower = message.toLowerCase()
+    if (lower.includes('limit')) return { kind: 'limit' }
+    if (lower.includes('not found') || lower.includes('incorrect imdb id')) return { kind: 'not-found' }
+    return { kind: 'error', message }
+  }
+  if (data.Response !== 'True') return { kind: 'error', message: 'OMDb response had no Response flag' }
+  const imdbText = omdbText(data.imdbRating)
+  const imdbFromRatings = omdbRatingValue(data.Ratings, 'Internet Movie Database')?.split('/')[0] ?? null
+  const metacriticFromRatings = omdbRatingValue(data.Ratings, 'Metacritic')?.split('/')[0] ?? null
+  const rtText = omdbRatingValue(data.Ratings, 'Rotten Tomatoes')
+  return {
+    kind: 'scores',
+    scores: {
+      imdb_rating: omdbImdbRating(imdbText) ?? omdbImdbRating(imdbFromRatings),
+      imdb_votes: omdbVotes(omdbText(data.imdbVotes)),
+      rt_score: rtText?.endsWith('%') ? omdbPercent(rtText.slice(0, -1)) : null,
+      metascore: omdbPercent(omdbText(data.Metascore)) ?? omdbPercent(metacriticFromRatings),
+    },
+  }
 }
 
 // Mirror of src/features/watchlist/credits.ts. Deno cannot import from src/,
@@ -507,8 +584,8 @@ serve(async (req) => {
     // library would go unsynced under a green log row. Paging is on the
     // top-level rows; seasons and episodes stay embedded. A single-title
     // resync reads only that title's row and skips the other table outright.
-    const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, release_year, top_cast'
-    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, status, top_cast, tv_show_seasons (id, season_number, release_date, trailer_checked_at, tv_show_episodes (episode_number, watched))'
+    const MOVIE_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, release_year, top_cast, imdb_id, scores_checked_at'
+    const SHOW_COLUMNS = 'id, title, tmdb_id, poster, backdrop, overview, genre, status, top_cast, imdb_id, scores_checked_at, tv_show_seasons (id, season_number, release_date, trailer_checked_at, tv_show_episodes (episode_number, watched))'
     const none = { data: [], error: null }
     const [moviesResult, showsResult] = await Promise.all([
       !target
@@ -543,6 +620,8 @@ serve(async (req) => {
       genres: m.genre ? m.genre.split(',').map((g: string) => g.trim()) : [],
       year: m.release_year || undefined,
       has_credits: m.top_cast !== null,
+      imdb_id: isImdbId(m.imdb_id) ? m.imdb_id : undefined,
+      scores_checked_at: m.scores_checked_at || undefined,
     }))
 
     const shows: SyncItem[] = ((showsResult.data || []) as ShowRow[]).map((s) => ({
@@ -556,6 +635,8 @@ serve(async (req) => {
       genres: s.genre ? s.genre.split(',').map((g: string) => g.trim()) : [],
       series_status: s.status,
       has_credits: s.top_cast !== null,
+      imdb_id: isImdbId(s.imdb_id) ? s.imdb_id : undefined,
+      scores_checked_at: s.scores_checked_at || undefined,
       seasons: (s.tv_show_seasons || []).map((season) => ({
         id: season.id,
         season_number: season.season_number,
@@ -615,21 +696,23 @@ serve(async (req) => {
             if (wantCredits && !target) creditsBackfillLeft--
             const detailPath = `${tmdbType}/${item.tmdb_id}`
             const detailParams = (append: string) => ({ append_to_response: append, ...VIDEO_PARAMS })
+            // A movie's details carry imdb_id; a show's need external_ids.
+            const baseAppend = tmdbType === 'tv' ? 'watch/providers,videos,external_ids' : 'watch/providers,videos'
             let data: TMDBDetails | null
             if (wantCredits) {
               try {
                 data = await fetchTMDB<TMDBDetails>(
                   detailPath,
-                  detailParams(`watch/providers,videos,${tmdbType === 'tv' ? 'aggregate_credits' : 'credits'}`),
+                  detailParams(`${baseAppend},${tmdbType === 'tv' ? 'aggregate_credits' : 'credits'}`),
                 )
               } catch (creditsError) {
                 // Credits must never fail a title: the call without them is the
                 // one every run made before credits were stored.
                 console.warn(`Credits fetch failed for ${item.title}; retrying without`, creditsError)
-                data = await fetchTMDB<TMDBDetails>(detailPath, detailParams('watch/providers,videos'))
+                data = await fetchTMDB<TMDBDetails>(detailPath, detailParams(baseAppend))
               }
             } else {
-              data = await fetchTMDB<TMDBDetails>(detailPath, detailParams('watch/providers,videos'))
+              data = await fetchTMDB<TMDBDetails>(detailPath, detailParams(baseAppend))
             }
             if (!data?.id) return
 
@@ -643,8 +726,14 @@ serve(async (req) => {
             // Rewritten every run, like platform: the append costs no extra
             // call, and a trailer TMDB has since removed should go too.
             commonUpdates.trailer_key = pickTrailerKey(data.videos?.results)
-            const votes = pickTitleVotes(data)
-            if (votes) Object.assign(commonUpdates, votes)
+            // Only a well-formed id is written, so a response without one
+            // never wipes a stored id. Movies carry it on the details, shows
+            // under external_ids.
+            const imdbId = item.category === 'Movies' ? data.imdb_id : data.external_ids?.imdb_id
+            if (isImdbId(imdbId)) {
+              commonUpdates.imdb_id = imdbId
+              item.imdb_id = imdbId
+            }
 
             if (item.category === 'Movies') {
               const movieUpdates = { ...commonUpdates }
@@ -711,9 +800,6 @@ serve(async (req) => {
                             tv_show_id: parseInt(item.id),
                             season_number: s.season_number,
                             release_date: s.air_date || null,
-                            ...(pickSeasonVote(s.vote_average) !== undefined
-                              ? { tmdb_vote_average: pickSeasonVote(s.vote_average) }
-                              : {}),
                           },
                           { onConflict: 'tv_show_id,season_number' },
                         )
@@ -859,6 +945,76 @@ serve(async (req) => {
       console.log(`[Sync ${runLabel}] Season trailers backfilled: ${trailersBackfilled}/${trailerBackfill.length}.`)
     }
 
+    // OMDb score pass, after the TMDB work so it can neither fail a title nor
+    // spend the time a title needs. Its failures are never the run's failures:
+    // nothing here touches failedTitles. The key is read here and appears only
+    // in the request URL; it is never logged or returned, and a fetch error is
+    // logged as a fixed string because its message can carry the URL.
+    const omdbStats = { asked: 0, updated: 0, notFound: 0, stoppedByLimit: false }
+    const omdbKey = Deno.env.get('OMDB_API_KEY')
+    if (!omdbKey) {
+      console.warn(`[Sync ${runLabel}] OMDB_API_KEY is not set; skipping the OMDb score pass.`)
+    } else {
+      const staleBefore = Date.now() - OMDB_STALE_AFTER_MS
+      const queue = [...movies, ...shows]
+        .filter((item) => item.imdb_id && (!shard || Number(item.id) % shard.count === shard.index))
+        .filter((item) => Boolean(target) || !item.scores_checked_at || Date.parse(item.scores_checked_at) < staleBefore)
+        .sort((a, b) => {
+          const aTime = a.scores_checked_at ? Date.parse(a.scores_checked_at) : -Infinity
+          const bTime = b.scores_checked_at ? Date.parse(b.scores_checked_at) : -Infinity
+          return aTime === bTime ? 0 : aTime < bTime ? -1 : 1
+        })
+        .slice(0, OMDB_MAX_PER_RUN)
+      let consecutiveErrors = 0
+      for (const item of queue) {
+        if (Date.now() - startTime >= MAX_EXECUTION_TIME_MS) break
+        if (omdbStats.asked > 0) await new Promise((resolve) => setTimeout(resolve, OMDB_REQUEST_GAP_MS))
+        omdbStats.asked++
+        let outcome: OmdbOutcome
+        try {
+          const res = await fetch(
+            `https://www.omdbapi.com/?${new URLSearchParams({ i: item.imdb_id!, apikey: omdbKey })}`,
+            { signal: AbortSignal.timeout(15000) },
+          )
+          // OMDb reports a bad key or a spent daily limit as a 401 with a JSON
+          // body, so the body is read whatever the status.
+          outcome = parseOmdbResponse(await res.json().catch(() => null))
+        } catch {
+          outcome = { kind: 'error', message: 'OMDb request failed' }
+        }
+        if (outcome.kind === 'limit') {
+          omdbStats.stoppedByLimit = true
+          break
+        }
+        if (outcome.kind === 'error') {
+          console.warn(`[Sync ${runLabel}] OMDb error for "${item.title}": ${outcome.message}`)
+          if (++consecutiveErrors >= OMDB_MAX_CONSECUTIVE_ERRORS) {
+            console.warn(`[Sync ${runLabel}] ${OMDB_MAX_CONSECUTIVE_ERRORS} OMDb errors in a row; stopping the pass.`)
+            break
+          }
+          continue
+        }
+        consecutiveErrors = 0
+        const checkedAt = new Date().toISOString()
+        const patch = outcome.kind === 'scores'
+          ? { ...outcome.scores, scores_checked_at: checkedAt }
+          : { scores_checked_at: checkedAt }
+        const { error: omdbWriteError } = await supabaseAdmin
+          .from(item.category === 'Movies' ? 'movies' : 'tv_shows')
+          .update(patch)
+          .eq('id', parseInt(item.id))
+        if (omdbWriteError) {
+          console.warn(`[Sync ${runLabel}] OMDb score write failed for "${item.title}":`, omdbWriteError.message)
+          continue
+        }
+        if (outcome.kind === 'scores') omdbStats.updated++
+        else omdbStats.notFound++
+      }
+      console.log(
+        `[Sync ${runLabel}] OMDb: asked ${omdbStats.asked}, updated ${omdbStats.updated}, not found ${omdbStats.notFound}, stopped by limit ${omdbStats.stoppedByLimit ? 'yes' : 'no'}.`,
+      )
+    }
+
     const durationMs = Date.now() - startTime
     const { error: logError } = await supabaseAdmin.from('sync_log').insert({
       sync_type: syncType,
@@ -893,6 +1049,7 @@ serve(async (req) => {
         shard: shard ?? undefined,
         failedTitles,
         changes,
+        omdb: omdbKey ? omdbStats : undefined,
         durationMs,
         // Stopped at the time ceiling: titles past the stopping point were
         // not reached, and are in neither count.

@@ -45,12 +45,19 @@ CREATE TABLE IF NOT EXISTS "public"."movies" (
     "watched" boolean DEFAULT false NOT NULL,
     "watched_at" timestamp with time zone,
     "library_state" "text" DEFAULT 'active'::"text" NOT NULL,
-    "tmdb_vote_average" numeric(3,1),
-    "tmdb_vote_count" integer,
+    "imdb_id" "text",
+    "imdb_rating" numeric(3,1),
+    "imdb_votes" integer,
+    "rt_score" smallint,
+    "metascore" smallint,
+    "scores_checked_at" timestamp with time zone,
     "collection_id" integer,
     "collection_name" "text",
-    CONSTRAINT "movies_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10),
-    CONSTRAINT "movies_tmdb_vote_count_check" CHECK ("tmdb_vote_count" >= 0)
+    CONSTRAINT "movies_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
+    CONSTRAINT "movies_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
+    CONSTRAINT "movies_imdb_votes_check" CHECK ("imdb_votes" >= 0),
+    CONSTRAINT "movies_rt_score_check" CHECK ("rt_score" BETWEEN 0 AND 100),
+    CONSTRAINT "movies_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100)
 );
 
 ALTER TABLE "public"."movies" OWNER TO "postgres";
@@ -138,9 +145,7 @@ CREATE TABLE IF NOT EXISTS "public"."tv_show_seasons" (
     "release_date" "date",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "trailer_key" "text",
-    "trailer_checked_at" timestamp with time zone,
-    "tmdb_vote_average" numeric(3,1),
-    CONSTRAINT "tv_show_seasons_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10)
+    "trailer_checked_at" timestamp with time zone
 );
 
 ALTER TABLE "public"."tv_show_seasons" OWNER TO "postgres";
@@ -173,10 +178,17 @@ CREATE TABLE IF NOT EXISTS "public"."tv_shows" (
     "creators" "text"[],
     "top_cast" "text"[],
     "library_state" "text" DEFAULT 'active'::"text" NOT NULL,
-    "tmdb_vote_average" numeric(3,1),
-    "tmdb_vote_count" integer,
-    CONSTRAINT "tv_shows_tmdb_vote_average_check" CHECK ("tmdb_vote_average" BETWEEN 0 AND 10),
-    CONSTRAINT "tv_shows_tmdb_vote_count_check" CHECK ("tmdb_vote_count" >= 0)
+    "imdb_id" "text",
+    "imdb_rating" numeric(3,1),
+    "imdb_votes" integer,
+    "rt_score" smallint,
+    "metascore" smallint,
+    "scores_checked_at" timestamp with time zone,
+    CONSTRAINT "tv_shows_imdb_id_check" CHECK ("imdb_id" ~ '^tt[0-9]{7,10}$'),
+    CONSTRAINT "tv_shows_imdb_rating_check" CHECK ("imdb_rating" BETWEEN 0 AND 10),
+    CONSTRAINT "tv_shows_imdb_votes_check" CHECK ("imdb_votes" >= 0),
+    CONSTRAINT "tv_shows_rt_score_check" CHECK ("rt_score" BETWEEN 0 AND 100),
+    CONSTRAINT "tv_shows_metascore_check" CHECK ("metascore" BETWEEN 0 AND 100)
 );
 
 ALTER TABLE "public"."tv_shows" OWNER TO "postgres";
@@ -1233,20 +1245,41 @@ COMMENT ON COLUMN "public"."favourites"."origin_country" IS
 COMMENT ON COLUMN "public"."favourites"."genre_ids" IS
     'TMDB genre ids (e.g. 16 = Animation, 18 = Drama), for deriving the favourites grid''s category bucket from TMDB data instead of the frozen category string. Left null on every pre-migration row and never backfilled in SQL -- the value only exists in TMDB and is fetched by an admin-triggered client action; a fabricated value here reads exactly like a real one. Falls back to category when null.';
 
-COMMENT ON COLUMN "public"."movies"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s own score in watchlist_ratings. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."imdb_id" IS
+    'IMDb title id (tt plus 7 to 10 digits), taken from TMDB (movie imdb_id, or tv external_ids.imdb_id). It is the key OMDb is queried by. Null when TMDB has none or the sync has not fetched it.';
 
-COMMENT ON COLUMN "public"."tv_shows"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average, 0 to 10 (not critics). Stored to show beside the owner''s own score in watchlist_ratings. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."imdb_rating" IS
+    'IMDb's weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
 
-COMMENT ON COLUMN "public"."tv_show_seasons"."tmdb_vote_average" IS
-    'TMDB''s community user-vote average for the season, 0 to 10 (not critics), stored beside the owner''s own score in watchlist_ratings. TMDB gives seasons an average but no vote count. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."imdb_votes" IS
+    'How many IMDb users voted behind imdb_rating; a low count means a noisy rating. From OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known.';
 
-COMMENT ON COLUMN "public"."movies"."tmdb_vote_count" IS
-    'How many TMDB users voted behind tmdb_vote_average; a low count means a noisy average. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."rt_score" IS
+    'Rotten Tomatoes Tomatometer, 0 to 100: the percentage of critics'' reviews that are positive (not an average grade). from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
 
-COMMENT ON COLUMN "public"."tv_shows"."tmdb_vote_count" IS
-    'How many TMDB users voted behind tmdb_vote_average; a low count means a noisy average. Null until the sync has fetched it.';
+COMMENT ON COLUMN "public"."movies"."metascore" IS
+    'Metacritic''s weighted critic score, 0 to 100, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
+
+COMMENT ON COLUMN "public"."movies"."scores_checked_at" IS
+    'When OMDb was last asked for this title; null = never. The nightly sync refreshes the oldest first within a daily request budget; a title OMDb has no scores for still gets a time so it is not asked every night. OMDb is an unofficial aggregator.';
+
+COMMENT ON COLUMN "public"."tv_shows"."imdb_id" IS
+    'IMDb title id (tt plus 7 to 10 digits), taken from TMDB (movie imdb_id, or tv external_ids.imdb_id). It is the key OMDb is queried by. Null when TMDB has none or the sync has not fetched it.';
+
+COMMENT ON COLUMN "public"."tv_shows"."imdb_rating" IS
+    'IMDb's weighted user rating, 0 to 10, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Not critics.';
+
+COMMENT ON COLUMN "public"."tv_shows"."imdb_votes" IS
+    'How many IMDb users voted behind imdb_rating; a low count means a noisy rating. From OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known.';
+
+COMMENT ON COLUMN "public"."tv_shows"."rt_score" IS
+    'Rotten Tomatoes Tomatometer, 0 to 100: the percentage of critics'' reviews that are positive (not an average grade). from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
+
+COMMENT ON COLUMN "public"."tv_shows"."metascore" IS
+    'Metacritic''s weighted critic score, 0 to 100, from OMDb, an unofficial aggregator, and shown beside the owner''s own score in watchlist_ratings. Null = not known. Often missing for TV and for older or foreign films.';
+
+COMMENT ON COLUMN "public"."tv_shows"."scores_checked_at" IS
+    'When OMDb was last asked for this title; null = never. The nightly sync refreshes the oldest first within a daily request budget; a title OMDb has no scores for still gets a time so it is not asked every night. OMDb is an unofficial aggregator.';
 
 COMMENT ON COLUMN "public"."tv_shows"."library_state" IS
     'active, paused, hidden or stopped. paused: a break -- the series leaves Your Week but keeps its shelf. stopped: the owner stopped watching it. hidden: hidden from visitors, owner-only. active is the truth for every pre-existing row. Films have no paused state (movies_library_state_check allows active, hidden, stopped).';

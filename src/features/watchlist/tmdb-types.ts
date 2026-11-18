@@ -39,8 +39,6 @@ export interface TMDBSeasonSummary {
   episode_count?: number;
   air_date?: string | null;
   name?: string;
-  /** TMDB users' mean score for the season; 0 when nobody has voted. */
-  vote_average?: number | null;
 }
 
 export interface TMDBEpisode {
@@ -121,9 +119,9 @@ export interface TMDBDetails {
   credits?: TMDBCredits;
   aggregate_credits?: TMDBCredits;
   created_by?: TMDBCreator[];
-  /** TMDB users' mean score, 0-10, and how many voted. 0 when nobody has. */
-  vote_average?: number | null;
-  vote_count?: number | null;
+  /** Films: on the record itself. TV: under `external_ids`. */
+  imdb_id?: string | null;
+  external_ids?: { imdb_id?: string | null };
   /** Films only: the series it belongs to, e.g. "X-Men Collection". */
   belongs_to_collection?: TMDBCollectionRef | null;
 }

@@ -9,7 +9,7 @@ import type {
 import { getPlatform } from './sync-logic';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import { CREDITS_APPEND, pickCreators, pickDirectors, pickTopCast } from './credits';
-import { pickCollection, pickTitleVotes } from './tmdb-score';
+import { pickCollection } from './tmdb-score';
 import { releaseYear } from './watchlist-utils';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
@@ -54,7 +54,7 @@ export function useTMDB() {
         setLoading(true);
         try {
             const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, {
-                append_to_response: `watch/providers,videos,${CREDITS_APPEND[type]}`,
+                append_to_response: `watch/providers,videos,${CREDITS_APPEND[type]}${type === 'tv' ? ',external_ids' : ''}`,
                 ...TRAILER_VIDEO_PARAMS,
             });
 
@@ -67,6 +67,7 @@ export function useTMDB() {
             // stores it.
             const credits = type === 'movie' ? data.credits : data.aggregate_credits;
 
+            const imdbId = type === 'movie' ? data.imdb_id : data.external_ids?.imdb_id;
             return {
                 title: data.title || data.name,
                 overview: data.overview,
@@ -86,9 +87,9 @@ export function useTMDB() {
                 directors: type === 'movie' && credits ? pickDirectors(credits.crew) : null,
                 creators: type === 'tv' ? pickCreators(data.created_by) : null,
                 top_cast: credits ? pickTopCast(credits.cast) : null,
-                // Same picks as the sync, so a title added by hand has its
-                // TMDB score (and a film its series) at once.
-                ...(pickTitleVotes(data) ?? { tmdb_vote_average: null, tmdb_vote_count: null }),
+                // The nightly sync looks the OMDb scores up by this id.
+                imdb_id: /^tt\d{7,10}$/.test(imdbId ?? '') ? imdbId : null,
+                // Same pick as the sync, so a film has its series at once.
                 ...(type === 'movie'
                     ? (pickCollection(data) ?? { collection_id: null, collection_name: null })
                     : { collection_id: null, collection_name: null }),

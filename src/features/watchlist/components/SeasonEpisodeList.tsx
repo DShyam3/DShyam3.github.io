@@ -7,7 +7,7 @@ import type { Season } from '@/features/watchlist/useWatchlist';
 import { daysUntil } from '@/features/watchlist/watchlist-utils';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { useAuth } from '@/contexts/AuthContext';
-import { TmdbScore } from './TmdbScore';
+import { TitleScores } from './TitleScores';
 import { WatchedWhenMenu } from './WatchedWhenMenu';
 import { summarizeRatings } from '../rating-summary';
 
@@ -132,7 +132,7 @@ export function SeasonEpisodeList({
 
         {currentSeason && (
           <>
-            <TmdbScore average={currentSeason.tmdb_vote_average} votes={null} mine={isAdmin ? undefined : currentSeason.personal_rating} />
+            <TitleScores mine={isAdmin ? undefined : currentSeason.personal_rating} />
             <div className="flex items-center gap-2 text-xs text-muted-foreground pb-1.5 border-b">
               <Calendar className="h-3.5 w-3.5" />
               <span>Released: {formatDate(currentSeason.release_date)}</span>
