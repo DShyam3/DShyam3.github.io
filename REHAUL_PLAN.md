@@ -329,7 +329,7 @@ Actions and the Node version before the change is enforced.
 
 ### Watchlist News and Library — what is left
 
-Open after the News and Library redesign, 2026-11-17. Its three migrations are applied to hosted; the code is not deployed yet (see STATE.md).
+Open after the News and Library redesign, 2026-11-17. Its three migrations are applied to hosted; the redesign baseline `63fa21b6` is deployed (see STATE.md for local follow-up changes).
 
 1. **Decide whether favourites become a flag on `movies` and `tv_shows`** instead
    of a separate table of copied titles.

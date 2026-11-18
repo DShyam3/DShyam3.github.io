@@ -12,8 +12,9 @@ import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWatchlist } from '../useWatchlist';
 import { useTMDB } from '../useTMDB';
-import { discoveryDate, discoveryKey, type DiscoveryItem, type DiscoveryMedia } from '../discovery';
+import { discoveryDate, discoveryKey, interleaveUpcoming, type DiscoveryItem, type DiscoveryMedia } from '../discovery';
 import { useDiscovery } from '../useDiscovery';
+import { discoveryAddPayload } from '../discovery-add';
 import type { LibraryType } from '../library-state';
 import { TrailerButton } from './TrailerButton';
 
@@ -54,22 +55,7 @@ function useAddSuggestion(item: DiscoveryItem) {
   };
   const add = (watched: boolean) => run(async () => {
     const data = await fetchDetail();
-    const title = data.title || titleOf(item);
-    await addWatchlistItem({
-      title: data.release_year ? `${title} (${data.release_year})` : title,
-      category: item.media === 'movie' ? 'Movies' : 'TV Shows',
-      description: data.overview,
-      year: data.release_year ?? undefined,
-      image_url: data.poster ?? undefined,
-      backdrop_url: data.backdrop ?? undefined,
-      runtime: data.runtime ?? undefined,
-      genres: data.genres,
-      tmdb_id: item.id,
-      release_date: data.release_date ?? undefined,
-      streaming_platform: data.platform,
-      trailer_key: data.trailer_key ?? undefined,
-      watched,
-    });
+    await addWatchlistItem(discoveryAddPayload(item, data, watched));
     // The library refresh removes this suggestion once the save succeeds.
   }, 'Could not add this title. Please try again.');
   const loadDetail = () => run(async () => { await fetchDetail(); }, 'Could not load details. Try again.');
@@ -174,7 +160,7 @@ function TileGrid({ items, onDismiss }: { items: DiscoveryItem[]; onDismiss: (me
 /** Discover: what is coming that you do not follow, then an endless "more like this". */
 export function DiscoverySection({ type }: { type: LibraryType }) {
   const discovery = useDiscovery(type);
-  const comingSoon = discovery.upcoming.slice(0, 12);
+  const comingSoon = interleaveUpcoming(discovery.upcoming).slice(0, 12);
   return (
     <div className="space-y-10">
       <section className="space-y-4" aria-labelledby="discover-coming-soon">

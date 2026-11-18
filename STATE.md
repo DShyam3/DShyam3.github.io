@@ -2,7 +2,7 @@
 
 Updated 2026-11-18 · `main` = branch `claude/eloquent-johnson-xdjc53` (fast-forwarded, pushed). Migration applied to hosted; `tmdb-proxy` v15 and `watchlist-cron-sync` v18 deployed. Pages deploy of this push NOT yet verified.
 
-## In progress
+## Deployed — Discovery fixes (`0ba78391`)
 
 **Watchlist Diary, Franchises, history import, OMDb scores and public ratings.** Live on hosted (database and functions) and pushed to `main`. Full list in `REHAUL_PLAN.md`, "Watchlist Diary, Franchises, import and public ratings".
 
@@ -32,6 +32,8 @@ Not run: `supabase db diff` against a from-schema build; graphify (not installed
 3. Check the Trakt export format against a real export, and that `last_watched_at` (latest play) is used as such.
 
 ## Landed on main (checked against git, 2026-11-18)
+
+- `0ba78391` Discover fixes (other session): validated series status and credits kept on add, Seen it puts an ended series in Finished, Coming soon alternates films and series. Deployed by Pages run `44376019120`; signed-in writes unverified.
 
 - `63fa21b6` Watchlist News and Library redesign: on `origin/main`. Its three migrations are applied to hosted. Browser-verified signed out only.
 - `3d17b507` Credits (directors, creators, top cast): on `origin/main`. Hosted migration `watchlist_credits` applied; `watchlist-cron-sync` v17 deployed. Backfill complete 2026-11-18.

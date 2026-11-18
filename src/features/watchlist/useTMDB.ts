@@ -12,6 +12,7 @@ import { CREDITS_APPEND, pickCreators, pickDirectors, pickTopCast } from './cred
 import { pickCollection } from './tmdb-score';
 import { isImdbId } from './omdb-scores';
 import { releaseYear } from './watchlist-utils';
+import { seriesStatus } from './discovery-add';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
 const TMDB_BACKDROP_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
@@ -71,6 +72,7 @@ export function useTMDB() {
             const imdbId = type === 'movie' ? data.imdb_id : data.external_ids?.imdb_id;
             return {
                 title: data.title || data.name,
+                series_status: seriesStatus(type, data.status),
                 overview: data.overview,
                 poster: data.poster_path ? getPosterUrl(data.poster_path) : null,
                 backdrop: data.backdrop_path ? getBackdropUrl(data.backdrop_path) : null,
