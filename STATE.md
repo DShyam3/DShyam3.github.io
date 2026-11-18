@@ -1,10 +1,10 @@
 # State
 
-Updated 2026-11-18 · Branch `main` · Head `63fa21b6` · 1 ahead of `origin/main` (`3d17b507`). `63fa21b6` is committed but NOT pushed, so NOT deployed: the live site still runs `3d17b507`.
+Updated 2026-11-18 · Branch `main` · `49a186ec` pushed and deployed (= `origin/main`), plus this STATE.md update, committed locally and not pushed.
 
-## In progress
+## Landed (Watchlist redesign, pushed and deployed)
 
-**Watchlist News and Library redesign: committed as `63fa21b6`, not pushed.** Open: push to origin/main (deploys via GitHub Pages), awaiting the owner's go-ahead in the redesign session.
+**Watchlist News and Library redesign: `63fa21b6`**, with `49a186ec` docs(state). Pushed `3d17b507..49a186ec` with the owner's go-ahead; Pages run 44306812884 succeeded.
 
 - News: Following and Discover tabs; All / Films / Series switch. Discover mixes five seed groups; Show more continues with the next seeds after leaving and returning. Recommendations wait for the owner's ratings.
 - Library: status shelves with a hint line; search groups results by shelf ("All shelves"); shelves hold while a detail is open; Finished sorts by Recently watched, series by their latest watched episode.
@@ -27,13 +27,14 @@ Updated 2026-11-18 · Branch `main` · Head `63fa21b6` · 1 ahead of `origin/mai
 
 Browser-verified signed out, desktop, local dev server against hosted, no console errors: Finished sort puts "Don't Trust the B---- in Apartment 23" second, after 22 Jump Street; Discover leave-and-return then Show more loads the next four seeds; grouped search "the" shows To watch 41, Upcoming 1, Up to date 2, Finished 4.
 
-NOT verified: anything signed in as admin (rating a film, season and episode; Seen it from Discover; favourite toggle; "Not interested" sync; ratings read back from `watchlist_ratings`); light mode; a real phone; production after deploy.
+Production, signed out, desktop, after deploy: Finished (78) sorted Recently watched with "Don't Trust the B---- in Apartment 23" second; the view read returns 200 and no ratings read is made; Discover shows 12 Coming soon and 72 suggestion tiles, all tmdb-proxy calls 200. The only console errors are the two 404 document responses GitHub Pages gives deep links (SPA fallback).
+
+NOT verified: anything signed in as admin (rating a film, season and episode; Seen it from Discover; favourite toggle; "Not interested" sync; ratings read back from `watchlist_ratings`); light mode; a real phone.
 
 ## Next
 
-1. Owner go-ahead, then push `63fa21b6` and confirm the Pages run succeeds.
-2. Signed-in owner check on production (the NOT-verified list above).
-3. The plan's "Watchlist News and Library — what is left" items: see `REHAUL_PLAN.md`, not copied here.
+1. Signed-in owner check on production (the NOT-verified list above).
+2. The plan's "Watchlist News and Library — what is left" items: see `REHAUL_PLAN.md`, not copied here.
 
 ## Landed (credits session, pushed and deployed)
 
