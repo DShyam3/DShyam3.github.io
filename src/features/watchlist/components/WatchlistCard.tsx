@@ -89,6 +89,9 @@ export const WatchlistCard = React.memo(function WatchlistCard({
   };
 
   const status = getAutoStatus(item);
+  const holdLabel = item.category === 'Movies'
+    ? (item.watched ? 'Watched' : null)
+    : item.tracking === 'paused' ? 'Paused' : item.tracking === 'dropped' ? 'Dropped' : null;
   // A search page on the provider's own site, not a deep link -- see
   // provider-links.ts.
   const watchUrl = providerSearchUrl(item.streaming_platform, item.title);
@@ -155,6 +158,11 @@ export const WatchlistCard = React.memo(function WatchlistCard({
               </a>
             ) : (
               <PlatformBadge platform={item.streaming_platform} size={18} />
+            )}
+            {holdLabel && (
+              <span className="text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap bg-secondary text-muted-foreground">
+                {holdLabel}
+              </span>
             )}
             {status && (
               isUpcomingStatus(status) && upcomingReleaseDate ? (

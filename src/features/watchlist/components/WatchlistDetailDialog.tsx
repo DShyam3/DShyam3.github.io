@@ -11,6 +11,11 @@ import { detailTrailer } from '@/features/watchlist/trailer';
 import { PlatformBadge } from './PlatformLogo';
 import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { describeWatchedAt, type WatchedWhen } from '@/features/watchlist/watched-when';
+import { RatingRow } from './RatingRow';
+import { TrackingControl } from './TrackingControl';
+import { WatchedWhenMenu } from './WatchedWhenMenu';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -27,7 +32,7 @@ interface WatchlistDetailDialogProps {
     seasonNumber: number,
     episodeNumber: number,
   ) => void;
-  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -71,7 +76,9 @@ export function WatchlistDetailDialog({
     [item.id],
   );
   const { askDelete, deleteDialog } = useDeleteConfirm();
-  const { loadShowEpisodes, loadItemDescription } = useWatchlist();
+  const { loadShowEpisodes, loadItemDescription, setMovieWatched, setRating, setShowTracking } =
+    useWatchlist();
+  const { isAdmin } = useAuth();
 
   // The grid only loads episode numbers and watched flags; episode titles,
   // air dates and runtimes are fetched here, for this show only, the first
@@ -265,6 +272,61 @@ export function WatchlistDetailDialog({
             className="w-full"
           />
 
+          {!isTVShow ? (
+            <div className="space-y-2">
+              {isAdmin && !item.watched ? (
+                <WatchedWhenMenu
+                  releaseDate={item.release_date}
+                  onPick={(when) => void setMovieWatched(item.id, true, when)}
+                  className="w-full"
+                >
+                  Mark watched
+                </WatchedWhenMenu>
+              ) : null}
+              {item.watched ? (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {describeWatchedAt(item.watched_at, true)}
+                  </span>
+                  {isAdmin ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void setMovieWatched(item.id, false)}
+                      className="min-h-10 text-xs"
+                    >
+                      Mark unwatched
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              <RatingRow
+                label="Your score"
+                mine={item.rating}
+                tmdbAverage={item.tmdb_vote_average}
+                tmdbVotes={item.tmdb_vote_count}
+                editable={isAdmin}
+                onChange={(rating) => void setRating({ kind: 'movie', id: item.id }, rating)}
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <TrackingControl
+                value={item.tracking ?? 'active'}
+                editable={isAdmin}
+                onChange={(value) => void setShowTracking(item.id, value)}
+              />
+              <RatingRow
+                label="Your score (show)"
+                mine={item.rating}
+                tmdbAverage={item.tmdb_vote_average}
+                tmdbVotes={item.tmdb_vote_count}
+                editable={isAdmin}
+                onChange={(rating) => void setRating({ kind: 'show', id: item.id }, rating)}
+              />
+            </div>
+          )}
+
           {!isTVShow && item.runtime ? (
             <RuntimeRow
               runtime={item.runtime}
@@ -294,6 +356,8 @@ export function WatchlistDetailDialog({
                 toggleSeasonWatched={toggleSeasonWatched}
                 isEpisodeWatched={isEpisodeWatched}
                 isSeasonWatched={isSeasonWatched}
+                onRateSeason={(seasonNumber, rating) =>
+                  void setRating({ kind: 'season', showId: item.id, seasonNumber }, rating)}
               />
             </div>
           ) : null}
@@ -402,6 +466,10 @@ export function WatchlistDetailDialog({
     isScheduled,
     syncing,
     isDeleting,
+    isAdmin,
+    setMovieWatched,
+    setRating,
+    setShowTracking,
     onOpenChange,
     onCloseAutoFocus,
     onSchedule,

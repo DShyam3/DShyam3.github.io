@@ -1,8 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Season } from '@/features/watchlist/useWatchlist';
+import type { Season } from '@/features/watchlist/useWatchlist';
 import { daysUntil } from '@/features/watchlist/watchlist-utils';
+import type { WatchedWhen } from '@/features/watchlist/watched-when';
+import { useAuth } from '@/contexts/AuthContext';
+import { RatingRow } from './RatingRow';
+import { WatchedWhenMenu } from './WatchedWhenMenu';
 
 interface SeasonEpisodeListProps {
   seasons: Season[];
@@ -12,7 +16,7 @@ interface SeasonEpisodeListProps {
     seasonNumber: number,
     episodeNumber: number,
   ) => void;
-  toggleSeasonWatched?: (showId: string, seasonNumber: number) => void;
+  toggleSeasonWatched?: (showId: string, seasonNumber: number, when?: WatchedWhen) => void;
   isEpisodeWatched: (
     showId: string,
     seasonNumber: number,
@@ -30,6 +34,12 @@ interface SeasonEpisodeListProps {
    * viewer is on, and finishing it must not move the list to the next one.
    */
   onSelectSeason: (seasonNumber: number) => void;
+  /**
+   * Saves the owner's score for a season. A prop, not useWatchlist(): this
+   * list renders inside the docked inspector, which sits above the
+   * WatchlistProvider, so the context is out of reach there.
+   */
+  onRateSeason?: (seasonNumber: number, rating: number | null) => void;
 }
 
 export function SeasonEpisodeList({
@@ -41,8 +51,10 @@ export function SeasonEpisodeList({
   isSeasonWatched,
   selectedSeason,
   onSelectSeason,
+  onRateSeason,
 }: SeasonEpisodeListProps) {
   const currentSeason = seasons.find((s) => s.season_number === selectedSeason);
+  const { isAdmin } = useAuth();
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'TBA';
@@ -113,6 +125,14 @@ export function SeasonEpisodeList({
 
         {currentSeason && (
           <>
+            <RatingRow
+              label={currentSeason.season_number === 0 ? 'Specials' : `Season ${currentSeason.season_number}`}
+              mine={currentSeason.rating}
+              tmdbAverage={currentSeason.tmdb_vote_average}
+              tmdbVotes={null}
+              editable={isAdmin && Boolean(onRateSeason)}
+              onChange={(rating) => onRateSeason?.(currentSeason.season_number, rating)}
+            />
             <div className="flex items-center gap-2 text-xs text-muted-foreground pb-1.5 border-b">
               <Calendar className="h-3.5 w-3.5" />
               <span>Released: {formatDate(currentSeason.release_date)}</span>
@@ -122,40 +142,39 @@ export function SeasonEpisodeList({
             </div>
 
             {/* Mark Season Complete button */}
-            {toggleSeasonWatched && currentSeason.episodes.length > 0 && (
+            {toggleSeasonWatched && currentSeason.episodes.length > 0 && !seasonFullyWatched && (
+              <WatchedWhenMenu
+                releaseDate={currentSeason.release_date}
+                onPick={(when) => {
+                  onSelectSeason(currentSeason.season_number);
+                  toggleSeasonWatched(showId, currentSeason.season_number, when);
+                }}
+                className="w-full whitespace-normal h-auto py-1.5"
+              >
+                <Circle className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Mark {currentSeason.season_number === 0 ? 'Specials' : `Season ${currentSeason.season_number}`} as Complete
+                  {currentWatchedCount > 0 && (
+                    <span className="opacity-60 ml-1">
+                      ({currentWatchedCount}/{currentSeason.episodes.length}{' '}
+                      watched)
+                    </span>
+                  )}
+                </span>
+              </WatchedWhenMenu>
+            )}
+            {toggleSeasonWatched && currentSeason.episodes.length > 0 && seasonFullyWatched && (
               <Button
-                variant={seasonFullyWatched ? 'outline' : 'default'}
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   onSelectSeason(currentSeason.season_number);
                   toggleSeasonWatched(showId, currentSeason.season_number);
                 }}
-                className={cn(
-                  'w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-1.5',
-                  seasonFullyWatched
-                    ? 'text-muted-foreground hover:bg-secondary'
-                    : '',
-                )}
+                className="w-full gap-2 text-xs transition-[color,background-color,border-color] whitespace-normal h-auto py-1.5 text-muted-foreground hover:bg-secondary"
               >
-                {seasonFullyWatched ? (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                    <span>Season Complete — Mark as Unwatched</span>
-                  </>
-                ) : (
-                  <>
-                    <Circle className="h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      Mark {currentSeason.season_number === 0 ? 'Specials' : `Season ${currentSeason.season_number}`} as Complete
-                      {currentWatchedCount > 0 && (
-                        <span className="opacity-60 ml-1">
-                          ({currentWatchedCount}/{currentSeason.episodes.length}{' '}
-                          watched)
-                        </span>
-                      )}
-                    </span>
-                  </>
-                )}
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span>Season Complete — Mark as Unwatched</span>
               </Button>
             )}
           </>

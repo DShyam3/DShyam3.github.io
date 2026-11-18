@@ -1,4 +1,4 @@
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { CountLabel } from '@/components/shared/CountLabel';
@@ -66,8 +66,7 @@ import {
   Heart,
   Trash2,
   Loader2,
-  Newspaper,
-  Library,
+  Pause,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -85,7 +84,8 @@ import {
   timeToFinishLabel,
   type TimeToFinish,
 } from '@/features/watchlist/time-to-finish';
-import { formatRuntime } from '@/features/watchlist/watchlist-utils';
+import { formatRuntime, isOnHold } from '@/features/watchlist/watchlist-utils';
+import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { TmdbSearchDialog } from '@/features/watchlist/components/TmdbSearchDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -99,10 +99,18 @@ import {
  */
 type LibrarySort = 'alphabetical' | 'recent' | 'finish';
 
+type WatchedFilter = 'all' | 'unwatched' | 'watched';
+const WATCHED_FILTERS: { value: WatchedFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'unwatched', label: 'Unwatched' },
+  { value: 'watched', label: 'Watched' },
+];
+
 const CATEGORIES = [
   'TV Shows',
   'Movies',
   'Currently Watching',
+  'On hold',
   'Upcoming',
   'Favourites',
 ] as const;
@@ -200,13 +208,15 @@ const Watchlist = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [watchedFilter, setWatchedFilter] = useState<WatchedFilter>('all');
   const [sortOrder, setSortOrder] = useState<LibrarySort>('alphabetical');
   // Upcoming has its own date order and Favourites its own shelf; neither
   // shows the sort picker, so neither takes the picked order.
   const sortable =
     selectedCategory === 'TV Shows' ||
     selectedCategory === 'Movies' ||
-    selectedCategory === 'Currently Watching';
+    selectedCategory === 'Currently Watching' ||
+    selectedCategory === 'On hold';
   const byTimeLeft = sortable && sortOrder === 'finish';
   const [title, setTitle] = useState('');
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
@@ -300,6 +310,10 @@ const Watchlist = () => {
           release_date: details.release_date,
           streaming_platform: details.platform,
           trailer_key: details.trailer_key ?? undefined,
+          tmdb_vote_average: details.tmdb_vote_average ?? undefined,
+          tmdb_vote_count: details.tmdb_vote_count ?? undefined,
+          collection_id: details.collection_id ?? undefined,
+          collection_name: details.collection_name ?? undefined,
           directors: details.directors ?? undefined,
           creators: details.creators ?? undefined,
           top_cast: details.top_cast ?? undefined,
@@ -368,6 +382,7 @@ const Watchlist = () => {
     if (
       selectedCategory === 'Upcoming' ||
       selectedCategory === 'Currently Watching' ||
+      selectedCategory === 'On hold' ||
       selectedCategory === 'Favourites'
     )
       return;
@@ -417,11 +432,14 @@ const Watchlist = () => {
     }
     if (selectedCategory === 'Currently Watching') {
       return watchlist.filter((item) => {
-        if (item.category !== 'TV Shows') return false;
+        if (item.category !== 'TV Shows' || isOnHold(item)) return false;
         const autoStatus = getAutoStatus(item);
         // Only show shows that are actively being watched (started a season but not finished it)
         return autoStatus === 'Watching';
       });
+    }
+    if (selectedCategory === 'On hold') {
+      return watchlist.filter(isOnHold);
     }
     return watchlist.filter((item) => item.category === selectedCategory);
   }, [watchlist, selectedCategory, getAutoStatus]);
@@ -536,6 +554,9 @@ const Watchlist = () => {
       result = result.filter((item) =>
         item.title.toLowerCase().includes(normalizedQuery),
       );
+    if (selectedCategory === 'Movies' && watchedFilter !== 'all') {
+      result = result.filter((item) => !!item.watched === (watchedFilter === 'watched'));
+    }
     if (selectedCategory === 'TV Shows' && hideCompleted && !normalizedQuery) {
       result = result.filter((item) => {
         const autoStatus = getAutoStatus(item);
@@ -587,6 +608,7 @@ const Watchlist = () => {
     searchQuery,
     selectedCategory,
     hideCompleted,
+    watchedFilter,
     sortOrder,
     byTimeLeft,
     finishTimes,
@@ -602,6 +624,8 @@ const Watchlist = () => {
         return <Film className="h-4 w-4" />;
       case 'Currently Watching':
         return <Eye className="h-4 w-4" />;
+      case 'On hold':
+        return <Pause className="h-4 w-4" />;
       case 'Upcoming':
         return <Bell className="h-4 w-4" />;
       case 'Favourites':
@@ -617,6 +641,7 @@ const Watchlist = () => {
       Movies: 0,
       Upcoming: 0,
       'Currently Watching': 0,
+      'On hold': 0,
       Favourites: favourites.length,
     };
     const now = new Date();
@@ -637,8 +662,9 @@ const Watchlist = () => {
       }
 
       if (item.category === 'TV Shows') {
-        const autoStatus = getAutoStatus(item);
-        if (autoStatus === 'Watching') {
+        if (isOnHold(item)) {
+          counts['On hold']++;
+        } else if (getAutoStatus(item) === 'Watching') {
           counts['Currently Watching']++;
         }
       }
@@ -657,6 +683,7 @@ const Watchlist = () => {
     selectedStatus,
     sortOrder,
     hideCompleted,
+    watchedFilter,
   ]);
 
   // Setup intersection observer for infinite scroll
@@ -697,17 +724,15 @@ const Watchlist = () => {
   };
 
   const activeFilterCount = [selectedPlatform, selectedGenre, selectedStatus].filter(Boolean).length
-    + (selectedCategory === 'TV Shows' && !hideCompleted ? 1 : 0);
+    + (selectedCategory === 'TV Shows' && !hideCompleted ? 1 : 0)
+    + (selectedCategory === 'Movies' && watchedFilter !== 'all' ? 1 : 0);
 
   const toolbar = (
     <div className="watchlist-toolbar watchlist-library-toolbar space-y-2 py-2">
       {/* Wraps rather than overflowing: past the viewport edge it widens the
           whole page on a phone. ml-auto keeps the actions right if they drop. */}
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <nav aria-label="Watchlist" className="flex items-center gap-1">
-          <Button asChild variant="ghost" className="gap-2"><Link to="/watchlist"><Newspaper className="h-4 w-4" />News</Link></Button>
-          <Button asChild variant="secondary" className="gap-2"><Link to="/watchlist/library" aria-current="page"><Library className="h-4 w-4" />Library</Link></Button>
-        </nav>
+        <WatchlistNav current="library" />
         <div className="ml-auto flex items-center gap-1">
         {isAdmin && selectedCategory === 'Favourites' && (
           <div className="flex items-center gap-2">
@@ -766,7 +791,8 @@ const Watchlist = () => {
             resultKey={(r) => String(r.id)}
             searchDisabled={
               selectedCategory === 'Upcoming' ||
-              selectedCategory === 'Currently Watching'
+              selectedCategory === 'Currently Watching' ||
+              selectedCategory === 'On hold'
             }
             isDisabled={(r) =>
               addedItems.has(r.id) || pendingResultIds.has(r.id)
@@ -969,7 +995,7 @@ const Watchlist = () => {
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Select value={selectedCategory} onValueChange={(value) => {
           setSelectedCategory(value as (typeof CATEGORIES)[number]);
-          setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setSearchQuery('');
+          setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setWatchedFilter('all'); setSearchQuery('');
         }}>
           <SelectTrigger aria-label="Library category" className="h-11 w-[210px] shrink-0 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -986,7 +1012,7 @@ const Watchlist = () => {
           <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
             <PopoverTrigger asChild><Button variant="outline" className="h-11 gap-2"><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}</Button></PopoverTrigger>
             <PopoverContent align="end" collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain space-y-3" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Library filters">
-              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setHideCompleted(true); }}>Reset</Button></div>
+              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setHideCompleted(true); setWatchedFilter('all'); }}>Reset</Button></div>
               <Select
                 value={selectedPlatform || 'all'}
                 onValueChange={(v) =>
@@ -1113,6 +1139,25 @@ const Watchlist = () => {
                 </Button>
               )}
 
+              {selectedCategory === 'Movies' && (
+                <div role="group" aria-label="Watched" className="flex flex-wrap gap-2">
+                  {WATCHED_FILTERS.map(({ value, label }) => (
+                    <Button
+                      key={value}
+                      variant={watchedFilter === value ? 'secondary' : 'outline'}
+                      aria-pressed={watchedFilter === value}
+                      size="sm"
+                      onClick={() => setWatchedFilter(value)}
+                      className={cn(
+                        'h-9 px-3 text-xs whitespace-nowrap',
+                        watchedFilter !== value && 'border border-border text-foreground',
+                      )}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              )}
 
             </PopoverContent>
           </Popover>

@@ -55,6 +55,8 @@ import NotFound from './pages/NotFound';
 const Travel = lazy(() => import('./features/travel/TravelPage'));
 const YearInHours = lazy(() => import('./pages/YearInHours'));
 const Watchlist = lazy(() => import('./features/watchlist/WatchlistPage'));
+const WatchlistDiary = lazy(() => import('./pages/WatchlistDiary'));
+const WatchlistFranchises = lazy(() => import('./pages/WatchlistFranchises'));
 
 /** Invisible component that warms every page's code and rows on idle (see useSiteWarmup). */
 function SiteWarmup() {
@@ -164,6 +166,8 @@ const App = () => {
                   <Route element={<WatchlistLayout />}>
                     <Route path="/watchlist" element={<WatchlistNews />} />
                     <Route path="/watchlist/library" element={<Watchlist />} />
+                    <Route path="/watchlist/diary" element={<WatchlistDiary />} />
+                    <Route path="/watchlist/franchises" element={<WatchlistFranchises />} />
                   </Route>
                   {/* Kept so a saved or shared link to the old address still lands somewhere. */}
                   <Route path="/watchlist/news" element={<Navigate to="/watchlist" replace />} />

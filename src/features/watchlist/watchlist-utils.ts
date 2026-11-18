@@ -1,5 +1,15 @@
 import type { WatchlistItem } from './WatchlistContext';
 
+type TrackedItem = Pick<WatchlistItem, 'category' | 'tracking'>;
+
+/** A show set aside, paused or dropped. Films have no tracking state. */
+export const isOnHold = (item: TrackedItem): boolean =>
+    item.category === 'TV Shows' && !!item.tracking && item.tracking !== 'active';
+
+/** A show given up on: News leaves it out as well as Watch Next and Your Week. */
+export const isDropped = (item: TrackedItem): boolean =>
+    item.category === 'TV Shows' && item.tracking === 'dropped';
+
 export const formatRuntime = (minutes?: number) => {
     if (!minutes) return '';
     const hours = Math.floor(minutes / 60);

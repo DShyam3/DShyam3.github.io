@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type {
+    TMDBCollection,
     TMDBDetails,
     TMDBSearchItem,
     TMDBSearchResponse,
@@ -8,6 +9,7 @@ import type {
 import { getPlatform } from './sync-logic';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
 import { CREDITS_APPEND, pickCreators, pickDirectors, pickTopCast } from './credits';
+import { pickCollection, pickTitleVotes } from './tmdb-score';
 import { releaseYear } from './watchlist-utils';
 
 const TMDB_IMAGE_BASE_URL = import.meta.env.VITE_TMDB_IMAGE_BASE_URL;
@@ -117,6 +119,12 @@ export function useTMDB() {
                 directors: type === 'movie' && credits ? pickDirectors(credits.crew) : null,
                 creators: type === 'tv' ? pickCreators(data.created_by) : null,
                 top_cast: credits ? pickTopCast(credits.cast) : null,
+                // Same picks as the sync, so a title added by hand has its
+                // TMDB score (and a film its series) at once.
+                ...(pickTitleVotes(data) ?? { tmdb_vote_average: null, tmdb_vote_count: null }),
+                ...(type === 'movie'
+                    ? (pickCollection(data) ?? { collection_id: null, collection_name: null })
+                    : { collection_id: null, collection_name: null }),
             };
         } catch (error) {
             console.error('TMDB Detail Error:', error);
@@ -125,6 +133,16 @@ export function useTMDB() {
             setLoading(false);
         }
     }, [fetchTMDB, getPosterUrl, getBackdropUrl]);
+
+    /** A film series and its parts; null when TMDB or the proxy fails. */
+    const getCollection = useCallback(async (id: number) => {
+        try {
+            return await fetchTMDB<TMDBCollection>(`collection/${id}`, {});
+        } catch (error) {
+            console.error('TMDB Collection Error:', error);
+            return null;
+        }
+    }, [fetchTMDB]);
 
     const searchMulti = useCallback(async (query: string) => {
         const trimmedQuery = query.trim();
@@ -173,5 +191,6 @@ export function useTMDB() {
         searchMulti,
         getPosterUrl,
         getMovieDetails,
+        getCollection,
     };
 }

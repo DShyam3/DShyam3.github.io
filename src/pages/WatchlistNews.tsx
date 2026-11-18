@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, Library, Newspaper, Tv } from 'lucide-react';
+import { Calendar, Tv } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DotMatrixText } from '@/components/dot-matrix/DotMatrixText';
 import { Button } from '@/components/ui/button';
@@ -10,6 +9,7 @@ import { UpNextRail } from '@/features/watchlist/components/UpNextRail';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { PlatformBadge } from '@/features/watchlist/components/PlatformLogo';
+import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
 import { useUpNext } from '@/features/watchlist/useUpNext';
 import {
@@ -32,6 +32,7 @@ import {
   getStatusColor,
   groupAnnouncementsByShow,
   groupRecentEpisodesByShow,
+  isDropped,
   isPremiereEpisode,
   isSeasonFinished,
   movieReleaseSentence,
@@ -440,6 +441,13 @@ const WatchlistNews = () => {
   const pinnedDays = pinned ? daysUntil(pinned.release_date, today) : null;
   const showCountdown = !!pinned && pinnedDays !== null && pinnedDays >= 0;
 
+  // Dropped shows and watched films stay out of Out Now, Upcoming and Updates,
+  // as shows you are caught up on already do. Matched by id against the library.
+  const droppedShowIds = new Set(watchlist.filter(isDropped).map((item) => item.id));
+  const watchedMovieIds = new Set(watchlist.filter((item) => item.category === 'Movies' && item.watched).map((item) => item.id));
+  const liveShow = (tvShowId: number) => !droppedShowIds.has(String(tvShowId));
+  const unwatchedMovie = (movieId: number) => !watchedMovieIds.has(String(movieId));
+
   const { upNext, failed: upNextFailed } = useUpNext();
   const watchNextIds = new Set(upNext.map((item) => item.tv_show_id));
 
@@ -450,7 +458,7 @@ const WatchlistNews = () => {
   const { episodes: recentEpisodes, loading: recentLoading, failed: recentFailed } = useRecentEpisodes(30);
   const { movies: outNowMovies, loading: outNowMovieLoading, failed: outNowMovieFailed } = useRecentMovies(30);
 
-  const outNowPremiereCandidates = premieresOf(recentEpisodes);
+  const outNowPremiereCandidates = premieresOf(recentEpisodes).filter((ep) => liveShow(ep.tv_show_id));
   const { episodesBySeason: premiereSeasonEpisodes, loading: premiereSeasonLoading, failed: premiereSeasonFailed } =
     usePremiereSeasonEpisodes(
       outNowPremiereCandidates.map((ep) => ({
@@ -482,7 +490,7 @@ const WatchlistNews = () => {
         seasonNumber: ep.season_number,
         entityId: ep.tv_show_id,
       })),
-      ...outNowMovies.map((movie): OutNowRow => ({
+      ...outNowMovies.filter((movie) => unwatchedMovie(movie.id)).map((movie): OutNowRow => ({
         key: `movie-${movie.id}`,
         kind: 'movie',
         title: movie.title,
@@ -506,7 +514,7 @@ const WatchlistNews = () => {
   const upcomingLoading = upcomingTvLoading || upcomingMovieLoading;
   const upcomingFailed = upcomingTvFailed || upcomingMovieFailed;
   const upcomingItems: UpcomingRow[] = [
-    ...premieresOf(upcomingEpisodes).map((ep): UpcomingRow => {
+    ...premieresOf(upcomingEpisodes).filter((ep) => liveShow(ep.tv_show_id)).map((ep): UpcomingRow => {
       const days = daysUntil(ep.release_date, today) ?? 0;
       return {
         key: `tv-${ep.tv_show_id}-${ep.season_number}`,
@@ -549,27 +557,27 @@ const WatchlistNews = () => {
   // Platform and status rows are not deduplicated -- they are different news.
   const excludedFromUpdates = new Set([...watchNextIds, ...outNowTvIds]);
   const recentGroups = groupRecentEpisodesByShow(recentEpisodes).filter(
-    (group) => !excludedFromUpdates.has(group.tv_show_id),
+    (group) => !excludedFromUpdates.has(group.tv_show_id) && liveShow(group.tv_show_id),
   );
 
   const { announcements, firstSeenByShow, loading: announcementsLoading, failed: announcementsFailed } =
     useRecentAnnouncements(30);
-  const announcementGroups = groupAnnouncementsByShow(announcements, firstSeenByShow, today);
+  const announcementGroups = groupAnnouncementsByShow(announcements, firstSeenByShow, today)
+    .filter((group) => liveShow(group.tv_show_id));
+  const updateEvents = events.filter((event) =>
+    event.entity_type === 'tv_show' ? liveShow(event.entity_id) : unwatchedMovie(event.entity_id));
 
   const updatesLoading = eventsLoading || recentLoading || announcementsLoading;
   const updatesFailed = eventsFailed || recentFailed || announcementsFailed;
   const updatesFeed = filterUpdatesByWindow(
-    buildUpdatesFeed(recentGroups, events, announcementGroups, today),
+    buildUpdatesFeed(recentGroups, updateEvents, announcementGroups, today),
     newsWindow,
     today,
   );
 
   const toolbar = (
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <nav aria-label="Watchlist" className="flex flex-wrap items-center gap-2">
-        <Button asChild variant="secondary"><Link to="/watchlist" aria-current="page"><Newspaper />News</Link></Button>
-        <Button asChild variant="ghost"><Link to="/watchlist/library"><Library />Library</Link></Button>
-      </nav>
+      <WatchlistNav current="news" />
       {/* A segmented control rather than nav-link text: `nav-link-active` only
           changes weight and tints to --primary, which in light mode is nearly
           the same dark tone as unselected text, so the selected window was

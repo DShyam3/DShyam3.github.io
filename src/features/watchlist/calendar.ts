@@ -1,6 +1,7 @@
 import type { WatchlistItem } from './useWatchlist';
 import type { ScheduleItem } from './useSchedule';
 import { isScheduleFor } from './title-ref';
+import { isOnHold } from './watchlist-utils';
 
 export interface CalendarEvent {
   id: string;
@@ -42,7 +43,8 @@ export function buildCalendarEvents(
   const weekStart = calendarWeekStart(today);
   for (const entry of schedule) {
     const item = watchlist.find((title) => isScheduleFor(entry, title));
-    if (!item) continue;
+    // Paused and dropped shows plan nothing; the saved row stays for a resume.
+    if (!item || isOnHold(item)) continue;
     const push = (date: string, label: string, releaseDate?: string) => events.push({
       id: `${entry.id}:${date}`, date, item, schedule: entry, label, releaseDate,
       kind: 'plan', unreleased: !!releaseDate && releaseDate > todayKey,
@@ -91,6 +93,7 @@ export function buildCalendarEvents(
   }
 
   for (const item of watchlist) {
+    if (isOnHold(item)) continue;
     if (schedule.some((entry) => isScheduleFor(entry, item))) continue;
     const suggest = (date: string | undefined, label: string, suffix: string) => {
       if (!validDate(date) || date < todayKey) return;
