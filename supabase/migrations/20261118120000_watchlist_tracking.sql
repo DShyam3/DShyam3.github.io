@@ -13,12 +13,21 @@
 -- What this file no longer does, and why:
 --   - It does not add movies.watched / watched_at or a watched_at trigger on
 --     movies. Those exist already (tr_set_movie_watched_at owns the stamping).
---   - It adds no `rating` column anywhere. The owner's scores live in the
---     admin-only watchlist_ratings table so visitors cannot read them; a
---     public-read column would leak them.
+--   - It adds no `rating` column anywhere. The owner's scores live in their
+--     own watchlist_ratings table (see "Ratings are now public" below).
 --   - It adds no tv_shows.tracking column. library_state carries the series
 --     state instead; this file only lets it take 'paused'.
 --   - It does not touch the watchlist_up_next view (nothing renders it now).
+--
+-- ## Ratings are now public
+--
+-- This REVERSES main's owner-only read of watchlist_ratings (20261118074422):
+-- the owner has decided the scores may be public. The "Admin read" policy is
+-- dropped and replaced by "Public Read Access" (SELECT to anon, authenticated,
+-- USING (true)); anon is granted SELECT and nothing else. Writes are unchanged:
+-- the "Admin insert/update/delete" policies and the authenticated-only write
+-- grants stand, so anon can read but never insert, update, delete or truncate.
+-- The table COMMENT is replaced to match.
 --
 -- ## Columns
 --
@@ -385,13 +394,13 @@ GRANT EXECUTE ON FUNCTION "public"."set_watched"(text, integer[], boolean, text,
 -- never erases a known date. The second statement lists watched_at alone, so
 -- the trigger does not fire again.
 --
--- Ratings are written to public.watchlist_ratings (owner-only, one row per
+-- Ratings are written to public.watchlist_ratings (public read, admin write, one row per
 -- target) only where the target has none yet and the imported value is 0.5 to
 -- 10 in half-point steps: an import never overwrites the owner's own score.
 -- ratings_set counts the rows actually inserted. Ids that match no row are
 -- ignored. A repeated id within one array is collapsed first (earliest date,
 -- highest rating) so the outcome does not depend on row order. The function is
--- SECURITY INVOKER, so watchlist_ratings' admin-only RLS applies to the insert.
+-- SECURITY INVOKER, so watchlist_ratings' admin-only write policy applies to the insert.
 CREATE OR REPLACE FUNCTION "public"."import_watch_history"(
     p_episodes jsonb DEFAULT '[]',
     p_movies jsonb DEFAULT '[]',
@@ -509,7 +518,7 @@ BEGIN
   )
   SELECT count(*) FILTER (WHERE imported IS NOT NULL) INTO v_dated_movies FROM u;
 
-  -- Ratings go to the owner-only watchlist_ratings table, only where the
+  -- Ratings go to the watchlist_ratings table (admin write), only where the
   -- target has none yet, only 0.5 to 10 in half-point steps.
   WITH i AS (
     SELECT x.id, max(x.rating) AS rating
@@ -621,5 +630,21 @@ ALTER FUNCTION "public"."reorder_viewing_order"(integer, integer[]) OWNER TO "po
 REVOKE ALL ON FUNCTION "public"."reorder_viewing_order"(integer, integer[]) FROM PUBLIC, "anon";
 
 GRANT EXECUTE ON FUNCTION "public"."reorder_viewing_order"(integer, integer[]) TO "authenticated", "service_role";
+
+-- ## watchlist_ratings: public read
+
+DROP POLICY IF EXISTS "Admin read" ON "public"."watchlist_ratings";
+
+DROP POLICY IF EXISTS "Public Read Access" ON "public"."watchlist_ratings";
+
+-- Public read, deliberately: the owner chose to publish their scores. Writes
+-- stay admin only through the existing Admin insert/update/delete policies.
+CREATE POLICY "Public Read Access" ON "public"."watchlist_ratings" FOR SELECT TO "anon", "authenticated" USING (true);
+
+-- SELECT only. anon keeps no INSERT, UPDATE, DELETE or TRUNCATE.
+GRANT SELECT ON TABLE "public"."watchlist_ratings" TO "anon";
+
+COMMENT ON TABLE "public"."watchlist_ratings" IS
+    'The owner''s scores for films, shows, seasons and episodes; publicly readable since 2026-11-18 (the owner''s choice), written only by the admin; exactly one target per row.';
 
 COMMIT;

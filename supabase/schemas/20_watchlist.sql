@@ -882,13 +882,13 @@ GRANT EXECUTE ON FUNCTION "public"."set_watched"(text, integer[], boolean, text,
 -- never erases a known date. The second statement lists watched_at alone, so
 -- the trigger does not fire again.
 --
--- Ratings are written to public.watchlist_ratings (owner-only, one row per
+-- Ratings are written to public.watchlist_ratings (public read, admin write, one row per
 -- target) only where the target has none yet and the imported value is 0.5 to
 -- 10 in half-point steps: an import never overwrites the owner's own score.
 -- ratings_set counts the rows actually inserted. Ids that match no row are
 -- ignored. A repeated id within one array is collapsed first (earliest date,
 -- highest rating) so the outcome does not depend on row order. The function is
--- SECURITY INVOKER, so watchlist_ratings' admin-only RLS applies to the insert.
+-- SECURITY INVOKER, so watchlist_ratings' admin-only write policy applies to the insert.
 CREATE OR REPLACE FUNCTION "public"."import_watch_history"(
     p_episodes jsonb DEFAULT '[]',
     p_movies jsonb DEFAULT '[]',
@@ -1006,7 +1006,7 @@ BEGIN
   )
   SELECT count(*) FILTER (WHERE imported IS NOT NULL) INTO v_dated_movies FROM u;
 
-  -- Ratings go to the owner-only watchlist_ratings table, only where the
+  -- Ratings go to the watchlist_ratings table (admin write), only where the
   -- target has none yet, only 0.5 to 10 in half-point steps.
   WITH i AS (
     SELECT x.id, max(x.rating) AS rating
@@ -1283,8 +1283,10 @@ GRANT SELECT, INSERT, DELETE ON TABLE "public"."watchlist_dismissed_suggestions"
 
 GRANT ALL ON TABLE "public"."watchlist_dismissed_suggestions" TO "service_role";
 
--- The owner's personal scores, kept out of the public-read watchlist tables so
--- a visitor can never read them through the API. One row per rated target;
+-- The owner's personal scores. Publicly readable since 2026-11-18 (the owner's
+-- choice, reversing the earlier owner-only read); written only by the admin.
+-- Kept in their own table rather than as columns on the watchlist tables so the
+-- read and write rules can differ from them. One row per rated target;
 -- exactly one of the four target columns is set. The UNIQUE constraints back
 -- client upserts (onConflict on each column) and index the foreign keys.
 -- No updated_at trigger exists in 01_functions.sql, so the client sets it.
@@ -1307,12 +1309,13 @@ CREATE TABLE IF NOT EXISTS "public"."watchlist_ratings" (
 ALTER TABLE "public"."watchlist_ratings" OWNER TO "postgres";
 
 COMMENT ON TABLE "public"."watchlist_ratings" IS
-    'The owner''s personal scores for films, shows, seasons and episodes; kept apart from the public watchlist tables so they are never readable by visitors; exactly one target per row.';
+    'The owner''s scores for films, shows, seasons and episodes; publicly readable since 2026-11-18 (the owner''s choice), written only by the admin; exactly one target per row.';
 
 ALTER TABLE "public"."watchlist_ratings" ENABLE ROW LEVEL SECURITY;
 
--- Admin only, reads included. No anon policy at all.
-CREATE POLICY "Admin read" ON "public"."watchlist_ratings" FOR SELECT TO "authenticated" USING ((SELECT "public"."is_admin"()));
+-- Public read, deliberately: the owner chose to publish their scores. Writes
+-- stay admin only through the three policies below.
+CREATE POLICY "Public Read Access" ON "public"."watchlist_ratings" FOR SELECT TO "anon", "authenticated" USING (true);
 
 CREATE POLICY "Admin insert" ON "public"."watchlist_ratings" FOR INSERT TO "authenticated" WITH CHECK ((SELECT "public"."is_admin"()));
 
@@ -1320,9 +1323,12 @@ CREATE POLICY "Admin update" ON "public"."watchlist_ratings" FOR UPDATE TO "auth
 
 CREATE POLICY "Admin delete" ON "public"."watchlist_ratings" FOR DELETE TO "authenticated" USING ((SELECT "public"."is_admin"()));
 
--- anon holds nothing: TRUNCATE is not filtered by RLS, so the grant is the
--- only barrier. The identity column needs no sequence grant.
+-- anon holds SELECT only: TRUNCATE is not filtered by RLS, so the grant is the
+-- only barrier to anon writing or truncating. The identity column needs no
+-- sequence grant.
 REVOKE ALL ON TABLE "public"."watchlist_ratings" FROM PUBLIC, "anon", "authenticated";
+
+GRANT SELECT ON TABLE "public"."watchlist_ratings" TO "anon";
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."watchlist_ratings" TO "authenticated";
 
