@@ -35,7 +35,7 @@ const hasAirDate = (v: TMDBEpisode): v is AiredEpisode => Boolean(v.air_date);
 import { useAuth } from '@/contexts/AuthContext';
 import { NIGHTLY_SYNC_HOUR_UTC } from './sync-logic';
 import { releaseYear } from './watchlist-utils';
-import { isLibraryState, libraryStatus, isValidPersonalRating, type LibraryState } from './library-state';
+import { countdownRelease, isLibraryState, libraryStatus, isValidPersonalRating, releaseCountdown, type LibraryState } from './library-state';
 
 // Returns a referentially-stable function that always calls the latest
 // version of `fn`. Used so the context value below doesn't hand out a new
@@ -628,48 +628,12 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     (item: WatchlistItem) => {
       const personalStatus = libraryStatus(item);
       if (['Hidden', 'Stopped watching', 'Watched', 'Completed', 'Watching'].includes(personalStatus)) return personalStatus;
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-
-      if (item.category === 'Movies') {
-        if (item.release_date) {
-          const releaseDate = new Date(item.release_date);
-          releaseDate.setHours(0, 0, 0, 0);
-          if (releaseDate > now) {
-            const diffTime = Math.abs(releaseDate.getTime() - now.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return `releases in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
-          }
-        }
-        return 'Released';
-      }
-
+      // The countdown comes from one pure source, shared with the card and
+      // the detail dialog (library-state's countdownRelease).
+      const next = countdownRelease(item);
+      if (item.category === 'Movies') return next ? releaseCountdown(next) : 'Released';
       if (!item.seasons || item.seasons.length === 0) return 'Returning Series';
-
-      const futureSeasons = item.seasons.filter(
-        (s) => s.season_number > 0 && s.release_date && new Date(s.release_date) > now,
-      );
-      if (futureSeasons.length > 0) {
-        const earliestSeason = futureSeasons.reduce((earliest, current) => {
-          if (!earliest.release_date) return current;
-          if (!current.release_date) return earliest;
-          return new Date(current.release_date) <
-            new Date(earliest.release_date)
-            ? current
-            : earliest;
-        });
-
-        if (earliestSeason.release_date) {
-          const releaseDate = new Date(earliestSeason.release_date);
-          releaseDate.setHours(0, 0, 0, 0);
-          const diffTime = Math.abs(releaseDate.getTime() - now.getTime());
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          return `S${earliestSeason.season_number} releases in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
-        }
-        return 'Coming Soon';
-      }
-
-      return personalStatus;
+      return next ? releaseCountdown(next) : personalStatus;
     },
     [],
   );

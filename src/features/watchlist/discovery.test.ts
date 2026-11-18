@@ -66,6 +66,21 @@ describe('discoverySeeds', () => {
     ]);
   });
 
+  it('waits only for new titles, not a caught-up series with a dated return', () => {
+    const episodes = (next?: string) => [
+      { title: 'Aired', episode_number: 1, watched: true, release_date: '2026-01-01' },
+      ...(next ? [{ title: 'Next', episode_number: 2, release_date: next }] : []),
+    ];
+    const watchlist: WatchlistItem[] = [
+      makeWatchlistItem({ id: '1', title: 'Returning Show', category: 'TV Shows', tmdb_id: 80, series_status: 'Returning Series', seasons: [{ season_number: 1, episodes: episodes('2026-12-01') }] }),
+      makeWatchlistItem({ id: '2', title: 'Quiet Show', category: 'TV Shows', tmdb_id: 90, series_status: 'Returning Series', seasons: [{ season_number: 1, episodes: episodes() }] }),
+    ];
+    const reasons = discoverySeeds(watchlist, [], new Date(2026, 10, 18, 12)).map((seed) => seed.reason);
+    expect(reasons).not.toContain('Because you’re waiting for Returning Show');
+    expect(reasons).toContain('Based on Returning Show in your library');
+    expect(reasons).not.toContain('Because you’re waiting for Quiet Show');
+  });
+
   it('no longer starts from the alphabetically first favourite', () => {
     const favourites: FavouriteItem[] = [
       makeFavourite({ id: 'f1', title: '21 Jump Street', tmdb_id: 1, created_at: '2024-01-01T00:00:00Z' }),

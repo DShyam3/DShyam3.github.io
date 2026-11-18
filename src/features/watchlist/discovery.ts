@@ -1,5 +1,5 @@
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
-import { libraryShelf, nextAirDate, type LibraryType } from './library-state';
+import { libraryShelf, libraryStatus, nextAirDate, type LibraryType } from './library-state';
 import type { TMDBSearchItem } from './tmdb-types';
 
 export type DiscoveryMedia = 'movie' | 'tv';
@@ -70,7 +70,9 @@ export function discoverySeeds(
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((item) => seed(item, `Because you’re watching ${item.title}`));
   const awaited = usable
-    .filter((item) => libraryShelf(item, today) === 'Upcoming')
+    // New titles only: a caught-up series' dated return also sits on
+    // Upcoming, but it is not what "waiting for" means here.
+    .filter((item) => libraryShelf(item, today) === 'Upcoming' && libraryStatus(item, today) !== 'Caught up')
     .map((item) => ({ item, date: nextAirDate(item, today) ?? '9999' }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.item.title.localeCompare(b.item.title))
     .map(({ item }) => seed(item, `Because you’re waiting for ${item.title}`));

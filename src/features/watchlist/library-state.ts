@@ -51,9 +51,11 @@ export function libraryStatus(item: WatchlistItem, today = new Date()): string {
  *
  * - Watching: a series with released episodes still to watch.
  * - To watch: released and not started.
- * - Upcoming: nothing released yet.
- * - Up to date: a running series with every released episode watched. It
- *   returns to Watching by itself when the next episode airs.
+ * - Upcoming: nothing to watch until a dated release: a title not out yet,
+ *   or the next episode of a series you are caught up on. When it comes out
+ *   a caught-up series moves to Watching, anything else to To watch.
+ * - Up to date: a running series with every released episode watched and
+ *   no next date known.
  * - Finished: a watched film, or an ended series watched to the end.
  */
 export const LIBRARY_SHELVES = ['Watching', 'To watch', 'Upcoming', 'Up to date', 'Finished'] as const;
@@ -92,15 +94,82 @@ export function libraryShelf(item: WatchlistItem, today = new Date()): LibrarySh
   const status = libraryStatus(item, today);
   if (status === 'Hidden' || status === 'Stopped watching') return status;
   if (status === 'Watched' || status === 'Completed') return 'Finished';
-  if (status === 'Caught up') return 'Up to date';
+  // Waiting on a known date reads as upcoming, whether or not the series
+  // was started; only an open-ended wait is Up to date.
+  if (status === 'Caught up') return futureDates(item, today).length > 0 ? 'Upcoming' : 'Up to date';
   if (status === 'Watching') return 'Watching';
   return isUnreleased(item, today) ? 'Upcoming' : 'To watch';
 }
 
-/** The soonest future air date, for ordering Upcoming and Up to date. Null when none is known. */
+/** The soonest future air date, for ordering Upcoming. Null when none is known. */
 export function nextAirDate(item: WatchlistItem, today = new Date()): string | null {
   const dates = futureDates(item, today).sort();
   return dates[0] ?? null;
+}
+
+/**
+ * The release a title's countdown names: a film's release date, or a
+ * series' soonest future season premiere or episode (specials excluded).
+ * An episode 1, or an episode on its season's premiere date, reads as the
+ * season. Dates compare as local calendar days, like the shelves, so a
+ * release dated today has come out.
+ */
+export interface NextRelease {
+  date: string;
+  season?: number;
+  episode?: number;
+}
+
+export function nextRelease(item: WatchlistItem, today = new Date(), withEpisodes = true): NextRelease | null {
+  const date = isoDay(today);
+  const day = (value?: string | null) => (value && value.slice(0, 10) > date ? value.slice(0, 10) : null);
+  if (item.category === 'Movies') {
+    const release = day(item.release_date);
+    return release ? { date: release } : null;
+  }
+  const candidates: NextRelease[] = [];
+  for (const season of item.seasons ?? []) {
+    if (season.season_number <= 0) continue;
+    const premiere = day(season.release_date);
+    if (premiere) candidates.push({ date: premiere, season: season.season_number });
+    for (const episode of season.episodes) {
+      if (!withEpisodes && episode.episode_number !== 1) continue;
+      const airs = day(episode.release_date);
+      if (!airs) continue;
+      const opensSeason = episode.episode_number === 1 || airs === premiere;
+      candidates.push(opensSeason ? { date: airs, season: season.season_number } : { date: airs, season: season.season_number, episode: episode.episode_number });
+    }
+  }
+  // Soonest first; on a shared date the season reads better than an episode.
+  return candidates.reduce<NextRelease | null>(
+    (best, candidate) =>
+      !best || candidate.date < best.date || (candidate.date === best.date && best.episode !== undefined && candidate.episode === undefined)
+        ? candidate
+        : best,
+    null,
+  );
+}
+
+/** A NextRelease's day as a local-midnight Date, for display. */
+export function releaseDay(release: NextRelease): Date {
+  return new Date(`${release.date}T00:00:00`);
+}
+
+/**
+ * The release a title's status pill counts down to. A caught-up series
+ * counts to its next episode, since that is what moves it off Upcoming;
+ * anything else counts to its release or next season premiere.
+ */
+export function countdownRelease(item: WatchlistItem, today = new Date()): NextRelease | null {
+  return nextRelease(item, today, libraryStatus(item, today) === 'Caught up');
+}
+
+/** The pill text, e.g. "S2E6 releases in 3 days", "S3 releases in 1 day", "releases in 9 days". */
+export function releaseCountdown(release: NextRelease, today = new Date()): string {
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.round((releaseDay(release).getTime() - start.getTime()) / 86_400_000);
+  const what = release.season === undefined ? '' : release.episode === undefined ? `S${release.season} ` : `S${release.season}E${release.episode} `;
+  return `${what}releases in ${days} day${days === 1 ? '' : 's'}`;
 }
 
 export function matchesLibraryType(item: WatchlistItem, type: LibraryType): boolean {

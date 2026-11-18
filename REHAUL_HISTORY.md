@@ -3106,4 +3106,10 @@ Seasons have no outside score.
 
 The Library uses TMDB's genre IDs, original language and origin country as facts and computes category memberships from reusable rules. A title can be Cartoon, Action and Sci-Fi at once without copied title records. Media type stays the film/series filter, watch progress stays the status shelf, and Favourites retains its older grouping. OMDb offers less structured category data for this library, while TMDB is already its source for title details and nightly updates. Anime and K-Drama (TV) are project rules over TMDB facts, not TMDB genre names. Missing origin facts do not become a guessed category; sync can fill them later. The new facts columns are nullable, and reads and writes tolerate the old schema while the migration is pending.
 
-Closure: `src/features/watchlist/library-categories.ts`, `library-query.ts`, `useTMDB.ts`, `watchlist-cron-sync/index.ts`, and `supabase/migrations/20261118210000_watchlist_tmdb_categories.sql`. The migration is written, not applied.
+Closure: `src/features/watchlist/library-categories.ts`, `library-query.ts`, `useTMDB.ts`, `watchlist-cron-sync/index.ts`, and `supabase/migrations/20261118201834_watchlist_tmdb_categories.sql`. The migration is applied to hosted and `watchlist-cron-sync` v20 is deployed.
+
+### Upcoming holds every dated wait; Up to date keeps the open-ended one — 2026-11-18
+
+Amends "Library shelves by status; News split into Following and Discover" above. Up to date read "S3 in 2d" as upcoming, and the owner asked for the shelf that shows what is coming up to be easier to see ("This would be easier to actually see what is coming up"). So Upcoming now means waiting on a known date, whether or not the series was started: a title not out yet, or a series already caught up on whose next episode or season has a date. Up to date keeps its name and holds only the open-ended wait, a running series with no next date known. A series moves to Upcoming when its date appears, and to Watching when the episode airs. Discover's "Because you're waiting for X" seed stays saved titles not out yet: the owner chose new titles only, so a series with a dated return does not seed suggestions.
+
+Closure: `src/features/watchlist/library-state.ts` (`libraryShelf`, `nextRelease`, `countdownRelease`).

@@ -2,12 +2,13 @@ import { useState, type ReactNode, type Ref } from 'react';
 import { Calendar, Film } from 'lucide-react';
 
 /** Shared poster anatomy keeps every row's metadata and action baseline aligned. */
-export function PosterCard({ title, poster, subtitle, meta, actions, scheduled, onSchedule, onOpen, cardRef }: {
+export function PosterCard({ title, poster, subtitle, meta, actions, footer, scheduled, onSchedule, onOpen, cardRef }: {
   title: string;
   poster?: string | null;
   subtitle: ReactNode;
   meta: ReactNode;
   actions?: ReactNode;
+  footer?: ReactNode;
   scheduled?: boolean;
   onSchedule?: () => void;
   onOpen: () => void;
@@ -29,6 +30,7 @@ export function PosterCard({ title, poster, subtitle, meta, actions, scheduled, 
         <div className="card-sub text-xs text-muted-foreground">{subtitle}</div>
         <div className="card-meta mt-auto grid gap-1">{meta}</div>
       </div>
+      {footer}
       {onSchedule && <button type="button" onClick={onSchedule} className="schedule-action flex min-h-11 w-full shrink-0 items-center justify-center gap-2 border-t px-2 py-2 text-xs font-medium text-primary hover:bg-primary/10" aria-label={`${scheduled ? 'Remove' : 'Add'} ${title} ${scheduled ? 'from' : 'to'} schedule`}><Calendar className="h-4 w-4 shrink-0" /><span>{scheduled ? 'Scheduled · remove' : 'Add to schedule'}</span></button>}
     </article>
   );

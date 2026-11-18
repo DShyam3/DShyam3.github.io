@@ -125,12 +125,12 @@ type Shelf = LibraryShelf | 'Favourites';
 const MAIN_SHELVES: Shelf[] = [...LIBRARY_SHELVES, 'Favourites'];
 const SHELVES: Shelf[] = [...MAIN_SHELVES, ...MORE_SHELVES];
 
-/** Each shelf's own orders, default first. Upcoming and Up to date run by date. */
+/** Each shelf's own orders, default first. Upcoming runs by date. */
 const SHELF_SORTS: Record<Shelf, LibrarySort[]> = {
   Watching: ['alphabetical', 'recent', 'finish'],
   'To watch': ['alphabetical', 'recent', 'finish'],
   Upcoming: [],
-  'Up to date': [],
+  'Up to date': ['alphabetical', 'recent'],
   Finished: ['watched', 'rating', 'alphabetical'],
   Favourites: [],
   'Stopped watching': ['alphabetical', 'rating'],
@@ -141,8 +141,8 @@ const SHELF_SORTS: Record<Shelf, LibrarySort[]> = {
 const SHELF_HINTS: Record<Shelf, string> = {
   Watching: 'Series you have started, with aired episodes still to watch. Films go straight from To watch to Finished.',
   'To watch': 'Out now, and not started yet.',
-  Upcoming: 'Saved, with nothing released yet.',
-  'Up to date': 'Series you are caught up on. Each moves back to Watching when its next episode airs.',
+  Upcoming: 'Nothing to watch until a dated release: new titles, and the next season or episode of a series you are up to date on. Soonest first.',
+  'Up to date': 'Running series with every aired episode watched and no next date known. A series moves to Upcoming once its next episode or season has a date.',
   Finished: 'Films you have watched, and ended series watched to the last episode.',
   Favourites: 'Titles you have hearted. A favourite also stays on its own shelf.',
   'Stopped watching': 'Set aside, with your progress and ratings kept.',
@@ -207,7 +207,7 @@ const favouriteAutoCategories = (favourite: FavouriteItem) => libraryCategories(
 });
 
 const Watchlist = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isAuthLoading } = useAuth();
   const {
     watchlist,
     favourites,
@@ -280,11 +280,22 @@ const Watchlist = () => {
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedAutoCategory, setSelectedAutoCategory] = useState<LibraryCategory | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  // A visitor's link to one of the owner's own shelves opens Watching, so
+  // the shelf, its count and its hint never show, and it resets filters and
+  // search as the shelf picker does. Only once auth has settled: isAdmin is
+  // false while it loads, and the owner's own link must hold.
+  if (!isAuthLoading && !isAdmin && (MORE_SHELVES as readonly string[]).includes(selectedCategory)) {
+    setSelectedCategory('Watching');
+    setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); setSearchQuery('');
+  }
   // Visitors never order by a rating they cannot see.
   const sortOptions = searching
     ? []
     : SHELF_SORTS[selectedCategory].filter((option) => option !== 'rating' || isAdmin);
-  const [sortOrder, setSortOrder] = useState<LibrarySort>(() => SHELF_SORTS[selectedCategory][0] ?? 'alphabetical');
+  const [chosenSort, setSortOrder] = useState<LibrarySort>(() => SHELF_SORTS[selectedCategory][0] ?? 'alphabetical');
+  // A choice the shelf no longer offers -- Your rating after signing out --
+  // falls back to the shelf's default rather than a blank picker.
+  const sortOrder = sortOptions.includes(chosenSort) ? chosenSort : sortOptions[0] ?? 'alphabetical';
   const sortable = sortOptions.length > 1;
   const byTimeLeft = sortable && sortOrder === 'finish';
   const [title, setTitle] = useState('');
@@ -468,7 +479,7 @@ const Watchlist = () => {
     if (!isAdmin && (MORE_SHELVES as readonly string[]).includes(selectedCategory)) return [];
     if (searching) return isAdmin ? typed : typed.filter((item) => !isPrivate(item));
     const onShelf = typed.filter((item) => gridShelfOf(item) === selectedCategory);
-    if (selectedCategory !== 'Upcoming' && selectedCategory !== 'Up to date') return onShelf;
+    if (selectedCategory !== 'Upcoming') return onShelf;
     // Soonest first; a title with no known date goes last.
     const today = new Date();
     return onShelf
