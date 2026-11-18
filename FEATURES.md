@@ -456,9 +456,9 @@ brands and chains found in the ledger, looked up once through a server-side cach
 transfers and independent shops get a coloured monogram instead, and their names are never
 sent to the logo service. Confirmed transfers are left out of spending and income everywhere figures are shown: Home, Budget history and Cash Flow. Transaction lists still show them.
 
-Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, monthly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. A payment dismissed as not recurring stays out of suggestions until you choose to show it as a suggestion again. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
+Recurring payments are suggested from repeated spending at the same merchant and account in imported bank records, without an AI key. Weekly, quarterly and quarterly patterns need at least three payment dates; annual patterns need two. Suggestions show their payment history and latest amount, and flag older patterns as possibly stopped. Review each suggestion to confirm whether it is active and when you last paid, or dismiss it as not recurring. The confirmed payment date stays separate from the latest payment seen in bank records. You can add bills manually, edit them, and restore inactive or dismissed entries. A payment dismissed as not recurring stays out of suggestions until you choose to show it as a suggestion again. Only active bills contribute to recurring totals. Adding, editing, deleting or marking a recurring bill paid leaves bank balances unchanged.
 
-Paid is decided per period: a month, quarter or year, labelled by the bill's due date. A bill shows Paid only when a recorded payment covers the current period, so a bill ticked before any payment date was recorded shows Unpaid until it is ticked again. Marking a monthly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. A tick never covers the next period. Marking the bill unpaid returns that period to unpaid. Weekly bills count as paid for a payment made in the last seven days, today included.
+Paid is decided per period: a month, quarter or year, labelled by the bill's due date. A bill shows Paid only when a recorded payment covers the current period, so a bill ticked before any payment date was recorded shows Unpaid until it is ticked again. Marking a quarterly, quarterly or annual bill paid records the period the payment covers, so a late payment for last month does not mark this month paid. A tick never covers the next period. Marking the bill unpaid returns that period to unpaid. Weekly bills count as paid for a payment made in the last seven days, today included.
 
 From seven days before a bill's next due date, a bill that is paid for the current period shows a "Paid 1 Nov early" button in its row, in both Due this month and Future / Scheduled. It records today's payment against that next period. Marking the bill unpaid then hands back only that early payment, so the current period stays Paid.
 
@@ -499,7 +499,7 @@ Category rules and review queue:
 
 ### Plan
 
-**Cash flow** — income, spending and net come only from recorded transactions, with confirmed transfers left out; recurring bills are not added on top. The detail drawers list each year in the chosen period with that year's total and monthly average. "Where it went" shows the period's income flowing into spending categories (top five payers and top eight categories, the rest grouped as "Other"), with what was kept or drawn from balances; below tablet width it shows as a table, and on wider screens the table is one click away.
+**Cash flow** — income, spending and net come only from recorded transactions, with confirmed transfers left out; recurring bills are not added on top. The detail drawers list each year in the chosen period with that year's total and quarterly average. "Where it went" shows the period's income flowing into spending categories (top five payers and top eight categories, the rest grouped as "Other"), with what was kept or drawn from balances; below tablet width it shows as a table, and on wider screens the table is one click away.
 
 **Forecast** — the projected balance of the checking accounts for each of the next 60 days. It starts from their balances today, takes off each active bill not yet paid or seen in the bank, and adds modelled take-home on each payday. It shows the lowest point, the first day below zero and the balance in 60 days, with a chart and a list of pay and bills by date. Day-to-day spending is not included. Bills paid from another account, and past bills not confirmed, are listed rather than subtracted. Pay that has already arrived a few days before payday is not counted twice. If take-home pay cannot be modelled, the forecast says pay is not included. A warning appears when transfers fail to load, because bills may then not match their bank payments.
 
@@ -516,7 +516,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   emoji and colour once; changes you make to them, and any annual fee you enter,
   are kept through later syncs
 - **Debts** — mortgages, car finance (PCP), cards and personal loans. Opens on
-  total owed, monthly total and a debt-free year. One row per debt with balance,
+  total owed, quarterly total and a debt-free year. One row per debt with balance,
   clear year and share repaid. Projections step forward from verified anchors
   rather than a floating balance; rate periods and PCP balloon payments are
   modelled. Drift against a real statement resolves to an implied annual
@@ -524,7 +524,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   showing the expected balance on that date and the gap against the actual
   statement
 - **Student Loan** — SLC charges Plan 2 interest at RPI during the tax year; the
-  income-linked part accrues monthly and lands in a later month (typically 6
+  income-linked part accrues quarterly and lands in a later month (typically 6
   after the tax year ends, editable as "Income-linked interest lands"). The
   headline builds the end-of-month figure from SLC's balance on its date, one
   item at a time: borrowing, refunds, interest charged (with its rate when one
@@ -539,7 +539,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   The simulator and inferred course end ignore draws with invalid calendar dates
   or non-finite amounts, while retaining valid negative and zero draws.
   Month-by-month timeline with a scrubber and play control, showing balance,
-  interest rate, monthly payment and repaid-so-far. Totals: total repaid,
+  interest rate, quarterly payment and repaid-so-far. Totals: total repaid,
   written off, peak balance, interest added. Refunds and payments made outside
   payroll are recorded inline. Published rates editor stores dated rows for
   each rate change (from, RPI, cap, Plan 2 threshold, Plan 2 full-rate income,
@@ -573,13 +573,13 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   calculated. Choose a baseline and a destination city (initially London and
   Berlin). Salary can be the same gross salary (starting at £50,000) converted
   into local currency, the same number in local currency, or a separate offer in
-  local currency for each city. Each city has eight monthly budget categories
+  local currency for each city. Each city has eight quarterly budget categories
   (housing, utilities and connectivity, groceries and household goods,
   transport, healthcare, leisure, local taxes and household charges, and other
   commitments); blank costs stay unknown and an explicit zero means no cost.
-  Complete budgets show monthly surplus or deficit, the difference against the
+  Complete budgets show quarterly surplus or deficit, the difference against the
   baseline, housing share of take-home (blank when salary is zero or missing)
-  and the largest monthly cost category (blank when all costs are zero). Each
+  and the largest quarterly cost category (blank when all costs are zero). Each
   jurisdiction names its local charges (Council Tax in Great Britain, Domestic
   rates in Northern Ireland, and Local taxes & household charges elsewhere),
   shows its healthcare note, and links its official tax-authority pages.
@@ -600,12 +600,12 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   Children, church tax, private health insurance and payslip withholding
   (Lohnsteuer) are not modelled, and at or below €2,000 a month the calculator
   declines and asks for net pay. The German figure is an annual assessment
-  estimate, not monthly withholding. The Netherlands uses 2026 Belastingdienst
+  estimate, not quarterly withholding. The Netherlands uses 2026 Belastingdienst
   tables for income brackets and the general and labour tax credits, with the 8%
   holiday allowance included in gross; the 30% ruling and occupational pension
-  are not modelled. Each calculated card lists that jurisdiction's own monthly
+  are not modelled. Each calculated card lists that jurisdiction's own quarterly
   deductions and offers a `Use my own net figure instead` switch. Every other
-  city takes a monthly net figure you enter for the shown gross; changing the
+  city takes a quarterly net figure you enter for the shown gross; changing the
   gross clears it, and its deductions are not estimated.
 
   Exchange rates are one dated snapshot of rates you enter, each quoted per one
@@ -621,7 +621,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
   `Gross needed to match <baseline>'s surplus` solves in any destination with
   calculated pay (UK, Germany or the Netherlands): the gross salary between 0
-  and 10,000,000 a year in the destination's currency that funds the destination's monthly basket and matches
+  and 10,000,000 a year in the destination's currency that funds the destination's quarterly basket and matches
   the baseline's surplus, with the baseline surplus converted at the rate
   snapshot. It reports when the answer falls in a band the calculator does not
   model, when it is outside the bound, when no gross reproduces the surplus
@@ -629,17 +629,17 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   states when a gross of 0 already leaves a smaller deficit than the baseline.
 
   Each city card with a complete budget shows a collapsible housing sensitivity
-  breakdown: break-even monthly housing cost (take-home minus non-housing
-  costs), the destination housing cost that matches the baseline's monthly
+  breakdown: break-even quarterly housing cost (take-home minus non-housing
+  costs), the destination housing cost that matches the baseline's quarterly
   surplus at the current exchange-rate snapshot, and ±10% / ±20% housing cost
-  cases holding non-housing costs constant, each with its resulting monthly
+  cases holding non-housing costs constant, each with its resulting quarterly
   surplus or deficit and housing share of take-home. Each city card also
   provides a collapsible upfront relocation cash & deposit calculator that
   separates refundable deposits tied up (tenancy deposit and other utility or
   key deposits) from one-off consumed moving expenses (visa and legal fees,
   travel and shipping, agency and admin fees, and initial setup and furnishing),
-  showing total upfront cash required and how many months of positive monthly
-  surplus — and on non-baseline cards, how many months of positive monthly
+  showing total upfront cash required and how many months of positive quarterly
+  surplus — and on non-baseline cards, how many months of positive quarterly
   surplus gain over the baseline — are needed to earn back the consumed moving
   expenses.
 
@@ -686,7 +686,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
   baseline only, copies the active profile's Tax & Income settings (salary or
   baseline offer, pension percentage, method and basis, student loan plan,
   postgraduate loan and tax-code personal allowance). It maps active non-savings
-  Budget items into the baseline city's eight monthly cost categories, with
+  Budget items into the baseline city's eight quarterly cost categories, with
   provenance badges (`Copied from Budget`, `0 from Budget` for unmatched
   categories, `Manual` once edited). Each category copies the total the Budget
   screen shows for it. `Reset to defaults` returns to the £50,000 London and
@@ -859,7 +859,7 @@ Budget and recurring defaults are generic UK: Home section covers Rent, Council 
 
   Configurable birthday leave usage rules: on the day (or nearest working day if it falls on a weekend or bank holiday), within ±1 week, within the birthday calendar month, within ±30 days, or floating anytime in the year, using day and month only (in UK `DD / MM` order, never storing a full date of birth) and highlighting the birthday and eligible booking window on the calendar.
 
-  A year switcher allows viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: UK bank holidays are stored in Supabase and refreshed monthly from gov.uk, so the saved year reads from that table (falling back to deterministic calculation), and any other year is calculated for that region.
+  A year switcher allows viewing and planning any current or future leave year with UK bank holidays (including deterministic future-year calculation and weekend substitute bank holidays) and UK (`en-GB`, day-first, Monday–Sunday) date formatting throughout. The year chevrons and the Plan Full Year shortcut change only the year on screen. The tax year saved in Settings, which also sets the weekend and bank holiday counts behind the pay rates, changes only in Settings. Bank holidays for the year on screen follow the profile's region: UK bank holidays are stored in Supabase and refreshed quarterly from gov.uk, so the saved year reads from that table (falling back to deterministic calculation), and any other year is calculated for that region.
 
   The Optimal Leave Maximiser opens in January to plan the full year and defaults later in the year to optimising remaining upcoming leave with long-weekend and 9-day week stretches alongside remaining bank holidays. It includes a shortcut to plan the next leave year, combining remaining annual leave allowance, UK bank holidays, and the Birthday Day Off (when enabled) to recommend the highest-leverage leave bridges. Selectable biases include Balanced, Long Christmas, Long Easter, and Summer Focus. Christmas bridges offer three tiers: Tier 1 · Efficient Bridge (Twixmas), Tier 2 · Balanced Stretch (pre-Christmas working days + Twixmas), and Tier 3 · Ultimate Shutdown (full Christmas week + Twixmas); Easter offers Tier 1 · Pre-Easter 4-Day Bridge, Tier 1 · Post-Easter 4-Day Bridge, and Tier 3 · 16-Day Easter Shutdown. Each bridge shows exact dates to book, leave spent, consecutive days off, and return-to-work date, with one-click booking for individual bridges or the full recommended plan. When no chosen bridge captures the Birthday Day Off, a standalone 1-day Birthday Day Off Break is recommended. Recorded sick days are excluded from suggestions and do not consume annual allowance. The Maximiser lists up to five bridges inline; with more, it lists the recommended ones and a button reveals the rest.
 
