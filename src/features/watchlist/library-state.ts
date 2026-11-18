@@ -7,6 +7,12 @@ import type { WatchlistItem } from './WatchlistContext';
  */
 export type LibraryState = 'active' | 'paused' | 'hidden' | 'stopped';
 
+/** Titles News follows: Paused stays; Stopped watching and Hidden leave. */
+export const FOLLOWED_STATES = ['active', 'paused'] as const;
+export function isFollowedState(state: string | null | undefined): boolean {
+  return !state || (FOLLOWED_STATES as readonly string[]).includes(state);
+}
+
 /** Films cannot be paused: there is nothing to resume. */
 export function isLibraryState(value: string, category: string): value is LibraryState {
   if (value === 'paused') return category === 'TV Shows';

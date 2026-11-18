@@ -4,8 +4,8 @@ import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { WatchRecord } from './diary';
 
 export const DIARY_EPISODE_SELECT = `id, episode_number, title, runtime, watched_at,
-  tv_show_seasons!inner(season_number, tv_shows!inner(id, title, poster, genre, platform))`;
-export const DIARY_MOVIE_SELECT = 'id, title, poster, genre, platform, runtime, watched_at';
+  tv_show_seasons!inner(season_number, tv_shows!inner(id, title, poster, genre, platform, library_state))`;
+export const DIARY_MOVIE_SELECT = 'id, title, poster, genre, platform, runtime, watched_at, library_state';
 
 const genresOf = (genre: string | null): string[] =>
   genre ? genre.split(',').map((g) => g.trim()).filter(Boolean) : [];
@@ -16,6 +16,7 @@ interface ShowRow {
   poster: string | null;
   genre: string | null;
   platform: string | null;
+  library_state?: string | null;
 }
 interface EpisodeRow {
   id: number;
@@ -68,6 +69,7 @@ async function readDiary(): Promise<{ records: WatchRecord[]; undated: number }>
       episodeTitle: row.title,
       genres: genresOf(show.genre),
       platform: show.platform,
+      hidden: show.library_state === 'hidden',
     };
   });
   const films = moviesResult.data.map((row): WatchRecord => ({
@@ -80,6 +82,7 @@ async function readDiary(): Promise<{ records: WatchRecord[]; undated: number }>
     poster: row.poster,
     genres: genresOf(row.genre),
     platform: row.platform,
+    hidden: row.library_state === 'hidden',
   }));
   return { records: [...episodes, ...films], undated: (undatedEpisodes.count ?? 0) + (undatedFilms.count ?? 0) };
 }

@@ -19,6 +19,9 @@ export interface RatingRow {
 export const watchlistRatingsQuery = queryOptions({
   queryKey: ['watchlist', 'ratings'] as const,
   staleTime: 5 * 60 * 1000,
+  // Everyone reads it and Discover waits on it, so a failing read must not
+  // hold a visitor's page for the default three retries.
+  retry: 1,
   // Paged: there are thousands of episodes to rate, and the Data API stops
   // at 1,000 rows without saying so. A short read would show rated titles
   // as unrated. Default retries; a failure is shown, never read as "none".

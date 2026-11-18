@@ -178,8 +178,8 @@ export function useDiscovery(type: LibraryType) {
   // reorders the seeds, and paging must not repeat or skip one -- also after
   // leaving Discover and coming back, or switching type and back.
   const recommendations = useInfiniteQuery({
-    // isAdmin in the key: pages seeded as a visitor (no scores) must not be
-    // what the owner gets after signing in.
+    // isAdmin in the key: a visitor's pages (public scores, but no owner-only
+    // shelves) must not be what the owner gets after signing in.
     queryKey: ['watchlist', 'discovery', 'recommendations', type, week, isAdmin],
     // Ratings decide the first seeds (8 and up lead, under 6 never seed), so
     // the first page waits for them rather than freezing without them.

@@ -1,5 +1,6 @@
 import { keepPreviousData, queryOptions, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { FOLLOWED_STATES, isFollowedState } from './library-state';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { Json } from '@/integrations/supabase/types';
 import {
@@ -28,12 +29,11 @@ function unwrapEmbed(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** A dropped show leaves every News section, and a watched film leaves Out
- *  Now and Updates. Applied to the rows each query returns, so it does not wait
- *  on the library held in the watchlist context. Paused shows stay. */
-/** Stopped watching and Hidden titles leave News; Paused ones stay. */
+/** Stopped watching and Hidden shows leave every News section (Paused ones
+ *  stay). Applied to the rows each query returns, so it does not wait on the
+ *  library held in the watchlist context. */
 const isDroppedShow = (show: { library_state?: string | null } | undefined) =>
-  show?.library_state === 'stopped' || show?.library_state === 'hidden';
+  !!show && !isFollowedState(show.library_state);
 
 export type WatchlistNewsMediaType = 'tv' | 'movie';
 
@@ -67,7 +67,7 @@ export const pinnedTitleQuery = queryOptions({
           .from('tv_shows')
           .select('id, title, poster, backdrop, release_date')
           .eq('pinned', true)
-          .eq('library_state', 'active')
+          .in('library_state', [...FOLLOWED_STATES])
           .limit(1)
           .maybeSingle(),
         supabase

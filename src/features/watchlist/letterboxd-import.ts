@@ -1,5 +1,5 @@
 import { parseDelimitedRows } from '@/lib/finance/statement-import';
-import { isCalendarDate } from './watched-when';
+import { isCalendarDate, todayLocal } from './watched-when';
 
 export const LETTERBOXD_MAX_BYTES = 10 * 1024 * 1024; // per file
 export const LETTERBOXD_MAX_ROWS = 20000; // per file
@@ -53,10 +53,6 @@ export function detectLetterboxdFile(fileName: string, headers: string[]): Lette
   return 'unknown';
 }
 
-const localToday = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
 const parseRating = (value: string): number | null => {
   const text = value.trim();
   if (!/^\d+(\.\d+)?$/.test(text)) return null;
@@ -75,7 +71,7 @@ interface Draft {
 
 export function parseLetterboxdFiles(files: { name: string; text: string }[], options: { today?: string } = {}): LetterboxdParseResult {
   if (files.length === 0) throw new Error('Choose at least one Letterboxd CSV file.');
-  const today = options.today ?? localToday();
+  const today = options.today ?? todayLocal();
   const maxYear = Number(today.slice(0, 4)) + 5;
   const drafts = new Map<string, Draft>();
   const result: LetterboxdParseResult = { films: [], files: [], skipped: [] };

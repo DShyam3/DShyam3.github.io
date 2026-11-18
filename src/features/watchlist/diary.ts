@@ -27,6 +27,8 @@ export interface WatchRecord {
   episodeNumber?: number;
   episodeTitle?: string | null;
   genres: string[];
+  /** The title is Hidden (owner-only): the page leaves it out for visitors. */
+  hidden?: boolean;
   platform: string | null;
 }
 

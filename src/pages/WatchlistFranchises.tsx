@@ -53,7 +53,10 @@ export default function WatchlistFranchises() {
   const savedCollectionIds = new Set(savedOrders.flatMap((o) => (o.tmdbCollectionId == null ? [] : [o.tmdbCollectionId])));
   const collectionRows = useQuery(libraryCollectionsQueryOptions);
   const collections = useMemo(() => {
-    const films = new Map(watchlist.filter((item) => item.category === 'Movies').map((item) => [item.id, item]));
+    // Hidden films are the owner's own shelf: visitors do not see them here.
+    const films = new Map(watchlist
+      .filter((item) => item.category === 'Movies' && (isAdmin || item.library_state !== 'hidden'))
+      .map((item) => [item.id, item]));
     return collectionsFromLibrary(
       (collectionRows.data ?? []).flatMap((row) => {
         const item = films.get(row.id);
@@ -71,7 +74,7 @@ export default function WatchlistFranchises() {
           : [];
       }),
     );
-  }, [watchlist, collectionRows.data]);
+  }, [watchlist, collectionRows.data, isAdmin]);
   const openCollections = collections.filter((c) => !savedCollectionIds.has(c.collectionId));
 
   /** Runs a change, then refreshes the orders. Resolves to an error message, or null on success. */

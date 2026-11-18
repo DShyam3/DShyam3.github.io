@@ -45,7 +45,7 @@ import { SmartScheduleDialog, scheduleReleaseDate } from '@/features/watchlist/c
 import './WatchlistNews.css';
 import { DiscoverySection } from '@/features/watchlist/components/DiscoverySection';
 import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
-import { LIBRARY_TYPE_OPTIONS, type LibraryType } from '@/features/watchlist/library-state';
+import { LIBRARY_TYPE_OPTIONS, type LibraryType, isFollowedState } from '@/features/watchlist/library-state';
 import { YourWeek } from '@/features/watchlist/components/YourWeek';
 
 /** Which entity a click on a card or row resolves to -- looked up in
@@ -477,7 +477,7 @@ const WatchlistNews = () => {
     };
   }, [addToSchedule, isAdmin, isInSchedule, removeFromScheduleByWatchlistId]);
 
-  const activeKeys = new Set(watchlist.filter((item) => !item.library_state || item.library_state === 'active').map((item) => `${item.category === 'Movies' ? 'movie' : 'tv_show'}:${item.id}`));
+  const activeKeys = new Set(watchlist.filter((item) => isFollowedState(item.library_state)).map((item) => `${item.category === 'Movies' ? 'movie' : 'tv_show'}:${item.id}`));
   const isFollowing = (entityType: EntityRef['entityType'], id: number) => activeKeys.has(`${entityType}:${id}`);
 
   const { pinned, loading: pinnedLoading, failed: pinnedFailed } = usePinnedTitle();

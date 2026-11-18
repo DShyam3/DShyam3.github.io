@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useWatchlistContext } from '../../WatchlistContext';
 import { watchlistLibraryQuery } from '../../library-query';
 import { newItemFromDetails } from '../../new-item';
+import { watchlistRatingsQuery } from '../../ratings-query';
 import { invalidateWatchDerived } from '../../up-next-query';
 import { useTMDB } from '../../useTMDB';
 import { releaseYear } from '../../watchlist-utils';
@@ -265,6 +266,7 @@ export function useWatchHistoryImport() {
       step = 'Refreshing the page';
       await fetchData();
       await invalidateWatchDerived(queryClient);
+      await queryClient.invalidateQueries({ queryKey: watchlistRatingsQuery.queryKey }, { throwOnError: false });
       assertLive(myRun);
       setOutcome({ added, failedAdds, marked, notFound: payload.notFound });
       setProgress(null);
@@ -275,6 +277,7 @@ export function useWatchHistoryImport() {
       // titles already added and cannot add them again.
       await fetchData();
       await invalidateWatchDerived(queryClient);
+      await queryClient.invalidateQueries({ queryKey: watchlistRatingsQuery.queryKey }, { throwOnError: false });
       if (runId.current !== myRun) return;
       setProgress(null);
       setFailure({ step, message: error instanceof Error ? error.message : 'Something went wrong.', saved: savedText() });

@@ -9,6 +9,7 @@ import { WatchHistoryImport } from '@/features/watchlist/components/import/Watch
 import { YearReviewView } from '@/features/watchlist/components/diary/YearReviewView';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
+import { SegmentedControl } from '@/features/watchlist/components/SegmentedControl';
 import { buildDiary, type DiaryRow } from '@/features/watchlist/diary';
 import { diaryQueryOptions } from '@/features/watchlist/diary-query';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
@@ -28,7 +29,12 @@ export default function WatchlistDiary() {
   const { watchlist, setWatchedDates } = useWatchlist();
   const queryClient = useQueryClient();
   const { data, isPending, isError } = useQuery(diaryQueryOptions);
-  const records = useMemo(() => data?.records ?? [], [data]);
+  // Hidden titles are the owner's own shelf, so visitors see none of their
+  // watches or scores.
+  const records = useMemo(
+    () => (data?.records ?? []).filter((record) => isAdmin || !record.hidden),
+    [data, isAdmin],
+  );
 
   const undated = data?.undated ?? 0;
   const diary = useMemo(() => ({ ...buildDiary(records), undated }), [records, undated]);
@@ -38,6 +44,7 @@ export default function WatchlistDiary() {
   const ratings = useMemo(() => {
     const things: RatedThing[] = [];
     for (const item of watchlist) {
+      if (!isAdmin && item.library_state === 'hidden') continue;
       if (item.category === 'Movies' && item.personal_rating != null) {
         things.push({ kind: 'movie', titleId: item.id, title: item.title, poster: item.image_url ?? null, rating: item.personal_rating });
       }
@@ -48,7 +55,7 @@ export default function WatchlistDiary() {
       }
     }
     return things;
-  }, [watchlist]);
+  }, [watchlist, isAdmin]);
 
   const review = useMemo(
     () => (year === undefined ? null : { ...buildYearReview({ records, ratings, year }), undated }),
@@ -56,11 +63,15 @@ export default function WatchlistDiary() {
   );
 
   const setDate = async (row: DiaryRow, watchedAt: string | null) => {
-    for (const kind of ['episode', 'movie'] as const) {
-      const ids = row.records.filter((record) => record.kind === kind).map((record) => record.id);
-      if (ids.length > 0) await setWatchedDates(kind, ids, watchedAt);
+    try {
+      for (const kind of ['episode', 'movie'] as const) {
+        const ids = row.records.filter((record) => record.kind === kind).map((record) => record.id);
+        if (ids.length > 0) await setWatchedDates(kind, ids, watchedAt);
+      }
+    } finally {
+      // Also after a failure: part of the row may already have been saved.
+      await queryClient.invalidateQueries({ queryKey: diaryQueryOptions.queryKey });
     }
-    await queryClient.invalidateQueries({ queryKey: diaryQueryOptions.queryKey });
   };
 
   const toolbar = (
@@ -75,26 +86,7 @@ export default function WatchlistDiary() {
   return (
     <AppShell title="Watchlist" subtitle="Diary" toolbar={toolbar}>
       <div className="space-y-4">
-        <div role="group" aria-label="Diary view" className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-card/60 p-0.5">
-          {TABS.map((option) => {
-            const selected = tab === option.key;
-            return (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setTab(option.key)}
-                aria-pressed={selected}
-                className={cn(
-                  'min-h-10 rounded-full px-3 py-1 transition-colors duration-200',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                  selected ? 'bg-primary text-primary-foreground' : 'text-foreground/75 hover:bg-muted hover:text-foreground',
-                )}
-              >
-                <DotMatrixText text={option.label} size="xs" wrap={false} />
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedControl label="Diary view" options={TABS} value={tab} onChange={setTab} />
 
       {isPending && (
         <div role="status" aria-label="Loading the diary" className="space-y-3">
