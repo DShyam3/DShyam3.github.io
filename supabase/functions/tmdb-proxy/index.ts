@@ -231,6 +231,18 @@ async function fetchTvSpinoffs(seedIds: number[]): Promise<TvSpinoffLink[]> {
     return links
 }
 
+function cacheControlFor(endpoint: string): string {
+    if (
+        endpoint === 'wikidata/tv-spinoffs' ||
+        endpoint.startsWith('collection/') ||
+        endpoint.startsWith('movie/') ||
+        /^tv\/\d+\/season\/\d+$/.test(endpoint)
+    ) {
+        return 'public, max-age=3600, s-maxage=86400'
+    }
+    return 'public, max-age=900, s-maxage=3600'
+}
+
 serve(async (req) => {
     const corsHeaders = buildCorsHeaders(req)
 
@@ -266,7 +278,11 @@ serve(async (req) => {
             const results = await fetchTvSpinoffs(ids)
             return new Response(JSON.stringify({ results }), {
                 status: 200,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                headers: {
+                    ...corsHeaders,
+                    'Content-Type': 'application/json',
+                    'Cache-Control': cacheControlFor(endpoint),
+                },
             })
         }
 
@@ -294,7 +310,11 @@ serve(async (req) => {
         // rather than as a failure it should report.
         return new Response(JSON.stringify(data), {
             status: response.status,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
+                ...(response.ok ? { 'Cache-Control': cacheControlFor(endpoint) } : {}),
+            },
         })
     } catch (error) {
         // Detail goes to the function log, not to the caller: `error.message`

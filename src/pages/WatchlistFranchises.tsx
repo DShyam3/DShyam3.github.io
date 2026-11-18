@@ -25,7 +25,6 @@ import {
   addEntry,
   createOrder,
   deleteOrder,
-  libraryCollectionsQueryOptions,
   moveEntry,
   removeEntry,
   renameOrder,
@@ -57,30 +56,27 @@ export default function WatchlistFranchises() {
   const savedOrders = orders.data ?? [];
   const savedCollectionIds = new Set(savedOrders.flatMap((o) => (o.tmdbCollectionId == null ? [] : [o.tmdbCollectionId])));
   const savedOrderNames = new Set(savedOrders.map((o) => o.name.trim().toLowerCase()));
-  const collectionRows = useQuery(libraryCollectionsQueryOptions);
   const collections = useMemo(() => {
     // Hidden films are the owner's own shelf: visitors do not see them here.
-    const films = new Map(watchlist
-      .filter((item) => item.category === 'Movies' && (isAdmin || item.library_state !== 'hidden'))
-      .map((item) => [item.id, item]));
     return collectionsFromLibrary(
-      (collectionRows.data ?? []).flatMap((row) => {
-        const item = films.get(row.id);
-        return item
+      watchlist.flatMap((item) =>
+        item.category === 'Movies' &&
+        item.collection_id != null &&
+        (isAdmin || item.library_state !== 'hidden')
           ? [{
               id: item.id,
-              tmdbId: row.tmdbId,
+              tmdbId: item.tmdb_id ?? null,
               title: item.title,
               watched: !!item.watched,
               releaseDate: item.release_date ?? null,
               poster: item.image_url ?? null,
-              collectionId: row.collectionId,
-              collectionName: row.collectionName,
+              collectionId: item.collection_id,
+              collectionName: item.collection_name ?? null,
             }]
-          : [];
-      }),
+          : [],
+      ),
     );
-  }, [watchlist, collectionRows.data, isAdmin]);
+  }, [watchlist, isAdmin]);
   const openCollections = collections.filter((c) => !savedCollectionIds.has(c.collectionId));
 
   const tvSeedIds = useMemo(

@@ -27,7 +27,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       .from('movies')
       .select(
         `id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime,
-          watched, watched_at, library_state,
+          watched, watched_at, library_state, collection_id, collection_name,
           imdb_id, imdb_rating, imdb_votes, rt_score, metascore`,
         { count: 'exact' },
       )
@@ -37,7 +37,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       if (!withFacts.error || !missingCategoryColumns(withFacts.error.message)) return withFacts;
       return selectAllPages((from, to) => supabase.from('movies')
         .select(`id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime,
-          watched, watched_at, library_state, imdb_id, imdb_rating, imdb_votes, rt_score, metascore`, { count: 'exact' })
+          watched, watched_at, library_state, collection_id, collection_name, imdb_id, imdb_rating, imdb_votes, rt_score, metascore`, { count: 'exact' })
         .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (movie) => String(movie.id));
     })(),
     (async () => {
@@ -130,6 +130,8 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       imdb_votes: movie.imdb_votes ?? undefined,
       rt_score: movie.rt_score ?? undefined,
       metascore: movie.metascore ?? undefined,
+      collection_id: movie.collection_id ?? undefined,
+      collection_name: movie.collection_name ?? undefined,
     }),
   );
 
@@ -232,6 +234,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
 export const watchlistLibraryQuery = queryOptions({
   queryKey: ['watchlist', 'library'],
   queryFn: readWatchlistLibrary,
+  staleTime: 5 * 60 * 1000,
   // The provider owns these objects' identity and writes them back on every
   // edit; structural sharing would deep-compare ~7,600 episode rows each time
   // to preserve references nothing relies on.

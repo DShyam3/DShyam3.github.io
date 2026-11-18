@@ -1,15 +1,24 @@
 # State
 
-Updated 2026-11-18 · `main` (pushed on top of `5e4b3ac7`).
+Updated 2026-11-18 · `main` (pushed on top of `3e2f8303`).
 
 ## Deployed & landed on `main`
 
-- **Watchlist Discover/Franchises layout & faster add path:**
-  - Responsive multi-column grids for franchise/collection cards: `HAVE YOU ALREADY WATCHED?` (`DiscoverySection.tsx`: 1 -> 2 -> 3 columns) and `/watchlist/franchises` (`WatchlistFranchises.tsx`: 1 -> 2 columns on `lg+`) eliminate the wide-screen single-column whitespace.
-  - Eliminated full-library re-fetch on add (`WatchlistContext.tsx`): `addWatchlistItem` now appends the newly inserted movie or TV show (including its inserted seasons/episodes) directly into `watchlist` state via `setWatchlist`, invalidating `['watchlist', 'library-collections']` (for movies with a `collection_id`) and `invalidateWatchDerived(queryClient)` (when added as watched) instead of re-downloading the full library via `fetchData()`.
-  - Eliminated duplicate `tv/{id}` TMDB fetch on TV show adds (`useTMDB.ts`, `WatchlistContext.tsx`, `DiscoverySection.tsx`, `useAddToLibrary.ts`, `WatchlistPage.tsx`): `getMovieDetails` returns `seasons` for TV shows and callers forward `options.seasons` into `addWatchlistItem`.
-- **Earlier on `main` (`5e4b3ac7`, `1c6bbacb`, `ac9fae38`, `b7aa0e1b`, `5050676b`, `acf42c01`):**
-  - `tmdb-proxy` v18 (`wikidata/tv-spinoffs` posters + dates), gap-first ranking, `Likely seen`, clickable posters/titles (`EntryPreviewDialog.tsx`), News `Following` scrim + `WeekStrip` + `OUT NOW` grid + `None of these`, Library shelf narrowing, `Shelf:` + `Favourite` pills, `NOW`/`Paramount+`/`Channel 4`/`Crunchyroll`, TMDB Library categories (`20261118201834` applied, `watchlist-cron-sync` v20), Diary, Franchises, Import, and OMDb scores (`20261118190243` applied, `OMDB_API_KEY` set).
+- **Watchlist loading, caching, update/resync, and nightly sync performance pass:**
+  - **Loading & caching:**
+    - `selectAllPages` (`src/integrations/supabase/select-all-pages.ts`) now fetches remaining 1,000-row pages in parallel after page 1 returns `count`.
+    - `library-query.ts` now selects `collection_id, collection_name` on `movies` and sets `staleTime: 5 * 60 * 1000`, eliminating the duplicate `movies` table scan in `useDiscovery.ts` and `WatchlistFranchises.tsx`.
+    - `useSiteWarmup.ts` now prefetches `watchlistRatingsQuery` alongside `watchlistLibraryQuery` so Discover recommendations don't stall on cold start.
+    - `useTMDB.ts` now caches `getMovieDetails`, `getCollection`, and `getTvSpinoffs` in React Query (`30m` / `24h` `staleTime`) with in-flight deduplication across dialogs, Discover, and Franchises.
+    - `useDiscovery.ts` & `discovery.ts`: per-collection `useQueries` share cache with `CollectionCard` and avoid re-fetching earlier collections on `Show more`; `curateDiscovery` calls are memoized; `interleaveBySeed` builds buckets in `O(n)`; `dismiss` no longer triggers a redundant `DISMISSED_QUERY_KEY` refetch after `setQueryData`.
+  - **Updating & resyncing (`WatchlistContext.tsx`):**
+    - `addFavourite` updates `favourites` in place via `.insert(...).select().single()` (no `fetchData()`), and `toggleFavourite` (`WatchlistPage.tsx`, `LibraryActions.tsx`) passes `facts` already in memory (no duplicate TMDB fetch).
+    - `syncSingleItem` / `runServerSync(target)` refreshes only the single resynced row instead of re-fetching all 1,400+ titles and wiping `loadedShowsRef` / `loadedDescriptionsRef`.
+    - `syncFavouriteFacts` runs with bounded concurrency (5) and updates `favourites` in place instead of `fetchData()`.
+    - Lazy detail hydrations (`loadItemDescription`, `loadShowEpisodes`) skip invalidating `['watchlist', 'news']`; `setMovieWatched` uses `.update(...).select(...).single()`; `toggleEpisodeWatched` / `toggleSeasonWatched` update `watched_at` in one `setWatchlist` pass when marking watched now.
+  - **Edge functions (in `main`, pending deploy to Supabase):**
+    - `supabase/functions/tmdb-proxy/index.ts`: adds `Cache-Control` headers on `200` responses (`3600s` browser / `86400s` CDN for stable movie/collection/season/spinoff responses, `900s` / `3600s` for search/discover/show details).
+    - `supabase/functions/watchlist-cron-sync/index.ts`: skips `hidden`/`stopped` titles during nightly runs, dirty-checks `movies` and `tv_shows` before writing, scopes `Returning Series`/`In Production` season refreshes to recent/latest seasons, avoids infinite TBA `episode_count` re-fetches on settled `Ended`/`Canceled` shows, eliminates both redundant `tv_show_episodes` `SELECT`s and unchanged season/episode writes, and batches removed-season deletes.
 
 ## Checks (2026-11-18)
 
@@ -18,17 +27,19 @@ Updated 2026-11-18 · `main` (pushed on top of `5e4b3ac7`).
 | `npm run lint` | 0 errors, 0 warnings |
 | `npm run typecheck` | pass |
 | `npm run typecheck:functions` | pass (`deno check`) |
-| `npx vitest run src/features/watchlist src/integrations/supabase/rls-admin-check.test.ts` | 32 files / 474 tests pass |
+| `npx vitest run src/features/watchlist src/integrations/supabase/rls-admin-check.test.ts src/integrations/supabase/select-all-pages.test.ts` | 33 files / 481 tests pass |
 | `npm run build` | pass |
 | `graphify update .` | pass |
+| Edge functions deploy (`tmdb-proxy`, `watchlist-cron-sync`) | **not yet deployed** (awaiting user confirmation for hosted mutation `--yes`) |
 | Browser | not run against production for the new commit |
 
 ## Next
 
-1. Verify GitHub Pages deploy for the latest `main` push and browser-verify `HAVE YOU ALREADY WATCHED?` (3-column grid, add-to-library / seen-it speed), `YOU MIGHT LIKE`, and `/watchlist/franchises` (2-column grid).
-2. After 2026-11-19 06:00 UTC: check show scores (`select count(scores_checked_at) from tv_shows`) and `pg_net` 120 s timeout.
+1. Deploy `tmdb-proxy` and `watchlist-cron-sync` to Supabase (`npx supabase functions deploy tmdb-proxy watchlist-cron-sync --remote=yvtiybyuifkiwyrnjebe`).
+2. Verify GitHub Pages deploy for the latest `main` push and browser-verify Discover, Franchises, Library adds/favourites/resyncs.
+3. After 2026-11-19 06:00 UTC: check show scores (`select count(scores_checked_at) from tv_shows`) and `pg_net` 120 s timeout.
 
 ## Still unverified & blockers
 
-- **Unverified:** Production browser checks for the latest Watchlist features (multi-column Discover/Franchises grids, instant-state add path, spin-off posters, gap-first ordering, `Likely seen`, Library shelf search narrowing, `Shelf:` pill, new streaming platforms, News `Following`, Discover, Franchise screens); signed-in admin flows (rating, favourite toggle, Not interested sync, `watchlist_ratings` reads, `Seen it` date menu); `S{n}E{e}` live countdown pill; light mode; phone viewport; show creator and cast dialog.
+- **Unverified:** Hosted Edge Function deploy for `tmdb-proxy` (v19) and `watchlist-cron-sync` (v22); production browser checks for the latest Watchlist features and performance pass; signed-in admin flows; light mode; phone viewport.
 - **Blockers:** Untracked drafts (`SITE_PLAN.md`, etc.) and `.claude/launch.json` in local main checkout; worktrees `.claude/worktrees/caught-up` and `.claude/worktrees/affectionate-lamarr-f2d2cb`.

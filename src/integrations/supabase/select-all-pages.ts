@@ -16,21 +16,32 @@ const readOnce = async <Row>(
   page: (from: number, to: number) => PromiseLike<PageResult<Row>>,
   keyOf: (row: Row) => string,
 ): Promise<ReadResult<Row>> => {
+  const first = await page(0, PAGE_ROWS - 1);
+  if (first.error) return { data: null, error: first.error };
+  if (typeof first.count !== 'number') return { data: null, error: { message: 'A paged read needs an exact row count.' } };
+  const expected = first.count;
   const rows = new Map<string, Row>();
-  let expected: number | undefined;
-  for (let from = 0; expected === undefined || from < expected;) {
-    const { data, error, count } = await page(from, from + PAGE_ROWS - 1);
-    if (error) return { data: null, error };
-    if (typeof count !== 'number') return { data: null, error: { message: 'A paged read needs an exact row count.' } };
-    if (expected !== undefined && count !== expected) {
-      return { data: null, error: { message: 'Rows changed while they were being read.' } };
+  const firstRows = first.data ?? [];
+  for (const row of firstRows) rows.set(keyOf(row), row);
+
+  if (firstRows.length > 0 && firstRows.length < expected) {
+    // Use the server's actual page size (respecting any server-side max_rows cap
+    // lower than PAGE_ROWS) to slice remaining ranges and fetch them in parallel.
+    const step = firstRows.length;
+    const ranges: Array<[number, number]> = [];
+    for (let from = step; from < expected; from += step) {
+      ranges.push([from, from + PAGE_ROWS - 1]);
     }
-    expected = count;
-    const fetched = data ?? [];
-    if (fetched.length === 0) break;
-    for (const row of fetched) rows.set(keyOf(row), row);
-    from += fetched.length;
+    const rest = await Promise.all(ranges.map(([from, to]) => page(from, to)));
+    for (const res of rest) {
+      if (res.error) return { data: null, error: res.error };
+      if (typeof res.count !== 'number' || res.count !== expected) {
+        return { data: null, error: { message: 'Rows changed while they were being read.' } };
+      }
+      for (const row of res.data ?? []) rows.set(keyOf(row), row);
+    }
   }
+
   return rows.size === expected
     ? { data: [...rows.values()], error: null }
     : { data: null, error: { message: 'Rows changed while they were being read.' } };

@@ -413,7 +413,23 @@ const Watchlist = () => {
         void removeFavourite(existing.id);
         return;
       }
-      void addFavourite({ title: item.title, poster: item.image_url, media_type: item.category === 'TV Shows' ? 'tv' : 'movie', tmdb_id: item.tmdb_id }).catch(() => {
+      const hasFacts =
+        item.genre_ids !== undefined ||
+        item.original_language !== undefined ||
+        item.origin_country !== undefined;
+      void addFavourite({
+        title: item.title,
+        poster: item.image_url,
+        media_type: item.category === 'TV Shows' ? 'tv' : 'movie',
+        tmdb_id: item.tmdb_id,
+        facts: hasFacts
+          ? {
+              genre_ids: item.genre_ids ?? null,
+              original_language: item.original_language ?? null,
+              origin_country: item.origin_country ?? null,
+            }
+          : undefined,
+      }).catch(() => {
         // addFavourite has already shown the failure.
       });
     },

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type {
     TMDBCollection,
@@ -24,6 +25,7 @@ export interface TMDBResult extends TMDBSearchItem {
 }
 
 export function useTMDB() {
+    const queryClient = useQueryClient();
     const [results, setResults] = useState<TMDBResult[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -54,89 +56,105 @@ export function useTMDB() {
     }, []);
 
     const getMovieDetails = useCallback(async (id: number, type: 'movie' | 'tv') => {
-        setLoading(true);
         try {
-            const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, {
-                append_to_response: `watch/providers,videos,${CREDITS_APPEND[type]}${type === 'tv' ? ',external_ids' : ''}`,
-                ...TRAILER_VIDEO_PARAMS,
+            return await queryClient.fetchQuery({
+                queryKey: ['watchlist', 'tmdb-details', type, id],
+                staleTime: 30 * 60 * 1000,
+                retry: false,
+                queryFn: async () => {
+                    const data = await fetchTMDB<TMDBDetails>(`${type}/${id}`, {
+                        append_to_response: `watch/providers,videos,${CREDITS_APPEND[type]}${type === 'tv' ? ',external_ids' : ''}`,
+                        ...TRAILER_VIDEO_PARAMS,
+                    });
+
+                    // Extract platform based on UK (GB) region. Same allowlist and
+                    // same precedence as the sync path, so an item added by hand and
+                    // the same item refreshed by the nightly sync agree.
+                    const platform = getPlatform(data['watch/providers']?.results?.GB);
+                    // Missing only if TMDB left the block out; null then, so the
+                    // sync's backfill asks again. An empty cast is [], as the sync
+                    // stores it.
+                    const credits = type === 'movie' ? data.credits : data.aggregate_credits;
+                    const regularSeasons = data.seasons?.filter((s) => s.season_number > 0 && (s.episode_count ?? 1) > 0).length;
+                    const seasonCount = type === 'tv' ? (regularSeasons || data.number_of_seasons || data.seasons?.length || 0) : 0;
+
+                    const imdbId = type === 'movie' ? data.imdb_id : data.external_ids?.imdb_id;
+                    return {
+                        title: data.title || data.name,
+                        series_status: seriesStatus(type, data.status),
+                        season_count: seasonCount,
+                        overview: data.overview,
+                        poster: data.poster_path ? getPosterUrl(data.poster_path) : null,
+                        backdrop: data.backdrop_path ? getBackdropUrl(data.backdrop_path) : null,
+                        release_date: data.release_date || data.first_air_date || null,
+                        release_year: releaseYear(data.release_date || data.first_air_date) ?? null,
+                        runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : null),
+                        genres: data.genres?.map((g) => g.name) || [],
+                        genre_ids: data.genres?.map((g) => g.id).filter((gid): gid is number => typeof gid === 'number') ?? [],
+                        original_language: data.original_language ?? null,
+                        origin_country: data.origin_country?.length ? data.origin_country : data.production_countries?.map((country) => country.iso_3166_1) ?? [],
+                        tmdb_id: data.id,
+                        platform: platform,
+                        // Same pick as the sync, so the title has its trailer from
+                        // the moment it is added rather than from the next sync.
+                        trailer_key: pickTrailerKey(data.videos?.results),
+                        directors: type === 'movie' && credits ? pickDirectors(credits.crew) : null,
+                        creators: type === 'tv' ? pickCreators(data.created_by) : null,
+                        top_cast: credits ? pickTopCast(credits.cast) : null,
+                        // The nightly sync looks the OMDb scores up by this id.
+                        imdb_id: isImdbId(imdbId) ? imdbId : null,
+                        // Same pick as the sync, so a film has its series at once.
+                        ...(type === 'movie'
+                            ? (pickCollection(data) ?? { collection_id: null, collection_name: null })
+                            : { collection_id: null, collection_name: null }),
+                        // TV show callers forward this to addWatchlistItem so it
+                        // doesn't refetch `tv/{id}` a second time for the season list.
+                        seasons: type === 'tv' ? data.seasons ?? [] : [],
+                    };
+                },
             });
-
-            // Extract platform based on UK (GB) region. Same allowlist and
-            // same precedence as the sync path, so an item added by hand and
-            // the same item refreshed by the nightly sync agree.
-            const platform = getPlatform(data['watch/providers']?.results?.GB);
-            // Missing only if TMDB left the block out; null then, so the
-            // sync's backfill asks again. An empty cast is [], as the sync
-            // stores it.
-            const credits = type === 'movie' ? data.credits : data.aggregate_credits;
-            const regularSeasons = data.seasons?.filter((s) => s.season_number > 0 && (s.episode_count ?? 1) > 0).length;
-            const seasonCount = type === 'tv' ? (regularSeasons || data.number_of_seasons || data.seasons?.length || 0) : 0;
-
-            const imdbId = type === 'movie' ? data.imdb_id : data.external_ids?.imdb_id;
-            return {
-                title: data.title || data.name,
-                series_status: seriesStatus(type, data.status),
-                season_count: seasonCount,
-                overview: data.overview,
-                poster: data.poster_path ? getPosterUrl(data.poster_path) : null,
-                backdrop: data.backdrop_path ? getBackdropUrl(data.backdrop_path) : null,
-                release_date: data.release_date || data.first_air_date || null,
-                release_year: releaseYear(data.release_date || data.first_air_date) ?? null,
-                runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : null),
-                genres: data.genres?.map((g) => g.name) || [],
-                genre_ids: data.genres?.map((g) => g.id).filter((id): id is number => typeof id === 'number') ?? [],
-                original_language: data.original_language ?? null,
-                origin_country: data.origin_country?.length ? data.origin_country : data.production_countries?.map((country) => country.iso_3166_1) ?? [],
-                tmdb_id: data.id,
-                platform: platform,
-                // Same pick as the sync, so the title has its trailer from
-                // the moment it is added rather than from the next sync.
-                trailer_key: pickTrailerKey(data.videos?.results),
-                directors: type === 'movie' && credits ? pickDirectors(credits.crew) : null,
-                creators: type === 'tv' ? pickCreators(data.created_by) : null,
-                top_cast: credits ? pickTopCast(credits.cast) : null,
-                // The nightly sync looks the OMDb scores up by this id.
-                imdb_id: isImdbId(imdbId) ? imdbId : null,
-                // Same pick as the sync, so a film has its series at once.
-                ...(type === 'movie'
-                    ? (pickCollection(data) ?? { collection_id: null, collection_name: null })
-                    : { collection_id: null, collection_name: null }),
-                // TV show callers forward this to addWatchlistItem so it
-                // doesn't refetch `tv/{id}` a second time for the season list.
-                seasons: type === 'tv' ? data.seasons ?? [] : [],
-            };
         } catch (error) {
             console.error('TMDB Detail Error:', error);
             return null;
-        } finally {
-            setLoading(false);
         }
-    }, [fetchTMDB, getPosterUrl, getBackdropUrl]);
+    }, [fetchTMDB, getPosterUrl, getBackdropUrl, queryClient]);
 
     /** A film series and its parts; null when TMDB or the proxy fails. */
     const getCollection = useCallback(async (id: number) => {
         try {
-            return await fetchTMDB<TMDBCollection>(`collection/${id}`, {});
+            return await queryClient.fetchQuery({
+                queryKey: ['watchlist', 'tmdb-collection', id],
+                staleTime: 24 * 60 * 60 * 1000,
+                retry: false,
+                queryFn: () => fetchTMDB<TMDBCollection>(`collection/${id}`, {}),
+            });
         } catch (error) {
             console.error('TMDB Collection Error:', error);
             return null;
         }
-    }, [fetchTMDB]);
+    }, [fetchTMDB, queryClient]);
 
     /** TV spin-off and parent relationships from Wikidata via tmdb-proxy. */
     const getTvSpinoffs = useCallback(async (tmdbIds: number[]): Promise<WikidataTvSpinoffLink[]> => {
-        const clean = [...new Set(tmdbIds.filter((id) => Number.isInteger(id) && id > 0))];
+        const clean = [...new Set(tmdbIds.filter((id) => Number.isInteger(id) && id > 0))].sort((a, b) => a - b);
         if (clean.length === 0) return [];
         try {
-            const data = await fetchTMDB<{ results?: WikidataTvSpinoffLink[] }>('wikidata/tv-spinoffs', {
-                ids: clean.join(','),
+            return await queryClient.fetchQuery({
+                queryKey: ['watchlist', 'tmdb-spinoffs', clean],
+                staleTime: 24 * 60 * 60 * 1000,
+                retry: false,
+                queryFn: async () => {
+                    const data = await fetchTMDB<{ results?: WikidataTvSpinoffLink[] }>('wikidata/tv-spinoffs', {
+                        ids: clean.join(','),
+                    });
+                    return data.results ?? [];
+                },
             });
-            return data.results ?? [];
         } catch (error) {
             console.error('Wikidata TV Spin-offs Error:', error);
             return [];
         }
-    }, [fetchTMDB]);
+    }, [fetchTMDB, queryClient]);
 
     const searchMulti = useCallback(async (query: string) => {
         const trimmedQuery = query.trim();

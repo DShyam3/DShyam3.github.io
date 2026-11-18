@@ -110,7 +110,9 @@ export function interleaveBySeed(items: DiscoveryItem[]): DiscoveryItem[] {
   const groups = new Map<string, DiscoveryItem[]>();
   for (const item of items) {
     const key = item.seedKey ?? '';
-    groups.set(key, [...(groups.get(key) ?? []), item]);
+    const existing = groups.get(key);
+    if (existing) existing.push(item);
+    else groups.set(key, [item]);
   }
   const queues = [...groups.values()];
   const result: DiscoveryItem[] = [];

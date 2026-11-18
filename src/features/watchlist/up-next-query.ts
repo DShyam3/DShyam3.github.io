@@ -69,10 +69,8 @@ export async function persistWatchedProgress(
       throw new Error('Episode update incomplete');
     }
   }
-  void queryClient.invalidateQueries({ queryKey: ['watchlist', 'diary'] });
-  // Query failures stay in the cache's error state, not in the write's promise.
-  await queryClient.invalidateQueries(
-    { queryKey: upNextQueryOptions.queryKey },
-    { throwOnError: false },
-  );
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['watchlist', 'diary'] }, { throwOnError: false }),
+    queryClient.invalidateQueries({ queryKey: upNextQueryOptions.queryKey }, { throwOnError: false }),
+  ]);
 }

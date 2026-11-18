@@ -59,7 +59,26 @@ export function LibraryActions({ item }: { item: WatchlistItem }) {
               Mark as watched
             </WatchedWhenMenu>
           ))}
-          <Button size="sm" className="min-h-11" variant="outline" aria-pressed={!!favourite} disabled={saving} onClick={() => void save(() => favourite ? removeFavourite(favourite.id) : addFavourite({ title: item.title, poster: item.image_url, media_type: mediaType, tmdb_id: item.tmdb_id }))}>
+          <Button size="sm" className="min-h-11" variant="outline" aria-pressed={!!favourite} disabled={saving} onClick={() => void save(() => {
+            if (favourite) return removeFavourite(favourite.id);
+            const hasFacts =
+              item.genre_ids !== undefined ||
+              item.original_language !== undefined ||
+              item.origin_country !== undefined;
+            return addFavourite({
+              title: item.title,
+              poster: item.image_url,
+              media_type: mediaType,
+              tmdb_id: item.tmdb_id,
+              facts: hasFacts
+                ? {
+                    genre_ids: item.genre_ids ?? null,
+                    original_language: item.original_language ?? null,
+                    origin_country: item.origin_country ?? null,
+                  }
+                : undefined,
+            });
+          })}>
             <Heart className={favourite ? 'fill-current' : ''} />{favourite ? 'Favourited' : 'Favourite'}
           </Button>
         </div>

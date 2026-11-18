@@ -7,6 +7,7 @@ import { warmFinanceSections } from '@/features/finance/section-chunks';
 import { visitedCitiesQuery } from '@/features/travel/useVisitedCities';
 import { visitedCountriesQuery } from '@/features/travel/useVisitedCountries';
 import { watchlistLibraryQuery } from '@/features/watchlist/library-query';
+import { watchlistRatingsQuery } from '@/features/watchlist/ratings-query';
 import { scheduleQuery } from '@/features/watchlist/useSchedule';
 import {
   pinnedTitleQuery,
@@ -69,6 +70,7 @@ export function useSiteWarmup() {
         visitedCountriesQuery,
         visitedCitiesQuery,
         watchlistLibraryQuery,
+        watchlistRatingsQuery,
         scheduleQuery,
         pinnedTitleQuery,
         // The windows WatchlistNews asks for; a different one is a different key.

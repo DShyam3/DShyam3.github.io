@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,7 +28,6 @@ import {
   type OrderView,
 } from './franchise';
 import { POSTER_BASE } from './components/franchise/EntryList';
-import { libraryCollectionsQueryOptions } from './viewing-orders-query';
 import { useTMDB } from './useTMDB';
 import type { LibraryType } from './library-state';
 import type { TMDBSearchResponse } from './tmdb-types';
@@ -187,7 +186,6 @@ export function useDiscovery(type: LibraryType) {
         const sent = rows.map((row) => discoveryKey(row.media as DiscoveryMedia, row.tmdb_id));
         queryClient.setQueryData<string[]>(DISMISSED_QUERY_KEY, (old) => [...new Set([...(old ?? []), ...sent])]);
         releaseLocal();
-        void queryClient.invalidateQueries({ queryKey: DISMISSED_QUERY_KEY });
       });
   }, [ownerSynced, localDismissed, remoteKeys, queryClient]);
 
@@ -207,7 +205,7 @@ export function useDiscovery(type: LibraryType) {
   useEffect(() => {
     movieSeedsRef.current = movieSeeds;
     tvSeedsRef.current = tvSeeds;
-  });
+  }, [movieSeeds, tvSeeds]);
 
   // The seed list is fixed when the first page loads and travels with the
   // pages, so it survives the cache: adding or "Seen it"-ing a title
@@ -287,55 +285,53 @@ export function useDiscovery(type: LibraryType) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
   const lookup = useMemo(() => libraryLookup(watchlist, today), [watchlist, week]);
 
-  const collectionRows = useQuery({
-    ...libraryCollectionsQueryOptions,
-    enabled: !loading && type !== 'tv',
-  });
   const libraryCollections = useMemo(() => {
-    const films = new Map(
-      watchlist
-        .filter((item) => item.category === 'Movies' && (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped')))
-        .map((item) => [item.id, item]),
-    );
     return collectionsFromLibrary(
-      (collectionRows.data ?? []).flatMap((row) => {
-        const item = films.get(row.id);
-        return item
+      watchlist.flatMap((item) =>
+        item.category === 'Movies' &&
+        item.collection_id != null &&
+        (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped'))
           ? [{
               id: item.id,
-              tmdbId: row.tmdbId,
+              tmdbId: item.tmdb_id ?? null,
               title: item.title,
               watched: !!item.watched,
               releaseDate: item.release_date ?? null,
               poster: item.image_url ?? null,
-              collectionId: row.collectionId,
-              collectionName: row.collectionName,
+              collectionId: item.collection_id,
+              collectionName: item.collection_name ?? null,
             }]
-          : [];
-      }),
+          : [],
+      ),
     ).sort((a, b) => (b.watched - a.watched) || (b.films.length - a.films.length) || a.name.localeCompare(b.name));
-  }, [watchlist, collectionRows.data, isAdmin]);
+  }, [watchlist, isAdmin]);
 
   const activeCollectionIds = useMemo(
     () => libraryCollections.slice(0, collectionLimit).map((c) => c.collectionId),
     [libraryCollections, collectionLimit],
   );
 
-  const expandedCollections = useQuery({
-    queryKey: ['watchlist', 'discovery', 'collections', activeCollectionIds],
-    enabled: !loading && type !== 'tv' && activeCollectionIds.length > 0,
-    staleTime: 24 * 60 * 60 * 1000,
-    retry: false,
-    queryFn: async () => {
-      const settled = await Promise.allSettled(
-        activeCollectionIds.map(async (collectionId) => {
-          const data = await getCollection(collectionId);
-          return { collectionId, entries: collectionPartsToEntries(data?.parts ?? [], POSTER_BASE) };
-        }),
-      );
-      return settled.flatMap((res) => (res.status === 'fulfilled' ? [res.value] : []));
-    },
+  // Per-collection queries share cache entries with CollectionCard and avoid
+  // re-fetching earlier collections when `collectionLimit` grows.
+  const collectionQueries = useQueries({
+    queries: activeCollectionIds.map((collectionId) => ({
+      queryKey: ['watchlist', 'tmdb-collection', collectionId] as const,
+      enabled: !loading && type !== 'tv',
+      staleTime: 24 * 60 * 60 * 1000,
+      retry: false,
+      queryFn: () => getCollection(collectionId),
+    })),
   });
+  const expandedCollectionsData = useMemo(
+    () =>
+      activeCollectionIds.flatMap((collectionId, idx) => {
+        const data = collectionQueries[idx]?.data;
+        if (!data) return [];
+        return [{ collectionId, entries: collectionPartsToEntries(data.parts ?? [], POSTER_BASE) }];
+      }),
+    [activeCollectionIds, collectionQueries],
+  );
+  const collectionsPending = activeCollectionIds.length > 0 && collectionQueries.some((q) => q.isPending);
 
   const tvSeedIds = useMemo(
     () =>
@@ -367,7 +363,7 @@ export function useDiscovery(type: LibraryType) {
     const groups: DiscoveryFranchiseGroup[] = [];
     if (type !== 'tv') {
       const nameById = new Map(libraryCollections.map((c) => [c.collectionId, c.name]));
-      for (const item of expandedCollections.data ?? []) {
+      for (const item of expandedCollectionsData) {
         const filtered = filterDismissedEntries(item.entries);
         const view = buildOrderView(filtered, lookup);
         const missingCount = view.total - view.inLibrary;
@@ -410,7 +406,7 @@ export function useDiscovery(type: LibraryType) {
         a.name.localeCompare(b.name),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, libraryCollections, expandedCollections.data, tvFranchiseSummaries, lookup, dismissed]);
+  }, [type, libraryCollections, expandedCollectionsData, tvFranchiseSummaries, lookup, dismissed]);
 
   const franchiseEntryKeys = useMemo(
     () => new Set(franchiseGroups.flatMap((g) => g.view.entries.map((e) => e.key))),
@@ -476,14 +472,23 @@ export function useDiscovery(type: LibraryType) {
   const hasMore = activeQueries.some((q) => q.hasNextPage);
   const loadingMore = activeQueries.some((q) => q.isFetchingNextPage);
 
+  const recommendations = useMemo(
+    () => curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
+    [recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys],
+  );
+  const upcomingCurated = useMemo(
+    () => curateDiscovery(upcomingItems, watchlist, favourites, dismissed),
+    [upcomingItems, watchlist, favourites, dismissed],
+  );
+
   return {
-    recommendations: curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
+    recommendations,
     likelySeen,
-    upcoming: curateDiscovery(upcomingItems, watchlist, favourites, dismissed),
+    upcoming: upcomingCurated,
     franchises: franchiseGroups,
     franchisesLoading:
       loading ||
-      (type !== 'tv' && (collectionRows.isPending || (activeCollectionIds.length > 0 && expandedCollections.isPending))) ||
+      (type !== 'tv' && collectionsPending) ||
       (type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending),
     hasMoreFranchises: type !== 'tv' && collectionLimit < libraryCollections.length,
     loadMoreFranchises: () => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH),
