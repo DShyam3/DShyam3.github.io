@@ -1,6 +1,6 @@
 # State
 
-Updated 2026-11-18 · `main` = branch `claude/eloquent-johnson-xdjc53` (fast-forwarded, pushed). Migration applied to hosted; `tmdb-proxy` v15 and `watchlist-cron-sync` v18 deployed. Pages deploy of this push NOT yet verified.
+Updated 2026-11-18 · `main` at `44f22ca` (this branch, fast-forwarded and pushed). Pages run `44378328865` at `44f22ca` succeeded. Hosted migration `20261118190243_watchlist_tracking` applied; `tmdb-proxy` v15 and `watchlist-cron-sync` v18 deployed; `OMDB_API_KEY` set by the owner 19:11 UTC. Not browser-verified: this sandbox cannot reach the live site.
 
 ## Deployed — Discovery fixes (`0ba78391`)
 
@@ -8,7 +8,7 @@ Updated 2026-11-18 · `main` = branch `claude/eloquent-johnson-xdjc53` (fast-for
 
 - Built: IMDb, Rotten Tomatoes and Metacritic scores (from OMDb, by the nightly sync) beside the owner's rating; Mark as watched and Mark Season as Complete ask when; Paused series state; Diary and Year in review (`/watchlist/diary`); Franchises (`/watchlist/franchises`); Letterboxd and Trakt file import (admin); nav News · Library · Diary · Franchises.
 - Hosted migration `20261118190243_watchlist_tracking` applied and checked by SQL: score and collection columns, `paused` on `tv_shows`, public read with admin-only writes on `watchlist_ratings` (ratings are now public, the owner's decision) and the viewing-order tables, anon cannot execute the new RPCs, the season-cascade guard is in. 0 ratings existed when it was applied.
-- `OMDB_API_KEY` is NOT set yet: storing it through the Supabase MCP is paused, so the owner is adding it in the dashboard (Edge Functions → Secrets). Until then the sync skips scores. The owner shared the key in chat (screenshot); a fresh key would retire that copy.
+- `OMDB_API_KEY` set by the owner in the dashboard (the MCP route was paused). Scores start with the next nightly parts. The key was shown in a chat screenshot; a fresh key would retire that copy. Anon can read all 20 columns the site reads (checked by SQL); Supabase security advisor shows nothing new.
 
 ## Checks (2026-11-18, final tree of this branch)
 
@@ -27,8 +27,8 @@ Not run: `supabase db diff` against a from-schema build; graphify (not installed
 
 ## Next
 
-1. Verify the Pages deploy of `main` finished, then browser-verify every new screen, signed out and signed in as admin. Nothing has been checked in a browser.
-2. Owner: activate the OMDb key and add `OMDB_API_KEY` in Edge Functions → Secrets. Then scores and collections fill in over the nightly sync parts (up to 300 OMDb lookups a part; 1,295 titles, weekly refresh after the first pass).
+1. Browser-verify every new screen on the live site, signed out and signed in as admin. Nothing has been checked in a browser.
+2. Owner: make sure the OMDb key is activated (link in OMDb's email). Then check after a night that scores appear (`select count(*) from movies where scores_checked_at is not null`); 1,295 titles, up to 300 OMDb lookups a part, weekly refresh after the first pass.
 3. Check the Trakt export format against a real export, and that `last_watched_at` (latest play) is used as such.
 
 ## Landed on main (checked against git, 2026-11-18)
