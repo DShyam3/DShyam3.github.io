@@ -251,6 +251,8 @@ interface SyncLogEntry {
 export interface AddWatchlistOptions {
   quiet?: boolean;
   skipRefresh?: boolean;
+  /** When an item added as watched was watched; absent means now. */
+  watchedWhen?: WatchedWhen;
 }
 
 interface WatchlistContextType {
@@ -668,6 +670,28 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     if (pendingAddKeys.has(key)) return false; // already in flight -- ignore double-click
     setPendingAddKeys((prev) => new Set(prev).add(key));
 
+    // "Seen it" watched now: the insert trigger stamps watched_at. Any other
+    // "when" inserts the rows unwatched and lets set_watched flip and date
+    // them, the path Mark as watched takes in the Library -- the trigger
+    // stamps now() on a watched insert with no date, so "unknown" could not
+    // survive an insert.
+    const laterWhen = item.watched === true && options.watchedWhen && options.watchedWhen.mode !== 'now'
+      ? options.watchedWhen
+      : undefined;
+    // The rows are in by then, so a failure must not read "Failed to add".
+    const markAddedWatched = async (kind: 'episode' | 'movie', ids: number[]): Promise<boolean> => {
+      if (!laterWhen || ids.length === 0) return true;
+      const { error } = await supabase.rpc('set_watched', setWatchedArgs(kind, ids, true, laterWhen));
+      if (!error) return true;
+      console.error(`Failed to mark "${item.title}" as watched:`, error);
+      toast({
+        title: 'Added, but not marked watched',
+        description: `"${item.title}" is in your library. Mark it as watched from there.`,
+        variant: 'destructive',
+      });
+      return false;
+    };
+
     try {
       if (item.category === 'Movies') {
         try {
@@ -688,22 +712,22 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             imdb_id: item.imdb_id ?? null,
             collection_id: item.collection_id ?? null,
             collection_name: item.collection_name ?? null,
-            // "Seen it" from discovery: straight to Finished. The row's
-            // trigger stamps watched_at.
-            watched: item.watched === true,
+            // "Seen it" from discovery: straight to Finished.
+            watched: item.watched === true && !laterWhen,
           };
-          const { error: firstError } = await supabase.from('movies').insert({
+          const firstInsert = await supabase.from('movies').insert({
             ...payload,
             genre_ids: item.genre_ids ?? null,
             original_language: item.original_language ?? null,
             origin_country: item.origin_country ?? null,
-          });
-          const error = firstError && missingCategoryColumns(firstError.message)
-            ? (await supabase.from('movies').insert(payload)).error
-            : firstError;
+          }).select('id').single();
+          const { data: inserted, error } = firstInsert.error && missingCategoryColumns(firstInsert.error.message)
+            ? await supabase.from('movies').insert(payload).select('id').single()
+            : firstInsert;
           if (error) throw error;
+          const marked = await markAddedWatched('movie', [inserted.id]);
           if (!options.skipRefresh) await fetchData();
-          if (!options.quiet) {
+          if (!options.quiet && marked) {
             toast({ title: 'Success', description: item.watched ? 'Film added as watched' : 'Movie added to watchlist' });
           }
           return true;
@@ -746,6 +770,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
 
           let failedSeasonCount = 0;
           let detailsFailed = false;
+          const airedEpisodeIds: number[] = [];
 
           const now = new Date();
           const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -801,9 +826,12 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
                       release_date: v.air_date,
                       // "Seen it": every episode aired so far is watched; the
                       // season trigger follows from the episodes.
-                      watched: item.watched === true && !!v.air_date && v.air_date <= todayIso,
+                      watched: !laterWhen && item.watched === true && !!v.air_date && v.air_date <= todayIso,
                     }));
-                    await supabase.from('tv_show_episodes').insert(eps);
+                    const { data: insertedEps } = await supabase.from('tv_show_episodes').insert(eps).select('id, release_date');
+                    for (const ep of insertedEps ?? []) {
+                      if (ep.release_date && ep.release_date <= todayIso) airedEpisodeIds.push(ep.id);
+                    }
                   } else {
                     // No valid episodes, remove the season
                     await supabase.from('tv_show_seasons')
@@ -823,7 +851,9 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             failedSeasonCount = results.filter((ok) => !ok).length;
           }
 
+          const marked = await markAddedWatched('episode', airedEpisodeIds);
           if (!options.skipRefresh) await fetchData();
+          if (!marked) return true;
           if (options.quiet && !detailsFailed && failedSeasonCount === 0) return true;
           toast({
             title: 'Success',

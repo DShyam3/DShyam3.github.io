@@ -121,8 +121,19 @@ export function interleaveBySeed(items: DiscoveryItem[]): DiscoveryItem[] {
 }
 
 /** Identity always includes media type: TMDB film/show IDs can collide. */
-export function curateDiscovery(items: DiscoveryItem[], watchlist: WatchlistItem[], favourites: FavouriteItem[], dismissed: ReadonlySet<string>): DiscoveryItem[] {
-  const seen = new Set([...dismissed, ...watchlist.filter((item) => item.tmdb_id).map((item) => discoveryKey(mediaOf(item), item.tmdb_id!)), ...favourites.filter((item) => item.tmdb_id).map((item) => discoveryKey(item.media_type, item.tmdb_id!))]);
+export function curateDiscovery(
+  items: DiscoveryItem[],
+  watchlist: WatchlistItem[],
+  favourites: FavouriteItem[],
+  dismissed: ReadonlySet<string>,
+  excludedKeys?: ReadonlySet<string>,
+): DiscoveryItem[] {
+  const seen = new Set([
+    ...dismissed,
+    ...(excludedKeys ?? []),
+    ...watchlist.filter((item) => item.tmdb_id).map((item) => discoveryKey(mediaOf(item), item.tmdb_id!)),
+    ...favourites.filter((item) => item.tmdb_id).map((item) => discoveryKey(item.media_type, item.tmdb_id!)),
+  ]);
   return items.filter((item) => {
     const key = discoveryKey(item.media, item.id);
     if (!Number.isInteger(item.id) || item.id <= 0 || !(item.title || item.name) || seen.has(key)) return false;

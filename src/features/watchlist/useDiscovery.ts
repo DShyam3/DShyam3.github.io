@@ -15,6 +15,18 @@ import {
   type DiscoveryMedia,
   type DiscoverySeed,
 } from './discovery';
+import {
+  buildOrderView,
+  collectionPartsToEntries,
+  collectionsFromLibrary,
+  libraryLookup,
+  tvFranchisesFromLinks,
+  type OrderEntryInput,
+  type OrderView,
+} from './franchise';
+import { POSTER_BASE } from './components/franchise/EntryList';
+import { libraryCollectionsQueryOptions } from './viewing-orders-query';
+import { useTMDB } from './useTMDB';
 import type { LibraryType } from './library-state';
 import type { TMDBSearchResponse } from './tmdb-types';
 
@@ -101,11 +113,24 @@ function sourcesForPage(seeds: DiscoverySeed[], page: number, type: LibraryType)
   }));
 }
 
+export interface DiscoveryFranchiseGroup {
+  key: string;
+  name: string;
+  kind: 'collection' | 'tv-spinoff';
+  media: DiscoveryMedia;
+  view: OrderView;
+  missingCount: number;
+}
+
+const COLLECTIONS_PER_BATCH = 8;
+
 export function useDiscovery(type: LibraryType) {
   const { watchlist, favourites, loading, ratingsStatus } = useWatchlist();
+  const { getCollection, getTvSpinoffs } = useTMDB();
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [localDismissed, setLocalDismissed] = useState(readDismissed);
+  const [collectionLimit, setCollectionLimit] = useState(COLLECTIONS_PER_BATCH);
   const today = new Date();
   const week = weekIndex(today);
 
@@ -216,6 +241,132 @@ export function useDiscovery(type: LibraryType) {
     [recommendations.data],
   );
 
+  // --- "Have you already watched?" grouped franchises & spin-offs ----------
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+  const lookup = useMemo(() => libraryLookup(watchlist, today), [watchlist, week]);
+
+  const collectionRows = useQuery({
+    ...libraryCollectionsQueryOptions,
+    enabled: !loading && type !== 'tv',
+  });
+  const libraryCollections = useMemo(() => {
+    const films = new Map(
+      watchlist
+        .filter((item) => item.category === 'Movies' && (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped')))
+        .map((item) => [item.id, item]),
+    );
+    return collectionsFromLibrary(
+      (collectionRows.data ?? []).flatMap((row) => {
+        const item = films.get(row.id);
+        return item
+          ? [{
+              id: item.id,
+              tmdbId: row.tmdbId,
+              title: item.title,
+              watched: !!item.watched,
+              releaseDate: item.release_date ?? null,
+              poster: item.image_url ?? null,
+              collectionId: row.collectionId,
+              collectionName: row.collectionName,
+            }]
+          : [];
+      }),
+    ).sort((a, b) => (b.watched - a.watched) || (b.films.length - a.films.length) || a.name.localeCompare(b.name));
+  }, [watchlist, collectionRows.data, isAdmin]);
+
+  const activeCollectionIds = useMemo(
+    () => libraryCollections.slice(0, collectionLimit).map((c) => c.collectionId),
+    [libraryCollections, collectionLimit],
+  );
+
+  const expandedCollections = useQuery({
+    queryKey: ['watchlist', 'discovery', 'collections', activeCollectionIds],
+    enabled: !loading && type !== 'tv' && activeCollectionIds.length > 0,
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const settled = await Promise.allSettled(
+        activeCollectionIds.map(async (collectionId) => {
+          const data = await getCollection(collectionId);
+          return { collectionId, entries: collectionPartsToEntries(data?.parts ?? [], POSTER_BASE) };
+        }),
+      );
+      return settled.flatMap((res) => (res.status === 'fulfilled' ? [res.value] : []));
+    },
+  });
+
+  const tvSeedIds = useMemo(
+    () =>
+      watchlist
+        .filter((item) => item.category === 'TV Shows' && item.tmdb_id && (isAdmin || (item.library_state !== 'hidden' && item.library_state !== 'stopped')))
+        .map((item) => item.tmdb_id!)
+        .sort((a, b) => a - b),
+    [watchlist, isAdmin],
+  );
+  const tvSpinoffs = useQuery({
+    queryKey: ['watchlist', 'tv-spinoffs', tvSeedIds],
+    enabled: !loading && type !== 'movie' && tvSeedIds.length > 0,
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+    queryFn: () => getTvSpinoffs(tvSeedIds),
+  });
+  const tvFranchiseSummaries = useMemo(
+    () => tvFranchisesFromLinks(tvSpinoffs.data ?? [], watchlist),
+    [tvSpinoffs.data, watchlist],
+  );
+
+  const filterDismissedEntries = (entries: OrderEntryInput[]) =>
+    entries.filter((entry) => {
+      const inLibrary = entry.mediaType === 'movie' ? lookup.movies.has(entry.tmdbId) : lookup.shows.has(entry.tmdbId);
+      return inLibrary || !dismissed.has(entry.key);
+    });
+
+  const franchiseGroups = useMemo((): DiscoveryFranchiseGroup[] => {
+    const groups: DiscoveryFranchiseGroup[] = [];
+    if (type !== 'tv') {
+      const nameById = new Map(libraryCollections.map((c) => [c.collectionId, c.name]));
+      for (const item of expandedCollections.data ?? []) {
+        const filtered = filterDismissedEntries(item.entries);
+        const view = buildOrderView(filtered, lookup);
+        const missingCount = view.total - view.inLibrary;
+        if (missingCount > 0) {
+          groups.push({
+            key: `collection:${item.collectionId}`,
+            name: nameById.get(item.collectionId) ?? `Collection ${item.collectionId}`,
+            kind: 'collection',
+            media: 'movie',
+            view,
+            missingCount,
+          });
+        }
+      }
+    }
+    if (type !== 'movie') {
+      for (const tvGroup of tvFranchiseSummaries) {
+        const filtered = filterDismissedEntries(tvGroup.entries);
+        const view = buildOrderView(filtered, lookup);
+        const missingCount = view.total - view.inLibrary;
+        if (missingCount > 0) {
+          groups.push({
+            key: `spinoff:${tvGroup.key}`,
+            name: tvGroup.name,
+            kind: 'tv-spinoff',
+            media: 'tv',
+            view,
+            missingCount,
+          });
+        }
+      }
+    }
+    return groups;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, libraryCollections, expandedCollections.data, tvFranchiseSummaries, lookup, dismissed]);
+
+  const franchiseEntryKeys = useMemo(
+    () => new Set(franchiseGroups.flatMap((g) => g.view.entries.map((e) => e.key))),
+    [franchiseGroups],
+  );
+
   // Kept in the browser first, so it holds even if the table write fails;
   // the effect above moves it into the table for the owner.
   const dismiss = (media: DiscoveryMedia, id: number) => {
@@ -235,8 +386,15 @@ export function useDiscovery(type: LibraryType) {
   const resettable = localDismissed.size + (ownerSynced ? remote.data?.length ?? 0 : 0);
 
   return {
-    recommendations: curateDiscovery(recommendationItems, watchlist, favourites, dismissed),
+    recommendations: curateDiscovery(recommendationItems, watchlist, favourites, dismissed, franchiseEntryKeys),
     upcoming: curateDiscovery(upcoming.data?.items ?? [], watchlist, favourites, dismissed),
+    franchises: franchiseGroups,
+    franchisesLoading:
+      loading ||
+      (type !== 'tv' && (collectionRows.isPending || (activeCollectionIds.length > 0 && expandedCollections.isPending))) ||
+      (type !== 'movie' && tvSeedIds.length > 0 && tvSpinoffs.isPending),
+    hasMoreFranchises: type !== 'tv' && collectionLimit < libraryCollections.length,
+    loadMoreFranchises: () => setCollectionLimit((prev) => prev + COLLECTIONS_PER_BATCH),
     loading: loading || ratingsStatus === 'loading' || recommendations.isPending,
     upcomingLoading: loading || upcoming.isPending,
     failed: recommendations.isError,

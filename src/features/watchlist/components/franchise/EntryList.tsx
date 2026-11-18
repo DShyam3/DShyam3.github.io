@@ -1,9 +1,11 @@
 import { useId, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Film, Loader2, Pencil, Plus, Trash2, Tv } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Film, Loader2, Pencil, Plus, Trash2, Tv, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { EntryState, OrderEntryView, OrderView } from '@/features/watchlist/franchise';
+import { WatchedWhenMenu } from '@/features/watchlist/components/WatchedWhenMenu';
+import type { WatchedWhen } from '@/features/watchlist/watched-when';
 
 /** Prefix for a TMDB poster path, as stored on an order entry. */
 export const POSTER_BASE: string = import.meta.env.VITE_TMDB_IMAGE_BASE_URL ?? '';
@@ -100,16 +102,21 @@ export function EntryList({
   view,
   onOpen,
   onAddToLibrary,
+  onSeenIt,
+  onDismiss,
   isAdding,
   edits,
 }: {
   view: OrderView;
   onOpen: (entry: OrderEntryView) => void;
   onAddToLibrary?: (entry: OrderEntryView) => void;
+  onSeenIt?: (entry: OrderEntryView, when: WatchedWhen) => void;
+  onDismiss?: (entry: OrderEntryView) => void;
   isAdding?: (key: string) => boolean;
   edits?: EntryEdits;
 }) {
   const [editing, setEditing] = useState<number | null>(null);
+  const todayIso = new Date().toLocaleDateString('en-CA');
 
   if (view.entries.length === 0) {
     return <p className="text-sm text-muted-foreground">Nothing in this order yet.</p>;
@@ -120,6 +127,8 @@ export function EntryList({
       {view.entries.map((entry, i) => {
         const year = entry.releaseDate?.slice(0, 4);
         const adding = isAdding?.(entry.key) ?? false;
+        const releaseDate = entry.releaseDate?.slice(0, 10);
+        const released = !releaseDate || releaseDate <= todayIso;
         return (
           <li key={entry.key} className="flex gap-3 py-3">
             <span className="w-6 shrink-0 pt-1 text-right text-sm tabular-nums text-muted-foreground">{i + 1}</span>
@@ -160,7 +169,7 @@ export function EntryList({
               ) : (
                 entry.note && <p className="break-words text-sm text-muted-foreground">{entry.note}</p>
               )}
-              {(edits || (onAddToLibrary && entry.state === 'not-in-library')) && (
+              {(edits || ((onAddToLibrary || onSeenIt || onDismiss) && entry.state === 'not-in-library')) && (
                 <div className="flex flex-wrap items-center gap-1 pt-1">
                   {onAddToLibrary && entry.state === 'not-in-library' && (
                     <Button
@@ -172,6 +181,32 @@ export function EntryList({
                     >
                       {adding ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
                       {adding ? 'Adding…' : 'Add to library'}
+                    </Button>
+                  )}
+                  {onSeenIt && entry.state === 'not-in-library' && released && (
+                    <WatchedWhenMenu
+                      releaseDate={releaseDate || undefined}
+                      releaseText={entry.mediaType === 'tv' ? 'On each episode\'s air date' : undefined}
+                      disabled={adding}
+                      onPick={(when) => onSeenIt(entry, when)}
+                      variant="outline"
+                      size="default"
+                      className="min-h-10 gap-1.5 text-sm"
+                    >
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                      Seen it
+                    </WatchedWhenMenu>
+                  )}
+                  {onDismiss && entry.state === 'not-in-library' && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={adding}
+                      onClick={() => onDismiss(entry)}
+                      className="gap-1.5 text-muted-foreground"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                      Not interested
                     </Button>
                   )}
                   {edits && (

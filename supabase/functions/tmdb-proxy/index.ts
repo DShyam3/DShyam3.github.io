@@ -92,6 +92,109 @@ async function isRateLimited(key: string): Promise<boolean> {
     }
 }
 
+function parseSpinoffSeedIds(raw: string | null): number[] {
+    if (!raw) return []
+    const ids = raw
+        .split(',')
+        .map((part) => Number(part.trim()))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    return [...new Set(ids)].slice(0, 400)
+}
+
+interface WikidataBinding {
+    seedTmdb?: { value?: string }
+    seedLabel?: { value?: string }
+    franchiseId?: { value?: string }
+    franchiseLabel?: { value?: string }
+    relatedLabel?: { value?: string }
+    relatedTvTmdb?: { value?: string }
+    relatedMovieTmdb?: { value?: string }
+    relDate?: { value?: string }
+}
+
+interface TvSpinoffLink {
+    seedTmdbId: number
+    seedTitle: string
+    franchiseId: string | null
+    franchiseName: string | null
+    relatedMediaType: 'tv' | 'movie'
+    relatedTmdbId: number
+    relatedTitle: string
+    releaseDate: string | null
+}
+
+async function fetchTvSpinoffs(seedIds: number[]): Promise<TvSpinoffLink[]> {
+    if (seedIds.length === 0) return []
+    const values = seedIds.map((id) => `"${id}"`).join(' ')
+    const sparql = `SELECT DISTINCT ?seedTmdb ?seedLabel ?franchiseId ?franchiseLabel ?relatedLabel ?relatedTvTmdb ?relatedMovieTmdb ?relDate WHERE {
+  VALUES ?seedTmdb { ${values} }
+  ?seed wdt:P4983 ?seedTmdb .
+  { ?seed wdt:P2512 ?related . }
+  UNION { ?related wdt:P2512 ?seed . }
+  FILTER(?seed != ?related)
+  OPTIONAL {
+    ?seed wdt:P8345 ?franchise .
+    BIND(STRAFTER(STR(?franchise), "entity/") AS ?franchiseId)
+    ?franchise rdfs:label ?franchiseLabel .
+    FILTER(LANG(?franchiseLabel) = "en")
+  }
+  OPTIONAL { ?related wdt:P4983 ?relatedTvTmdb . }
+  OPTIONAL { ?related wdt:P4947 ?relatedMovieTmdb . }
+  OPTIONAL { ?related wdt:P580 ?startTime . }
+  OPTIONAL { ?related wdt:P577 ?pubDate . }
+  BIND(COALESCE(?startTime, ?pubDate) AS ?relDate)
+  FILTER(BOUND(?relatedTvTmdb) || BOUND(?relatedMovieTmdb))
+  ?seed rdfs:label ?seedLabel . FILTER(LANG(?seedLabel) = "en")
+  ?related rdfs:label ?relatedLabel . FILTER(LANG(?relatedLabel) = "en")
+}`
+    const url = new URL('https://query.wikidata.org/sparql')
+    url.searchParams.set('query', sparql)
+    const response = await fetch(url.toString(), {
+        headers: {
+            'Accept': 'application/sparql-results+json',
+            'User-Agent': 'DShyamWatchlist/1.0 (https://dshyam3.github.io)',
+        },
+    })
+    if (!response.ok) throw new Error(`Wikidata returned ${response.status}`)
+    const payload = (await response.json()) as { results?: { bindings?: WikidataBinding[] } }
+    const links: TvSpinoffLink[] = []
+    const seen = new Set<string>()
+    for (const row of payload.results?.bindings ?? []) {
+        const seedTmdbId = Number(row.seedTmdb?.value)
+        const seedTitle = row.seedLabel?.value?.trim()
+        const relatedTitle = row.relatedLabel?.value?.trim()
+        const tvId = row.relatedTvTmdb?.value ? Number(row.relatedTvTmdb.value) : null
+        const movieId = !tvId && row.relatedMovieTmdb?.value ? Number(row.relatedMovieTmdb.value) : null
+        const relatedMediaType = tvId ? 'tv' : movieId ? 'movie' : null
+        const relatedTmdbId = tvId ?? movieId
+        if (
+            !Number.isInteger(seedTmdbId) ||
+            seedTmdbId <= 0 ||
+            !seedTitle ||
+            !relatedTitle ||
+            !relatedMediaType ||
+            !relatedTmdbId ||
+            !Number.isInteger(relatedTmdbId) ||
+            relatedTmdbId <= 0
+        ) continue
+        const key = `${seedTmdbId}->${relatedMediaType}:${relatedTmdbId}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const rawDate = row.relDate?.value?.slice(0, 10) ?? null
+        links.push({
+            seedTmdbId,
+            seedTitle,
+            franchiseId: row.franchiseId?.value?.trim() || null,
+            franchiseName: row.franchiseLabel?.value?.trim() || null,
+            relatedMediaType,
+            relatedTmdbId,
+            relatedTitle,
+            releaseDate: rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null,
+        })
+    }
+    return links
+}
+
 serve(async (req) => {
     const corsHeaders = buildCorsHeaders(req)
 
@@ -118,6 +221,15 @@ serve(async (req) => {
         if (!endpoint) {
             return new Response(JSON.stringify({ error: 'Endpoint is required' }), {
                 status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
+
+        if (endpoint === 'wikidata/tv-spinoffs') {
+            const ids = parseSpinoffSeedIds(searchParams.get('ids'))
+            const results = await fetchTvSpinoffs(ids)
+            return new Response(JSON.stringify({ results }), {
+                status: 200,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
         }

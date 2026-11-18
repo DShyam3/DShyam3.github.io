@@ -5,6 +5,7 @@ import type {
     TMDBDetails,
     TMDBSearchItem,
     TMDBSearchResponse,
+    WikidataTvSpinoffLink,
 } from './tmdb-types';
 import { getPlatform } from './sync-logic';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
@@ -68,6 +69,8 @@ export function useTMDB() {
             // sync's backfill asks again. An empty cast is [], as the sync
             // stores it.
             const credits = type === 'movie' ? data.credits : data.aggregate_credits;
+            const regularSeasons = data.seasons?.filter((s) => s.season_number > 0 && (s.episode_count ?? 1) > 0).length;
+            const seasonCount = type === 'tv' ? (regularSeasons || data.number_of_seasons || data.seasons?.length || 0) : 0;
 
             const imdbId = type === 'movie' ? data.imdb_id : data.external_ids?.imdb_id;
             return {
@@ -85,8 +88,8 @@ export function useTMDB() {
                 origin_country: data.origin_country?.length ? data.origin_country : data.production_countries?.map((country) => country.iso_3166_1) ?? [],
                 tmdb_id: data.id,
                 platform: platform,
-                /** TV only; the import paces its proxy calls by it. */
-                season_count: type === 'tv' ? data.seasons?.length ?? 0 : 0,
+                /** TV only; regular seasons count (with fallback for the import pacing). */
+                season_count: seasonCount,
                 // Same pick as the sync, so the title has its trailer from
                 // the moment it is added rather than from the next sync.
                 trailer_key: pickTrailerKey(data.videos?.results),
@@ -115,6 +118,21 @@ export function useTMDB() {
         } catch (error) {
             console.error('TMDB Collection Error:', error);
             return null;
+        }
+    }, [fetchTMDB]);
+
+    /** TV spin-off and parent relationships from Wikidata via tmdb-proxy. */
+    const getTvSpinoffs = useCallback(async (tmdbIds: number[]): Promise<WikidataTvSpinoffLink[]> => {
+        const clean = [...new Set(tmdbIds.filter((id) => Number.isInteger(id) && id > 0))];
+        if (clean.length === 0) return [];
+        try {
+            const data = await fetchTMDB<{ results?: WikidataTvSpinoffLink[] }>('wikidata/tv-spinoffs', {
+                ids: clean.join(','),
+            });
+            return data.results ?? [];
+        } catch (error) {
+            console.error('Wikidata TV Spin-offs Error:', error);
+            return [];
         }
     }, [fetchTMDB]);
 
@@ -201,5 +219,6 @@ export function useTMDB() {
         getPosterUrl,
         getMovieDetails,
         getCollection,
+        getTvSpinoffs,
     };
 }

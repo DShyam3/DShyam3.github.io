@@ -178,6 +178,10 @@ describe('curateDiscovery', () => {
       'tv:700',
       'movie:800',
     ]);
+    expect(curateDiscovery(items, watchlist, favourites, dismissed, new Set(['movie:800'])).map((item) => `${item.media}:${item.id}`)).toEqual([
+      'tv:500',
+      'tv:700',
+    ]);
   });
 });
 

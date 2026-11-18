@@ -123,6 +123,7 @@ export interface TMDBDetails {
   external_ids?: { imdb_id?: string | null };
   /** Films only: the series it belongs to, e.g. "X-Men Collection". */
   belongs_to_collection?: TMDBCollectionRef | null;
+  number_of_seasons?: number;
 }
 
 export interface TMDBCollectionRef {
@@ -144,7 +145,20 @@ export interface TMDBCollection {
     title?: string;
     release_date?: string | null;
     poster_path?: string | null;
+    overview?: string;
   }[];
+}
+
+/** One spin-off / parent TV link returned by `tmdb-proxy?endpoint=wikidata/tv-spinoffs`. */
+export interface WikidataTvSpinoffLink {
+  seedTmdbId: number;
+  seedTitle: string;
+  franchiseId: string | null;
+  franchiseName: string | null;
+  relatedMediaType: 'tv' | 'movie';
+  relatedTmdbId: number;
+  relatedTitle: string;
+  releaseDate: string | null;
 }
 
 /** One row of `search/movie` or `search/tv`. */

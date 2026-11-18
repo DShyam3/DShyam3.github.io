@@ -4,8 +4,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useWatchlist } from '@/features/watchlist/useWatchlist';
 import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { OrderEntryInput } from '@/features/watchlist/franchise';
+import type { WatchedWhen } from '@/features/watchlist/watched-when';
 
-/** "Add to library" for an entry that is not in it yet: the same
+/** "Add to library" (or "Seen it") for an entry that is not in it yet: the same
  *  getMovieDetails + addWatchlistItem path as the Library's add dialog. */
 export function useAddToLibrary() {
   const { addWatchlistItem } = useWatchlist();
@@ -14,7 +15,7 @@ export function useAddToLibrary() {
   const [pending, setPending] = useState<Set<string>>(new Set());
 
   const addToLibrary = useCallback(
-    async (entry: OrderEntryInput) => {
+    async (entry: OrderEntryInput, options?: { watched?: boolean; watchedWhen?: WatchedWhen }) => {
       setPending((prev) => new Set(prev).add(entry.key));
       try {
         const details = await getMovieDetails(entry.tmdbId, entry.mediaType);
@@ -22,7 +23,13 @@ export function useAddToLibrary() {
           toast({ title: `Could not look up ${entry.title}`, variant: 'destructive' });
           return;
         }
-        await addWatchlistItem(newItemFromDetails(details, entry.mediaType === 'movie' ? 'Movies' : 'TV Shows'));
+        await addWatchlistItem(
+          {
+            ...newItemFromDetails(details, entry.mediaType === 'movie' ? 'Movies' : 'TV Shows'),
+            watched: options?.watched === true,
+          },
+          { watchedWhen: options?.watchedWhen },
+        );
       } finally {
         setPending((prev) => {
           const next = new Set(prev);

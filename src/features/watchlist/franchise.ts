@@ -4,6 +4,7 @@
  */
 
 import type { WatchlistItem } from './WatchlistContext';
+import type { WikidataTvSpinoffLink } from './tmdb-types';
 import { daysUntil, isSpecialsSeason } from './watchlist-utils';
 
 export interface OrderEntryInput {
@@ -194,4 +195,111 @@ export function collectionPartsToEntries(
     });
   }
   return sortByRelease(entries);
+}
+
+export interface TvFranchiseSummary {
+  /** Stable identifier: the earliest entry's key, e.g. `tv:1418`. */
+  key: string;
+  name: string;
+  entries: OrderEntryInput[];
+}
+
+const stripTrailingYear = (title: string): string =>
+  title.replace(/\s*\((?:19|20)\d{2}\)\s*$/, '').trim();
+
+/**
+ * Groups TV spin-off links from Wikidata into connected TV franchise universes
+ * (e.g. The Big Bang Theory -> Young Sheldon -> Georgie & Mandy's First Marriage).
+ * Pure: merges library metadata (posters, release dates, clean titles) with the
+ * connected Wikidata nodes and sorts each group chronologically by release date.
+ */
+export function tvFranchisesFromLinks(
+  links: WikidataTvSpinoffLink[],
+  watchlist: WatchlistItem[],
+): TvFranchiseSummary[] {
+  if (links.length === 0) return [];
+
+  const libraryByKey = new Map<string, { title: string; releaseDate: string | null; poster: string | null }>();
+  for (const item of watchlist) {
+    if (item.tmdb_id == null) continue;
+    const mediaType = item.category === 'Movies' ? 'movie' : 'tv';
+    libraryByKey.set(`${mediaType}:${item.tmdb_id}`, {
+      title: stripTrailingYear(item.title),
+      releaseDate: item.release_date?.slice(0, 10) || null,
+      poster: item.image_url ?? null,
+    });
+  }
+
+  const nodes = new Map<string, OrderEntryInput>();
+  const adjacency = new Map<string, Set<string>>();
+  const franchiseNames = new Map<string, string>();
+
+  const ensureNode = (mediaType: 'movie' | 'tv', tmdbId: number, fallbackTitle: string, fallbackDate: string | null): string => {
+    const key = `${mediaType}:${tmdbId}`;
+    const lib = libraryByKey.get(key);
+    const existing = nodes.get(key);
+    nodes.set(key, {
+      key,
+      mediaType,
+      tmdbId,
+      title: lib?.title || existing?.title || stripTrailingYear(fallbackTitle),
+      releaseDate: lib?.releaseDate || existing?.releaseDate || fallbackDate || null,
+      poster: lib?.poster || existing?.poster || null,
+    });
+    if (!adjacency.has(key)) adjacency.set(key, new Set());
+    return key;
+  };
+
+  for (const link of links) {
+    if (!Number.isInteger(link.seedTmdbId) || link.seedTmdbId <= 0) continue;
+    if (!Number.isInteger(link.relatedTmdbId) || link.relatedTmdbId <= 0) continue;
+    const seedKey = ensureNode('tv', link.seedTmdbId, link.seedTitle, null);
+    const relatedKey = ensureNode(link.relatedMediaType, link.relatedTmdbId, link.relatedTitle, link.releaseDate);
+    if (seedKey === relatedKey) continue;
+    // Skip same-title international remakes (e.g. Shameless UK/US) unless Wikidata names a shared franchise.
+    const seedTitle = nodes.get(seedKey)!.title.toLowerCase();
+    const relatedTitle = nodes.get(relatedKey)!.title.toLowerCase();
+    if (seedTitle === relatedTitle && !link.franchiseName) continue;
+
+    adjacency.get(seedKey)!.add(relatedKey);
+    adjacency.get(relatedKey)!.add(seedKey);
+    if (link.franchiseName) {
+      franchiseNames.set(seedKey, link.franchiseName);
+      franchiseNames.set(relatedKey, link.franchiseName);
+    }
+  }
+
+  const visited = new Set<string>();
+  const groups: TvFranchiseSummary[] = [];
+
+  for (const startKey of nodes.keys()) {
+    if (visited.has(startKey)) continue;
+    const queue = [startKey];
+    visited.add(startKey);
+    const component: string[] = [];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      component.push(current);
+      for (const neighbour of adjacency.get(current) ?? []) {
+        if (!visited.has(neighbour)) {
+          visited.add(neighbour);
+          queue.push(neighbour);
+        }
+      }
+    }
+    if (component.length < 2) continue;
+    const entries = sortByRelease(component.map((k) => nodes.get(k)!));
+    const explicitName = component.map((k) => franchiseNames.get(k)).find((n): n is string => Boolean(n));
+    const baseName = explicitName || entries[0].title;
+    const name = /universe|franchise|collection|chronicles/i.test(baseName)
+      ? baseName
+      : `${baseName} Universe`;
+    groups.push({
+      key: entries[0].key,
+      name,
+      entries,
+    });
+  }
+
+  return groups.sort((a, b) => a.name.localeCompare(b.name));
 }
