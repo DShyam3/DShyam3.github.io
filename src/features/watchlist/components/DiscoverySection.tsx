@@ -231,7 +231,11 @@ function DiscoveryFranchiseCard({
   return (
     <FranchiseCard
       name={group.name}
-      summary={`${view.watched} of ${view.total} watched · ${group.missingCount} not in library`}
+      summary={[
+        `${view.watched} of ${view.total} watched`,
+        `${group.missingCount} not in library`,
+        group.hasGap ? 'Gap in series' : null,
+      ].filter(Boolean).join(' · ')}
       nextUp={view.nextUp?.title}
       strip={view.entries.map((e) => ({
         key: e.key,
@@ -290,8 +294,8 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
         {discovery.franchisesLoading && discovery.franchises.length === 0 && (
           <p role="status" className="text-sm text-muted-foreground">Checking series, trilogies and spin-offs…</p>
         )}
-        {!discovery.franchisesLoading && discovery.franchises.length === 0 && (
-          <p className="text-sm text-muted-foreground">No incomplete series or spin-off groups found in this view.</p>
+        {!discovery.franchisesLoading && discovery.franchises.length === 0 && discovery.likelySeen.length === 0 && (
+          <p className="text-sm text-muted-foreground">No incomplete series, spin-offs or likely seen titles found in this view.</p>
         )}
         {discovery.franchises.length > 0 && (
           <div className="space-y-3">
@@ -313,6 +317,15 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
             <Button variant="outline" onClick={discovery.loadMoreFranchises}>
               Show more series &amp; collections
             </Button>
+          </div>
+        )}
+        {discovery.likelySeen.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <div className="space-y-0.5">
+              <h3 className="text-sm font-medium">Likely seen</h3>
+              <p className="text-xs text-muted-foreground">Recommended across multiple titles you have already watched or rated highly.</p>
+            </div>
+            <TileGrid items={discovery.likelySeen} onDismiss={discovery.dismiss} />
           </div>
         )}
       </section>

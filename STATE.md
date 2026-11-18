@@ -1,30 +1,35 @@
 # State
 
-Updated 2026-11-18 · `main` rebased/merged onto `origin/main` (`ac9fae38`), uncommitted local changes ready to commit & push.
+Updated 2026-11-18 · `main` (pushed on top of `1c6bbacb`).
 
-## Landed locally (uncommitted) & on `origin/main`
+## Deployed & landed on `main`
 
-- **Local Watchlist updates (uncommitted on `main`):**
-  - Library search & shelf visibility: shelf dropdown shows `All shelves (N)` and live match counts per shelf while searching; picking a shelf narrows the search to that shelf without clearing the query. `WatchlistDetailDialog` displays a `Shelf: <shelf>` pill and `Favourite` heart pill in the top badge row.
-  - Streaming platform allowlist: added `NOW`, `Paramount+`, `Channel 4`, and `Crunchyroll` (`sync-logic.ts`, cron-sync, `PlatformLogo.tsx`, `sync-logic.test.ts`).
-  - Watchlist News `Following` + Discover/Season/Sync improvements (`Worth your attention` backdrop scrim, plot overview, `WeekStrip`, `OUT NOW` grid, `None of these` batch dismiss, `N season(s)`, series status pill in top badge row, season rating prompt and auto-advance).
-- **On `origin/main` (`ac9fae38`):** Grouped film collections & TV spin-offs in Discover (`HAVE YOU ALREADY WATCHED?`) and Franchises (`TV SERIES & SPIN-OFFS IN YOUR LIBRARY`), `tmdb-proxy` v17, `watchlist-cron-sync` v20, migration `20261118201834_watchlist_tmdb_categories` applied, Library `Upcoming`/`Up to date` shelves & countdown pills, Diary, Import, and OMDb scores.
+- **Discover "Have you already watched?" polish + spin-off posters:**
+  - `tmdb-proxy` v18 deployed and verified over HTTP (`endpoint=wikidata/tv-spinoffs` now enriches unique related spin-off/parent targets with TMDB `posterPath` and `releaseDate` so not-in-library spin-off entries render posters).
+  - Gap-first ranking (`hasWatchGap` in `src/features/watchlist/franchise.ts`): incomplete collections/spin-off groups with an earlier missing/unwatched entry before a watched/in-progress one sort to the top of `HAVE YOU ALREADY WATCHED?` and are labelled `Gap in series`.
+  - Multi-seed consensus (`likelySeenConsensus` in `src/features/watchlist/discovery.ts`): released titles independently recommended by 2+ titles in the library surface under `Likely seen` inside `HAVE YOU ALREADY WATCHED?` and are excluded from `YOU MIGHT LIKE`.
+- **Earlier on `main` (`1c6bbacb`, `ac9fae38`, `b7aa0e1b`, `5050676b`, `acf42c01`):**
+  - Library search shelf narrowing, `Shelf:` + `Favourite` pills, `NOW`/`Paramount+`/`Channel 4`/`Crunchyroll` platforms, News `Following` `Worth your attention` scrim + `WeekStrip` + `OUT NOW` grid + `None of these`, `Upcoming`/`Up to date` shelves, TMDB Library categories (`20261118201834` applied, `watchlist-cron-sync` v20), Diary, Franchises, Import, and OMDb scores (`20261118190243` applied, `OMDB_API_KEY` set; retire screenshot copy; first OMDb pass: 899/1,052 films checked, 0/377 shows yet).
 
-## Checks (2026-11-18, local working tree)
+## Checks (2026-11-18)
 
-- `npm run lint`: 0 errors, 0 warnings
-- `npm run typecheck`: pass
-- `npm run typecheck:functions`: pass (`deno check`)
-- Vitest: 32 test files pass (all tests green)
-- `npm run build`: pass
-- `graphify update .`: pass
+| Check | Result |
+|---|---|
+| `npm run lint` | 0 errors, 0 warnings |
+| `npm run typecheck` | pass |
+| `npm run typecheck:functions` | pass (`deno check`) |
+| `npx vitest run src/features/watchlist src/integrations/supabase/rls-admin-check.test.ts` | 32 files / 474 tests pass |
+| `npm run build` | pass |
+| `tmdb-proxy` v18 HTTP probe | pass (`wikidata/tv-spinoffs` returns `posterPath` + `releaseDate`) |
+| `graphify update .` | pass |
+| Browser | not run against production for the new commit |
 
 ## Next
 
-1. Commit and push `main` (on top of `ac9fae38`), verify GitHub Pages deploy, and browser-verify Watchlist News `Following`, Discover, Franchise screens, Library search shelf filtering, and new platform badges on production.
+1. Verify GitHub Pages deploy for the latest `main` push and browser-verify `HAVE YOU ALREADY WATCHED?` (spin-off posters, gap-first ordering, `Likely seen` grid), `YOU MIGHT LIKE`, and `/watchlist/franchises` (signed out and signed in as admin).
 2. After 2026-11-19 06:00 UTC: check show scores (`select count(scores_checked_at) from tv_shows`) and `pg_net` 120 s timeout.
 
 ## Still unverified & blockers
 
-- **Unverified:** Production browser checks for new features (Library shelf search narrowing, `Shelf:` pill, new streaming platforms, News `Following`, Discover, Franchise screens); signed-in admin flows (rating, favourite toggle, Not interested sync, `watchlist_ratings` reads, `Seen it` date menu); `S{n}E{e}` live countdown pill; light mode; phone viewport; show creator and cast dialog.
-- **Blockers:** Untracked drafts (`SITE_PLAN.md`, etc.) and `.claude/launch.json` in checkout; worktrees `.claude/worktrees/caught-up` and `.claude/worktrees/affectionate-lamarr-f2d2cb`.
+- **Unverified:** Production browser checks for the latest Watchlist features (spin-off posters, gap-first ordering, `Likely seen`, Library shelf search narrowing, `Shelf:` pill, new streaming platforms, News `Following`, Discover, Franchise screens); signed-in admin flows (rating, favourite toggle, Not interested sync, `watchlist_ratings` reads, `Seen it` date menu); `S{n}E{e}` live countdown pill; light mode; phone viewport; show creator and cast dialog.
+- **Blockers:** Untracked drafts (`SITE_PLAN.md`, etc.) and `.claude/launch.json` in local main checkout; worktrees `.claude/worktrees/caught-up` and `.claude/worktrees/affectionate-lamarr-f2d2cb`.

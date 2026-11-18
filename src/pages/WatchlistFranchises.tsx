@@ -6,6 +6,7 @@ import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
 import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { CollectionCard } from '@/features/watchlist/components/franchise/CollectionCard';
+import { POSTER_BASE } from '@/features/watchlist/components/franchise/EntryList';
 import { NewOrderForm } from '@/features/watchlist/components/franchise/NewOrderForm';
 import { OrderCard, type OrderActions } from '@/features/watchlist/components/franchise/OrderCard';
 import { TvFranchiseCard } from '@/features/watchlist/components/franchise/TvFranchiseCard';
@@ -96,7 +97,7 @@ export default function WatchlistFranchises() {
     retry: false,
   });
   const tvFranchises = useMemo(
-    () => tvFranchisesFromLinks(tvSpinoffsQuery.data ?? [], watchlist),
+    () => tvFranchisesFromLinks(tvSpinoffsQuery.data ?? [], watchlist, POSTER_BASE),
     [tvSpinoffsQuery.data, watchlist],
   );
   const openTvFranchises = tvFranchises.filter((f) => !savedOrderNames.has(f.name.trim().toLowerCase()));

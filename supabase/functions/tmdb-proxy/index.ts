@@ -121,6 +121,7 @@ interface TvSpinoffLink {
     relatedTmdbId: number
     relatedTitle: string
     releaseDate: string | null
+    posterPath: string | null
 }
 
 async function fetchTvSpinoffs(seedIds: number[]): Promise<TvSpinoffLink[]> {
@@ -190,8 +191,43 @@ async function fetchTvSpinoffs(seedIds: number[]): Promise<TvSpinoffLink[]> {
             relatedTmdbId,
             relatedTitle,
             releaseDate: rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null,
+            posterPath: null,
         })
     }
+
+    // Enrich unique related targets with TMDB poster_path and release_date in parallel
+    // so not-in-library spin-offs render posters without extra browser requests.
+    if (TMDB_API_KEY && links.length > 0) {
+        const targets = new Map<string, { media: 'tv' | 'movie'; id: number }>()
+        for (const l of links) {
+            const k = `${l.relatedMediaType}:${l.relatedTmdbId}`
+            if (!targets.has(k)) targets.set(k, { media: l.relatedMediaType, id: l.relatedTmdbId })
+        }
+        const meta = new Map<string, { posterPath: string | null; releaseDate: string | null }>()
+        await Promise.allSettled(
+            [...targets.entries()].slice(0, 40).map(async ([k, t]) => {
+                const res = await fetch(`${TMDB_BASE_URL}/${t.media}/${t.id}?api_key=${TMDB_API_KEY}&language=en-GB`)
+                if (!res.ok) return
+                const detail = (await res.json()) as {
+                    poster_path?: string | null
+                    release_date?: string | null
+                    first_air_date?: string | null
+                }
+                const d = (detail.release_date || detail.first_air_date || '').slice(0, 10)
+                meta.set(k, {
+                    posterPath: detail.poster_path ?? null,
+                    releaseDate: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null,
+                })
+            }),
+        )
+        for (const l of links) {
+            const hit = meta.get(`${l.relatedMediaType}:${l.relatedTmdbId}`)
+            if (!hit) continue
+            if (hit.posterPath) l.posterPath = hit.posterPath
+            if (!l.releaseDate && hit.releaseDate) l.releaseDate = hit.releaseDate
+        }
+    }
+
     return links
 }
 

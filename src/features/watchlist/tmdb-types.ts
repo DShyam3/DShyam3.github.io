@@ -159,6 +159,7 @@ export interface WikidataTvSpinoffLink {
   relatedTmdbId: number;
   relatedTitle: string;
   releaseDate: string | null;
+  posterPath?: string | null;
 }
 
 /** One row of `search/movie` or `search/tv`. */

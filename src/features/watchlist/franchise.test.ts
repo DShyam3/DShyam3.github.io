@@ -5,6 +5,7 @@ import {
   collectionPartsToEntries,
   collectionsFromLibrary,
   entryState,
+  hasWatchGap,
   libraryLookup,
   sortByRelease,
   tvFranchisesFromLinks,
@@ -193,16 +194,22 @@ describe('tvFranchisesFromLinks', () => {
           relatedTmdbId: 243875,
           relatedTitle: "Georgie & Mandy's First Marriage",
           releaseDate: '2024-10-17',
+          posterPath: '/gm.jpg',
         },
       ],
       watchlist,
+      'https://img/',
     );
 
     expect(groups).toHaveLength(1);
     expect(groups[0].name).toBe('The Big Bang Theory Universe');
     expect(groups[0].entries.map((e) => e.key)).toEqual(['tv:1418', 'tv:71728', 'tv:243875']);
     expect(groups[0].entries[0]).toMatchObject({ title: 'The Big Bang Theory', poster: '/tbbt.jpg' });
-    expect(groups[0].entries[2]).toMatchObject({ title: "Georgie & Mandy's First Marriage", releaseDate: '2024-10-17' });
+    expect(groups[0].entries[2]).toMatchObject({
+      title: "Georgie & Mandy's First Marriage",
+      releaseDate: '2024-10-17',
+      poster: 'https://img//gm.jpg',
+    });
   });
 
   it('ignores same-title international remakes when no shared franchise name exists', () => {
@@ -222,5 +229,30 @@ describe('tvFranchisesFromLinks', () => {
       [],
     );
     expect(groups).toEqual([]);
+  });
+});
+
+describe('hasWatchGap', () => {
+  it('detects missing or unwatched earlier entries when a later entry is watched', () => {
+    const gapView = buildOrderView(
+      [entry({ key: 'a', tmdbId: 1 }), entry({ key: 'b', tmdbId: 3 }), entry({ key: 'c', tmdbId: 100 })],
+      {
+        movies: new Map([
+          [1, { id: 'm1', watched: true }],
+          [100, { id: 'm3', watched: true }],
+        ]),
+        shows: new Map(),
+      },
+    );
+    expect(hasWatchGap(gapView)).toBe(true);
+
+    const noGapView = buildOrderView(
+      [entry({ key: 'a', tmdbId: 1 }), entry({ key: 'b', tmdbId: 3 })],
+      {
+        movies: new Map([[1, { id: 'm1', watched: true }]]),
+        shows: new Map(),
+      },
+    );
+    expect(hasWatchGap(noGapView)).toBe(false);
   });
 });

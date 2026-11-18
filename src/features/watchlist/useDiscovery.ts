@@ -11,6 +11,7 @@ import {
   discoverySeeds,
   interleaveBySeed,
   interleaveUpcoming,
+  likelySeenConsensus,
   weekIndex,
   type DiscoveryItem,
   type DiscoveryMedia,
@@ -20,6 +21,7 @@ import {
   buildOrderView,
   collectionPartsToEntries,
   collectionsFromLibrary,
+  hasWatchGap,
   libraryLookup,
   tvFranchisesFromLinks,
   type OrderEntryInput,
@@ -119,6 +121,7 @@ export interface DiscoveryFranchiseGroup {
   media: DiscoveryMedia;
   view: OrderView;
   missingCount: number;
+  hasGap: boolean;
 }
 
 const COLLECTIONS_PER_BATCH = 8;
@@ -343,7 +346,7 @@ export function useDiscovery(type: LibraryType) {
     queryFn: () => getTvSpinoffs(tvSeedIds),
   });
   const tvFranchiseSummaries = useMemo(
-    () => tvFranchisesFromLinks(tvSpinoffs.data ?? [], watchlist),
+    () => tvFranchisesFromLinks(tvSpinoffs.data ?? [], watchlist, POSTER_BASE),
     [tvSpinoffs.data, watchlist],
   );
 
@@ -369,6 +372,7 @@ export function useDiscovery(type: LibraryType) {
             media: 'movie',
             view,
             missingCount,
+            hasGap: hasWatchGap(view),
           });
         }
       }
@@ -386,17 +390,45 @@ export function useDiscovery(type: LibraryType) {
             media: 'tv',
             view,
             missingCount,
+            hasGap: hasWatchGap(view),
           });
         }
       }
     }
-    return groups;
+    return groups.sort(
+      (a, b) =>
+        Number(b.hasGap) - Number(a.hasGap) ||
+        b.view.watched - a.view.watched ||
+        b.view.inLibrary - a.view.inLibrary ||
+        a.name.localeCompare(b.name),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, libraryCollections, expandedCollections.data, tvFranchiseSummaries, lookup, dismissed]);
 
   const franchiseEntryKeys = useMemo(
     () => new Set(franchiseGroups.flatMap((g) => g.view.entries.map((e) => e.key))),
     [franchiseGroups],
+  );
+
+  // Multi-seed consensus: released titles independently recommended by 2+
+  // titles in the library surface under HAVE YOU ALREADY WATCHED? ("Likely seen")
+  // and are excluded from YOU MIGHT LIKE so they are not shown twice.
+  const likelySeen = useMemo(
+    () =>
+      curateDiscovery(
+        likelySeenConsensus(recommendationItems, today),
+        watchlist,
+        favourites,
+        dismissed,
+        franchiseEntryKeys,
+      ).slice(0, 12),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `week` stands in for `today`.
+    [recommendationItems, watchlist, favourites, dismissed, franchiseEntryKeys, week],
+  );
+
+  const alreadyWatchedKeys = useMemo(
+    () => new Set([...franchiseEntryKeys, ...likelySeen.map((item) => discoveryKey(item.media, item.id))]),
+    [franchiseEntryKeys, likelySeen],
   );
 
   // Kept in the browser first, so it holds even if the table write fails;
@@ -438,7 +470,8 @@ export function useDiscovery(type: LibraryType) {
   const loadingMore = activeQueries.some((q) => q.isFetchingNextPage);
 
   return {
-    recommendations: curateDiscovery(recommendationItems, watchlist, favourites, dismissed, franchiseEntryKeys),
+    recommendations: curateDiscovery(recommendationItems, watchlist, favourites, dismissed, alreadyWatchedKeys),
+    likelySeen,
     upcoming: curateDiscovery(upcomingItems, watchlist, favourites, dismissed),
     franchises: franchiseGroups,
     franchisesLoading:

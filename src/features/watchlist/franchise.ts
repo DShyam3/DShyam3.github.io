@@ -216,6 +216,7 @@ const stripTrailingYear = (title: string): string =>
 export function tvFranchisesFromLinks(
   links: WikidataTvSpinoffLink[],
   watchlist: WatchlistItem[],
+  posterBase = '',
 ): TvFranchiseSummary[] {
   if (links.length === 0) return [];
 
@@ -234,17 +235,27 @@ export function tvFranchisesFromLinks(
   const adjacency = new Map<string, Set<string>>();
   const franchiseNames = new Map<string, string>();
 
-  const ensureNode = (mediaType: 'movie' | 'tv', tmdbId: number, fallbackTitle: string, fallbackDate: string | null): string => {
+  const ensureNode = (
+    mediaType: 'movie' | 'tv',
+    tmdbId: number,
+    fallbackTitle: string,
+    fallbackDate: string | null,
+    fallbackPosterPath?: string | null,
+  ): string => {
     const key = `${mediaType}:${tmdbId}`;
     const lib = libraryByKey.get(key);
     const existing = nodes.get(key);
+    const resolvedPoster =
+      lib?.poster ||
+      existing?.poster ||
+      (fallbackPosterPath ? `${posterBase}${fallbackPosterPath}` : null);
     nodes.set(key, {
       key,
       mediaType,
       tmdbId,
       title: lib?.title || existing?.title || stripTrailingYear(fallbackTitle),
       releaseDate: lib?.releaseDate || existing?.releaseDate || fallbackDate || null,
-      poster: lib?.poster || existing?.poster || null,
+      poster: resolvedPoster,
     });
     if (!adjacency.has(key)) adjacency.set(key, new Set());
     return key;
@@ -254,7 +265,7 @@ export function tvFranchisesFromLinks(
     if (!Number.isInteger(link.seedTmdbId) || link.seedTmdbId <= 0) continue;
     if (!Number.isInteger(link.relatedTmdbId) || link.relatedTmdbId <= 0) continue;
     const seedKey = ensureNode('tv', link.seedTmdbId, link.seedTitle, null);
-    const relatedKey = ensureNode(link.relatedMediaType, link.relatedTmdbId, link.relatedTitle, link.releaseDate);
+    const relatedKey = ensureNode(link.relatedMediaType, link.relatedTmdbId, link.relatedTitle, link.releaseDate, link.posterPath);
     if (seedKey === relatedKey) continue;
     // Skip same-title international remakes (e.g. Shameless UK/US) unless Wikidata names a shared franchise.
     const seedTitle = nodes.get(seedKey)!.title.toLowerCase();
@@ -302,4 +313,25 @@ export function tvFranchisesFromLinks(
   }
 
   return groups.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * True when an earlier entry in release order is unwatched or missing from
+ * the library while a later entry is already watched or in progress (e.g.
+ * watched X 1 and X 3, missing X 2).
+ */
+export function hasWatchGap(view: OrderView): boolean {
+  let lastWatchedIndex = -1;
+  for (let i = view.entries.length - 1; i >= 0; i--) {
+    const state = view.entries[i].state;
+    if (state === 'watched' || state === 'in-progress') {
+      lastWatchedIndex = i;
+      break;
+    }
+  }
+  if (lastWatchedIndex <= 0) return false;
+  for (let i = 0; i < lastWatchedIndex; i++) {
+    if (view.entries[i].state !== 'watched') return true;
+  }
+  return false;
 }

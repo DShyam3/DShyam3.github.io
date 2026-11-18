@@ -149,3 +149,45 @@ export function interleaveUpcoming(items: DiscoveryItem[]): DiscoveryItem[] {
     items.filter((item) => item.media === 'tv'),
   ]);
 }
+
+/**
+ * Finds released titles recommended independently by `minSeeds` or more
+ * distinct titles in the library (multi-seed consensus) so obvious
+ * "Likely seen" classics can be surfaced in HAVE YOU ALREADY WATCHED?
+ * rather than cluttering YOU MIGHT LIKE.
+ */
+export function likelySeenConsensus(
+  items: DiscoveryItem[],
+  today = new Date(),
+  minSeeds = 2,
+): DiscoveryItem[] {
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const groups = new Map<string, { item: DiscoveryItem; seeds: Set<string> }>();
+
+  for (const item of items) {
+    if (item.kind !== 'recommendation' || !item.seedKey || item.seedKey.startsWith('filler:')) continue;
+    const date = discoveryDate(item).slice(0, 10);
+    if (!date || date > todayIso) continue;
+    const key = discoveryKey(item.media, item.id);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.seeds.add(item.seedKey);
+    } else {
+      groups.set(key, { item, seeds: new Set([item.seedKey]) });
+    }
+  }
+
+  return [...groups.values()]
+    .filter((entry) => entry.seeds.size >= minSeeds)
+    .sort(
+      (a, b) =>
+        b.seeds.size - a.seeds.size ||
+        (b.item.vote_count ?? 0) - (a.item.vote_count ?? 0) ||
+        (a.item.title || a.item.name || '').localeCompare(b.item.title || b.item.name || ''),
+    )
+    .map(({ item, seeds }) => ({
+      ...item,
+      reason: `Recommended across ${seeds.size} titles in your library`,
+      shortReason: `In ${seeds.size} of your lists`,
+    }));
+}

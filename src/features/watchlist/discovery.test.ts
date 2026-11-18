@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curateDiscovery, discoverySeeds, interleaveBySeed, interleaveUpcoming, type DiscoveryItem } from './discovery';
+import { curateDiscovery, discoverySeeds, interleaveBySeed, interleaveUpcoming, likelySeenConsensus, type DiscoveryItem } from './discovery';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 const makeWatchlistItem = (overrides: Partial<WatchlistItem>): WatchlistItem => ({
@@ -206,5 +206,28 @@ describe('interleaveUpcoming', () => {
     expect(interleaveUpcoming(films)).toEqual(films);
     expect(interleaveUpcoming(series)).toEqual(series);
     expect(interleaveUpcoming([])).toEqual([]);
+  });
+});
+
+describe('likelySeenConsensus', () => {
+  it('surfaces released titles recommended by 2+ independent library seeds and ignores future or single-seed items', () => {
+    const today = new Date(2026, 10, 18);
+    const items: DiscoveryItem[] = [
+      makeDiscoveryItem({ id: 10, media: 'tv', name: 'The Sopranos', title: undefined, first_air_date: '1999-01-10', kind: 'recommendation', seedKey: 'tv:1', vote_count: 2500 }),
+      makeDiscoveryItem({ id: 10, media: 'tv', name: 'The Sopranos', title: undefined, first_air_date: '1999-01-10', kind: 'recommendation', seedKey: 'tv:2', vote_count: 2500 }),
+      makeDiscoveryItem({ id: 10, media: 'tv', name: 'The Sopranos', title: undefined, first_air_date: '1999-01-10', kind: 'recommendation', seedKey: 'tv:2', vote_count: 2500 }),
+      makeDiscoveryItem({ id: 11, media: 'movie', title: 'Single Seed', release_date: '2020-01-01', kind: 'recommendation', seedKey: 'movie:1' }),
+      makeDiscoveryItem({ id: 12, media: 'movie', title: 'Future Hit', release_date: '2027-01-01', kind: 'recommendation', seedKey: 'movie:1' }),
+      makeDiscoveryItem({ id: 12, media: 'movie', title: 'Future Hit', release_date: '2027-01-01', kind: 'recommendation', seedKey: 'movie:2' }),
+    ];
+
+    const out = likelySeenConsensus(items, today, 2);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      id: 10,
+      media: 'tv',
+      shortReason: 'In 2 of your lists',
+      reason: 'Recommended across 2 titles in your library',
+    });
   });
 });
