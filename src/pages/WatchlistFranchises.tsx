@@ -7,6 +7,7 @@ import { SectionFailure } from '@/features/watchlist/components/SectionFailure';
 import { WatchlistDetailDialog } from '@/features/watchlist/components/WatchlistDetailDialog';
 import { CollectionCard } from '@/features/watchlist/components/franchise/CollectionCard';
 import { POSTER_BASE } from '@/features/watchlist/components/franchise/EntryList';
+import { EntryPreviewDialog } from '@/features/watchlist/components/franchise/EntryPreviewDialog';
 import { NewOrderForm } from '@/features/watchlist/components/franchise/NewOrderForm';
 import { OrderCard, type OrderActions } from '@/features/watchlist/components/franchise/OrderCard';
 import { TvFranchiseCard } from '@/features/watchlist/components/franchise/TvFranchiseCard';
@@ -49,6 +50,7 @@ export default function WatchlistFranchises() {
   const queryClient = useQueryClient();
   const orders = useQuery(viewingOrdersQueryOptions);
   const [selected, setSelected] = useState<{ id: string; category: 'Movies' | 'TV Shows' } | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<OrderEntryView | null>(null);
 
   const lookup = useMemo(() => libraryLookup(watchlist, new Date()), [watchlist]);
 
@@ -150,6 +152,7 @@ export default function WatchlistFranchises() {
 
   const openEntry = (entry: OrderEntryView) => {
     if (entry.libraryId) setSelected({ id: entry.libraryId, category: entry.mediaType === 'movie' ? 'Movies' : 'TV Shows' });
+    else setPreviewEntry(entry);
   };
   const selectedItem = selected && watchlist.find((i) => i.category === selected.category && i.id === selected.id);
 
@@ -276,6 +279,17 @@ export default function WatchlistFranchises() {
           toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
           isEpisodeWatched={isEpisodeWatched}
           isSeasonWatched={isSeasonWatched}
+        />
+      )}
+      {previewEntry && (
+        <EntryPreviewDialog
+          entry={previewEntry}
+          onOpenChange={(open) => {
+            if (!open) setPreviewEntry(null);
+          }}
+          onAddToLibrary={isAdmin ? (entry) => addToLibrary(entry) : undefined}
+          onSeenIt={isAdmin ? (entry, when) => addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+          adding={isAdding(previewEntry.key)}
         />
       )}
     </div>

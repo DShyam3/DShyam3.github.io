@@ -20,6 +20,7 @@ import type { OrderEntryView } from '../franchise';
 import type { LibraryType } from '../library-state';
 import type { WatchedWhen } from '../watched-when';
 import { EntryList } from './franchise/EntryList';
+import { EntryPreviewDialog } from './franchise/EntryPreviewDialog';
 import { FranchiseCard } from './franchise/FranchiseCard';
 import { useAddToLibrary } from './franchise/useAddToLibrary';
 import { PlatformBadge } from './PlatformLogo';
@@ -265,10 +266,15 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
   const { watchlist, getAutoStatus, isEpisodeWatched, isSeasonWatched, toggleEpisodeWatched } = useWatchlist();
   const { addToLibrary, isAdding } = useAddToLibrary();
   const [selected, setSelected] = useState<{ id: string; category: 'Movies' | 'TV Shows' } | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<OrderEntryView | null>(null);
   const comingSoon = interleaveUpcoming(discovery.upcoming).slice(0, 12);
 
   const openEntry = (entry: OrderEntryView) => {
-    if (entry.libraryId) setSelected({ id: entry.libraryId, category: entry.mediaType === 'movie' ? 'Movies' : 'TV Shows' });
+    if (entry.libraryId) {
+      setSelected({ id: entry.libraryId, category: entry.mediaType === 'movie' ? 'Movies' : 'TV Shows' });
+    } else {
+      setPreviewEntry(entry);
+    }
   };
   const selectedItem = selected && watchlist.find((i) => i.category === selected.category && i.id === selected.id);
 
@@ -387,6 +393,18 @@ export function DiscoverySection({ type }: { type: LibraryType }) {
           toggleEpisodeWatched={isAdmin ? toggleEpisodeWatched : undefined}
           isEpisodeWatched={isEpisodeWatched}
           isSeasonWatched={isSeasonWatched}
+        />
+      )}
+      {previewEntry && (
+        <EntryPreviewDialog
+          entry={previewEntry}
+          onOpenChange={(open) => {
+            if (!open) setPreviewEntry(null);
+          }}
+          onAddToLibrary={isAdmin ? (entry) => addToLibrary(entry) : undefined}
+          onSeenIt={isAdmin ? (entry, when) => addToLibrary(entry, { watched: true, watchedWhen: when }) : undefined}
+          onDismiss={(entry) => discovery.dismiss(entry.mediaType, entry.tmdbId)}
+          adding={isAdding(previewEntry.key)}
         />
       )}
     </div>
