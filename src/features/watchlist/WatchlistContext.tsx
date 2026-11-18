@@ -17,6 +17,7 @@ import { useCooldown } from '@/hooks/useCooldown';
 import { supabase } from '@/integrations/supabase/client';
 import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import type { TMDBDetails, TMDBEpisode, TMDBSeasonDetails } from './tmdb-types';
+import { missingCategoryColumns } from './category-schema';
 import { isSameTitle, isShowWithId, titleKey, type TitleRef } from './title-ref';
 import { applyRatings, ratingColumn, watchlistRatingsQuery, withRating, type RatingTarget } from './ratings-query';
 import { pickTrailerKey, TRAILER_VIDEO_PARAMS } from './trailer';
@@ -139,6 +140,9 @@ export interface WatchlistItem {
   year?: number;
   runtime?: number;
   genres?: string[];
+  genre_ids?: number[] | null;
+  original_language?: string | null;
+  origin_country?: string[] | null;
   image_url?: string;
   backdrop_url?: string;
   link?: string;
@@ -703,7 +707,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
     try {
       if (item.category === 'Movies') {
         try {
-          const { error } = await supabase.from('movies').insert({
+          const payload = {
             title: item.title,
             platform: item.streaming_platform || 'Online',
             genre: item.genres?.join(', ') || null,
@@ -723,7 +727,16 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
             // "Seen it" from discovery: straight to Finished. The row's
             // trigger stamps watched_at.
             watched: item.watched === true,
+          };
+          const { error: firstError } = await supabase.from('movies').insert({
+            ...payload,
+            genre_ids: item.genre_ids ?? null,
+            original_language: item.original_language ?? null,
+            origin_country: item.origin_country ?? null,
           });
+          const error = firstError && missingCategoryColumns(firstError.message)
+            ? (await supabase.from('movies').insert(payload)).error
+            : firstError;
           if (error) throw error;
           if (!options.skipRefresh) await fetchData();
           if (!options.quiet) {
@@ -740,8 +753,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         }
       } else if (item.category === 'TV Shows') {
         try {
-          const { data: show, error: showError } = await supabase.from('tv_shows')
-            .insert({
+          const payload = {
               title: item.title,
               platform: item.streaming_platform || 'Online',
               genre: item.genres?.join(', ') || null,
@@ -755,9 +767,16 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               creators: item.creators ?? null,
               top_cast: item.top_cast ?? null,
               imdb_id: item.imdb_id ?? null,
-            })
-            .select()
-            .single();
+          };
+          const firstInsert = await supabase.from('tv_shows').insert({
+            ...payload,
+            genre_ids: item.genre_ids ?? null,
+            original_language: item.original_language ?? null,
+            origin_country: item.origin_country ?? null,
+          }).select().single();
+          const { data: show, error: showError } = firstInsert.error && missingCategoryColumns(firstInsert.error.message)
+            ? await supabase.from('tv_shows').insert(payload).select().single()
+            : firstInsert;
 
           if (showError) throw showError;
 
@@ -1024,7 +1043,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
         if (details) {
           facts = {
             original_language: details.original_language ?? null,
-            origin_country: details.origin_country ?? [],
+            origin_country: details.origin_country?.length ? details.origin_country : details.production_countries?.map((country) => country.iso_3166_1) ?? [],
             genre_ids: details.genres?.map((genre) => genre.id).filter((id): id is number => typeof id === 'number') ?? [],
           };
         }
@@ -1380,7 +1399,7 @@ export const WatchlistProvider = ({ children }: { children: ReactNode }) => {
               original_language: details.original_language ?? null,
               // Empty rather than null: see the note above on what marks a
               // row finished.
-              origin_country: details.origin_country ?? [],
+              origin_country: details.origin_country?.length ? details.origin_country : details.production_countries?.map((country) => country.iso_3166_1) ?? [],
               genre_ids: genreIds,
             })
             .eq('id', Number(fav.id));

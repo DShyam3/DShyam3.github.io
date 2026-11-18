@@ -19,6 +19,7 @@ import { useTMDB } from '@/features/watchlist/useTMDB';
 import type { TMDBResult } from '@/features/watchlist/useTMDB';
 import { newItemFromDetails } from '@/features/watchlist/new-item';
 import { WatchlistNav } from '@/features/watchlist/components/WatchlistNav';
+import { LIBRARY_CATEGORIES, libraryCategories, type LibraryCategory } from '@/features/watchlist/library-categories';
 import {
   FAVOURITE_CATEGORIES,
   resolveFavouriteCategory,
@@ -200,6 +201,11 @@ const ALL_GENRES = [
   'Western',
 ];
 
+const favouriteAutoCategories = (favourite: FavouriteItem) => libraryCategories({
+  category: favourite.media_type === 'tv' ? 'TV Shows' : 'Movies',
+  ...favourite.facts,
+});
+
 const Watchlist = () => {
   const { isAdmin } = useAuth();
   const {
@@ -272,6 +278,7 @@ const Watchlist = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [selectedAutoCategory, setSelectedAutoCategory] = useState<LibraryCategory | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   // Visitors never order by a rating they cannot see.
   const sortOptions = searching
@@ -497,6 +504,12 @@ const Watchlist = () => {
     return counts;
   }, [categoryItems]);
 
+  const autoCategoryCounts = useMemo(() => {
+    const counts = Object.fromEntries(LIBRARY_CATEGORIES.map((category) => [category, 0])) as Record<LibraryCategory, number>;
+    categoryItems.forEach((item) => libraryCategories(item).forEach((category) => { counts[category]++; }));
+    return counts;
+  }, [categoryItems]);
+
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     categoryItems.forEach((item) => {
@@ -574,6 +587,8 @@ const Watchlist = () => {
       );
     if (selectedGenre)
       result = result.filter((item) => item.genres?.includes(selectedGenre));
+    if (selectedAutoCategory)
+      result = result.filter((item) => libraryCategories(item).includes(selectedAutoCategory));
     if (selectedStatus) {
       if (selectedStatus === 'Ended / Cancelled') {
         result = result.filter(
@@ -636,6 +651,7 @@ const Watchlist = () => {
     categoryItems,
     selectedPlatform,
     selectedGenre,
+    selectedAutoCategory,
     selectedStatus,
     searchQuery,
     searching,
@@ -668,20 +684,29 @@ const Watchlist = () => {
     }
   };
 
+  const favouriteCategoryCounts = useMemo(() => {
+    const counts = Object.fromEntries(LIBRARY_CATEGORIES.map((category) => [category, 0])) as Record<LibraryCategory, number>;
+    favourites.filter((favourite) => libraryType === 'all' || favourite.media_type === libraryType)
+      .forEach((favourite) => favouriteAutoCategories(favourite).forEach((category) => { counts[category]++; }));
+    return counts;
+  }, [favourites, libraryType]);
+
   const typedFavourites = useMemo(
-    () => favourites.filter((favourite) => libraryType === 'all' || favourite.media_type === libraryType),
-    [favourites, libraryType],
+    () => favourites.filter((favourite) =>
+      (libraryType === 'all' || favourite.media_type === libraryType) &&
+      (!selectedAutoCategory || favouriteAutoCategories(favourite).includes(selectedAutoCategory))),
+    [favourites, libraryType, selectedAutoCategory],
   );
 
   const categoryCounts = useMemo(() => {
     const counts = Object.fromEntries(SHELVES.map((shelf) => [shelf, 0])) as Record<Shelf, number>;
-    counts.Favourites = typedFavourites.length;
+    counts.Favourites = favourites.filter((favourite) => libraryType === 'all' || favourite.media_type === libraryType).length;
     watchlist.forEach((item) => {
       const shelf = shelfByItem.get(titleKey(item));
       if (shelf && matchesLibraryType(item, libraryType)) counts[shelf]++;
     });
     return counts;
-  }, [watchlist, typedFavourites, shelfByItem, libraryType]);
+  }, [watchlist, favourites, shelfByItem, libraryType]);
 
   // Reset visible count when filters change
   useEffect(() => {
@@ -692,6 +717,7 @@ const Watchlist = () => {
     searchQuery,
     selectedPlatform,
     selectedGenre,
+    selectedAutoCategory,
     selectedStatus,
     sortOrder,
   ]);
@@ -733,7 +759,7 @@ const Watchlist = () => {
     return item.runtime ? formatRuntime(item.runtime) : undefined;
   };
 
-  const activeFilterCount = [selectedPlatform, selectedGenre, selectedStatus].filter(Boolean).length;
+  const activeFilterCount = [selectedPlatform, selectedGenre, selectedAutoCategory, selectedStatus].filter(Boolean).length;
 
   const renderCard = (item: WatchlistItem) => (
     <WatchlistCard
@@ -1021,7 +1047,7 @@ const Watchlist = () => {
           const shelf = value as Shelf;
           setSelectedCategory(shelf);
           setSortOrder(SHELF_SORTS[shelf][0] ?? 'alphabetical');
-          setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); setSearchQuery('');
+          setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); setSearchQuery('');
         }}>
           {/* A search covers every shelf, so the picker says so; picking a
               shelf clears the search and opens that shelf. */}
@@ -1047,6 +1073,15 @@ const Watchlist = () => {
           </SelectContent>
         </Select>
         <SegmentedControl label="Show films, series or both" options={LIBRARY_TYPE_OPTIONS} value={libraryType} onChange={setLibraryType} />
+        {selectedCategory === 'Favourites' && <Select value={selectedAutoCategory ?? 'all'} onValueChange={(value) => setSelectedAutoCategory(value === 'all' ? null : value as LibraryCategory)}>
+          <SelectTrigger aria-label="Automatic category" className="h-11 w-[180px] shrink-0 text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {LIBRARY_CATEGORIES.filter((category) => favouriteCategoryCounts[category] > 0 || selectedAutoCategory === category).map((category) => (
+              <SelectItem key={category} value={category}>{category} ({favouriteCategoryCounts[category]})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>}
         {selectedCategory !== 'Favourites' && <>
           {/* 12rem holds the whole placeholder; narrower, the box drops below the category picker. */}
           <div className="relative min-w-[12rem] flex-1">
@@ -1057,7 +1092,7 @@ const Watchlist = () => {
           <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
             <PopoverTrigger asChild><Button variant="outline" className="h-11 gap-2"><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}</Button></PopoverTrigger>
             <PopoverContent align="end" collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain space-y-3" style={{ maxHeight: 'min(480px, var(--radix-popover-content-available-height))' }} aria-label="Library filters">
-              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedStatus(null); }}>Reset</Button></div>
+              <div className="flex items-center justify-between"><h3 className="font-medium">Filter library</h3><Button variant="ghost" size="sm" onClick={() => { setSelectedPlatform(null); setSelectedGenre(null); setSelectedAutoCategory(null); setSelectedStatus(null); }}>Reset</Button></div>
               <Select
                 value={selectedPlatform || 'all'}
                 onValueChange={(v) =>
@@ -1105,6 +1140,16 @@ const Watchlist = () => {
                       </SelectItem>
                     ),
                   )}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedAutoCategory ?? 'all'} onValueChange={(value) => setSelectedAutoCategory(value === 'all' ? null : value as LibraryCategory)}>
+                <SelectTrigger aria-label="Automatic category" className="w-full h-11 text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {LIBRARY_CATEGORIES.filter((category) => autoCategoryCounts[category] > 0 || selectedAutoCategory === category).map((category) => (
+                    <SelectItem key={category} value={category}>{category} ({autoCategoryCounts[category]})</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -1205,7 +1250,7 @@ const Watchlist = () => {
               </CardGrid>
             ) : typedFavourites.length === 0 ? (
               <p className="text-center py-16 text-muted-foreground">
-                No favourites yet
+                {selectedAutoCategory ? `No favourites in ${selectedAutoCategory}` : 'No favourites yet'}
               </p>
             ) : (
               <>

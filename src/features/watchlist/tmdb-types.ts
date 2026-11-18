@@ -101,10 +101,9 @@ export interface TMDBDetails {
   name?: string;
   overview?: string;
   original_language?: string;
-  // ISO 3166-1 alpha-2. TMDB returns this on both detail endpoints, but only
-  // on the *TV* search endpoint -- which is why a favourite added as a movie
-  // needs a detail call before its origin is known.
+  // ISO 3166-1 alpha-2 on TV. Films use production_countries instead.
   origin_country?: string[];
+  production_countries?: { iso_3166_1: string }[];
   poster_path?: string | null;
   backdrop_path?: string | null;
   release_date?: string | null;

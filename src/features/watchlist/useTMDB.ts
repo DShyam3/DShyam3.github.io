@@ -80,6 +80,9 @@ export function useTMDB() {
                 release_year: releaseYear(data.release_date || data.first_air_date) ?? null,
                 runtime: data.runtime || (data.episode_run_time ? data.episode_run_time[0] : null),
                 genres: data.genres?.map((g) => g.name) || [],
+                genre_ids: data.genres?.map((g) => g.id).filter((id): id is number => typeof id === 'number') ?? [],
+                original_language: data.original_language ?? null,
+                origin_country: data.origin_country?.length ? data.origin_country : data.production_countries?.map((country) => country.iso_3166_1) ?? [],
                 tmdb_id: data.id,
                 platform: platform,
                 /** TV only; the import paces its proxy calls by it. */

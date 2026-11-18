@@ -114,6 +114,9 @@ interface TMDBCredits {
 }
 interface TMDBDetails {
   id?: number
+  original_language?: string
+  origin_country?: string[]
+  production_countries?: { iso_3166_1: string }[]
   overview?: string
   poster_path?: string | null
   backdrop_path?: string | null
@@ -121,7 +124,7 @@ interface TMDBDetails {
   first_air_date?: string | null
   runtime?: number | null
   episode_run_time?: number[]
-  genres?: { name: string }[]
+  genres?: { id?: number; name: string }[]
   status?: string
   seasons?: TMDBSeasonSummary[]
   'watch/providers'?: { results?: Record<string, TMDBRegionProviders | undefined> }
@@ -722,6 +725,15 @@ serve(async (req) => {
             if (!item.description && data.overview) commonUpdates.overview = data.overview
             if (data.release_date || data.first_air_date) commonUpdates.release_date = data.release_date || data.first_air_date
             if (!item.genres?.length && data.genres) commonUpdates.genre = data.genres.map((g) => g.name).join(', ')
+            // Keep the source facts current so categories can be recomputed
+            // locally when rules change. A missing field does not erase one.
+            if (data.genres) commonUpdates.genre_ids = data.genres.map((g) => g.id).filter((id): id is number => typeof id === 'number')
+            if (data.original_language) commonUpdates.original_language = data.original_language
+            if (data.origin_country?.length || data.production_countries?.length) {
+              commonUpdates.origin_country = data.origin_country?.length
+                ? data.origin_country
+                : data.production_countries?.map((country) => country.iso_3166_1)
+            }
             commonUpdates.platform = getPlatform(data['watch/providers']?.results?.GB)
             // Rewritten every run, like platform: the append costs no extra
             // call, and a trailer TMDB has since removed should go too.
@@ -750,7 +762,13 @@ serve(async (req) => {
                 movieUpdates.directors = pickDirectors(data.credits.crew)
                 movieUpdates.top_cast = pickTopCast(data.credits.cast)
               }
-              check(await supabaseAdmin.from('movies').update(movieUpdates).eq('id', parseInt(item.id)))
+              const movieUpdate = await supabaseAdmin.from('movies').update(movieUpdates).eq('id', parseInt(item.id))
+              if (movieUpdate.error && /(?:genre_ids|original_language|origin_country)/.test(movieUpdate.error.message) && /(?:does not exist|could not find)/i.test(movieUpdate.error.message)) {
+                delete movieUpdates.genre_ids
+                delete movieUpdates.original_language
+                delete movieUpdates.origin_country
+                check(await supabaseAdmin.from('movies').update(movieUpdates).eq('id', parseInt(item.id)))
+              } else check(movieUpdate)
             } else {
               if (data.status && item.series_status && data.status !== item.series_status) {
                 changes.push(`${item.title}: status → ${data.status}`)
@@ -760,7 +778,13 @@ serve(async (req) => {
                 tvUpdates.creators = pickCreators(data.created_by)
                 tvUpdates.top_cast = pickTopCast(data.aggregate_credits.cast)
               }
-              check(await supabaseAdmin.from('tv_shows').update(tvUpdates).eq('id', parseInt(item.id)))
+              const tvUpdate = await supabaseAdmin.from('tv_shows').update(tvUpdates).eq('id', parseInt(item.id))
+              if (tvUpdate.error && /(?:genre_ids|original_language|origin_country)/.test(tvUpdate.error.message) && /(?:does not exist|could not find)/i.test(tvUpdate.error.message)) {
+                delete tvUpdates.genre_ids
+                delete tvUpdates.original_language
+                delete tvUpdates.origin_country
+                check(await supabaseAdmin.from('tv_shows').update(tvUpdates).eq('id', parseInt(item.id)))
+              } else check(tvUpdate)
 
               // Season 0 cleanup (specials that TMDB removed or that duplicate a real season)
               const tmdbSeason0 = data.seasons?.find((s) => s.season_number === 0)

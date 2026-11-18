@@ -4,6 +4,7 @@ import { selectAllPages } from '@/integrations/supabase/select-all-pages';
 import { resolveFavouriteCategory, type TmdbFacts } from './favourite-category';
 import type { LibraryState } from './library-state';
 import { releaseYear } from './watchlist-utils';
+import { missingCategoryColumns } from './category-schema';
 import type { FavouriteItem, WatchlistItem } from './WatchlistContext';
 
 
@@ -21,18 +22,26 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
     // Every column except `overview`. Plot summaries are 218 kB of the
     // movies table's 357 kB and are only read by the detail dialog, so
     // they load per item in loadItemDescription instead.
-    selectAllPages((from, to) => supabase
+    (async () => {
+      const withFacts = await selectAllPages((from, to) => supabase
       .from('movies')
       .select(
-        `id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime,
+        `id, title, platform, genre, genre_ids, original_language, origin_country, release_year, poster, release_date, tmdb_id, runtime,
           watched, watched_at, library_state,
           imdb_id, imdb_rating, imdb_votes, rt_score, metascore`,
         { count: 'exact' },
       )
       .order('title', { ascending: true })
       .order('id', { ascending: true })
-      .range(from, to), (movie) => String(movie.id)),
-    selectAllPages((from, to) => supabase
+      .range(from, to), (movie) => String(movie.id));
+      if (!withFacts.error || !missingCategoryColumns(withFacts.error.message)) return withFacts;
+      return selectAllPages((from, to) => supabase.from('movies')
+        .select(`id, title, platform, genre, release_year, poster, release_date, tmdb_id, runtime,
+          watched, watched_at, library_state, imdb_id, imdb_rating, imdb_votes, rt_score, metascore`, { count: 'exact' })
+        .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (movie) => String(movie.id));
+    })(),
+    (async () => {
+      const withFacts = await selectAllPages((from, to) => supabase
       .from('tv_shows')
       // Deliberately not `tv_show_episodes (*)`. Every mount of this page
       // was pulling all ~7,600 episode rows in full (~474 kB) purely to
@@ -42,7 +51,7 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       // As above: no `overview` (62 kB of tv_shows' 108 kB).
       .select(
         `
-                id, title, platform, genre, status, poster, release_date, tmdb_id, library_state,
+                id, title, platform, genre, genre_ids, original_language, origin_country, status, poster, release_date, tmdb_id, library_state,
                 imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
                 tv_show_seasons (
                   id, season_number, release_date, watched,
@@ -53,7 +62,15 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       )
       .order('title', { ascending: true })
       .order('id', { ascending: true })
-      .range(from, to), (show) => String(show.id)),
+      .range(from, to), (show) => String(show.id));
+      if (!withFacts.error || !missingCategoryColumns(withFacts.error.message)) return withFacts;
+      return selectAllPages((from, to) => supabase.from('tv_shows')
+        .select(`id, title, platform, genre, status, poster, release_date, tmdb_id, library_state,
+          imdb_id, imdb_rating, imdb_votes, rt_score, metascore,
+          tv_show_seasons (id, season_number, release_date, watched,
+            tv_show_episodes (id, episode_number, watched, runtime, release_date))`, { count: 'exact' })
+        .order('title', { ascending: true }).order('id', { ascending: true }).range(from, to), (show) => String(show.id));
+    })(),
     selectAllPages((from, to) => supabase
       .from('favourites')
       .select('id, title, poster, media_type, tmdb_id, created_at, category, original_language, origin_country, genre_ids', { count: 'exact' })
@@ -95,6 +112,9 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       genres: movie.genre
         ? movie.genre.split(',').map((g) => g.trim())
         : [],
+      genre_ids: ('genre_ids' in movie ? movie.genre_ids : null) as number[] | null,
+      original_language: ('original_language' in movie ? movie.original_language : null) as string | null,
+      origin_country: ('origin_country' in movie ? movie.origin_country : null) as string[] | null,
       image_url: movie.poster || undefined,
       link: movie.tmdb_id
         ? `https://www.themoviedb.org/movie/${movie.tmdb_id}`
@@ -127,6 +147,9 @@ async function readWatchlistLibrary(): Promise<WatchlistLibrary> {
       genres: show.genre
         ? show.genre.split(',').map((g: string) => g.trim())
         : [],
+      genre_ids: ('genre_ids' in show ? show.genre_ids : null) as number[] | null,
+      original_language: ('original_language' in show ? show.original_language : null) as string | null,
+      origin_country: ('origin_country' in show ? show.origin_country : null) as string[] | null,
       image_url: show.poster || undefined,
       link: show.tmdb_id
         ? `https://www.themoviedb.org/tv/${show.tmdb_id}`

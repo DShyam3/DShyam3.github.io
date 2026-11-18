@@ -15,6 +15,7 @@ import { useDeleteConfirm } from '@/hooks/useDeleteConfirm';
 import { useWorkspaceInspector } from '@/contexts/WorkspaceInspectorContext';
 import type { WatchedWhen } from '@/features/watchlist/watched-when';
 import { TitleScores } from './TitleScores';
+import { libraryCategories } from '../library-categories';
 
 interface WatchlistDetailDialogProps {
   open: boolean;
@@ -215,6 +216,7 @@ export function WatchlistDetailDialog({
               {item.genres && item.genres.length > 0 ? (
                 <span>• {item.genres.join(', ')}</span>
               ) : null}
+              {libraryCategories(item).length > 0 && <span>• Categories: {libraryCategories(item).join(', ')}</span>}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">

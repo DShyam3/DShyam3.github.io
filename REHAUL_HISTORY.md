@@ -3101,3 +3101,9 @@ tier's 1,000 requests a day sets the budget: at most 300 lookups per nightly
 part, oldest `scores_checked_at` first, refreshed weekly. The TMDB vote columns
 were removed from the unapplied migration rather than added and dropped.
 Seasons have no outside score.
+
+### Library categories derive from TMDB facts — 2026-11-18
+
+The Library uses TMDB's genre IDs, original language and origin country as facts and computes category memberships from reusable rules. A title can be Cartoon, Action and Sci-Fi at once without copied title records. Media type stays the film/series filter, watch progress stays the status shelf, and Favourites retains its older grouping. OMDb offers less structured category data for this library, while TMDB is already its source for title details and nightly updates. Anime and K-Drama (TV) are project rules over TMDB facts, not TMDB genre names. Missing origin facts do not become a guessed category; sync can fill them later. The new facts columns are nullable, and reads and writes tolerate the old schema while the migration is pending.
+
+Closure: `src/features/watchlist/library-categories.ts`, `library-query.ts`, `useTMDB.ts`, `watchlist-cron-sync/index.ts`, and `supabase/migrations/20261118210000_watchlist_tmdb_categories.sql`. The migration is written, not applied.

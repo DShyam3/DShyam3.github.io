@@ -2234,6 +2234,9 @@ export type Database = {
       }
       movies: {
         Row: {
+          genre_ids: number[] | null
+          original_language: string | null
+          origin_country: string[] | null
           library_state: string
           watched: boolean
           watched_at: string | null
@@ -2262,6 +2265,9 @@ export type Database = {
           trailer_key: string | null
         }
         Insert: {
+          genre_ids?: number[] | null
+          original_language?: string | null
+          origin_country?: string[] | null
           library_state?: string
           watched?: boolean
           watched_at?: string | null
@@ -2290,6 +2296,9 @@ export type Database = {
           trailer_key?: string | null
         }
         Update: {
+          genre_ids?: number[] | null
+          original_language?: string | null
+          origin_country?: string[] | null
           library_state?: string
           watched?: boolean
           watched_at?: string | null
@@ -2622,6 +2631,9 @@ export type Database = {
       }
       tv_shows: {
         Row: {
+          genre_ids: number[] | null
+          original_language: string | null
+          origin_country: string[] | null
           library_state: string
           backdrop: string | null
           creators: string[] | null
@@ -2645,6 +2657,9 @@ export type Database = {
           trailer_key: string | null
         }
         Insert: {
+          genre_ids?: number[] | null
+          original_language?: string | null
+          origin_country?: string[] | null
           library_state?: string
           backdrop?: string | null
           creators?: string[] | null
@@ -2668,6 +2683,9 @@ export type Database = {
           trailer_key?: string | null
         }
         Update: {
+          genre_ids?: number[] | null
+          original_language?: string | null
+          origin_country?: string[] | null
           library_state?: string
           backdrop?: string | null
           creators?: string[] | null
